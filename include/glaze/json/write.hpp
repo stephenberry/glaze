@@ -211,6 +211,123 @@ namespace glz
       }
    };
 
+   // Runtime partial write - writes only the keys specified at runtime
+   // Outputs keys in the order they appear in the input container
+   template <class T>
+      requires(glaze_object_t<T> || reflectable<T>)
+   struct to_runtime_partial
+   {
+      template <auto Opts, class Keys, class Value, is_context Ctx, class B, class IX>
+      static void op(const Keys& keys, Value&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         if constexpr (!check_opening_handled(Opts)) {
+            dump<'{'>(b, ix);
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(b, ix);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
+            }
+         }
+
+         using V = std::remove_cvref_t<Value>;
+         static constexpr auto N = reflect<V>::size;
+
+         if constexpr (N == 0) {
+            // Empty struct - any key is unknown
+            for (const auto& key_ref : keys) {
+               (void)key_ref;
+               ctx.error = error_code::unknown_key;
+               return;
+            }
+         }
+         else {
+            static constexpr auto& HashInfo = hash_info<V>;
+
+            decltype(auto) t = [&]() -> decltype(auto) {
+               if constexpr (reflectable<V>) {
+                  return to_tie(value);
+               }
+               else {
+                  return nullptr;
+               }
+            }();
+
+            bool first = true;
+
+            for (const auto& key_ref : keys) {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+
+               const sv key{key_ref};
+
+               // Use hash-based lookup to find the member index
+               const auto index = decode_hash_with_size<JSON, V, HashInfo, HashInfo.type>::op(
+                  key.data(), key.data() + key.size(), key.size());
+
+               if (index >= N) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+
+               // Verify the key matches (hash collision check)
+               const sv actual_key = reflect<V>::keys[index];
+               if (key != actual_key) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+
+               // Write separator if not first
+               if (first) {
+                  first = false;
+               }
+               else {
+                  write_object_entry_separator<Opts>(ctx, b, ix);
+               }
+
+               // Write the quoted key at runtime
+               if constexpr (vector_like<B>) {
+                  const auto k = ix + key.size() + 4 + (Opts.prettify ? 1 : 0);
+                  if (k > b.size()) [[unlikely]] {
+                     b.resize(2 * k);
+                  }
+               }
+               dump<'"'>(b, ix);
+               dump(key, b, ix);
+               if constexpr (Opts.prettify) {
+                  dump<"\": ">(b, ix);
+               }
+               else {
+                  dump<"\":">(b, ix);
+               }
+
+               // Use visit to dispatch to correct member and serialize value
+               visit<N>(
+                  [&]<size_t I>() {
+                     using val_t = field_t<V, I>;
+                     if constexpr (reflectable<V>) {
+                        to<JSON, val_t>::template op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
+                     }
+                     else {
+                        to<JSON, val_t>::template op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, b, ix);
+                     }
+                  },
+                  index);
+            }
+         }
+
+         if constexpr (Opts.prettify) {
+            ctx.indentation_level -= Opts.indentation_width;
+            dump<'\n'>(b, ix);
+            dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
+         }
+
+         if (not bool(ctx.error)) [[likely]] {
+            dump<'}'>(b, ix);
+         }
+      }
+   };
+
    template <class T>
       requires(glaze_value_t<T> && !custom_write<T>)
    struct to<JSON, T>
@@ -2215,6 +2332,56 @@ namespace glz
    [[nodiscard]] glz::expected<size_t, error_ctx> write_json(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+
+   // Runtime partial write - writes only the keys specified at runtime
+   // Keys is a range of string-like types (e.g., std::vector<std::string>, std::array<std::string_view, N>)
+   // Output key order matches the order in the input container
+   // Returns error_code::unknown_key if any key doesn't exist in the struct
+
+   template <auto Opts = opts{}, class T, class Keys, output_buffer Buffer>
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+   [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
+   {
+      if constexpr (resizable<Buffer>) {
+         if (buffer.size() < 2 * write_padding_bytes) {
+            buffer.resize(2 * write_padding_bytes);
+         }
+      }
+      context ctx{};
+      size_t ix = 0;
+      to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
+                                                                                 buffer, ix);
+      if constexpr (resizable<Buffer>) {
+         buffer.resize(ix);
+      }
+      return {ctx.error, ctx.custom_error_message};
+   }
+
+   template <auto Opts = opts{}, class T, class Keys, raw_buffer Buffer>
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+   [[nodiscard]] glz::expected<size_t, error_ctx> write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
+   {
+      context ctx{};
+      size_t ix = 0;
+      to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
+                                                                                 buffer, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message});
+      }
+      return {ix};
+   }
+
+   template <auto Opts = opts{}, class T, class Keys>
+      requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_json_partial(T&& value, const Keys& keys)
+   {
+      std::string buffer{};
+      const auto ec = write_json_partial<Opts>(std::forward<T>(value), keys, buffer);
+      if (bool(ec)) [[unlikely]] {
+         return glz::unexpected(ec);
+      }
+      return {std::move(buffer)};
    }
 
    template <write_supported<JSON> T, class Buffer>
