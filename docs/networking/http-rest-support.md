@@ -136,9 +136,18 @@ server.patch("/users/:id", handler);  // PATCH
 
 ## Dependencies
 
-- **ASIO** for networking
+- **ASIO** for networking (standalone ASIO or Boost.Asio)
 - **OpenSSL** (optional) for SSL/TLS support
 - **C++23** compiler support
+
+> **Important:** The core Glaze serialization library has no external dependencies. ASIO is only required when using networking features.
+
+See the **[ASIO Setup Guide](asio-setup.md)** for detailed installation and configuration instructions, including:
+- Installing standalone ASIO or Boost.Asio
+- CMake integration examples
+- SSL/TLS configuration
+- Platform-specific notes
+- Troubleshooting common issues
 
 ## Installation
 

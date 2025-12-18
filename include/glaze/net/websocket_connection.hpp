@@ -5,10 +5,15 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstring>
+#include <deque>
 #include <functional>
+#include <iostream>
 #include <memory>
+#include <mutex>
+#include <random>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -28,6 +33,7 @@
 #include "glaze/base64/base64.hpp"
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/util/parse.hpp"
 
 namespace glz
 {
@@ -252,18 +258,76 @@ namespace glz
    }
 
    // Forward declarations
+   template <typename SocketType = asio::ip::tcp::socket>
    struct websocket_connection;
 
+   // Base class for type-erased connection closing
+   struct closeable_connection
+   {
+      virtual ~closeable_connection() = default;
+      virtual void force_close() = 0;
+   };
+
    // WebSocket server class
+   //
+   // Message Handler Lifetime:
+   // The std::string_view passed to message handlers is only valid for the duration
+   // of the callback. The view points directly into internal receive buffers which
+   // are reused after the handler returns. If you need to retain the message data
+   // beyond the callback (e.g., for async processing), you must copy it:
+   //
+   //   ws_server->on_message([](auto conn, std::string_view msg, ws_opcode op) {
+   //      std::string retained(msg);  // Copy if needed beyond this callback
+   //      // ... use msg directly for synchronous processing ...
+   //   });
+   //
    struct websocket_server
    {
-      using message_handler = std::function<void(std::shared_ptr<websocket_connection>, std::string_view, ws_opcode)>;
-      using close_handler = std::function<void(std::shared_ptr<websocket_connection>)>;
-      using error_handler = std::function<void(std::shared_ptr<websocket_connection>, std::error_code)>;
-      using open_handler = std::function<void(std::shared_ptr<websocket_connection>, const request&)>;
+      using message_handler =
+         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::string_view, ws_opcode)>;
+      using close_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>,
+                                               ws_close_code, std::string_view)>;
+      using error_handler =
+         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code)>;
+      using open_handler =
+         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, const request&)>;
       using validate_handler = std::function<bool(const request&)>;
 
       websocket_server() = default;
+
+      ~websocket_server() { close_all_connections(); }
+
+      // Close all active connections - called on server shutdown
+      void close_all_connections()
+      {
+         std::lock_guard<std::mutex> lock(connections_mutex_);
+         for (auto& weak_conn : connections_) {
+            if (auto conn = weak_conn.lock()) {
+               conn->force_close();
+            }
+         }
+         connections_.clear();
+      }
+
+      // Register a connection for tracking (called by websocket_connection)
+      void register_connection(std::shared_ptr<closeable_connection> conn)
+      {
+         std::lock_guard<std::mutex> lock(connections_mutex_);
+         connections_.push_back(conn);
+      }
+
+      // Remove expired weak_ptrs (optional cleanup, called periodically or on unregister)
+      void cleanup_expired_connections()
+      {
+         std::lock_guard<std::mutex> lock(connections_mutex_);
+         connections_.erase(std::remove_if(connections_.begin(), connections_.end(),
+                                           [](const std::weak_ptr<closeable_connection>& w) { return w.expired(); }),
+                            connections_.end());
+      }
+
+      // Configuration
+      void set_max_message_size(size_t size) { max_message_size_ = size; }
+      size_t get_max_message_size() const { return max_message_size_; }
 
       // Set message handler
       inline void on_message(message_handler handler) { message_handler_ = std::move(handler); }
@@ -281,28 +345,30 @@ namespace glz
       inline void on_validate(validate_handler handler) { validate_handler_ = std::move(handler); }
 
       // Internal methods called by websocket_connection
-      inline void notify_open(std::shared_ptr<websocket_connection> conn, const request& req)
+      inline void notify_open(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request& req)
       {
          if (open_handler_) {
             open_handler_(conn, req);
          }
       }
 
-      inline void notify_message(std::shared_ptr<websocket_connection> conn, std::string_view message, ws_opcode opcode)
+      inline void notify_message(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn,
+                                 std::string_view message, ws_opcode opcode)
       {
          if (message_handler_) {
             message_handler_(conn, message, opcode);
          }
       }
 
-      inline void notify_close(std::shared_ptr<websocket_connection> conn)
+      inline void notify_close(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, ws_close_code code,
+                               std::string_view reason)
       {
          if (close_handler_) {
-            close_handler_(conn);
+            close_handler_(conn, code, reason);
          }
       }
 
-      inline void notify_error(std::shared_ptr<websocket_connection> conn, std::error_code ec)
+      inline void notify_error(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, std::error_code ec)
       {
          if (error_handler_) {
             error_handler_(conn, ec);
@@ -318,24 +384,69 @@ namespace glz
       }
 
      private:
+      size_t max_message_size_{1024 * 1024 * 16};
       open_handler open_handler_;
       message_handler message_handler_;
       close_handler close_handler_;
       error_handler error_handler_;
       validate_handler validate_handler_;
+
+      // Connection tracking for clean shutdown
+      std::mutex connections_mutex_;
+      std::vector<std::weak_ptr<closeable_connection>> connections_;
    };
 
    // WebSocket connection class - implementations come after websocket_server
-   struct websocket_connection : public std::enable_shared_from_this<websocket_connection>
+   //
+   // Thread-safety: send_text(), send_binary(), send_ping(), send_pong(), and close()
+   // are thread-safe and may be called concurrently from multiple threads.
+   // Outgoing frames are serialized via an internal write queue.
+   //
+   // Message Handler Lifetime: The std::string_view passed to on_message callbacks
+   // is only valid for the duration of the callback. Copy the data if you need to
+   // retain it beyond the callback scope.
+   template <typename SocketType>
+   struct websocket_connection : public closeable_connection,
+                                 public std::enable_shared_from_this<websocket_connection<SocketType>>
    {
      public:
-      inline websocket_connection(asio::ip::tcp::socket socket, websocket_server* server)
-         : socket_(std::move(socket)), server_(server)
+      inline websocket_connection(std::shared_ptr<SocketType> socket,
+                                  std::weak_ptr<websocket_server> server = std::weak_ptr<websocket_server>{})
+         : socket_(socket), server_(std::move(server))
       {
-         remote_endpoint_ = socket_.remote_endpoint();
+         // Try to get remote endpoint, but don't fail if it's not available yet
+         try {
+            if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+               remote_endpoint_ = socket_->remote_endpoint();
+            }
+            else {
+               // For SSL sockets, get the endpoint from the lowest layer
+               remote_endpoint_ = socket_->lowest_layer().remote_endpoint();
+            }
+         }
+         catch (...) {
+            // Endpoint not available yet (e.g., for client mode before connection)
+            // Will be set later if needed
+         }
+         if (auto srv = server_.lock()) {
+            max_message_size_ = srv->get_max_message_size();
+         }
       }
 
-      ~websocket_connection() = default;
+      ~websocket_connection()
+      {
+         // Clear handlers first to prevent any callbacks during destruction.
+         // Don't close the socket here - let it close naturally when the shared_ptr
+         // is destroyed. Closing during destruction can cause issues if this destructor
+         // runs during io_context destruction (cancelled operations try to interact
+         // with a destroying io_context).
+         client_message_handler_ = nullptr;
+         client_close_handler_ = nullptr;
+         client_error_handler_ = nullptr;
+      }
+
+      // Configuration
+      void set_max_message_size(size_t size) { max_message_size_ = size; }
 
       // Start the WebSocket connection (performs handshake)
       inline void start(const request& req) { perform_handshake(req); }
@@ -353,18 +464,53 @@ namespace glz
       inline void send_pong(std::string_view payload = {}) { send_frame(ws_opcode::pong, payload); }
 
       // Close the connection
+      // RFC 6455 Section 7.1.2: "To Start the WebSocket Closing Handshake with a status code,
+      // an endpoint MUST send a Close control frame"
+      // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.2
       inline void close(ws_close_code code = ws_close_code::normal, std::string_view reason = {})
       {
-         if (is_closing_) return;
+         // Atomically check and set is_closing_ to prevent race conditions
+         bool expected = false;
+         if (!is_closing_.compare_exchange_strong(expected, true)) {
+            return; // Another thread is already closing
+         }
 
+         // Store close code for the callback
+         close_code_ = code;
+
+         // Send close frame but DON'T close socket immediately.
+         // RFC 6455 Section 7.1.1: "Once an endpoint has both sent and received a Close control
+         // frame, that endpoint SHOULD Close the WebSocket Connection"
+         // The socket will be closed when we receive the close response in handle_frame().
+         send_close_frame(code, reason, false);
+      }
+
+      // Force close the connection immediately (closes socket without handshake).
+      // Used during server shutdown to ensure clean destruction.
+      void force_close() override
+      {
          is_closing_ = true;
-         send_close_frame(code, reason);
-
-         // Close after a short delay to allow the close frame to be sent
-         auto self = shared_from_this();
-         auto timer = std::make_shared<asio::steady_timer>(socket_.get_executor());
-         timer->expires_after(std::chrono::milliseconds(100));
-         timer->async_wait([self, timer](std::error_code) { self->do_close(); });
+         // ALWAYS clear handlers under mutex to prevent callbacks with dangling references.
+         // This races with do_close() which also holds the mutex while calling handlers.
+         // Mutual exclusion ensures either handlers are called OR cleared, never both.
+         {
+            std::lock_guard<std::mutex> lock(close_handler_mutex_);
+            client_message_handler_ = nullptr;
+            client_close_handler_ = nullptr;
+            client_error_handler_ = nullptr;
+         }
+         closed_ = true;
+         // Hold socket_op_mutex_ while closing to prevent race with async_read_some/async_write
+         // setup in do_start_read/do_write. ASIO socket operations are NOT thread-safe.
+         {
+            std::lock_guard<std::mutex> lock(socket_op_mutex_);
+            if (socket_) {
+               asio::error_code ec;
+               socket_->cancel(ec); // Cancel pending operations first
+               socket_->close(ec);
+               socket_.reset();
+            }
+         }
       }
 
       // Get remote endpoint information
@@ -376,7 +522,23 @@ namespace glz
       inline void set_user_data(std::shared_ptr<void> data) { user_data_ = data; }
       inline std::shared_ptr<void> get_user_data() const { return user_data_; }
 
+      // Get close code and reason (valid after connection is closed)
+      inline ws_close_code get_close_code() const { return close_code_; }
+      inline std::string_view get_close_reason() const { return close_reason_; }
+
+      // Inject initial data read during handshake
+      inline void set_initial_data(std::string_view data)
+      {
+         frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
+         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
+         if (consumed > 0) {
+            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+         }
+      }
+
      private:
+      size_t max_message_size_{1024 * 1024 * 16}; // 16 MB limit
+
       inline void perform_handshake(const request& req)
       {
          // Validate WebSocket upgrade request
@@ -408,9 +570,11 @@ namespace glz
          }
 
          // Check if server wants to validate this connection
-         if (server_ && !server_->validate_connection(req)) {
-            do_close();
-            return;
+         if (auto srv = server_.lock()) {
+            if (!srv->validate_connection(req)) {
+               do_close();
+               return;
+            }
          }
 
          // Generate accept key
@@ -425,24 +589,38 @@ namespace glz
          response_str.append(accept_key);
          response_str.append("\r\n\r\n");
 
-         auto self = shared_from_this();
+         auto self = this->shared_from_this();
+
+         // Hold socket_op_mutex_ while setting up the async write operation.
+         // This prevents close() from being called while async_write() is setting up.
+         std::lock_guard<std::mutex> sock_lock(socket_op_mutex_);
+
+         // Capture socket locally to prevent race condition
+         auto socket = socket_;
+         // Check both pointer validity AND that socket is still open
+         if (!socket || !socket->is_open()) {
+            return;
+         }
 
          // Use shared_ptr to keep response string alive during async operation
          auto response_buffer = std::make_shared<std::string>(std::move(response_str));
-         asio::async_write(socket_, asio::buffer(*response_buffer),
-                           [self, req, response_buffer](std::error_code ec, std::size_t) {
+         asio::async_write(*socket, asio::buffer(*response_buffer),
+                           [self, req, response_buffer, socket](std::error_code ec, std::size_t) {
                               if (ec) {
-                                 if (self->server_) {
-                                    self->server_->notify_error(self, ec);
+                                 self->is_closing_ = true;
+                                 if (auto srv = self->server_.lock()) {
+                                    srv->notify_error(self, ec);
                                  }
+                                 self->do_close();
                                  return;
                               }
 
                               self->handshake_complete_ = true;
 
-                              // Notify server of successful connection
-                              if (self->server_) {
-                                 self->server_->notify_open(self, req);
+                              // Register with server for clean shutdown tracking
+                              if (auto srv = self->server_.lock()) {
+                                 srv->register_connection(self);
+                                 srv->notify_open(self, req);
                               }
 
                               // Start reading frames
@@ -450,36 +628,51 @@ namespace glz
                            });
       }
 
-      inline void start_read()
-      {
-         auto self = shared_from_this();
-         socket_.async_read_some(asio::buffer(read_buffer_), [self](std::error_code ec, std::size_t bytes_transferred) {
-            self->on_read(ec, bytes_transferred);
-         });
-      }
-
       inline void on_read(std::error_code ec, std::size_t bytes_transferred)
       {
          if (ec) {
-            if (server_) {
-               server_->notify_error(shared_from_this(), ec);
+            is_closing_ = true;
+            // Only call error handlers if not already closed (prevents calling handlers
+            // after force_close() when user's captured references may be invalid)
+            if (!closed_.load()) {
+               if (auto srv = server_.lock()) {
+                  srv->notify_error(this->shared_from_this(), ec);
+               }
+               else if (client_error_handler_) {
+                  client_error_handler_(ec);
+               }
             }
+            // Close the connection after a read error (connection is likely broken)
+            do_close();
             return;
          }
 
          // Add received data to frame buffer
          frame_buffer_.insert(frame_buffer_.end(), read_buffer_.begin(), read_buffer_.begin() + bytes_transferred);
 
+         // Check buffer size limit (simple DoS protection)
+         if (frame_buffer_.size() > max_message_size_ + 1024) { // Allow some header overhead
+            close(ws_close_code::message_too_big, "Buffer limit exceeded");
+            return;
+         }
+
          // Process complete frames
-         process_frame(frame_buffer_.data(), frame_buffer_.size());
+         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
+         if (consumed > 0) {
+            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+         }
 
          // Continue reading if connection is still open
-         if (!is_closing_ && handshake_complete_) {
+         // RFC 6455 Section 7.1.1: The initiator must continue reading to receive the peer's
+         // Close frame response before closing the TCP connection.
+         // Use closed_ (not is_closing_) to allow receiving close response during handshake.
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
+         if (!closed_.load() && handshake_complete_) {
             start_read();
          }
       }
 
-      inline void process_frame(const uint8_t* data, std::size_t length)
+      inline size_t process_frames(uint8_t* data, std::size_t length)
       {
          std::size_t offset = 0;
 
@@ -492,67 +685,65 @@ namespace glz
             ws_frame_header header;
             header.data[0] = data[offset];
             header.data[1] = data[offset + 1];
-            offset += 2;
+            size_t header_size = 2;
 
             // Check reserved bits
             if ((header.data[0] & 0x70) != 0) {
                close(ws_close_code::protocol_error, "Reserved bits set");
-               return;
+               return length; // Consume all
             }
 
             // Get payload length
             uint64_t payload_length = header.payload_len();
 
             if (payload_length == 126) {
-               if (length - offset < 2) break;
-               payload_length = (static_cast<uint64_t>(data[offset]) << 8) | data[offset + 1];
-               offset += 2;
+               if (length - offset < 4) break;
+               payload_length = (static_cast<uint64_t>(data[offset + 2]) << 8) | data[offset + 3];
+               header_size += 2;
             }
             else if (payload_length == 127) {
-               if (length - offset < 8) break;
+               if (length - offset < 10) break;
                payload_length = 0;
                for (int i = 0; i < 8; ++i) {
-                  payload_length = (payload_length << 8) | data[offset + i];
+                  payload_length = (payload_length << 8) | data[offset + 2 + i];
                }
-               offset += 8;
+               header_size += 8;
+            }
+
+            if (payload_length > max_message_size_) {
+               close(ws_close_code::message_too_big, "Message too big");
+               return length;
             }
 
             // Read mask key if present
             std::array<uint8_t, 4> mask_key{};
             if (header.mask()) {
-               if (length - offset < 4) break;
-               std::copy(data + offset, data + offset + 4, mask_key.begin());
-               offset += 4;
+               if (length - offset < header_size + 4) break;
+               std::copy(data + offset + header_size, data + offset + header_size + 4, mask_key.begin());
+               header_size += 4;
             }
 
             // Check if we have the complete payload
-            if (length - offset < payload_length) {
+            if (length - offset < header_size + payload_length) {
                break;
             }
 
-            // Extract and unmask payload
-            std::vector<uint8_t> payload(payload_length);
-            if (payload_length > 0) {
-               std::copy(data + offset, data + offset + payload_length, payload.begin());
+            // Get pointer to payload in frame buffer and unmask in-place
+            uint8_t* payload_ptr = data + offset + header_size;
+            const auto payload_size = static_cast<size_t>(payload_length);
 
-               if (header.mask()) {
-                  for (std::size_t i = 0; i < payload_length; ++i) {
-                     payload[i] ^= mask_key[i % 4];
-                  }
+            if (header.mask() && payload_size > 0) {
+               for (std::size_t i = 0; i < payload_size; ++i) {
+                  payload_ptr[i] ^= mask_key[i % 4];
                }
             }
 
-            offset += payload_length;
-
             // Handle the frame
-            handle_frame(header.opcode(), payload.data(), payload.size(), header.fin());
+            handle_frame(header.opcode(), payload_ptr, payload_size, header.fin());
 
-            // Remove processed data from buffer
-            if (offset > 0) {
-               frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + offset);
-               return process_frame(frame_buffer_.data(), frame_buffer_.size());
-            }
+            offset += header_size + static_cast<size_t>(payload_length);
          }
+         return offset;
       }
 
       inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin)
@@ -565,26 +756,36 @@ namespace glz
                return;
             }
 
-            current_opcode_ = opcode;
-            message_buffer_.assign(payload, payload + length);
+            if (length > max_message_size_) {
+               close(ws_close_code::message_too_big, "Message too big");
+               return;
+            }
 
             if (fin) {
-               // Validate UTF-8 for text frames
-               if (opcode == ws_opcode::text && !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
-                  close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                  return;
+               // Complete single-frame message - deliver directly (zero-copy)
+               if (opcode == ws_opcode::text) {
+                  if (!glz::validate_utf8(payload, length)) {
+                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
+                     return;
+                  }
                }
 
-               if (server_) {
-                  server_->notify_message(
-                     shared_from_this(),
-                     std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
-                     current_opcode_);
+               std::string_view message_view(reinterpret_cast<const char*>(payload), length);
+               // Only call message handlers if not closed (prevents calling handlers
+               // after force_close() when user's captured references may be invalid)
+               if (!closed_.load()) {
+                  if (auto srv = server_.lock()) {
+                     srv->notify_message(this->shared_from_this(), message_view, opcode);
+                  }
+                  else if (client_message_handler_) {
+                     client_message_handler_(message_view, opcode);
+                  }
                }
-               message_buffer_.clear();
-               current_opcode_ = ws_opcode::continuation;
             }
             else {
+               // Fragmented message - must buffer for reassembly
+               current_opcode_ = opcode;
+               message_buffer_.assign(payload, payload + length);
                is_reading_frame_ = true;
             }
             break;
@@ -595,29 +796,44 @@ namespace glz
                return;
             }
 
+            if (message_buffer_.size() + length > max_message_size_) {
+               close(ws_close_code::message_too_big, "Message too big");
+               return;
+            }
+
             message_buffer_.insert(message_buffer_.end(), payload, payload + length);
 
             if (fin) {
                is_reading_frame_ = false;
 
                // Validate UTF-8 for text frames
-               if (current_opcode_ == ws_opcode::text &&
-                   !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
-                  close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                  return;
+               if (current_opcode_ == ws_opcode::text) {
+                  if (!glz::validate_utf8(message_buffer_.data(), message_buffer_.size())) {
+                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
+                     return;
+                  }
                }
 
-               if (server_) {
-                  server_->notify_message(
-                     shared_from_this(),
-                     std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
-                     current_opcode_);
+               std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
+                                             message_buffer_.size());
+               // Only call message handlers if not closed (prevents calling handlers
+               // after force_close() when user's captured references may be invalid)
+               if (!closed_.load()) {
+                  if (auto srv = server_.lock()) {
+                     srv->notify_message(this->shared_from_this(), message_view, current_opcode_);
+                  }
+                  else if (client_message_handler_) {
+                     client_message_handler_(message_view, current_opcode_);
+                  }
                }
                message_buffer_.clear();
                current_opcode_ = ws_opcode::continuation;
             }
             break;
 
+         // RFC 6455 Section 5.5.1: "If an endpoint receives a Close frame and did not previously
+         // send a Close frame, the endpoint MUST send a Close frame in response."
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.1
          case ws_opcode::close: {
             ws_close_code code = ws_close_code::normal;
             std::string reason;
@@ -629,11 +845,24 @@ namespace glz
                }
             }
 
-            if (!is_closing_) {
-               send_close_frame(code, reason);
-            }
+            // Store close code and reason for callback
+            close_code_ = code;
+            close_reason_ = std::move(reason);
 
-            do_close();
+            // Atomically check and set is_closing_ to handle race with close() method
+            bool expected = false;
+            if (is_closing_.compare_exchange_strong(expected, true)) {
+               // Peer initiated close - we successfully marked as closing, send response
+               // RFC 6455: "the endpoint MUST send a Close frame in response"
+               // Send close frame and schedule socket close after write completes
+               send_close_frame(code, {}, true);
+            }
+            else {
+               // We initiated close, peer responded - close socket now
+               // RFC 6455 Section 7.1.1: "Once an endpoint has both sent and received a Close
+               // control frame, that endpoint SHOULD Close the WebSocket Connection"
+               do_close();
+            }
          } break;
 
          case ws_opcode::ping:
@@ -650,28 +879,163 @@ namespace glz
          }
       }
 
-      inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true)
+      inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true, bool close_after = false)
       {
-         if (is_closing_) return;
+         // Allow close frames to be sent even when closing, but block other frame types
+         if (is_closing_ && opcode != ws_opcode::close) {
+            return;
+         }
 
-         std::size_t header_size = get_frame_header_size(payload.size());
-         std::vector<uint8_t> frame(header_size + payload.size());
-
-         write_frame_header(opcode, payload.size(), fin, frame.data());
-         std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
-
-         auto self = shared_from_this();
-
-         // Use shared_ptr to keep the frame alive during async operation
-         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
-            if (ec && self->server_) {
-               self->server_->notify_error(self, ec);
+         // Capture socket locally to prevent race condition
+         auto socket = socket_;
+         if (!socket) {
+            // Socket already closed - if close was requested, ensure do_close() is called
+            if (close_after) {
+               do_close();
             }
-         });
+            return;
+         }
+
+         std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
+         auto frame_buffer = std::make_unique<std::vector<uint8_t>>(header_size + payload.size());
+
+         write_frame_header(opcode, payload.size(), fin, frame_buffer->data(), client_mode_);
+         std::copy(payload.begin(), payload.end(), frame_buffer->begin() + header_size);
+
+         // Apply masking if in client mode
+         if (client_mode_ && payload.size() > 0) {
+            // Get the masking key from the header
+            std::size_t mask_key_offset = header_size - 4;
+            const uint8_t* mask_key = frame_buffer->data() + mask_key_offset;
+            // Mask the payload
+            for (std::size_t i = 0; i < payload.size(); ++i) {
+               (*frame_buffer)[header_size + i] ^= mask_key[i % 4];
+            }
+         }
+
+         // Queue the frame and start writing if not already in progress
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            write_queue_.push_back(std::move(frame_buffer));
+            if (close_after) {
+               close_after_write_ = true; // Set atomically with queuing
+            }
+            if (write_in_progress_) {
+               return; // Another write is in progress, frame will be sent when it completes
+            }
+            write_in_progress_ = true;
+         }
+
+         // Start writing the queued frame
+         do_write();
       }
 
-      inline void send_close_frame(ws_close_code code, std::string_view reason)
+      // Process the write queue - called when a write completes or when starting a new write
+      inline void do_write()
+      {
+         std::unique_ptr<std::vector<uint8_t>> frame_buffer;
+         bool should_close_after = false;
+
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (write_queue_.empty()) {
+               write_in_progress_ = false;
+               should_close_after = close_after_write_;
+               close_after_write_ = false;
+            }
+            else {
+               frame_buffer = std::move(write_queue_.front());
+               write_queue_.pop_front();
+            }
+         }
+
+         // Handle close-after-write when queue is empty
+         if (!frame_buffer) {
+            if (should_close_after) {
+               schedule_close();
+            }
+            return;
+         }
+
+         // Hold socket_op_mutex_ while setting up the async write operation.
+         // This prevents close() from being called while async_write() is setting up.
+         // ASIO socket operations are NOT thread-safe for concurrent calls.
+         std::lock_guard<std::mutex> sock_lock(socket_op_mutex_);
+
+         auto socket = socket_;
+         // Check both pointer validity AND that socket is still open.
+         // The socket could be closed (is_open() == false) while the shared_ptr is still valid.
+         // Calling async_write on a closed socket crashes in ASIO's reactor.
+         if (!socket || !socket->is_open()) {
+            // Socket was closed externally - ensure close callback fires if pending
+            bool had_close_pending = false;
+            {
+               std::lock_guard<std::mutex> lock(write_mutex_);
+               write_in_progress_ = false;
+               had_close_pending = close_after_write_;
+               write_queue_.clear();
+               close_after_write_ = false;
+            }
+            if (had_close_pending) {
+               do_close(); // Ensure callback fires (idempotent via closed_ CAS)
+            }
+            return;
+         }
+
+         auto self = this->shared_from_this();
+         // Create buffer view before moving frame_buffer into lambda (C++14 evaluation order safety)
+         auto buffer_view = asio::buffer(*frame_buffer);
+         asio::async_write(*socket, buffer_view,
+                           [self, socket, frame_buffer = std::move(frame_buffer)](std::error_code ec, std::size_t) {
+                              if (ec) {
+                                 // Mark connection as closing before notifying handlers to avoid re-entrant close
+                                 // attempts
+                                 self->is_closing_ = true;
+                                 {
+                                    std::lock_guard<std::mutex> lock(self->write_mutex_);
+                                    self->write_in_progress_ = false;
+                                    self->write_queue_.clear();
+                                    self->close_after_write_ = false;
+                                 }
+                                 // Only call error handlers if not already closed (prevents calling handlers
+                                 // after force_close() when user's captured references may be invalid)
+                                 if (!self->closed_.load()) {
+                                    if (auto srv = self->server_.lock()) {
+                                       srv->notify_error(self, ec);
+                                    }
+                                    else if (self->client_error_handler_) {
+                                       self->client_error_handler_(ec);
+                                    }
+                                 }
+                                 // Close the connection after a write error (connection is likely broken)
+                                 self->do_close();
+                                 return;
+                              }
+
+                              // Process next frame in queue
+                              self->do_write();
+                           });
+      }
+
+      // Close the socket after the close frame has been sent (responder side)
+      // RFC 6455 Section 7.1.1: "the server MUST close the connection immediately"
+      // after sending the Close frame response.
+      // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
+      inline void schedule_close()
+      {
+         // The close frame has been written to the kernel buffer via async_write.
+         // Use shutdown to signal we're done sending while allowing pending data to drain.
+         // This ensures the close frame reaches the peer before we close the socket.
+         auto socket = socket_;
+         if (socket) {
+            asio::error_code ec;
+            socket->shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+            // Ignore shutdown errors - socket may already be closed
+         }
+         do_close();
+      }
+
+      inline void send_close_frame(ws_close_code code, std::string_view reason, bool schedule_socket_close = false)
       {
          std::vector<uint8_t> payload(2 + reason.size());
          payload[0] = static_cast<uint8_t>(static_cast<uint16_t>(code) >> 8);
@@ -681,30 +1045,50 @@ namespace glz
             std::copy(reason.begin(), reason.end(), payload.begin() + 2);
          }
 
-         send_frame(ws_opcode::close, std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
-      }
-
-      inline std::size_t get_frame_header_size(std::size_t payload_length)
-      {
-         if (payload_length < 126) {
-            return 2;
-         }
-         else if (payload_length <= 0xFFFF) {
-            return 4;
+         if (schedule_socket_close) {
+            // Send close frame and schedule socket closure after write completes
+            send_close_frame_with_callback(
+               ws_opcode::close, std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
          }
          else {
-            return 10;
+            // Just send the close frame without scheduling closure
+            send_frame(ws_opcode::close,
+                       std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
          }
       }
 
-      inline void write_frame_header(ws_opcode opcode, std::size_t payload_length, bool fin, uint8_t* header)
+      inline void send_close_frame_with_callback(ws_opcode opcode, std::string_view payload)
+      {
+         // Queue the close frame and set close_after_write_ flag atomically
+         send_frame(opcode, payload, true, true);
+      }
+
+      inline std::size_t get_frame_header_size(std::size_t payload_length, bool use_masking)
+      {
+         std::size_t base_size;
+         if (payload_length < 126) {
+            base_size = 2;
+         }
+         else if (payload_length <= 0xFFFF) {
+            base_size = 4;
+         }
+         else {
+            base_size = 10;
+         }
+         return base_size + (use_masking ? 4 : 0); // Add 4 bytes for masking key if needed
+      }
+
+      inline void write_frame_header(ws_opcode opcode, std::size_t payload_length, bool fin, uint8_t* header,
+                                     bool use_masking)
       {
          ws_frame_header frame_header;
          frame_header.fin(fin);
          frame_header.opcode(opcode);
-         frame_header.mask(false);
+         frame_header.mask(use_masking);
 
          header[0] = frame_header.data[0];
+
+         std::size_t header_offset = 2;
 
          if (payload_length < 126) {
             frame_header.payload_len(static_cast<uint8_t>(payload_length));
@@ -715,76 +1099,148 @@ namespace glz
             header[1] = frame_header.data[1];
             header[2] = static_cast<uint8_t>(payload_length >> 8);
             header[3] = static_cast<uint8_t>(payload_length & 0xFF);
+            header_offset = 4;
          }
          else {
             frame_header.payload_len(127);
             header[1] = frame_header.data[1];
             for (int i = 0; i < 8; ++i) {
-               header[2 + i] = static_cast<uint8_t>(payload_length >> (8 * (7 - i)));
+               header[2 + i] = static_cast<uint8_t>(static_cast<uint64_t>(payload_length) >> (8 * (7 - i)));
             }
-         }
-      }
-
-      inline bool is_valid_utf8(const uint8_t* data, std::size_t length)
-      {
-         // Simple UTF-8 validation
-         for (std::size_t i = 0; i < length;) {
-            uint8_t byte = data[i];
-
-            if (byte < 0x80) {
-               // ASCII character
-               i++;
-            }
-            else if ((byte & 0xE0) == 0xC0) {
-               // 2-byte sequence
-               if (i + 1 >= length || (data[i + 1] & 0xC0) != 0x80) {
-                  return false;
-               }
-               i += 2;
-            }
-            else if ((byte & 0xF0) == 0xE0) {
-               // 3-byte sequence
-               if (i + 2 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80) {
-                  return false;
-               }
-               i += 3;
-            }
-            else if ((byte & 0xF8) == 0xF0) {
-               // 4-byte sequence
-               if (i + 3 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80 ||
-                   (data[i + 3] & 0xC0) != 0x80) {
-                  return false;
-               }
-               i += 4;
-            }
-            else {
-               return false;
-            }
+            header_offset = 10;
          }
 
-         return true;
+         // Write masking key if needed (client mode)
+         if (use_masking) {
+            // Generate random masking key
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<unsigned int> dist(0, 255);
+            for (int i = 0; i < 4; ++i) {
+               header[header_offset + i] = static_cast<uint8_t>(dist(gen));
+            }
+            // Mask the payload (done in-place in the frame buffer after this header)
+            // Note: Actual masking of payload should be done by caller if needed
+         }
       }
 
       inline void do_close()
       {
-         if (server_) {
-            server_->notify_close(shared_from_this());
+         // Ensure we only close once and call on_close once
+         bool expected = false;
+         if (!closed_.compare_exchange_strong(expected, true)) {
+            return; // Already closed
          }
 
-         asio::error_code ec;
-         socket_.close(ec);
+         // Synchronize with force_close() to prevent calling handlers with dangling references
+         {
+            std::lock_guard<std::mutex> lock(close_handler_mutex_);
+            if (auto srv = server_.lock()) {
+               srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
+            }
+            else if (client_close_handler_) {
+               client_close_handler_(close_code_, close_reason_);
+            }
+         }
+
+         // Hold socket_op_mutex_ while closing to prevent race with async_read_some/async_write
+         // setup in do_start_read/do_write. ASIO socket operations are NOT thread-safe.
+         {
+            std::lock_guard<std::mutex> lock(socket_op_mutex_);
+            if (socket_) {
+               asio::error_code ec;
+               socket_->cancel(ec); // Cancel pending operations first
+               socket_->close(ec);
+               socket_.reset(); // Reset pointer so subsequent checks know socket is closed
+            }
+         }
       }
 
-      asio::ip::tcp::socket socket_;
-      websocket_server* server_;
-      std::array<uint8_t, 4096> read_buffer_;
+      std::shared_ptr<SocketType> socket_;
+      std::weak_ptr<websocket_server> server_;
+      std::array<uint8_t, 16384> read_buffer_;
       std::vector<uint8_t> frame_buffer_;
       std::vector<uint8_t> message_buffer_;
       ws_opcode current_opcode_{ws_opcode::continuation};
       bool is_reading_frame_{false};
-      bool is_closing_{false};
+      std::atomic<bool> is_closing_{false};
       bool handshake_complete_{false};
+      std::atomic<bool> closed_{false};
       std::shared_ptr<void> user_data_;
       asio::ip::tcp::endpoint remote_endpoint_;
+      bool client_mode_{false}; // For client-side connections (requires masking)
+
+      // Write queue for serializing outgoing frames (prevents interleaved writes)
+      std::mutex write_mutex_;
+      std::deque<std::unique_ptr<std::vector<uint8_t>>> write_queue_;
+      bool write_in_progress_{false};
+      bool close_after_write_{false}; // Close socket after write queue drains
+
+      // Client mode callbacks
+      std::function<void(std::string_view, ws_opcode)> client_message_handler_;
+      std::function<void(ws_close_code, std::string_view)> client_close_handler_;
+      std::function<void(std::error_code)> client_error_handler_;
+
+      // Mutex to synchronize close handler access between do_close() and force_close()
+      std::mutex close_handler_mutex_;
+
+      // Mutex to prevent race between starting async operations and closing the socket.
+      // ASIO sockets are NOT thread-safe for concurrent operations (e.g., async_read_some
+      // racing with close()). This mutex is held briefly while setting up async ops and
+      // while closing the socket.
+      std::mutex socket_op_mutex_;
+
+      // Close code and reason for callback
+      ws_close_code close_code_{ws_close_code::normal};
+      std::string close_reason_;
+
+     public:
+      // Client mode support
+      inline void set_client_mode(bool enabled)
+      {
+         client_mode_ = enabled;
+         handshake_complete_ = true;
+      }
+      inline void start_read() { do_start_read(); }
+
+      // Client mode callback setters
+      inline void on_message(std::function<void(std::string_view, ws_opcode)> handler)
+      {
+         client_message_handler_ = std::move(handler);
+      }
+      inline void on_close(std::function<void(ws_close_code, std::string_view)> handler)
+      {
+         client_close_handler_ = std::move(handler);
+      }
+      inline void on_error(std::function<void(std::error_code)> handler) { client_error_handler_ = std::move(handler); }
+
+     private:
+      inline void do_start_read()
+      {
+         // Check if already fully closed to avoid operations on closed sockets
+         // RFC 6455 Section 7.1.1: Use closed_ (not is_closing_) to allow receiving
+         // close response during handshake. The initiator must continue reading.
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
+         if (closed_.load()) {
+            return;
+         }
+
+         // Hold socket_op_mutex_ while setting up the async read operation.
+         // This prevents close() from being called while async_read_some() is setting up.
+         // ASIO socket operations are NOT thread-safe for concurrent calls.
+         std::lock_guard<std::mutex> lock(socket_op_mutex_);
+
+         // Re-check under lock since socket may have been closed while waiting for mutex
+         auto socket = socket_;
+         if (!socket || !socket->is_open()) {
+            return;
+         }
+
+         auto self = this->shared_from_this();
+         socket->async_read_some(asio::buffer(read_buffer_),
+                                 [self, socket](std::error_code ec, std::size_t bytes_transferred) {
+                                    self->on_read(ec, bytes_transferred);
+                                 });
+      }
    };
 }

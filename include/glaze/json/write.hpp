@@ -8,12 +8,12 @@
 #include <ostream>
 #include <variant>
 
+#include "glaze/core/chrono.hpp"
+#include "glaze/util/parse.hpp"
+
 #if !defined(GLZ_DISABLE_SIMD) && (defined(__x86_64__) || defined(_M_X64))
 #if defined(_MSC_VER)
 #include <intrin.h>
-#pragma warning(push)
-#pragma warning( \
-   disable : 4702) // disable "unreachable code" warnings, which are often invalid due to constexpr branching
 #else
 #include <immintrin.h>
 #endif
@@ -21,6 +21,12 @@
 #if defined(__AVX2__)
 #define GLZ_USE_AVX2
 #endif
+#endif
+
+#if defined(_MSC_VER) && !defined(__clang__)
+// disable "unreachable code" warnings, which are often invalid due to constexpr branching
+#pragma warning(push)
+#pragma warning(disable : 4702)
 #endif
 
 #include "glaze/core/opts.hpp"
@@ -361,8 +367,15 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts>
-      static void op(auto&&, is_context auto&&, auto&&...) noexcept
-      {}
+      static void op(auto&&, is_context auto&&, auto&& b, auto&& ix) noexcept
+      {
+         if constexpr (check_write_member_functions(Opts)) {
+            constexpr sv type_name = name_v<T>;
+            dump<'"'>(b, ix);
+            dump(type_name, b, ix);
+            dump<'"'>(b, ix);
+         }
+      }
    };
 
    template <is_reference_wrapper T>
@@ -419,7 +432,7 @@ namespace glz
             }
          }
 
-         if constexpr (Opts.bools_as_numbers) {
+         if constexpr (check_bools_as_numbers(Opts)) {
             if (value) {
                std::memcpy(&b[ix], "1", 1);
             }
@@ -529,6 +542,9 @@ namespace glz
                   if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                      return value ? value : "";
                   }
+                  else if constexpr (u8str_t<T>) {
+                     return sv{reinterpret_cast<const char*>(value.data()), value.size()};
+                  }
                   else {
                      return sv{value};
                   }
@@ -545,15 +561,19 @@ namespace glz
                }
                // now we don't have to check writing
 
-               std::memcpy(&b[ix], "\"", 1);
-               ++ix;
+               if constexpr (not Opts.raw) {
+                  std::memcpy(&b[ix], "\"", 1);
+                  ++ix;
+               }
                if (str.size()) [[likely]] {
                   const auto n = str.size();
                   std::memcpy(&b[ix], str.data(), n);
                   ix += n;
                }
-               std::memcpy(&b[ix], "\"", 1);
-               ++ix;
+               if constexpr (not Opts.raw) {
+                  std::memcpy(&b[ix], "\"", 1);
+                  ++ix;
+               }
             }
             else {
                const sv str = [&]() -> const sv {
@@ -561,7 +581,10 @@ namespace glz
                      return value ? value : "";
                   }
                   else if constexpr (array_char_t<T>) {
-                     return *value.data() ? sv{value.data()} : "";
+                     return sv{value.data(), value.size()};
+                  }
+                  else if constexpr (u8str_t<T>) {
+                     return sv{reinterpret_cast<const char*>(value.data()), value.size()};
                   }
                   else {
                      return sv{value};
@@ -679,6 +702,9 @@ namespace glz
                         std::memcpy(data, c, 8);
                         uint64_t swar;
                         std::memcpy(&swar, c, 8);
+                        if constexpr (std::endian::native == std::endian::big) {
+                           swar = std::byteswap(swar);
+                        }
 
                         constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
                         const uint64_t lo7 = swar & lo7_mask;
@@ -765,13 +791,8 @@ namespace glz
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
-         // TODO: Use new hashing approach for better performance
-         // TODO: Check if sequenced and use the value as the index if so
-         using key_t = std::underlying_type_t<T>;
-         static constexpr auto frozen_map = make_enum_to_string_map<T>();
-         const auto& member_it = frozen_map.find(static_cast<key_t>(value));
-         if (member_it != frozen_map.end()) {
-            const sv str = {member_it->second.data(), member_it->second.size()};
+         const sv str = get_enum_name(value);
+         if (!str.empty()) {
             // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
             // TODO: Could create a pre quoted map for better performance
             if constexpr (not Opts.raw) {
@@ -783,7 +804,7 @@ namespace glz
             }
          }
          else [[unlikely]] {
-            // What do we want to happen if the value doesn't have a mapped string
+            // Value doesn't have a mapped string, serialize as underlying number
             serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
          }
       }
@@ -905,7 +926,7 @@ namespace glz
    template <auto Opts, class Key, class Value, is_context Ctx, class B>
    GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, B&& b, auto&& ix)
    {
-      if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
+      if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || mimics_str_t<Key> || Opts.quoted_num) {
          to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
       }
       else if constexpr (num_t<Key>) {
@@ -1327,8 +1348,14 @@ namespace glz
                b.resize(2 * k);
             }
          }
-         static constexpr uint32_t null_v = 1819047278;
-         std::memcpy(&b[ix], &null_v, 4);
+         if constexpr (std::endian::native == std::endian::big) {
+            static constexpr char null_v[] = "null";
+            std::memcpy(&b[ix], null_v, 4);
+         }
+         else {
+            static constexpr uint32_t null_v = 1819047278;
+            std::memcpy(&b[ix], &null_v, 4);
+         }
          ix += 4;
       }
    };
@@ -1344,8 +1371,16 @@ namespace glz
                using V = std::decay_t<decltype(val)>;
 
                if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() &&
-                             (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)))) {
-                  constexpr auto N = reflect<V>::size;
+                             (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)) ||
+                              is_memory_object<V>)) {
+                  constexpr auto N = []() {
+                     if constexpr (is_memory_object<V>) {
+                        return reflect<memory_type<V>>::size;
+                     }
+                     else {
+                        return reflect<V>::size;
+                     }
+                  }();
 
                   // must first write out type
                   if constexpr (Opts.prettify) {
@@ -1404,7 +1439,16 @@ namespace glz
                         }
                      }
                   }
-                  to<JSON, V>::template op<opening_and_closing_handled<Opts>()>(val, ctx, b, ix);
+                  if constexpr (is_memory_object<V>) {
+                     if (!val) [[unlikely]] {
+                        ctx.error = error_code::invalid_variant_object;
+                        return;
+                     }
+                     to<JSON, memory_type<V>>::template op<opening_and_closing_handled<Opts>()>(*val, ctx, b, ix);
+                  }
+                  else {
+                     to<JSON, V>::template op<opening_and_closing_handled<Opts>()>(val, ctx, b, ix);
+                  }
                   // If we skip everything then we may have an extra comma, which we want to revert
                   if constexpr (Opts.skip_null_members) {
                      if (b[ix - 1] == ',') {
@@ -1807,6 +1851,19 @@ namespace glz
                      static constexpr meta_context mctx{.op = operation::serialize};
                      if constexpr (meta<T>::skip(reflect<T>::keys[I], mctx)) return;
                   }
+                  if constexpr (meta_has_skip_if<T>) {
+                     static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                     static constexpr meta_context mctx{.op = operation::serialize};
+                     decltype(auto) field_value = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get<I>(t);
+                        }
+                        else {
+                           return get_member(value, glz::get<I>(reflect<T>::values));
+                        }
+                     }();
+                     if (meta<T>::skip_if(field_value, key, mctx)) return;
+                  }
 
                   constexpr bool write_member_functions = check_write_member_functions(Opts);
                   if constexpr (always_skipped<val_t> ||
@@ -1975,6 +2032,161 @@ namespace glz
       }
    };
 
+   // ============================================
+   // std::chrono serialization
+   // ============================================
+
+   // Duration: serialize as count
+   template <is_duration T>
+      requires(not custom_write<T>)
+   struct to<JSON, T>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<JSON, Rep>::template op<Opts>(value.count(), ctx, b, ix);
+      }
+   };
+
+   // system_clock::time_point: serialize as ISO 8601 string
+   // Zero-allocation implementation writing directly to buffer
+   template <is_system_time_point T>
+      requires(not custom_write<T>)
+   struct to<JSON, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using namespace std::chrono;
+         using TP = std::remove_cvref_t<T>;
+         using Duration = typename TP::duration;
+
+         // Split into date and time-of-day
+         const auto dp = floor<days>(value);
+         const year_month_day ymd{dp};
+         const hh_mm_ss tod{floor<Duration>(value - dp)};
+
+         // Extract components
+         const int yr = static_cast<int>(ymd.year());
+         const unsigned mo = static_cast<unsigned>(ymd.month());
+         const unsigned dy = static_cast<unsigned>(ymd.day());
+         const auto hr = static_cast<unsigned>(tod.hours().count());
+         const auto mi = static_cast<unsigned>(tod.minutes().count());
+         const auto sc = static_cast<unsigned>(tod.seconds().count());
+
+         // Calculate fractional digits based on duration precision
+         constexpr size_t frac_digits = []() constexpr {
+            using Period = typename Duration::period;
+            if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+               return 0; // seconds or coarser
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
+               return 3; // milliseconds
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
+               return 6; // microseconds
+            }
+            else {
+               return 9; // nanoseconds or finer
+            }
+         }();
+
+         // Max size: "YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ" = 30 + quotes = 32
+         constexpr size_t max_size = 22 + (frac_digits > 0 ? 1 + frac_digits : 0);
+         maybe_pad<max_size>(b, ix);
+
+         // Helper to write N-digit zero-padded number
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
+               b[ix + i - 1] = static_cast<char>('0' + val % 10);
+               val /= 10;
+            }
+            ix += N;
+         };
+
+         if constexpr (not Opts.raw) {
+            b[ix++] = '"';
+         }
+         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
+         b[ix++] = '-';
+         write_digits.template operator()<2>(mo);
+         b[ix++] = '-';
+         write_digits.template operator()<2>(dy);
+         b[ix++] = 'T';
+         write_digits.template operator()<2>(hr);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(mi);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(sc);
+
+         // Write fractional seconds if duration is finer than seconds
+         if constexpr (frac_digits > 0) {
+            b[ix++] = '.';
+            const auto subsec = tod.subseconds();
+            if constexpr (frac_digits == 3) {
+               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+            }
+            else if constexpr (frac_digits == 6) {
+               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+            }
+            else {
+               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+            }
+         }
+
+         b[ix++] = 'Z';
+         if constexpr (not Opts.raw) {
+            b[ix++] = '"';
+         }
+      }
+   };
+
+   // steady_clock::time_point: serialize as count in the time_point's native duration
+   template <is_steady_time_point T>
+      requires(not custom_write<T>)
+   struct to<JSON, T>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         const auto count = value.time_since_epoch().count();
+         to<JSON, Rep>::template op<Opts>(count, ctx, b, ix);
+      }
+   };
+
+   // high_resolution_clock::time_point when it's a distinct type (rare)
+   template <is_high_res_time_point T>
+      requires(not custom_write<T>)
+   struct to<JSON, T>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         // Treat like steady_clock - serialize as count since epoch is implementation-defined
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         const auto count = value.time_since_epoch().count();
+         to<JSON, Rep>::template op<Opts>(count, ctx, b, ix);
+      }
+   };
+
+   // epoch_time wrapper: serialize as numeric Unix timestamp
+   template <class Duration>
+      requires(not custom_write<epoch_time<Duration>>)
+   struct to<JSON, epoch_time<Duration>>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using Rep = typename Duration::rep;
+         const auto count = std::chrono::duration_cast<Duration>(wrapper.value.time_since_epoch()).count();
+         to<JSON, Rep>::template op<Opts>(count, ctx, b, ix);
+      }
+   };
+
    template <write_supported<JSON> T, output_buffer Buffer>
    [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer)
    {
@@ -2028,6 +2240,6 @@ namespace glz
    }
 }
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
 #pragma warning(pop)
 #endif

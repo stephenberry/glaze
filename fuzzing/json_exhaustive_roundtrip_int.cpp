@@ -58,7 +58,7 @@ void test()
    // can't use jthread, does not exist in all stdlibs.
    std::vector<std::thread> threads;
    threads.reserve(nthreads);
-   for (int threadi = 0; threadi < nthreads; ++threadi) {
+   for (size_t threadi = 0; threadi < nthreads; ++threadi) {
       const UT start = threadi * step;
       const UT stop = (threadi == nthreads - 1) ? (std::numeric_limits<UT>::max)() : start + step;
       // std::cout << "thread i=" << threadi << " goes from " << start << " to " << stop << '\n';
@@ -92,7 +92,7 @@ void testonetype(int bits)
    }
 }
 
-int main(int argc, char* argv[])
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
 {
    testonetype(16);
    testonetype(32);

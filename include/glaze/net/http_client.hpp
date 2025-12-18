@@ -60,6 +60,13 @@ namespace glz
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
 
+      // Check for control characters to prevent CRLF injection
+      for (unsigned char c : url) {
+         if (c < 32 || c == 127) {
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+         }
+      }
+
       // Find protocol
       size_t protocol_end = url.find("://");
       if (protocol_end == std::string_view::npos) {
@@ -67,7 +74,7 @@ namespace glz
       }
 
       std::string protocol(url.substr(0, protocol_end));
-      if (protocol != "http" && protocol != "https") {
+      if (protocol != "http" && protocol != "https" && protocol != "ws" && protocol != "wss") {
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
 
@@ -113,7 +120,7 @@ namespace glz
 
       uint16_t port = 0;
       if (port_str.empty()) {
-         port = (protocol == "https") ? 443 : 80;
+         port = (protocol == "https" || protocol == "wss") ? 443 : 80;
       }
       else {
          try {

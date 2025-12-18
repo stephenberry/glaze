@@ -1,175 +1,234 @@
 # Compile Time Options
 
-Glaze has a large number of available compile time options. These options are passed as a non-type template parameter to `read/write` and `from/to` calls.
+Glaze provides extensive compile time options to customize serialization/deserialization behavior. This document serves as a comprehensive reference for all available options.
 
-In order to keep template errors more succinct and allow more customization, Glaze allows (and in some cases requires) users to build their own option structs.
+## Quick Reference Tables
 
-Example:
+The tables below list **all** compile time options, organized by category:
 
-```c++
-struct custom_opts : glz::opts // Inherit from glz::opts to get basic options
-{
-  // Add known Glaze options that do not exist in the base glz::opts
-  bool validate_trailing_whitespace = true;
-};
-```
+- **Core Options**: Available in the default `glz::opts` struct
+- **Inheritable Options**: Must be added to a custom options struct (see [How to Use Inheritable Options](#how-to-use-inheritable-options))
+- **CSV Options**: Available in `glz::opts_csv`
 
-In use:
+### Core Options (`glz::opts`)
 
-```c++
-// Using custom_opts while specifying a base option (prettify) 
-glz::write<custom_opts{{glz::opts{.prettify = true}}, true}>(obj);
-```
+| Option | Default | Description |
+|--------|---------|-------------|
+| `uint32_t format` | `JSON` | Format selector (`JSON`, `BEVE`, `CSV`, `TOML`, etc.) |
+| `bool null_terminated` | `true` | Whether the input buffer is null terminated |
+| `bool comments` | `false` | Support reading JSONC style comments |
+| `bool error_on_unknown_keys` | `true` | Error when an unknown key is encountered |
+| `bool skip_null_members` | `true` | Skip writing out members if their value is null |
+| `bool prettify` | `false` | Write out prettified JSON |
+| `bool minified` | `false` | Require minified input for faster read performance |
+| `char indentation_char` | `' '` | Prettified JSON indentation character |
+| `uint8_t indentation_width` | `3` | Prettified JSON indentation size |
+| `bool new_lines_in_arrays` | `true` | Whether prettified arrays have new lines per element |
+| `bool error_on_missing_keys` | `false` | Require all non-nullable keys to be present |
+| `bool quoted_num` | `false` | Treat numbers as quoted or arrays as having quoted numbers |
+| `bool number` | `false` | Treat string-like types as numbers |
+| `bool raw` | `false` | Write string-like values without quotes |
+| `bool raw_string` | `false` | Skip escape sequence encoding/decoding for strings |
+| `bool structs_as_arrays` | `false` | Handle structs without keys (as arrays) |
+| `bool partial_read` | `false` | Exit after reading the deepest structural object |
 
-## How Custom Options Work
+### Inheritable Options
 
-Glaze uses C++20 concepts to detect if an option exists in the provided options struct, if it doesn't exist, a default value is returned.
+These options are **not** in `glz::opts` by default. Add them to a custom options struct to use them.
 
-```c++
-// Code from Glaze demonstrating compile time option check:
-consteval bool check_validate_trailing_whitespace(auto&& Opts) {
-  if constexpr (requires { Opts.validate_trailing_whitespace; }) {
-     return Opts.validate_trailing_whitespace;
-  } else {
-     return false; // Default value (may be different for various options)
-  }
-}
-```
+| Option | Default | Description |
+|--------|---------|-------------|
+| `bool validate_skipped` | `false` | Perform full validation on skipped values |
+| `bool validate_trailing_whitespace` | `false` | Validate whitespace after parsing completes |
+| `bool bools_as_numbers` | `false` | Read/write booleans as `1` and `0` |
+| `bool write_member_functions` | `false` | Serialize member function pointers in `glz::meta` (off by default for safety) |
+| `bool concatenate` | `true` | Concatenate ranges of `std::pair` into single objects |
+| `bool allow_conversions` | `true` | Allow type conversions in BEVE (e.g., `double` → `float`) |
+| `bool write_type_info` | `true` | Write type info for meta objects in variants |
+| `bool append_arrays` | `false` | Append to arrays instead of replacing contents |
+| `bool shrink_to_fit` | `false` | Shrink dynamic containers after reading |
+| `bool error_on_const_read` | `false` | Error when attempting to read into a const value |
+| `bool hide_non_invocable` | `true` | Hide non-invocable members from `cli_menu` |
+| `bool escape_control_characters` | `false` | Escape control characters as unicode sequences |
+| `float_precision float_max_write_precision` | `full` | Maximum precision for writing floats |
+| `bool skip_null_members_on_read` | `false` | Skip null values when reading (preserve existing value) |
+| `bool skip_self_constraint` | `false` | Skip `self_constraint` validation during reading |
 
-## Default `glz::opts` Options
+### CSV Options (`glz::opts_csv`)
 
-These are the default options provided by `glz::opts` in `include/glaze/core/opts.hpp`. You can inherit from `glz::opts` to create custom option structs and override these defaults or add new options.
+For CSV format, use `glz::opts_csv` which provides CSV-specific defaults.
 
-```c++
-struct opts
-{
-   uint32_t format = JSON;
-   // The default format for reading/writing (JSON)
+| Option | Default | Description |
+|--------|---------|-------------|
+| `uint32_t format` | `CSV` | Format selector (fixed to CSV) |
+| `bool null_terminated` | `true` | Whether the input buffer is null terminated |
+| `uint8_t layout` | `rowwise` | Data layout: `rowwise` or `colwise` |
+| `bool use_headers` | `true` | Read/write with column headers |
+| `bool raw_string` | `false` | Skip escape sequence encoding/decoding |
+| `bool skip_header_row` | `false` | Skip first row when reading |
+| `bool validate_rectangular` | `false` | Ensure all rows have equal column counts |
 
-   bool null_terminated = true;
-   // Whether the input buffer is null terminated
-   
-   bool comments = false;
-   // Support reading in JSONC style comments
-
-   bool error_on_unknown_keys = true;
-   // Error when an unknown key is encountered
-
-   bool skip_null_members = true;
-   // Skip writing out params in an object if the value is null
-   // This applies to nullable types like std::optional, std::shared_ptr, and raw pointers (T*)
-
-   bool prettify = false;
-   // Write out prettified JSON
-
-   bool minified = false;
-   // Require minified input for JSON, which results in faster read performance
-
-   char indentation_char = ' ';
-   // Prettified JSON indentation char
-
-   uint8_t indentation_width = 3;
-   // Prettified JSON indentation size
-
-   bool new_lines_in_arrays = true;
-   // Whether prettified arrays should have new lines for each element
-
-   bool append_arrays = false;
-   // When reading into an array the data will be appended if the type supports it
-
-   bool error_on_missing_keys = false;
-   // Require all non nullable keys to be present in the object.
-   // Use skip_null_members = false to require nullable members
-
-   bool error_on_const_read = false;
-   // Error if attempt is made to read into a const value, by default the value is skipped without error
-   
-   bool bools_as_numbers = false;
-   // Read and write booleans with 1's and 0's
-   
-   bool quoted_num = false;
-   // Treat numbers as quoted or array-like types as having quoted numbers
-   
-   bool number = false;
-   // Treats all types like std::string as numbers: read/write these quoted numbers
-   
-   bool raw = false;
-   // write out string like values without quotes
-   
-   bool raw_string = false;
-   // Do not decode/encode escaped characters for strings (improves read/write performance)
-   
-   bool structs_as_arrays = false;
-   // Handle structs (reading/writing) without keys, which applies
-
-   bool partial_read = false;
-   // Reads into the deepest structural object and then exits without parsing the rest of the input
-};
-```
-
-## Available Options Outside of `glz::opts`
-
-The supported, but not default provided options are listed after `glz::opts` and include:
-
-```c++
-bool validate_skipped = false;
-// If full validation should be performed on skipped values
-
-bool write_member_functions = false;
-// Serialize member function pointers referenced in glz::meta instead of skipping them
-// JSON/BEVE/TOML writers skip member function pointers by default for safety
-
-bool validate_trailing_whitespace = false;
-// If, after parsing a value, we want to validate the trailing whitespace
-
-bool concatenate = true;
-// Concatenates ranges of std::pair into single objects when writing
-
-bool allow_conversions = true;
-// Whether conversions between convertible types are allowed in binary, e.g. double -> float
-
-bool write_type_info = true;
-// Write type info for meta objects in variants
-
-bool shrink_to_fit = false;
-// Shrinks dynamic containers to new size to save memory
-
-bool hide_non_invocable = true;
-// Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
-
-bool escape_control_characters = false;
-// Escapes control characters like 0x01 or null characters with proper unicode escape sequences.
-// The default behavior does not escape these characters for performance and safety
-// (embedding nulls can cause issues, especially with C APIs)
-// Glaze will error when parsing non-escaped control character (per the JSON spec)
-// This option allows escaping control characters to avoid such errors.
-
-float_precision float_max_write_precision{};
-// The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
-```
-
-## CSV Options (`glz::opts_csv`)
-
-For CSV, use `glz::opts_csv` to access CSV-specific options and defaults.
-
-```c++
-struct opts_csv {
-  uint32_t format = CSV;                 // CSV format selector
-  static constexpr bool null_terminated = true;
-  uint8_t layout = rowwise;              // rowwise | colwise
-  bool use_headers = true;               // write/read with headers for structs
-  bool append_arrays = false;            // append on read if container supports it
-  bool raw_string = false;               // do not escape/unescape string contents
-  bool skip_header_row = false;          // skip first row on read
-  bool validate_rectangular = false;     // enforce equal column counts on 2D reads
-  uint32_t internal{};                   // internal flags
-};
-```
-
-Notes:
+**Notes:**
 - `layout`: `rowwise` treats each row as a record; `colwise` uses columns (2D arrays are transposed on IO).
 - `use_headers`: when `false`, vectors of structs read/write without headers in declaration order.
 - `skip_header_row`: skip the first row during read (useful when ingesting headered CSV into headerless targets).
 - `validate_rectangular`: for 2D arrays, fail reads when row lengths differ (`constraint_violated`).
-- `append_arrays`: appends parsed values to existing containers when supported.
+- `append_arrays`: appends parsed values to existing containers when supported (add to custom opts struct).
 - Use as a template parameter: `glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(...)`.
+
+---
+
+## How to Use Inheritable Options
+
+Glaze uses C++20 concepts to detect if an option exists. If an option is not present in your options struct, a default value is used. This allows you to create custom option structs with only the options you need.
+
+### Creating a Custom Options Struct
+
+Inherit from `glz::opts` and add the options you need:
+
+```c++
+struct my_opts : glz::opts
+{
+   bool validate_trailing_whitespace = true;
+   bool skip_self_constraint = true;
+};
+```
+
+### Using Custom Options
+
+```c++
+constexpr my_opts opts{};
+auto ec = glz::read<opts>(obj, buffer);
+```
+
+Or specify base options inline:
+
+```c++
+// Set both a base option (prettify) and an inheritable option
+struct my_write_opts : glz::opts {
+   bool escape_control_characters = true;
+};
+glz::write<my_write_opts{.prettify = true, .escape_control_characters = true}>(obj, buffer);
+```
+
+### How Detection Works
+
+Glaze uses `consteval` functions to check for option existence at compile time:
+
+```c++
+consteval bool check_validate_trailing_whitespace(auto&& Opts) {
+   if constexpr (requires { Opts.validate_trailing_whitespace; }) {
+      return Opts.validate_trailing_whitespace;
+   } else {
+      return false; // Default value
+   }
+}
+```
+
+---
+
+## Option Details
+
+### Format & Parsing Options
+
+#### `format`
+Selects the serialization format. Built-in formats include:
+- `glz::JSON` (10) - JSON format
+- `glz::BEVE` (1) - Binary Efficient Versatile Encoding
+- `glz::CSV` (10000) - Comma Separated Values
+- `glz::TOML` (400) - Tom's Obvious Minimal Language
+- `glz::NDJSON` (100) - Newline Delimited JSON
+
+#### `null_terminated`
+When `true` (default), Glaze assumes input buffers are null-terminated, enabling certain optimizations. Set to `false` for non-null-terminated buffers with a small performance cost.
+
+#### `comments`
+Enable JSONC-style comment parsing (`//` and `/* */`).
+
+#### `minified`
+When `true`, assumes input JSON has no unnecessary whitespace. Provides faster parsing but will fail on prettified input.
+
+### Validation Options
+
+#### `error_on_unknown_keys`
+When `true` (default), parsing fails if the JSON contains keys not present in your C++ struct. Set to `false` to silently skip unknown keys.
+
+#### `error_on_missing_keys`
+When `true`, parsing fails if required keys are missing from the JSON input. Works with `skip_null_members = false` to also require nullable members. Can be customized per-type using `meta<T>::requires_key(key, is_nullable)` function (see [Field Validation](field-validation.md)).
+
+#### `validate_skipped`
+Performs full JSON validation on values that are skipped (unknown keys). Without this, Glaze only validates that skipped content is structurally valid.
+
+#### `validate_trailing_whitespace`
+Validates that content after the parsed value contains only valid whitespace.
+
+#### `skip_self_constraint`
+Skips `self_constraint` validation during deserialization. Useful for performance when data is known to be valid. See [Wrappers](wrappers.md) for more on constraints.
+
+#### `error_on_const_read`
+When `true`, attempting to read into a const value produces an error. By default, const values are silently skipped.
+
+### Output Control Options
+
+#### `skip_null_members`
+When `true` (default), null values are omitted from JSON output. This applies to nullable types like `std::optional`, `std::shared_ptr`, `std::unique_ptr`, and raw pointers (`T*`).
+
+#### `prettify`
+When `true`, outputs formatted JSON with indentation and newlines.
+
+#### `indentation_char` / `indentation_width`
+Control prettified output formatting. Default is 3 spaces per level.
+
+#### `new_lines_in_arrays`
+When `true` (default), prettified arrays have each element on its own line.
+
+#### `raw` / `raw_string`
+Control string quoting and escape sequence handling. Useful for embedding pre-formatted content.
+
+#### `escape_control_characters`
+When `true`, control characters (0x00-0x1F) are escaped as `\uXXXX` sequences. The default (`false`) does not escape these characters for performance and safety (embedding nulls can cause issues, especially with C APIs). Glaze will error when parsing non-escaped control characters per the JSON spec—this option allows writing them as escaped unicode to avoid such errors on re-read.
+
+### Performance Options
+
+#### `partial_read`
+Exits parsing after reading the deepest structural object. Useful for reading headers or partial documents.
+
+#### `append_arrays`
+When reading into arrays, appends new elements instead of replacing existing contents.
+
+#### `shrink_to_fit`
+Calls `shrink_to_fit()` on dynamic containers after reading to minimize memory usage.
+
+### Type Handling Options
+
+#### `quoted_num`
+Treats numbers as quoted strings (e.g., `"123"` instead of `123`).
+
+#### `number`
+Treats string-like types as unquoted numbers.
+
+#### `structs_as_arrays`
+Serializes/deserializes structs as JSON arrays (without keys), using field order.
+
+#### `bools_as_numbers`
+Reads/writes boolean values as `1` and `0` instead of `true` and `false`.
+
+#### `write_type_info`
+When `true` (default), includes type discriminator information for variant types.
+
+#### `concatenate`
+When `true` (default), ranges of `std::pair` are written as a single object with pairs as key-value entries.
+
+#### `allow_conversions`
+When `true` (default), BEVE allows implicit type conversions (e.g., reading a `double` into a `float`).
+
+#### `float_max_write_precision`
+Limits the precision used when writing floating-point numbers. Options: `full`, `float32`, `float64`, `float128`.
+
+---
+
+## See Also
+
+- [Wrappers](wrappers.md) - Per-field options using wrappers
+- [Field Validation](field-validation.md) - Customizing required field validation
+- [Partial Read](partial-read.md) - Reading partial documents

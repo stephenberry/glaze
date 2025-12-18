@@ -2,16 +2,101 @@
 // For the license information refer to glaze.hpp
 
 #include <latch>
+#include <span>
 #include <thread>
 
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/registry.hpp"
+#include "glaze/rpc/repe/buffer.hpp"
 #include "glaze/thread/async_string.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
 
 namespace repe = glz::repe;
+
+// ============================================================
+// Test helpers for span-based API
+// ============================================================
+namespace test_helpers
+{
+   namespace detail
+   {
+      // thread_local buffers are safe in synchronous test code (no coroutines).
+      // These avoid allocations by reusing buffer capacity across calls.
+      inline std::string& request_buffer()
+      {
+         thread_local std::string buf;
+         return buf;
+      }
+
+      inline std::string& response_buffer()
+      {
+         thread_local std::string buf;
+         return buf;
+      }
+
+      inline repe::message& request_message()
+      {
+         thread_local repe::message msg;
+         // Clear strings but preserve capacity for reuse
+         msg.query.clear();
+         msg.body.clear();
+         return msg;
+      }
+   }
+
+   // Convert message to wire format, call registry with span-based API, parse response
+   template <class Registry>
+   inline repe::message call(Registry& registry, repe::message& request)
+   {
+      auto& request_buffer = detail::request_buffer();
+      auto& response_buffer = detail::response_buffer();
+
+      repe::to_buffer(request, request_buffer);
+      registry.call(std::span<const char>{request_buffer}, response_buffer);
+
+      repe::message response{};
+      repe::from_buffer(response_buffer, response);
+      return response;
+   }
+
+   // JSON request without body
+   template <class Registry>
+   inline repe::message call_json(Registry& registry, const repe::user_header& hdr)
+   {
+      auto& request = detail::request_message();
+      repe::request_json(hdr, request);
+      return call(registry, request);
+   }
+
+   // JSON request with body
+   template <class Registry, class Value>
+   inline repe::message call_json(Registry& registry, const repe::user_header& hdr, Value&& value)
+   {
+      auto& request = detail::request_message();
+      repe::request_json(hdr, request, std::forward<Value>(value));
+      return call(registry, request);
+   }
+
+   // BEVE request without body
+   template <class Registry>
+   inline repe::message call_beve(Registry& registry, const repe::user_header& hdr)
+   {
+      auto& request = detail::request_message();
+      repe::request_beve(hdr, request);
+      return call(registry, request);
+   }
+
+   // BEVE request with body
+   template <class Registry, class Value>
+   inline repe::message call_beve(Registry& registry, const repe::user_header& hdr, Value&& value)
+   {
+      auto& request = detail::request_message();
+      repe::request_beve(hdr, request, std::forward<Value>(value));
+      return call(registry, request);
+   }
+}
 
 struct my_functions_t
 {
@@ -62,7 +147,51 @@ struct example_functions_t
    };
 };
 
+struct Exhibit
+{
+   std::string name{};
+   int year{};
+
+   struct glaze
+   {
+      using T = Exhibit;
+      static constexpr auto value = glz::object(&T::name, &T::year);
+   };
+};
+
+struct Museum
+{
+   std::string name{};
+   Exhibit main_exhibit{};
+
+   Exhibit get_main_exhibit() { return main_exhibit; }
+   void set_main_exhibit(const Exhibit& exhibit) { main_exhibit = exhibit; }
+
+   struct glaze
+   {
+      using T = Museum;
+      static constexpr auto value = glz::object(&T::name, &T::main_exhibit, &T::get_main_exhibit, &T::set_main_exhibit);
+   };
+};
+
+struct VolatileData
+{
+   volatile int i = 10;
+   volatile double d = 3.14;
+
+   int get_i() volatile { return i; }
+   void inc_i() volatile { i = i + 1; }
+
+   struct glaze
+   {
+      using T = VolatileData;
+      static constexpr auto value = glz::object(&T::i, &T::d, &T::get_i, &T::inc_i);
+   };
+};
+
 suite structs_of_functions = [] {
+   using namespace test_helpers;
+
    "structs_of_functions"_test = [] {
       glz::registry server{};
 
@@ -72,19 +201,23 @@ suite structs_of_functions = [] {
 
       obj.i = 55;
 
-      repe::message response{};
-
-      server.call(repe::request_json({"/i"}), response);
+      auto response = call_json(server, {"/i"});
       expect(response.body == R"(55)") << response.body;
 
-      server.call(repe::request_json({.query = "/i"}, 42), response);
+      response = call_json(server, {.query = "/i"}, 42);
       expect(response.body == "null") << response.body;
 
-      server.call(repe::request_json({"/hello"}), response);
+      response = call_json(server, {"/hello"});
       expect(response.body == R"("Hello")");
 
-      server.call(repe::request_json({"/get_number"}), response);
+      response = call_json(server, {"/get_number"});
       expect(response.body == R"(42)");
+
+      response = call_json(server, {""});
+      expect(
+         response.body ==
+         R"({"i":42,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
+         << response.body;
    };
 
    "nested_structs_of_functions"_test = [] {
@@ -94,53 +227,40 @@ suite structs_of_functions = [] {
 
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
-      repe::request_json({"/my_functions/void_func"}, request);
-      server.call(request, response);
+      auto response = call_json(server, {"/my_functions/void_func"});
       expect(response.body == "null") << response.body;
 
-      repe::request_json({"/my_functions/hello"}, request);
-      server.call(request, response);
+      response = call_json(server, {"/my_functions/hello"});
       expect(response.body == R"("Hello")");
 
-      repe::request_json({"/meta_functions/hello"}, request);
-      server.call(request, response);
+      response = call_json(server, {"/meta_functions/hello"});
       expect(response.body == R"("Hello")");
 
-      repe::request_json({"/append_awesome"}, request, "you are");
-      server.call(request, response);
+      response = call_json(server, {"/append_awesome"}, "you are");
       expect(response.body == R"("you are awesome!")");
 
-      repe::request_json({"/my_string"}, request, "Howdy!");
-      server.call(request, response);
+      response = call_json(server, {"/my_string"}, "Howdy!");
       expect(response.body == "null");
 
-      request = repe::request_json({"/my_string"});
-      server.call(request, response);
+      response = call_json(server, {"/my_string"});
       expect(response.body == R"("Howdy!")") << response.body;
 
       obj.my_string.clear();
 
-      repe::request_json({"/my_string"}, request);
-      server.call(request, response);
+      response = call_json(server, {"/my_string"});
       // we expect an empty string returned because we cleared it
       expect(response.body == R"("")");
 
-      repe::request_json({"/my_functions/max"}, request, std::vector<double>{1.1, 3.3, 2.25});
-      server.call(request, response);
+      response = call_json(server, {"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
       expect(response.body == R"(3.3)") << response.body;
 
-      request = repe::request_json({"/my_functions"});
-      server.call(request, response);
+      response = call_json(server, {"/my_functions"});
       expect(
          response.body ==
          R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
          << response.body;
 
-      repe::request_json({""}, request);
-      server.call(request, response);
+      response = call_json(server, {""});
       expect(
          response.body ==
          R"({"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""})")
@@ -154,35 +274,67 @@ suite structs_of_functions = [] {
 
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
-      repe::request_json({"/name"}, request, "Susan");
-      server.call(request, response);
+      auto response = call_json(server, {"/name"}, "Susan");
       expect(response.body == "null") << response.body;
 
-      repe::request_json({"/get_name"}, request);
-      server.call(request, response);
+      response = call_json(server, {"/get_name"});
       expect(response.body == R"("Susan")") << response.body;
 
-      repe::request_json({"/get_name"}, request, "Bob");
-      server.call(request, response);
+      response = call_json(server, {"/get_name"}, "Bob");
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
       expect(response.body == R"("Susan")") << response.body;
 
-      repe::request_json({"/set_name"}, request, "Bob");
-      server.call(request, response);
+      response = call_json(server, {"/set_name"}, "Bob");
       expect(obj.name == "Bob");
       expect(response.body == "null") << response.body;
 
-      repe::request_json({"/custom_name"}, request, "Alice");
-      server.call(request, response);
+      response = call_json(server, {"/custom_name"}, "Alice");
       expect(obj.name == "Alice");
       expect(response.body == "null") << response.body;
+
+      response = call_json(server, {""});
+      expect(response.body == R"({"name":"Alice","custom_name":"Alice"})") << response.body;
+   };
+
+   "volatile_member_functions_test"_test = [] {
+      struct opts_with_write_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      glz::registry<opts_with_write_member_functions{}> server{};
+      VolatileData obj{};
+
+      server.on(obj);
+
+      // Test reading volatile data member
+      auto response = call_json(server, {"/i"});
+      expect(response.body == "10");
+
+      // Test calling volatile member function
+      response = call_json(server, {"/get_i"});
+      expect(response.body == "10");
+
+      // Test calling volatile void member function (modifier)
+      response = call_json(server, {"/inc_i"});
+      expect(response.body == "null");
+
+      // Verify change
+      response = call_json(server, {"/i"});
+      expect(response.body == "11");
+
+      // Test empty query with write_member_functions=true
+      response = call_json(server, {""});
+      expect(
+         response.body ==
+         R"=({"i":11,"d":3.14,"get_i":"int (VolatileData::*)() volatile","inc_i":"void (VolatileData::*)() volatile"})=")
+         << response.body;
    };
 };
 
 suite structs_of_functions_beve = [] {
+   using namespace test_helpers;
+
    "structs_of_functions"_test = [] {
       glz::registry<glz::opts{.format = glz::BEVE}> server{};
 
@@ -192,27 +344,21 @@ suite structs_of_functions_beve = [] {
 
       obj.i = 55;
 
-      repe::message request{};
-      repe::message response{};
-
-      repe::request_beve({"/i"}, request);
-      server.call(request, response);
       std::string res{};
+
+      auto response = call_beve(server, {"/i"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(55)") << res;
 
-      repe::request_beve({.query = "/i"}, request, 42);
-      server.call(request, response);
+      response = call_beve(server, {.query = "/i"}, 42);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == "null") << res;
 
-      repe::request_beve({"/hello"}, request);
-      server.call(request, response);
+      response = call_beve(server, {"/hello"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Hello")");
 
-      repe::request_beve({"/get_number"}, request);
-      server.call(request, response);
+      response = call_beve(server, {"/get_number"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(42)");
    };
@@ -224,64 +370,51 @@ suite structs_of_functions_beve = [] {
 
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
-      repe::request_beve({"/my_functions/void_func"}, request);
-      server.call(request, response);
-
       std::string res{};
+
+      auto response = call_beve(server, {"/my_functions/void_func"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == "null") << res;
 
-      repe::request_beve({"/my_functions/hello"}, request);
-      server.call(request, response);
+      response = call_beve(server, {"/my_functions/hello"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Hello")");
 
-      repe::request_beve({"/meta_functions/hello"}, request);
-      server.call(request, response);
+      response = call_beve(server, {"/meta_functions/hello"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Hello")");
 
-      repe::request_beve({"/append_awesome"}, request, "you are");
-      server.call(request, response);
+      response = call_beve(server, {"/append_awesome"}, "you are");
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("you are awesome!")");
 
-      repe::request_beve({"/my_string"}, request, "Howdy!");
-      server.call(request, response);
+      response = call_beve(server, {"/my_string"}, "Howdy!");
       expect(!glz::beve_to_json(response.body, res));
       expect(res == "null");
 
-      request = repe::request_beve({"/my_string"});
-      server.call(request, response);
+      response = call_beve(server, {"/my_string"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Howdy!")") << res;
 
       obj.my_string.clear();
 
-      request = repe::request_beve({"/my_string"});
-      server.call(request, response);
+      response = call_beve(server, {"/my_string"});
       expect(!glz::beve_to_json(response.body, res));
       // we expect an empty string returned because we cleared it
       expect(res == R"("")");
 
-      repe::request_beve({"/my_functions/max"}, request, std::vector<double>{1.1, 3.3, 2.25});
-      server.call(request, response);
+      response = call_beve(server, {"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(3.3)") << res;
 
-      request = repe::request_beve({"/my_functions"});
-      server.call(request, response);
+      response = call_beve(server, {"/my_functions"});
       expect(!glz::beve_to_json(response.body, res));
       expect(
          res ==
          R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
          << res;
 
-      repe::request_beve({""}, request);
-      server.call(request, response);
+      response = call_beve(server, {""});
       expect(!glz::beve_to_json(response.body, res));
       expect(
          res ==
@@ -296,39 +429,27 @@ suite structs_of_functions_beve = [] {
 
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
-      repe::request_beve({"/name"}, request, "Susan");
-      server.call(request, response);
-
       std::string res{};
+
+      auto response = call_beve(server, {"/name"}, "Susan");
       expect(!glz::beve_to_json(response.body, res));
       expect(res == "null") << res;
 
-      repe::request_beve({"/get_name"}, request);
-      server.call(request, response);
-
+      response = call_beve(server, {"/get_name"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Susan")") << res;
 
-      repe::request_beve({"/get_name"}, request, "Bob");
-      server.call(request, response);
-
+      response = call_beve(server, {"/get_name"}, "Bob");
       expect(!glz::beve_to_json(response.body, res));
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
       expect(res == R"("Susan")") << res;
 
-      repe::request_beve({"/set_name"}, request, "Bob");
-      server.call(request, response);
-
+      response = call_beve(server, {"/set_name"}, "Bob");
       expect(!glz::beve_to_json(response.body, res));
       expect(obj.name == "Bob");
       expect(res == "null") << res;
 
-      repe::request_beve({"/custom_name"}, request, "Alice");
-      server.call(request, response);
-
+      response = call_beve(server, {"/custom_name"}, "Alice");
       expect(!glz::beve_to_json(response.body, res));
       expect(obj.name == "Alice");
       expect(res == "null") << res;
@@ -347,6 +468,8 @@ struct wrapper_t
 };
 
 suite wrapper_tests = [] {
+   using namespace test_helpers;
+
    "wrapper"_test = [] {
       glz::registry server{};
 
@@ -355,20 +478,17 @@ suite wrapper_tests = [] {
 
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
-      repe::request_json({"/sub/my_functions/void_func"}, request);
-      server.call(request, response);
+      auto response = call_json(server, {"/sub/my_functions/void_func"});
       expect(response.body == "null") << response.body;
 
-      repe::request_json({"/sub/my_functions/hello"}, request);
-      server.call(request, response);
+      response = call_json(server, {"/sub/my_functions/hello"});
       expect(response.body == R"("Hello")");
    };
 };
 
 suite root_tests = [] {
+   using namespace test_helpers;
+
    "root /sub"_test = [] {
       glz::registry server{};
 
@@ -376,20 +496,17 @@ suite root_tests = [] {
 
       server.on<glz::root<"/sub">>(obj);
 
-      repe::message request{};
-      repe::message response{};
-
-      repe::request_json({"/sub/my_functions/void_func"}, request);
-      server.call(request, response);
+      auto response = call_json(server, {"/sub/my_functions/void_func"});
       expect(response.body == "null") << response.body;
 
-      repe::request_json({"/sub/my_functions/hello"}, request);
-      server.call(request, response);
+      response = call_json(server, {"/sub/my_functions/hello"});
       expect(response.body == R"("Hello")");
    };
 };
 
 suite wrapper_tests_beve = [] {
+   using namespace test_helpers;
+
    "wrapper"_test = [] {
       glz::registry<glz::opts{.format = glz::BEVE}> server{};
 
@@ -398,19 +515,13 @@ suite wrapper_tests_beve = [] {
 
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
-      repe::request_beve({"/sub/my_functions/void_func"}, request);
-      server.call(request, response);
-
       std::string res{};
+
+      auto response = call_beve(server, {"/sub/my_functions/void_func"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == "null") << res;
 
-      repe::request_beve({"/sub/my_functions/hello"}, request);
-      server.call(request, response);
-
+      response = call_beve(server, {"/sub/my_functions/hello"});
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Hello")");
    };
@@ -540,19 +651,18 @@ suite glaze_types_test = [] {
 };
 
 suite validation_tests = [] {
+   using namespace test_helpers;
+
    "version_validation"_test = [] {
       glz::registry server{};
       my_functions_t obj{};
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
       // Create a request with invalid version
-      repe::request_json({"/hello"}, request);
+      auto request = repe::request_json({"/hello"});
       request.header.version = 2; // Invalid version
 
-      server.call(request, response);
+      auto response = call(server, request);
 
       expect(response.header.ec == glz::error_code::version_mismatch);
       expect(response.body.find("version mismatch") != std::string::npos);
@@ -563,14 +673,11 @@ suite validation_tests = [] {
       my_functions_t obj{};
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
       // Create a request with invalid length
-      repe::request_json({"/hello"}, request);
+      auto request = repe::request_json({"/hello"});
       request.header.length = 100; // Wrong length
 
-      server.call(request, response);
+      auto response = call(server, request);
 
       expect(response.header.ec == glz::error_code::invalid_header);
       expect(response.body.find("length mismatch") != std::string::npos);
@@ -581,14 +688,11 @@ suite validation_tests = [] {
       my_functions_t obj{};
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
       // Create a request with invalid magic number
-      repe::request_json({"/hello"}, request);
+      auto request = repe::request_json({"/hello"});
       request.header.spec = 0x1234; // Wrong magic number
 
-      server.call(request, response);
+      auto response = call(server, request);
 
       expect(response.header.ec == glz::error_code::invalid_header);
       expect(response.body.find("magic number mismatch") != std::string::npos);
@@ -599,14 +703,8 @@ suite validation_tests = [] {
       my_functions_t obj{};
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
       // Create a valid request
-      repe::request_json({"/hello"}, request);
-      // All validation fields should be correct by default
-
-      server.call(request, response);
+      auto response = call_json(server, {"/hello"});
 
       // Should succeed and not have validation errors
       expect(response.header.ec == glz::error_code::none);
@@ -621,20 +719,19 @@ struct throwing_functions_t
 };
 
 suite id_preservation_tests = [] {
+   using namespace test_helpers;
+
    "method_not_found_preserves_id"_test = [] {
       glz::registry server{};
 
       my_functions_t obj{};
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
       // Create a request with a specific ID for a non-existent endpoint
-      repe::request_json({"/non_existent_endpoint"}, request);
+      auto request = repe::request_json({"/non_existent_endpoint"});
       request.header.id = 12345; // Set a specific ID
 
-      server.call(request, response);
+      auto response = call(server, request);
 
       // Verify error is set and ID is preserved
       expect(response.header.ec == glz::error_code::method_not_found);
@@ -648,14 +745,11 @@ suite id_preservation_tests = [] {
       throwing_functions_t obj{};
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
       // Create a request with a specific ID
-      repe::request_json({"/throw_func"}, request);
+      auto request = repe::request_json({"/throw_func"});
       request.header.id = 67890; // Set a specific ID
 
-      server.call(request, response);
+      auto response = call(server, request);
 
       // Verify error is set and ID is preserved
       expect(response.header.ec == glz::error_code::parse_error);
@@ -669,35 +763,32 @@ suite id_preservation_tests = [] {
       my_functions_t obj{};
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
       // Test version mismatch
-      repe::request_json({"/hello"}, request);
+      auto request = repe::request_json({"/hello"});
       request.header.id = 11111;
       request.header.version = 2; // Invalid version
 
-      server.call(request, response);
+      auto response = call(server, request);
 
       expect(response.header.ec == glz::error_code::version_mismatch);
       expect(response.header.id == 11111) << "ID should be preserved in version_mismatch error";
 
       // Test invalid length
-      repe::request_json({"/hello"}, request);
+      request = repe::request_json({"/hello"});
       request.header.id = 22222;
       request.header.length = 100; // Wrong length
 
-      server.call(request, response);
+      response = call(server, request);
 
       expect(response.header.ec == glz::error_code::invalid_header);
       expect(response.header.id == 22222) << "ID should be preserved in length mismatch error";
 
       // Test invalid magic number
-      repe::request_json({"/hello"}, request);
+      request = repe::request_json({"/hello"});
       request.header.id = 33333;
       request.header.spec = 0x1234; // Wrong magic number
 
-      server.call(request, response);
+      response = call(server, request);
 
       expect(response.header.ec == glz::error_code::invalid_header);
       expect(response.header.id == 33333) << "ID should be preserved in magic number error";
@@ -709,19 +800,292 @@ suite id_preservation_tests = [] {
       my_functions_t obj{};
       server.on(obj);
 
-      repe::message request{};
-      repe::message response{};
-
       // Create a valid request with a specific ID
-      repe::request_json({"/get_number"}, request);
+      auto request = repe::request_json({"/get_number"});
       request.header.id = 99999;
 
-      server.call(request, response);
+      auto response = call(server, request);
 
       // Verify success and ID is preserved
       expect(response.header.ec == glz::error_code::none);
       expect(response.header.id == 99999) << "ID should be preserved in successful response";
       expect(response.body == R"(42)");
+   };
+};
+
+struct inner_t
+{
+   int val = 10;
+   int get_val() { return val; }
+
+   struct glaze
+   {
+      using T = inner_t;
+      static constexpr auto value = glz::object(&T::val, &T::get_val);
+   };
+};
+
+struct middle_t
+{
+   inner_t inner{};
+   std::string name = "mid";
+   std::string_view get_name() { return name; }
+
+   struct glaze
+   {
+      using T = middle_t;
+      static constexpr auto value = glz::object(&T::inner, &T::name, &T::get_name);
+   };
+};
+
+struct outer_t
+{
+   middle_t middle{};
+   double score = 3.14;
+   void set_score(double s) { score = s; }
+
+   struct glaze
+   {
+      using T = outer_t;
+      static constexpr auto value = glz::object(&T::middle, &T::score, &T::set_score);
+   };
+};
+
+suite deeply_nested_tests = [] {
+   using namespace test_helpers;
+
+   "nested_mix_test"_test = [] {
+      glz::registry server{};
+      outer_t obj{};
+      server.on(obj);
+
+      // Modify some values to ensure we get current state
+      obj.middle.inner.val = 99;
+      obj.middle.name = "modified_mid";
+      obj.score = 1.23;
+
+      auto response = call_json(server, {""});
+
+      expect(response.body == R"({"middle":{"inner":{"val":99},"name":"modified_mid"},"score":1.23})") << response.body;
+   };
+
+   "nested_mix_write_member_functions_test"_test = [] {
+      struct opts_with_write_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      glz::registry<opts_with_write_member_functions{}> server{};
+      outer_t obj{};
+      server.on(obj);
+
+      // Modify some values
+      obj.middle.inner.val = 99;
+      obj.middle.name = "modified_mid";
+      obj.score = 1.23;
+
+      auto response = call_json(server, {""});
+
+      expect(
+         response.body ==
+         R"e({"middle":{"inner":{"val":99,"get_val":"int32_t (inner_t::*)()"},"name":"modified_mid","get_name":"std::string_view (middle_t::*)()"},"score":1.23,"set_score":"void (outer_t::*)(double)"})e")
+         << response.body;
+   };
+
+   "museum_member_functions_test"_test = [] {
+      struct opts_with_write_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      glz::registry<opts_with_write_member_functions{}> server{};
+      Museum museum{};
+      museum.name = "The Louvre";
+      museum.main_exhibit = {"Mona Lisa", 1503};
+
+      server.on(museum);
+
+      // Test reading data member
+      auto response = call_json(server, {"/name"});
+      expect(response.body == R"("The Louvre")");
+
+      // Test calling member function that returns a struct
+      response = call_json(server, {"/get_main_exhibit"});
+      expect(response.body == R"({"name":"Mona Lisa","year":1503})") << response.body;
+
+      // Test writing via member function
+      response = call_json(server, {.query = "/set_main_exhibit"}, Exhibit{"The Raft of the Medusa", 1819});
+      expect(response.body == "null");
+
+      // Verify change
+      response = call_json(server, {"/main_exhibit"});
+      expect(response.body == R"({"name":"The Raft of the Medusa","year":1819})");
+
+      response = call_json(server, {""});
+      expect(
+         response.body ==
+         R"=({"name":"The Louvre","main_exhibit":{"name":"The Raft of the Medusa","year":1819},"get_main_exhibit":"Exhibit (Museum::*)()","set_main_exhibit":"void (Museum::*)(const Exhibit&)"})=")
+         << response.body;
+   };
+};
+
+// Test types for merge functionality
+struct first_object_t
+{
+   int value1 = 42;
+   std::string name1 = "first";
+   int get_value1() { return value1; }
+
+   struct glaze
+   {
+      using T = first_object_t;
+      static constexpr auto value = glz::object(&T::value1, &T::name1, &T::get_value1);
+   };
+};
+
+struct second_object_t
+{
+   double value2 = 3.14;
+   std::string name2 = "second";
+   double get_value2() { return value2; }
+
+   struct glaze
+   {
+      using T = second_object_t;
+      static constexpr auto value = glz::object(&T::value2, &T::name2, &T::get_value2);
+   };
+};
+
+suite merge_tests = [] {
+   using namespace test_helpers;
+
+   "merge_basic"_test = [] {
+      glz::registry server{};
+
+      first_object_t obj1{};
+      second_object_t obj2{};
+
+      auto merged = glz::merge{obj1, obj2};
+      server.on(merged);
+
+      // Test reading from first object
+      auto response = call_json(server, {"/value1"});
+      expect(response.body == "42") << response.body;
+
+      response = call_json(server, {"/name1"});
+      expect(response.body == R"("first")") << response.body;
+
+      response = call_json(server, {"/get_value1"});
+      expect(response.body == "42") << response.body;
+
+      // Test reading from second object
+      response = call_json(server, {"/value2"});
+      expect(response.body == "3.14") << response.body;
+
+      response = call_json(server, {"/name2"});
+      expect(response.body == R"("second")") << response.body;
+
+      response = call_json(server, {"/get_value2"});
+      expect(response.body == "3.14") << response.body;
+
+      // Test merged root endpoint returns combined view
+      response = call_json(server, {""});
+      expect(response.body == R"({"value1":42,"name1":"first","value2":3.14,"name2":"second"})") << response.body;
+   };
+
+   "merge_write_individual_fields"_test = [] {
+      glz::registry server{};
+
+      first_object_t obj1{};
+      second_object_t obj2{};
+
+      auto merged = glz::merge{obj1, obj2};
+      server.on(merged);
+
+      // Write to individual fields should work
+      auto response = call_json(server, {.query = "/value1"}, 100);
+      expect(response.body == "null") << response.body;
+
+      response = call_json(server, {"/value1"});
+      expect(response.body == "100") << response.body;
+
+      response = call_json(server, {.query = "/name2"}, "modified");
+      expect(response.body == "null") << response.body;
+
+      response = call_json(server, {"/name2"});
+      expect(response.body == R"("modified")") << response.body;
+   };
+
+   "merge_write_to_root_not_supported"_test = [] {
+      glz::registry server{};
+
+      first_object_t obj1{};
+      second_object_t obj2{};
+
+      auto merged = glz::merge{obj1, obj2};
+      server.on(merged);
+
+      // Writing to merged root should return error
+      auto response = call_json(server, {.query = ""}, R"({"value1":999})");
+      expect(response.header.ec == glz::error_code::invalid_body);
+      expect(response.body.find("not supported") != std::string::npos) << response.body;
+   };
+
+   "merge_with_nested_objects"_test = [] {
+      glz::registry server{};
+
+      Museum museum{};
+      museum.name = "Art Museum";
+      museum.main_exhibit = {"Starry Night", 1889};
+
+      first_object_t obj1{};
+      obj1.value1 = 10;
+
+      auto merged = glz::merge{museum, obj1};
+      server.on(merged);
+
+      // Access nested object from museum
+      auto response = call_json(server, {"/main_exhibit"});
+      expect(response.body == R"({"name":"Starry Night","year":1889})") << response.body;
+
+      response = call_json(server, {"/main_exhibit/name"});
+      expect(response.body == R"("Starry Night")") << response.body;
+
+      // Access field from first_object_t
+      response = call_json(server, {"/value1"});
+      expect(response.body == "10") << response.body;
+
+      // Root should return merged view
+      response = call_json(server, {""});
+      expect(response.body.find("\"name\":\"Art Museum\"") != std::string::npos) << response.body;
+      expect(response.body.find("\"value1\":10") != std::string::npos) << response.body;
+   };
+
+   "merge_beve"_test = [] {
+      glz::registry<glz::opts{.format = glz::BEVE}> server{};
+
+      first_object_t obj1{};
+      second_object_t obj2{};
+
+      auto merged = glz::merge{obj1, obj2};
+      server.on(merged);
+
+      std::string res{};
+
+      // Test reading from merged objects with BEVE
+      auto response = call_beve(server, {"/value1"});
+      expect(!glz::beve_to_json(response.body, res));
+      expect(res == "42") << res;
+
+      response = call_beve(server, {"/value2"});
+      expect(!glz::beve_to_json(response.body, res));
+      expect(res == "3.14") << res;
+
+      // Test merged root with BEVE
+      response = call_beve(server, {""});
+      expect(!glz::beve_to_json(response.body, res));
+      expect(res.find("\"value1\":42") != std::string::npos) << res;
+      expect(res.find("\"value2\":3.14") != std::string::npos) << res;
    };
 };
 

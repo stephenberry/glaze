@@ -21,7 +21,6 @@
 #include "glaze/util/bit_array.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/for_each.hpp"
-#include "glaze/util/hash_map.hpp"
 #include "glaze/util/help.hpp"
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/tuple.hpp"
@@ -209,17 +208,30 @@ namespace glz
    template <class T>
    concept meta_value_t = glaze_t<std::decay_t<T>>;
 
-   // this concept requires that T is just a view
+   // Concept for byte-sized string views (std::string_view, std::u8string_view)
+   // Excludes wide string views (wstring_view, u16string_view, u32string_view)
    template <class T>
-   concept string_view_t = std::same_as<std::decay_t<T>, std::string_view>;
+   concept string_view_t =
+      is_specialization_v<std::decay_t<T>, std::basic_string_view> && sizeof(typename std::decay_t<T>::value_type) == 1;
+
+   // Concept for byte-sized basic_string types (std::string, std::u8string)
+   // Excludes wide strings (wstring, u16string, u32string)
+   template <class T>
+   concept basic_string_t =
+      is_specialization_v<std::decay_t<T>, std::basic_string> && sizeof(typename std::decay_t<T>::value_type) == 1;
 
    template <class T>
    concept array_char_t =
       requires { std::tuple_size<T>::value; } && std::same_as<T, std::array<char, std::tuple_size_v<T>>>;
 
+   // Concept for char8_t-based string types (std::u8string, std::u8string_view)
+   template <class T>
+   concept u8str_t =
+      (basic_string_t<T> || string_view_t<T>) && std::same_as<typename std::decay_t<T>::value_type, char8_t>;
+
    template <class T>
    concept str_t = (!std::same_as<std::nullptr_t, T> && std::constructible_from<std::string_view, std::decay_t<T>>) ||
-                   array_char_t<T>;
+                   array_char_t<T> || u8str_t<T>;
 
    template <class T>
    concept is_static_string =
@@ -237,6 +249,12 @@ namespace glz
 
    template <class T>
    concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
+
+   // Concept: does T's mimic type satisfy str_t?
+   // This allows checking if a custom type mimics string behavior.
+   // Prevents double-quoting when used as a map key.
+   template <class T>
+   concept mimics_str_t = has_mimic<T> && str_t<mimic_type<T>>;
 
    template <class T>
    concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> &&
@@ -408,38 +426,6 @@ namespace glz
 #endif
    };
 
-   template <is_variant T, size_t... I>
-   constexpr auto make_variant_sv_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
-   {
-      // Use the actual size of the ids array, not the variant size
-      return normal_map<sv, size_t, sizeof...(I)>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
-   }
-
-   template <is_variant T, size_t... I>
-   constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
-   {
-      using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-      // Use the actual size of the ids array, not the variant size
-      return normal_map<id_type, size_t, sizeof...(I)>(std::array{pair{variant_ids[I], I}...});
-   }
-
-   template <is_variant T>
-   constexpr auto make_variant_id_map()
-   {
-      // Use the size of the ids array, not the variant size
-      // This allows unlabeled variant types to serve as defaults
-      constexpr auto indices = std::make_index_sequence<ids_v<T>.size()>{};
-
-      using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-
-      if constexpr (std::integral<id_type>) {
-         return make_variant_id_map_impl<T>(indices, ids_v<T>);
-      }
-      else {
-         return make_variant_sv_id_map_impl<T>(indices, ids_v<T>);
-      }
-   }
-
    /**
     * @brief Extracts the underlying member from a struct.
     *
@@ -556,6 +542,10 @@ namespace glz
       }
    }
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
    constexpr auto array(auto&&... args) noexcept { return detail::Array{glz::tuple{conv_sv(args)...}}; }
 
    template <class... Args>
@@ -567,6 +557,10 @@ namespace glz
    constexpr auto enumerate(auto&&... args) noexcept { return detail::Enum{tuple{args...}}; }
 
    constexpr auto flags(auto&&... args) noexcept { return detail::Flags{tuple{args...}}; }
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 }
 
 namespace glz

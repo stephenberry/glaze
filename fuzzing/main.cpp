@@ -22,7 +22,7 @@ void handle_file(std::filesystem::path file)
 
    std::ifstream filestream(file);
    filestream.read(data.data(), data.size());
-   if (filestream.gcount() != Nbytes) {
+   if (static_cast<std::uintmax_t>(filestream.gcount()) != Nbytes) {
       std::cerr << "failed reading from file " << file << '\n';
       return;
    }

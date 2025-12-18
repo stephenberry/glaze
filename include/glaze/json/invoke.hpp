@@ -34,7 +34,7 @@ namespace glz
    struct from<JSON, invoke_t<T>>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = std::decay_t<decltype(value.val)>;
 
@@ -168,7 +168,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = std::decay_t<decltype(value.func)>;
 

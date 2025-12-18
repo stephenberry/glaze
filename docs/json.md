@@ -74,6 +74,14 @@ if (result) {
 }
 ```
 
+**Partial Updates**: When reading into an existing object, `read_json` only updates fields present in the JSON—other fields retain their existing values. This makes `read_json` ideal for applying partial updates:
+
+```cpp
+Person person{.name = "Default", .age = 0, .hobbies = {}};
+glz::read_json(person, R"({"age": 25})");
+// person.name is still "Default", person.age is now 25
+```
+
 ### File I/O
 
 ```cpp
@@ -578,3 +586,11 @@ struct strict_opts : glz::opts {
 
 auto ec = glz::read<strict_opts>(obj, json_data);
 ```
+
+## See Also
+
+- [Generic JSON](./generic-json.md) - Working with `glz::generic` for dynamic JSON
+- [JSON Patch (RFC 6902)](./json-patch.md) - Apply structured patches to JSON documents
+- [JSON Merge Patch (RFC 7386)](./json-merge-patch.md) - Apply partial updates to JSON documents
+- [JSON Schema](./json-schema.md) - Generate JSON Schema from C++ types
+- [JSON Pointer Syntax](./json-pointer-syntax.md) - Path syntax for navigating JSON documents

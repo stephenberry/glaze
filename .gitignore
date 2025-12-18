@@ -50,3 +50,6 @@ Thumbs.db
 !tests/mock_json_test/json/*.json
 alabastar.beve
 *.jsonc
+*.csv
+*.beve
+*.pem

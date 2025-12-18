@@ -1204,4 +1204,55 @@ suite has_reflect_meta_types_tests = [] {
    };
 };
 
+// Enum for testing monotonic values
+enum class Monotonic { A, B, C };
+
+template <>
+struct glz::meta<Monotonic>
+{
+   using enum Monotonic;
+   static constexpr auto value = enumerate(A, B, C);
+};
+
+// Enum for testing non-monotonic values
+enum class NonMonotonic { A = 1, B = 10, C = 100 };
+
+template <>
+struct glz::meta<NonMonotonic>
+{
+   using enum NonMonotonic;
+   static constexpr auto value = enumerate(A, B, C);
+};
+
+// Enum for testing large values
+enum class LargeEnum { A = 0xFF };
+
+template <>
+struct glz::meta<LargeEnum>
+{
+   using enum LargeEnum;
+   static constexpr auto value = enumerate(A);
+};
+
+suite enum_name_test = [] {
+   "monotonic_enum_test"_test = [] {
+      expect(glz::get_enum_name(Monotonic::A) == "A");
+      expect(glz::get_enum_name(Monotonic::B) == "B");
+      expect(glz::get_enum_name(Monotonic::C) == "C");
+   };
+
+   "non_monotonic_enum_test"_test = [] {
+      expect(glz::get_enum_name(NonMonotonic::A) == "A");
+      expect(glz::get_enum_name(NonMonotonic::B) == "B");
+      expect(glz::get_enum_name(NonMonotonic::C) == "C");
+   };
+
+   "large_enum_test"_test = [] { expect(glz::get_enum_name(LargeEnum::A) == "A"); };
+
+   "unknown_enum_value"_test = [] {
+      // If we cast an invalid integer to enum, it should return empty string
+      expect(glz::get_enum_name(static_cast<Monotonic>(42)).empty());
+   };
+};
+
 int main() { return 0; }

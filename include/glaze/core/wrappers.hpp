@@ -18,6 +18,17 @@ namespace glz
       T& val;
    };
 
+   template <class T>
+   struct escape_bytes_t
+   {
+      static constexpr bool glaze_wrapper = true;
+      using value_type = T;
+      T& val;
+   };
+
+   template <class T>
+   escape_bytes_t(T&) -> escape_bytes_t<T>;
+
    template <class T, auto OptsMemPtr>
    struct opts_wrapper_t
    {
@@ -70,11 +81,11 @@ namespace glz
 
    // When reading into an array that is appendable, the new data will be appended rather than overwrite
    template <auto MemPtr>
-   constexpr auto append_arrays = opts_wrapper<MemPtr, &opts::append_arrays>();
+   constexpr auto append_arrays = opts_wrapper<MemPtr, append_arrays_opt_tag{}>();
 
    // Read and write booleans as numbers
    template <auto MemPtr>
-   constexpr auto bools_as_numbers = opts_wrapper<MemPtr, &opts::bools_as_numbers>();
+   constexpr auto bools_as_numbers = opts_wrapper<MemPtr, bools_as_numbers_opt_tag{}>();
 
    // Read and write numbers as strings
    template <auto MemPtr>
@@ -95,4 +106,14 @@ namespace glz
    // Customize reading and writing
    template <auto From, auto To>
    constexpr auto custom = custom_impl<From, To>();
+
+   template <auto MemPtr>
+   inline constexpr decltype(auto) escape_bytes_impl() noexcept
+   {
+      return [](auto&& val) { return escape_bytes_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+   }
+
+   // Treat char arrays as byte sequences to be fully escaped
+   template <auto MemPtr>
+   constexpr auto escape_bytes = escape_bytes_impl<MemPtr>();
 }

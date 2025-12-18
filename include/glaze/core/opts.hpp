@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 
 #include "glaze/util/type_traits.hpp"
 
@@ -14,6 +15,7 @@ namespace glz
    // User defined formats can be 65536 to 4294967296
    inline constexpr uint32_t INVALID = 0;
    inline constexpr uint32_t BEVE = 1;
+   inline constexpr uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
    inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t MSGPACK = 30;
@@ -27,6 +29,7 @@ namespace glz
    // Protocol formats
    inline constexpr uint32_t REPE = 30000;
    inline constexpr uint32_t REST = 30100;
+   inline constexpr uint32_t JSONRPC = 30200;
 
    // layout
    inline constexpr uint8_t rowwise = 0;
@@ -88,13 +91,8 @@ namespace glz
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
       bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
-      bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
-      bool error_on_const_read =
-         false; // Error if attempt is made to read into a const value, by default the value is skipped without error
-
-      bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
@@ -119,7 +117,6 @@ namespace glz
       static constexpr bool null_terminated = true; // Whether the input buffer is null terminated
       uint8_t layout = rowwise; // CSV row wise output/input
       bool use_headers = true; // Whether to write column/row headers in CSV format
-      bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
 
       // New options for headerless CSV support
@@ -135,6 +132,10 @@ namespace glz
 
    // Add these fields to a custom options struct if you want to use them
    // OTHER AVAILABLE OPTIONS (and default values):
+
+   // ---
+   // bool bools_as_numbers = false;
+   // Read and write booleans with 1's and 0's
 
    // ---
    // bool validate_skipped = false;
@@ -161,8 +162,16 @@ namespace glz
    // Write type info for meta objects in variants
 
    // ---
+   // bool append_arrays = false;
+   // When reading into an array the data will be appended if the type supports it
+
+   // ---
    // bool shrink_to_fit = false;
    // Shrinks dynamic containers to new size to save memory
+
+   // ---
+   // bool error_on_const_read = false;
+   // Error if attempt is made to read into a const value, by default the value is skipped without error
 
    // ---
    // bool hide_non_invocable = true;
@@ -180,6 +189,30 @@ namespace glz
    // float_precision float_max_write_precision{};
    // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
 
+   // ---
+   // bool skip_self_constraint = false;
+   // Skip self_constraint validation during reading. Useful for performance when constraints are known to be valid
+   // or when validation should be deferred.
+
+   struct append_arrays_opt_tag
+   {};
+
+   struct bools_as_numbers_opt_tag
+   {};
+
+   struct escape_control_characters_opt_tag
+   {};
+
+   template <auto member_ptr>
+   concept is_append_arrays_tag = std::same_as<std::decay_t<decltype(member_ptr)>, append_arrays_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_bools_as_numbers_tag = std::same_as<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_escape_control_characters_tag =
+      std::same_as<std::decay_t<decltype(member_ptr)>, escape_control_characters_opt_tag>;
+
    consteval bool check_validate_skipped(auto&& Opts)
    {
       if constexpr (requires { Opts.validate_skipped; }) {
@@ -190,10 +223,40 @@ namespace glz
       }
    }
 
+   consteval bool check_append_arrays(auto&& Opts)
+   {
+      if constexpr (requires { Opts.append_arrays; }) {
+         return Opts.append_arrays;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_error_on_const_read(auto&& Opts)
+   {
+      if constexpr (requires { Opts.error_on_const_read; }) {
+         return Opts.error_on_const_read;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_write_member_functions(auto&& Opts)
    {
       if constexpr (requires { Opts.write_member_functions; }) {
          return Opts.write_member_functions;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_bools_as_numbers(auto&& Opts)
+   {
+      if constexpr (requires { Opts.bools_as_numbers; }) {
+         return Opts.bools_as_numbers;
       }
       else {
          return false;
@@ -280,6 +343,16 @@ namespace glz
       }
    }
 
+   consteval bool check_skip_null_members_on_read(auto&& Opts)
+   {
+      if constexpr (requires { Opts.skip_null_members_on_read; }) {
+         return Opts.skip_null_members_on_read;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_use_headers(auto&& Opts)
    {
       if constexpr (requires { Opts.use_headers; }) {
@@ -317,6 +390,16 @@ namespace glz
       }
       else {
          return {};
+      }
+   }
+
+   consteval bool check_skip_self_constraint(auto&& Opts)
+   {
+      if constexpr (requires { Opts.skip_self_constraint; }) {
+         return Opts.skip_self_constraint;
+      }
+      else {
+         return false;
       }
    }
 
@@ -454,17 +537,105 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto set_opt(auto&& value)
    {
-      auto ret = Opts;
-      ret.*member_ptr = value;
-      return ret;
+      if constexpr (is_append_arrays_tag<member_ptr>) {
+         if constexpr (requires { Opts.append_arrays; }) {
+            auto ret = Opts;
+            ret.append_arrays = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_append_arrays : std::decay_t<decltype(Opts)>
+            {
+               bool append_arrays{};
+            };
+            return opts_append_arrays{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_bools_as_numbers_tag<member_ptr>) {
+         if constexpr (requires { Opts.bools_as_numbers; }) {
+            auto ret = Opts;
+            ret.bools_as_numbers = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_bools_as_numbers : std::decay_t<decltype(Opts)>
+            {
+               bool bools_as_numbers{};
+            };
+            return opts_bools_as_numbers{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_escape_control_characters_tag<member_ptr>) {
+         if constexpr (requires { Opts.escape_control_characters; }) {
+            auto ret = Opts;
+            ret.escape_control_characters = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_escape_control_characters : std::decay_t<decltype(Opts)>
+            {
+               bool escape_control_characters{};
+            };
+            return opts_escape_control_characters{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else {
+         auto ret = Opts;
+         ret.*member_ptr = value;
+         return ret;
+      }
    }
 
    template <auto Opts, auto member_ptr>
    constexpr auto opt_on()
    {
-      auto ret = Opts;
-      ret.*member_ptr = true;
-      return ret;
+      if constexpr (is_append_arrays_tag<member_ptr>) {
+         if constexpr (requires { Opts.append_arrays; }) {
+            auto ret = Opts;
+            ret.append_arrays = true;
+            return ret;
+         }
+         else {
+            struct opts_append_arrays : std::decay_t<decltype(Opts)>
+            {
+               bool append_arrays = true;
+            };
+            return opts_append_arrays{{Opts}};
+         }
+      }
+      else if constexpr (is_bools_as_numbers_tag<member_ptr>) {
+         if constexpr (requires { Opts.bools_as_numbers; }) {
+            auto ret = Opts;
+            ret.bools_as_numbers = true;
+            return ret;
+         }
+         else {
+            struct opts_bools_as_numbers : std::decay_t<decltype(Opts)>
+            {
+               bool bools_as_numbers = true;
+            };
+            return opts_bools_as_numbers{{Opts}};
+         }
+      }
+      else if constexpr (is_escape_control_characters_tag<member_ptr>) {
+         if constexpr (requires { Opts.escape_control_characters; }) {
+            auto ret = Opts;
+            ret.escape_control_characters = true;
+            return ret;
+         }
+         else {
+            struct opts_escape_control_characters : std::decay_t<decltype(Opts)>
+            {
+               bool escape_control_characters = true;
+            };
+            return opts_escape_control_characters{{Opts}};
+         }
+      }
+      else {
+         auto ret = Opts;
+         ret.*member_ptr = true;
+         return ret;
+      }
    }
 
    template <auto Opts, auto member_ptr>
@@ -473,9 +644,41 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto opt_off()
    {
-      auto ret = Opts;
-      ret.*member_ptr = false;
-      return ret;
+      if constexpr (is_append_arrays_tag<member_ptr>) {
+         if constexpr (requires { Opts.append_arrays; }) {
+            auto ret = Opts;
+            ret.append_arrays = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_bools_as_numbers_tag<member_ptr>) {
+         if constexpr (requires { Opts.bools_as_numbers; }) {
+            auto ret = Opts;
+            ret.bools_as_numbers = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_escape_control_characters_tag<member_ptr>) {
+         if constexpr (requires { Opts.escape_control_characters; }) {
+            auto ret = Opts;
+            ret.escape_control_characters = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else {
+         auto ret = Opts;
+         ret.*member_ptr = false;
+         return ret;
+      }
    }
 
    template <auto Opts, auto member_ptr>
@@ -502,6 +705,14 @@ namespace glz
    {
       auto ret = Opts;
       ret.format = BEVE;
+      return ret;
+   }
+
+   template <auto Opts>
+   constexpr auto set_cbor()
+   {
+      auto ret = Opts;
+      ret.format = CBOR;
       return ret;
    }
 

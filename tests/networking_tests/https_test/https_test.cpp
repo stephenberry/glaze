@@ -10,6 +10,8 @@
 #include <memory>
 #include <thread>
 
+#include "asio/io_context.hpp"
+
 #ifndef GLZ_ENABLE_SSL
 #define GLZ_ENABLE_SSL
 #endif
@@ -587,6 +589,142 @@ suite server_lifecycle_tests = [] {
 
       test_server.stop();
       expect(true) << "HTTPS server should stop cleanly\n";
+   };
+};
+
+class ExternalIOContextServer
+{
+  public:
+   ExternalIOContextServer()
+      : io_context(std::make_shared<asio::io_context>()),
+        server_(io_context,
+                [](std::error_code, std::source_location) { std::cout << "HTTPS Server Error Handler Invoked\n"; }),
+        work_guard(asio::make_work_guard(*io_context))
+   {
+      // Ensure certificates exist
+      if (!certificates_exist()) {
+         CertificateGenerator::generate_test_certificates();
+      }
+
+      wait_for_port_free(8443);
+   }
+
+   ~ExternalIOContextServer() { stop_io_thread(); }
+
+   void start_io_thread()
+   {
+      io_thread = std::thread([this]() {
+         setup_routes();
+         server_.load_certificate("test_cert.pem", "test_key.pem");
+         server_.set_ssl_verify_mode(0);
+         server_.enable_cors();
+         server_.bind("127.0.0.1", 8443);
+         // Start the server accepting connections without creating worker threads (0)
+         // We'll run the io_context manually in this thread
+         server_.start(0);
+         // Run the io_context event loop in this thread
+         io_context->run();
+      });
+   }
+
+   void stop_io_thread()
+   {
+      work_guard.reset();
+      io_context->stop();
+      server_.stop();
+      if (io_thread.joinable()) {
+         io_thread.join();
+      }
+   }
+
+   void setup_routes()
+   {
+      // Health check endpoint
+      server_.get("/health", [](const glz::request&, glz::response& res) { res.status(200).body("HTTPS Server OK"); });
+   }
+
+  private:
+   std::shared_ptr<asio::io_context> io_context;
+   glz::https_server server_;
+   std::thread io_thread;
+   asio::executor_work_guard<asio::io_context::executor_type> work_guard;
+};
+
+suite server_lifecycle_external_context_tests = [] {
+   auto io_context = std::make_shared<asio::io_context>();
+   auto error_handler = [](std::error_code, std::source_location) {};
+   "https_server_creation"_test = [&] {
+      glz::https_server server(io_context, error_handler);
+      expect(true) << "HTTPS server should be created successfully\n";
+   };
+
+   "https_server_configuration"_test = [&] {
+      glz::https_server server(io_context, error_handler);
+
+      auto& server_ref = server.enable_cors().set_ssl_verify_mode(0);
+
+      expect(&server_ref == &server) << "Method chaining should work\n";
+   };
+
+   "https_server_startup_shutdown"_test = [&] {
+      // Ensure certificates exist
+      if (!certificates_exist()) {
+         CertificateGenerator::generate_test_certificates();
+      }
+
+      ExternalIOContextServer server;
+      std::cout << "Starting HTTPS server with external io_context thread...\n";
+      server.start_io_thread();
+
+      // Wait for server to be ready
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+      // Verify server is running by making a successful connection
+      bool connection_successful = false;
+      try {
+         asio::io_context client_io;
+         asio::ip::tcp::socket socket(client_io);
+         asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 8443);
+
+         std::error_code ec;
+         socket.connect(endpoint, ec);
+         connection_successful = !ec;
+         if (!ec) {
+            socket.close();
+         }
+      }
+      catch (...) {
+         connection_successful = false;
+      }
+
+      expect(connection_successful) << "Server should accept connections before shutdown\n";
+
+      // Stop the server
+      server.stop_io_thread();
+      std::cout << "Server stopped, verifying connections are closed...\n";
+
+      // Wait a moment for cleanup
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+      // Verify connections are refused after shutdown
+      bool connection_refused = false;
+      try {
+         asio::io_context client_io;
+         asio::ip::tcp::socket socket(client_io);
+         asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 8443);
+
+         std::error_code ec;
+         socket.connect(endpoint, ec);
+         connection_refused = (ec == asio::error::connection_refused);
+         if (!ec) {
+            socket.close();
+         }
+      }
+      catch (...) {
+         connection_refused = true; // Exception also indicates connection failed
+      }
+
+      expect(connection_refused) << "Server should refuse connections after shutdown\n";
    };
 };
 

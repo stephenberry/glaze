@@ -9,7 +9,7 @@
 #include "glaze/core/wrappers.hpp"
 #include "glaze/util/primes_64.hpp"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
 #pragma warning(push)
 #pragma warning(disable : 4100 4189)
@@ -17,6 +17,104 @@
 
 namespace glz
 {
+   // Check if a size_t value exists in an array (used for hash collision detection)
+   constexpr bool contains(const size_t* data, const size_t size, const size_t val) noexcept
+   {
+      for (size_t i = 0; i < size; ++i) {
+         if (data[i] == val) {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   // Convert up to 7 bytes to uint64_t (for short key hashing)
+   inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
+   {
+      uint64_t res{};
+      if (std::is_constant_evaluated()) {
+         // Compile-time: build value byte-by-byte in little-endian order
+         for (size_t i = 0; i < N; ++i) {
+            res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
+         }
+      }
+      else {
+         switch (N) {
+         case 1: {
+            std::memcpy(&res, bytes, 1);
+            break;
+         }
+         case 2: {
+            std::memcpy(&res, bytes, 2);
+            break;
+         }
+         case 3: {
+            std::memcpy(&res, bytes, 3);
+            break;
+         }
+         case 4: {
+            std::memcpy(&res, bytes, 4);
+            break;
+         }
+         case 5: {
+            std::memcpy(&res, bytes, 5);
+            break;
+         }
+         case 6: {
+            std::memcpy(&res, bytes, 6);
+            break;
+         }
+         case 7: {
+            std::memcpy(&res, bytes, 7);
+            break;
+         }
+         default: {
+            // zero size case
+            break;
+         }
+         }
+         // On big endian: byteswap to match little-endian layout
+         // Example for "abc" (N=3):
+         //   LE memcpy: res = 0x0000000000636261 (bytes in LSB positions)
+         //   BE memcpy: res = 0x6162630000000000 (bytes in MSB positions)
+         //   BE after byteswap: res = 0x0000000000636261 (matches LE)
+         if constexpr (std::endian::native == std::endian::big) {
+            res = std::byteswap(res);
+         }
+      }
+      return res;
+   }
+
+   // Convert N bytes to uint64_t (template version for compile-time N)
+   template <size_t N = 8>
+   constexpr uint64_t to_uint64(const char* bytes) noexcept
+   {
+      static_assert(N <= sizeof(uint64_t));
+      if (std::is_constant_evaluated()) {
+         uint64_t res{};
+         for (size_t i = 0; i < N; ++i) {
+            res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
+         }
+         return res;
+      }
+      else if constexpr (N == 8) {
+         uint64_t res;
+         std::memcpy(&res, bytes, N);
+         if constexpr (std::endian::native == std::endian::big) {
+            res = std::byteswap(res);
+         }
+         return res;
+      }
+      else {
+         uint64_t res{};
+         std::memcpy(&res, bytes, N);
+         if constexpr (std::endian::native == std::endian::big) {
+            res = std::byteswap(res);
+         }
+         return res;
+      }
+   }
+
    // Get indices of elements satisfying a predicate
    template <class Tuple, template <class> class Predicate>
    consteval auto filter_indices()
@@ -84,6 +182,57 @@ namespace glz
 
    template <class T>
    struct reflect;
+
+   // ============================================================================
+   // keys_wrapper: A pseudo-type that provides reflect<> interface for arbitrary key arrays
+   // Used to enable hash-based lookup for variant IDs and other key sources
+   // ============================================================================
+
+   template <const auto& Keys>
+   struct keys_wrapper
+   {
+      // This type exists only to satisfy template parameters for hash_info and decode_hash
+   };
+
+   template <class T>
+   struct is_keys_wrapper_t : std::false_type
+   {};
+
+   template <const auto& Keys>
+   struct is_keys_wrapper_t<keys_wrapper<Keys>> : std::true_type
+   {};
+
+   template <class T>
+   inline constexpr bool is_keys_wrapper_v = is_keys_wrapper_t<T>::value;
+
+   // Specialize reflect for keys_wrapper to provide the keys interface
+   template <const auto& Keys>
+   struct reflect<keys_wrapper<Keys>>
+   {
+      static constexpr auto size = Keys.size();
+
+      // Convert keys to array of string_view
+      static constexpr auto keys = []() {
+         std::array<sv, size> result{};
+         for (size_t i = 0; i < size; ++i) {
+            result[i] = sv(Keys[i]);
+         }
+         return result;
+      }();
+
+      // Provide values as indices for completeness (needed by some hash paths)
+      static constexpr auto values = []() {
+         std::array<size_t, size> result{};
+         for (size_t i = 0; i < size; ++i) {
+            result[i] = i;
+         }
+         return result;
+      }();
+   };
+
+   // ============================================================================
+   // End of keys_wrapper
+   // ============================================================================
 
    // MSVC requires this template specialization for when the tuple size if zero,
    // otherwise MSVC tries to instantiate calls of get<0> in invalid branches
@@ -220,8 +369,7 @@ namespace glz
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
          constexpr auto N = reflect<T>::size;
-         if constexpr (meta_has_skip<T>) {
-            // If the glz::meta provides a skip method, we assume the user wants to skip fields
+         if constexpr (meta_has_skip<T> || meta_has_skip_if<T>) {
             return true;
          }
          else if constexpr (Opts.skip_null_members) {
@@ -320,7 +468,26 @@ namespace glz
       if constexpr (Opts.error_on_missing_keys) {
          for_each<N>([&]<auto I>() constexpr {
             using V = std::decay_t<refl_t<T, I>>;
-            if constexpr (is_specialization_v<V, custom_t>) {
+
+            // Check if meta<T>::requires_key customization point exists
+            if constexpr (meta_has_requires_key<T>) {
+               constexpr auto key = reflect<T>::keys[I];
+               constexpr bool is_nullable = [] {
+                  if constexpr (is_specialization_v<V, custom_t>) {
+                     using From = typename V::from_t;
+                     return custom_type_is_nullable<V, From>();
+                  }
+                  else if constexpr (is_cast<V>) {
+                     using CastType = typename V::cast_type;
+                     return null_t<CastType>;
+                  }
+                  else {
+                     return null_t<V>;
+                  }
+               }();
+               fields[I] = meta<T>::requires_key(key, is_nullable);
+            }
+            else if constexpr (is_specialization_v<V, custom_t>) {
                using From = typename V::from_t;
 
                // If we are reading a glz::custom_t, we must deduce the input argument and not require the key if it is
@@ -456,25 +623,252 @@ namespace glz
 
 namespace glz
 {
-   template <class T>
-   constexpr auto make_enum_to_string_map()
+   // ============================================================================
+   // Integer key hashing for enum values and integral variant IDs
+   // ============================================================================
+
+   enum struct int_hash_type {
+      direct, // Sequential values starting at 0: value as index
+      offset, // Sequential values with offset: value - min_value
+      power_of_two, // Powers of 2 (flags): countr_zero(value)
+      small_range, // Sparse lookup table for small ranges
+      modular // Perfect hash: (value * seed) % table_size
+   };
+
+   template <size_t N, size_t TableSize>
+   struct int_keys_info_t
    {
+      int_hash_type type{};
+      int64_t min_value{};
+      int64_t max_value{};
+      uint64_t seed{};
+      size_t table_size{};
+      std::array<uint8_t, TableSize> table{}; // For small_range/modular: maps key → index
+   };
+
+   // Specialization for when no table is needed
+   template <size_t N>
+   struct int_keys_info_t<N, 0>
+   {
+      int_hash_type type{};
+      int64_t min_value{};
+      int64_t max_value{};
+      uint64_t seed{};
+      size_t table_size{};
+   };
+
+   template <class T>
+      requires std::is_enum_v<T>
+   constexpr auto make_int_keys_info()
+   {
+      using U = std::underlying_type_t<T>;
       constexpr auto N = reflect<T>::size;
-      return [&]<size_t... I>(std::index_sequence<I...>) {
-         using key_t = std::underlying_type_t<T>;
-         return normal_map<key_t, sv, N>(std::array<pair<key_t, sv>, N>{
-            pair<key_t, sv>{static_cast<key_t>(glz::get<I>(reflect<T>::values)), reflect<T>::keys[I]}...});
-      }(std::make_index_sequence<N>{});
+
+      if constexpr (N == 0) {
+         return int_keys_info_t<0, 0>{};
+      }
+      else if constexpr (N == 1) {
+         // For single-element enums, check if value is 0 (direct) or needs offset
+         constexpr auto value = static_cast<U>(glz::get<0>(reflect<T>::values));
+         if constexpr (value == 0) {
+            return int_keys_info_t<1, 0>{.type = int_hash_type::direct};
+         }
+         else {
+            return int_keys_info_t<1, 0>{.type = int_hash_type::offset, .min_value = static_cast<int64_t>(value)};
+         }
+      }
+      else {
+         // Extract values into array for analysis
+         constexpr auto vals = []() constexpr {
+            constexpr auto size = reflect<T>::size;
+            std::array<U, size> result{};
+            for_each<size>([&]<size_t I>() { result[I] = static_cast<U>(glz::get<I>(reflect<T>::values)); });
+            return result;
+         }();
+
+         // Find min/max
+         constexpr auto min_max = [&]() {
+            U min_val = vals[0], max_val = vals[0];
+            for (const auto v : vals) {
+               if (v < min_val) min_val = v;
+               if (v > max_val) max_val = v;
+            }
+            return std::pair{min_val, max_val};
+         }();
+
+         constexpr U min_val = min_max.first;
+         constexpr U max_val = min_max.second;
+         constexpr auto range = static_cast<size_t>(max_val - min_val);
+
+         // Strategy 1: Dense sequential (most common case)
+         constexpr bool is_sequential = [&]() {
+            if (range + 1 != N) return false;
+            std::array<bool, N> seen{};
+            for (const auto v : vals) {
+               const auto idx = static_cast<size_t>(v - min_val);
+               if (idx >= N || seen[idx]) return false;
+               seen[idx] = true;
+            }
+            return true;
+         }();
+
+         // Strategy 2: Powers of 2 (flag enums)
+         constexpr auto power_of_two_info = [&]() {
+            using UnsignedU = std::make_unsigned_t<U>;
+            size_t max_bit = 0;
+
+            for (const auto v : vals) {
+               const auto uv = static_cast<UnsignedU>(v);
+               if (uv == 0 || !std::has_single_bit(uv)) {
+                  return std::pair{false, size_t{0}};
+               }
+               const auto bit = static_cast<size_t>(std::countr_zero(uv));
+               if (bit > max_bit) max_bit = bit;
+            }
+
+            // Verify no collisions in bit positions
+            std::array<bool, 64> used{};
+            for (const auto v : vals) {
+               const auto bit = std::countr_zero(static_cast<UnsignedU>(v));
+               if (used[bit]) return std::pair{false, size_t{0}};
+               used[bit] = true;
+            }
+
+            return std::pair{true, max_bit + 1};
+         }();
+
+         constexpr size_t sparse_threshold = 256;
+         constexpr auto table_size = std::bit_ceil(N * 2);
+
+         // Use proper if-else-if chain so only one return type is deduced
+         if constexpr (is_sequential) {
+            if constexpr (min_val == 0) {
+               return int_keys_info_t<N, 0>{.type = int_hash_type::direct};
+            }
+            else {
+               return int_keys_info_t<N, 0>{.type = int_hash_type::offset, .min_value = min_val};
+            }
+         }
+         else if constexpr (power_of_two_info.first) {
+            constexpr auto tbl_size = power_of_two_info.second;
+            int_keys_info_t<N, tbl_size> info{.type = int_hash_type::power_of_two, .table_size = tbl_size};
+            info.table.fill(static_cast<uint8_t>(N));
+
+            using UnsignedU = std::make_unsigned_t<U>;
+            for (size_t i = 0; i < N; ++i) {
+               const auto bit = std::countr_zero(static_cast<UnsignedU>(vals[i]));
+               info.table[bit] = static_cast<uint8_t>(i);
+            }
+            return info;
+         }
+         else if constexpr (range < sparse_threshold) {
+            // Strategy 3: Small range → sparse lookup table
+            int_keys_info_t<N, sparse_threshold> info{
+               .type = int_hash_type::small_range, .min_value = min_val, .max_value = max_val, .table_size = range + 1};
+            info.table.fill(static_cast<uint8_t>(N));
+
+            for (size_t i = 0; i < N; ++i) {
+               info.table[static_cast<size_t>(vals[i] - min_val)] = static_cast<uint8_t>(i);
+            }
+            return info;
+         }
+         else {
+            // Strategy 4: Modular perfect hash (fallback)
+            constexpr auto modular_info = [&]() {
+               for (const auto prime : primes_64) {
+                  std::array<bool, table_size> used{};
+                  bool collision = false;
+
+                  for (size_t i = 0; i < N; ++i) {
+                     const auto h = (static_cast<uint64_t>(vals[i]) * prime) % table_size;
+                     if (used[h]) {
+                        collision = true;
+                        break;
+                     }
+                     used[h] = true;
+                  }
+
+                  if (!collision) {
+                     return std::pair{true, prime};
+                  }
+               }
+               return std::pair{false, uint64_t{0}};
+            }();
+
+            static_assert(modular_info.first, "Failed to find perfect hash seed for enum");
+
+            int_keys_info_t<N, table_size> info{
+               .type = int_hash_type::modular, .seed = modular_info.second, .table_size = table_size};
+            info.table.fill(static_cast<uint8_t>(N));
+
+            for (size_t i = 0; i < N; ++i) {
+               const auto h = (static_cast<uint64_t>(vals[i]) * info.seed) % table_size;
+               info.table[h] = static_cast<uint8_t>(i);
+            }
+            return info;
+         }
+      }
    }
 
-   // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
    template <class T>
-   constexpr auto make_enum_to_string_array() noexcept
+      requires std::is_enum_v<T>
+   constexpr auto enum_index_info = make_int_keys_info<T>();
+
+   // Array of enum underlying values for runtime indexing
+   template <class T>
+      requires std::is_enum_v<T>
+   constexpr auto enum_values_array = []<size_t... I>(std::index_sequence<I...>) {
+      using U = std::underlying_type_t<T>;
+      return std::array<U, sizeof...(I)>{static_cast<U>(glz::get<I>(reflect<T>::values))...};
+   }(std::make_index_sequence<reflect<T>::size>{});
+
+   template <class T, auto Info>
+   struct enum_value_to_index
    {
-      return []<size_t... I>(std::index_sequence<I...>) {
-         return std::array<sv, sizeof...(I)>{reflect<T>::keys[I]...};
-      }(std::make_index_sequence<reflect<T>::size>{});
-   }
+      using U = std::underlying_type_t<T>;
+      static constexpr auto N = reflect<T>::size;
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(U value) noexcept
+      {
+         using enum int_hash_type;
+
+         if constexpr (Info.type == direct) {
+            // Bounds check done by caller
+            return static_cast<size_t>(value);
+         }
+         else if constexpr (Info.type == offset) {
+            return static_cast<size_t>(value - Info.min_value);
+         }
+         else if constexpr (Info.type == power_of_two) {
+            using UnsignedU = std::make_unsigned_t<U>;
+            const auto uv = static_cast<UnsignedU>(value);
+            // Must be a non-zero power of 2, otherwise countr_zero gives wrong result
+            if (uv == 0 || !std::has_single_bit(uv)) [[unlikely]] {
+               return N; // Invalid: not a power of 2
+            }
+            const auto bit = static_cast<size_t>(std::countr_zero(uv));
+            if (bit >= Info.table_size) [[unlikely]] {
+               return N; // Invalid: bit position out of range
+            }
+            return Info.table[bit];
+         }
+         else if constexpr (Info.type == small_range) {
+            const auto idx = static_cast<int64_t>(value) - Info.min_value;
+            if (idx < 0 || static_cast<size_t>(idx) >= Info.table_size) [[unlikely]] {
+               return N; // Invalid: out of range
+            }
+            return Info.table[static_cast<size_t>(idx)]; // Returns N if slot is empty
+         }
+         else { // modular
+            const auto h = (static_cast<uint64_t>(value) * Info.seed) % Info.table_size;
+            return Info.table[h]; // Returns N if slot is empty
+         }
+      }
+   };
+
+   // ============================================================================
+   // End of integer key hashing
+   // ============================================================================
 
    // get a std::string_view from an enum value
    template <class T>
@@ -483,8 +877,33 @@ namespace glz
    {
       using V = std::decay_t<T>;
       using U = std::underlying_type_t<V>;
-      constexpr auto arr = make_enum_to_string_array<V>();
-      return arr[static_cast<U>(enum_value)];
+      constexpr auto N = reflect<V>::size;
+
+      if constexpr (N == 0) {
+         return std::string_view{};
+      }
+      else {
+         constexpr auto& info = enum_index_info<V>;
+         const auto index = enum_value_to_index<V, info>::op(static_cast<U>(enum_value));
+
+         if (index >= N) [[unlikely]] {
+            return std::string_view{};
+         }
+
+         // For direct/offset strategies, values are guaranteed sequential
+         // For hash-based strategies, verify the value matches to avoid false positives
+         if constexpr (info.type == int_hash_type::direct || info.type == int_hash_type::offset) {
+            return reflect<V>::keys[index];
+         }
+         else {
+            // Verify match for power_of_two/small_range/modular lookups
+            constexpr auto& values = enum_values_array<V>;
+            if (values[index] == static_cast<U>(enum_value)) {
+               return reflect<V>::keys[index];
+            }
+            return std::string_view{};
+         }
+      }
    }
 
    template <glaze_flags_t T>
@@ -561,39 +980,6 @@ namespace glz
       const auto size = std::distance(keys.begin(), end);
 
       return pair{keys, size};
-   }
-
-   template <class T, size_t... I>
-   consteval auto make_variant_deduction_base_map(std::index_sequence<I...>, auto&& keys)
-   {
-      using V = bit_array<std::variant_size_v<T>>;
-      return normal_map<sv, V, sizeof...(I)>(
-         std::array<pair<sv, V>, sizeof...(I)>{pair<sv, V>{sv(std::get<I>(keys)), V{}}...});
-   }
-
-   template <class T>
-   constexpr auto make_variant_deduction_map()
-   {
-      constexpr auto key_size_pair = get_combined_keys_from_variant<T>();
-
-      auto deduction_map =
-         make_variant_deduction_base_map<T>(std::make_index_sequence<key_size_pair.second>{}, key_size_pair.first);
-
-      constexpr auto N = std::variant_size_v<T>;
-      for_each<N>([&]<auto I>() {
-         using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
-         if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
-            using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
-            constexpr auto Size = reflect<X>::size;
-            if constexpr (Size > 0) {
-               for (size_t J = 0; J < Size; ++J) {
-                  deduction_map.find(reflect<X>::keys[J])->second[I] = true;
-               }
-            }
-         }
-      });
-
-      return deduction_map;
    }
 }
 
@@ -1365,7 +1751,8 @@ namespace glz
    template <class T>
    constexpr auto hash_info = [] {
       if constexpr ((glaze_object_t<T> || reflectable<T> || glaze_flags_t<T> ||
-                     ((std::is_enum_v<std::remove_cvref_t<T>> && meta_keys<T>) || glaze_enum_t<T>)) &&
+                     ((std::is_enum_v<std::remove_cvref_t<T>> && meta_keys<T>) || glaze_enum_t<T>) ||
+                     is_keys_wrapper_v<T>) &&
                     (reflect<T>::size > 0)) {
          constexpr auto& k_info = keys_info<T>;
          constexpr auto& type = k_info.type;
@@ -1514,7 +1901,7 @@ namespace glz
    }();
 
    template <size_t min_length>
-   GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto end) noexcept
    {
       if (std::is_constant_evaluated()) {
          const auto count = size_t(end - it);
@@ -1586,7 +1973,7 @@ namespace glz
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
       static constexpr auto uindex = HashInfo.unique_index;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (HashInfo.sized_hash) {
             const auto* c = quote_memchr<HashInfo.min_length>(it, end);
@@ -1638,7 +2025,7 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto uindex = HashInfo.unique_index;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (uindex > 0) {
             if ((it + uindex) >= end) [[unlikely]] {
@@ -1663,7 +2050,7 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (HashInfo.front_hash_bytes == 2) {
             if ((it + 2) >= end) [[unlikely]] {
@@ -1678,6 +2065,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 2);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -1694,6 +2084,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 4);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -1710,6 +2103,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[rich_bitmix(h, HashInfo.seed) % bsize];
          }
@@ -1725,7 +2121,7 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          const auto* c = quote_memchr<HashInfo.min_length>(it, end);
          if (c) [[likely]] {
@@ -1752,7 +2148,7 @@ namespace glz
       static constexpr auto max_length = HashInfo.max_length;
       static constexpr auto length_range = max_length - min_length;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          // For JSON we require at a minimum ":1} characters after a key (1 being a single char number)
          // This means that we can require all these characters to exist for SWAR parsing
@@ -1915,6 +2311,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 2);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -1928,6 +2327,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 4);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -1941,6 +2343,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[rich_bitmix(h, HashInfo.seed) % bsize];
          }
@@ -1979,6 +2384,290 @@ namespace glz
          return HashInfo.table[h % bsize];
       }
    };
+
+   // ============================================================================
+   // variant_deduction: Maps field keys to bit arrays for variant type deduction
+   // Uses compile-time decode_hash for O(1) lookup
+   // ============================================================================
+
+   // Number of unique keys from all variant types
+   template <is_variant T>
+   constexpr size_t variant_deduction_key_count = get_combined_keys_from_variant<T>().second;
+
+   // Array of unique keys (sorted) from all variant types
+   template <is_variant T>
+   constexpr auto variant_deduction_keys = []() {
+      constexpr auto pair = get_combined_keys_from_variant<T>();
+      std::array<sv, variant_deduction_key_count<T>> result{};
+      for (size_t i = 0; i < variant_deduction_key_count<T>; ++i) {
+         result[i] = pair.first[i];
+      }
+      return result;
+   }();
+
+   // Variant deduction bits - for each unique key, tracks which variant types contain it
+   template <is_variant T>
+   constexpr auto variant_deduction_bits = []() {
+      constexpr size_t K = variant_deduction_key_count<T>;
+      using bits_type = bit_array<std::variant_size_v<T>>;
+      std::array<bits_type, K> bits{};
+
+      if constexpr (K > 0) {
+         using keys_t = keys_wrapper<variant_deduction_keys<T>>;
+         constexpr auto& HashInfo = hash_info<keys_t>;
+
+         // Populate bit arrays - for each key, set bits for variant types that have it
+         for_each<std::variant_size_v<T>>([&]<auto I>() {
+            using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
+            if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
+               using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+               constexpr auto Size = reflect<X>::size;
+               if constexpr (Size > 0) {
+                  for (size_t J = 0; J < Size; ++J) {
+                     sv key = reflect<X>::keys[J];
+                     const auto index = decode_hash_with_size<JSON, keys_t, HashInfo, HashInfo.type>::op(
+                        key.data(), key.data() + key.size(), key.size());
+                     if (index < K) {
+                        bits[index][I] = true;
+                     }
+                  }
+               }
+            }
+         });
+      }
+
+      return bits;
+   }();
+
+   // ============================================================================
+   // variant_id_to_index: Maps variant type IDs to indices using perfect hashing
+   // ============================================================================
+
+   // Helper to create int_keys_info from ids_v<T> for integral variant IDs
+   template <is_variant T>
+      requires(std::integral<std::decay_t<decltype(ids_v<T>[0])>>)
+   constexpr auto make_variant_int_keys_info()
+   {
+      using U = std::decay_t<decltype(ids_v<T>[0])>;
+      constexpr auto N = ids_v<T>.size();
+
+      if constexpr (N == 0) {
+         return int_keys_info_t<0, 0>{};
+      }
+      else if constexpr (N == 1) {
+         // For single-element IDs, check if value is 0 (direct) or needs offset
+         constexpr auto value = static_cast<U>(ids_v<T>[0]);
+         if constexpr (value == 0) {
+            return int_keys_info_t<1, 0>{.type = int_hash_type::direct};
+         }
+         else {
+            return int_keys_info_t<1, 0>{.type = int_hash_type::offset, .min_value = static_cast<int64_t>(value)};
+         }
+      }
+      else {
+         // Extract values from ids_v<T>
+         constexpr auto vals = []() constexpr {
+            constexpr auto size = ids_v<T>.size();
+            std::array<U, size> result{};
+            for (size_t i = 0; i < size; ++i) {
+               result[i] = ids_v<T>[i];
+            }
+            return result;
+         }();
+
+         // Find min/max
+         constexpr auto min_max = [&]() {
+            U min_val = vals[0], max_val = vals[0];
+            for (const auto v : vals) {
+               if (v < min_val) min_val = v;
+               if (v > max_val) max_val = v;
+            }
+            return std::pair{min_val, max_val};
+         }();
+
+         constexpr U min_val = min_max.first;
+         constexpr U max_val = min_max.second;
+         constexpr auto range = static_cast<size_t>(max_val - min_val);
+
+         // Check for sequential IDs
+         constexpr bool is_sequential = [&]() {
+            if (range + 1 != N) return false;
+            std::array<bool, N> seen{};
+            for (const auto v : vals) {
+               const auto idx = static_cast<size_t>(v - min_val);
+               if (idx >= N || seen[idx]) return false;
+               seen[idx] = true;
+            }
+            return true;
+         }();
+
+         // Check for powers of 2
+         constexpr auto power_of_two_info = [&]() {
+            using UnsignedU = std::make_unsigned_t<U>;
+            size_t max_bit = 0;
+
+            for (const auto v : vals) {
+               const auto uv = static_cast<UnsignedU>(v);
+               if (uv == 0 || !std::has_single_bit(uv)) {
+                  return std::pair{false, size_t{0}};
+               }
+               const auto bit = static_cast<size_t>(std::countr_zero(uv));
+               if (bit > max_bit) max_bit = bit;
+            }
+
+            std::array<bool, 64> used{};
+            for (const auto v : vals) {
+               const auto bit = std::countr_zero(static_cast<UnsignedU>(v));
+               if (used[bit]) return std::pair{false, size_t{0}};
+               used[bit] = true;
+            }
+
+            return std::pair{true, max_bit + 1};
+         }();
+
+         constexpr size_t sparse_threshold = 256;
+         constexpr auto table_size = std::bit_ceil(N * 2);
+
+         if constexpr (is_sequential) {
+            if constexpr (min_val == 0) {
+               return int_keys_info_t<N, 0>{.type = int_hash_type::direct};
+            }
+            else {
+               return int_keys_info_t<N, 0>{.type = int_hash_type::offset, .min_value = min_val};
+            }
+         }
+         else if constexpr (power_of_two_info.first) {
+            constexpr auto tbl_size = power_of_two_info.second;
+            int_keys_info_t<N, tbl_size> info{.type = int_hash_type::power_of_two, .table_size = tbl_size};
+            info.table.fill(static_cast<uint8_t>(N));
+
+            using UnsignedU = std::make_unsigned_t<U>;
+            for (size_t i = 0; i < N; ++i) {
+               const auto bit = std::countr_zero(static_cast<UnsignedU>(vals[i]));
+               info.table[bit] = static_cast<uint8_t>(i);
+            }
+            return info;
+         }
+         else if constexpr (range < sparse_threshold) {
+            int_keys_info_t<N, sparse_threshold> info{
+               .type = int_hash_type::small_range, .min_value = min_val, .max_value = max_val, .table_size = range + 1};
+            info.table.fill(static_cast<uint8_t>(N));
+
+            for (size_t i = 0; i < N; ++i) {
+               info.table[static_cast<size_t>(vals[i] - min_val)] = static_cast<uint8_t>(i);
+            }
+            return info;
+         }
+         else {
+            constexpr auto modular_info = [&]() {
+               for (const auto prime : primes_64) {
+                  std::array<bool, table_size> used{};
+                  bool collision = false;
+
+                  for (size_t i = 0; i < N; ++i) {
+                     const auto h = (static_cast<uint64_t>(vals[i]) * prime) % table_size;
+                     if (used[h]) {
+                        collision = true;
+                        break;
+                     }
+                     used[h] = true;
+                  }
+
+                  if (!collision) {
+                     return std::pair{true, prime};
+                  }
+               }
+               return std::pair{false, uint64_t{0}};
+            }();
+
+            static_assert(modular_info.first, "Failed to find perfect hash seed for variant int IDs");
+
+            int_keys_info_t<N, table_size> info{
+               .type = int_hash_type::modular, .seed = modular_info.second, .table_size = table_size};
+            info.table.fill(static_cast<uint8_t>(N));
+
+            for (size_t i = 0; i < N; ++i) {
+               const auto h = (static_cast<uint64_t>(vals[i]) * info.seed) % table_size;
+               info.table[h] = static_cast<uint8_t>(i);
+            }
+            return info;
+         }
+      }
+   }
+
+   // Primary template for variant_id_to_index
+   template <is_variant T, bool IsIntegral = std::integral<std::decay_t<decltype(ids_v<T>[0])>>>
+   struct variant_id_to_index;
+
+   // Specialization for string IDs
+   template <is_variant T>
+   struct variant_id_to_index<T, false>
+   {
+      using keys_t = keys_wrapper<ids_v<T>>;
+      static constexpr auto& HashInfo = hash_info<keys_t>;
+      static constexpr auto N = ids_v<T>.size();
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(const char* data, const char* end, size_t n) noexcept
+      {
+         const auto index = decode_hash_with_size<JSON, keys_t, HashInfo, HashInfo.type>::op(data, end, n);
+         // Verify the key matches to avoid false positives from hash collisions
+         if (index < N) {
+            const sv key{data, n};
+            if (ids_v<T>[index] == key) {
+               return index;
+            }
+         }
+         return N; // Not found
+      }
+   };
+
+   // Specialization for integral IDs
+   template <is_variant T>
+   struct variant_id_to_index<T, true>
+   {
+      using U = std::decay_t<decltype(ids_v<T>[0])>;
+      static constexpr auto Info = make_variant_int_keys_info<T>();
+      static constexpr auto N = ids_v<T>.size();
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(U id) noexcept
+      {
+         using enum int_hash_type;
+
+         if constexpr (Info.type == direct) {
+            return static_cast<size_t>(id);
+         }
+         else if constexpr (Info.type == offset) {
+            return static_cast<size_t>(id - Info.min_value);
+         }
+         else if constexpr (Info.type == power_of_two) {
+            using UnsignedU = std::make_unsigned_t<U>;
+            const auto uv = static_cast<UnsignedU>(id);
+            if (uv == 0 || !std::has_single_bit(uv)) [[unlikely]] {
+               return N;
+            }
+            const auto bit = static_cast<size_t>(std::countr_zero(uv));
+            if (bit >= Info.table_size) [[unlikely]] {
+               return N;
+            }
+            return Info.table[bit];
+         }
+         else if constexpr (Info.type == small_range) {
+            const auto idx = static_cast<int64_t>(id) - Info.min_value;
+            if (idx < 0 || static_cast<size_t>(idx) >= Info.table_size) [[unlikely]] {
+               return N;
+            }
+            return Info.table[static_cast<size_t>(idx)];
+         }
+         else { // modular
+            const auto h = (static_cast<uint64_t>(id) * Info.seed) % Info.table_size;
+            return Info.table[h];
+         }
+      }
+   };
+
+   // ============================================================================
+   // End of variant_id_to_index
+   // ============================================================================
 }
 
 namespace glz
@@ -2104,7 +2793,7 @@ namespace glz
    };
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // restore disabled warnings
 #pragma warning(pop)
 #endif

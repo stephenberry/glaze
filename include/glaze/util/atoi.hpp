@@ -39,7 +39,7 @@
 // It isn't technically required, because end validation would handle it, but it produces
 // much clearer errors, especially when we don't perform trailing validation.
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for possible loss of data: we are intentionally allowing well defined unsigned integer
 // overflows
 #pragma warning(push)
@@ -759,11 +759,11 @@ namespace glz
          }
          else {
 #if defined(__SIZEOF_INT128__)
-            const __uint128_t res = __uint128_t(reinterpret_cast<utype&>(v)) * powers_of_ten_int[exp];
+            const __uint128_t res = __uint128_t(std::bit_cast<utype>(v)) * powers_of_ten_int[exp];
             v = T((uint64_t(res) ^ -sign) + sign);
             return uint64_t(res) <= (9223372036854775807ull + sign);
 #else
-            const auto res = full_multiplication(reinterpret_cast<utype&>(v), powers_of_ten_int[exp]);
+            const auto res = full_multiplication(std::bit_cast<utype>(v), powers_of_ten_int[exp]);
             v = T((uint64_t(res.low) ^ -sign) + sign);
             return res.high == 0 && (uint64_t(res.low) <= (9223372036854775807ull + sign));
 #endif
@@ -940,7 +940,7 @@ namespace glz::detail
    }
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // restore disabled warnings
 #pragma warning(pop)
 #endif

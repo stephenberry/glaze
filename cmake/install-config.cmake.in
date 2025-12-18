@@ -1,0 +1,20 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Handle EETF format dependency (Erlang)
+# The FindErlang module is embedded directly to avoid file collisions with other projects
+set(_glaze_EETF_FORMAT "@glaze_EETF_FORMAT@")
+if(_glaze_EETF_FORMAT)
+@glaze_FIND_ERLANG_SCRIPT@
+endif()
+unset(_glaze_EETF_FORMAT)
+
+# Handle SSL dependency (OpenSSL)
+set(_glaze_ENABLE_SSL "@glaze_ENABLE_SSL@")
+if(_glaze_ENABLE_SSL)
+    find_dependency(OpenSSL REQUIRED)
+endif()
+unset(_glaze_ENABLE_SSL)
+
+include("${CMAKE_CURRENT_LIST_DIR}/glazeTargets.cmake")

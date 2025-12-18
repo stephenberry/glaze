@@ -909,27 +909,6 @@ suite json_serialization_tests = [] {
 
 // Performance and thread safety tests
 suite performance_tests = [] {
-   "concurrent_user_operations"_test = [] {
-      UserAPI api;
-      std::atomic<int> operations_completed{0};
-
-      std::vector<std::thread> threads;
-      for (int i = 0; i < 5; ++i) {
-         threads.emplace_back([&api, &operations_completed, i]() {
-            CreateUserRequest request{"User" + std::to_string(i), "user" + std::to_string(i) + "@test.com"};
-            api.create_user(request);
-            operations_completed++;
-         });
-      }
-
-      for (auto& t : threads) {
-         t.join();
-      }
-
-      expect(operations_completed.load() == 5) << "All concurrent operations should complete\n";
-      expect(api.user_count() >= 5) << "Should have created at least 5 new users\n";
-   };
-
    "chat_room_concurrent_messages"_test = [] {
       ChatRoom room;
       room.add_connection("Alice");

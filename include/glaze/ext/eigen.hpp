@@ -14,6 +14,8 @@ static_assert(false, "Eigen must be included to use glaze/ext/eigen.hpp");
 #include "glaze/api/std/array.hpp"
 #include "glaze/beve/read.hpp"
 #include "glaze/beve/write.hpp"
+#include "glaze/cbor/read.hpp"
+#include "glaze/cbor/write.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/json/json_ptr.hpp"
@@ -27,7 +29,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          ++it;
          if (it >= end) [[unlikely]] {
@@ -53,7 +55,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          ++it;
          if (it >= end) [[unlikely]] {
@@ -92,7 +94,8 @@ namespace glz
          std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
          serialize<BEVE>::op<Opts>(extents, ctx, args...);
 
-         std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
+         std::span<const typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(),
+                                                                                               value.size());
          serialize<BEVE>::op<Opts>(view, ctx, args...);
       }
    };
@@ -115,8 +118,141 @@ namespace glz
          std::array<Eigen::Index, 2> extents{value.rows(), value.cols()};
          serialize<BEVE>::op<Opts>(extents, ctx, args...);
 
-         std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
+         std::span<const typename T::Scalar> view(value.data(), extents[0] * extents[1]);
          serialize<BEVE>::op<Opts>(view, ctx, args...);
+      }
+   };
+
+   // CBOR Eigen support (matrices and vectors)
+   // Uses RFC 8746 multi-dimensional array tags:
+   //   Tag 40: row-major order
+   //   Tag 1040: column-major order (Eigen default)
+   // Format: tag([[rows, cols], typed_array])
+   template <eigen_t T>
+   struct to<CBOR, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      {
+         using Scalar = typename std::remove_cvref_t<T>::Scalar;
+         using EigenType = std::remove_cvref_t<T>;
+
+         // Write tag: 40 for row-major, 1040 for column-major
+         constexpr uint64_t tag =
+            EigenType::IsRowMajor ? cbor::semantic_tag::multi_dim_array : cbor::semantic_tag::multi_dim_array_col_major;
+         cbor_detail::encode_arg(cbor::major::tag, tag, b, ix);
+
+         // Write 2-element array: [dimensions, data]
+         cbor_detail::encode_arg(cbor::major::array, 2, b, ix);
+
+         // Write dimensions as array [rows, cols]
+         cbor_detail::encode_arg(cbor::major::array, 2, b, ix);
+         cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(value.rows()), b, ix);
+         cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(value.cols()), b, ix);
+
+         // Write data as typed array
+         std::span<const Scalar> view(value.data(), value.size());
+         serialize<CBOR>::op<Opts>(view, ctx, b, ix);
+      }
+   };
+
+   // CBOR Eigen read (matrices and vectors)
+   // Parses RFC 8746 multi-dimensional array format:
+   //   Tag 40 or 1040 followed by [[dimensions], typed_array]
+   template <eigen_t T>
+   struct from<CBOR, T>
+   {
+      template <auto Opts>
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         using Scalar = typename std::remove_cvref_t<T>::Scalar;
+         using EigenType = std::remove_cvref_t<T>;
+
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Read and verify tag (40 = row-major, 1040 = column-major)
+         uint8_t initial;
+         std::memcpy(&initial, it, 1);
+         if (cbor::get_major_type(initial) != cbor::major::tag) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         ++it;
+         const uint64_t tag = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Verify tag matches expected layout
+         constexpr uint64_t expected_tag =
+            EigenType::IsRowMajor ? cbor::semantic_tag::multi_dim_array : cbor::semantic_tag::multi_dim_array_col_major;
+         if (tag != expected_tag) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // Read outer array header (expect 2 elements: [dimensions, data])
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         std::memcpy(&initial, it, 1);
+         if (cbor::get_major_type(initial) != cbor::major::array) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         ++it;
+         const auto outer_size = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         if (outer_size != 2) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // Read dimensions array [rows, cols]
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         std::memcpy(&initial, it, 1);
+         if (cbor::get_major_type(initial) != cbor::major::array) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         ++it;
+         const auto dims_size = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         if (dims_size != 2) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // Read rows
+         std::memcpy(&initial, it, 1);
+         ++it;
+         const auto rows = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Read cols
+         std::memcpy(&initial, it, 1);
+         ++it;
+         const auto cols = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Resize if dynamic
+         if constexpr (EigenType::RowsAtCompileTime < 0 || EigenType::ColsAtCompileTime < 0) {
+            value.resize(static_cast<Eigen::Index>(rows), static_cast<Eigen::Index>(cols));
+         }
+
+         // Read data as typed array
+         std::span<Scalar> view(value.data(), rows * cols);
+         parse<CBOR>::op<Opts>(view, ctx, it, end);
       }
    };
 
@@ -125,7 +261,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
          parse<JSON>::op<Opts>(view, ctx, it, end);
@@ -139,7 +275,8 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
-         std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
+         std::span<const typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(),
+                                                                                               value.size());
          using Value = std::remove_cvref_t<decltype(value)>;
          to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
       }
@@ -159,7 +296,7 @@ namespace glz
          to<JSON, RowColT>::template op<Opts>(extents, ctx, b, ix);
          dump<','>(b, ix);
 
-         std::span<typename T::Scalar> view(value.data(), value.size());
+         std::span<const typename T::Scalar> view(value.data(), value.size());
          using Value = std::remove_cvref_t<decltype(view)>;
          to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
          dump<']'>(b, ix);
@@ -172,7 +309,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
@@ -200,7 +337,7 @@ namespace glz
    struct from<JSON, Eigen::Transform<Scalar, Dim, Mode>>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto size = Mode == Eigen::TransformTraits::AffineCompact ? (Dim + 1) * Dim : (Dim + 1) * (Dim + 1);
          std::span<Scalar, size> view(value.data(), size);
@@ -215,7 +352,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
          constexpr auto size = Mode == Eigen::TransformTraits::AffineCompact ? (Dim + 1) * Dim : (Dim + 1) * (Dim + 1);
-         std::span<Scalar, size> view(value.data(), size);
+         std::span<const Scalar, size> view(value.data(), size);
          using Value = std::remove_cvref_t<decltype(value)>;
          to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
       }

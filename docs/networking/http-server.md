@@ -2,6 +2,8 @@
 
 The Glaze HTTP server provides a high-performance, async HTTP server implementation using ASIO.
 
+> **Prerequisites:** This feature requires ASIO. See the [ASIO Setup Guide](asio-setup.md) for installation instructions.
+
 ## Basic Usage
 
 ### Creating a Server
@@ -70,21 +72,79 @@ server.bind("::", 8080);   // all IPv6 interfaces
 ### Thread Pool Configuration
 
 ```cpp
+// Start with default thread count (hardware concurrency, minimum 1)
+server.start();   // Uses std::thread::hardware_concurrency(), minimum 1 thread
+
 // Start with specific number of threads
 server.start(4);  // 4 worker threads
 
-// Start with hardware concurrency (default)
-server.start();   // Uses std::thread::hardware_concurrency()
+// Start without creating worker threads (for external io_context management)
+server.start(0);  // No worker threads - caller manages io_context::run()
 ```
 
 ### Error Handling
 
+You can provide a custom error handler either in the constructor or using `on_error()`:
+
 ```cpp
+// Option 1: Provide error handler in constructor
+auto error_handler = [](std::error_code ec, std::source_location loc) {
+    std::fprintf(stderr, "Server error at %s:%d: %s\n",
+                loc.file_name(), loc.line(), ec.message().c_str());
+};
+glz::http_server server(nullptr, error_handler);
+
+// Option 2: Set error handler after construction
 server.on_error([](std::error_code ec, std::source_location loc) {
-    std::fprintf(stderr, "Server error at %s:%d: %s\n", 
+    std::fprintf(stderr, "Server error at %s:%d: %s\n",
                 loc.file_name(), loc.line(), ec.message().c_str());
 });
 ```
+
+### Using an External io_context
+
+You can provide your own `asio::io_context` to the server, allowing you to share the event loop with other ASIO-based components or manage the lifecycle externally.
+
+```cpp
+#include "glaze/net/http_server.hpp"
+#include <asio/io_context.hpp>
+#include <memory>
+#include <thread>
+
+// Create a shared io_context
+auto io_ctx = std::make_shared<asio::io_context>();
+
+// Pass it to the server constructor
+glz::http_server server(io_ctx);
+
+// Configure routes
+server.get("/hello", [](const glz::request&, glz::response& res) {
+    res.body("Hello, World!");
+});
+
+// Bind the server
+server.bind(8080);
+
+// Start server without creating worker threads (pass 0)
+server.start(0);
+
+// Run io_context in your own thread(s)
+std::thread io_thread([io_ctx]() {
+    io_ctx->run();
+});
+
+// ... later, when shutting down ...
+server.stop();
+io_ctx->stop();
+io_thread.join();
+```
+
+This is useful when:
+- You want to share an io_context between multiple ASIO components (e.g., multiple servers or clients)
+- You need fine-grained control over thread management
+- You're integrating the server into an existing ASIO-based application
+
+**Important:** When using an external io_context, pass `0` to `start()` to prevent the server from creating its own worker threads. You are then responsible for calling `io_context::run()` in your own threads.
 
 ## Route Registration
 
@@ -267,6 +327,147 @@ auto rate_limiter = [](const glz::request& req, glz::response& res) {
 };
 
 server.use(rate_limiter);
+```
+
+### Wrapping Middleware
+
+Wrapping middleware executes around handlers, allowing code execution both before and after the handler completes.
+
+```cpp
+// Timing and metrics middleware
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
+    auto start = std::chrono::steady_clock::now();
+
+    next(); // Execute next middleware or handler
+
+    auto duration = std::chrono::steady_clock::now() - start;
+    std::cout << req.target << " completed in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count()
+              << "ms\n";
+});
+```
+
+#### ⚠️ Safety Requirements
+
+**The `next()` handler MUST be called synchronously.** The `next` parameter is intentionally non-copyable and non-movable to prevent accidental storage and asynchronous invocation, which would cause dangling references.
+
+✅ **Correct - Synchronous execution:**
+```cpp
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
+    // Do work before
+    next(); // Call synchronously
+    // Do work after
+});
+```
+
+❌ **Incorrect - Will not compile:**
+```cpp
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
+    // ✗ COMPILE ERROR: next is non-copyable
+    std::thread([next]() {
+        next();
+    }).detach();
+});
+```
+
+For asynchronous operations, complete them **before** or **after** calling `next()`:
+```cpp
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
+    // Async work BEFORE handler
+    auto data = fetch_data_async().get();
+
+    next(); // Synchronous handler execution
+
+    // Fire-and-forget async work AFTER (using copied values only)
+    std::async([status = res.status_code]() {
+        log_to_remote(status);
+    });
+});
+```
+
+#### Use Cases
+
+**Request/Response Timing:**
+```cpp
+struct Metrics {
+    std::atomic<uint64_t> total_requests{0};
+    std::atomic<uint64_t> total_responses{0};
+    std::atomic<double> response_time_sum{0.0};
+};
+
+Metrics metrics;
+
+server.wrap([&metrics](const glz::request&, glz::response& res, const auto& next) {
+    metrics.total_requests++;
+
+    auto start = std::chrono::steady_clock::now();
+    next();
+    auto duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+    metrics.response_time_sum += duration;
+    metrics.total_responses++;
+});
+```
+
+**Error Handling:**
+```cpp
+server.wrap([](const glz::request&, glz::response& res, const auto& next) {
+    try {
+        next();
+    } catch (const std::exception& e) {
+        res.status(500).json({{"error", "Internal server error"}});
+        log_error(e.what());
+    }
+});
+```
+
+**Response Transformation:**
+```cpp
+server.wrap([](const glz::request&, glz::response& res, const auto& next) {
+    next();
+
+    // Add security headers after handler completes
+    res.header("X-Content-Type-Options", "nosniff");
+    res.header("X-Frame-Options", "DENY");
+    res.header("X-XSS-Protection", "1; mode=block");
+});
+```
+
+**Logging with Full Context:**
+```cpp
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
+    auto start = std::chrono::steady_clock::now();
+
+    next();
+
+    auto duration = std::chrono::steady_clock::now() - start;
+    log_request(req.method, req.target, res.status_code, duration);
+});
+```
+
+#### Execution Order
+
+Multiple wrapping middleware execute in the order they are registered:
+
+```cpp
+server.wrap([](const glz::request&, glz::response&, const auto& next) {
+    std::cout << "Middleware 1 before\n";
+    next();
+    std::cout << "Middleware 1 after\n";
+});
+
+server.wrap([](const glz::request&, glz::response&, const auto& next) {
+    std::cout << "Middleware 2 before\n";
+    next();
+    std::cout << "Middleware 2 after\n";
+});
+
+// Output order:
+// Middleware 1 before
+// Middleware 2 before
+// Handler executes
+// Middleware 2 after
+// Middleware 1 after
 ```
 
 ## Mounting Sub-routers
@@ -474,6 +675,52 @@ server.on_error([](std::error_code ec, std::source_location loc) {
     }
 });
 ```
+
+### Connection Management (Keep-Alive)
+
+The HTTP server supports HTTP/1.1 persistent connections (keep-alive) for improved performance. By default, keep-alive is enabled with a 60-second idle timeout.
+
+#### Configuration Options
+
+```cpp
+// Configure all connection settings at once
+server.connection_settings({
+    .keep_alive = true,              // Enable persistent connections (default: true)
+    .keep_alive_timeout = 30,        // Idle timeout in seconds (default: 60)
+    .max_requests_per_connection = 100  // Max requests per connection (default: 0 = unlimited)
+});
+
+// Or configure individual settings
+server.keep_alive(true)              // Enable/disable keep-alive
+      .keep_alive_timeout(30)        // Set idle timeout
+      .max_requests_per_connection(100);  // Set max requests limit
+```
+
+#### Disabling Keep-Alive
+
+If you experience connection issues with certain clients, you can disable keep-alive:
+
+```cpp
+// Disable keep-alive entirely
+server.keep_alive(false);
+
+// Or use connection_settings
+server.connection_settings({
+    .keep_alive = false
+});
+```
+
+When keep-alive is disabled, the server sends `Connection: close` with every response and closes the connection after each request/response cycle.
+
+#### Behavior Details
+
+- **HTTP/1.1 clients**: Keep-alive is enabled by default (per HTTP/1.1 spec)
+- **HTTP/1.0 clients**: Keep-alive is disabled unless client sends `Connection: keep-alive`
+- **Client requests close**: If client sends `Connection: close`, server respects it
+- **Idle timeout**: Connections are closed after the configured timeout of inactivity
+- **Max requests**: Connections are closed after reaching the request limit (if configured)
+
+The server always sends the appropriate `Connection` header (`keep-alive` or `close`) and a `Keep-Alive` header with timeout information when keep-alive is active.
 
 ### Health Checks
 

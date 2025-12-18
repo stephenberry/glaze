@@ -26,7 +26,9 @@ Array types logically convert to JSON array values. Concepts are used to allow v
 
 - `std::variant`
 
-See [Variant Handling](./docs/variant-handling.md) for more information.
+Variants support auto-deduction and tagged types. Smart pointers (`std::unique_ptr`, `std::shared_ptr`) are fully supported as variant alternatives, including with tagged variants.
+
+See [Variant Handling](./variant-handling.md) for more information.
 
 ## Nullable Types
 
@@ -35,7 +37,7 @@ See [Variant Handling](./docs/variant-handling.md) for more information.
 - `std::optional`
 - Raw pointers (`T*`)
 
-Nullable types may be allocated by valid input or nullified by the `null` keyword.
+Nullable types may be allocated by valid input or nullified by the `null` keyword. Smart pointers can also be used as variant alternatives (e.g., `std::variant<std::unique_ptr<A>, std::unique_ptr<B>>`), see [Variant Handling](./variant-handling.md) for details.
 
 > [!NOTE]
 > Raw pointers work with automatic reflection and respect the `skip_null_members` option. See [Nullable Types](./nullable-types.md) for detailed information about pointer handling.
@@ -53,6 +55,14 @@ Nullable types may be allocated by valid input or nullified by the `null` keywor
 std::bitset<8> b = 0b10101010;
 // will be serialized as a string: "10101010"
 ```
+
+## Chrono Types
+
+- `std::chrono::duration<Rep, Period>` - serializes as numeric count
+- `std::chrono::system_clock::time_point` - serializes as ISO 8601 string
+- `std::chrono::steady_clock::time_point` - serializes as numeric count
+
+See [Chrono Support](./chrono.md) for detailed information about time serialization and `epoch_time` wrappers.
 
 ## std::expected
 

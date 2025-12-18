@@ -2,6 +2,8 @@
 
 The Glaze HTTP client provides a simple and efficient way to make HTTP requests with connection pooling and asynchronous operations.
 
+> **Prerequisites:** This feature requires ASIO. See the [ASIO Setup Guide](asio-setup.md) for installation instructions. For HTTPS connections, OpenSSL is also required.
+
 ## Basic Usage
 
 ```cpp

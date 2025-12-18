@@ -25,7 +25,7 @@ namespace glz
    struct from<Format, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          using V = typename T::value_type;
          V temp{};

@@ -1,36 +1,38 @@
 project(json_test)
 
-## Null terminated json_test
+set(JSON_TEST_SOURCES json_test.cpp)
+set(JSON_VARIANT_SUPPORT_SOURCES json_variant_support_test.cpp)
 
-add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+function(add_glz_json_test target)
+    add_executable(${target} ${ARGN})
+    target_link_libraries(${target} PRIVATE glz_test_common)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common)
+    if (MINGW)
+        target_compile_options(${target} PRIVATE "-Wa,-mbig-obj")
+    endif ()
 
-if (MINGW)
-    target_compile_options(${PROJECT_NAME} PRIVATE "-Wa,-mbig-obj")
-endif ()
+    add_test(NAME ${target} COMMAND ${target})
 
-add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+    target_code_coverage(${target} AUTO ALL)
 
-target_code_coverage(${PROJECT_NAME} AUTO ALL)
+    set(non_null_target ${target}_non_null)
+    add_executable(${non_null_target} ${ARGN})
+    target_compile_definitions(${non_null_target} PRIVATE GLZ_NULL_TERMINATED=false)
+    target_link_libraries(${non_null_target} PRIVATE glz_test_common)
 
-## Non-null terminated json_test
+    if (MINGW)
+        target_compile_options(${non_null_target} PRIVATE "-Wa,-mbig-obj")
+    endif ()
 
-add_executable(${PROJECT_NAME}_non_null ${PROJECT_NAME}.cpp)
+    add_test(NAME ${non_null_target} COMMAND ${non_null_target})
+endfunction()
 
-target_compile_definitions(${PROJECT_NAME}_non_null PRIVATE GLZ_NULL_TERMINATED=false)
-
-target_link_libraries(${PROJECT_NAME}_non_null PRIVATE glz_test_common)
-
-if (MINGW)
-    target_compile_options(${PROJECT_NAME}_non_null PRIVATE "-Wa,-mbig-obj")
-endif ()
-
-add_test(NAME ${PROJECT_NAME}_non_null COMMAND ${PROJECT_NAME}_non_null)
+add_glz_json_test(${PROJECT_NAME} ${JSON_TEST_SOURCES})
+add_glz_json_test(json_variant_support_test ${JSON_VARIANT_SUPPORT_SOURCES})
 
 ## glz::generic test
 
-add_executable(json_t_test json_t_test.cpp)
+add_executable(json_t_test generic_test.cpp)
 
 target_link_libraries(json_t_test PRIVATE glz_test_common)
 
@@ -52,3 +54,66 @@ target_link_libraries(variant_ambiguous_test PRIVATE glz_test_common)
 
 add_test(NAME variant_ambiguous_test COMMAND variant_ambiguous_test)
 
+## Value-based skip test - test for issue #1994
+
+add_executable(value_based_skip_test value_based_skip_test.cpp)
+
+target_link_libraries(value_based_skip_test PRIVATE glz_test_common)
+
+add_test(NAME value_based_skip_test COMMAND value_based_skip_test)
+
+## Nullable lambda test - tests that lambdas returning nullable types can be skipped
+
+add_executable(nullable_lambda_test nullable_lambda_test.cpp)
+
+target_link_libraries(nullable_lambda_test PRIVATE glz_test_common)
+
+add_test(NAME nullable_lambda_test COMMAND nullable_lambda_test)
+
+## Byte array test - test for issue #1959 and PR #1966
+
+add_executable(byte_array_test byte_array_test.cpp)
+
+target_link_libraries(byte_array_test PRIVATE glz_test_common)
+
+add_test(NAME byte_array_test COMMAND byte_array_test)
+
+## Indexed rename_key test - generic solution for issue #1117
+
+add_executable(indexed_rename_key_test indexed_rename_key_test.cpp)
+
+target_link_libraries(indexed_rename_key_test PRIVATE glz_test_common)
+
+add_test(NAME indexed_rename_key_test COMMAND indexed_rename_key_test)
+
+## Skip null on read test - test for issue #1047
+
+add_executable(skip_null_on_read_test skip_null_on_read_test.cpp)
+
+target_link_libraries(skip_null_on_read_test PRIVATE glz_test_common)
+
+add_test(NAME skip_null_on_read_test COMMAND skip_null_on_read_test)
+
+## u8string test - test for std::u8string support as both buffer and value types
+
+add_executable(u8string_test u8string_test.cpp)
+
+target_link_libraries(u8string_test PRIVATE glz_test_common)
+
+add_test(NAME u8string_test COMMAND u8string_test)
+
+## JSON Patch test - RFC 6902
+
+add_executable(json_patch_test json_patch_test.cpp)
+
+target_link_libraries(json_patch_test PRIVATE glz_test_common)
+
+add_test(NAME json_patch_test COMMAND json_patch_test)
+
+## JSON Merge Patch test - RFC 7386
+
+add_executable(json_merge_patch_test json_merge_patch_test.cpp)
+
+target_link_libraries(json_merge_patch_test PRIVATE glz_test_common)
+
+add_test(NAME json_merge_patch_test COMMAND json_merge_patch_test)

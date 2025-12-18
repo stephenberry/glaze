@@ -128,6 +128,18 @@ namespace glz
       using type = Result;
    };
 
+   template <class ClassType, class Result, class... Args>
+   struct return_type<Result (ClassType::*)(Args...) volatile>
+   {
+      using type = Result;
+   };
+
+   template <class ClassType, class Result, class... Args>
+   struct return_type<Result (ClassType::*)(Args...) const volatile>
+   {
+      using type = Result;
+   };
+
    template <class T>
    struct inputs_as_tuple;
 
@@ -138,13 +150,25 @@ namespace glz
    };
 
    template <class ClassType, class Result, class... Args>
-   struct inputs_as_tuple<Result (ClassType::*)(Args...) noexcept>
+   struct inputs_as_tuple<Result (ClassType::*)(Args...) const>
    {
       using type = std::tuple<Args...>;
    };
 
    template <class ClassType, class Result, class... Args>
-   struct inputs_as_tuple<Result (ClassType::*)(Args...) const>
+   struct inputs_as_tuple<Result (ClassType::*)(Args...) volatile>
+   {
+      using type = std::tuple<Args...>;
+   };
+
+   template <class ClassType, class Result, class... Args>
+   struct inputs_as_tuple<Result (ClassType::*)(Args...) const volatile>
+   {
+      using type = std::tuple<Args...>;
+   };
+
+   template <class ClassType, class Result, class... Args>
+   struct inputs_as_tuple<Result (ClassType::*)(Args...) noexcept>
    {
       using type = std::tuple<Args...>;
    };
