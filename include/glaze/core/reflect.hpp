@@ -2408,20 +2408,20 @@ namespace glz
    // Variant deduction bits - for each unique key, tracks which variant types contain it
    template <is_variant T>
    constexpr auto variant_deduction_bits = []() {
-      constexpr size_t K = variant_deduction_key_count<T>;
+      static constexpr size_t K = variant_deduction_key_count<T>;
       using bits_type = bit_array<std::variant_size_v<T>>;
       std::array<bits_type, K> bits{};
 
       if constexpr (K > 0) {
          using keys_t = keys_wrapper<variant_deduction_keys<T>>;
-         constexpr auto& HashInfo = hash_info<keys_t>;
+         static constexpr auto& HashInfo = hash_info<keys_t>;
 
          // Populate bit arrays - for each key, set bits for variant types that have it
          for_each<std::variant_size_v<T>>([&]<auto I>() {
             using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
             if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
                using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
-               constexpr auto Size = reflect<X>::size;
+               static constexpr auto Size = reflect<X>::size;
                if constexpr (Size > 0) {
                   for (size_t J = 0; J < Size; ++J) {
                      sv key = reflect<X>::keys[J];
