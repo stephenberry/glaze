@@ -9959,6 +9959,439 @@ suite runtime_partial_write_tests = [] {
    };
 };
 
+suite runtime_exclude_write_tests = [] {
+   "basic runtime exclude write"_test = [] {
+      runtime_partial_test_struct obj{};
+      std::string s{};
+      std::vector<std::string> exclude = {"b", "d"};
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":1,"c":3.14})") << s;
+   };
+
+   "runtime exclude write - single exclusion"_test = [] {
+      runtime_partial_test_struct obj{.a = 10, .b = "world", .c = 2.5, .d = false};
+      std::string s{};
+      std::vector<std::string> exclude = {"b"};
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":10,"c":2.5,"d":false})") << s;
+   };
+
+   "runtime exclude write - empty exclusion list"_test = [] {
+      runtime_partial_test_struct obj{.a = 1, .b = "hi", .c = 1.5, .d = true};
+      std::string s{};
+      std::vector<std::string> exclude = {};
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":1,"b":"hi","c":1.5,"d":true})") << s;
+   };
+
+   "runtime exclude write - all keys excluded"_test = [] {
+      runtime_partial_test_struct obj{};
+      std::string s{};
+      std::vector<std::string> exclude = {"a", "b", "c", "d"};
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({})") << s;
+   };
+
+   "runtime exclude write - unknown key error"_test = [] {
+      runtime_partial_test_struct obj{};
+      std::string s{};
+      std::vector<std::string> exclude = {"a", "nonexistent"};
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(ec.ec == glz::error_code::unknown_key);
+   };
+
+   "runtime exclude write - prettify"_test = [] {
+      runtime_partial_test_struct obj{.a = 1, .b = "test"};
+      std::string s{};
+      std::vector<std::string> exclude = {"c", "d"};
+
+      const auto ec = glz::write_json_exclude<glz::opts{.prettify = true}>(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s.find('\n') != std::string::npos); // Contains newlines
+      expect(s.find("\"a\": 1") != std::string::npos); // Space after colon
+   };
+
+   "runtime exclude write - raw buffer"_test = [] {
+      runtime_partial_test_struct obj{.a = 99, .b = "x", .c = 1.0, .d = true};
+      char buf[64]{};
+      std::vector<std::string> exclude = {"b", "c", "d"};
+
+      auto result = glz::write_json_exclude(obj, exclude, buf);
+      expect(result.has_value());
+      expect(std::string_view(buf, *result) == R"({"a":99})");
+   };
+
+   "runtime exclude write - return string"_test = [] {
+      runtime_partial_test_struct obj{.a = 5, .b = "x", .c = 9.99, .d = false};
+      std::vector<std::string> exclude = {"a", "b", "d"};
+
+      auto result = glz::write_json_exclude(obj, exclude);
+      expect(result.has_value());
+      expect(*result == R"({"c":9.99})") << *result;
+   };
+
+   "runtime exclude write - const object"_test = [] {
+      const runtime_partial_test_struct obj{.a = 5, .b = "const", .c = 2.0, .d = true};
+      std::string s{};
+      std::vector<std::string> exclude = {"c", "d"};
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":5,"b":"const"})") << s;
+   };
+
+   "runtime exclude write - reflectable type"_test = [] {
+      runtime_partial_reflectable obj{};
+      std::string s{};
+      std::vector<std::string> exclude = {"field1"};
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"field2":"test","field3":2.5})") << s;
+   };
+
+   "runtime exclude write - array of string_view"_test = [] {
+      runtime_partial_test_struct obj{.a = 7, .b = "x", .c = 1.0, .d = true};
+      std::string s{};
+      std::array<std::string_view, 2> exclude = {"b", "c"};
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":7,"d":true})") << s;
+   };
+
+   "runtime exclude write - duplicate exclude keys"_test = [] {
+      runtime_partial_test_struct obj{.a = 42, .b = "dup", .c = 1.0, .d = false};
+      std::string s{};
+      std::vector<std::string> exclude = {"b", "b"}; // duplicate
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":42,"c":1,"d":false})") << s;
+   };
+
+   "runtime exclude write - struct order preserved"_test = [] {
+      runtime_partial_test_struct obj{.a = 1, .b = "two", .c = 3.0, .d = true};
+      std::string s{};
+      std::vector<std::string> exclude = {"b"}; // Only exclude b
+
+      const auto ec = glz::write_json_exclude(obj, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      // Keys should be in struct definition order: a, c, d
+      expect(s == R"({"a":1,"c":3,"d":true})") << s;
+   };
+};
+
+// Zoo-themed structs for nested object exclude tests
+struct zoo_animal
+{
+   std::string name{};
+   std::string species{};
+   int age{};
+   double weight_kg{};
+   bool endangered{};
+};
+
+struct zoo_habitat
+{
+   std::string name{};
+   std::string climate{};
+   double area_sqm{};
+   int capacity{};
+};
+
+struct zoo_keeper
+{
+   std::string name{};
+   std::string employee_id{};
+   int years_experience{};
+   std::string phone{};        // Sensitive - might want to exclude
+   std::string home_address{}; // Sensitive - might want to exclude
+};
+
+struct zoo_exhibit
+{
+   std::string exhibit_name{};
+   zoo_habitat habitat{};
+   std::vector<zoo_animal> animals{};
+   zoo_keeper primary_keeper{};
+   std::string internal_notes{}; // Internal - might want to exclude
+   double budget{};              // Sensitive - might want to exclude
+};
+
+struct zoo_info
+{
+   std::string zoo_name{};
+   std::string location{};
+   int year_established{};
+   std::vector<zoo_exhibit> exhibits{};
+   std::string admin_password{};  // Sensitive - should exclude
+   std::string api_key{};         // Sensitive - should exclude
+   double annual_revenue{};       // Sensitive - might exclude
+   int total_animals{};
+   bool is_open{};
+};
+
+suite zoo_exclude_write_tests = [] {
+   "zoo - exclude sensitive animal data"_test = [] {
+      zoo_animal lion{
+         .name = "Simba",
+         .species = "Panthera leo",
+         .age = 8,
+         .weight_kg = 190.5,
+         .endangered = false};
+      std::string s{};
+      std::vector<std::string> exclude = {"weight_kg"}; // Don't expose exact weight
+
+      const auto ec = glz::write_json_exclude(lion, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"name":"Simba","species":"Panthera leo","age":8,"endangered":false})") << s;
+   };
+
+   "zoo - exclude multiple animal fields"_test = [] {
+      zoo_animal panda{
+         .name = "Bao Bao",
+         .species = "Ailuropoda melanoleuca",
+         .age = 5,
+         .weight_kg = 95.0,
+         .endangered = true};
+      std::string s{};
+      std::vector<std::string> exclude = {"age", "weight_kg"};
+
+      const auto ec = glz::write_json_exclude(panda, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"name":"Bao Bao","species":"Ailuropoda melanoleuca","endangered":true})") << s;
+   };
+
+   "zoo - exclude habitat capacity"_test = [] {
+      zoo_habitat savanna{
+         .name = "African Savanna",
+         .climate = "tropical",
+         .area_sqm = 5000.0,
+         .capacity = 25};
+      std::string s{};
+      std::vector<std::string> exclude = {"capacity"}; // Don't expose capacity limits
+
+      const auto ec = glz::write_json_exclude(savanna, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"name":"African Savanna","climate":"tropical","area_sqm":5000})") << s;
+   };
+
+   "zoo - exclude keeper personal info"_test = [] {
+      zoo_keeper keeper{
+         .name = "Jane Goodall",
+         .employee_id = "EMP-12345",
+         .years_experience = 15,
+         .phone = "555-123-4567",
+         .home_address = "123 Safari Lane"};
+      std::string s{};
+      std::vector<std::string> exclude = {"phone", "home_address", "employee_id"};
+
+      const auto ec = glz::write_json_exclude(keeper, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"name":"Jane Goodall","years_experience":15})") << s;
+   };
+
+   "zoo - exhibit with nested objects excludes top-level fields"_test = [] {
+      zoo_exhibit exhibit{
+         .exhibit_name = "Big Cat Country",
+         .habitat = {.name = "Savanna Enclosure", .climate = "warm", .area_sqm = 2000.0, .capacity = 10},
+         .animals = {{.name = "Leo", .species = "Lion", .age = 6, .weight_kg = 180.0, .endangered = false},
+                     {.name = "Tigger", .species = "Tiger", .age = 4, .weight_kg = 220.0, .endangered = true}},
+         .primary_keeper = {.name = "Jack Hanna",
+                            .employee_id = "EMP-001",
+                            .years_experience = 30,
+                            .phone = "555-ZOO-KEEP",
+                            .home_address = "456 Wildlife Dr"},
+         .internal_notes = "Needs fence repair in Q2",
+         .budget = 500000.0};
+      std::string s{};
+      std::vector<std::string> exclude = {"internal_notes", "budget"};
+
+      const auto ec = glz::write_json_exclude(exhibit, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      // Should have exhibit_name, habitat, animals, primary_keeper but NOT internal_notes or budget
+      expect(s.find("\"exhibit_name\":\"Big Cat Country\"") != std::string::npos) << s;
+      expect(s.find("\"habitat\":{") != std::string::npos) << s;
+      expect(s.find("\"animals\":[") != std::string::npos) << s;
+      expect(s.find("\"primary_keeper\":{") != std::string::npos) << s;
+      expect(s.find("internal_notes") == std::string::npos) << s;
+      expect(s.find("budget") == std::string::npos) << s;
+      expect(s.find("500000") == std::string::npos) << s;
+   };
+
+   "zoo - full zoo info excludes sensitive data"_test = [] {
+      zoo_info zoo{.zoo_name = "Wildlife Paradise",
+                   .location = "San Diego, CA",
+                   .year_established = 1916,
+                   .exhibits = {},
+                   .admin_password = "super_secret_123",
+                   .api_key = "ak_live_xyz789",
+                   .annual_revenue = 50000000.0,
+                   .total_animals = 3500,
+                   .is_open = true};
+      std::string s{};
+      std::vector<std::string> exclude = {"admin_password", "api_key", "annual_revenue"};
+
+      const auto ec = glz::write_json_exclude(zoo, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s.find("admin_password") == std::string::npos) << s;
+      expect(s.find("api_key") == std::string::npos) << s;
+      expect(s.find("annual_revenue") == std::string::npos) << s;
+      expect(s.find("super_secret") == std::string::npos) << s;
+      expect(s.find("ak_live") == std::string::npos) << s;
+      expect(s.find("\"zoo_name\":\"Wildlife Paradise\"") != std::string::npos) << s;
+      expect(s.find("\"total_animals\":3500") != std::string::npos) << s;
+      expect(s.find("\"is_open\":true") != std::string::npos) << s;
+   };
+
+   "zoo - exclude only the exhibits array"_test = [] {
+      zoo_info zoo{.zoo_name = "City Zoo",
+                   .location = "New York, NY",
+                   .year_established = 1899,
+                   .exhibits = {{.exhibit_name = "Reptile House",
+                                 .habitat = {},
+                                 .animals = {},
+                                 .primary_keeper = {},
+                                 .internal_notes = "",
+                                 .budget = 100000}},
+                   .admin_password = "pwd",
+                   .api_key = "key",
+                   .annual_revenue = 1000000,
+                   .total_animals = 500,
+                   .is_open = false};
+      std::string s{};
+      std::vector<std::string> exclude = {"exhibits"};
+
+      const auto ec = glz::write_json_exclude(zoo, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s.find("exhibits") == std::string::npos) << s;
+      expect(s.find("Reptile House") == std::string::npos) << s;
+      expect(s.find("\"zoo_name\":\"City Zoo\"") != std::string::npos) << s;
+   };
+
+   "zoo - exclude everything except name"_test = [] {
+      zoo_animal elephant{
+         .name = "Dumbo",
+         .species = "Loxodonta africana",
+         .age = 25,
+         .weight_kg = 5000.0,
+         .endangered = true};
+      std::string s{};
+      std::vector<std::string> exclude = {"species", "age", "weight_kg", "endangered"};
+
+      const auto ec = glz::write_json_exclude(elephant, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"name":"Dumbo"})") << s;
+   };
+
+   "zoo - prettified output with exclusions"_test = [] {
+      zoo_animal penguin{
+         .name = "Skipper",
+         .species = "Aptenodytes forsteri",
+         .age = 3,
+         .weight_kg = 30.0,
+         .endangered = false};
+      std::string s{};
+      std::vector<std::string> exclude = {"weight_kg", "endangered"};
+
+      const auto ec = glz::write_json_exclude<glz::opts{.prettify = true}>(penguin, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s.find('\n') != std::string::npos) << s;
+      expect(s.find("\"name\": \"Skipper\"") != std::string::npos) << s;
+      expect(s.find("\"species\": \"Aptenodytes forsteri\"") != std::string::npos) << s;
+      expect(s.find("\"age\": 3") != std::string::npos) << s;
+      expect(s.find("weight_kg") == std::string::npos) << s;
+      expect(s.find("endangered") == std::string::npos) << s;
+   };
+
+   "zoo - exhibit with populated animals vector"_test = [] {
+      zoo_exhibit aquarium{
+         .exhibit_name = "Ocean World",
+         .habitat = {.name = "Saltwater Tank", .climate = "marine", .area_sqm = 10000.0, .capacity = 100},
+         .animals = {{.name = "Nemo", .species = "Clownfish", .age = 2, .weight_kg = 0.05, .endangered = false},
+                     {.name = "Dory", .species = "Blue Tang", .age = 3, .weight_kg = 0.3, .endangered = false},
+                     {.name = "Bruce", .species = "Great White Shark", .age = 15, .weight_kg = 1100.0, .endangered = true}},
+         .primary_keeper = {.name = "Marine Biologist",
+                            .employee_id = "MB-100",
+                            .years_experience = 20,
+                            .phone = "555-FISH",
+                            .home_address = "789 Beach Blvd"},
+         .internal_notes = "Shark feeding schedule: MWF",
+         .budget = 2000000.0};
+      std::string s{};
+      std::vector<std::string> exclude = {"primary_keeper", "internal_notes", "budget"};
+
+      const auto ec = glz::write_json_exclude(aquarium, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      // Verify animals are still present
+      expect(s.find("\"Nemo\"") != std::string::npos) << s;
+      expect(s.find("\"Dory\"") != std::string::npos) << s;
+      expect(s.find("\"Bruce\"") != std::string::npos) << s;
+      expect(s.find("\"Great White Shark\"") != std::string::npos) << s;
+      // Verify excluded fields are gone
+      expect(s.find("primary_keeper") == std::string::npos) << s;
+      expect(s.find("Marine Biologist") == std::string::npos) << s;
+      expect(s.find("internal_notes") == std::string::npos) << s;
+      expect(s.find("budget") == std::string::npos) << s;
+   };
+
+   "zoo - empty exclusion serializes entire zoo"_test = [] {
+      zoo_animal giraffe{
+         .name = "Geoffrey",
+         .species = "Giraffa camelopardalis",
+         .age = 12,
+         .weight_kg = 1200.0,
+         .endangered = true};
+      std::string s{};
+      std::vector<std::string> exclude = {};
+
+      const auto ec = glz::write_json_exclude(giraffe, exclude, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s ==
+             R"({"name":"Geoffrey","species":"Giraffa camelopardalis","age":12,"weight_kg":1200,"endangered":true})")
+         << s;
+   };
+
+   "zoo - return string overload with zoo data"_test = [] {
+      zoo_habitat arctic{
+         .name = "Arctic Tundra",
+         .climate = "freezing",
+         .area_sqm = 3000.0,
+         .capacity = 15};
+      std::vector<std::string> exclude = {"capacity", "area_sqm"};
+
+      auto result = glz::write_json_exclude(arctic, exclude);
+      expect(result.has_value());
+      expect(*result == R"({"name":"Arctic Tundra","climate":"freezing"})") << *result;
+   };
+
+   "zoo - raw buffer with nested zoo object"_test = [] {
+      zoo_keeper night_guard{
+         .name = "Larry Daley",
+         .employee_id = "NG-001",
+         .years_experience = 5,
+         .phone = "555-NIGHT",
+         .home_address = "Museum Way"};
+      char buf[256]{};
+      std::vector<std::string> exclude = {"phone", "home_address"};
+
+      auto result = glz::write_json_exclude(night_guard, exclude, buf);
+      expect(result.has_value());
+      std::string_view output(buf, *result);
+      expect(output == R"({"name":"Larry Daley","employee_id":"NG-001","years_experience":5})") << output;
+   };
+};
+
 struct S0
 {
    std::string f1{}; /*, f1misc is ignored*/
