@@ -517,7 +517,8 @@ namespace glz
        * @return Reference to this router for method chaining
        * @throws std::runtime_error if there's a route conflict
        */
-      inline basic_http_router& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
+      inline basic_http_router& route(http_method method, std::string_view path, handler handle,
+                                      const route_spec& spec = {})
       {
          std::string path_str(path);
          try {
