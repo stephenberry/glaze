@@ -90,7 +90,7 @@ namespace glz
       // - u64: uint64_t, then int64_t, then double (full integer range)
       using val_t = typename generic_val_type<Mode, null_t, array_t, object_t>::type;
 
-      val_t data{};
+      val_t data;
 
       /**
        * @brief Converts the JSON data to a string representation.
