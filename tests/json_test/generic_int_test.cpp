@@ -145,11 +145,7 @@ suite generic_i64_tests = [] {
    };
 
    "i64_roundtrip_mixed_types"_test = [] {
-      glz::generic_i64 json = {
-         {"int_value", 42},
-         {"double_value", 3.14},
-         {"big_int", 9007199254740993LL}
-      };
+      glz::generic_i64 json = {{"int_value", 42}, {"double_value", 3.14}, {"big_int", 9007199254740993LL}};
 
       auto json_str = json.dump();
       expect(json_str.has_value());

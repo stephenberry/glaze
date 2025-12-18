@@ -46,9 +46,9 @@ namespace glz
 {
    // Number storage mode for generic JSON types
    enum class num_mode {
-      f64,  // double only - fast, JavaScript-compatible (default)
-      i64,  // int64_t → double - signed integer precision
-      u64   // uint64_t → int64_t → double - full integer range
+      f64, // double only - fast, JavaScript-compatible (default)
+      i64, // int64_t → double - signed integer precision
+      u64 // uint64_t → int64_t → double - full integer range
    };
 
    // Helper to determine variant type based on mode
@@ -281,8 +281,7 @@ namespace glz
                   !std::is_same_v<std::decay_t<T>, std::string> && !std::is_same_v<std::decay_t<T>, std::string_view> &&
                   !std::is_same_v<std::decay_t<T>, const char*> && !std::is_same_v<std::decay_t<T>, array_t> &&
                   !std::is_same_v<std::decay_t<T>, object_t> && !std::integral<std::decay_t<T>> &&
-                  !std::floating_point<std::decay_t<T>> &&
-                  requires { write_json(std::declval<T>()); })
+                  !std::floating_point<std::decay_t<T>> && requires { write_json(std::declval<T>()); })
       generic_json& operator=(T&& value)
       {
          auto json_str = write_json(std::forward<T>(value));
@@ -412,15 +411,18 @@ namespace glz
       {
          if constexpr (Mode == num_mode::u64) {
             if (holds<uint64_t>()) {
-               glaze_error("Cannot get reference to double when variant holds uint64_t. Use as<double>() for conversion.");
+               glaze_error(
+                  "Cannot get reference to double when variant holds uint64_t. Use as<double>() for conversion.");
             }
             if (holds<int64_t>()) {
-               glaze_error("Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
+               glaze_error(
+                  "Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
             }
          }
          else if constexpr (Mode == num_mode::i64) {
             if (holds<int64_t>()) {
-               glaze_error("Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
+               glaze_error(
+                  "Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
             }
          }
          return get<double>();
@@ -429,15 +431,18 @@ namespace glz
       {
          if constexpr (Mode == num_mode::u64) {
             if (holds<uint64_t>()) {
-               glaze_error("Cannot get reference to double when variant holds uint64_t. Use as<double>() for conversion.");
+               glaze_error(
+                  "Cannot get reference to double when variant holds uint64_t. Use as<double>() for conversion.");
             }
             if (holds<int64_t>()) {
-               glaze_error("Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
+               glaze_error(
+                  "Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
             }
          }
          else if constexpr (Mode == num_mode::i64) {
             if (holds<int64_t>()) {
-               glaze_error("Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
+               glaze_error(
+                  "Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion.");
             }
          }
          return get<double>();
@@ -527,30 +532,48 @@ namespace glz
    };
 
    // Type aliases for different number handling modes
-   using generic = generic_json<num_mode::f64>;      // double only - fast, JavaScript-compatible
-   using generic_i64 = generic_json<num_mode::i64>;  // int64_t → double - signed integer precision
-   using generic_u64 = generic_json<num_mode::u64>;  // uint64_t → int64_t → double - full integer range
+   using generic = generic_json<num_mode::f64>; // double only - fast, JavaScript-compatible
+   using generic_i64 = generic_json<num_mode::i64>; // int64_t → double - signed integer precision
+   using generic_u64 = generic_json<num_mode::u64>; // uint64_t → int64_t → double - full integer range
 
    // Backwards compatibility alias
    using json_t [[deprecated("glz::json_t is deprecated, use glz::generic instead")]] = generic;
 
    template <num_mode Mode>
-   [[nodiscard]] inline bool is_array(const generic_json<Mode>& value) noexcept { return value.is_array(); }
+   [[nodiscard]] inline bool is_array(const generic_json<Mode>& value) noexcept
+   {
+      return value.is_array();
+   }
 
    template <num_mode Mode>
-   [[nodiscard]] inline bool is_object(const generic_json<Mode>& value) noexcept { return value.is_object(); }
+   [[nodiscard]] inline bool is_object(const generic_json<Mode>& value) noexcept
+   {
+      return value.is_object();
+   }
 
    template <num_mode Mode>
-   [[nodiscard]] inline bool is_number(const generic_json<Mode>& value) noexcept { return value.is_number(); }
+   [[nodiscard]] inline bool is_number(const generic_json<Mode>& value) noexcept
+   {
+      return value.is_number();
+   }
 
    template <num_mode Mode>
-   [[nodiscard]] inline bool is_string(const generic_json<Mode>& value) noexcept { return value.is_string(); }
+   [[nodiscard]] inline bool is_string(const generic_json<Mode>& value) noexcept
+   {
+      return value.is_string();
+   }
 
    template <num_mode Mode>
-   [[nodiscard]] inline bool is_boolean(const generic_json<Mode>& value) noexcept { return value.is_boolean(); }
+   [[nodiscard]] inline bool is_boolean(const generic_json<Mode>& value) noexcept
+   {
+      return value.is_boolean();
+   }
 
    template <num_mode Mode>
-   [[nodiscard]] inline bool is_null(const generic_json<Mode>& value) noexcept { return value.is_null(); }
+   [[nodiscard]] inline bool is_null(const generic_json<Mode>& value) noexcept
+   {
+      return value.is_null();
+   }
 }
 
 template <glz::num_mode Mode>
