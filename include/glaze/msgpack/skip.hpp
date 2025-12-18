@@ -23,7 +23,7 @@ namespace glz
          skip_with_tag<Opts>(ctx, tag, it, end);
       }
 
-   private:
+     private:
       template <auto Opts, class It, class End>
       static void skip_with_tag(is_context auto& ctx, const uint8_t tag, It& it, const End& end) noexcept
       {

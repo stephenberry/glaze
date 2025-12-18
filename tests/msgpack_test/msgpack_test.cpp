@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/msgpack.hpp"
+
 #include <array>
 #include <bitset>
 #include <chrono>
@@ -19,7 +21,6 @@
 #include <variant>
 #include <vector>
 
-#include "glaze/msgpack.hpp"
 #include "glaze/json/ptr.hpp"
 #include "ut/ut.hpp"
 
@@ -81,12 +82,7 @@ namespace
       bool operator==(const telemetry_batch&) const = default;
    };
 
-   enum class device_mode
-   {
-      standby,
-      active,
-      maintenance
-   };
+   enum class device_mode { standby, active, maintenance };
 
    struct cast_device_id
    {
@@ -111,16 +107,15 @@ struct glz::meta<simple_record>
 {
    using T = simple_record;
    [[maybe_unused]] static constexpr std::string_view name = "simple_record";
-   static constexpr auto value =
-      glz::object("name", &T::name, "age", &T::age, "height", &T::height, "scores", &T::scores, "tags", &T::tags,
-                  "active", &T::active);
+   static constexpr auto value = glz::object("name", &T::name, "age", &T::age, "height", &T::height, "scores",
+                                             &T::scores, "tags", &T::tags, "active", &T::active);
 };
 
 template <>
 struct glz::meta<device_mode>
 {
-   static constexpr auto value =
-      glz::enumerate("standby", device_mode::standby, "active", device_mode::active, "maintenance", device_mode::maintenance);
+   static constexpr auto value = glz::enumerate("standby", device_mode::standby, "active", device_mode::active,
+                                                "maintenance", device_mode::maintenance);
 };
 
 template <>
@@ -142,8 +137,7 @@ struct glz::meta<sensor_reading>
 {
    using T = sensor_reading;
    [[maybe_unused]] static constexpr std::string_view name = "sensor_reading";
-   static constexpr auto value =
-      glz::object("id", &T::id, "value", &T::value, "meta", &T::meta, "tags", &T::tags);
+   static constexpr auto value = glz::object("id", &T::id, "value", &T::value, "meta", &T::meta, "tags", &T::tags);
 };
 
 template <>
@@ -151,9 +145,8 @@ struct glz::meta<telemetry_batch>
 {
    using T = telemetry_batch;
    [[maybe_unused]] static constexpr std::string_view name = "telemetry_batch";
-   static constexpr auto value =
-      glz::object("active", &T::active, "readings", &T::readings, "metrics", &T::metrics, "header", &T::header,
-                  "status", &T::status);
+   static constexpr auto value = glz::object("active", &T::active, "readings", &T::readings, "metrics", &T::metrics,
+                                             "header", &T::header, "status", &T::status);
 };
 
 int main()
@@ -205,7 +198,8 @@ int main()
    };
 
    "msgpack variant richness"_test = [] {
-      using complex_variant = std::variant<std::monostate, int, std::string, std::vector<int>, std::map<std::string, int>>;
+      using complex_variant =
+         std::variant<std::monostate, int, std::string, std::vector<int>, std::map<std::string, int>>;
       expect_roundtrip_equal(complex_variant{std::monostate{}});
       expect_roundtrip_equal(complex_variant{42});
       expect_roundtrip_equal(complex_variant{std::string{"text"}});
@@ -298,8 +292,7 @@ int main()
          expect(false) << "expected unknown key error";
          return;
       }
-      expect(ec.ec == glz::error_code::unknown_key)
-         << "unexpected error: " << glz::format_error(ec, buffer);
+      expect(ec.ec == glz::error_code::unknown_key) << "unexpected error: " << glz::format_error(ec, buffer);
 
       constexpr auto permissive_opts = glz::opts{.format = glz::MSGPACK, .error_on_unknown_keys = false};
       glz::context ctx{};
@@ -404,7 +397,8 @@ int main()
       telemetry_batch decoded{};
       decoded.status = 999;
 
-      static constexpr glz::opts partial_opts{.format = glz::MSGPACK, .error_on_unknown_keys = false, .partial_read = true};
+      static constexpr glz::opts partial_opts{
+         .format = glz::MSGPACK, .error_on_unknown_keys = false, .partial_read = true};
       auto ec = glz::read<partial_opts>(decoded, std::string_view{buffer});
       expect(!ec) << glz::format_error(ec, buffer);
       expect(decoded.header == batch.header);

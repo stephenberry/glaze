@@ -65,9 +65,9 @@ namespace glz
    concept non_const_buffer = !std::is_const_v<Buffer>;
 
    template <class T>
-   concept byte_like = std::same_as<std::remove_cvref_t<T>, std::byte> ||
-                       std::same_as<std::remove_cvref_t<T>, unsigned char> ||
-                       std::same_as<std::remove_cvref_t<T>, std::uint8_t>;
+   concept byte_like =
+      std::same_as<std::remove_cvref_t<T>, std::byte> || std::same_as<std::remove_cvref_t<T>, unsigned char> ||
+      std::same_as<std::remove_cvref_t<T>, std::uint8_t>;
 }
 
 namespace glz

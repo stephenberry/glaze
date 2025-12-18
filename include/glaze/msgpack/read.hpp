@@ -28,9 +28,8 @@
 namespace glz::msgpack::detail
 {
    template <class It>
-   GLZ_ALWAYS_INLINE bool read_integer_value(is_context auto& ctx, uint8_t tag, It& it, const It& end,
-                                             bool& is_signed, int64_t& signed_value,
-                                             uint64_t& unsigned_value) noexcept
+   GLZ_ALWAYS_INLINE bool read_integer_value(is_context auto& ctx, uint8_t tag, It& it, const It& end, bool& is_signed,
+                                             int64_t& signed_value, uint64_t& unsigned_value) noexcept
    {
       if (is_positive_fixint(tag)) {
          is_signed = false;
@@ -385,8 +384,8 @@ namespace glz
          }
          else {
             static constexpr auto HashInfo = hash_info<T>;
-            const auto index =
-               decode_hash_with_size<MSGPACK, T, HashInfo, HashInfo.type>::op(sv.data(), sv.data() + sv.size(), sv.size());
+            const auto index = decode_hash_with_size<MSGPACK, T, HashInfo, HashInfo.type>::op(
+               sv.data(), sv.data() + sv.size(), sv.size());
 
             if (index >= N || reflect<T>::keys[index] != sv) [[unlikely]] {
                ctx.error = error_code::unexpected_enum;
@@ -599,8 +598,8 @@ namespace glz
                   return;
                }
 
-               const auto index =
-                  decode_hash_with_size<MSGPACK, T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size(), key.size());
+               const auto index = decode_hash_with_size<MSGPACK, T, HashInfo, HashInfo.type>::op(
+                  key.data(), key.data() + key.size(), key.size());
 
                if (index >= N || reflect<T>::keys[index] != key) {
                   if constexpr (Opts.error_on_unknown_keys) {
@@ -905,7 +904,8 @@ namespace glz
          }
 
          using namespace std::chrono;
-         value = system_clock::time_point{duration_cast<system_clock::duration>(seconds{ts.seconds} + nanoseconds{ts.nanoseconds})};
+         value = system_clock::time_point{
+            duration_cast<system_clock::duration>(seconds{ts.seconds} + nanoseconds{ts.nanoseconds})};
       }
    };
 
@@ -1014,8 +1014,9 @@ namespace glz
                parsed = true;
             }
          };
-         [&]<size_t... I>(std::index_sequence<I...>) { (try_parse(std::integral_constant<size_t, I>{}), ...); }(
-            std::make_index_sequence<std::variant_size_v<T>>{});
+         [&]<size_t... I>(std::index_sequence<I...>) {
+            (try_parse(std::integral_constant<size_t, I>{}), ...);
+         }(std::make_index_sequence<std::variant_size_v<T>>{});
 
          if (!parsed && ctx.error == error_code::none) {
             ctx.error = error_code::no_matching_variant_type;

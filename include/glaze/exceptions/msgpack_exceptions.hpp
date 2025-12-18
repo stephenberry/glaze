@@ -5,8 +5,8 @@
 
 #if __cpp_exceptions
 
-#include "glaze/msgpack.hpp"
 #include "glaze/exceptions/core_exceptions.hpp"
+#include "glaze/msgpack.hpp"
 
 namespace glz::ex
 {

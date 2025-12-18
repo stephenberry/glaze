@@ -11,8 +11,8 @@
 
 #include "glaze/core/context.hpp"
 #include "glaze/core/error_category.hpp"
-#include "glaze/util/inline.hpp"
 #include "glaze/util/dump.hpp"
+#include "glaze/util/inline.hpp"
 
 namespace glz::msgpack
 {
@@ -80,20 +80,11 @@ namespace glz::msgpack
       return (tag & negative_fixint_mask) == negative_fixint_mask;
    }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_fixmap(uint8_t tag) noexcept
-   {
-      return (tag & fixmap_mask) == fixmap_bits;
-   }
+   GLZ_ALWAYS_INLINE constexpr bool is_fixmap(uint8_t tag) noexcept { return (tag & fixmap_mask) == fixmap_bits; }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_fixarray(uint8_t tag) noexcept
-   {
-      return (tag & fixarray_mask) == fixarray_bits;
-   }
+   GLZ_ALWAYS_INLINE constexpr bool is_fixarray(uint8_t tag) noexcept { return (tag & fixarray_mask) == fixarray_bits; }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_fixstr(uint8_t tag) noexcept
-   {
-      return (tag & fixstr_mask) == fixstr_bits;
-   }
+   GLZ_ALWAYS_INLINE constexpr bool is_fixstr(uint8_t tag) noexcept { return (tag & fixstr_mask) == fixstr_bits; }
 
    template <class B>
    GLZ_ALWAYS_INLINE void dump_uint8(uint8_t value, B& b, size_t& ix) noexcept(not vector_like<B>)

@@ -408,9 +408,8 @@ namespace glz
       static consteval size_t count_members()
       {
          return []<size_t... I>(std::index_sequence<I...>) consteval {
-            return (size_t{} + ... + (std::same_as<field_t<T, I>, hidden> || std::same_as<field_t<T, I>, skip>
-                                         ? size_t{}
-                                         : size_t{1}));
+            return (size_t{} + ... +
+                    (std::same_as<field_t<T, I>, hidden> || std::same_as<field_t<T, I>, skip> ? size_t{} : size_t{1}));
          }(std::make_index_sequence<N>{});
       }
 
@@ -508,29 +507,19 @@ namespace glz
 
          switch (len) {
          case 1:
-            dump_payload([&] {
-               dump(std::byte{msgpack::fixext1}, b, ix);
-            });
+            dump_payload([&] { dump(std::byte{msgpack::fixext1}, b, ix); });
             return;
          case 2:
-            dump_payload([&] {
-               dump(std::byte{msgpack::fixext2}, b, ix);
-            });
+            dump_payload([&] { dump(std::byte{msgpack::fixext2}, b, ix); });
             return;
          case 4:
-            dump_payload([&] {
-               dump(std::byte{msgpack::fixext4}, b, ix);
-            });
+            dump_payload([&] { dump(std::byte{msgpack::fixext4}, b, ix); });
             return;
          case 8:
-            dump_payload([&] {
-               dump(std::byte{msgpack::fixext8}, b, ix);
-            });
+            dump_payload([&] { dump(std::byte{msgpack::fixext8}, b, ix); });
             return;
          case 16:
-            dump_payload([&] {
-               dump(std::byte{msgpack::fixext16}, b, ix);
-            });
+            dump_payload([&] { dump(std::byte{msgpack::fixext16}, b, ix); });
             return;
          default:
             break;
@@ -585,8 +574,8 @@ namespace glz
             dump(std::byte{msgpack::fixext8}, b, ix);
             dump(std::byte{type_byte}, b, ix);
             // Upper 30 bits: nanoseconds, lower 34 bits: seconds
-            const uint64_t val64 = (static_cast<uint64_t>(value.nanoseconds) << 34) |
-                                   static_cast<uint64_t>(value.seconds);
+            const uint64_t val64 =
+               (static_cast<uint64_t>(value.nanoseconds) << 34) | static_cast<uint64_t>(value.seconds);
             msgpack::dump_uint64(val64, b, ix);
          }
          // Timestamp 96: full range with signed seconds
@@ -760,9 +749,7 @@ namespace glz
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
          msgpack::detail::write_array_header(N, b, ix);
-         for_each<N>([&]<size_t I>() {
-            serialize<MSGPACK>::op<Opts>(glz::get<I>(value.value), ctx, b, ix);
-         });
+         for_each<N>([&]<size_t I>() { serialize<MSGPACK>::op<Opts>(glz::get<I>(value.value), ctx, b, ix); });
       }
    };
 
@@ -776,9 +763,7 @@ namespace glz
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
          msgpack::detail::write_array_header(N, b, ix);
-         for_each<N>([&]<size_t I>() {
-            serialize<MSGPACK>::op<Opts>(glz::get<I>(value.value), ctx, b, ix);
-         });
+         for_each<N>([&]<size_t I>() { serialize<MSGPACK>::op<Opts>(glz::get<I>(value.value), ctx, b, ix); });
       }
    };
 
