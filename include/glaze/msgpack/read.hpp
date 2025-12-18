@@ -905,7 +905,7 @@ namespace glz
          }
 
          using namespace std::chrono;
-         value = system_clock::time_point{seconds{ts.seconds} + nanoseconds{ts.nanoseconds}};
+         value = system_clock::time_point{duration_cast<system_clock::duration>(seconds{ts.seconds} + nanoseconds{ts.nanoseconds})};
       }
    };
 
