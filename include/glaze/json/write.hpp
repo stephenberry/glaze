@@ -2351,7 +2351,7 @@ namespace glz
       context ctx{};
       size_t ix = 0;
       to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
-                                                                                 buffer, ix);
+                                                                                buffer, ix);
       if constexpr (resizable<Buffer>) {
          buffer.resize(ix);
       }
@@ -2365,7 +2365,7 @@ namespace glz
       context ctx{};
       size_t ix = 0;
       to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
-                                                                                 buffer, ix);
+                                                                                buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message});
       }
