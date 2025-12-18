@@ -4,10 +4,9 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 Glaze also supports:
 
 - [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding)
-- [MessagePack](./docs/msgpack.md) (binary serialization)
 - [CBOR](./docs/cbor.md) (Concise Binary Object Representation)
 - [CSV](./docs/csv.md) (Comma Separated Value)
-- [MessagePack](./docs/msgpack.md) (binary serialization)
+- [MessagePack](./docs/msgpack.md)
 - [Stencil/Mustache](./docs/stencil-mustache.md) (string interpolation)
 - [TOML](./docs/toml.md) (Tom's Obvious, Minimal Language)
 - [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
