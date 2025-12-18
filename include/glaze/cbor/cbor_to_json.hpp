@@ -158,10 +158,12 @@ namespace glz
                      return;
                   }
 
-                  const size_t old_size = bytes.size();
-                  bytes.resize(old_size + chunk_len);
-                  std::memcpy(bytes.data() + old_size, it, chunk_len);
-                  it += chunk_len;
+                  if (chunk_len > 0) {
+                     const size_t old_size = bytes.size();
+                     bytes.resize(old_size + chunk_len);
+                     std::memcpy(bytes.data() + old_size, it, chunk_len);
+                     it += chunk_len;
+                  }
                }
                // Write as base64-encoded string
                dump<'"'>(out, ix);

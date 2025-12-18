@@ -3,6 +3,8 @@
 
 #include "glaze/cbor.hpp"
 
+#include "glaze/base64/base64.hpp"
+
 #include <bit>
 #include <bitset>
 #include <complex>
@@ -2172,6 +2174,22 @@ void cbor_to_json_tests()
    };
 }
 
+void past_fuzzing_issues()
+{
+   // Test cases from fuzzing that must return errors gracefully (no crash/UB)
+   "fuzz0_indefinite_bstr_no_break"_test = [] {
+      // Base64: X0A= -> 0x5F 0x40
+      // Indefinite-length byte string with one empty chunk but no break code
+      // Previously triggered null pointer UB in memcpy, now returns error gracefully
+      std::string_view base64 = "X0A=";
+      const auto input = glz::read_base64(base64);
+      expect(glz::read_cbor<my_struct>(input).error());
+
+      std::string json_output{};
+      expect(bool(glz::cbor_to_json(input, json_output)));
+   };
+}
+
 void error_tests()
 {
    "truncated_input"_test = [] {
@@ -2276,6 +2294,7 @@ int main()
    rfc8949_appendix_a_tests();
    typed_array_tests();
    cbor_to_json_tests();
+   past_fuzzing_issues();
    error_tests();
 #if __cpp_exceptions
    exceptions_tests();
