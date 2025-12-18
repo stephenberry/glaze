@@ -7,8 +7,9 @@ Glaze also supports:
 - [MessagePack](./docs/msgpack.md) (binary serialization)
 - [CBOR](./docs/cbor.md) (Concise Binary Object Representation)
 - [CSV](./docs/csv.md) (Comma Separated Value)
-- [TOML](./docs/toml.md) (Tom's Obvious, Minimal Language)
+- [MessagePack](./docs/msgpack.md) (binary serialization)
 - [Stencil/Mustache](./docs/stencil-mustache.md) (string interpolation)
+- [TOML](./docs/toml.md) (Tom's Obvious, Minimal Language)
 - [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
 - [And Many More Features](https://stephenberry.github.io/glaze/)
 
