@@ -78,12 +78,12 @@ nav:
    - Modify Reflection: modify-reflection.md
  - Formats:
    - JSON: json.md
-   - MessagePack: msgpack.md
-   - TOML: toml.md
-   - CSV: csv.md
    - BEVE (binary): binary.md
    - CBOR: cbor.md
+   - CSV: csv.md
+   - MessagePack: msgpack.md
    - Stencil/Mustache: stencil-mustache.md
+   - TOML: toml.md
    - EETF: EETF/erlang-external-term-format.md
  - Serialization/Parsing:
    - Exceptions: exceptions.md
