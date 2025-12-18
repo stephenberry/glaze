@@ -117,7 +117,17 @@ namespace glz
    }();
 
    inline constexpr std::array<uint16_t, 256> char_escape_table = [] {
-      auto combine = [](const char chars[2]) -> uint16_t { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); };
+      // Build uint16_t so that memcpy produces chars in correct order.
+      // On LE: chars[0] in low byte, chars[1] in high byte -> memcpy writes [chars[0]][chars[1]]
+      // On BE: chars[0] in high byte, chars[1] in low byte -> memcpy writes [chars[0]][chars[1]]
+      auto combine = [](const char chars[2]) -> uint16_t {
+         if constexpr (std::endian::native == std::endian::big) {
+            return (uint16_t(uint8_t(chars[0])) << 8) | uint16_t(uint8_t(chars[1]));
+         }
+         else {
+            return uint16_t(uint8_t(chars[0])) | (uint16_t(uint8_t(chars[1])) << 8);
+         }
+      };
 
       std::array<uint16_t, 256> t{};
       t['\b'] = combine(R"(\b)");
@@ -148,13 +158,17 @@ namespace glz
    {
       constexpr auto& t = digit_hex_table;
       const uint8_t arr[4]{t[uint8_t(c[3])], t[uint8_t(c[2])], t[uint8_t(c[1])], t[uint8_t(c[0])]};
-      const auto chunk = std::bit_cast<uint32_t>(arr);
+      auto chunk = std::bit_cast<uint32_t>(arr);
+      // On big-endian, bit_cast produces bytes in opposite order than expected
+      // byteswap to get consistent little-endian representation
+      if constexpr (std::endian::native == std::endian::big) {
+         chunk = std::byteswap(chunk);
+      }
       // check that all hex characters are valid
       if (chunk & repeat_byte4(0b11110000u)) [[unlikely]] {
          return 0xFFFFFFFFu;
       }
 
-      // TODO: can you use std::bit_cast here?
       // now pack into first four bytes of uint32_t
       uint32_t packed{};
       packed |= (chunk & 0x0000000F);
@@ -223,9 +237,9 @@ namespace glz
       constexpr uint32_t surrogate_codepoint_bits = 10;
    }
 
-   template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst,
-                                                                      const Char* end) noexcept
+   template <class SrcChar, class DstChar = SrcChar>
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
+                                                                      const SrcChar* end) noexcept
    {
       using namespace unicode;
 
@@ -332,9 +346,23 @@ namespace glz
       return skip_code_point(code_point) > 0;
    }
 
+   // Options struct for match_invalid_end - reduces template instantiations
+   struct match_invalid_end_opts
+   {
+      bool null_terminated;
+
+      // Convert from any opts-like type
+      template <typename T>
+      consteval match_invalid_end_opts(const T& opts) noexcept : null_terminated{opts.null_terminated}
+      {}
+
+      // Direct construction
+      explicit consteval match_invalid_end_opts(bool null_terminated_) noexcept : null_terminated{null_terminated_} {}
+   };
+
    // Checks for a character and validates that we are not at the end (considered an error)
-   template <char C, auto Opts>
-   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
+   template <char C, match_invalid_end_opts Opts>
+   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if (*it != C) [[unlikely]] {
          if constexpr (C == '"') {
@@ -401,7 +429,7 @@ namespace glz
 
    template <string_literal str, auto Opts>
       requires(check_is_padded(Opts) && str.size() <= padding_bytes)
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto) noexcept
    {
       static constexpr auto S = str.sv();
       if (not comparitor<S>(it)) [[unlikely]] {
@@ -414,7 +442,7 @@ namespace glz
 
    template <string_literal str, auto Opts>
       requires(!check_is_padded(Opts))
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       const auto n = size_t(end - it);
       static constexpr auto S = str.sv();
@@ -426,7 +454,7 @@ namespace glz
       }
    }
 
-   GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       ++it;
       if (it == end) [[unlikely]] {
@@ -491,13 +519,32 @@ namespace glz
 
 namespace glz
 {
+   // Options struct for skip_ws - reduces template instantiations
+   struct ws_opts
+   {
+      bool minified;
+      bool null_terminated;
+      bool comments;
+
+      // Convert from any opts-like type
+      template <typename T>
+      consteval ws_opts(const T& opts) noexcept
+         : minified{opts.minified}, null_terminated{opts.null_terminated}, comments{opts.comments}
+      {}
+
+      // Direct construction - all values required
+      consteval ws_opts(bool minified_, bool null_terminated_, bool comments_) noexcept
+         : minified{minified_}, null_terminated{null_terminated_}, comments{comments_}
+      {}
+   };
+
    // skip whitespace
-   template <auto Opts>
-   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   template <ws_opts Opts>
+   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       using namespace glz::detail;
 
-      if constexpr (!Opts.minified) {
+      if constexpr (not Opts.minified) {
          if constexpr (Opts.null_terminated) {
             if constexpr (Opts.comments) {
                while (whitespace_comment_table[uint8_t(*it)]) {
@@ -652,7 +699,7 @@ namespace glz
    }
 #endif
 
-   GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       const auto* pc = std::memchr(it, '"', size_t(end - it));
       if (pc) [[likely]] {
@@ -663,8 +710,7 @@ namespace glz
       ctx.error = error_code::expected_quote;
    }
 
-   template <auto Opts>
-   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       while (it < end) [[likely]] {
          const auto* pc = std::memchr(it, '"', size_t(end - it));
@@ -687,18 +733,42 @@ namespace glz
       ctx.error = error_code::expected_quote;
    }
 
-   template <auto Opts>
-      requires(check_is_padded(Opts))
-   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   // Options struct for skip_string - reduces template instantiations
+   struct skip_string_opts
    {
-      if constexpr (!check_opening_handled(Opts)) {
+      bool padded;
+      bool opening_handled;
+      bool validate_skipped;
+
+      // Convert from any opts-like type (consteval because check_* functions are consteval)
+      template <typename T>
+      consteval skip_string_opts(const T& opts) noexcept
+         : padded{check_is_padded(opts)},
+           opening_handled{check_opening_handled(opts)},
+           validate_skipped{check_validate_skipped(opts)}
+      {}
+
+      // Direct construction - all values required
+      consteval skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_) noexcept
+         : padded{padded_}, opening_handled{opening_handled_}, validate_skipped{validate_skipped_}
+      {}
+   };
+
+   template <skip_string_opts Opts>
+      requires(Opts.padded)
+   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
+   {
+      if constexpr (not Opts.opening_handled) {
          ++it;
       }
 
-      if constexpr (check_validate_skipped(Opts)) {
+      if constexpr (Opts.validate_skipped) {
          while (true) {
-            uint64_t swar{};
+            uint64_t swar;
             std::memcpy(&swar, it, 8);
+            if constexpr (std::endian::native == std::endian::big) {
+               swar = std::byteswap(swar);
+            }
 
             constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
             const uint64_t lo7 = swar & lo7_mask;
@@ -769,7 +839,7 @@ namespace glz
          ctx.error = error_code::unexpected_end;
       }
       else {
-         skip_string_view<Opts>(ctx, it, end);
+         skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -777,15 +847,15 @@ namespace glz
       }
    }
 
-   template <auto Opts>
-      requires(not check_is_padded(Opts))
-   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   template <skip_string_opts Opts>
+      requires(not Opts.padded)
+   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      if constexpr (!check_opening_handled(Opts)) {
+      if constexpr (not Opts.opening_handled) {
          ++it;
       }
 
-      if constexpr (check_validate_skipped(Opts)) {
+      if constexpr (Opts.validate_skipped) {
          while (true) {
             if ((*it & 0b11100000) == 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -821,7 +891,7 @@ namespace glz
          }
       }
       else {
-         skip_string_view<Opts>(ctx, it, end);
+         skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -829,22 +899,43 @@ namespace glz
       }
    }
 
-   template <auto Opts, char open, char close, size_t Depth = 1>
-      requires(check_is_padded(Opts) && not bool(Opts.comments))
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   // Options struct for skip_until_closed - reduces template instantiations
+   struct skip_until_closed_opts
    {
+      bool padded;
+      bool comments;
+
+      // Convert from any opts-like type (consteval because check_is_padded is consteval)
+      template <typename T>
+      consteval skip_until_closed_opts(const T& opts) noexcept : padded{check_is_padded(opts)}, comments{opts.comments}
+      {}
+
+      // Direct construction - all values required
+      consteval skip_until_closed_opts(bool padded_, bool comments_) noexcept : padded{padded_}, comments{comments_} {}
+   };
+
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+      requires(Opts.padded && not Opts.comments)
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
+   {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
             switch (*it) {
             case '"': {
-               skip_string<opts{}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -877,22 +968,28 @@ namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <auto Opts, char open, char close, size_t Depth = 1>
-      requires(check_is_padded(Opts) && bool(Opts.comments))
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+      requires(Opts.padded && Opts.comments)
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
             switch (*it) {
             case '"': {
-               skip_string<opts{}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -932,22 +1029,28 @@ namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <auto Opts, char open, char close, size_t Depth = 1>
-      requires(!check_is_padded(Opts) && not bool(Opts.comments))
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+      requires(not Opts.padded && not Opts.comments)
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
             switch (*it) {
             case '"': {
-               skip_string<opts{}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -981,7 +1084,7 @@ namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<opts{}>(ctx, it, end);
+            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1016,22 +1119,28 @@ namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <auto Opts, char open, char close, size_t Depth = 1>
-      requires(!check_is_padded(Opts) && bool(Opts.comments))
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+      requires(not Opts.padded && Opts.comments)
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
             switch (*it) {
             case '"': {
-               skip_string<opts{}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1072,7 +1181,7 @@ namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<opts{}>(ctx, it, end);
+            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1122,7 +1231,7 @@ namespace glz
       return {};
    }
 
-   GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       it += *it == '-';
       const auto sig_start_it = it;
@@ -1165,10 +1274,24 @@ namespace glz
       }
    }
 
-   template <auto Opts>
-   GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   // Options struct for skip_number - reduces template instantiations
+   struct skip_number_opts
    {
-      if constexpr (!check_validate_skipped(Opts)) {
+      bool validate;
+
+      // Convert from any opts-like type (consteval because check_validate_skipped is consteval)
+      template <typename T>
+      consteval skip_number_opts(const T& opts) noexcept : validate{check_validate_skipped(opts)}
+      {}
+
+      // Direct construction
+      explicit consteval skip_number_opts(bool validate_) noexcept : validate{validate_} {}
+   };
+
+   template <skip_number_opts Opts>
+   GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
+   {
+      if constexpr (not Opts.validate) {
          while (numeric_table[uint8_t(*it)]) {
             ++it;
          }
@@ -1179,7 +1302,7 @@ namespace glz
    }
 
    // expects opening whitespace to be handled
-   GLZ_ALWAYS_INLINE sv parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE sv parse_key(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       // TODO this assumes no escapes.
       if (bool(ctx.error)) [[unlikely]]
@@ -1199,6 +1322,58 @@ namespace glz
    GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const std::integral auto val) noexcept
    {
       return val + (multiple - (val % multiple)) % multiple;
+   }
+
+   inline bool validate_utf8(const auto* str, const size_t size) noexcept
+   {
+      const uint8_t* it = reinterpret_cast<const uint8_t*>(str);
+      const uint8_t* end = it + size;
+
+      while (it < end) {
+         // Optimistic SWAR check for ASCII
+         if (it + 8 <= end) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            if ((chunk & glz::repeat_byte8(0x80)) == 0) {
+               it += 8;
+               continue;
+            }
+         }
+
+         // Byte-by-byte validation (standard conformant)
+         uint8_t byte = *it;
+
+         if (byte < 0x80) {
+            it++;
+         }
+         else if ((byte & 0xE0) == 0xC0) {
+            // 2-byte sequence
+            if (it + 2 > end || (it[1] & 0xC0) != 0x80) return false;
+            if (byte < 0xC2) return false; // Overlong
+            it += 2;
+         }
+         else if ((byte & 0xF0) == 0xE0) {
+            // 3-byte sequence
+            if (it + 3 > end || (it[1] & 0xC0) != 0x80 || (it[2] & 0xC0) != 0x80) return false;
+            if (byte == 0xE0 && it[1] < 0xA0) return false; // Overlong
+            if (byte == 0xED && it[1] >= 0xA0) return false; // Surrogate
+            it += 3;
+         }
+         else if ((byte & 0xF8) == 0xF0) {
+            // 4-byte sequence
+            if (it + 4 > end || (it[1] & 0xC0) != 0x80 || (it[2] & 0xC0) != 0x80 || (it[3] & 0xC0) != 0x80)
+               return false;
+            if (byte == 0xF0 && it[1] < 0x90) return false; // Overlong
+            if (byte == 0xF4 && it[1] >= 0x90) return false; // > U+10FFFF
+            if (byte > 0xF4) return false; // > U+10FFFF
+            it += 4;
+         }
+         else {
+            return false;
+         }
+      }
+
+      return true;
    }
 }
 

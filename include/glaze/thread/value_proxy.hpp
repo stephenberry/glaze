@@ -14,7 +14,7 @@ namespace glz
    struct from<Format, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          parse<JSON>::op<Opts>(value.value(), ctx, it, end);
       }

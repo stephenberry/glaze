@@ -759,11 +759,11 @@ namespace glz
          }
          else {
 #if defined(__SIZEOF_INT128__)
-            const __uint128_t res = __uint128_t(reinterpret_cast<utype&>(v)) * powers_of_ten_int[exp];
+            const __uint128_t res = __uint128_t(std::bit_cast<utype>(v)) * powers_of_ten_int[exp];
             v = T((uint64_t(res) ^ -sign) + sign);
             return uint64_t(res) <= (9223372036854775807ull + sign);
 #else
-            const auto res = full_multiplication(reinterpret_cast<utype&>(v), powers_of_ten_int[exp]);
+            const auto res = full_multiplication(std::bit_cast<utype>(v), powers_of_ten_int[exp]);
             v = T((uint64_t(res.low) ^ -sign) + sign);
             return res.high == 0 && (uint64_t(res.low) <= (9223372036854775807ull + sign));
 #endif

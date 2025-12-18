@@ -69,3 +69,59 @@ add_executable(value_based_skip_test value_based_skip_test.cpp)
 target_link_libraries(value_based_skip_test PRIVATE glz_test_common)
 
 add_test(NAME value_based_skip_test COMMAND value_based_skip_test)
+
+## Nullable lambda test - tests that lambdas returning nullable types can be skipped
+
+add_executable(nullable_lambda_test nullable_lambda_test.cpp)
+
+target_link_libraries(nullable_lambda_test PRIVATE glz_test_common)
+
+add_test(NAME nullable_lambda_test COMMAND nullable_lambda_test)
+
+## Byte array test - test for issue #1959 and PR #1966
+
+add_executable(byte_array_test byte_array_test.cpp)
+
+target_link_libraries(byte_array_test PRIVATE glz_test_common)
+
+add_test(NAME byte_array_test COMMAND byte_array_test)
+
+## Indexed rename_key test - generic solution for issue #1117
+
+add_executable(indexed_rename_key_test indexed_rename_key_test.cpp)
+
+target_link_libraries(indexed_rename_key_test PRIVATE glz_test_common)
+
+add_test(NAME indexed_rename_key_test COMMAND indexed_rename_key_test)
+
+## Skip null on read test - test for issue #1047
+
+add_executable(skip_null_on_read_test skip_null_on_read_test.cpp)
+
+target_link_libraries(skip_null_on_read_test PRIVATE glz_test_common)
+
+add_test(NAME skip_null_on_read_test COMMAND skip_null_on_read_test)
+
+## u8string test - test for std::u8string support as both buffer and value types
+
+add_executable(u8string_test u8string_test.cpp)
+
+target_link_libraries(u8string_test PRIVATE glz_test_common)
+
+add_test(NAME u8string_test COMMAND u8string_test)
+
+## JSON Patch test - RFC 6902
+
+add_executable(json_patch_test json_patch_test.cpp)
+
+target_link_libraries(json_patch_test PRIVATE glz_test_common)
+
+add_test(NAME json_patch_test COMMAND json_patch_test)
+
+## JSON Merge Patch test - RFC 7386
+
+add_executable(json_merge_patch_test json_merge_patch_test.cpp)
+
+target_link_libraries(json_merge_patch_test PRIVATE glz_test_common)
+
+add_test(NAME json_merge_patch_test COMMAND json_merge_patch_test)

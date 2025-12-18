@@ -26,10 +26,9 @@ jobs:
           - { name: clang, version: 17 }
           - { name: clang, version: 18 }
           - { name: clang, version: 20 }
-          - { name: gcc, version: 12 }
           - { name: gcc, version: 13 }
           - { name: gcc, version: 14 }
-        boost_version: [1.88.0, 1.73.0]
+        boost_version: [1.88.0, 1.86.0]
 
     env:
       CC: ${{matrix.compiler.name}}-${{matrix.compiler.version}}

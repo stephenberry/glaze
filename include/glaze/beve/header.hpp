@@ -15,7 +15,7 @@
 
 namespace glz
 {
-   GLZ_ALWAYS_INLINE bool invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE bool invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if (it >= end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -23,6 +23,36 @@ namespace glz
       }
       else [[likely]] {
          return false;
+      }
+   }
+
+   // Byteswaps a numeric value in-place for little-endian wire format compatibility.
+   // Call ONLY inside: if constexpr (std::endian::native == std::endian::big) blocks.
+   // On little-endian systems, this function is never instantiated (zero overhead).
+   template <class T>
+      requires(std::integral<T> || std::floating_point<T> || std::is_enum_v<T>)
+   GLZ_ALWAYS_INLINE void byteswap_le(T& value) noexcept
+   {
+      if constexpr (std::is_enum_v<T>) {
+         using U = std::underlying_type_t<T>;
+         if constexpr (sizeof(U) > 1) {
+            U underlying_val;
+            std::memcpy(&underlying_val, &value, sizeof(T));
+            underlying_val = std::byteswap(underlying_val);
+            std::memcpy(&value, &underlying_val, sizeof(T));
+         }
+      }
+      else if constexpr (std::integral<T>) {
+         if constexpr (sizeof(T) > 1) {
+            value = std::byteswap(value);
+         }
+      }
+      else if constexpr (std::floating_point<T>) {
+         using Int = std::conditional_t<sizeof(T) == 4, uint32_t, uint64_t>;
+         Int int_val;
+         std::memcpy(&int_val, &value, sizeof(T));
+         int_val = std::byteswap(int_val);
+         std::memcpy(&value, &int_val, sizeof(T));
       }
    }
 }
@@ -37,6 +67,10 @@ namespace glz::tag
    constexpr uint8_t typed_array = 4;
    constexpr uint8_t generic_array = 5;
    constexpr uint8_t extensions = 6;
+
+   // Data delimiter for separating multiple BEVE values in a stream/buffer
+   // Used like NDJSON's newline delimiter - when converted to JSON outputs '\n'
+   constexpr uint8_t delimiter = 0b00000'110; // extensions type (6) with subtype 0
 
    constexpr uint8_t bool_false = 0b000'01'000;
    constexpr uint8_t bool_true = 0b000'11'000;
@@ -67,7 +101,7 @@ namespace glz
 
    inline constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto&& end) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
    {
       if (it >= end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -90,12 +124,18 @@ namespace glz
       case 1: {
          uint16_t h;
          std::memcpy(&h, it, 2);
+         if constexpr (std::endian::native == std::endian::big) {
+            h = std::byteswap(h);
+         }
          it += 2;
          return h >> 2;
       }
       case 2: {
          uint32_t h;
          std::memcpy(&h, it, 4);
+         if constexpr (std::endian::native == std::endian::big) {
+            h = std::byteswap(h);
+         }
          it += 4;
          return h >> 2;
       }
@@ -105,6 +145,9 @@ namespace glz
          if constexpr (sizeof(size_t) > sizeof(uint32_t)) {
             uint64_t h;
             std::memcpy(&h, it, 8);
+            if constexpr (std::endian::native == std::endian::big) {
+               h = std::byteswap(h);
+            }
             it += 8;
             h = h >> 2;
             static constexpr uint64_t safety_limit = 1ull << 48; // 2^48
@@ -122,7 +165,7 @@ namespace glz
       }
    }
 
-   GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if (invalid_end(ctx, it, end)) {
          return;

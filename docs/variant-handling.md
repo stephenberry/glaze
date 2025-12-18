@@ -511,6 +511,82 @@ glz::read_json(nv, json);
 - The tag field in the default type will be populated with the actual tag value from the JSON
 - Only the first unlabeled type serves as the default (you can only have one default handler)
 
+## Variants with Smart Pointers
+
+Glaze fully supports `std::unique_ptr` and `std::shared_ptr` as variant alternatives, including both auto-deduction and tagged variants. This is particularly useful for polymorphic types, factory patterns, and managing object ownership in variant containers.
+
+### Auto-Deduction with Smart Pointers
+
+Smart pointers work seamlessly with auto-deduction based on field names:
+
+```c++
+struct Cat {
+   std::string name;
+   int lives;
+};
+
+struct Dog {
+   std::string name;
+   std::string breed;
+};
+
+// Variant of smart pointers - auto-deduction works!
+using PetVariant = std::variant<std::unique_ptr<Cat>, std::unique_ptr<Dog>>;
+
+PetVariant pet;
+glz::read_json(pet, R"({"name":"Fluffy","lives":9})");
+// pet holds std::unique_ptr<Cat>
+
+glz::read_json(pet, R"({"name":"Rover","breed":"Labrador"})");
+// pet holds std::unique_ptr<Dog>
+```
+
+### Tagged Variants with Smart Pointers
+
+Tagged variants also work with smart pointers, providing explicit type control:
+
+```c++
+struct SiteDiagnostic {
+   std::string message;
+   int severity;
+};
+
+struct DerivedSite {
+   std::string message;
+   int severity;
+   std::string additional_info;
+};
+
+using DiagnosticVariant = std::variant<
+   std::unique_ptr<SiteDiagnostic>,
+   std::unique_ptr<DerivedSite>
+>;
+
+template <>
+struct glz::meta<DiagnosticVariant> {
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"SiteDiagnostic", "DerivedSite"};
+};
+
+// Writing includes the type tag
+DiagnosticVariant diag = std::make_unique<SiteDiagnostic>(
+   SiteDiagnostic{"Error occurred", 3}
+);
+auto json = glz::write_json(diag);
+// Result: {"type":"SiteDiagnostic","message":"Error occurred","severity":3}
+
+// Reading uses the tag for type selection
+DiagnosticVariant parsed;
+glz::read_json(parsed, R"({"type":"DerivedSite","message":"Warning","severity":2,"additional_info":"Details"})");
+// parsed holds std::unique_ptr<DerivedSite>
+```
+
+**Important notes:**
+- Smart pointers are automatically allocated during deserialization
+- Null smart pointers during serialization will result in an error
+- Both auto-deduction and tagged variants work with smart pointers
+- Mixed variants (e.g., `std::variant<Cat, std::unique_ptr<Dog>>`) are also supported
+
 ## BEVE to JSON
 
 BEVE uses the variant index to denote the type in a variant. When calling `glz::beve_to_json`, variants will be written in JSON with `"index"` and `"value"` keys. The index indicates the type, which would correspond to a `std::variant` `index()` method.

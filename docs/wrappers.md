@@ -14,6 +14,8 @@ glz::number<&T::x> // Read a string as a number and writes the string as a numbe
 glz::raw<&T::x> // Write out string like types without quotes
 glz::raw_string<&T::string> // Do not decode/encode escaped characters for strings (improves read/write performance)
 glz::escaped<&T::string> // Opposite of glz::raw_string, it turns off this behavior
+glz::escape_bytes_t<T> // A wrapper type for local use to treat char array or vector as byte sequence to be fully escaped (prevents null termination truncation)
+glz::escape_bytes<&T::x> // For meta usage: treats char array or vector as byte sequence to be fully escaped (prevents null termination truncation)
 
 glz::read_constraint<&T::x, constraint_function, "Message"> // Applies a constraint function when reading
   
@@ -38,7 +40,8 @@ glz::as_array<&T::member> // Treat a reflected/member-annotated type as a positi
 
 When reading into an array that is appendable, the new data will be appended rather than overwrite
 
-Associated option: `glz::opts{.append_arrays = true};`
+Associated option: add `bool append_arrays = true;` to a custom options struct (for example,
+`struct append_arrays_opts : glz::opts { bool append_arrays = true; };`).
 
 ```c++
 struct append_obj
@@ -72,7 +75,8 @@ expect(obj.arrays == std::vector<std::array<int, 2>>{{0,0},{1,1}});
 
 Read and write booleans as numbers
 
-Associated option: `glz::opts{.bools_as_numbers = true};`
+Associated option: add `bool bools_as_numbers = true;` to a custom options struct (for example,
+`struct bools_as_numbers_opts : glz::opts { bool bools_as_numbers = true; };`).
 
 ```c++
 struct bools_as_numbers_struct
@@ -107,7 +111,11 @@ You don't have to use wrappers if you want the global behavior to handle boolean
 ```c++
 std::string s = R"([1,0,1,0])";
 std::array<bool, 4> obj{};
-constexpr glz::opts opts{.bools_as_numbers = true};
+struct bools_as_numbers_opts : glz::opts
+{
+   bool bools_as_numbers = true;
+};
+constexpr bools_as_numbers_opts opts{};
 expect(!glz::read<opts>(obj, s));
 expect(glz::write<opts>(obj) == s);
 ```
@@ -402,6 +410,60 @@ glz::write_json(obj, buffer);
 expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
 ```
 
+## escape_bytes
+
+The `glz::escape_bytes_t` wrapper (for local usage) and `glz::escape_bytes` (for meta usage) are used to read and write binary data stored in character arrays (`char[]`) or vectors (`std::vector<char>`) as fully escaped JSON strings. This is particularly useful for handling binary data that might contain null characters or other control characters that would otherwise be truncated or cause issues.
+
+**Meta Usage (`glz::escape_bytes<&T::member>`):**
+
+```c++
+struct binary_data
+{
+   char data[4];
+};
+
+template <>
+struct glz::meta<binary_data>
+{
+   using T = binary_data;
+   static constexpr auto value = object("data", glz::escape_bytes<&T::data>);
+};
+```
+
+In use:
+
+```c++
+binary_data obj;
+obj.data[0] = 0;
+obj.data[1] = 1;
+obj.data[2] = 0;
+obj.data[3] = 2;
+
+std::string out;
+glz::write_json(obj, out);
+expect(out == R"({"data":"\u0000\u0001\u0000\u0002"})");
+
+binary_data obj2;
+glz::read_json(obj2, out);
+expect(std::memcmp(obj.data, obj2.data, 4) == 0);
+```
+
+**Local Usage (`glz::escape_bytes_t{value}`):**
+
+```c++
+char local_data[4] = {0, 'A', 0, 'B'};
+std::string out;
+glz::write_json(glz::escape_bytes_t{local_data}, out);
+expect(out == R"("\u0000A\u0000B")");
+
+char read_back_data[4];
+glz::read_json(glz::escape_bytes_t{read_back_data}, out);
+expect(read_back_data[0] == 0);
+expect(read_back_data[1] == 'A');
+expect(read_back_data[2] == 0);
+expect(read_back_data[3] == 'B');
+```
+
 ## read_constraint
 
 Enables complex constraints to be defined within a `glz::meta` or using member functions. Parsing is short circuited upon violating a constraint and a nicely formatted error can be produced with a custom error message.
@@ -508,6 +570,26 @@ observes the partially constructed object during parsing—prefer `read_constrai
 constraints fire before the member is written, so the in-memory representation never stores an invalid value. In
 contrast, `self_constraint` runs after fields are populated, so it can detect issues that span multiple members but the
 object may hold the problematic data until the constraint handler reports an error.
+
+### Skipping self_constraint validation
+
+In some cases you may want to skip `self_constraint` validation—for example, when performance is critical and the data
+is known to be valid, or when validation should be deferred to a later stage. You can disable `self_constraint` checks
+by creating a custom options struct with `skip_self_constraint = true`:
+
+```c++
+struct skip_constraint_opts : glz::opts
+{
+   bool skip_self_constraint = true;
+};
+
+// Use it like this:
+constexpr skip_constraint_opts opts{};
+auto ec = glz::read<opts>(obj, buffer);
+```
+
+With this option enabled, the `self_constraint` is still defined in `glz::meta<T>` but will not be evaluated during
+deserialization. This allows you to toggle validation on or off at compile time based on your use case.
 
 ## partial_read
 
@@ -790,3 +872,119 @@ expect(s == R"({"x":[1,2,3]})");
 expect(obj.x[0] == 1);
 expect(obj.x[1] == 2);
 ```
+
+## skip_null_members_on_read
+
+The `skip_null_members_on_read` option allows reading JSON or BEVE data with null values without requiring `std::optional` wrappers on your C++ types. When enabled, null values in the input are simply skipped, leaving the existing field values unchanged.
+
+This option is particularly useful when:
+- You receive JSON from external sources that may include null values but you want to maintain default or existing values
+- You want to avoid wrapping all your types in `std::optional` just to handle occasional null values
+- You're implementing partial updates where null means "don't change this field"
+
+### Usage
+
+Add `bool skip_null_members_on_read = true;` to a custom options struct:
+
+```c++
+struct Person {
+   std::string name = "Unknown";
+   int age = 0;
+   double salary = 0.0;
+};
+
+template <>
+struct glz::meta<Person> {
+   using T = Person;
+   static constexpr auto value = glz::object(&T::name, &T::age, &T::salary);
+};
+
+struct opts_skip_null : glz::opts {
+   bool skip_null_members_on_read = true;
+};
+```
+
+### Example: Preserving Existing Values
+
+```c++
+Person person;
+person.name = "Alice";
+person.age = 30;
+person.salary = 75000.0;
+
+// JSON with null values
+std::string json = R"({"name":null,"age":35,"salary":null})";
+
+glz::read<opts_skip_null{}>(person, json);
+
+// null fields were skipped, preserving existing values
+expect(person.name == "Alice");    // Unchanged (was null in JSON)
+expect(person.age == 35);          // Updated
+expect(person.salary == 75000.0);  // Unchanged (was null in JSON)
+```
+
+### Format Support
+
+This option works with both JSON and BEVE formats:
+
+**JSON:**
+```c++
+struct opts_skip_null_json : glz::opts {
+   bool skip_null_members_on_read = true;
+   // format = JSON (default)
+};
+```
+
+**BEVE:**
+```c++
+struct opts_skip_null_beve : glz::opts {
+   uint32_t format = glz::BEVE;
+   bool skip_null_members_on_read = true;
+};
+```
+
+### Behavior
+
+- **With option enabled:** Null values in input are skipped; C++ field retains its existing value
+- **With option disabled (default):** Null values cause errors for non-nullable types, or reset `std::optional` types to empty
+
+### Comparison with std::optional
+
+**Without skip_null_members_on_read:**
+```c++
+struct PersonWithOptional {
+   std::optional<std::string> name;
+   std::optional<int> age;
+};
+
+PersonWithOptional p;
+p.name = "Alice";
+p.age = 30;
+
+glz::read_json(p, R"({"name":null,"age":35})");
+
+// name is reset to empty by null
+expect(!p.name.has_value());
+expect(p.age == 35);
+```
+
+**With skip_null_members_on_read:**
+```c++
+struct Person {
+   std::string name;  // No std::optional needed
+   int age;
+};
+
+Person p;
+p.name = "Alice";
+p.age = 30;
+
+glz::read<opts_skip_null{}>(p, R"({"name":null,"age":35})");
+
+// name preserves existing value
+expect(p.name == "Alice");
+expect(p.age == 35);
+```
+
+> [!NOTE]
+> This option is not a core field in `glz::opts`. You must create a custom options struct that adds this field, as shown in the examples above.

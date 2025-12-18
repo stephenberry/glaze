@@ -175,3 +175,9 @@ auto names_array = glz::get<std::array<std::string, 3>>(json, "/names");
 ```
 
 This works because `glz::generic` stores arrays as `std::vector<glz::generic>` and objects as `std::map<std::string, glz::generic>`. When you request a specific container type, Glaze deserializes the generic representation into your desired type.
+
+## See Also
+
+- [JSON Patch (RFC 6902)](./json-patch.md) - Apply structured patches to `glz::generic` documents
+- [JSON Merge Patch (RFC 7386)](./json-merge-patch.md) - Apply partial updates to `glz::generic` documents
+- [JSON Pointer Syntax](./json-pointer-syntax.md) - Path syntax for navigating JSON documents

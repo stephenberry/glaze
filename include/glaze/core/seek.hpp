@@ -14,6 +14,55 @@
 
 namespace glz
 {
+   namespace detail
+   {
+      // Parse a single JSON pointer token, handling RFC 6901 escapes (~0 -> ~, ~1 -> /)
+      // Writes the unescaped token to `out` and returns the remaining json_ptr
+      // json_ptr must start with '/' (or be empty for root)
+      // Returns empty string_view on parse error (invalid escape sequence)
+      inline sv parse_json_ptr_token_into(sv json_ptr, std::string& out)
+      {
+         if (json_ptr.empty() || json_ptr[0] != '/') {
+            return json_ptr; // No token to parse (at root or invalid)
+         }
+
+         out.clear();
+         size_t i = 1; // Skip leading '/'
+         for (; i < json_ptr.size(); ++i) {
+            auto c = json_ptr[i];
+            if (c == '/') {
+               break;
+            }
+            else if (c == '~') {
+               if (++i >= json_ptr.size()) {
+                  return {}; // Error: incomplete escape sequence
+               }
+               c = json_ptr[i];
+               if (c == '0') {
+                  c = '~';
+               }
+               else if (c == '1') {
+                  c = '/';
+               }
+               else {
+                  return {}; // Error: invalid escape sequence
+               }
+            }
+            out.push_back(c);
+         }
+
+         return json_ptr.substr(i);
+      }
+
+      // Convenience wrapper that returns {token, remaining}
+      inline std::pair<std::string, sv> parse_json_ptr_token(sv json_ptr)
+      {
+         std::string token;
+         sv remaining = parse_json_ptr_token_into(json_ptr, token);
+         return {std::move(token), remaining};
+      }
+   } // namespace detail
+
    template <class T>
    struct seek_op;
 
@@ -124,9 +173,10 @@ namespace glz
             func(value);
             return true;
          }
-         if (json_ptr[0] != '/' || json_ptr.size() < 2) return false;
+         if (json_ptr[0] != '/') return false;
 
-         static thread_local auto key = []() {
+         // Determine key type: maps use their key_type, objects/reflectables use string
+         auto key = []() {
             if constexpr (writable_map_t<T>) {
                return typename T::key_type{};
             }
@@ -134,29 +184,13 @@ namespace glz
                return std::string{};
             }
          }();
-         using Key = std::decay_t<decltype(key)>;
+         using Key = decltype(key);
          static_assert(std::is_same_v<Key, std::string> || num_t<Key>);
 
          if constexpr (std::is_same_v<Key, std::string>) {
-            key.clear();
-            size_t i = 1;
-            for (; i < json_ptr.size(); ++i) {
-               auto c = json_ptr[i];
-               if (c == '/')
-                  break;
-               else if (c == '~') {
-                  if (++i == json_ptr.size()) return false;
-                  c = json_ptr[i];
-                  if (c == '0')
-                     c = '~';
-                  else if (c == '1')
-                     c = '/';
-                  else
-                     return false;
-               }
-               key.push_back(c);
-            }
-            json_ptr = json_ptr.substr(i);
+            sv remaining = detail::parse_json_ptr_token_into(json_ptr, key);
+            if (remaining.data() == nullptr) return false; // Parse error (invalid escape)
+            json_ptr = remaining;
          }
          else if constexpr (std::floating_point<Key>) {
             auto [ptr, ec] = glz::from_chars<false>(json_ptr.data(), json_ptr.data() + json_ptr.size(), key);
@@ -201,7 +235,11 @@ namespace glz
             }
          }
          else {
-            return seek(std::forward<F>(func), value[key], json_ptr);
+            auto it = value.find(key);
+            if (it == value.end()) {
+               return false;
+            }
+            return seek(std::forward<F>(func), it->second, json_ptr);
          }
       }
    };
@@ -242,7 +280,7 @@ namespace glz
          },
          std::forward<T>(root_value), json_ptr);
       if (!result) {
-         return unexpected(error_ctx{error_code::get_nonexistent_json_ptr});
+         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
       }
       else if (bool(ec)) {
          return unexpected(error_ctx{ec});
@@ -287,7 +325,7 @@ namespace glz
          },
          std::forward<T>(root_value), json_ptr);
       if (!found) {
-         return unexpected(error_code::get_nonexistent_json_ptr);
+         return unexpected(error_code::nonexistent_json_ptr);
       }
       else if (bool(ec)) {
          return unexpected(ec);
@@ -367,7 +405,7 @@ namespace glz
          std::forward<T>(root_value), json_ptr);
 
       if (!valid) {
-         return unexpected(error_code::get_nonexistent_json_ptr);
+         return unexpected(error_code::nonexistent_json_ptr);
       }
 
       if (bool(ec)) {

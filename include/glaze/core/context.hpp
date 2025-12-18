@@ -68,7 +68,7 @@ namespace glz
       file_extension_not_supported, //
       could_not_determine_extension, //
       // JSON pointer access errors
-      get_nonexistent_json_ptr, //
+      nonexistent_json_ptr, //
       get_wrong_type, //
       seek_failure, //
       // Other errors
@@ -85,7 +85,11 @@ namespace glz
       hostname_failure, //
       includer_error, //
       // Feature support
-      feature_not_supported //
+      feature_not_supported, //
+      // JSON Pointer errors (RFC 6901)
+      invalid_json_pointer, // Malformed JSON pointer syntax (e.g., "~" at end, "~2")
+      // JSON Patch errors (RFC 6902)
+      patch_test_failed // Test operation value mismatch (unique to RFC 6902 test op)
    };
 
    struct error_ctx final
@@ -95,7 +99,8 @@ namespace glz
       // But, since the first error always short-circuits parsing, developers are free to inject
       // their own errors in the custom_error_message.
       std::string_view custom_error_message{};
-      // INTERNAL USE:
+      // Number of bytes consumed from the buffer during parsing.
+      // Useful for reading multiple values from a single buffer (e.g., delimited BEVE/NDJSON).
       size_t location{};
       std::string_view includer_error{}; // error from a nested file includer
 

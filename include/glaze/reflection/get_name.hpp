@@ -195,9 +195,44 @@ namespace glz
       }
    }
 
+   // Concept for indexed rename_key that provides type information
+   template <class T>
+   concept meta_has_rename_key_indexed = requires {
+      { glz::meta<std::remove_cvref_t<T>>::template rename_key<0>() } -> std::convertible_to<std::string_view>;
+   } && !meta_has_rename_key_string<T> && !meta_has_rename_key_convertible<T>;
+
+   template <meta_has_rename_key_indexed T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array<sv, sizeof...(I)>{sv{glz::meta<std::remove_cvref_t<T>>::template rename_key<I>()}...};
+      }
+   }
+
    template <class T>
    inline constexpr auto member_names =
       [] { return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>>{}); }();
+
+   // Forward declaration of refl_t for member type extraction
+   // The actual definition is in glaze/core/reflect.hpp
+   // This allows users to get the type of a member at a given index in rename_key
+   namespace detail
+   {
+      template <class T, size_t I>
+      struct member_type_at_index
+      {
+         using tie_type = decltype(to_tie(std::declval<std::remove_cvref_t<T>&>()));
+         using type = std::remove_cvref_t<tuple_element_t<I, tie_type>>;
+      };
+   }
+
+   // Helper to get the type of a member at a given index
+   // Usage in rename_key: using member_type = glz::member_type_t<T, Index>;
+   template <class T, size_t Index>
+   using member_type_t = typename detail::member_type_at_index<T, Index>::type;
 }
 
 // For member object pointers

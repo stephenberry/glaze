@@ -45,9 +45,11 @@ namespace glz
 
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Opts);
 
+      [[maybe_unused]] size_t original_size{};
       if constexpr (use_padded) {
          // Pad the buffer for SWAR
-         buffer.resize(buffer.size() + padding_bytes);
+         original_size = buffer.size();
+         buffer.resize(original_size + padding_bytes);
       }
 
       auto [it, end] = read_iterators<Opts, use_padded>(buffer);
@@ -100,7 +102,7 @@ namespace glz
 
       if constexpr (use_padded) {
          // Restore the original buffer state
-         buffer.resize(buffer.size() - padding_bytes);
+         buffer.resize(original_size);
       }
 
       return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};

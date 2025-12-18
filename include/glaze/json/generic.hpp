@@ -268,17 +268,15 @@ namespace glz
       void reset() noexcept { data = null_t{}; }
 
       generic_t() = default;
-      generic_t(const generic_t&) = default;
+      generic_t(const generic_t& other) : data(other.data) {}
       generic_t& operator=(const generic_t&) = default;
-      generic_t(generic_t&&) = default;
+      generic_t(generic_t&& other) noexcept : data(std::move(other.data)) {}
       generic_t& operator=(generic_t&&) = default;
 
       template <class T>
          requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, generic_t>)
-      generic_t(T&& val)
-      {
-         data = val;
-      }
+      generic_t(T&& val) : data(std::forward<T>(val))
+      {}
 
       template <class T>
          requires std::convertible_to<T, double> && (!std::derived_from<std::decay_t<T>, generic_t>) &&
@@ -298,7 +296,7 @@ namespace glz
          }
       }
 
-      generic_t(const std::string_view value) { data = std::string(value); }
+      generic_t(const std::string_view value) : data(std::string(value)) {}
 
       generic_t(std::initializer_list<std::pair<const char*, generic_t>>&& obj)
       {
@@ -631,7 +629,8 @@ namespace glz
    {
       if (!root) return nullptr;
       if (json_ptr.empty()) return root;
-      if (json_ptr[0] != '/' || json_ptr.size() < 2) return nullptr;
+      // RFC 6901: "/" is valid (refers to empty string key), so don't require size >= 2
+      if (json_ptr[0] != '/') return nullptr;
 
       GenericPtr current = root;
       sv remaining = json_ptr;
@@ -912,7 +911,7 @@ namespace glz
       // Navigate to the target location
       generic* target = navigate_to(&root, json_ptr);
       if (!target) {
-         return unexpected(error_ctx{error_code::get_nonexistent_json_ptr});
+         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
       }
 
       // Direct conversion without JSON serialization round-trip
@@ -931,7 +930,7 @@ namespace glz
    {
       const generic* target = navigate_to(&root, json_ptr);
       if (!target) {
-         return unexpected(error_ctx{error_code::get_nonexistent_json_ptr});
+         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
       }
 
       // Direct conversion without JSON serialization round-trip

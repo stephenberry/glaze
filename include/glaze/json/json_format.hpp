@@ -72,13 +72,16 @@ namespace glz::detail
 
    template <auto Opts>
       requires(check_is_padded(Opts))
-   sv read_json_string(auto&& it, auto&& end) noexcept
+   sv read_json_string(auto&& it, auto end) noexcept
    {
       auto start = it;
       ++it; // skip quote
       while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t quote = has_quote(chunk);
          if (quote) {
             it += (countr_zero(quote) >> 3);
@@ -103,13 +106,16 @@ namespace glz::detail
 
    template <auto Opts>
       requires(!check_is_padded(Opts))
-   sv read_json_string(auto&& it, auto&& end) noexcept
+   sv read_json_string(auto&& it, auto end) noexcept
    {
       auto start = it;
       ++it; // skip quote
       for (const auto end_m7 = end - 7; it < end_m7;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t quote = has_quote(chunk);
          if (quote) {
             it += (countr_zero(quote) >> 3);
@@ -148,13 +154,16 @@ namespace glz::detail
    }
 
    // Reads /* my comment */ style comments
-   inline sv read_jsonc_comment(auto&& it, auto&& end) noexcept
+   inline sv read_jsonc_comment(auto&& it, auto end) noexcept
    {
       auto start = it;
       it += 2; // skip /*
       for (const auto end_m7 = end - 7; it < end_m7;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t slash = has_char<'/'>(chunk);
          if (slash) {
             it += (countr_zero(slash) >> 3);
@@ -184,7 +193,7 @@ namespace glz::detail
    }
 
    template <bool null_terminated>
-   GLZ_ALWAYS_INLINE sv read_json_number(auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE sv read_json_number(auto&& it, auto end) noexcept
    {
       auto start = it;
       if constexpr (null_terminated) {

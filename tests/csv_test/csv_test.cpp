@@ -1202,7 +1202,12 @@ suite vector_struct_direct_read_tests = [] {
 3,15.7,Point C)";
 
       // Append the new data
-      expect(not glz::read<glz::opts_csv{.layout = glz::colwise, .append_arrays = true}>(data, csv_str));
+      struct colwise_append_opts : glz::opts_csv
+      {
+         uint8_t layout = glz::colwise;
+         bool append_arrays = true;
+      };
+      expect(not glz::read<colwise_append_opts{}>(data, csv_str));
 
       // Verify combined data
       expect(data.size() == 3);
@@ -1415,7 +1420,12 @@ suite vector_data_point_no_headers_tests = [] {
       std::string more_data = R"(2,2.0,Second
 3,3.0,Third)";
 
-      expect(!glz::read<glz::opts_csv{.use_headers = false, .append_arrays = true}>(initial, more_data));
+      struct no_headers_append_opts : glz::opts_csv
+      {
+         bool use_headers = false;
+         bool append_arrays = true;
+      };
+      expect(!glz::read<no_headers_append_opts{}>(initial, more_data));
 
       expect(initial.size() == 3) << "Should have 3 elements after appending";
       expect(initial[0].id == 1) << "Original data preserved";
@@ -2293,7 +2303,12 @@ Bob,Manager,Sales)";
       std::string csv_data = R"(5,6
 7,8)";
 
-      expect(!glz::read<glz::opts_csv{.use_headers = false, .append_arrays = true}>(initial, csv_data));
+      struct no_headers_append_opts : glz::opts_csv
+      {
+         bool use_headers = false;
+         bool append_arrays = true;
+      };
+      expect(!glz::read<no_headers_append_opts{}>(initial, csv_data));
 
       expect(initial.size() == 4) << "Should have 4 rows after append";
       expect(initial[0] == std::vector<int>{1, 2}) << "Original first row preserved";

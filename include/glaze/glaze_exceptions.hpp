@@ -8,6 +8,7 @@
 // These files provide convenience functions that throw C++ exceptions, which can make code cleaner for users
 
 #include "glaze/exceptions/binary_exceptions.hpp"
+#include "glaze/exceptions/cbor_exceptions.hpp"
 #include "glaze/exceptions/csv_exceptions.hpp"
 #include "glaze/exceptions/json_exceptions.hpp"
 

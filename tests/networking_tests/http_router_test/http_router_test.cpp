@@ -319,4 +319,67 @@ suite http_router_functionality_tests = [] {
    };
 };
 
+// Custom handler types for testing
+using fn_ptr_handler = void (*)(const glz::request&, glz::response&);
+using custom_std_function = std::function<void(const glz::request&, glz::response&)>;
+
+suite templated_router_tests = [] {
+   "is_async_enabled_default_router"_test = [] {
+      // Default http_router should have async enabled
+      static_assert(glz::http_router::is_async_enabled, "Default http_router should have async enabled");
+      static_assert(glz::basic_http_router<>::is_async_enabled, "basic_http_router<> should have async enabled");
+      expect(glz::http_router::is_async_enabled) << "Runtime check: default router has async\n";
+   };
+
+   "is_async_enabled_equivalent_std_function"_test = [] {
+      // Equivalent std::function type should also have async enabled
+      static_assert(glz::basic_http_router<custom_std_function>::is_async_enabled,
+                    "Equivalent std::function should have async enabled");
+      expect(glz::basic_http_router<custom_std_function>::is_async_enabled)
+         << "Runtime check: custom std::function has async\n";
+   };
+
+   "is_async_disabled_function_pointer"_test = [] {
+      // Function pointers cannot hold capturing lambdas, so async should be disabled
+      static_assert(!glz::basic_http_router<fn_ptr_handler>::is_async_enabled,
+                    "Function pointer handler should NOT have async enabled");
+      expect(!glz::basic_http_router<fn_ptr_handler>::is_async_enabled)
+         << "Runtime check: function pointer has no async\n";
+   };
+
+   "custom_handler_basic_routing"_test = [] {
+      glz::basic_http_router<fn_ptr_handler> router;
+
+      router.get("/hello", [](const glz::request&, glz::response& res) { res.body("Hello from fn ptr"); });
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/hello");
+      expect(handler != nullptr) << "Handler should match for /hello\n";
+
+      glz::request req{.method = glz::http_method::GET, .target = "/hello"};
+      glz::response res;
+      handler(req, res);
+      expect(res.response_body == "Hello from fn ptr") << "Response body should match\n";
+   };
+
+   "custom_handler_with_parameters"_test = [] {
+      glz::basic_http_router<fn_ptr_handler> router;
+
+      router.get("/users/:id", [](const glz::request& req, glz::response& res) {
+         auto it = req.params.find("id");
+         if (it != req.params.end()) {
+            res.body("User: " + it->second);
+         }
+      });
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/users/42");
+      expect(handler != nullptr) << "Handler should match for /users/42\n";
+      expect(params.at("id") == "42") << "ID parameter should be extracted\n";
+
+      glz::request req{.method = glz::http_method::GET, .target = "/users/42", .params = params};
+      glz::response res;
+      handler(req, res);
+      expect(res.response_body == "User: 42") << "Response body should contain user ID\n";
+   };
+};
+
 int main() {}

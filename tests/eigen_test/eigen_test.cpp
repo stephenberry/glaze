@@ -12,6 +12,8 @@
 #include <random>
 
 #include "glaze/beve/beve_to_json.hpp"
+#include "glaze/cbor/read.hpp"
+#include "glaze/cbor/write.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/read.hpp"
@@ -539,5 +541,109 @@ int main()
       ConstHolder restored;
       expect(not glz::read_beve(restored, b));
       expect(holder.m == restored.m);
+   };
+
+   // CBOR Matrix Tests
+   "cbor fixed size matrix"_test = [] {
+      Eigen::Matrix<double, 2, 2> m{};
+      m << 1, 2, 3, 4;
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      Eigen::Matrix<double, 2, 2> e{};
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
+   };
+
+   "cbor dynamic matrix"_test = [] {
+      Eigen::MatrixXd m(2, 3);
+      m << 1, 2, 3, 4, 5, 6;
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      Eigen::MatrixXd e;
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
+   };
+
+   "cbor Matrix3d"_test = [] {
+      Eigen::Matrix3d m;
+      m << 1, 2, 3, 4, 5, 6, 7, 8, 9;
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      Eigen::Matrix3d e;
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
+   };
+
+   "cbor Matrix4d"_test = [] {
+      Eigen::Matrix4d m;
+      m << 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16;
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      Eigen::Matrix4d e;
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
+   };
+
+   "cbor row major matrix"_test = [] {
+      Eigen::Matrix<double, 2, 3, Eigen::RowMajor> m;
+      m << 1, 2, 3, 4, 5, 6;
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      Eigen::Matrix<double, 2, 3, Eigen::RowMajor> e;
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
+   };
+
+   "cbor complex matrix"_test = [] {
+      Eigen::MatrixXcd m(2, 2);
+      m << std::complex<double>(1, 1), std::complex<double>(2, 2), std::complex<double>(3, 3),
+         std::complex<double>(4, 4);
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      Eigen::MatrixXcd e;
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
+   };
+
+   "cbor vector"_test = [] {
+      Eigen::Vector3d m{1, 2, 3};
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      Eigen::Vector3d e{};
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
+   };
+
+   "cbor dynamic vector"_test = [] {
+      Eigen::VectorXd m(10);
+      for (int i = 0; i < m.size(); ++i) {
+         m[i] = i;
+      }
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      Eigen::VectorXd e{};
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
+   };
+
+   "cbor large dynamic matrix"_test = [] {
+      Eigen::MatrixXd m(50, 50);
+      m.setRandom();
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      Eigen::MatrixXd e;
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
+   };
+
+   "cbor const Matrix4d"_test = [] {
+      const Eigen::Matrix4d m = Eigen::Matrix4d::Identity();
+      std::string b;
+      expect(not glz::write_cbor(m, b));
+      expect(!b.empty());
+
+      Eigen::Matrix4d e;
+      expect(not glz::read_cbor(e, b));
+      expect(m == e);
    };
 }

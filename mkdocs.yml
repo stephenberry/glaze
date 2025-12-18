@@ -81,6 +81,7 @@ nav:
    - TOML: toml.md
    - CSV: csv.md
    - BEVE (binary): binary.md
+   - CBOR: cbor.md
    - Stencil/Mustache: stencil-mustache.md
    - EETF: EETF/erlang-external-term-format.md
  - Serialization/Parsing:
@@ -88,11 +89,16 @@ nav:
    - Wrappers: wrappers.md
    - Custom Wrappers: custom-wrappers.md
    - Custom Serialization: custom-serialization.md
+   - Chrono Support: chrono.md
    - Variant Handling: variant-handling.md
    - Unknown Keys: unknown-keys.md
    - JSON Pointer Syntax: json-pointer-syntax.md
+   - Struct JSON Pointer Operations: struct-json-pointer.md
+   - JSON Patch (RFC 6902): json-patch.md
+   - JSON Merge Patch (RFC 7386): json-merge-patch.md
    - JMESPath: JMESPath.md
    - JSON Schema: json-schema.md
+   - Field Validation: field-validation.md
    - Partial Read/Write:
      - Partial Read: partial-read.md
      - Partial Write: partial-write.md
@@ -105,8 +111,16 @@ nav:
    - networking/rest-registry.md
    - networking/tls-support.md
    - networking/http-client.md
+   - networking/websocket-client.md
    - networking/advanced-networking.md
    - networking/http-examples.md
+ - RPC:
+   - REPE RPC: rpc/repe-rpc.md
+   - REPE Buffer Handling: rpc/repe-buffer.md
+   - REPE Plugin Interface: rpc/repe-plugin.md
+   - JSON-RPC 2.0 Registry: rpc/jsonrpc-registry.md
+   - JSON-RPC 2.0 Client/Server: rpc/json-rpc.md
+   - REPE to JSON-RPC: rpc/repe-jsonrpc-conversion.md
  - Interface Utilities:
    - JSON Include: json-include.md
    - CLI Menu: cli-menu.md

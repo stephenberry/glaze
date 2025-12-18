@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/glaze.hpp"
+#include "glaze/rpc/repe/buffer.hpp"
 #include "glaze/rpc/repe/repe.hpp"
 
 namespace glz
@@ -11,6 +12,73 @@ namespace glz
    namespace detail
    {
       static constexpr std::string_view empty_path = "";
+
+      // Single shared thread_local buffer for error messages (safe for synchronous operations)
+      inline std::string& error_buffer()
+      {
+         thread_local std::string buffer;
+         buffer.clear();
+         return buffer;
+      }
+
+      inline std::string_view build_registry_error(std::string_view query, std::string_view what)
+      {
+         auto& buf = error_buffer();
+         buf = "registry error for `";
+         buf.append(query);
+         buf.append("`: ");
+         buf.append(what);
+         return buf;
+      }
+
+      inline std::string_view build_invalid_query_error(std::string_view query)
+      {
+         auto& buf = error_buffer();
+         buf = "invalid_query: ";
+         buf.append(query);
+         return buf;
+      }
+
+      inline std::string_view build_version_error(uint8_t version)
+      {
+         auto& buf = error_buffer();
+         buf = "REPE version mismatch: expected 1, got ";
+         const auto n = buf.size();
+         buf.resize(n + 8);
+         auto* end = glz::to_chars(buf.data() + n, uint32_t(version));
+         buf.resize(size_t(end - buf.data()));
+         return buf;
+      }
+
+      inline std::string_view build_length_error(uint64_t expected, uint64_t actual)
+      {
+         auto& buf = error_buffer();
+         buf = "REPE length mismatch: expected ";
+         auto n = buf.size();
+         buf.resize(n + 24);
+         auto* end = glz::to_chars(buf.data() + n, expected);
+         buf.resize(size_t(end - buf.data()));
+         buf.append(", got ");
+         n = buf.size();
+         buf.resize(n + 24);
+         end = glz::to_chars(buf.data() + n, actual);
+         buf.resize(size_t(end - buf.data()));
+         return buf;
+      }
+
+      inline std::string_view build_magic_error(uint16_t spec)
+      {
+         auto& buf = error_buffer();
+         buf = "REPE magic number mismatch: expected 0x1507, got 0x";
+         constexpr char hex_chars[] = "0123456789abcdef";
+         char hex[4];
+         hex[0] = hex_chars[(spec >> 12) & 0xF];
+         hex[1] = hex_chars[(spec >> 8) & 0xF];
+         hex[2] = hex_chars[(spec >> 4) & 0xF];
+         hex[3] = hex_chars[spec & 0xF];
+         buf.append(hex, 4);
+         return buf;
+      }
    }
 
    // Forward declaration of implementation template
@@ -20,6 +88,7 @@ namespace glz
 
 // Include implementation files
 #include "glaze/net/rest_registry_impl.hpp"
+#include "glaze/rpc/jsonrpc_registry_impl.hpp"
 #include "glaze/rpc/repe/repe_registry_impl.hpp"
 
 namespace glz
@@ -28,8 +97,8 @@ namespace glz
    template <auto Opts = opts{}, uint32_t Proto = REPE>
    struct registry
    {
-      // procedure for REPE protocol
-      using procedure = std::function<void(repe::state&&)>; // RPC method
+      // procedure for REPE protocol (zero-copy state_view)
+      using procedure = std::function<void(repe::state_view&)>; // RPC method
 
       static constexpr auto protocol = Proto;
 
@@ -37,10 +106,11 @@ namespace glz
 
       void clear() { endpoints.clear(); }
 
-      // Register a C++ type that stores pointers to the value, so be sure to keep the registered value alive
-      template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
+     private:
+      // Helper to register all members of a type without registering the root endpoint
+      template <const std::string_view& root, class T, const std::string_view& parent>
          requires(glaze_object_t<T> || reflectable<T>)
-      void on(T& value)
+      void register_members(T& value)
       {
          using namespace glz::detail;
          static constexpr auto N = reflect<T>::size;
@@ -55,10 +125,6 @@ namespace glz
          }();
 
          using impl = registry_impl<Opts, Proto>;
-
-         if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
-            impl::register_endpoint(root, value, *this);
-         }
 
          for_each<N>([&]<auto I>() {
             decltype(auto) func = [&]() -> decltype(auto) {
@@ -161,12 +227,48 @@ namespace glz
          });
       }
 
-      // Function to call methods - only available for REPE protocol
+     public:
+      // Register a C++ type that stores pointers to the value, so be sure to keep the registered value alive
+      template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
+         requires(glaze_object_t<T> || reflectable<T>)
+      void on(T& value)
+      {
+         using impl = registry_impl<Opts, Proto>;
+
+         if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
+            impl::register_endpoint(root, value, *this);
+         }
+
+         register_members<root, T, parent>(value);
+      }
+
+      // Register multiple C++ types merged together, allowing the root endpoint to return a combined view
+      template <const std::string_view& root = detail::empty_path, class... Ts>
+         requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
+      void on(glz::merge<Ts...>& merged)
+      {
+         using impl = registry_impl<Opts, Proto>;
+
+         // Register root endpoint with the merged object - this handles ""
+         impl::register_merge_endpoint(root, merged, *this);
+
+         // Register each merged object's member paths
+         for_each<sizeof...(Ts)>([&]<size_t I>() {
+            auto& obj = glz::get<I>(merged.value);
+            using T = std::decay_t<decltype(obj)>;
+            register_members<root, T, root>(obj);
+         });
+      }
+
+      /// Message-based call for REPE protocol (deprecated)
+      /// @deprecated Use the zero-copy span-based overload instead:
+      ///             `call(std::span<const char>, std::string&)`
       template <class In = repe::message, class Out = repe::message>
-         requires(Proto == REPE) // call method is only available for REPE protocol
+         requires(Proto == REPE)
+      [[deprecated("Use call(std::span<const char>, std::string&) for zero-copy performance")]]
       void call(In&& in, Out&& out)
       {
-         auto write_error = [&](const std::string& body) {
+         auto write_error = [&](std::string_view body) {
             out.body = body;
             out.header.body_length = body.size();
             out.header.body_format = repe::body_format::UTF8; // Error messages are UTF-8
@@ -179,7 +281,7 @@ namespace glz
          if (in.header.version != 1) {
             out.header.ec = error_code::version_mismatch;
             out.header.id = in.header.id; // Echo back the original ID
-            write_error("REPE version mismatch: expected 1, got " + std::to_string(in.header.version));
+            write_error(detail::build_version_error(in.header.version));
             return;
          }
 
@@ -188,8 +290,7 @@ namespace glz
          if (in.header.length != expected_length) {
             out.header.ec = error_code::invalid_header;
             out.header.id = in.header.id; // Echo back the original ID
-            write_error("REPE length mismatch: expected " + std::to_string(expected_length) + ", got " +
-                        std::to_string(in.header.length));
+            write_error(detail::build_length_error(expected_length, in.header.length));
             return;
          }
 
@@ -197,7 +298,7 @@ namespace glz
          if (in.header.spec != 0x1507) {
             out.header.ec = error_code::invalid_header;
             out.header.id = in.header.id; // Echo back the original ID
-            write_error("REPE magic number mismatch: expected 0x1507, got 0x" + std::to_string(in.header.spec));
+            write_error(detail::build_magic_error(in.header.spec));
             return;
          }
 
@@ -206,26 +307,270 @@ namespace glz
                out = in;
             }
             else {
+               // Create view into input message
+               repe::request_view req_view{};
+               req_view.hdr = in.header;
+               req_view.query = in.query;
+               req_view.body = in.body;
+
+               // Response builder writes directly to output message (no intermediate buffer)
+               repe::response_builder resp{out};
+               resp.reset(req_view);
+               repe::state_view state{req_view, resp};
+
                try {
-                  it->second(repe::state{in, out}); // handle the body
+                  it->second(state);
                }
                catch (const std::exception& e) {
-                  out = repe::message{}; // reset the output message because it could have been modified
-                  out.header.id = in.header.id; // Preserve the ID from the input message
-                  out.header.query_length = 0;
-                  std::string body = "registry error for `" + in.query + "`: ";
-                  body.append(e.what());
-                  out.header.ec = error_code::parse_error;
-                  write_error(body);
+                  resp.reset(req_view);
+                  resp.set_error(error_code::parse_error, detail::build_registry_error(in.query, e.what()));
                }
             }
          }
          else {
-            std::string body = "invalid_query: " + in.query;
             out.header.ec = error_code::method_not_found;
             out.header.id = in.header.id; // Preserve the ID from the input message
-            write_error(body);
+            write_error(detail::build_invalid_query_error(in.query));
          }
+      }
+
+      /// Span-based call for zero-copy processing (REPE protocol only)
+      /// Request is parsed in-place (query/body are views into the buffer).
+      /// Response is written directly to response_buffer.
+      /// @param request Raw REPE message bytes
+      /// @param response_buffer Buffer for response (will be resized, empty if no response)
+      void call(std::span<const char> request, std::string& response_buffer)
+         requires(Proto == REPE)
+      {
+         response_buffer.clear(); // Empty buffer means no response
+         repe::response_builder resp{response_buffer};
+
+         // Parse request with zero-copy (header copied to stack, query/body are views)
+         auto result = repe::parse_request(request);
+         if (!result) {
+            // Use the specific error code from parse_result
+            // Note: parse_request copies the header before validation, so we can access it
+            resp.reset(result.request.hdr.id);
+
+            // Build appropriate error message based on error code
+            if (result.ec == error_code::version_mismatch) {
+               resp.set_error(result.ec, detail::build_version_error(result.request.hdr.version));
+            }
+            else if (result.ec == error_code::invalid_header) {
+               // Could be magic mismatch, length mismatch, or buffer too small
+               if (request.size() >= sizeof(repe::header)) {
+                  const auto& hdr = result.request.hdr;
+                  if (hdr.spec != repe::repe_magic) {
+                     resp.set_error(result.ec, detail::build_magic_error(hdr.spec));
+                  }
+                  else {
+                     // Length mismatch
+                     const uint64_t expected = sizeof(repe::header) + hdr.query_length + hdr.body_length;
+                     resp.set_error(result.ec, detail::build_length_error(expected, hdr.length));
+                  }
+               }
+               else {
+                  resp.set_error(result.ec, "Invalid header");
+               }
+            }
+            else {
+               resp.set_error(result.ec, "Failed to parse request");
+            }
+            return;
+         }
+
+         const auto& req = result.request;
+
+         // Look up endpoint (transparent comparison avoids allocation)
+         auto it = endpoints.find(req.query);
+         if (it == endpoints.end()) {
+            if (req.is_notify()) {
+               return; // Silent ignore for unknown notifications (buffer stays empty)
+            }
+            resp.reset(req);
+            resp.set_error(error_code::method_not_found, detail::build_invalid_query_error(req.query));
+            return;
+         }
+
+         // If request has an error, just echo it back
+         if (bool(req.hdr.ec)) {
+            resp.reset(req);
+            resp.set_error(req.hdr.ec);
+            return;
+         }
+
+         // Zero-copy call: state_view references the parsed request and response builder directly
+         repe::state_view state{req, resp};
+
+         try {
+            it->second(state);
+         }
+         catch (const std::exception& e) {
+            resp.reset(req);
+            resp.set_error(error_code::parse_error, detail::build_registry_error(req.query, e.what()));
+            return;
+         }
+         catch (...) {
+            resp.reset(req);
+            resp.set_error(error_code::parse_error, "Unknown error");
+            return;
+         }
+
+         // For notifications, response buffer stays empty (no response sent)
+      }
+
+      // Function to call methods - only available for JSONRPC protocol
+      // Returns a JSON RPC response string
+      // Supports single requests, batch requests, and notifications
+      std::string call(std::string_view json_request)
+         requires(Proto == JSONRPC)
+      {
+         // Find first non-whitespace to determine batch vs single request
+         auto it = std::find_if(json_request.begin(), json_request.end(),
+                                [](char c) { return !std::isspace(static_cast<unsigned char>(c)); });
+
+         if (it != json_request.end() && *it == '[') {
+            // Batch request
+            auto batch_requests = glz::read_json<std::vector<glz::raw_json_view>>(json_request);
+            if (!batch_requests) {
+               return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
+                      write_json(format_error(batch_requests.error(), json_request)).value_or("null") +
+                      R"(},"id":null})";
+            }
+            if (batch_requests->empty()) {
+               return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":"Empty batch"},"id":null})";
+            }
+            return process_batch(*batch_requests);
+         }
+
+         // Single request
+         auto response = process_single_request(json_request);
+         return response.value_or("");
+      }
+
+     private:
+      // Process a single JSON RPC request, returns nullopt for notifications
+      std::optional<std::string> process_single_request(std::string_view json_request)
+         requires(Proto == JSONRPC)
+      {
+         auto request = glz::read_json<rpc::generic_request_t>(json_request);
+         if (!request.has_value()) {
+            // Check if it's a JSON syntax error vs schema error
+            if (glz::validate_json(json_request)) {
+               // JSON is syntactically invalid - return Parse error (-32700)
+               return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
+                      write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":null})";
+            }
+            // Valid JSON but invalid request structure - return Invalid Request (-32600)
+            auto id = glz::get_as_json<rpc::id_t, "/id">(json_request);
+            std::string id_json = id.has_value() ? glz::write_json(id.value()).value_or("null") : "null";
+            return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
+                   write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":)" + id_json +
+                   "}";
+         }
+
+         auto& req = request.value();
+
+         // Validate version
+         if (req.version != rpc::supported_version) {
+            std::string id_json = glz::write_json(req.id).value_or("null");
+            return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
+                   write_json("Invalid version: " + std::string(req.version)).value_or("null") + R"(},"id":)" +
+                   id_json + "}";
+         }
+
+         // Check if this is a notification (id is null)
+         bool is_notification = std::holds_alternative<glz::generic::null_t>(req.id);
+
+         // Look up the endpoint - try direct lookup first (handles methods that already start with /)
+         auto it = endpoints.find(req.method);
+         if (it == endpoints.end()) {
+            if (!req.method.empty()) {
+               // Try with leading slash using stack buffer for common case
+               char buf[256];
+               if (req.method.size() < sizeof(buf) - 1) {
+                  buf[0] = '/';
+                  std::memcpy(buf + 1, req.method.data(), req.method.size());
+                  it = endpoints.find(std::string_view{buf, req.method.size() + 1});
+               }
+               else {
+                  // Fallback for very long method names
+                  std::string method_path = "/";
+                  method_path += req.method;
+                  it = endpoints.find(method_path);
+               }
+            }
+            else {
+               // Empty method - try root endpoint
+               it = endpoints.find("");
+            }
+            if (it == endpoints.end()) {
+               if (is_notification) {
+                  return std::nullopt; // No response for notifications
+               }
+               std::string id_json = glz::write_json(req.id).value_or("null");
+               return R"({"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":)" +
+                      write_json(req.method).value_or("null") + R"(},"id":)" + id_json + "}";
+            }
+         }
+
+         // Prepare state
+         std::string response;
+         bool has_params = !req.params.str.empty() && req.params.str != "null";
+         jsonrpc::state state{req.id, response, is_notification, has_params, req.params.str};
+
+         try {
+            it->second(std::move(state));
+         }
+         catch (const std::exception& e) {
+            if (is_notification) {
+               return std::nullopt;
+            }
+            std::string id_json = glz::write_json(req.id).value_or("null");
+            return R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":)" +
+                   write_json(std::string_view{e.what()}).value_or("null") + R"(},"id":)" + id_json + "}";
+         }
+
+         if (is_notification) {
+            return std::nullopt;
+         }
+
+         return response;
+      }
+
+      // Process batch requests
+      std::string process_batch(const std::vector<glz::raw_json_view>& batch)
+         requires(Proto == JSONRPC)
+      {
+         std::vector<std::string> responses;
+         responses.reserve(batch.size());
+
+         size_t total_size = 2; // []
+         for (const auto& req : batch) {
+            auto response = process_single_request(req.str);
+            if (response.has_value()) {
+               total_size += response->size() + 1; // +1 for comma
+               responses.push_back(std::move(*response));
+            }
+         }
+
+         // If all were notifications, return empty string
+         if (responses.empty()) {
+            return "";
+         }
+
+         // Build batch response array with pre-reserved capacity
+         std::string result;
+         result.reserve(total_size);
+         result = "[";
+         for (size_t i = 0; i < responses.size(); ++i) {
+            if (i > 0) {
+               result += ",";
+            }
+            result += responses[i];
+         }
+         result += "]";
+         return result;
       }
    };
 }

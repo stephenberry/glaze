@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v1.0.0
+  GIT_TAG v1.1.0
   GIT_SHALLOW TRUE
 )
 
@@ -14,6 +14,62 @@ FetchContent_MakeAvailable(ut)
 set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
 message(STATUS "...finished fetching dependencies.")
+
+# Setup ASIO dependency (used by networking tests)
+# This must be defined here before glz_test_common/glz_test_exceptions
+#
+# Search order:
+#   1. Boost.Asio (via find_package(Boost))
+#   2. Standalone Asio (via find_package(Asio) using our FindAsio.cmake)
+#   3. FetchContent (if glaze_USE_BUNDLED_ASIO is ON)
+#
+# Distro maintainers can set -Dglaze_USE_BUNDLED_ASIO=OFF to require system packages.
+
+option(glaze_USE_BUNDLED_ASIO
+    "Download ASIO via FetchContent if not found on system (disable for distro builds)"
+    ON
+)
+
+# First, try Boost.Asio
+find_package(Boost QUIET CONFIG COMPONENTS system)
+
+if(Boost_FOUND)
+    message(STATUS "Using Boost.Asio")
+    add_library(glz_asio INTERFACE)
+    target_link_libraries(glz_asio INTERFACE Boost::system)
+    target_compile_definitions(glz_asio INTERFACE BOOST_ASIO_DYN_LINK)
+else()
+    # Second, try standalone Asio
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+    find_package(Asio QUIET)
+
+    if(Asio_FOUND)
+        message(STATUS "Using standalone Asio ${Asio_VERSION}")
+        add_library(glz_asio INTERFACE)
+        target_link_libraries(glz_asio INTERFACE Asio::Asio)
+    elseif(glaze_USE_BUNDLED_ASIO)
+        # Third, fetch via FetchContent
+        message(STATUS "Fetching standalone Asio via FetchContent")
+        FetchContent_Declare(
+            asio
+            GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
+            GIT_TAG asio-1-36-0
+            GIT_SHALLOW TRUE
+        )
+        FetchContent_MakeAvailable(asio)
+        add_library(glz_asio INTERFACE)
+        target_include_directories(glz_asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
+    else()
+        message(FATAL_ERROR
+            "ASIO not found and bundling is disabled (glaze_USE_BUNDLED_ASIO=OFF).\n"
+            "Options:\n"
+            "  - Install Boost with the 'system' component\n"
+            "  - Install standalone Asio (headers in standard location)\n"
+            "  - Set Asio_INCLUDE_DIR to your Asio headers location\n"
+            "  - Set glaze_USE_BUNDLED_ASIO=ON to download via FetchContent"
+        )
+    endif()
+endif()
 
 include(../cmake/code-coverage.cmake)
 add_code_coverage_all_targets()
@@ -57,6 +113,8 @@ endif()
 
 add_subdirectory(api_test)
 add_subdirectory(beve_test)
+add_subdirectory(cbor_test)
+add_subdirectory(buffer_pool_test)
 add_subdirectory(cli_menu_test)
 add_subdirectory(compare_test)
 add_subdirectory(csv_test)
@@ -64,7 +122,10 @@ add_subdirectory(eigen_test)
 add_subdirectory(example_json)
 add_subdirectory(exceptions_test)
 add_subdirectory(inplace_vector)
-add_subdirectory(int_parsing)
+option(glaze_BUILD_PERFORMANCE_TESTS "Build performance tests" ON)
+if(glaze_BUILD_PERFORMANCE_TESTS)
+    add_subdirectory(int_parsing)
+endif()
 add_subdirectory(jmespath)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(key_transformers_test)
@@ -78,12 +139,18 @@ add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
 
 # JSON Tests
+add_subdirectory(chrono_test)
 add_subdirectory(json_conformance)
-add_subdirectory(json_performance)
+if(glaze_BUILD_PERFORMANCE_TESTS)
+    add_subdirectory(json_performance)
+endif()
 add_subdirectory(json_reflection_test)
 add_subdirectory(json_test)
 
-add_subdirectory(networking_tests)
+option(glaze_BUILD_NETWORKING_TESTS "Build networking tests (requires OpenSSL)" ON)
+if(glaze_BUILD_NETWORKING_TESTS)
+    add_subdirectory(networking_tests)
+endif()
 
 if(glaze_EETF_FORMAT)
     add_subdirectory(eetf_test)

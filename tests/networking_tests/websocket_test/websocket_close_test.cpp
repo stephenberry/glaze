@@ -171,6 +171,26 @@ std::optional<websocket_frame> poll_for_frame(asio::ip::tcp::socket& socket, std
    return std::nullopt;
 }
 
+// Helper to send a close frame (client must use masking)
+void send_close_frame(asio::ip::tcp::socket& socket, uint16_t code = 1000)
+{
+   // WebSocket close frame from client (must be masked)
+   // Frame: 0x88 (FIN=1, opcode=8), 0x82 (mask=1, len=2), 4-byte mask, 2-byte code (masked)
+   uint8_t mask[4] = {0x12, 0x34, 0x56, 0x78}; // Simple mask
+   uint8_t code_bytes[2] = {static_cast<uint8_t>(code >> 8), static_cast<uint8_t>(code & 0xFF)};
+
+   std::vector<uint8_t> frame = {0x88,
+                                 0x82,
+                                 mask[0],
+                                 mask[1],
+                                 mask[2],
+                                 mask[3],
+                                 static_cast<uint8_t>(code_bytes[0] ^ mask[0]),
+                                 static_cast<uint8_t>(code_bytes[1] ^ mask[1])};
+
+   asio::write(socket, asio::buffer(frame));
+}
+
 suite websocket_close_frame_tests = [] {
    "close_frame_is_sent"_test = [] {
       std::atomic<bool> close_frame_received{false};
@@ -180,12 +200,13 @@ suite websocket_close_frame_tests = [] {
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_open([](std::shared_ptr<websocket_connection> conn, const request&) {
+      ws_server->on_open([](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
          // Server initiates close - this should send a close frame
          conn->close(ws_close_code::normal, "Test close");
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection>) { on_close_called = true; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+                              std::string_view) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -230,6 +251,9 @@ suite websocket_close_frame_tests = [] {
 
       if (frame && frame->opcode == 0x08) {
          close_frame_received = true;
+         // Send close frame response to complete the handshake
+         socket.non_blocking(false);
+         send_close_frame(socket, 1000);
       }
 
       expect(close_frame_received.load()) << "Close frame should be received by client";
@@ -253,7 +277,7 @@ suite websocket_close_frame_tests = [] {
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_open([](std::shared_ptr<websocket_connection> conn, const request&) {
+      ws_server->on_open([](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
          // Close with specific code and reason
          conn->close(ws_close_code::going_away, "Server shutdown");
       });
@@ -334,20 +358,23 @@ suite websocket_error_handling_tests = [] {
       std::atomic<bool> on_error_called{false};
       std::atomic<bool> on_close_called{false};
       std::atomic<bool> server_ready{false};
-      std::shared_ptr<websocket_connection> server_conn;
+      std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> server_conn;
       std::mutex conn_mutex;
 
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_open([&](std::shared_ptr<websocket_connection> conn, const request&) {
+      ws_server->on_open([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
          std::lock_guard<std::mutex> lock(conn_mutex);
          server_conn = conn;
       });
 
-      ws_server->on_error([&](std::shared_ptr<websocket_connection>, std::error_code) { on_error_called = true; });
+      ws_server->on_error([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code) {
+         on_error_called = true;
+      });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection>) { on_close_called = true; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+                              std::string_view) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -415,9 +442,12 @@ suite websocket_error_handling_tests = [] {
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_error([&](std::shared_ptr<websocket_connection>, std::error_code) { on_error_called = true; });
+      ws_server->on_error([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code) {
+         on_error_called = true;
+      });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection>) { on_close_called = true; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+                              std::string_view) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -475,14 +505,15 @@ suite websocket_error_handling_tests = [] {
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_open([](std::shared_ptr<websocket_connection> conn, const request&) {
+      ws_server->on_open([](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
          // Try to close multiple times - should only send one close frame
          conn->close(ws_close_code::normal, "First close");
          conn->close(ws_close_code::normal, "Second close");
          conn->close(ws_close_code::normal, "Third close");
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection>) { on_close_call_count++; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+                              std::string_view) { on_close_call_count++; });
 
       // Create HTTP server
       http_server server;
@@ -530,6 +561,12 @@ suite websocket_error_handling_tests = [] {
       while (frame) {
          if (frame->opcode == 0x08) {
             close_frame_count++;
+            // Send close frame response after receiving the first close frame
+            if (close_frame_count == 1) {
+               socket.non_blocking(false);
+               send_close_frame(socket, 1000);
+               socket.non_blocking(true);
+            }
          }
          frame = poll_for_frame(socket, pending, std::chrono::milliseconds(200));
       }

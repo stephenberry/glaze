@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <any>
+#include <array>
 #include <atomic>
 #include <bitset>
 #include <chrono>
@@ -17,6 +18,7 @@
 #include <random>
 #include <ranges>
 #include <set>
+#include <span>
 #if defined(__STDCPP_FLOAT128_T__)
 #include <stdfloat>
 #endif
@@ -1839,6 +1841,12 @@ suite large_length_range = [] {
    };
 };
 
+// Test struct for issue #2124
+struct RecursiveNode
+{
+   std::unordered_map<std::string, RecursiveNode> children;
+};
+
 suite json_pointer = [] {
    using namespace ut;
 
@@ -1940,6 +1948,15 @@ suite json_pointer = [] {
       auto maybe_id = glz::get_sv_json<"/data/1/id">(json);
       expect(maybe_id.has_value());
       expect(maybe_id.value() == "88") << maybe_id.value();
+   };
+
+   "seek_nonexistent_key_in_map"_test = [] {
+      // Test for issue #2124: seek should not modify the map when key doesn't exist
+      RecursiveNode root;
+      bool found = glz::seek([](auto&) {}, root, "/children/does_not_exist/children/does_not_exist_as_well");
+
+      expect(found == false) << "seek should return false for non-existent path";
+      expect(root.children.empty()) << "seek should not modify the map";
    };
 };
 
@@ -2086,7 +2103,10 @@ suite bench = [] {
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          buffer.clear();
-         expect(not glz::write_json(thing, buffer));
+         if (glz::write_json(thing, buffer)) {
+            expect(false) << "write_json failed";
+            break;
+         }
       }
       auto tend = std::chrono::high_resolution_clock::now();
       trace.end("write_bench");
@@ -2099,7 +2119,11 @@ suite bench = [] {
       trace.begin("read_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
-         expect(glz::read_json(thing, buffer) == glz::error_code::none);
+         auto ec = glz::read_json(thing, buffer);
+         if (ec != glz::error_code::none) {
+            expect(false) << "read_json failed: " << glz::format_error(ec, buffer);
+            break;
+         }
       }
       tend = std::chrono::high_resolution_clock::now();
       trace.end("read_bench", "JSON reading benchmark");
@@ -5270,6 +5294,665 @@ suite get_sv = [] {
       expect(not ec);
       expect(buffer == R"({"str":"hello","number":3.14,"sub":{"target":42}})");
    };
+
+   // Runtime JSON pointer tests
+   "runtime get_view_json"_test = [] {
+      std::string buffer = R"({"action":"DELETE","data":{"x":10,"y":200}})";
+
+      auto view = glz::get_view_json("/action", buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == R"("DELETE")");
+
+      auto view2 = glz::get_view_json("/data/x", buffer);
+      expect(view2.has_value());
+      expect(glz::sv{view2->data(), view2->size()} == "10");
+
+      auto view3 = glz::get_view_json("/data", buffer);
+      expect(view3.has_value());
+      expect(glz::sv{view3->data(), view3->size()} == R"({"x":10,"y":200})");
+
+      // Non-existent key
+      auto view4 = glz::get_view_json("/nonexistent", buffer);
+      expect(not view4.has_value());
+   };
+
+   "runtime get_view_json array"_test = [] {
+      std::string buffer = R"({"items":[1,2,3,4,5]})";
+
+      auto view = glz::get_view_json("/items/0", buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == "1");
+
+      auto view2 = glz::get_view_json("/items/2", buffer);
+      expect(view2.has_value());
+      expect(glz::sv{view2->data(), view2->size()} == "3");
+
+      auto view3 = glz::get_view_json("/items/4", buffer);
+      expect(view3.has_value());
+      expect(glz::sv{view3->data(), view3->size()} == "5");
+
+      // Out of bounds
+      auto view4 = glz::get_view_json("/items/10", buffer);
+      expect(not view4.has_value());
+   };
+
+   "runtime write_at"_test = [] {
+      std::string buffer = R"( { "action": "DELETE", "data": { "x": 10, "y": 200 }})";
+
+      auto ec = glz::write_at("/action", R"("GO!")", buffer);
+      expect(not ec);
+      expect(buffer == R"( { "action": "GO!", "data": { "x": 10, "y": 200 }})");
+   };
+
+   "runtime write_at nested"_test = [] {
+      std::string buffer = R"({"str":"hello","number":3.14,"sub":{"target":"X"}})";
+
+      auto ec = glz::write_at("/sub/target", "42", buffer);
+      expect(not ec);
+      expect(buffer == R"({"str":"hello","number":3.14,"sub":{"target":42}})");
+   };
+
+   "runtime write_at array"_test = [] {
+      std::string buffer = R"({"items":[1,2,3,4,5]})";
+
+      auto ec = glz::write_at("/items/2", "999", buffer);
+      expect(not ec);
+      expect(buffer == R"({"items":[1,2,999,4,5]})");
+   };
+
+   "runtime write_at with dynamic path"_test = [] {
+      std::string buffer = R"({"a":1,"b":2,"c":3})";
+
+      std::string path = "/b";
+      auto ec = glz::write_at(path, "42", buffer);
+      expect(not ec);
+      expect(buffer == R"({"a":1,"b":42,"c":3})");
+   };
+
+   "runtime write_at escaped pointer"_test = [] {
+      // Test RFC 6901 escape sequences: ~0 -> ~, ~1 -> /
+      std::string buffer = R"({"a/b":1,"c~d":2})";
+
+      // Key with slash: use ~1
+      auto ec = glz::write_at("/a~1b", "10", buffer);
+      expect(not ec);
+      expect(buffer == R"({"a/b":10,"c~d":2})");
+
+      // Key with tilde: use ~0
+      auto ec2 = glz::write_at("/c~0d", "20", buffer);
+      expect(not ec2);
+      expect(buffer == R"({"a/b":10,"c~d":20})");
+   };
+
+   "runtime get_view_json empty pointer"_test = [] {
+      std::string buffer = R"({"x":1})";
+
+      // Empty pointer returns the whole document
+      auto view = glz::get_view_json("", buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == R"({"x":1})");
+   };
+
+   // ============ Additional comprehensive tests ============
+
+   // Deep nesting tests
+   "runtime json_ptr deep nesting"_test = [] {
+      std::string buffer = R"({"a":{"b":{"c":{"d":{"e":42}}}}})";
+
+      auto view = glz::get_view_json("/a/b/c/d/e", buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == "42");
+
+      auto view2 = glz::get_view_json("/a/b/c/d", buffer);
+      expect(view2.has_value());
+      expect(glz::sv{view2->data(), view2->size()} == R"({"e":42})");
+
+      auto view3 = glz::get_view_json("/a/b/c", buffer);
+      expect(view3.has_value());
+      expect(glz::sv{view3->data(), view3->size()} == R"({"d":{"e":42}})");
+
+      // Write at deep level
+      auto ec = glz::write_at("/a/b/c/d/e", "999", buffer);
+      expect(not ec);
+      expect(buffer == R"({"a":{"b":{"c":{"d":{"e":999}}}}})");
+   };
+
+   // Mixed arrays and objects
+   "runtime json_ptr mixed arrays and objects"_test = [] {
+      std::string buffer = R"({"users":[{"name":"Alice","scores":[10,20,30]},{"name":"Bob","scores":[40,50,60]}]})";
+
+      // Access nested array within object within array
+      auto view = glz::get_view_json("/users/0/scores/1", buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == "20");
+
+      auto view2 = glz::get_view_json("/users/1/name", buffer);
+      expect(view2.has_value());
+      expect(glz::sv{view2->data(), view2->size()} == R"("Bob")");
+
+      // Modify nested value
+      auto ec = glz::write_at("/users/0/scores/2", "35", buffer);
+      expect(not ec);
+
+      auto view3 = glz::get_view_json("/users/0/scores/2", buffer);
+      expect(view3.has_value());
+      expect(glz::sv{view3->data(), view3->size()} == "35");
+   };
+
+   // Numeric keys in objects (not array indices)
+   "runtime json_ptr numeric object keys"_test = [] {
+      std::string buffer = R"({"123":"numeric key","456":{"nested":true}})";
+
+      auto view = glz::get_view_json("/123", buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == R"("numeric key")");
+
+      auto view2 = glz::get_view_json("/456/nested", buffer);
+      expect(view2.has_value());
+      expect(glz::sv{view2->data(), view2->size()} == "true");
+
+      auto ec = glz::write_at("/123", R"("updated")", buffer);
+      expect(not ec);
+      expect(buffer == R"({"123":"updated","456":{"nested":true}})");
+   };
+
+   // Empty string key
+   "runtime json_ptr empty string key"_test = [] {
+      std::string buffer = R"({"":"empty key value","other":"value"})";
+
+      auto view = glz::get_view_json("/", buffer);
+      expect(view.has_value());
+      expect(glz::sv{view->data(), view->size()} == R"("empty key value")");
+
+      auto ec = glz::write_at("/", R"("new empty")", buffer);
+      expect(not ec);
+      expect(buffer == R"({"":"new empty","other":"value"})");
+   };
+
+   // Various JSON value types
+   "runtime json_ptr value types"_test = [] {
+      std::string buffer =
+         R"({"str":"hello","int":42,"float":3.14,"neg":-17,"sci":1.5e10,"bool_t":true,"bool_f":false,"null_v":null,"obj":{},"arr":[]})";
+
+      // String
+      auto v1 = glz::get_view_json("/str", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == R"("hello")");
+
+      // Integer
+      auto v2 = glz::get_view_json("/int", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == "42");
+
+      // Float
+      auto v3 = glz::get_view_json("/float", buffer);
+      expect(v3.has_value());
+      expect(glz::sv{v3->data(), v3->size()} == "3.14");
+
+      // Negative
+      auto v4 = glz::get_view_json("/neg", buffer);
+      expect(v4.has_value());
+      expect(glz::sv{v4->data(), v4->size()} == "-17");
+
+      // Scientific notation
+      auto v5 = glz::get_view_json("/sci", buffer);
+      expect(v5.has_value());
+      expect(glz::sv{v5->data(), v5->size()} == "1.5e10");
+
+      // Boolean true
+      auto v6 = glz::get_view_json("/bool_t", buffer);
+      expect(v6.has_value());
+      expect(glz::sv{v6->data(), v6->size()} == "true");
+
+      // Boolean false
+      auto v7 = glz::get_view_json("/bool_f", buffer);
+      expect(v7.has_value());
+      expect(glz::sv{v7->data(), v7->size()} == "false");
+
+      // Null
+      auto v8 = glz::get_view_json("/null_v", buffer);
+      expect(v8.has_value());
+      expect(glz::sv{v8->data(), v8->size()} == "null");
+
+      // Empty object
+      auto v9 = glz::get_view_json("/obj", buffer);
+      expect(v9.has_value());
+      expect(glz::sv{v9->data(), v9->size()} == "{}");
+
+      // Empty array
+      auto v10 = glz::get_view_json("/arr", buffer);
+      expect(v10.has_value());
+      expect(glz::sv{v10->data(), v10->size()} == "[]");
+   };
+
+   // Write different value types
+   "runtime write_at value types"_test = [] {
+      std::string buffer = R"({"v":null})";
+
+      // Write string
+      (void)glz::write_at("/v", R"("hello")", buffer);
+      expect(buffer == R"({"v":"hello"})");
+
+      // Write number
+      (void)glz::write_at("/v", "42", buffer);
+      expect(buffer == R"({"v":42})");
+
+      // Write boolean
+      (void)glz::write_at("/v", "true", buffer);
+      expect(buffer == R"({"v":true})");
+
+      // Write null
+      (void)glz::write_at("/v", "null", buffer);
+      expect(buffer == R"({"v":null})");
+
+      // Write object
+      (void)glz::write_at("/v", R"({"nested":1})", buffer);
+      expect(buffer == R"({"v":{"nested":1}})");
+
+      // Write array
+      (void)glz::write_at("/v", "[1,2,3]", buffer);
+      expect(buffer == R"({"v":[1,2,3]})");
+   };
+
+   // Whitespace handling
+   "runtime json_ptr whitespace"_test = [] {
+      std::string buffer = R"({
+         "key1" : "value1" ,
+         "key2" : {
+            "nested" : 42
+         } ,
+         "arr" : [ 1 , 2 , 3 ]
+      })";
+
+      auto v1 = glz::get_view_json("/key1", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == R"("value1")");
+
+      auto v2 = glz::get_view_json("/key2/nested", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == "42");
+
+      auto v3 = glz::get_view_json("/arr/1", buffer);
+      expect(v3.has_value());
+      expect(glz::sv{v3->data(), v3->size()} == "2");
+   };
+
+   // Error cases
+   "runtime json_ptr errors"_test = [] {
+      std::string buffer = R"({"a":1,"b":{"c":2},"arr":[1,2,3]})";
+
+      // Non-existent key
+      auto e1 = glz::get_view_json("/nonexistent", buffer);
+      expect(not e1.has_value());
+
+      // Non-existent nested key
+      auto e2 = glz::get_view_json("/b/nonexistent", buffer);
+      expect(not e2.has_value());
+
+      // Array index out of bounds
+      auto e3 = glz::get_view_json("/arr/10", buffer);
+      expect(not e3.has_value());
+
+      // Path into non-container (trying to descend into a number)
+      auto e4 = glz::get_view_json("/a/foo", buffer);
+      expect(not e4.has_value());
+
+      // Non-numeric array index
+      auto e5 = glz::get_view_json("/arr/abc", buffer);
+      expect(not e5.has_value());
+
+      // write_at errors
+      auto ec1 = glz::write_at("/nonexistent", "42", buffer);
+      expect(bool(ec1)); // should fail
+
+      auto ec2 = glz::write_at("/arr/100", "42", buffer);
+      expect(bool(ec2)); // should fail
+   };
+
+   // Invalid JSON pointer format
+   "runtime json_ptr invalid format"_test = [] {
+      std::string buffer = R"({"a":1})";
+
+      // Missing leading slash (non-empty pointer must start with /)
+      auto e1 = glz::get_view_json("a", buffer);
+      expect(not e1.has_value());
+
+      // The implementation should handle this gracefully
+      auto e2 = glz::get_view_json("not/valid/pointer", buffer);
+      expect(not e2.has_value());
+   };
+
+   // Empty buffer
+   "runtime json_ptr empty buffer"_test = [] {
+      std::string buffer = "";
+
+      auto view = glz::get_view_json("/key", buffer);
+      expect(not view.has_value());
+
+      auto ec = glz::write_at("/key", "42", buffer);
+      expect(bool(ec)); // should fail
+   };
+
+   // Multiple escape sequences
+   "runtime json_ptr multiple escapes"_test = [] {
+      // Key with both / and ~
+      std::string buffer = R"({"a/b~c":1,"~/":2,"~0~1":3})";
+
+      // a/b~c requires ~1 for / and ~0 for ~
+      auto v1 = glz::get_view_json("/a~1b~0c", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == "1");
+
+      // Key is literally "~/" - need ~0 for ~ and ~1 for /
+      auto v2 = glz::get_view_json("/~0~1", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == "2");
+
+      // Key is literally "~0~1" (the escape codes themselves)
+      auto v3 = glz::get_view_json("/~00~01", buffer);
+      expect(v3.has_value());
+      expect(glz::sv{v3->data(), v3->size()} == "3");
+
+      // Write with escapes
+      auto ec = glz::write_at("/a~1b~0c", "100", buffer);
+      expect(not ec);
+      auto v4 = glz::get_view_json("/a~1b~0c", buffer);
+      expect(glz::sv{v4->data(), v4->size()} == "100");
+   };
+
+   // Array edge cases
+   "runtime json_ptr array edges"_test = [] {
+      std::string buffer = R"({"arr":[100,200,300,400,500]})";
+
+      // First element
+      auto v1 = glz::get_view_json("/arr/0", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == "100");
+
+      // Last element
+      auto v2 = glz::get_view_json("/arr/4", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == "500");
+
+      // Write to first
+      auto ec1 = glz::write_at("/arr/0", "1", buffer);
+      expect(not ec1);
+
+      // Write to last
+      auto ec2 = glz::write_at("/arr/4", "5", buffer);
+      expect(not ec2);
+
+      expect(buffer == R"({"arr":[1,200,300,400,5]})");
+   };
+
+   // Nested arrays
+   "runtime json_ptr nested arrays"_test = [] {
+      std::string buffer = R"([[1,2],[3,4],[5,6]])";
+
+      auto v1 = glz::get_view_json("/0/0", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == "1");
+
+      auto v2 = glz::get_view_json("/1/1", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == "4");
+
+      auto v3 = glz::get_view_json("/2", buffer);
+      expect(v3.has_value());
+      expect(glz::sv{v3->data(), v3->size()} == "[5,6]");
+
+      auto ec = glz::write_at("/1/0", "33", buffer);
+      expect(not ec);
+      expect(buffer == R"([[1,2],[33,4],[5,6]])");
+   };
+
+   // Root array
+   "runtime json_ptr root array"_test = [] {
+      std::string buffer = R"([10,20,30])";
+
+      auto v1 = glz::get_view_json("/0", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == "10");
+
+      auto v2 = glz::get_view_json("/2", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == "30");
+
+      auto ec = glz::write_at("/1", "25", buffer);
+      expect(not ec);
+      expect(buffer == R"([10,25,30])");
+   };
+
+   // Size changes during write
+   "runtime write_at size changes"_test = [] {
+      // Small to large
+      std::string buffer1 = R"({"v":1})";
+      auto ec1 = glz::write_at("/v", "123456789", buffer1);
+      expect(not ec1);
+      expect(buffer1 == R"({"v":123456789})");
+
+      // Large to small
+      std::string buffer2 = R"({"v":123456789})";
+      auto ec2 = glz::write_at("/v", "1", buffer2);
+      expect(not ec2);
+      expect(buffer2 == R"({"v":1})");
+
+      // String to much longer string
+      std::string buffer3 = R"({"v":"x"})";
+      auto ec3 = glz::write_at("/v", R"("this is a much longer string value")", buffer3);
+      expect(not ec3);
+      expect(buffer3 == R"({"v":"this is a much longer string value"})");
+
+      // Object to primitive
+      std::string buffer4 = R"({"v":{"a":1,"b":2,"c":3}})";
+      auto ec4 = glz::write_at("/v", "null", buffer4);
+      expect(not ec4);
+      expect(buffer4 == R"({"v":null})");
+
+      // Primitive to object
+      std::string buffer5 = R"({"v":1})";
+      auto ec5 = glz::write_at("/v", R"({"x":1,"y":2})", buffer5);
+      expect(not ec5);
+      expect(buffer5 == R"({"v":{"x":1,"y":2}})");
+   };
+
+   // Multiple writes to same buffer
+   "runtime write_at multiple writes"_test = [] {
+      std::string buffer = R"({"a":1,"b":2,"c":3})";
+
+      auto ec1 = glz::write_at("/a", "10", buffer);
+      expect(not ec1);
+
+      auto ec2 = glz::write_at("/b", "20", buffer);
+      expect(not ec2);
+
+      auto ec3 = glz::write_at("/c", "30", buffer);
+      expect(not ec3);
+
+      expect(buffer == R"({"a":10,"b":20,"c":30})");
+
+      // Write again
+      auto ec4 = glz::write_at("/b", "200", buffer);
+      expect(not ec4);
+      expect(buffer == R"({"a":10,"b":200,"c":30})");
+   };
+
+   // Unicode in keys and values
+   "runtime json_ptr unicode"_test = [] {
+      std::string buffer = R"({"日本語":"Japanese","emoji":"😀","mixed":"hello世界"})";
+
+      auto v1 = glz::get_view_json("/emoji", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == R"("😀")");
+
+      auto v2 = glz::get_view_json("/mixed", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == R"("hello世界")");
+
+      auto ec = glz::write_at("/emoji", R"("🎉")", buffer);
+      expect(not ec);
+      auto v3 = glz::get_view_json("/emoji", buffer);
+      expect(glz::sv{v3->data(), v3->size()} == R"("🎉")");
+   };
+
+   // Comparison with compile-time version
+   "runtime vs compile-time json_ptr"_test = [] {
+      std::string buffer1 = R"({"a":{"b":{"c":42}}})";
+      std::string buffer2 = buffer1;
+
+      // Compile-time
+      auto ct_view = glz::get_view_json<"/a/b/c">(buffer1);
+      expect(ct_view.has_value());
+
+      // Runtime
+      auto rt_view = glz::get_view_json("/a/b/c", buffer2);
+      expect(rt_view.has_value());
+
+      // Should get same result
+      expect(glz::sv{ct_view->data(), ct_view->size()} == glz::sv{rt_view->data(), rt_view->size()});
+
+      // Write with compile-time
+      auto ct_ec = glz::write_at<"/a/b/c">("100", buffer1);
+      expect(not ct_ec);
+
+      // Write with runtime
+      auto rt_ec = glz::write_at("/a/b/c", "100", buffer2);
+      expect(not rt_ec);
+
+      // Should produce same result
+      expect(buffer1 == buffer2);
+   };
+
+   // Keys at different positions in object
+   "runtime json_ptr key positions"_test = [] {
+      std::string buffer = R"({"first":1,"middle":2,"last":3})";
+
+      // First key
+      auto v1 = glz::get_view_json("/first", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == "1");
+
+      // Middle key
+      auto v2 = glz::get_view_json("/middle", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == "2");
+
+      // Last key
+      auto v3 = glz::get_view_json("/last", buffer);
+      expect(v3.has_value());
+      expect(glz::sv{v3->data(), v3->size()} == "3");
+
+      // Write to each position
+      (void)glz::write_at("/first", "10", buffer);
+      (void)glz::write_at("/middle", "20", buffer);
+      (void)glz::write_at("/last", "30", buffer);
+      expect(buffer == R"({"first":10,"middle":20,"last":30})");
+   };
+
+   // Large array indices
+   "runtime json_ptr large array index"_test = [] {
+      // Create array with many elements
+      std::string buffer = R"({"arr":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]})";
+
+      auto v1 = glz::get_view_json("/arr/19", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == "19");
+
+      auto v2 = glz::get_view_json("/arr/10", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == "10");
+
+      auto ec = glz::write_at("/arr/15", "1500", buffer);
+      expect(not ec);
+      auto v3 = glz::get_view_json("/arr/15", buffer);
+      expect(glz::sv{v3->data(), v3->size()} == "1500");
+   };
+
+   // String values with special characters
+   "runtime json_ptr string special chars"_test = [] {
+      std::string buffer = R"({"escaped":"hello\nworld","quotes":"say \"hi\"","backslash":"path\\to\\file"})";
+
+      auto v1 = glz::get_view_json("/escaped", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == R"("hello\nworld")");
+
+      auto v2 = glz::get_view_json("/quotes", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == R"("say \"hi\"")");
+
+      auto v3 = glz::get_view_json("/backslash", buffer);
+      expect(v3.has_value());
+      expect(glz::sv{v3->data(), v3->size()} == R"("path\\to\\file")");
+   };
+
+   // Single element containers
+   "runtime json_ptr single element"_test = [] {
+      std::string buffer1 = R"({"only":42})";
+      auto v1 = glz::get_view_json("/only", buffer1);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == "42");
+
+      std::string buffer2 = R"([99])";
+      auto v2 = glz::get_view_json("/0", buffer2);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == "99");
+
+      auto ec1 = glz::write_at("/only", "0", buffer1);
+      expect(not ec1);
+      expect(buffer1 == R"({"only":0})");
+
+      auto ec2 = glz::write_at("/0", "0", buffer2);
+      expect(not ec2);
+      expect(buffer2 == R"([0])");
+   };
+
+   // Complex real-world-like JSON
+   "runtime json_ptr complex json"_test = [] {
+      std::string buffer = R"({
+         "apiVersion": "v1",
+         "kind": "Pod",
+         "metadata": {
+            "name": "test-pod",
+            "labels": {
+               "app": "myapp",
+               "version": "1.0"
+            }
+         },
+         "spec": {
+            "containers": [
+               {
+                  "name": "main",
+                  "image": "nginx:latest",
+                  "ports": [{"containerPort": 80}]
+               }
+            ]
+         }
+      })";
+
+      // Read various paths
+      auto v1 = glz::get_view_json("/apiVersion", buffer);
+      expect(v1.has_value());
+      expect(glz::sv{v1->data(), v1->size()} == R"("v1")");
+
+      auto v2 = glz::get_view_json("/metadata/labels/app", buffer);
+      expect(v2.has_value());
+      expect(glz::sv{v2->data(), v2->size()} == R"("myapp")");
+
+      auto v3 = glz::get_view_json("/spec/containers/0/image", buffer);
+      expect(v3.has_value());
+      expect(glz::sv{v3->data(), v3->size()} == R"("nginx:latest")");
+
+      auto v4 = glz::get_view_json("/spec/containers/0/ports/0/containerPort", buffer);
+      expect(v4.has_value());
+      expect(glz::sv{v4->data(), v4->size()} == "80");
+
+      // Update version
+      auto ec = glz::write_at("/metadata/labels/version", R"("2.0")", buffer);
+      expect(not ec);
+
+      auto v5 = glz::get_view_json("/metadata/labels/version", buffer);
+      expect(glz::sv{v5->data(), v5->size()} == R"("2.0")");
+   };
 };
 
 suite no_except_tests = [] {
@@ -5861,6 +6544,88 @@ suite arbitrary_key_maps = [] {
          }};
 
       glz::for_each_apply(tester, tests);
+   };
+};
+
+// Test for issue #1477: Double quoted keys for custom struct json write
+// When a custom type with custom serialization is used as a map key,
+// the mimics<T, std::string> concept prevents double-quoting
+struct mimics_string_key
+{
+   std::string value{};
+
+   [[nodiscard]] std::strong_ordering operator<=>(const mimics_string_key&) const noexcept = default;
+};
+
+template <>
+struct glz::meta<mimics_string_key>
+{
+   using mimic = std::string;
+   static constexpr auto value = &mimics_string_key::value;
+};
+
+// Struct for testing mimics in nested context
+struct mimics_string_nested_struct
+{
+   std::map<mimics_string_key, bool> data;
+
+   bool operator==(const mimics_string_nested_struct&) const = default;
+};
+
+suite mimics_string_key_tests = [] {
+   "mimics<T, std::string> key write"_test = [] {
+      std::map<mimics_string_key, int> m{{{"hello"}, 42}, {{"world"}, 99}};
+
+      std::string buffer{};
+      expect(not glz::write_json(m, buffer));
+      // With using mimic = std::string, the key should be "hello" not "\"hello\""
+      expect(buffer == R"({"hello":42,"world":99})") << buffer;
+   };
+
+   "mimics<T, std::string> key read"_test = [] {
+      std::map<mimics_string_key, int> m{};
+      std::string json = R"({"hello":42,"world":99})";
+
+      expect(not glz::read_json(m, json));
+      expect(m.size() == 2);
+      expect(m[{"hello"}] == 42);
+      expect(m[{"world"}] == 99);
+   };
+
+   "mimics<T, std::string> key roundtrip"_test = [] {
+      std::map<mimics_string_key, std::string> original{{{"key1"}, "value1"}, {{"key2"}, "value2"}};
+
+      std::string buffer{};
+      expect(not glz::write_json(original, buffer));
+
+      std::map<mimics_string_key, std::string> parsed{};
+      expect(not glz::read_json(parsed, buffer));
+
+      expect(parsed.size() == original.size());
+      for (const auto& [key, val] : original) {
+         expect(parsed.contains(key));
+         expect(parsed[key] == val);
+      }
+   };
+
+   "mimics<T, std::string> key in struct"_test = [] {
+      mimics_string_nested_struct obj{.data = {{{"enabled"}, true}, {{"disabled"}, false}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"data":{"disabled":false,"enabled":true}})") << buffer;
+
+      mimics_string_nested_struct parsed{};
+      expect(not glz::read_json(parsed, buffer));
+      expect(parsed == obj);
+   };
+
+   "mimic concepts"_test = [] {
+      // Test that the concepts work correctly
+      static_assert(glz::has_mimic<mimics_string_key>);
+      static_assert(glz::mimics<mimics_string_key, std::string>);
+      static_assert(glz::mimics_str_t<mimics_string_key>);
+      expect(true);
    };
 };
 
@@ -6728,11 +7493,16 @@ suite write_as_json_raw = [] {
    };
 };
 
+struct error_on_const_read_opts : glz::opts
+{
+   bool error_on_const_read = true;
+};
+
 suite const_read_error = [] {
    "const_read_error"_test = [] {
       const std::string hello = "world";
       std::string s = R"(explode)";
-      constexpr glz::opts opts{.error_on_const_read = true};
+      constexpr error_on_const_read_opts opts{};
       expect(glz::read<opts>(hello, s) == glz::error_code::attempt_const_read);
    };
 };
@@ -7323,6 +8093,49 @@ suite self_constraint_real_world = [] {
    };
 };
 
+struct skip_self_constraint_opts : glz::opts
+{
+   bool skip_self_constraint = true;
+};
+
+suite skip_self_constraint_tests = [] {
+   "skip_self_constraint allows invalid data through"_test = [] {
+      constexpr skip_self_constraint_opts opts{};
+
+      // This would normally fail self_constraint validation
+      cross_constrained_object obj{};
+      std::string buffer = R"({"age":9,"name":"Alice"})";
+
+      // With default options, constraint is violated
+      auto ec = glz::read_json(obj, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+
+      // With skip_self_constraint = true, constraint is skipped
+      obj = {};
+      ec = glz::read<opts>(obj, buffer);
+      expect(ec == glz::error_code::none);
+      expect(obj.age == 9);
+      expect(obj.name == "Alice");
+   };
+
+   "skip_self_constraint works with registration_request"_test = [] {
+      constexpr skip_self_constraint_opts opts{};
+
+      registration_request req{};
+      std::string buffer = R"({"username":"coder","password":"short","confirm_password":"short"})";
+
+      // With default options, constraint is violated (password too short)
+      auto ec = glz::read_json(req, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+
+      // With skip_self_constraint = true, constraint is skipped
+      req = {};
+      ec = glz::read<opts>(req, buffer);
+      expect(ec == glz::error_code::none);
+      expect(req.password == "short");
+   };
+};
+
 struct client_state
 {
    uint64_t id{};
@@ -7731,6 +8544,19 @@ World)");
       buffer.clear();
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
+   };
+
+   "raw_and_raw_string_combined"_test = [] {
+      // Test that opts.raw works correctly when combined with opts.raw_string
+      std::string value = R"(Hello\nWorld)";
+
+      // With raw_string only: should have quotes
+      auto json_raw_string = glz::write<glz::opts{.raw_string = true}>(value);
+      expect(json_raw_string.value() == R"("Hello\nWorld")") << json_raw_string.value();
+
+      // With raw and raw_string: should not have quotes
+      auto json_raw_and_raw_string = glz::write<glz::opts{.raw = true, .raw_string = true}>(value);
+      expect(json_raw_and_raw_string.value() == R"(Hello\nWorld)") << json_raw_and_raw_string.value();
    };
 };
 
@@ -8977,6 +9803,162 @@ suite partial_write_tests = [] {
    };
 };
 
+struct runtime_partial_test_struct
+{
+   int a = 1;
+   std::string b = "hello";
+   double c = 3.14;
+   bool d = true;
+};
+
+struct runtime_partial_reflectable
+{
+   int field1 = 100;
+   std::string field2 = "test";
+   double field3 = 2.5;
+};
+
+suite runtime_partial_write_tests = [] {
+   "basic runtime partial write"_test = [] {
+      runtime_partial_test_struct obj{};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "c"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":1,"c":3.14})") << s;
+   };
+
+   "runtime partial write - key order preserved"_test = [] {
+      runtime_partial_test_struct obj{.a = 10, .b = "world", .c = 2.5, .d = false};
+      std::string s{};
+      std::vector<std::string_view> keys = {"c", "a", "d"}; // reversed from struct order
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"c":2.5,"a":10,"d":false})") << s; // Output matches key order
+   };
+
+   "runtime partial write - unknown key error"_test = [] {
+      runtime_partial_test_struct obj{};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "nonexistent"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(ec.ec == glz::error_code::unknown_key);
+   };
+
+   "runtime partial write - empty keys"_test = [] {
+      runtime_partial_test_struct obj{};
+      std::string s{};
+      std::vector<std::string> keys = {};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({})") << s;
+   };
+
+   "runtime partial write - duplicate keys"_test = [] {
+      runtime_partial_test_struct obj{.a = 42};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "a"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":42,"a":42})") << s; // Key written twice
+   };
+
+   "runtime partial write - single key"_test = [] {
+      runtime_partial_test_struct obj{.b = "single"};
+      std::string s{};
+      std::vector<std::string> keys = {"b"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"b":"single"})") << s;
+   };
+
+   "runtime partial write - all keys"_test = [] {
+      runtime_partial_test_struct obj{.a = 1, .b = "hi", .c = 1.5, .d = false};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "b", "c", "d"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":1,"b":"hi","c":1.5,"d":false})") << s;
+   };
+
+   "runtime partial write - prettify"_test = [] {
+      runtime_partial_test_struct obj{.a = 1, .b = "test"};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "b"};
+
+      const auto ec = glz::write_json_partial<glz::opts{.prettify = true}>(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s.find('\n') != std::string::npos); // Contains newlines
+      expect(s.find("\"a\": 1") != std::string::npos); // Space after colon
+   };
+
+   "runtime partial write - raw buffer"_test = [] {
+      runtime_partial_test_struct obj{.a = 99};
+      char buf[64]{};
+      std::vector<std::string> keys = {"a"};
+
+      auto result = glz::write_json_partial(obj, keys, buf);
+      expect(result.has_value());
+      expect(std::string_view(buf, *result) == R"({"a":99})");
+   };
+
+   "runtime partial write - return string"_test = [] {
+      runtime_partial_test_struct obj{.c = 9.99};
+      std::vector<std::string> keys = {"c"};
+
+      auto result = glz::write_json_partial(obj, keys);
+      expect(result.has_value());
+      expect(*result == R"({"c":9.99})") << *result;
+   };
+
+   "runtime partial write - const object"_test = [] {
+      const runtime_partial_test_struct obj{.a = 5, .b = "const"};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "b"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":5,"b":"const"})") << s;
+   };
+
+   "runtime partial write - reflectable type"_test = [] {
+      runtime_partial_reflectable obj{};
+      std::string s{};
+      std::vector<std::string> keys = {"field2", "field1"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"field2":"test","field1":100})") << s;
+   };
+
+   "runtime partial write - array of string_view keys"_test = [] {
+      runtime_partial_test_struct obj{.a = 7, .d = true};
+      std::string s{};
+      std::array<std::string_view, 2> keys = {"d", "a"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"d":true,"a":7})") << s;
+   };
+
+   "runtime partial write - initializer_list style"_test = [] {
+      runtime_partial_test_struct obj{.a = 3, .b = "init"};
+      std::string s{};
+      std::vector<std::string_view> keys = {"b", "a"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"b":"init","a":3})") << s;
+   };
+};
+
 struct S0
 {
    std::string f1{}; /*, f1misc is ignored*/
@@ -9668,6 +10650,11 @@ struct bools_as_numbers_struct
 };
 
 suite bools_as_numbers_test = [] {
+   struct bools_as_numbers_opts : glz::opts
+   {
+      bool bools_as_numbers = true;
+   };
+
    "bools_as_numbers"_test = [] {
       std::string s = R"({"a":1,"b":0,"c":true,"d":false})";
       bools_as_numbers_struct obj{};
@@ -9680,7 +10667,7 @@ suite bools_as_numbers_test = [] {
    "bools_as_numbers_array"_test = [] {
       std::string s = R"([1,0,1,0])";
       std::array<bool, 4> obj{};
-      constexpr glz::opts opts{.bools_as_numbers = true};
+      constexpr bools_as_numbers_opts opts{};
       expect(!glz::read<opts>(obj, s));
       expect(glz::write<opts>(obj) == s);
    };
@@ -9688,7 +10675,7 @@ suite bools_as_numbers_test = [] {
    "bools_as_numbers_vector"_test = [] {
       std::string s = R"([1,0,1,0])";
       std::vector<bool> obj{};
-      constexpr glz::opts opts{.bools_as_numbers = true};
+      constexpr bools_as_numbers_opts opts{};
       expect(!glz::read<opts>(obj, s));
       expect(glz::write<opts>(obj) == s);
    };
@@ -10207,10 +11194,23 @@ suite array_char_tests = [] {
       std::array<char, 8> value{};
       expect(not glz::read_json(value, R"("hello")"));
       expect(std::string_view{value.data()} == "hello");
-      expect(glz::write_json(value).value_or("error") == R"("hello")");
+      // After fix for issue #1760: std::array<char, N> now respects array bounds
+      // instead of scanning for null terminator (which could cause buffer overflow).
+      // The output includes all 8 characters of the array.
+      // Use const char* for null-terminated C-style string semantics.
+      auto result = glz::write_json(value);
+      expect(result.has_value());
+      expect(result->size() > 7) << "Output should include full array contents";
+      expect(result->front() == '"' && result->back() == '"');
       expect(glz::read_json(value, R"("hello---too long")"));
       expect(not glz::read_json(value, R"("bye")"));
       expect(std::string_view{value.data()} == "bye");
+   };
+
+   "const char* for null-terminated strings"_test = [] {
+      // const char* retains null-terminated semantics for C API compatibility
+      const char* cstr = "hello";
+      expect(glz::write_json(cstr).value_or("error") == R"("hello")");
    };
 };
 
@@ -10507,7 +11507,7 @@ suite const_pointer_tests = [] {
       std::string buffer = R"({"name":"Foo Bar","p_add":{"street":"Baz Yaz"}})";
       trr::Address add{};
       trr::Person p{&add};
-      auto ec = glz::read<glz::opts{.format = glz::JSON, .error_on_const_read = true}>(p, buffer);
+      auto ec = glz::read<error_on_const_read_opts{}>(p, buffer);
       if (ec) {
          std::cout << glz::format_error(ec, buffer) << std::endl;
       }
@@ -10611,10 +11611,15 @@ struct glz::meta<append_obj>
    static constexpr auto value = object("names", append_arrays<&T::names>, "arrays", append_arrays<&T::arrays>);
 };
 
+struct append_arrays_opts : glz::opts
+{
+   bool append_arrays = true;
+};
+
 suite append_arrays_tests = [] {
    "append_arrays vector"_test = [] {
       std::vector<int> v{};
-      constexpr glz::opts append_opts{.append_arrays = true};
+      constexpr append_arrays_opts append_opts{};
       expect(not glz::read<append_opts>(v, "[1,2,3]"));
       expect(v == std::vector<int>{1, 2, 3});
       expect(not glz::read<append_opts>(v, "[4,5,6]"));
@@ -10623,7 +11628,7 @@ suite append_arrays_tests = [] {
 
    "append_arrays deque"_test = [] {
       std::deque<int> v{};
-      constexpr glz::opts append_opts{.append_arrays = true};
+      constexpr append_arrays_opts append_opts{};
       expect(not glz::read<append_opts>(v, "[1,2,3]"));
       expect(v == std::deque<int>{1, 2, 3});
       expect(not glz::read<append_opts>(v, "[4,5,6]"));
@@ -11000,6 +12005,84 @@ suite explicit_string_view_support = [] {
    };
 };
 
+suite span_char_serialization = [] {
+   "write json from std::span<const char>"_test = [] {
+      const char data[] = "hello span";
+      std::span<const char> span{data, 10};
+
+      std::string buffer{};
+      expect(not glz::write_json(span, buffer));
+      expect(buffer == R"("hello span")");
+   };
+
+   "write json from std::span<char>"_test = [] {
+      char data[] = "mutable";
+      std::span<char> span{data, 7};
+
+      std::string buffer{};
+      expect(not glz::write_json(span, buffer));
+      expect(buffer == R"("mutable")");
+   };
+
+   "write json from empty std::span<const char>"_test = [] {
+      std::span<const char> span{};
+
+      std::string buffer{};
+      expect(not glz::write_json(span, buffer));
+      expect(buffer == R"("")");
+   };
+
+   "write json from std::span<const char> with raw_string option"_test = [] {
+      const char data[] = "raw span";
+      std::span<const char> span{data, 8};
+
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.raw_string = true}>(span, buffer));
+      expect(buffer == R"("raw span")");
+   };
+
+   "write json from std::array<char, N> without null terminator"_test = [] {
+      // This tests the fix for issue #1760 buffer overflow
+      // Array has no null terminator - must respect array bounds
+      std::array<char, 5> arr = {'h', 'e', 'l', 'l', 'o'};
+
+      std::string buffer{};
+      expect(not glz::write_json(arr, buffer));
+      expect(buffer == R"("hello")") << buffer;
+   };
+
+   "write json from std::array<char, N> with null terminator"_test = [] {
+      // Array contains null terminator as part of the data
+      // The full array size should be used, including the null
+      std::array<char, 6> arr = {'h', 'e', 'l', 'l', 'o', '\0'};
+
+      std::string buffer{};
+      expect(not glz::write_json(arr, buffer));
+      // The null character is included in the output (escaped as \u0000 or similar)
+      expect(buffer.size() > 2) << "Buffer should contain data";
+      expect(buffer.front() == '"' && buffer.back() == '"') << "Should be quoted string";
+   };
+
+   "write json from std::array<char, N> with embedded null"_test = [] {
+      // Array with embedded null - should serialize full array
+      std::array<char, 5> arr = {'a', '\0', 'b', 'c', 'd'};
+
+      std::string buffer{};
+      expect(not glz::write_json(arr, buffer));
+      // Should contain all 5 characters, with embedded null escaped
+      expect(buffer.size() > 2) << buffer;
+   };
+
+   "const char* uses null-terminated semantics"_test = [] {
+      // const char* should still use null-terminated semantics for C API compatibility
+      const char* cstr = "c-string";
+
+      std::string buffer{};
+      expect(not glz::write_json(cstr, buffer));
+      expect(buffer == R"("c-string")") << buffer;
+   };
+};
+
 suite member_function_pointer_serialization = [] {
    "member function pointer skipped in json write"_test = [] {
       MemberFunctionThing thing{};
@@ -11061,6 +12144,121 @@ suite member_function_pointer_serialization = [] {
       std::string buffer2{};
       expect(not glz::write<opts_with_member_functions{}>(s, buffer2));
       expect(buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})") << buffer2;
+   };
+};
+
+// Test struct for requires_key customization point during parsing
+// Demonstrates making non-nullable fields optional without using std::optional
+struct requires_key_parsing_test
+{
+   int required_field1{};
+   int optional_field{}; // Non-nullable but made optional via requires_key
+   int required_field2{};
+   int reserved_internal{}; // Internal field that shouldn't be required
+};
+
+template <>
+struct glz::meta<requires_key_parsing_test>
+{
+   static constexpr bool requires_key(const std::string_view key, const bool is_nullable)
+   {
+      // Make optional_field not required, even though it's not a nullable type
+      if (key == "optional_field") {
+         return false;
+      }
+      // Make reserved_internal not required
+      if (key == "reserved_internal") {
+         return false;
+      }
+      // All other non-nullable fields are required
+      return !is_nullable;
+   }
+};
+
+// Test struct for mixing nullable types with requires_key
+struct mixed_nullable_and_requires_key_test
+{
+   int required{};
+   std::optional<int> optional_by_type{};
+   int optional_by_key{};
+};
+
+template <>
+struct glz::meta<mixed_nullable_and_requires_key_test>
+{
+   static constexpr bool requires_key(std::string_view key, bool is_nullable)
+   {
+      if (key == "optional_by_key") {
+         return false;
+      }
+      return !is_nullable;
+   }
+};
+
+suite requires_key_parsing_tests = [] {
+   using namespace ut;
+
+   "requires_key allows non-nullable fields to be optional during parsing"_test = [] {
+      // Test 1: All required fields present, optional fields missing
+      {
+         std::string json = R"({"required_field1":1,"required_field2":2})";
+         requires_key_parsing_test obj{};
+         constexpr auto opts = glz::opts{.error_on_missing_keys = true};
+
+         auto ec = glz::read<opts>(obj, json);
+         expect(not ec) << glz::format_error(ec, json);
+         expect(obj.required_field1 == 1);
+         expect(obj.required_field2 == 2);
+         expect(obj.optional_field == 0); // Default value
+         expect(obj.reserved_internal == 0); // Default value
+      }
+
+      // Test 2: Missing a required field should fail
+      {
+         std::string json = R"({"required_field1":1,"optional_field":99})";
+         requires_key_parsing_test obj{};
+         constexpr auto opts = glz::opts{.error_on_missing_keys = true};
+
+         auto ec = glz::read<opts>(obj, json);
+         expect(ec == glz::error_code::missing_key) << glz::format_error(ec, json);
+      }
+
+      // Test 3: All fields present including optional
+      {
+         std::string json = R"({"required_field1":1,"optional_field":99,"required_field2":2,"reserved_internal":77})";
+         requires_key_parsing_test obj{};
+         constexpr auto opts = glz::opts{.error_on_missing_keys = true};
+
+         auto ec = glz::read<opts>(obj, json);
+         expect(not ec) << glz::format_error(ec, json);
+         expect(obj.required_field1 == 1);
+         expect(obj.optional_field == 99);
+         expect(obj.required_field2 == 2);
+         expect(obj.reserved_internal == 77);
+      }
+
+      // Test 4: Only optional fields present should fail
+      {
+         std::string json = R"({"optional_field":99,"reserved_internal":77})";
+         requires_key_parsing_test obj{};
+         constexpr auto opts = glz::opts{.error_on_missing_keys = true};
+
+         auto ec = glz::read<opts>(obj, json);
+         expect(ec == glz::error_code::missing_key);
+      }
+   };
+
+   "requires_key works with nullable types"_test = [] {
+      // All three fields can be missing except 'required'
+      std::string json = R"({"required":42})";
+      mixed_nullable_and_requires_key_test obj{};
+      constexpr auto opts = glz::opts{.error_on_missing_keys = true};
+
+      auto ec = glz::read<opts>(obj, json);
+      expect(not ec) << glz::format_error(ec, json);
+      expect(obj.required == 42);
+      expect(not obj.optional_by_type.has_value());
+      expect(obj.optional_by_key == 0);
    };
 };
 

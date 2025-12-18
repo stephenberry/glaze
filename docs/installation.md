@@ -165,6 +165,23 @@ For cross-compilation to ARM or other architectures:
 set(glaze_ENABLE_AVX2 OFF)
 ```
 
+## Optional Dependencies
+
+The core Glaze library (JSON, BEVE, CSV, TOML serialization) is **header-only with no external dependencies**.
+
+### Networking Features
+
+For HTTP server/client, WebSocket, and RPC features, you need:
+
+- **ASIO** - Either [standalone ASIO](https://think-async.com/Asio/) or Boost.Asio
+- **OpenSSL** (optional) - For HTTPS and secure WebSocket (wss://) support
+
+See the **[ASIO Setup Guide](networking/asio-setup.md)** for detailed instructions on:
+- Installing and configuring ASIO
+- CMake integration
+- SSL/TLS setup
+- Platform-specific configuration
+
 ## Example Project Setup
 
 ### Complete CMakeLists.txt Example

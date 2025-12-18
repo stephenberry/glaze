@@ -28,7 +28,7 @@ namespace glz
       async_string(const char* s) : str(s) {}
       async_string(const std::string& s) : str(s) {}
       async_string(std::string&& s) : str(std::move(s)) {}
-      async_string(const std::string_view& sv) : str(sv) {}
+      async_string(const std::string_view sv) : str(sv) {}
 
       async_string(const async_string& other)
       {
@@ -85,7 +85,7 @@ namespace glz
          return *this;
       }
 
-      async_string& operator=(const std::string_view& sv)
+      async_string& operator=(const std::string_view sv)
       {
          std::unique_lock lock(mutex);
          str = sv;
@@ -142,7 +142,7 @@ namespace glz
          // Modifiers
          void clear() noexcept { ptr->clear(); }
          void insert(size_t pos, const std::string& str) { ptr->insert(pos, str); }
-         void insert(size_t pos, const std::string_view& sv) { ptr->insert(pos, sv); }
+         void insert(size_t pos, const std::string_view sv) { ptr->insert(pos, sv); }
          void insert(size_t pos, const char* s) { ptr->insert(pos, s); }
          void insert(size_t pos, const char* s, size_t n) { ptr->insert(pos, s, n); }
          void insert(size_t pos, size_t n, char c) { ptr->insert(pos, n, c); }
@@ -155,7 +155,7 @@ namespace glz
             ptr->append(str);
             return *this;
          }
-         proxy& append(const std::string_view& sv)
+         proxy& append(const std::string_view sv)
          {
             ptr->append(sv);
             return *this;
@@ -181,7 +181,7 @@ namespace glz
             ptr->operator+=(str);
             return *this;
          }
-         proxy& operator+=(const std::string_view& sv)
+         proxy& operator+=(const std::string_view sv)
          {
             ptr->operator+=(sv);
             return *this;
@@ -203,7 +203,7 @@ namespace glz
 
          // String operations
          int compare(const std::string& str) const noexcept { return ptr->compare(str); }
-         int compare(const std::string_view& sv) const noexcept { return ptr->compare(sv); }
+         int compare(const std::string_view sv) const noexcept { return ptr->compare(sv); }
          int compare(const char* s) const noexcept { return ptr->compare(s); }
          int compare(size_t pos1, size_t count1, const std::string& str) const
          {
@@ -212,17 +212,17 @@ namespace glz
 
          std::string substr(size_t pos = 0, size_t count = std::string::npos) const { return ptr->substr(pos, count); }
 
-         bool starts_with(const std::string_view& sv) const noexcept { return ptr->starts_with(sv); }
+         bool starts_with(const std::string_view sv) const noexcept { return ptr->starts_with(sv); }
          bool starts_with(char c) const noexcept { return ptr->starts_with(c); }
          bool starts_with(const char* s) const { return ptr->starts_with(s); }
 
-         bool ends_with(const std::string_view& sv) const noexcept { return ptr->ends_with(sv); }
+         bool ends_with(const std::string_view sv) const noexcept { return ptr->ends_with(sv); }
          bool ends_with(char c) const noexcept { return ptr->ends_with(c); }
          bool ends_with(const char* s) const { return ptr->ends_with(s); }
 
          // Search
          size_t find(const std::string& str, size_t pos = 0) const noexcept { return ptr->find(str, pos); }
-         size_t find(const std::string_view& sv, size_t pos = 0) const noexcept { return ptr->find(sv, pos); }
+         size_t find(const std::string_view sv, size_t pos = 0) const noexcept { return ptr->find(sv, pos); }
          size_t find(const char* s, size_t pos = 0) const { return ptr->find(s, pos); }
          size_t find(const char* s, size_t pos, size_t count) const { return ptr->find(s, pos, count); }
          size_t find(char ch, size_t pos = 0) const noexcept { return ptr->find(ch, pos); }
@@ -231,7 +231,7 @@ namespace glz
          {
             return ptr->rfind(str, pos);
          }
-         size_t rfind(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         size_t rfind(const std::string_view sv, size_t pos = std::string::npos) const noexcept
          {
             return ptr->rfind(sv, pos);
          }
@@ -243,7 +243,7 @@ namespace glz
          {
             return ptr->find_first_of(str, pos);
          }
-         size_t find_first_of(const std::string_view& sv, size_t pos = 0) const noexcept
+         size_t find_first_of(const std::string_view sv, size_t pos = 0) const noexcept
          {
             return ptr->find_first_of(sv, pos);
          }
@@ -258,7 +258,7 @@ namespace glz
          {
             return ptr->find_last_of(str, pos);
          }
-         size_t find_last_of(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         size_t find_last_of(const std::string_view sv, size_t pos = std::string::npos) const noexcept
          {
             return ptr->find_last_of(sv, pos);
          }
@@ -273,7 +273,7 @@ namespace glz
          {
             return ptr->find_first_not_of(str, pos);
          }
-         size_t find_first_not_of(const std::string_view& sv, size_t pos = 0) const noexcept
+         size_t find_first_not_of(const std::string_view sv, size_t pos = 0) const noexcept
          {
             return ptr->find_first_not_of(sv, pos);
          }
@@ -288,7 +288,7 @@ namespace glz
          {
             return ptr->find_last_not_of(str, pos);
          }
-         size_t find_last_not_of(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         size_t find_last_not_of(const std::string_view sv, size_t pos = std::string::npos) const noexcept
          {
             return ptr->find_last_not_of(sv, pos);
          }
@@ -311,7 +311,7 @@ namespace glz
             ptr->replace(pos, count, str);
             return *this;
          }
-         proxy& replace(size_t pos, size_t count, const std::string_view& sv)
+         proxy& replace(size_t pos, size_t count, const std::string_view sv)
          {
             ptr->replace(pos, count, sv);
             return *this;
@@ -370,7 +370,7 @@ namespace glz
 
          // String operations
          int compare(const std::string& str) const noexcept { return ptr->compare(str); }
-         int compare(const std::string_view& sv) const noexcept { return ptr->compare(sv); }
+         int compare(const std::string_view sv) const noexcept { return ptr->compare(sv); }
          int compare(const char* s) const noexcept { return ptr->compare(s); }
          int compare(size_t pos1, size_t count1, const std::string& str) const
          {
@@ -379,17 +379,17 @@ namespace glz
 
          std::string substr(size_t pos = 0, size_t count = std::string::npos) const { return ptr->substr(pos, count); }
 
-         bool starts_with(const std::string_view& sv) const noexcept { return ptr->starts_with(sv); }
+         bool starts_with(const std::string_view sv) const noexcept { return ptr->starts_with(sv); }
          bool starts_with(char c) const noexcept { return ptr->starts_with(c); }
          bool starts_with(const char* s) const { return ptr->starts_with(s); }
 
-         bool ends_with(const std::string_view& sv) const noexcept { return ptr->ends_with(sv); }
+         bool ends_with(const std::string_view sv) const noexcept { return ptr->ends_with(sv); }
          bool ends_with(char c) const noexcept { return ptr->ends_with(c); }
          bool ends_with(const char* s) const { return ptr->ends_with(s); }
 
          // Search
          size_t find(const std::string& str, size_t pos = 0) const noexcept { return ptr->find(str, pos); }
-         size_t find(const std::string_view& sv, size_t pos = 0) const noexcept { return ptr->find(sv, pos); }
+         size_t find(const std::string_view sv, size_t pos = 0) const noexcept { return ptr->find(sv, pos); }
          size_t find(const char* s, size_t pos = 0) const { return ptr->find(s, pos); }
          size_t find(const char* s, size_t pos, size_t count) const { return ptr->find(s, pos, count); }
          size_t find(char ch, size_t pos = 0) const noexcept { return ptr->find(ch, pos); }
@@ -398,7 +398,7 @@ namespace glz
          {
             return ptr->rfind(str, pos);
          }
-         size_t rfind(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         size_t rfind(const std::string_view sv, size_t pos = std::string::npos) const noexcept
          {
             return ptr->rfind(sv, pos);
          }
@@ -410,7 +410,7 @@ namespace glz
          {
             return ptr->find_first_of(str, pos);
          }
-         size_t find_first_of(const std::string_view& sv, size_t pos = 0) const noexcept
+         size_t find_first_of(const std::string_view sv, size_t pos = 0) const noexcept
          {
             return ptr->find_first_of(sv, pos);
          }
@@ -425,7 +425,7 @@ namespace glz
          {
             return ptr->find_last_of(str, pos);
          }
-         size_t find_last_of(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         size_t find_last_of(const std::string_view sv, size_t pos = std::string::npos) const noexcept
          {
             return ptr->find_last_of(sv, pos);
          }
@@ -440,7 +440,7 @@ namespace glz
          {
             return ptr->find_first_not_of(str, pos);
          }
-         size_t find_first_not_of(const std::string_view& sv, size_t pos = 0) const noexcept
+         size_t find_first_not_of(const std::string_view sv, size_t pos = 0) const noexcept
          {
             return ptr->find_first_not_of(sv, pos);
          }
@@ -455,7 +455,7 @@ namespace glz
          {
             return ptr->find_last_not_of(str, pos);
          }
-         size_t find_last_not_of(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         size_t find_last_not_of(const std::string_view sv, size_t pos = std::string::npos) const noexcept
          {
             return ptr->find_last_not_of(sv, pos);
          }
@@ -529,7 +529,7 @@ namespace glz
          return *this;
       }
 
-      async_string& append(const std::string_view& sv)
+      async_string& append(const std::string_view sv)
       {
          std::unique_lock lock(mutex);
          str.append(sv);
@@ -556,7 +556,7 @@ namespace glz
          return *this;
       }
 
-      async_string& insert(size_t pos, const std::string_view& sv)
+      async_string& insert(size_t pos, const std::string_view sv)
       {
          std::unique_lock lock(mutex);
          str.insert(pos, sv);
@@ -581,7 +581,7 @@ namespace glz
          return append(std::forward<RHS>(s));
       }
 
-      async_string& operator+=(const std::string_view& sv) { return append(sv); }
+      async_string& operator+=(const std::string_view sv) { return append(sv); }
 
       async_string& operator+=(char c)
       {
@@ -759,7 +759,7 @@ namespace glz
    struct from<Format, glz::async_string>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          auto proxy = value.write();
          parse<Format>::template op<Opts>(*proxy, ctx, it, end);
