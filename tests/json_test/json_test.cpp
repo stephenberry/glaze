@@ -9803,6 +9803,162 @@ suite partial_write_tests = [] {
    };
 };
 
+struct runtime_partial_test_struct
+{
+   int a = 1;
+   std::string b = "hello";
+   double c = 3.14;
+   bool d = true;
+};
+
+struct runtime_partial_reflectable
+{
+   int field1 = 100;
+   std::string field2 = "test";
+   double field3 = 2.5;
+};
+
+suite runtime_partial_write_tests = [] {
+   "basic runtime partial write"_test = [] {
+      runtime_partial_test_struct obj{};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "c"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":1,"c":3.14})") << s;
+   };
+
+   "runtime partial write - key order preserved"_test = [] {
+      runtime_partial_test_struct obj{.a = 10, .b = "world", .c = 2.5, .d = false};
+      std::string s{};
+      std::vector<std::string_view> keys = {"c", "a", "d"}; // reversed from struct order
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"c":2.5,"a":10,"d":false})") << s; // Output matches key order
+   };
+
+   "runtime partial write - unknown key error"_test = [] {
+      runtime_partial_test_struct obj{};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "nonexistent"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(ec.ec == glz::error_code::unknown_key);
+   };
+
+   "runtime partial write - empty keys"_test = [] {
+      runtime_partial_test_struct obj{};
+      std::string s{};
+      std::vector<std::string> keys = {};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({})") << s;
+   };
+
+   "runtime partial write - duplicate keys"_test = [] {
+      runtime_partial_test_struct obj{.a = 42};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "a"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":42,"a":42})") << s; // Key written twice
+   };
+
+   "runtime partial write - single key"_test = [] {
+      runtime_partial_test_struct obj{.b = "single"};
+      std::string s{};
+      std::vector<std::string> keys = {"b"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"b":"single"})") << s;
+   };
+
+   "runtime partial write - all keys"_test = [] {
+      runtime_partial_test_struct obj{.a = 1, .b = "hi", .c = 1.5, .d = false};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "b", "c", "d"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":1,"b":"hi","c":1.5,"d":false})") << s;
+   };
+
+   "runtime partial write - prettify"_test = [] {
+      runtime_partial_test_struct obj{.a = 1, .b = "test"};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "b"};
+
+      const auto ec = glz::write_json_partial<glz::opts{.prettify = true}>(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s.find('\n') != std::string::npos); // Contains newlines
+      expect(s.find("\"a\": 1") != std::string::npos); // Space after colon
+   };
+
+   "runtime partial write - raw buffer"_test = [] {
+      runtime_partial_test_struct obj{.a = 99};
+      char buf[64]{};
+      std::vector<std::string> keys = {"a"};
+
+      auto result = glz::write_json_partial(obj, keys, buf);
+      expect(result.has_value());
+      expect(std::string_view(buf, *result) == R"({"a":99})");
+   };
+
+   "runtime partial write - return string"_test = [] {
+      runtime_partial_test_struct obj{.c = 9.99};
+      std::vector<std::string> keys = {"c"};
+
+      auto result = glz::write_json_partial(obj, keys);
+      expect(result.has_value());
+      expect(*result == R"({"c":9.99})") << *result;
+   };
+
+   "runtime partial write - const object"_test = [] {
+      const runtime_partial_test_struct obj{.a = 5, .b = "const"};
+      std::string s{};
+      std::vector<std::string> keys = {"a", "b"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"a":5,"b":"const"})") << s;
+   };
+
+   "runtime partial write - reflectable type"_test = [] {
+      runtime_partial_reflectable obj{};
+      std::string s{};
+      std::vector<std::string> keys = {"field2", "field1"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"field2":"test","field1":100})") << s;
+   };
+
+   "runtime partial write - array of string_view keys"_test = [] {
+      runtime_partial_test_struct obj{.a = 7, .d = true};
+      std::string s{};
+      std::array<std::string_view, 2> keys = {"d", "a"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"d":true,"a":7})") << s;
+   };
+
+   "runtime partial write - initializer_list style"_test = [] {
+      runtime_partial_test_struct obj{.a = 3, .b = "init"};
+      std::string s{};
+      std::vector<std::string_view> keys = {"b", "a"};
+
+      const auto ec = glz::write_json_partial(obj, keys, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(s == R"({"b":"init","a":3})") << s;
+   };
+};
+
 struct S0
 {
    std::string f1{}; /*, f1misc is ignored*/
