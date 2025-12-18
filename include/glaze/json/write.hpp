@@ -2526,7 +2526,7 @@ namespace glz
       context ctx{};
       size_t ix = 0;
       to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
-                                                                                 ctx, buffer, ix);
+                                                                                ctx, buffer, ix);
       if constexpr (resizable<Buffer>) {
          buffer.resize(ix);
       }
@@ -2536,12 +2536,12 @@ namespace glz
    template <auto Opts = opts{}, class T, class Keys, raw_buffer Buffer>
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
    [[nodiscard]] glz::expected<size_t, error_ctx> write_json_exclude(T&& value, const Keys& exclude_keys,
-                                                                      Buffer&& buffer)
+                                                                     Buffer&& buffer)
    {
       context ctx{};
       size_t ix = 0;
       to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
-                                                                                 ctx, buffer, ix);
+                                                                                ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message});
       }

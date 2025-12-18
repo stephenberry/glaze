@@ -10114,7 +10114,7 @@ struct zoo_keeper
    std::string name{};
    std::string employee_id{};
    int years_experience{};
-   std::string phone{};        // Sensitive - might want to exclude
+   std::string phone{}; // Sensitive - might want to exclude
    std::string home_address{}; // Sensitive - might want to exclude
 };
 
@@ -10125,7 +10125,7 @@ struct zoo_exhibit
    std::vector<zoo_animal> animals{};
    zoo_keeper primary_keeper{};
    std::string internal_notes{}; // Internal - might want to exclude
-   double budget{};              // Sensitive - might want to exclude
+   double budget{}; // Sensitive - might want to exclude
 };
 
 struct zoo_info
@@ -10134,21 +10134,16 @@ struct zoo_info
    std::string location{};
    int year_established{};
    std::vector<zoo_exhibit> exhibits{};
-   std::string admin_password{};  // Sensitive - should exclude
-   std::string api_key{};         // Sensitive - should exclude
-   double annual_revenue{};       // Sensitive - might exclude
+   std::string admin_password{}; // Sensitive - should exclude
+   std::string api_key{}; // Sensitive - should exclude
+   double annual_revenue{}; // Sensitive - might exclude
    int total_animals{};
    bool is_open{};
 };
 
 suite zoo_exclude_write_tests = [] {
    "zoo - exclude sensitive animal data"_test = [] {
-      zoo_animal lion{
-         .name = "Simba",
-         .species = "Panthera leo",
-         .age = 8,
-         .weight_kg = 190.5,
-         .endangered = false};
+      zoo_animal lion{.name = "Simba", .species = "Panthera leo", .age = 8, .weight_kg = 190.5, .endangered = false};
       std::string s{};
       std::vector<std::string> exclude = {"weight_kg"}; // Don't expose exact weight
 
@@ -10159,11 +10154,7 @@ suite zoo_exclude_write_tests = [] {
 
    "zoo - exclude multiple animal fields"_test = [] {
       zoo_animal panda{
-         .name = "Bao Bao",
-         .species = "Ailuropoda melanoleuca",
-         .age = 5,
-         .weight_kg = 95.0,
-         .endangered = true};
+         .name = "Bao Bao", .species = "Ailuropoda melanoleuca", .age = 5, .weight_kg = 95.0, .endangered = true};
       std::string s{};
       std::vector<std::string> exclude = {"age", "weight_kg"};
 
@@ -10173,11 +10164,7 @@ suite zoo_exclude_write_tests = [] {
    };
 
    "zoo - exclude habitat capacity"_test = [] {
-      zoo_habitat savanna{
-         .name = "African Savanna",
-         .climate = "tropical",
-         .area_sqm = 5000.0,
-         .capacity = 25};
+      zoo_habitat savanna{.name = "African Savanna", .climate = "tropical", .area_sqm = 5000.0, .capacity = 25};
       std::string s{};
       std::vector<std::string> exclude = {"capacity"}; // Don't expose capacity limits
 
@@ -10187,12 +10174,11 @@ suite zoo_exclude_write_tests = [] {
    };
 
    "zoo - exclude keeper personal info"_test = [] {
-      zoo_keeper keeper{
-         .name = "Jane Goodall",
-         .employee_id = "EMP-12345",
-         .years_experience = 15,
-         .phone = "555-123-4567",
-         .home_address = "123 Safari Lane"};
+      zoo_keeper keeper{.name = "Jane Goodall",
+                        .employee_id = "EMP-12345",
+                        .years_experience = 15,
+                        .phone = "555-123-4567",
+                        .home_address = "123 Safari Lane"};
       std::string s{};
       std::vector<std::string> exclude = {"phone", "home_address", "employee_id"};
 
@@ -10281,11 +10267,7 @@ suite zoo_exclude_write_tests = [] {
 
    "zoo - exclude everything except name"_test = [] {
       zoo_animal elephant{
-         .name = "Dumbo",
-         .species = "Loxodonta africana",
-         .age = 25,
-         .weight_kg = 5000.0,
-         .endangered = true};
+         .name = "Dumbo", .species = "Loxodonta africana", .age = 25, .weight_kg = 5000.0, .endangered = true};
       std::string s{};
       std::vector<std::string> exclude = {"species", "age", "weight_kg", "endangered"};
 
@@ -10296,11 +10278,7 @@ suite zoo_exclude_write_tests = [] {
 
    "zoo - prettified output with exclusions"_test = [] {
       zoo_animal penguin{
-         .name = "Skipper",
-         .species = "Aptenodytes forsteri",
-         .age = 3,
-         .weight_kg = 30.0,
-         .endangered = false};
+         .name = "Skipper", .species = "Aptenodytes forsteri", .age = 3, .weight_kg = 30.0, .endangered = false};
       std::string s{};
       std::vector<std::string> exclude = {"weight_kg", "endangered"};
 
@@ -10318,9 +10296,10 @@ suite zoo_exclude_write_tests = [] {
       zoo_exhibit aquarium{
          .exhibit_name = "Ocean World",
          .habitat = {.name = "Saltwater Tank", .climate = "marine", .area_sqm = 10000.0, .capacity = 100},
-         .animals = {{.name = "Nemo", .species = "Clownfish", .age = 2, .weight_kg = 0.05, .endangered = false},
-                     {.name = "Dory", .species = "Blue Tang", .age = 3, .weight_kg = 0.3, .endangered = false},
-                     {.name = "Bruce", .species = "Great White Shark", .age = 15, .weight_kg = 1100.0, .endangered = true}},
+         .animals =
+            {{.name = "Nemo", .species = "Clownfish", .age = 2, .weight_kg = 0.05, .endangered = false},
+             {.name = "Dory", .species = "Blue Tang", .age = 3, .weight_kg = 0.3, .endangered = false},
+             {.name = "Bruce", .species = "Great White Shark", .age = 15, .weight_kg = 1100.0, .endangered = true}},
          .primary_keeper = {.name = "Marine Biologist",
                             .employee_id = "MB-100",
                             .years_experience = 20,
@@ -10347,11 +10326,7 @@ suite zoo_exclude_write_tests = [] {
 
    "zoo - empty exclusion serializes entire zoo"_test = [] {
       zoo_animal giraffe{
-         .name = "Geoffrey",
-         .species = "Giraffa camelopardalis",
-         .age = 12,
-         .weight_kg = 1200.0,
-         .endangered = true};
+         .name = "Geoffrey", .species = "Giraffa camelopardalis", .age = 12, .weight_kg = 1200.0, .endangered = true};
       std::string s{};
       std::vector<std::string> exclude = {};
 
@@ -10363,11 +10338,7 @@ suite zoo_exclude_write_tests = [] {
    };
 
    "zoo - return string overload with zoo data"_test = [] {
-      zoo_habitat arctic{
-         .name = "Arctic Tundra",
-         .climate = "freezing",
-         .area_sqm = 3000.0,
-         .capacity = 15};
+      zoo_habitat arctic{.name = "Arctic Tundra", .climate = "freezing", .area_sqm = 3000.0, .capacity = 15};
       std::vector<std::string> exclude = {"capacity", "area_sqm"};
 
       auto result = glz::write_json_exclude(arctic, exclude);
@@ -10376,12 +10347,11 @@ suite zoo_exclude_write_tests = [] {
    };
 
    "zoo - raw buffer with nested zoo object"_test = [] {
-      zoo_keeper night_guard{
-         .name = "Larry Daley",
-         .employee_id = "NG-001",
-         .years_experience = 5,
-         .phone = "555-NIGHT",
-         .home_address = "Museum Way"};
+      zoo_keeper night_guard{.name = "Larry Daley",
+                             .employee_id = "NG-001",
+                             .years_experience = 5,
+                             .phone = "555-NIGHT",
+                             .home_address = "Museum Way"};
       char buf[256]{};
       std::vector<std::string> exclude = {"phone", "home_address"};
 
