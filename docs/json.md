@@ -261,12 +261,16 @@ struct glz::meta<Status> {
     using enum Status;
     static constexpr auto value = glz::enumerate(
         Active,
-        Inactive, 
+        Inactive,
         Pending
     );
 };
 // Now serializes as: "Active", "Inactive", "Pending"
 ```
+
+> [!TIP]
+>
+> For automatic enum-to-string serialization without writing metadata, consider using [simple_enum](https://github.com/arturbac/simple_enum), which provides Glaze integration.
 
 ### Variants
 

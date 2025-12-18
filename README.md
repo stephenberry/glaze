@@ -817,6 +817,10 @@ glz::write_json(color, buffer);
 expect(buffer == "\"Red\"");
 ```
 
+> [!TIP]
+>
+> For automatic enum-to-string serialization without writing metadata, consider using [simple_enum](https://github.com/arturbac/simple_enum), which provides Glaze integration.
+
 # JSON With Comments (JSONC)
 
 Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
