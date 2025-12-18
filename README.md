@@ -4,12 +4,12 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 Glaze also supports:
 
 - [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding)
-- [CBOR](./docs/cbor.md) (Concise Binary Object Representation)
-- [CSV](./docs/csv.md) (Comma Separated Value)
-- [MessagePack](./docs/msgpack.md)
-- [Stencil/Mustache](./docs/stencil-mustache.md) (string interpolation)
-- [TOML](./docs/toml.md) (Tom's Obvious, Minimal Language)
-- [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
+- [CBOR](https://stephenberry.github.io/glaze/cbor/) (Concise Binary Object Representation)
+- [CSV](https://stephenberry.github.io/glaze/csv/) (Comma Separated Value)
+- [MessagePack](https://stephenberry.github.io/glaze/msgpack/)
+- [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation)
+- [TOML](https://stephenberry.github.io/glaze/toml/) (Tom's Obvious, Minimal Language)
+- [EETF](https://stephenberry.github.io/glaze/EETF/erlang-external-term-format/) (Erlang External Term Format) [optionally included]
 - [And Many More Features](https://stephenberry.github.io/glaze/)
 
 > [!NOTE]
@@ -34,16 +34,16 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 - Header only
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
-- Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
+- Powerful wrappers to modify read/write behavior ([Wrappers](https://stephenberry.github.io/glaze/wrappers/))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
-- [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
-- Direct memory access through [JSON pointer syntax](./docs/json-pointer-syntax.md)
-- [JMESPath](./docs/JMESPath.md) querying
+- [Handle unknown keys](https://stephenberry.github.io/glaze/unknown-keys/) in a fast and flexible manner
+- Direct memory access through [JSON pointer syntax](https://stephenberry.github.io/glaze/json-pointer-syntax/)
+- [JMESPath](https://stephenberry.github.io/glaze/JMESPath/) querying
 - No exceptions (compiles with `-fno-exceptions`)
-  - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
+  - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](https://stephenberry.github.io/glaze/exceptions/)
 - No runtime type information necessary (compiles with `-fno-rtti`)
-- [JSON Schema generation](./docs/json-schema.md)
-- [Partial Read](./docs/partial-read.md) and [Partial Write](./docs/partial-write.md) support
+- [JSON Schema generation](https://stephenberry.github.io/glaze/json-schema/)
+- [Partial Read](https://stephenberry.github.io/glaze/partial-read/) and [Partial Write](https://stephenberry.github.io/glaze/partial-write/) support
 - [Much more!](#more-features)
 
 ## Performance
@@ -242,7 +242,7 @@ import libs = libglaze%lib{glaze}
 
 ---
 
-## See [FAQ](./docs/FAQ.md) for Frequently Asked Questions
+## See [FAQ](https://stephenberry.github.io/glaze/FAQ/) for Frequently Asked Questions
 
 # Explicit Metadata
 
@@ -317,7 +317,7 @@ struct glz::meta<my_struct> {
 > Names are required for:
 >
 > - static constexpr member variables
-> - [Wrappers](./docs/wrappers.md)
+> - [Wrappers](https://stephenberry.github.io/glaze/wrappers/)
 > - Lambda functions
 
 ### Extending pure reflection with `modify`
@@ -763,7 +763,7 @@ Object types logically convert to JSON object values, such as maps. Like JSON, G
 
 - `std::variant`
 
-See [Variant Handling](./docs/variant-handling.md) for more information.
+See [Variant Handling](https://stephenberry.github.io/glaze/variant-handling/) for more information.
 
 ## Nullable Types
 
@@ -937,7 +937,7 @@ glz::write_json(merged, s); // will write out a single, merged object
 
 ## Generic JSON
 
-See [Generic JSON](./docs/generic-json.md) for `glz::generic`.
+See [Generic JSON](https://stephenberry.github.io/glaze/generic-json/) for `glz::generic`.
 
 ```c++
 glz::generic json{};
@@ -971,7 +971,7 @@ For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will tu
 
 > [!IMPORTANT]
 >
-> See [Options](./docs/options.md) for a **comprehensive reference table** of all compile time options, including inheritable options that can be added to custom option structs.
+> See [Options](https://stephenberry.github.io/glaze/options/) for a **comprehensive reference table** of all compile time options, including inheritable options that can be added to custom option structs.
 
 ### Common Compile Time Options
 
@@ -1000,7 +1000,7 @@ constexpr my_opts opts{};
 auto ec = glz::read<opts>(obj, buffer);
 ```
 
-> See [Options](./docs/options.md) for the complete list with detailed descriptions, and [Wrappers](./docs/wrappers.md) for per-field options.
+> See [Options](https://stephenberry.github.io/glaze/options/) for the complete list with detailed descriptions, and [Wrappers](https://stephenberry.github.io/glaze/wrappers/) for per-field options.
 
 ## JSON Conformance
 
@@ -1118,41 +1118,41 @@ auto ec = glz::read_ndjson(x, s);
 
 # More Features
 
-### [Data Recorder](./docs/recorder.md)
+### [Data Recorder](https://stephenberry.github.io/glaze/recorder/)
 
-### [Command Line Interface Menu](./docs/cli-menu.md)
+### [Command Line Interface Menu](https://stephenberry.github.io/glaze/cli-menu/)
 
-### [JMESPath](./docs/JMESPath.md)
+### [JMESPath](https://stephenberry.github.io/glaze/JMESPath/)
 
 - Querying JSON
 
-### [JSON Include System](./docs/json-include.md)
+### [JSON Include System](https://stephenberry.github.io/glaze/json-include/)
 
-### [JSON Pointer Syntax](./docs/json-pointer-syntax.md)
+### [JSON Pointer Syntax](https://stephenberry.github.io/glaze/json-pointer-syntax/)
 
-### [JSON-RPC 2.0](./docs/rpc/json-rpc.md)
+### [JSON-RPC 2.0](https://stephenberry.github.io/glaze/rpc/json-rpc/)
 
-### [JSON Schema](./docs/json-schema.md)
+### [JSON Schema](https://stephenberry.github.io/glaze/json-schema/)
 
-### [Shared Library API](./docs/glaze-interfaces.md)
+### [Shared Library API](https://stephenberry.github.io/glaze/glaze-interfaces/)
 
-### [Tagged Binary Messages](./docs/binary.md)
+### [Tagged Binary Messages](https://stephenberry.github.io/glaze/binary/)
 
-### [Thread Pool](./docs/thread-pool.md)
+### [Thread Pool](https://stephenberry.github.io/glaze/thread-pool/)
 
-### [Time Trace Profiling](./docs/time-trace.md)
+### [Time Trace Profiling](https://stephenberry.github.io/glaze/time-trace/)
 
 - Output performance profiles to JSON and visualize using [Perfetto](https://ui.perfetto.dev)
 
-### [Wrappers](./docs/wrappers.md)
+### [Wrappers](https://stephenberry.github.io/glaze/wrappers/)
 
 # Extensions
 
 See the `ext` directory for extensions.
 
 - [Eigen](https://gitlab.com/libeigen/eigen)
-- [JSON-RPC 2.0](./docs/rpc/json-rpc.md)
-- [Command Line Interface Menu (cli_menu)](./docs/cli-menu.md)
+- [JSON-RPC 2.0](https://stephenberry.github.io/glaze/rpc/json-rpc/)
+- [Command Line Interface Menu (cli_menu)](https://stephenberry.github.io/glaze/cli-menu/)
 
 # License
 
