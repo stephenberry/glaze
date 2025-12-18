@@ -5471,7 +5471,8 @@ suite get_sv = [] {
 
    // Various JSON value types
    "runtime json_ptr value types"_test = [] {
-      std::string buffer = R"({"str":"hello","int":42,"float":3.14,"neg":-17,"sci":1.5e10,"bool_t":true,"bool_f":false,"null_v":null,"obj":{},"arr":[]})";
+      std::string buffer =
+         R"({"str":"hello","int":42,"float":3.14,"neg":-17,"sci":1.5e10,"bool_t":true,"bool_f":false,"null_v":null,"obj":{},"arr":[]})";
 
       // String
       auto v1 = glz::get_view_json("/str", buffer);

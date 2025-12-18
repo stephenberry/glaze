@@ -333,9 +333,8 @@ namespace glz
                }
 
                if (it >= end || *it != ':') {
-                  return result_t{
-                     unexpected(error_ctx{it >= end ? error_code::unexpected_end : error_code::expected_colon, "",
-                                          size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{
+                     it >= end ? error_code::unexpected_end : error_code::expected_colon, "", size_t(it - start)})};
                }
                ++it;
 
@@ -343,8 +342,7 @@ namespace glz
                   return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
                }
 
-               if (token.size() == key_content.size() &&
-                   std::equal(token.begin(), token.end(), key_content.begin())) {
+               if (token.size() == key_content.size() && std::equal(token.begin(), token.end(), key_content.begin())) {
                   found = true;
                   if (is_last) {
                      return result_t{parse_value<Opts>(ctx, it, end)};
