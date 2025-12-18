@@ -63,6 +63,11 @@ namespace glz
 
    template <class Buffer>
    concept non_const_buffer = !std::is_const_v<Buffer>;
+
+   template <class T>
+   concept byte_like = std::same_as<std::remove_cvref_t<T>, std::byte> ||
+                       std::same_as<std::remove_cvref_t<T>, unsigned char> ||
+                       std::same_as<std::remove_cvref_t<T>, std::uint8_t>;
 }
 
 namespace glz
@@ -305,6 +310,9 @@ namespace glz
    template <class Buffer>
    concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char)) &&
                            non_const_buffer<Buffer> && safe_resizable_buffer<Buffer>;
+
+   template <class Range>
+   concept contiguous_byte_range = contiguous<Range> && byte_like<range_value_t<Range>>;
 
    template <class T>
    constexpr bool const_value_v = std::is_const_v<std::remove_pointer_t<std::remove_reference_t<T>>>;

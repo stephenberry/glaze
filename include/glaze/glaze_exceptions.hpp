@@ -11,6 +11,7 @@
 #include "glaze/exceptions/cbor_exceptions.hpp"
 #include "glaze/exceptions/csv_exceptions.hpp"
 #include "glaze/exceptions/json_exceptions.hpp"
+#include "glaze/exceptions/msgpack_exceptions.hpp"
 
 namespace glz::ex
 {
