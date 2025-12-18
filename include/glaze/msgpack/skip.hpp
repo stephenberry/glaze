@@ -131,11 +131,8 @@ namespace glz
          }
          if (tag == msgpack::ext8 || tag == msgpack::ext16 || tag == msgpack::ext32) {
             size_t len{};
-            if (!msgpack::read_bin_length(ctx, tag - msgpack::ext8 + msgpack::bin8, it, end, len)) {
-               return;
-            }
-            // all ext headers include a type byte before payload
-            if (!msgpack::skip_bytes(ctx, it, end, 1)) {
+            int8_t type{};
+            if (!msgpack::read_ext_header(ctx, tag, it, end, len, type)) {
                return;
             }
             msgpack::skip_bytes(ctx, it, end, len);

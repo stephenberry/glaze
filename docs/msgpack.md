@@ -3,6 +3,18 @@
 Glaze ships with first–class MessagePack support. You can read and write payloads using
 the same reflection metadata that drives JSON, BEVE, and TOML so there is no extra boilerplate.
 
+## Specification Compliance
+
+Glaze implements the [MessagePack specification](https://github.com/msgpack/msgpack/blob/master/spec.md) (2.0), providing full support for:
+
+| Feature | Description |
+|---------|-------------|
+| Core types | nil, bool, integers, floats, strings, binary, arrays, maps |
+| Extension types | Generic `ext` support and the standard timestamp extension |
+| Timestamp extension | Type -1 per the MessagePack spec, all three formats (32, 64, 96 bit) |
+
+This ensures interoperability with MessagePack implementations in other languages (Python, Ruby, Go, JavaScript, etc.).
+
 ```cpp
 #include "glaze/msgpack.hpp"
 
@@ -56,6 +68,70 @@ if (encoded) {
    auto decoded = glz::read_msgpack<glz::msgpack::ext>(std::string_view{encoded.value()});
    // decoded->type == 5, decoded->data == {0xCA, 0xFE}
 }
+```
+
+## Timestamp Extension
+
+Glaze supports the MessagePack [timestamp extension](https://github.com/msgpack/msgpack/blob/master/spec.md#timestamp-extension-type) (type -1), which is the standard way to represent timestamps in MessagePack. This enables interoperability with other MessagePack implementations.
+
+### `glz::msgpack::timestamp`
+
+The `glz::msgpack::timestamp` struct stores seconds since the Unix epoch and optional nanoseconds:
+
+```cpp
+glz::msgpack::timestamp ts{1700000000, 123456789}; // seconds, nanoseconds
+std::string buffer;
+auto ec = glz::write_msgpack(ts, buffer);
+
+glz::msgpack::timestamp decoded;
+ec = glz::read_msgpack(decoded, buffer);
+// decoded.seconds == 1700000000
+// decoded.nanoseconds == 123456789
+```
+
+### Timestamp Formats
+
+Glaze automatically chooses the most compact format when writing:
+
+| Format | Condition | Wire Size |
+|--------|-----------|-----------|
+| Timestamp 32 | `nsec == 0` and `sec` fits in `uint32` | 6 bytes |
+| Timestamp 64 | `sec` fits in 34 bits (0 to 17179869183) | 10 bytes |
+| Timestamp 96 | All other cases (including negative seconds) | 15 bytes |
+
+When reading, all three formats are supported regardless of how the data was written.
+
+### `std::chrono::system_clock::time_point`
+
+Glaze provides automatic conversion between `std::chrono::system_clock::time_point` and the MessagePack timestamp extension:
+
+```cpp
+#include <chrono>
+
+// Write a time_point
+auto now = std::chrono::system_clock::now();
+std::string buffer;
+glz::write_msgpack(now, buffer);
+
+// Read back to time_point
+std::chrono::system_clock::time_point decoded;
+glz::read_msgpack(decoded, buffer);
+```
+
+This allows seamless serialization of C++ time points with nanosecond precision.
+
+### Timestamps in Structs
+
+Timestamps work naturally as struct members:
+
+```cpp
+struct event {
+   std::string name;
+   glz::msgpack::timestamp time;
+};
+
+event e{"user_login", {1700000000, 0}};
+auto encoded = glz::write_msgpack(e);
 ```
 
 ## Binary Buffers

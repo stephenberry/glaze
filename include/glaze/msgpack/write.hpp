@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <limits>
 #include <utility>
 
@@ -556,6 +557,69 @@ namespace glz
          else {
             ctx.error = error_code::exceeded_static_array_size;
          }
+      }
+   };
+
+   // MessagePack timestamp extension (type -1)
+   // Chooses the most compact format:
+   // - Timestamp 32: when nanoseconds == 0 and seconds fits in uint32
+   // - Timestamp 64: when seconds fits in 34 bits (0 to 17179869183)
+   // - Timestamp 96: for all other cases (including negative seconds)
+   template <>
+   struct to<MSGPACK, msgpack::timestamp>
+   {
+      template <auto Opts, class Value, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&&, B&& b, IX&& ix)
+      {
+         const auto type_byte = static_cast<uint8_t>(msgpack::timestamp_type);
+
+         // Timestamp 32: seconds only, fits in uint32, no nanoseconds
+         if (value.nanoseconds == 0 && value.seconds >= 0 &&
+             value.seconds <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
+            dump(std::byte{msgpack::fixext4}, b, ix);
+            dump(std::byte{type_byte}, b, ix);
+            msgpack::dump_uint32(static_cast<uint32_t>(value.seconds), b, ix);
+         }
+         // Timestamp 64: 30-bit nanoseconds + 34-bit seconds
+         else if (value.seconds >= 0 && value.seconds <= 0x3FFFFFFFF) {
+            dump(std::byte{msgpack::fixext8}, b, ix);
+            dump(std::byte{type_byte}, b, ix);
+            // Upper 30 bits: nanoseconds, lower 34 bits: seconds
+            const uint64_t val64 = (static_cast<uint64_t>(value.nanoseconds) << 34) |
+                                   static_cast<uint64_t>(value.seconds);
+            msgpack::dump_uint64(val64, b, ix);
+         }
+         // Timestamp 96: full range with signed seconds
+         else {
+            dump(std::byte{msgpack::ext8}, b, ix);
+            msgpack::dump_uint8(12, b, ix); // 12 bytes payload
+            dump(std::byte{type_byte}, b, ix);
+            msgpack::dump_uint32(value.nanoseconds, b, ix);
+            msgpack::dump_uint64(static_cast<uint64_t>(value.seconds), b, ix);
+         }
+      }
+   };
+
+   // std::chrono::system_clock::time_point support
+   // Converts to msgpack::timestamp for serialization
+   template <class T>
+      requires std::same_as<std::remove_cvref_t<T>, std::chrono::system_clock::time_point>
+   struct to<MSGPACK, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         using namespace std::chrono;
+         const auto epoch = value.time_since_epoch();
+         const auto secs = duration_cast<seconds>(epoch);
+         const auto nsecs = duration_cast<nanoseconds>(epoch - secs);
+
+         msgpack::timestamp ts;
+         ts.seconds = secs.count();
+         ts.nanoseconds = static_cast<uint32_t>(nsecs.count());
+
+         to<MSGPACK, msgpack::timestamp>::template op<Opts>(ts, std::forward<Ctx>(ctx), std::forward<B>(b),
+                                                            std::forward<IX>(ix));
       }
    };
 

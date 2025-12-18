@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <cstring>
 #include <ranges>
 #include <string>
@@ -38,7 +39,7 @@ namespace glz::msgpack::detail
       }
       if (is_negative_fixint(tag)) {
          is_signed = true;
-         signed_value = static_cast<int8_t>(static_cast<int8_t>(tag));
+         signed_value = static_cast<int8_t>(tag);
          return true;
       }
 
@@ -166,17 +167,6 @@ namespace glz::msgpack::detail
       }
    }
 
-   template <class T>
-   GLZ_ALWAYS_INLINE size_t find_key_index_runtime(const std::string_view key) noexcept
-   {
-      constexpr auto N = reflect<T>::size;
-      for (size_t i = 0; i < N; ++i) {
-         if (key == reflect<T>::keys[i]) {
-            return i;
-         }
-      }
-      return N;
-   }
 }
 
 namespace glz
@@ -595,6 +585,8 @@ namespace glz
                }
             }();
 
+            static constexpr auto HashInfo = hash_info<T>;
+
             for (size_t pair_i = 0; pair_i < len && ctx.error == error_code::none; ++pair_i) {
                if (it >= end) {
                   ctx.error = error_code::unexpected_end;
@@ -607,8 +599,10 @@ namespace glz
                   return;
                }
 
-               const auto index = msgpack::detail::find_key_index_runtime<T>(key);
-               if (index >= N) {
+               const auto index =
+                  decode_hash_with_size<MSGPACK, T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size(), key.size());
+
+               if (index >= N || reflect<T>::keys[index] != key) {
                   if constexpr (Opts.error_on_unknown_keys) {
                      ctx.error = error_code::unknown_key;
                      return;
@@ -619,22 +613,19 @@ namespace glz
                   }
                }
 
-               bool handled = false;
-               for_each<N>([&]<size_t I>() {
-                  if (handled || index != I) {
-                     return;
-                  }
-                  handled = true;
-                  if constexpr (msgpack::detail::should_skip_field<field_t<T, I>>()) {
-                     skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
-                  }
-                  else {
-                     parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
-                     if constexpr (Opts.partial_read) {
-                        fields[I] = true;
+               visit<N>(
+                  [&]<size_t I>() {
+                     if constexpr (msgpack::detail::should_skip_field<field_t<T, I>>()) {
+                        skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
                      }
-                  }
-               });
+                     else {
+                        parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                        if constexpr (Opts.partial_read) {
+                           fields[I] = true;
+                        }
+                     }
+                  },
+                  index);
 
                if constexpr (Opts.partial_read) {
                   if (ctx.error == error_code::partial_read_complete) {
@@ -828,6 +819,93 @@ namespace glz
             std::memcpy(value.data.data(), it, len);
             it += len;
          }
+      }
+   };
+
+   // MessagePack timestamp extension (type -1)
+   // Supports all three timestamp formats:
+   // - Timestamp 32 (fixext 4): seconds only
+   // - Timestamp 64 (fixext 8): 30-bit nanoseconds + 34-bit seconds
+   // - Timestamp 96 (ext 8 with 12 bytes): 32-bit nanoseconds + 64-bit signed seconds
+   template <>
+   struct from<MSGPACK, msgpack::timestamp>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         size_t len{};
+         int8_t type{};
+         if (!msgpack::read_ext_header(ctx, tag, it, end, len, type)) {
+            return;
+         }
+
+         if (type != msgpack::timestamp_type) {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         switch (len) {
+         case 4: {
+            // Timestamp 32: 4 bytes, seconds only (uint32)
+            uint32_t sec32{};
+            if (!msgpack::read_uint32(ctx, it, end, sec32)) {
+               return;
+            }
+            value.seconds = sec32;
+            value.nanoseconds = 0;
+            break;
+         }
+         case 8: {
+            // Timestamp 64: 8 bytes
+            // Upper 30 bits: nanoseconds, lower 34 bits: seconds
+            uint64_t val64{};
+            if (!msgpack::read_uint64(ctx, it, end, val64)) {
+               return;
+            }
+            value.nanoseconds = static_cast<uint32_t>(val64 >> 34);
+            value.seconds = static_cast<int64_t>(val64 & 0x3FFFFFFFF);
+            break;
+         }
+         case 12: {
+            // Timestamp 96: 12 bytes
+            // First 4 bytes: nanoseconds (uint32)
+            // Next 8 bytes: seconds (int64)
+            uint32_t nsec{};
+            if (!msgpack::read_uint32(ctx, it, end, nsec)) {
+               return;
+            }
+            uint64_t sec64{};
+            if (!msgpack::read_uint64(ctx, it, end, sec64)) {
+               return;
+            }
+            value.nanoseconds = nsec;
+            value.seconds = static_cast<int64_t>(sec64);
+            break;
+         }
+         default:
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+      }
+   };
+
+   // std::chrono::system_clock::time_point support
+   // Converts from msgpack::timestamp during deserialization
+   template <class T>
+      requires std::same_as<std::remove_cvref_t<T>, std::chrono::system_clock::time_point>
+   struct from<MSGPACK, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         msgpack::timestamp ts;
+         from<MSGPACK, msgpack::timestamp>::template op<Opts>(ts, tag, ctx, it, end);
+         if (ctx.error != error_code::none) {
+            return;
+         }
+
+         using namespace std::chrono;
+         value = system_clock::time_point{seconds{ts.seconds} + nanoseconds{ts.nanoseconds}};
       }
    };
 

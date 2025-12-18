@@ -1,10 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
-// Glaze Library
-// For the license information refer to glaze.hpp
 
 #include <array>
 #include <bitset>
+#include <chrono>
 #include <compare>
 #include <cstddef>
 #include <deque>
@@ -505,6 +504,94 @@ int main()
             },
          .mode = device_mode::active,
       };
+      expect_roundtrip_equal(original);
+   };
+
+   "timestamp32 roundtrip"_test = [] {
+      // Timestamp 32: seconds only, fits in uint32, no nanoseconds
+      glz::msgpack::timestamp ts{1234567890, 0};
+      expect_roundtrip_equal(ts);
+   };
+
+   "timestamp64 roundtrip"_test = [] {
+      // Timestamp 64: with nanoseconds
+      glz::msgpack::timestamp ts{1234567890, 123456789};
+      expect_roundtrip_equal(ts);
+   };
+
+   "timestamp96 roundtrip"_test = [] {
+      // Timestamp 96: negative seconds (before Unix epoch)
+      glz::msgpack::timestamp ts{-1000, 500000000};
+      expect_roundtrip_equal(ts);
+   };
+
+   "timestamp large seconds"_test = [] {
+      // Timestamp 64: seconds that fit in 34 bits but not 32 bits
+      glz::msgpack::timestamp ts{0x100000000LL, 0}; // 2^32
+      expect_roundtrip_equal(ts);
+   };
+
+   "timestamp max 34bit"_test = [] {
+      // Timestamp 64: maximum 34-bit seconds with nanoseconds
+      glz::msgpack::timestamp ts{0x3FFFFFFFFLL, 999999999};
+      expect_roundtrip_equal(ts);
+   };
+
+   "timestamp comparison"_test = [] {
+      glz::msgpack::timestamp ts1{100, 500};
+      glz::msgpack::timestamp ts2{100, 500};
+      glz::msgpack::timestamp ts3{100, 600};
+      glz::msgpack::timestamp ts4{101, 0};
+
+      expect(ts1 == ts2);
+      expect(ts1 != ts3);
+      expect(ts1 < ts3);
+      expect(ts3 < ts4);
+   };
+
+   "chrono time_point roundtrip"_test = [] {
+      using namespace std::chrono;
+      auto now = system_clock::now();
+      // Truncate to nanoseconds to avoid precision issues
+      auto epoch = now.time_since_epoch();
+      auto secs = duration_cast<seconds>(epoch);
+      auto nsecs = duration_cast<nanoseconds>(epoch - secs);
+      auto truncated = system_clock::time_point{secs + nsecs};
+
+      std::string buffer;
+      auto ec = glz::write_msgpack(truncated, buffer);
+      expect(!ec);
+
+      system_clock::time_point decoded;
+      ec = glz::read_msgpack(decoded, buffer);
+      expect(!ec);
+      expect(decoded == truncated);
+   };
+
+   "chrono epoch roundtrip"_test = [] {
+      using namespace std::chrono;
+      // Unix epoch
+      system_clock::time_point epoch{};
+
+      std::string buffer;
+      auto ec = glz::write_msgpack(epoch, buffer);
+      expect(!ec);
+
+      system_clock::time_point decoded;
+      ec = glz::read_msgpack(decoded, buffer);
+      expect(!ec);
+      expect(decoded == epoch);
+   };
+
+   "timestamp in struct"_test = [] {
+      struct event
+      {
+         std::string name;
+         glz::msgpack::timestamp time;
+         bool operator==(const event&) const = default;
+      };
+
+      event original{"test_event", {1700000000, 123000000}};
       expect_roundtrip_equal(original);
    };
 

@@ -361,6 +361,26 @@ namespace glz::msgpack
       bool operator==(const ext&) const = default;
    };
 
+   // MessagePack timestamp extension (type -1)
+   // Supports the three timestamp formats defined in the MessagePack spec:
+   // - Timestamp 32: fixext 4, seconds only (uint32)
+   // - Timestamp 64: fixext 8, nanoseconds (30-bit) + seconds (34-bit)
+   // - Timestamp 96: ext 8 with 12 bytes, nanoseconds (uint32) + seconds (int64)
+   inline constexpr int8_t timestamp_type = -1;
+
+   struct timestamp
+   {
+      int64_t seconds{};
+      uint32_t nanoseconds{};
+
+      timestamp() = default;
+
+      timestamp(int64_t sec, uint32_t nsec = 0) : seconds(sec), nanoseconds(nsec) {}
+
+      bool operator==(const timestamp&) const = default;
+      auto operator<=>(const timestamp&) const = default;
+   };
+
    template <class It>
    GLZ_ALWAYS_INLINE bool read_bin_length(is_context auto& ctx, uint8_t tag, It& it, const It& end,
                                           size_t& out) noexcept
