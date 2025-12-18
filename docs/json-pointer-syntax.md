@@ -71,6 +71,10 @@ expect(view == "5.5");
 
 `write_at` allows raw text to be written to a specific JSON value pointed at via JSON Pointer syntax.
 
+### Compile-time Path (Template Parameter)
+
+When the path is known at compile time, use the template parameter version:
+
 ```c++
 std::string buffer = R"( { "action": "DELETE", "data": { "x": 10, "y": 200 }})";
 auto ec = glz::write_at<"/action">(R"("GO!")", buffer);
@@ -85,6 +89,141 @@ auto ec = glz::write_at<"/sub/target">("42", buffer);
 expect(not ec);
 expect(buffer == R"({"str":"hello","number":3.14,"sub":{"target":42}})");
 ```
+
+### Runtime Path (String Parameter)
+
+When the path is determined at runtime, pass it as the first argument:
+
+```c++
+std::string buffer = R"({"action":"DELETE","data":{"x":10,"y":200}})";
+std::string path = "/action";
+auto ec = glz::write_at(path, R"("GO!")", buffer);
+expect(not ec);
+expect(buffer == R"({"action":"GO!","data":{"x":10,"y":200}})");
+```
+
+This is useful for dynamic path construction:
+
+```c++
+std::string buffer = R"({"users":[{"name":"Alice"},{"name":"Bob"}]})";
+
+// Update user at runtime-determined index
+size_t user_index = 1;
+std::string path = "/users/" + std::to_string(user_index) + "/name";
+glz::write_at(path, R"("Charlie")", buffer);
+// buffer is now: {"users":[{"name":"Alice"},{"name":"Charlie"}]}
+```
+
+## get_view_json
+
+`get_view_json` returns a `std::span` pointing to the raw JSON bytes of a value at a given path. This is useful for extracting JSON fragments without parsing.
+
+### Compile-time Path
+
+```c++
+std::string buffer = R"({"obj":{"x":5.5}})";
+auto view = glz::get_view_json<"/obj/x">(buffer);
+if (view) {
+   // view->data() points to "5.5" within buffer
+   std::string_view sv{view->data(), view->size()};
+   expect(sv == "5.5");
+}
+```
+
+### Runtime Path
+
+```c++
+std::string buffer = R"({"action":"DELETE","data":{"x":10,"y":200}})";
+
+auto view = glz::get_view_json("/action", buffer);
+if (view) {
+   std::string_view sv{view->data(), view->size()};
+   expect(sv == R"("DELETE")");
+}
+
+// Navigate nested paths
+auto view2 = glz::get_view_json("/data/x", buffer);
+if (view2) {
+   std::string_view sv{view2->data(), view2->size()};
+   expect(sv == "10");
+}
+
+// Get entire sub-object
+auto view3 = glz::get_view_json("/data", buffer);
+if (view3) {
+   std::string_view sv{view3->data(), view3->size()};
+   expect(sv == R"({"x":10,"y":200})");
+}
+```
+
+### Array Access
+
+```c++
+std::string buffer = R"({"items":[100,200,300,400,500]})";
+
+auto view = glz::get_view_json("/items/2", buffer);
+if (view) {
+   std::string_view sv{view->data(), view->size()};
+   expect(sv == "300");
+}
+```
+
+### Error Handling
+
+Both `get_view_json` and `write_at` return error information:
+
+```c++
+std::string buffer = R"({"a":1})";
+
+// Non-existent path
+auto view = glz::get_view_json("/nonexistent", buffer);
+if (!view) {
+   // view.error().ec == glz::error_code::key_not_found
+}
+
+// write_at also returns errors
+auto ec = glz::write_at("/nonexistent", "42", buffer);
+if (ec) {
+   // Path not found, buffer unchanged
+}
+```
+
+## RFC 6901 Escape Sequences
+
+JSON Pointer uses escape sequences for special characters in keys:
+- `~0` represents `~`
+- `~1` represents `/`
+
+Both compile-time and runtime APIs support these escapes:
+
+```c++
+std::string buffer = R"({"a/b":1,"c~d":2})";
+
+// Key contains "/" - use ~1
+auto ec1 = glz::write_at("/a~1b", "10", buffer);
+expect(not ec1);
+
+// Key contains "~" - use ~0
+auto ec2 = glz::write_at("/c~0d", "20", buffer);
+expect(not ec2);
+
+expect(buffer == R"({"a/b":10,"c~d":20})");
+```
+
+## Runtime vs Compile-time Comparison
+
+| Feature | Compile-time | Runtime |
+|---------|--------------|---------|
+| Path specification | Template parameter | Function argument |
+| Path validation | Compile-time | Runtime |
+| Use case | Fixed, known paths | Dynamic paths |
+| Syntax | `glz::write_at<"/path">(value, buffer)` | `glz::write_at("/path", value, buffer)` |
+
+Both versions:
+- Support the same JSON Pointer syntax
+- Handle RFC 6901 escape sequences
+- Work with nested objects and arrays
+- Return the same error types
 
 ## Using JSON Pointers with `glz::generic`
 
