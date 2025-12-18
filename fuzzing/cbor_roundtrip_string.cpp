@@ -2,8 +2,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <glaze/glaze.hpp>
 #include <glaze/cbor.hpp>
+#include <glaze/glaze.hpp>
 #include <vector>
 
 struct S

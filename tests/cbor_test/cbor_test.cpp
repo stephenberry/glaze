@@ -3,8 +3,6 @@
 
 #include "glaze/cbor.hpp"
 
-#include "glaze/base64/base64.hpp"
-
 #include <bit>
 #include <bitset>
 #include <complex>
@@ -14,6 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "glaze/base64/base64.hpp"
 #include "glaze/glaze_exceptions.hpp"
 #include "ut/ut.hpp"
 
