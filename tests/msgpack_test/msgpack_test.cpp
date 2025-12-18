@@ -556,7 +556,7 @@ int main()
       auto epoch = now.time_since_epoch();
       auto secs = duration_cast<seconds>(epoch);
       auto nsecs = duration_cast<nanoseconds>(epoch - secs);
-      auto truncated = system_clock::time_point{secs + nsecs};
+      auto truncated = system_clock::time_point{duration_cast<system_clock::duration>(secs + nsecs)};
 
       std::string buffer;
       auto ec = glz::write_msgpack(truncated, buffer);
