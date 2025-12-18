@@ -245,38 +245,6 @@ namespace glz
 
    namespace detail
    {
-      // Parse the next token from a JSON pointer at runtime
-      // Returns {token, remaining_pointer}
-      // Handles RFC 6901 escapes: ~0 -> ~, ~1 -> /
-      inline std::pair<std::string, sv> runtime_parse_json_ptr_token(sv json_ptr)
-      {
-         if (json_ptr.empty() || json_ptr[0] != '/') {
-            return {{}, json_ptr};
-         }
-
-         json_ptr.remove_prefix(1); // skip leading '/'
-
-         std::string token;
-         size_t i = 0;
-         for (; i < json_ptr.size() && json_ptr[i] != '/'; ++i) {
-            if (json_ptr[i] == '~' && i + 1 < json_ptr.size()) {
-               if (json_ptr[i + 1] == '0') {
-                  token.push_back('~');
-                  ++i;
-                  continue;
-               }
-               else if (json_ptr[i + 1] == '1') {
-                  token.push_back('/');
-                  ++i;
-                  continue;
-               }
-            }
-            token.push_back(json_ptr[i]);
-         }
-
-         return {std::move(token), json_ptr.substr(i)};
-      }
-
       // Check if a string could be a numeric array index
       inline bool runtime_maybe_numeric(const std::string& s)
       {
@@ -311,7 +279,7 @@ namespace glz
       sv remaining_ptr = json_ptr;
 
       while (!remaining_ptr.empty()) {
-         auto [token, next_remaining] = runtime_parse_json_ptr_token(remaining_ptr);
+         auto [token, next_remaining] = parse_json_ptr_token(remaining_ptr);
          if (token.empty() && remaining_ptr.size() > 0 && remaining_ptr[0] == '/') {
             // Empty token after '/' is valid (represents empty string key)
             // But if we got here with no token and remaining_ptr doesn't start with '/',
