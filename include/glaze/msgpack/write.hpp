@@ -293,6 +293,24 @@ namespace glz
       }
    };
 
+   template <is_bitset T>
+   struct to<MSGPACK, T>
+   {
+      template <auto Opts, class B, class IX>
+      static void op(auto&& value, is_context auto&&, B&& b, IX&& ix)
+      {
+         const auto num_bytes = (value.size() + 7) / 8;
+         std::vector<uint8_t> bytes(num_bytes);
+         for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
+            for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
+               bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
+            }
+         }
+         msgpack::detail::write_binary_header(bytes.size(), b, ix);
+         msgpack::detail::dump_raw_bytes(reinterpret_cast<const char*>(bytes.data()), bytes.size(), b, ix);
+      }
+   };
+
    template <class T>
       requires(std::is_enum_v<T> && !glaze_enum_t<T> && !custom_write<T>)
    struct to<MSGPACK, T>
@@ -550,7 +568,7 @@ namespace glz
       {
          static constexpr auto sorted = sort_json_ptrs(Partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
-         static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>();
+         static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
 
          msgpack::detail::write_map_header(N, b, ix);
 
@@ -786,6 +804,17 @@ namespace glz
    [[nodiscard]] glz::expected<size_t, error_ctx> write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+
+   template <auto& Partial, write_supported<MSGPACK> T>
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_msgpack(T&& value)
+   {
+      std::string buffer{};
+      const auto ec = write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), buffer);
+      if (bool(ec)) [[unlikely]] {
+         return glz::unexpected(ec);
+      }
+      return {buffer};
    }
 
    template <auto Opts = opts{}, write_supported<MSGPACK> T>

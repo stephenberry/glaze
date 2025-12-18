@@ -405,7 +405,7 @@ int main()
       telemetry_batch decoded{};
       decoded.status = 999;
 
-      static constexpr glz::opts partial_opts{.format = glz::MSGPACK, .partial_read = true, .error_on_unknown_keys = false};
+      static constexpr glz::opts partial_opts{.format = glz::MSGPACK, .error_on_unknown_keys = false, .partial_read = true};
       auto ec = glz::read<partial_opts>(decoded, std::string_view{buffer});
       expect(!ec) << glz::format_error(ec, buffer);
       expect(decoded.header == batch.header);
@@ -424,12 +424,12 @@ int main()
       };
 
       const auto path = std::filesystem::path{"msgpack_file_test.bin"};
-      std::vector<std::byte> buffer{};
+      std::string buffer{};
       auto ec_write = glz::write_file_msgpack(original, path.string(), buffer);
       expect(!ec_write) << glz::format_error(ec_write, std::string_view{});
 
       simple_record restored{};
-      std::vector<std::byte> read_buffer{};
+      std::string read_buffer{};
       auto ec_read = glz::read_file_msgpack(restored, path.string(), read_buffer);
       expect(!ec_read) << glz::format_error(ec_read, std::string_view{});
       expect(restored == original);

@@ -184,11 +184,33 @@ namespace glz
    template <>
    struct parse<MSGPACK>
    {
+      // 5-parameter version with tag - for when header has already been read
+      template <auto Opts, class T, class Tag, is_context Ctx, class It, class End>
+         requires(check_no_header(Opts))
+      GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         if constexpr (const_value_v<T>) {
+            if constexpr (check_error_on_const_read(Opts)) {
+               ctx.error = error_code::attempt_const_read;
+            }
+            else {
+               skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
+            }
+            return;
+         }
+
+         using V = std::remove_cvref_t<T>;
+         from<MSGPACK, V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx), it,
+                                             end);
+      }
+
+      // 4-parameter version without tag - reads header first
       template <auto Opts, class T, is_context Ctx, class It, class End>
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It& it, const End& end) noexcept
       {
          if constexpr (const_value_v<T>) {
-            if constexpr (Opts.error_on_const_read) {
+            if constexpr (check_error_on_const_read(Opts)) {
                ctx.error = error_code::attempt_const_read;
             }
             else {
@@ -215,8 +237,8 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
-         from<MSGPACK, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>), tag, ctx, it,
-                                             end);
+         from<MSGPACK, V>::template op<no_header_on<Opts>()>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                                             tag, ctx, it, end);
       }
    };
 
@@ -299,6 +321,32 @@ namespace glz
          }
          else {
             ctx.error = error_code::expected_true_or_false;
+         }
+      }
+   };
+
+   template <is_bitset T>
+   struct from<MSGPACK, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         size_t len{};
+         if (!msgpack::read_bin_length(ctx, tag, it, end, len)) {
+            return;
+         }
+
+         const auto num_bytes = (value.size() + 7) / 8;
+         if (len != num_bytes) {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         for (size_t byte_i{}, i{}; byte_i < num_bytes && it < end; ++byte_i, ++it) {
+            uint8_t byte = static_cast<uint8_t>(*it);
+            for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
+               value[i] = (byte >> bit_i) & uint8_t(1);
+            }
          }
       }
    };
@@ -658,7 +706,35 @@ namespace glz
       }
    };
 
-   template <writable_array_t T>
+   // for set-like containers (emplaceable but not emplace_backable)
+   template <class T>
+      requires(writable_array_t<T> && !emplace_backable<T> && emplaceable<T>)
+   struct from<MSGPACK, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         size_t len{};
+         if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
+            return;
+         }
+
+         value.clear();
+         for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            using V = range_value_t<std::decay_t<Value>>;
+            V v{};
+            parse<MSGPACK>::template op<Opts>(v, ctx, it, end);
+            if (ctx.error != error_code::none) {
+               return;
+            }
+            value.emplace(std::move(v));
+         }
+      }
+   };
+
+   // for vector-like containers (emplace_backable) and fixed-size arrays
+   template <class T>
+      requires(writable_array_t<T> && (emplace_backable<T> || !emplaceable<T>))
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -705,7 +781,7 @@ namespace glz
             return;
          }
 
-         if constexpr (resizable<std::decay_t<Value>>) {
+         if constexpr (emplace_backable<std::decay_t<Value>>) {
             value.clear();
             if constexpr (has_reserve<std::decay_t<Value>>) {
                value.reserve(len);
@@ -719,6 +795,7 @@ namespace glz
             }
          }
          else {
+            // Fixed-size array
             if (len > value.size()) {
                ctx.error = error_code::exceeded_static_array_size;
                return;
