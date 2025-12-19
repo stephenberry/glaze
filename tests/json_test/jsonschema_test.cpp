@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <glaze/core/feature_test.hpp>
 #include <glaze/json.hpp>
 #include <glaze/json/schema.hpp>
 #include <string>
@@ -554,6 +555,7 @@ suite auto_default_tests = [] {
       expect(std::get<int64_t>(props.at("small").defaultValue.value()) == -5);
    };
 
+#if GLZ_HAS_CONSTEXPR_STRING
    "mixed_defaults extracts primitive defaults even with non-trivial members"_test = [] {
       // mixed_defaults contains std::string and std::vector, but with C++20 transient constexpr allocation
       // we can still extract defaults for primitive members
@@ -580,6 +582,7 @@ suite auto_default_tests = [] {
       expect(props.contains("container"));
       expect(!props.at("container").defaultValue.has_value());
    };
+#endif
 
    "explicit json_schema default overrides struct default"_test = [] {
       std::string schema_str = glz::write_json_schema<explicit_override>().value_or("error");

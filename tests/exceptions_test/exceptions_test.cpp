@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/core/feature_test.hpp"
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/async.hpp"
 #include "glaze/thread/async_string.hpp"
@@ -50,6 +51,7 @@ suite starter = [] {
 })");
    };
 
+#if GLZ_HAS_CONSTEXPR_STRING
    "json_schema"_test = [] {
       const std::string schema = glz::ex::write_json_schema<my_struct>();
       expect(
@@ -66,6 +68,7 @@ suite starter = [] {
          R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<uint64_t,3>"},"d":{"$ref":"#/$defs/double","default":3.14},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
+#endif
 };
 
 suite basic_types = [] {

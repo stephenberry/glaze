@@ -4452,6 +4452,7 @@ suite json_performance = [] {
    };
 };
 
+#if GLZ_HAS_CONSTEXPR_STRING
 suite json_schema = [] {
    "json schema"_test = [] {
       Thing obj{};
@@ -4467,6 +4468,7 @@ suite json_schema = [] {
          << schema;
    };
 };
+#endif
 
 // custom type handling
 struct date
@@ -9584,6 +9586,7 @@ struct glz::json_schema<meta_schema_t>
 static_assert(glz::json_schema_t<meta_schema_t>);
 static_assert(glz::detail::count_members<glz::json_schema_type<meta_schema_t>> > 0);
 
+#if GLZ_HAS_CONSTEXPR_STRING
 suite meta_schema_tests = [] {
    "meta_schema"_test = [] {
       meta_schema_t obj;
@@ -9652,6 +9655,7 @@ suite meta_schema_tests = [] {
 })") << json_schema;
    };
 };
+#endif
 
 suite glz_text_tests = [] {
    "glz_text"_test = [] {
