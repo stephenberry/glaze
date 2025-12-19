@@ -2408,7 +2408,7 @@ namespace glz
    // Variant deduction bits - for each unique key, tracks which variant types contain it
    template <is_variant T>
    constexpr auto variant_deduction_bits = []() {
-      constexpr size_t K = variant_deduction_key_count<T>;
+      static constexpr size_t K = variant_deduction_key_count<T>;
       using bits_type = bit_array<std::variant_size_v<T>>;
       std::array<bits_type, K> bits{};
 

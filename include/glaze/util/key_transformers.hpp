@@ -7,6 +7,8 @@
 #include <string>
 #include <string_view>
 
+#include "glaze/core/feature_test.hpp"
+
 namespace glz
 {
    inline constexpr char ascii_toupper(char c) noexcept
@@ -245,7 +247,8 @@ namespace glz
    }
 
    // Struct wrappers for inheritance-based usage
-
+   // These require constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
+#if GLZ_HAS_CONSTEXPR_STRING
    struct camel_case
    {
       static constexpr std::string rename_key(const auto key) { return to_camel_case(key); }
@@ -285,4 +288,5 @@ namespace glz
    {
       static constexpr std::string rename_key(const auto key) { return to_upper_case(key); }
    };
+#endif
 }

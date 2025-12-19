@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "glaze/core/feature_test.hpp"
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
@@ -1285,6 +1286,8 @@ struct glz::meta<renamed_t>
 };
 
 // This example shows how we use dynamic memory at compile time for string transformations
+// Requires constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
+#if GLZ_HAS_CONSTEXPR_STRING
 struct suffixed_keys_t
 {
    std::string first{};
@@ -1296,6 +1299,7 @@ struct glz::meta<suffixed_keys_t>
 {
    static constexpr std::string rename_key(const auto key) { return std::string(key) + "_name"; }
 };
+#endif
 
 struct rename_with_modify
 {
@@ -1335,6 +1339,7 @@ suite rename_tests = [] {
       expect(obj.age == 29);
    };
 
+#if GLZ_HAS_CONSTEXPR_STRING
    "suffixed keys"_test = [] {
       suffixed_keys_t obj{};
       std::string buffer{};
@@ -1347,6 +1352,7 @@ suite rename_tests = [] {
       expect(obj.first == "Kira");
       expect(obj.last == "Song");
    };
+#endif
 
    "rename with modify"_test = [] {
       rename_with_modify obj{.first = 7, .second = 8};
