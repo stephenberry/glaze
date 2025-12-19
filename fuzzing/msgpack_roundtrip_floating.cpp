@@ -3,8 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <glaze/msgpack.hpp>
 #include <glaze/glaze.hpp>
+#include <glaze/msgpack.hpp>
 #include <vector>
 
 // must be outside test() to work in gcc<14

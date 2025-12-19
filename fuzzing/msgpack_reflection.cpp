@@ -1,8 +1,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <glaze/msgpack.hpp>
 #include <glaze/glaze.hpp>
+#include <glaze/msgpack.hpp>
 #include <vector>
 
 struct my_struct
