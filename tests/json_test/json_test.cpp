@@ -12533,9 +12533,8 @@ suite member_function_pointer_serialization = [] {
 #if defined(__GNUC__) && !defined(__clang__)
 #if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
       // Old ABI uses std::basic_string<char> without __cxx11 namespace
-      expect(
-         buffer ==
-         R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})")
+      expect(buffer ==
+             R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})")
          << buffer;
 #else
       expect(
