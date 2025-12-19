@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 
+#include "glaze/core/feature_test.hpp"
 #include "glaze/util/string_literal.hpp"
 
 // JSON does not require escaped unicode keys to match with unescaped UTF-8
@@ -13,6 +14,9 @@
 // the escaped unicode value.
 // glz::escape_unicode<"😀"> will generate a compile time escaped unicode version
 // of your key.
+
+// These features require constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
+#if GLZ_HAS_CONSTEXPR_STRING
 
 namespace glz::detail
 {
@@ -255,3 +259,5 @@ namespace glz
       return {arr.data(), arr.size() - 1};
    }();
 }
+
+#endif // GLZ_HAS_CONSTEXPR_STRING
