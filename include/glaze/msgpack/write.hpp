@@ -826,13 +826,13 @@ namespace glz
    };
 
    template <write_supported<MSGPACK> T, output_buffer Buffer>
-   [[nodiscard]] result write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_supported<MSGPACK> T, raw_buffer Buffer>
-   [[nodiscard]] result write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -844,13 +844,13 @@ namespace glz
    }
 
    template <auto& Partial, write_supported<MSGPACK> T, output_buffer Buffer>
-   [[nodiscard]] result write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <auto& Partial, write_supported<MSGPACK> T, raw_buffer Buffer>
-   [[nodiscard]] result write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }

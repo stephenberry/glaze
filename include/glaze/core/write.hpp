@@ -14,7 +14,7 @@ namespace glz
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <auto Opts, class T, output_buffer Buffer>
       requires write_supported<T, Opts.format>
-   [[nodiscard]] result write(T&& value, Buffer& buffer, is_context auto&& ctx)
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
 
@@ -37,7 +37,7 @@ namespace glz
 
    template <auto& Partial, auto Opts, class T, output_buffer Buffer>
       requires write_supported<T, Opts.format>
-   [[nodiscard]] result write(T&& value, Buffer& buffer)
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
 
@@ -61,7 +61,7 @@ namespace glz
 
    template <auto& Partial, auto Opts, class T, raw_buffer Buffer>
       requires write_supported<T, Opts.format>
-   [[nodiscard]] result write(T&& value, Buffer& buffer)
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       context ctx{};
       size_t ix = 0;
@@ -74,7 +74,7 @@ namespace glz
 
    template <auto Opts, class T, output_buffer Buffer>
       requires write_supported<T, Opts.format>
-   [[nodiscard]] result write(T&& value, Buffer& buffer)
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       context ctx{};
       return write<Opts>(std::forward<T>(value), buffer, ctx);
@@ -82,7 +82,7 @@ namespace glz
 
    template <auto Opts, class T>
       requires write_supported<T, Opts.format>
-   [[nodiscard]] glz::expected<std::string, result> write(T&& value)
+   [[nodiscard]] glz::expected<std::string, error_ctx> write(T&& value)
    {
       std::string buffer{};
       context ctx{};
@@ -95,7 +95,7 @@ namespace glz
 
    template <auto Opts, class T, raw_buffer Buffer>
       requires write_supported<T, Opts.format>
-   [[nodiscard]] result write(T&& value, Buffer&& buffer, is_context auto&& ctx)
+   [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
       size_t ix = 0;
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
@@ -107,7 +107,7 @@ namespace glz
 
    template <auto Opts, class T, raw_buffer Buffer>
       requires write_supported<T, Opts.format>
-   [[nodiscard]] result write(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer)
    {
       context ctx{};
       return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);

@@ -1159,7 +1159,7 @@ namespace glz
    };
 
    template <write_supported<BEVE> T, class Buffer>
-   [[nodiscard]] result write_beve(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_beve(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -1171,7 +1171,7 @@ namespace glz
    }
 
    template <auto& Partial, write_supported<BEVE> T, class Buffer>
-   [[nodiscard]] result write_beve(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_beve(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -1200,7 +1200,7 @@ namespace glz
    }
 
    template <write_supported<BEVE> T, class Buffer>
-   [[nodiscard]] result write_beve_untagged(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_beve_untagged(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                     std::forward<Buffer>(buffer));
@@ -1232,7 +1232,7 @@ namespace glz
    // Returns the number of bytes written via result.count
    template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
       requires output_buffer<Buffer>
-   [[nodiscard]] result write_beve_append(T&& value, Buffer& buffer)
+   [[nodiscard]] error_ctx write_beve_append(T&& value, Buffer& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
       const size_t start_ix = buffer.size();
@@ -1259,7 +1259,7 @@ namespace glz
    // Useful for streaming multiple values
    template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
       requires output_buffer<Buffer>
-   [[nodiscard]] result write_beve_append_with_delimiter(T&& value, Buffer& buffer)
+   [[nodiscard]] error_ctx write_beve_append_with_delimiter(T&& value, Buffer& buffer)
    {
       write_beve_delimiter(buffer);
       auto result = write_beve_append<Opts>(std::forward<T>(value), buffer);
@@ -1272,7 +1272,7 @@ namespace glz
    // Write multiple BEVE values to a buffer with delimiters between them
    template <auto Opts = opts{}, class Container, class Buffer>
       requires output_buffer<Buffer> && readable_array_t<Container>
-   [[nodiscard]] result write_beve_delimited(const Container& values, Buffer& buffer)
+   [[nodiscard]] error_ctx write_beve_delimited(const Container& values, Buffer& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
       context ctx{};

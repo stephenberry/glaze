@@ -2430,13 +2430,13 @@ namespace glz
    };
 
    template <write_supported<JSON> T, output_buffer Buffer>
-   [[nodiscard]] result write_json(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer)
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_supported<JSON> T, raw_buffer Buffer>
-   [[nodiscard]] result write_json(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer)
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -2448,13 +2448,13 @@ namespace glz
    }
 
    template <auto& Partial, write_supported<JSON> T, output_buffer Buffer>
-   [[nodiscard]] result write_json(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <auto& Partial, write_supported<JSON> T, raw_buffer Buffer>
-   [[nodiscard]] result write_json(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -2466,7 +2466,7 @@ namespace glz
 
    template <auto Opts = opts{}, class T, class Keys, output_buffer Buffer>
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
-   [[nodiscard]] result write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
 
@@ -2489,7 +2489,7 @@ namespace glz
 
    template <auto Opts = opts{}, class T, class Keys, raw_buffer Buffer>
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
-   [[nodiscard]] result write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
       context ctx{};
       size_t ix = 0;
@@ -2520,7 +2520,7 @@ namespace glz
 
    template <auto Opts = opts{}, class T, class Keys, output_buffer Buffer>
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
-   [[nodiscard]] result write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
 
@@ -2543,7 +2543,7 @@ namespace glz
 
    template <auto Opts = opts{}, class T, class Keys, raw_buffer Buffer>
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
-   [[nodiscard]] result write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
       context ctx{};
       size_t ix = 0;
@@ -2568,7 +2568,7 @@ namespace glz
    }
 
    template <write_supported<JSON> T, class Buffer>
-   [[nodiscard]] result write_jsonc(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_jsonc(T&& value, Buffer&& buffer)
    {
       return write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
