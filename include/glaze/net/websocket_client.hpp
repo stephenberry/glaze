@@ -96,7 +96,10 @@ namespace glz
          asio::ip::tcp::socket& get_tcp_socket_ref()
          {
 #ifdef GLZ_ENABLE_SSL
-            if (ssl_socket_) return ssl_socket_->lowest_layer();
+            // Use next_layer() instead of lowest_layer() to get the correct type.
+            // In ASIO 1.32+, lowest_layer() returns basic_socket<tcp> which differs
+            // from basic_stream_socket<tcp> (the actual socket type).
+            if (ssl_socket_) return ssl_socket_->next_layer();
 #endif
             return *tcp_socket_;
          }
@@ -104,7 +107,7 @@ namespace glz
          const asio::ip::tcp::socket& get_tcp_socket_ref() const
          {
 #ifdef GLZ_ENABLE_SSL
-            if (ssl_socket_) return ssl_socket_->lowest_layer();
+            if (ssl_socket_) return ssl_socket_->next_layer();
 #endif
             return *tcp_socket_;
          }

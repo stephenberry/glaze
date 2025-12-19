@@ -42,3 +42,26 @@ add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+# WSS (WebSocket Secure) Test - requires OpenSSL
+find_package(OpenSSL QUIET)
+if(OpenSSL_FOUND)
+    project(wss_test)
+
+    add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+
+    target_link_libraries(${PROJECT_NAME}
+        PRIVATE
+        glz_test_exceptions
+        OpenSSL::SSL
+        OpenSSL::Crypto
+    )
+
+    target_compile_definitions(${PROJECT_NAME} PRIVATE GLZ_ENABLE_SSL)
+
+    add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+    message(STATUS "WSS test will be built with OpenSSL support")
+else()
+    message(STATUS "WSS test skipped - OpenSSL not found")
+endif()

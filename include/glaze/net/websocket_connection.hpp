@@ -35,8 +35,52 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/util/parse.hpp"
 
+#ifdef GLZ_ENABLE_SSL
+#include <asio/ssl.hpp>
+#endif
+
 namespace glz
 {
+   // Helper type traits and functions for SSL socket compatibility.
+   // ASIO 1.32+ ssl::stream<> doesn't have cancel/close/is_open methods directly.
+   namespace detail
+   {
+      template <typename T>
+      struct is_ssl_stream : std::false_type
+      {};
+
+#ifdef GLZ_ENABLE_SSL
+      template <typename T>
+      struct is_ssl_stream<asio::ssl::stream<T>> : std::true_type
+      {};
+#endif
+
+      template <typename T>
+      inline constexpr bool is_ssl_stream_v = is_ssl_stream<T>::value;
+
+      template <typename SocketType>
+      auto& get_lowest_layer(SocketType& socket)
+      {
+         if constexpr (is_ssl_stream_v<SocketType>) {
+            return socket.lowest_layer();
+         }
+         else {
+            return socket;
+         }
+      }
+
+      template <typename SocketType>
+      const auto& get_lowest_layer(const SocketType& socket)
+      {
+         if constexpr (is_ssl_stream_v<SocketType>) {
+            return socket.lowest_layer();
+         }
+         else {
+            return socket;
+         }
+      }
+   }
+
    // WebSocket opcode constants
    enum class ws_opcode : uint8_t { continuation = 0x0, text = 0x1, binary = 0x2, close = 0x8, ping = 0x9, pong = 0xa };
 
@@ -416,13 +460,7 @@ namespace glz
       {
          // Try to get remote endpoint, but don't fail if it's not available yet
          try {
-            if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-               remote_endpoint_ = socket_->remote_endpoint();
-            }
-            else {
-               // For SSL sockets, get the endpoint from the lowest layer
-               remote_endpoint_ = socket_->lowest_layer().remote_endpoint();
-            }
+            remote_endpoint_ = detail::get_lowest_layer(*socket_).remote_endpoint();
          }
          catch (...) {
             // Endpoint not available yet (e.g., for client mode before connection)
@@ -506,8 +544,8 @@ namespace glz
             std::lock_guard<std::mutex> lock(socket_op_mutex_);
             if (socket_) {
                asio::error_code ec;
-               socket_->cancel(ec); // Cancel pending operations first
-               socket_->close(ec);
+               detail::get_lowest_layer(*socket_).cancel(ec);
+               detail::get_lowest_layer(*socket_).close(ec);
                socket_.reset();
             }
          }
@@ -598,7 +636,7 @@ namespace glz
          // Capture socket locally to prevent race condition
          auto socket = socket_;
          // Check both pointer validity AND that socket is still open
-         if (!socket || !socket->is_open()) {
+         if (!socket || !detail::get_lowest_layer(*socket).is_open()) {
             return;
          }
 
@@ -608,8 +646,10 @@ namespace glz
                            [self, req, response_buffer, socket](std::error_code ec, std::size_t) {
                               if (ec) {
                                  self->is_closing_ = true;
-                                 if (auto srv = self->server_.lock()) {
-                                    srv->notify_error(self, ec);
+                                 if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+                                    if (auto srv = self->server_.lock()) {
+                                       srv->notify_error(self, ec);
+                                    }
                                  }
                                  self->do_close();
                                  return;
@@ -618,9 +658,11 @@ namespace glz
                               self->handshake_complete_ = true;
 
                               // Register with server for clean shutdown tracking
-                              if (auto srv = self->server_.lock()) {
-                                 srv->register_connection(self);
-                                 srv->notify_open(self, req);
+                              if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+                                 if (auto srv = self->server_.lock()) {
+                                    srv->register_connection(self);
+                                    srv->notify_open(self, req);
+                                 }
                               }
 
                               // Start reading frames
@@ -635,8 +677,13 @@ namespace glz
             // Only call error handlers if not already closed (prevents calling handlers
             // after force_close() when user's captured references may be invalid)
             if (!closed_.load()) {
-               if (auto srv = server_.lock()) {
-                  srv->notify_error(this->shared_from_this(), ec);
+               if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+                  if (auto srv = server_.lock()) {
+                     srv->notify_error(this->shared_from_this(), ec);
+                  }
+                  else if (client_error_handler_) {
+                     client_error_handler_(ec);
+                  }
                }
                else if (client_error_handler_) {
                   client_error_handler_(ec);
@@ -774,8 +821,13 @@ namespace glz
                // Only call message handlers if not closed (prevents calling handlers
                // after force_close() when user's captured references may be invalid)
                if (!closed_.load()) {
-                  if (auto srv = server_.lock()) {
-                     srv->notify_message(this->shared_from_this(), message_view, opcode);
+                  if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+                     if (auto srv = server_.lock()) {
+                        srv->notify_message(this->shared_from_this(), message_view, opcode);
+                     }
+                     else if (client_message_handler_) {
+                        client_message_handler_(message_view, opcode);
+                     }
                   }
                   else if (client_message_handler_) {
                      client_message_handler_(message_view, opcode);
@@ -819,8 +871,13 @@ namespace glz
                // Only call message handlers if not closed (prevents calling handlers
                // after force_close() when user's captured references may be invalid)
                if (!closed_.load()) {
-                  if (auto srv = server_.lock()) {
-                     srv->notify_message(this->shared_from_this(), message_view, current_opcode_);
+                  if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+                     if (auto srv = server_.lock()) {
+                        srv->notify_message(this->shared_from_this(), message_view, current_opcode_);
+                     }
+                     else if (client_message_handler_) {
+                        client_message_handler_(message_view, current_opcode_);
+                     }
                   }
                   else if (client_message_handler_) {
                      client_message_handler_(message_view, current_opcode_);
@@ -966,7 +1023,7 @@ namespace glz
          // Check both pointer validity AND that socket is still open.
          // The socket could be closed (is_open() == false) while the shared_ptr is still valid.
          // Calling async_write on a closed socket crashes in ASIO's reactor.
-         if (!socket || !socket->is_open()) {
+         if (!socket || !detail::get_lowest_layer(*socket).is_open()) {
             // Socket was closed externally - ensure close callback fires if pending
             bool had_close_pending = false;
             {
@@ -1000,8 +1057,13 @@ namespace glz
                                  // Only call error handlers if not already closed (prevents calling handlers
                                  // after force_close() when user's captured references may be invalid)
                                  if (!self->closed_.load()) {
-                                    if (auto srv = self->server_.lock()) {
-                                       srv->notify_error(self, ec);
+                                    if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+                                       if (auto srv = self->server_.lock()) {
+                                          srv->notify_error(self, ec);
+                                       }
+                                       else if (self->client_error_handler_) {
+                                          self->client_error_handler_(ec);
+                                       }
                                     }
                                     else if (self->client_error_handler_) {
                                        self->client_error_handler_(ec);
@@ -1029,7 +1091,7 @@ namespace glz
          auto socket = socket_;
          if (socket) {
             asio::error_code ec;
-            socket->shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+            detail::get_lowest_layer(*socket).shutdown(asio::ip::tcp::socket::shutdown_send, ec);
             // Ignore shutdown errors - socket may already be closed
          }
          do_close();
@@ -1135,8 +1197,13 @@ namespace glz
          // Synchronize with force_close() to prevent calling handlers with dangling references
          {
             std::lock_guard<std::mutex> lock(close_handler_mutex_);
-            if (auto srv = server_.lock()) {
-               srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
+            if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+               if (auto srv = server_.lock()) {
+                  srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
+               }
+               else if (client_close_handler_) {
+                  client_close_handler_(close_code_, close_reason_);
+               }
             }
             else if (client_close_handler_) {
                client_close_handler_(close_code_, close_reason_);
@@ -1149,8 +1216,8 @@ namespace glz
             std::lock_guard<std::mutex> lock(socket_op_mutex_);
             if (socket_) {
                asio::error_code ec;
-               socket_->cancel(ec); // Cancel pending operations first
-               socket_->close(ec);
+               detail::get_lowest_layer(*socket_).cancel(ec);
+               detail::get_lowest_layer(*socket_).close(ec);
                socket_.reset(); // Reset pointer so subsequent checks know socket is closed
             }
          }
@@ -1232,7 +1299,7 @@ namespace glz
 
          // Re-check under lock since socket may have been closed while waiting for mutex
          auto socket = socket_;
-         if (!socket || !socket->is_open()) {
+         if (!socket || !detail::get_lowest_layer(*socket).is_open()) {
             return;
          }
 
