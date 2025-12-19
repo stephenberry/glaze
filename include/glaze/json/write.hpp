@@ -2430,13 +2430,13 @@ namespace glz
    };
 
    template <write_supported<JSON> T, output_buffer Buffer>
-   [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_json(T&& value, Buffer&& buffer)
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_supported<JSON> T, raw_buffer Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_json(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_json(T&& value, Buffer&& buffer)
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -2448,13 +2448,13 @@ namespace glz
    }
 
    template <auto& Partial, write_supported<JSON> T, output_buffer Buffer>
-   [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_json(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <auto& Partial, write_supported<JSON> T, raw_buffer Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_json(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_json(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -2466,9 +2466,11 @@ namespace glz
 
    template <auto Opts = opts{}, class T, class Keys, output_buffer Buffer>
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
-   [[nodiscard]] error_ctx write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
+   [[nodiscard]] result write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
-      if constexpr (resizable<Buffer>) {
+      using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
+
+      if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
             buffer.resize(2 * write_padding_bytes);
          }
@@ -2477,24 +2479,26 @@ namespace glz
       size_t ix = 0;
       to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
                                                                                 buffer, ix);
-      if constexpr (resizable<Buffer>) {
-         buffer.resize(ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return {ix, ctx.error, ctx.custom_error_message};
       }
-      return {ctx.error, ctx.custom_error_message};
+
+      traits::finalize(buffer, ix);
+      return {ix, error_code::none, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}, class T, class Keys, raw_buffer Buffer>
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
+   [[nodiscard]] result write_json_partial(T&& value, const Keys& keys, Buffer&& buffer)
    {
       context ctx{};
       size_t ix = 0;
       to_runtime_partial<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(keys, std::forward<T>(value), ctx,
                                                                                 buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
-         return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message});
+         return {ix, ctx.error, ctx.custom_error_message};
       }
-      return {ix};
+      return {ix, error_code::none, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}, class T, class Keys>
@@ -2502,9 +2506,9 @@ namespace glz
    [[nodiscard]] glz::expected<std::string, error_ctx> write_json_partial(T&& value, const Keys& keys)
    {
       std::string buffer{};
-      const auto ec = write_json_partial<Opts>(std::forward<T>(value), keys, buffer);
-      if (bool(ec)) [[unlikely]] {
-         return glz::unexpected(ec);
+      const auto result = write_json_partial<Opts>(std::forward<T>(value), keys, buffer);
+      if (result) [[unlikely]] {
+         return glz::unexpected(static_cast<error_ctx>(result));
       }
       return {std::move(buffer)};
    }
@@ -2516,9 +2520,11 @@ namespace glz
 
    template <auto Opts = opts{}, class T, class Keys, output_buffer Buffer>
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
-   [[nodiscard]] error_ctx write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
+   [[nodiscard]] result write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
-      if constexpr (resizable<Buffer>) {
+      using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
+
+      if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
             buffer.resize(2 * write_padding_bytes);
          }
@@ -2527,25 +2533,26 @@ namespace glz
       size_t ix = 0;
       to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
                                                                                 ctx, buffer, ix);
-      if constexpr (resizable<Buffer>) {
-         buffer.resize(ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return {ix, ctx.error, ctx.custom_error_message};
       }
-      return {ctx.error, ctx.custom_error_message};
+
+      traits::finalize(buffer, ix);
+      return {ix, error_code::none, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}, class T, class Keys, raw_buffer Buffer>
       requires((glaze_object_t<T> || reflectable<T>) && range<Keys>)
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_json_exclude(T&& value, const Keys& exclude_keys,
-                                                                     Buffer&& buffer)
+   [[nodiscard]] result write_json_exclude(T&& value, const Keys& exclude_keys, Buffer&& buffer)
    {
       context ctx{};
       size_t ix = 0;
       to_runtime_exclude<std::remove_cvref_t<T>>::template op<set_json<Opts>()>(exclude_keys, std::forward<T>(value),
                                                                                 ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
-         return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message});
+         return {ix, ctx.error, ctx.custom_error_message};
       }
-      return {ix};
+      return {ix, error_code::none, ctx.custom_error_message};
    }
 
    template <auto Opts = opts{}, class T, class Keys>
@@ -2553,15 +2560,15 @@ namespace glz
    [[nodiscard]] glz::expected<std::string, error_ctx> write_json_exclude(T&& value, const Keys& exclude_keys)
    {
       std::string buffer{};
-      const auto ec = write_json_exclude<Opts>(std::forward<T>(value), exclude_keys, buffer);
-      if (bool(ec)) [[unlikely]] {
-         return glz::unexpected(ec);
+      const auto result = write_json_exclude<Opts>(std::forward<T>(value), exclude_keys, buffer);
+      if (result) [[unlikely]] {
+         return glz::unexpected(static_cast<error_ctx>(result));
       }
       return {std::move(buffer)};
    }
 
    template <write_supported<JSON> T, class Buffer>
-   [[nodiscard]] error_ctx write_jsonc(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_jsonc(T&& value, Buffer&& buffer)
    {
       return write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -2579,7 +2586,10 @@ namespace glz
       if (bool(ec)) [[unlikely]] {
          return ec;
       }
-      return {buffer_to_file(buffer, file_name)};
+      if (auto file_ec = buffer_to_file(buffer, file_name); bool(file_ec)) {
+         return {0, file_ec};
+      }
+      return {};
    }
 }
 

@@ -567,9 +567,9 @@ void write_tests()
       std::array<test_skip, 2> b{{{false}, {true}}};
       auto beve_b{b};
 
-      json_err = glz::read_json(b, json_buffer);
-      beve_err = glz::read_beve(beve_b, beve_buffer);
-      expect(!json_err && !beve_err);
+      auto json_err2 = glz::read_json(b, json_buffer);
+      auto beve_err2 = glz::read_beve(beve_b, beve_buffer);
+      expect(!json_err2 && !beve_err2);
 
       // Both should handle empty optionals the same way
       expect(b[0].o_ == beve_b[0].o_);
@@ -601,9 +601,9 @@ void write_tests()
          beve_obj1.nested.inner_opt1 = 9999;
          beve_obj1.nested.inner_opt2 = 99.99;
 
-         json_err = glz::read_json(json_obj1, json_buffer);
-         beve_err = glz::read_beve(beve_obj1, beve_buffer);
-         expect(!json_err && !beve_err);
+         auto json_err2 = glz::read_json(json_obj1, json_buffer);
+         auto beve_err2 = glz::read_beve(beve_obj1, beve_buffer);
+         expect(!json_err2 && !beve_err2);
 
          // Verify both formats skip null members the same way - sentinel values should remain
          expect(json_obj1.outer_opt1 == beve_obj1.outer_opt1);
@@ -649,9 +649,9 @@ void write_tests()
          beve_obj2.nested.inner_opt1 = 7777;
          beve_obj2.nested.inner_opt2 = 77.77; // Sentinel - should not change
 
-         json_err = glz::read_json(json_obj2, json_buffer);
-         beve_err = glz::read_beve(beve_obj2, beve_buffer);
-         expect(!json_err && !beve_err);
+         auto json_err2 = glz::read_json(json_obj2, json_buffer);
+         auto beve_err2 = glz::read_beve(beve_obj2, beve_buffer);
+         expect(!json_err2 && !beve_err2);
 
          // Verify written values were updated
          expect(json_obj2.outer_opt1 == beve_obj2.outer_opt1);
@@ -694,9 +694,9 @@ void write_tests()
          beve_obj3.nested.inner_opt1 = 5555;
          beve_obj3.nested.inner_opt2 = 55.55;
 
-         json_err = glz::read_json(json_obj3, json_buffer);
-         beve_err = glz::read_beve(beve_obj3, beve_buffer);
-         expect(!json_err && !beve_err);
+         auto json_err2 = glz::read_json(json_obj3, json_buffer);
+         auto beve_err2 = glz::read_beve(beve_obj3, beve_buffer);
+         expect(!json_err2 && !beve_err2);
 
          // Verify all values were replaced with the serialized values
          expect(json_obj3.outer_opt1 == beve_obj3.outer_opt1);
@@ -2590,13 +2590,13 @@ suite early_end = [] {
          // This is mainly to check if all our end checks are in place.
          auto ec = glz::read_beve(obj, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read_beve(json, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read_beve(skip_me, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
       }
    };
 
@@ -2615,13 +2615,13 @@ suite early_end = [] {
          // This is mainly to check if all our end checks are in place.
          auto ec = glz::read<options>(obj, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read<options>(json, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read<options>(skip_me, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
       }
    };
 };
@@ -3109,13 +3109,13 @@ suite delimited_beve_tests = [] {
       std::string buffer{};
 
       auto result1 = glz::write_beve_append(42, buffer);
-      expect(result1.has_value());
-      expect(*result1 > size_t(0));
+      expect(!result1);
+      expect(result1.count > size_t(0));
       const size_t first_size = buffer.size();
 
       auto result2 = glz::write_beve_append(std::string{"hello"}, buffer);
-      expect(result2.has_value());
-      expect(*result2 > size_t(0));
+      expect(!result2);
+      expect(result2.count > size_t(0));
       expect(buffer.size() > first_size);
    };
 
@@ -3124,13 +3124,13 @@ suite delimited_beve_tests = [] {
 
       // Write first value without delimiter
       auto result1 = glz::write_beve_append(42, buffer);
-      expect(result1.has_value());
+      expect(!result1);
       const size_t first_size = buffer.size();
 
       // Write second value with delimiter
       auto result2 = glz::write_beve_append_with_delimiter(100, buffer);
-      expect(result2.has_value());
-      expect(*result2 > size_t(0));
+      expect(!result2);
+      expect(result2.count > size_t(0));
 
       // Check delimiter was written
       expect(static_cast<uint8_t>(buffer[first_size]) == glz::tag::delimiter);
@@ -3146,8 +3146,8 @@ suite delimited_beve_tests = [] {
 
       // Verify round-trip works correctly (more robust than counting raw delimiter bytes)
       std::vector<int> result{};
-      ec = glz::read_beve_delimited(result, buffer);
-      expect(!ec);
+      auto ec2 = glz::read_beve_delimited(result, buffer);
+      expect(!ec2);
       expect(result.size() == size_t(5));
       expect(result == values);
    };
@@ -3168,8 +3168,8 @@ suite delimited_beve_tests = [] {
 
       // Read them back
       std::vector<int> output{};
-      ec = glz::read_beve_delimited(output, buffer);
-      expect(!ec);
+      auto ec2 = glz::read_beve_delimited(output, buffer);
+      expect(!ec2);
       expect(output.size() == size_t(4));
       expect(output == input);
    };
@@ -3181,8 +3181,8 @@ suite delimited_beve_tests = [] {
       expect(!ec);
 
       std::vector<std::string> output{};
-      ec = glz::read_beve_delimited(output, buffer);
-      expect(!ec);
+      auto ec2 = glz::read_beve_delimited(output, buffer);
+      expect(!ec2);
       expect(output == input);
    };
 
@@ -3193,8 +3193,8 @@ suite delimited_beve_tests = [] {
       expect(!ec);
 
       std::vector<simple_obj> output{};
-      ec = glz::read_beve_delimited(output, buffer);
-      expect(!ec);
+      auto ec2 = glz::read_beve_delimited(output, buffer);
+      expect(!ec2);
       expect(output.size() == size_t(3));
       expect(output[0].x == 1);
       expect(output[0].y == "first");
@@ -3283,8 +3283,8 @@ suite delimited_beve_tests = [] {
 
       // Verify single value round-trips correctly
       std::vector<int> output{};
-      ec = glz::read_beve_delimited(output, buffer);
-      expect(!ec);
+      auto ec2 = glz::read_beve_delimited(output, buffer);
+      expect(!ec2);
       expect(output.size() == size_t(1));
       expect(output == input);
    };
@@ -3296,15 +3296,15 @@ suite delimited_beve_tests = [] {
 
       // Append first object
       auto bytes1 = glz::write_beve_append(simple_obj{1, "first"}, buffer);
-      expect(bytes1.has_value());
+      expect(!bytes1);
 
       // Append delimiter and second object
       auto bytes2 = glz::write_beve_append_with_delimiter(simple_obj{2, "second"}, buffer);
-      expect(bytes2.has_value());
+      expect(!bytes2);
 
       // Append delimiter and third object
       auto bytes3 = glz::write_beve_append_with_delimiter(simple_obj{3, "third"}, buffer);
-      expect(bytes3.has_value());
+      expect(!bytes3);
 
       // Now read all objects back
       std::vector<simple_obj> results{};
@@ -3320,16 +3320,16 @@ suite delimited_beve_tests = [] {
    };
 
    "bytes consumed tracking"_test = [] {
-      // Test that error_ctx.location tracks bytes consumed correctly
+      // Test that error_ctx.count tracks bytes consumed correctly
       int value = 42;
       std::string buffer{};
       auto ec = glz::write_beve(value, buffer);
       expect(!ec);
 
       int result{};
-      ec = glz::read_beve(result, buffer);
-      expect(!ec);
-      expect(ec.location == buffer.size()) << "location should equal bytes consumed";
+      auto ec2 = glz::read_beve(result, buffer);
+      expect(!ec2);
+      expect(ec2.count == buffer.size()) << "count should equal bytes consumed";
       expect(result == 42);
    };
 };

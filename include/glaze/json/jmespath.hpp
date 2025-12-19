@@ -945,7 +945,7 @@ namespace glz
          buffer.resize(buffer.size() - padding_bytes);
       }
 
-      return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+      return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
    // A "compiled" jmespath expression, which can be pre-computed for efficient traversal
@@ -978,7 +978,7 @@ namespace glz
    [[nodiscard]] inline error_ctx read_jmespath(const jmespath_expression& expression, T&& value, Buffer&& buffer)
    {
       if (bool(expression.error)) {
-         return {error_code::syntax_error, "JMESPath invalid expression"};
+         return {0, error_code::syntax_error, "JMESPath invalid expression"};
       }
 
       const auto& tokens = expression.tokens;
@@ -1252,7 +1252,7 @@ namespace glz
          buffer.resize(buffer.size() - padding_bytes);
       }
 
-      return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+      return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
 }

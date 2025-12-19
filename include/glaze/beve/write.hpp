@@ -1159,7 +1159,7 @@ namespace glz
    };
 
    template <write_supported<BEVE> T, class Buffer>
-   [[nodiscard]] error_ctx write_beve(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_beve(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -1171,7 +1171,7 @@ namespace glz
    }
 
    template <auto& Partial, write_supported<BEVE> T, class Buffer>
-   [[nodiscard]] error_ctx write_beve(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_beve(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -1193,14 +1193,14 @@ namespace glz
          file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
       }
       else {
-         return {error_code::file_open_failure};
+         return {0, error_code::file_open_failure};
       }
 
       return {};
    }
 
    template <write_supported<BEVE> T, class Buffer>
-   [[nodiscard]] error_ctx write_beve_untagged(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_beve_untagged(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                     std::forward<Buffer>(buffer));
@@ -1229,14 +1229,15 @@ namespace glz
    }
 
    // Append a BEVE value to an existing buffer without clearing it
-   // Returns the number of bytes written via the expected value
+   // Returns the number of bytes written via result.count
    template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
       requires output_buffer<Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_beve_append(T&& value, Buffer& buffer)
+   [[nodiscard]] result write_beve_append(T&& value, Buffer& buffer)
    {
+      using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
       const size_t start_ix = buffer.size();
 
-      if constexpr (resizable<Buffer>) {
+      if constexpr (traits::is_resizable) {
          if (buffer.size() < start_ix + 2 * write_padding_bytes) {
             buffer.resize(start_ix + 2 * write_padding_bytes);
          }
@@ -1246,27 +1247,24 @@ namespace glz
       size_t ix = start_ix;
       to<BEVE, std::remove_cvref_t<T>>::template op<set_beve<Opts>()>(std::forward<T>(value), ctx, buffer, ix);
 
-      if constexpr (resizable<Buffer>) {
-         buffer.resize(ix);
-      }
-
       if (bool(ctx.error)) [[unlikely]] {
-         return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message});
+         return {ix - start_ix, ctx.error, ctx.custom_error_message};
       }
 
-      return ix - start_ix; // bytes written
+      traits::finalize(buffer, ix);
+      return {ix - start_ix, error_code::none, ctx.custom_error_message}; // bytes written
    }
 
    // Append a BEVE value to an existing buffer with a delimiter prefix
    // Useful for streaming multiple values
    template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
       requires output_buffer<Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_beve_append_with_delimiter(T&& value, Buffer& buffer)
+   [[nodiscard]] result write_beve_append_with_delimiter(T&& value, Buffer& buffer)
    {
       write_beve_delimiter(buffer);
       auto result = write_beve_append<Opts>(std::forward<T>(value), buffer);
-      if (result) {
-         return *result + 1; // +1 for delimiter
+      if (!result) {
+         result.count += 1; // +1 for delimiter
       }
       return result;
    }
@@ -1274,11 +1272,12 @@ namespace glz
    // Write multiple BEVE values to a buffer with delimiters between them
    template <auto Opts = opts{}, class Container, class Buffer>
       requires output_buffer<Buffer> && readable_array_t<Container>
-   [[nodiscard]] error_ctx write_beve_delimited(const Container& values, Buffer& buffer)
+   [[nodiscard]] result write_beve_delimited(const Container& values, Buffer& buffer)
    {
+      using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
       context ctx{};
 
-      if constexpr (resizable<Buffer>) {
+      if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
             buffer.resize(2 * write_padding_bytes);
          }
@@ -1297,18 +1296,13 @@ namespace glz
          to<BEVE, std::remove_cvref_t<decltype(value)>>::template op<set_beve<Opts>()>(value, ctx, buffer, ix);
 
          if (bool(ctx.error)) [[unlikely]] {
-            if constexpr (resizable<Buffer>) {
-               buffer.resize(ix);
-            }
-            return {ctx.error, ctx.custom_error_message};
+            traits::finalize(buffer, ix);
+            return {ix, ctx.error, ctx.custom_error_message};
          }
       }
 
-      if constexpr (resizable<Buffer>) {
-         buffer.resize(ix);
-      }
-
-      return {};
+      traits::finalize(buffer, ix);
+      return {ix, error_code::none, ctx.custom_error_message};
    }
 
    // Write multiple BEVE values to a buffer with delimiters, returning the buffer
@@ -1317,9 +1311,9 @@ namespace glz
    [[nodiscard]] glz::expected<std::string, error_ctx> write_beve_delimited(const Container& values)
    {
       std::string buffer{};
-      const auto ec = write_beve_delimited<Opts>(values, buffer);
-      if (bool(ec)) [[unlikely]] {
-         return glz::unexpected(ec);
+      const auto result = write_beve_delimited<Opts>(values, buffer);
+      if (result) [[unlikely]] {
+         return glz::unexpected(static_cast<error_ctx>(result));
       }
       return buffer;
    }

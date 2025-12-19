@@ -1989,13 +1989,13 @@ suite early_end = [] {
          // This is mainly to check if all our end checks are in place.
          auto ec = glz::read<options>(obj, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read<options>(json, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read<options>(skip_me, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
       }
    };
 
@@ -2012,13 +2012,13 @@ suite early_end = [] {
          // This is mainly to check if all our end checks are in place.
          auto ec = glz::read_json(obj, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read_json(json, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read_json(skip_me, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
       }
    };
 
@@ -2038,13 +2038,13 @@ suite early_end = [] {
          // This is mainly to check if all our end checks are in place.
          auto ec = glz::read<options>(obj, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read<options>(json, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
          ec = glz::read<options>(skip_me, buffer);
          expect(ec);
-         expect(ec.location <= buffer.size());
+         expect(ec.count <= buffer.size());
       }
    };
 
@@ -3751,8 +3751,9 @@ suite allocated_write = [] {
       my_struct v{};
       std::string s{};
       s.resize(100);
-      auto length = glz::write_json(v, s.data()).value();
-      s.resize(length);
+      auto result = glz::write_json(v, s.data());
+      expect(!result) << "write should succeed";
+      s.resize(result.count);
       expect(s == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
    };
 };
@@ -9789,8 +9790,8 @@ suite partial_write_tests = [] {
       static constexpr auto json_ptrs = glz::json_ptrs("/name");
       zoo_t obj{};
       char buf[32]{};
-      const auto length = glz::write_json<json_ptrs>(obj, buf);
-      expect(length.has_value());
+      const auto result = glz::write_json<json_ptrs>(obj, buf);
+      expect(!result) << "write should succeed";
       expect(std::string_view{buf} == R"({"name":"My Awesome Zoo"})");
    };
 
@@ -9905,8 +9906,8 @@ suite runtime_partial_write_tests = [] {
       std::vector<std::string> keys = {"a"};
 
       auto result = glz::write_json_partial(obj, keys, buf);
-      expect(result.has_value());
-      expect(std::string_view(buf, *result) == R"({"a":99})");
+      expect(!result) << "write should succeed";
+      expect(std::string_view(buf, result.count) == R"({"a":99})");
    };
 
    "runtime partial write - return string"_test = [] {
@@ -10026,8 +10027,8 @@ suite runtime_exclude_write_tests = [] {
       std::vector<std::string> exclude = {"b", "c", "d"};
 
       auto result = glz::write_json_exclude(obj, exclude, buf);
-      expect(result.has_value());
-      expect(std::string_view(buf, *result) == R"({"a":99})");
+      expect(!result) << "write should succeed";
+      expect(std::string_view(buf, result.count) == R"({"a":99})");
    };
 
    "runtime exclude write - return string"_test = [] {
@@ -10356,8 +10357,8 @@ suite zoo_exclude_write_tests = [] {
       std::vector<std::string> exclude = {"phone", "home_address"};
 
       auto result = glz::write_json_exclude(night_guard, exclude, buf);
-      expect(result.has_value());
-      std::string_view output(buf, *result);
+      expect(!result) << "write should succeed";
+      std::string_view output(buf, result.count);
       expect(output == R"({"name":"Larry Daley","employee_id":"NG-001","years_experience":5})") << output;
    };
 };
@@ -11370,8 +11371,8 @@ suite msvc_ice_tests = [] {
 };
 
 suite error_codes_test = [] {
-   expect(glz::format_error(glz::error_ctx{glz::error_code::none}) == "none");
-   expect(glz::format_error(glz::error_ctx{glz::error_code::expected_brace}) == "expected_brace");
+   expect(glz::format_error(glz::error_ctx{0, glz::error_code::none}) == "none");
+   expect(glz::format_error(glz::error_ctx{0, glz::error_code::expected_brace}) == "expected_brace");
 };
 
 struct front_16_t
@@ -11442,8 +11443,8 @@ suite custom_error = [] {
       auto ec = glz::write_json(obj, buffer);
       expect(ec.custom_error_message == "custom_errors_t write error");
 
-      ec = glz::read_json(obj, "{}");
-      expect(ec.custom_error_message == "custom_errors_t read error");
+      auto ec2 = glz::read_json(obj, "{}");
+      expect(ec2.custom_error_message == "custom_errors_t read error");
    };
 };
 

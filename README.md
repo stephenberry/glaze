@@ -705,6 +705,26 @@ Produces this error:
 
 Denoting that x is invalid here.
 
+## Bytes Consumed on Read
+
+The `error_ctx` type returned by read operations includes a `location` field that indicates the byte position in the input buffer:
+
+```c++
+std::string buffer = R"({"x":1,"y":2})";
+my_struct obj{};
+auto ec = glz::read_json(obj, buffer);
+if (!ec) {
+   // Success: ec.location contains bytes consumed
+   size_t bytes_consumed = ec.location;
+   // bytes_consumed == 13 (entire JSON object)
+}
+```
+
+This is useful for:
+- **Streaming**: Reading multiple JSON values from a single buffer
+- **Partial parsing**: Knowing where parsing stopped with `partial_read` option
+- **Error diagnostics**: On failure, `location` indicates where the error occurred
+
 # Input Buffer (Null) Termination
 
 A non-const `std::string` is recommended for input buffers, as this allows Glaze to improve performance with temporary padding and the buffer will be null terminated.
@@ -954,11 +974,37 @@ assert(json[2]["pi"].get<double>() == 3.14);
 
 Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below, but it is not recommended.
 
-```
+```c++
 glz::read_json(obj, buffer);
-const auto n = glz::write_json(obj, buffer.data()).value_or(0);
-buffer.resize(n);
+const auto result = glz::write_json(obj, buffer.data());
+if (!result) {
+   buffer.resize(result.count);
+}
 ```
+
+### Writing to Fixed-Size Buffers
+
+All write functions return `glz::result`, which provides both error information and the byte count:
+
+```c++
+std::array<char, 1024> buffer;
+auto result = glz::write_json(my_obj, buffer);
+if (result) {
+   if (result.ec == glz::error_code::buffer_overflow) {
+      // Buffer was too small
+      std::cerr << "Overflow after " << result.count << " bytes\n";
+   }
+   return;
+}
+// Success: result.count contains bytes written
+std::string_view json(buffer.data(), result.count);
+```
+
+The `result` type is interface-compatible with `error_ctx`, so existing error checking code continues to work:
+- `if (result)` - true when there is an error (matches `error_ctx` semantics)
+- `result.count` - bytes written (always populated, even on error)
+- `result.ec` - the error code
+- `glz::format_error(result, buffer)` - works via implicit conversion to `error_ctx`
 
 ## Compile Time Options
 

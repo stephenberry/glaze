@@ -1173,7 +1173,7 @@ namespace glz
       const auto file_error = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(file_error)) [[unlikely]] {
-         return error_ctx{file_error};
+         return error_ctx{0, file_error};
       }
 
       return read<set_msgpack<Opts>()>(value, buffer, ctx);

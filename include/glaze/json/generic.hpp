@@ -849,7 +849,7 @@ namespace glz
    inline error_ctx convert_from_generic(bool& result, const generic_json<Mode>& source)
    {
       if (!source.is_boolean()) {
-         return error_ctx{error_code::syntax_error};
+         return error_ctx{0, error_code::syntax_error};
       }
       result = source.template get<bool>();
       return {};
@@ -860,7 +860,7 @@ namespace glz
    inline error_ctx convert_from_generic(double& result, const generic_json<Mode>& source)
    {
       if (!source.is_number()) {
-         return error_ctx{error_code::syntax_error};
+         return error_ctx{0, error_code::syntax_error};
       }
       if constexpr (Mode == num_mode::u64) {
          if (source.template holds<uint64_t>()) {
@@ -893,7 +893,7 @@ namespace glz
    inline error_ctx convert_from_generic(uint64_t& result, const generic_json<Mode>& source)
    {
       if (!source.is_number()) {
-         return error_ctx{error_code::syntax_error};
+         return error_ctx{0, error_code::syntax_error};
       }
       if (source.template holds<uint64_t>()) {
          result = source.template get<uint64_t>();
@@ -913,7 +913,7 @@ namespace glz
    inline error_ctx convert_from_generic(int64_t& result, const generic_json<Mode>& source)
    {
       if (!source.is_number()) {
-         return error_ctx{error_code::syntax_error};
+         return error_ctx{0, error_code::syntax_error};
       }
       if constexpr (Mode == num_mode::u64) {
          if (source.template holds<uint64_t>()) {
@@ -942,7 +942,7 @@ namespace glz
    inline error_ctx convert_from_generic(std::string& result, const generic_json<Mode>& source)
    {
       if (!source.is_string()) {
-         return error_ctx{error_code::syntax_error};
+         return error_ctx{0, error_code::syntax_error};
       }
       result = source.template get<std::string>();
       return {};
@@ -954,7 +954,7 @@ namespace glz
    error_ctx convert_from_generic(T& result, const generic_json<Mode>& source)
    {
       if (!source.is_number()) {
-         return error_ctx{error_code::syntax_error};
+         return error_ctx{0, error_code::syntax_error};
       }
       if constexpr (Mode == num_mode::u64) {
          if (source.template holds<uint64_t>()) {
@@ -987,7 +987,7 @@ namespace glz
    error_ctx convert_from_generic(T& result, const generic_json<Mode>& source)
    {
       if (!source.is_array()) {
-         return error_ctx{error_code::syntax_error};
+         return error_ctx{0, error_code::syntax_error};
       }
 
       const auto& arr = source.get_array();
@@ -1016,7 +1016,7 @@ namespace glz
          }
          else if constexpr (accessible<T>) {
             if (index >= result.size()) {
-               return error_ctx{error_code::syntax_error};
+               return error_ctx{0, error_code::syntax_error};
             }
             result[index] = std::move(converted);
          }
@@ -1024,7 +1024,7 @@ namespace glz
             result.emplace(std::move(converted));
          }
          else {
-            return error_ctx{error_code::syntax_error};
+            return error_ctx{0, error_code::syntax_error};
          }
 
          ++index;
@@ -1039,7 +1039,7 @@ namespace glz
    error_ctx convert_from_generic(T& result, const generic_json<Mode>& source)
    {
       if (!source.is_object()) {
-         return error_ctx{error_code::syntax_error};
+         return error_ctx{0, error_code::syntax_error};
       }
 
       const auto& obj = source.get_object();
@@ -1059,7 +1059,7 @@ namespace glz
             result.emplace(key, std::move(converted));
          }
          else {
-            return error_ctx{error_code::syntax_error};
+            return error_ctx{0, error_code::syntax_error};
          }
       }
 
@@ -1090,7 +1090,7 @@ namespace glz
       // Navigate to the target location
       generic* target = navigate_to(&root, json_ptr);
       if (!target) {
-         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+         return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
 
       // Direct conversion without JSON serialization round-trip
@@ -1109,7 +1109,7 @@ namespace glz
    {
       const generic* target = navigate_to(&root, json_ptr);
       if (!target) {
-         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+         return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
 
       // Direct conversion without JSON serialization round-trip

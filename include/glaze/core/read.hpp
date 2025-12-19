@@ -39,7 +39,7 @@ namespace glz
       if constexpr (Opts.format != NDJSON) {
          if (buffer.empty()) [[unlikely]] {
             ctx.error = error_code::no_read_input;
-            return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
+            return {0, ctx.error, ctx.custom_error_message};
          }
       }
 
@@ -105,7 +105,7 @@ namespace glz
          buffer.resize(original_size);
       }
 
-      return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+      return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
    template <auto Opts, class T>
@@ -129,7 +129,7 @@ namespace glz
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
-         return {error_code::no_read_input};
+         return {0, error_code::no_read_input};
       }
       return read<Opts>(value, str, ctx);
    }

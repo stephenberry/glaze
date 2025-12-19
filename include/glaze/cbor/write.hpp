@@ -887,7 +887,7 @@ namespace glz
    // ===== High-level write APIs =====
 
    template <write_supported<CBOR> T, class Buffer>
-   [[nodiscard]] error_ctx write_cbor(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_cbor(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = CBOR}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }

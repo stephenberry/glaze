@@ -2499,7 +2499,7 @@ namespace glz
             ctx.error = error_code::includer_error;
             auto& error_msg = error_buffer();
             error_msg = "file failed to open: " + string_file_path;
-            ctx.includer_error = error_msg;
+            ctx.custom_error_message = error_msg;
             return;
          }
 
@@ -2514,7 +2514,7 @@ namespace glz
             ctx.error = error_code::includer_error;
             auto& error_msg = error_buffer();
             error_msg = glz::format_error(ecode, nested_buffer);
-            ctx.includer_error = error_msg;
+            ctx.custom_error_message = error_msg;
             return;
          }
 
@@ -4411,7 +4411,7 @@ namespace glz
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(ec)) {
-         return {ec};
+         return {0, ec};
       }
 
       return read<set_json<Opts>()>(value, buffer, ctx);
@@ -4426,7 +4426,7 @@ namespace glz
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(ec)) {
-         return {ec};
+         return {0, ec};
       }
 
       constexpr auto Options = opt_true<set_json<Opts>(), &opts::comments>;

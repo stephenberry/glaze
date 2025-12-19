@@ -9,14 +9,20 @@ The binary specification is known as [BEVE](https://github.com/beve-org/beve).
 ```c++
 my_struct s{};
 std::vector<std::byte> buffer{};
-glz::write_beve(s, buffer);
+auto result = glz::write_beve(s, buffer);
+if (!result) {
+   // Success: result.count contains bytes written
+}
 ```
 
 **Read BEVE**
 
 ```c++
 my_struct s{};
-glz::read_beve(s, buffer);
+auto ec = glz::read_beve(s, buffer);
+if (!ec) {
+   // Success
+}
 ```
 
 > [!NOTE]
@@ -100,9 +106,9 @@ This is useful for:
 | Function | Description |
 |----------|-------------|
 | `write_beve_delimiter(buffer)` | Writes a single delimiter byte (0x06) |
-| `write_beve_append(value, buffer)` | Appends a BEVE value to existing buffer. Returns `expected<size_t, error_ctx>` with bytes written. |
-| `write_beve_append_with_delimiter(value, buffer)` | Writes delimiter + value. Returns bytes written including delimiter. |
-| `write_beve_delimited(container, buffer)` | Writes all container elements with delimiters between them |
+| `write_beve_append(value, buffer)` | Appends a BEVE value to existing buffer. Returns `result` with `count` field for bytes written. |
+| `write_beve_append_with_delimiter(value, buffer)` | Writes delimiter + value. Returns `result` with bytes written including delimiter. |
+| `write_beve_delimited(container, buffer)` | Writes all container elements with delimiters between them. Returns `result`. |
 
 **Reading Functions**
 
@@ -121,16 +127,17 @@ Use `write_beve_append` to add a value to an existing buffer without clearing it
 std::string buffer{};
 
 // Write first object
-auto bytes1 = glz::write_beve_append(my_struct{1, "first"}, buffer);
+auto result1 = glz::write_beve_append(my_struct{1, "first"}, buffer);
+// result1.count contains bytes written
 
 // Append delimiter and second object
-auto bytes2 = glz::write_beve_append_with_delimiter(my_struct{2, "second"}, buffer);
+auto result2 = glz::write_beve_append_with_delimiter(my_struct{2, "second"}, buffer);
 
 // Append delimiter and third object
-auto bytes3 = glz::write_beve_append_with_delimiter(my_struct{3, "third"}, buffer);
+auto result3 = glz::write_beve_append_with_delimiter(my_struct{3, "third"}, buffer);
 ```
 
-The `write_beve_append` function returns `glz::expected<size_t, error_ctx>` containing the number of bytes written.
+The `write_beve_append` function returns `glz::result` where `result.count` contains the number of bytes written.
 
 #### Write a Delimiter
 
@@ -210,13 +217,17 @@ while (offset < buffer.size()) {
 
 #### Bytes Consumed Tracking
 
-The standard `read_beve` function also tracks bytes consumed via `error_ctx.location`:
+The standard `read_beve` function tracks bytes consumed via `result.count`:
 
 ```c++
 my_struct obj{};
 auto ec = glz::read_beve(obj, buffer);
-size_t bytes_consumed = ec.location;  // Number of bytes read
+if (!ec) {
+   size_t bytes_consumed = ec.count;  // Number of bytes read on success
+}
 ```
+
+On error, `count` indicates where the parse error occurred. This field is available for all read operations (`read_beve`, `read_json`, `read_cbor`, `read_msgpack`).
 
 ### Example: Streaming Workflow
 

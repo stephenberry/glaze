@@ -89,25 +89,27 @@ namespace glz
       // JSON Pointer errors (RFC 6901)
       invalid_json_pointer, // Malformed JSON pointer syntax (e.g., "~" at end, "~2")
       // JSON Patch errors (RFC 6902)
-      patch_test_failed // Test operation value mismatch (unique to RFC 6902 test op)
+      patch_test_failed, // Test operation value mismatch (unique to RFC 6902 test op)
+      // Buffer errors
+      buffer_overflow // Write would exceed fixed buffer capacity
    };
 
-   struct error_ctx final
+   // Unified result type for all read/write operations
+   // Provides byte count processed and error information
+   struct result final
    {
-      error_code ec{};
-      // Glaze uses the custom_error_message for some error reporting
-      // But, since the first error always short-circuits parsing, developers are free to inject
-      // their own errors in the custom_error_message.
-      std::string_view custom_error_message{};
-      // Number of bytes consumed from the buffer during parsing.
-      // Useful for reading multiple values from a single buffer (e.g., delimited BEVE/NDJSON).
-      size_t location{};
-      std::string_view includer_error{}; // error from a nested file includer
+      size_t count{}; // Bytes processed (read or written)
+      error_code ec{}; // Error code (none on success)
+      std::string_view custom_error_message{}; // Human-readable error context
 
-      operator bool() const { return ec != error_code::none; }
+      // Returns true when there IS an error
+      operator bool() const noexcept { return ec != error_code::none; }
 
-      bool operator==(const error_code e) const { return ec == e; }
+      bool operator==(const error_code e) const noexcept { return ec == e; }
    };
+
+   // Backwards compatibility alias
+   using error_ctx = result;
 
    // Runtime context for configuration
    // We do not template the context on iterators so that it can be easily shared across buffer implementations
@@ -120,7 +122,6 @@ namespace glz
       // When reading indentation_level is used to track the depth of structures to prevent stack overflows
       // From massive depths due to untrusted inputs or attacks
       std::string current_file; // top level file path
-      std::string_view includer_error; // error from a nested file includer
       // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
       // because debuggers like jumping to std::string_view initialization calls
    };

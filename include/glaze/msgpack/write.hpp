@@ -826,13 +826,13 @@ namespace glz
    };
 
    template <write_supported<MSGPACK> T, output_buffer Buffer>
-   [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_supported<MSGPACK> T, raw_buffer Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -844,13 +844,13 @@ namespace glz
    }
 
    template <auto& Partial, write_supported<MSGPACK> T, output_buffer Buffer>
-   [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <auto& Partial, write_supported<MSGPACK> T, raw_buffer Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] result write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -859,9 +859,9 @@ namespace glz
    [[nodiscard]] glz::expected<std::string, error_ctx> write_msgpack(T&& value)
    {
       std::string buffer{};
-      const auto ec = write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), buffer);
-      if (bool(ec)) [[unlikely]] {
-         return glz::unexpected(ec);
+      const auto result = write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), buffer);
+      if (result) [[unlikely]] {
+         return glz::unexpected(static_cast<error_ctx>(result));
       }
       return {buffer};
    }
@@ -873,6 +873,9 @@ namespace glz
       if (ec) {
          return ec;
       }
-      return {buffer_to_file(buffer, file_name)};
+      if (auto file_ec = buffer_to_file(buffer, file_name); bool(file_ec)) {
+         return {0, file_ec};
+      }
+      return {};
    }
 }
