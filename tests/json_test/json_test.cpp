@@ -28,6 +28,7 @@
 
 #include "glaze/api/impl.hpp"
 #include "glaze/containers/flat_map.hpp"
+#include "glaze/core/feature_test.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
 #include "glaze/hardware/volatile_array.hpp"
@@ -4604,6 +4605,7 @@ struct glz::meta<question_t>
    static constexpr auto value = object("ᇿ", &T::text);
 };
 
+#if GLZ_HAS_CONSTEXPR_STRING
 struct question_escaped_t
 {
    std::string text{};
@@ -4617,6 +4619,7 @@ struct glz::meta<question_escaped_t>
 };
 
 static_assert(glz::escape_unicode<"ᇿ"> == R"(\u11FF)");
+#endif
 
 suite unicode_tests = [] {
    "unicode"_test = [] {
@@ -4654,6 +4657,7 @@ suite unicode_tests = [] {
       expect(obj.text == "ᇿ");
    };
 
+#if GLZ_HAS_CONSTEXPR_STRING
    "unicode_escaped"_test = [] {
       std::string str = R"({"\u11FF":"\u11FF"})";
       question_escaped_t obj{};
@@ -4661,6 +4665,7 @@ suite unicode_tests = [] {
 
       expect(obj.text == "ᇿ");
    };
+#endif
 
    "surrogate pair"_test = [] {
       const char* json = R"("\uD83C\uDF40")"; // 🍀
@@ -4691,6 +4696,8 @@ struct opts_escape_control_characters : glz::opts
 };
 
 // Structure for escaped control chars
+// Requires constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
+#if GLZ_HAS_CONSTEXPR_STRING
 struct control_char_escaped_t
 {
    std::string value{};
@@ -4705,6 +4712,7 @@ struct glz::meta<control_char_escaped_t>
 
 static_assert(glz::escape_unicode<"\x01"> == R"(\u0001)");
 static_assert(glz::escape_unicode<"\x1F"> == R"(\u001F)");
+#endif
 
 suite control_character_tests = [] {
    "basic_control_char_escaping"_test = [] {
@@ -4743,6 +4751,7 @@ suite control_character_tests = [] {
       expect(result == expected) << "String with NULL should match original";
    };
 
+#if GLZ_HAS_CONSTEXPR_STRING
    "control_char_explicitly_escaped"_test = [] {
       // Test explicitly escaped control character
       std::string str = R"({"\u0001":"control char value"})";
@@ -4751,6 +4760,7 @@ suite control_character_tests = [] {
       expect(not glz::read_json(obj, str));
       expect(obj.value == "control char value") << "Value with escaped control char key should be read correctly";
    };
+#endif
 
    "mixed_control_and_regular"_test = [] {
       // Test mix of control and regular characters
@@ -12521,10 +12531,18 @@ suite member_function_pointer_serialization = [] {
       std::string buffer{};
       expect(not glz::write<opts_with_member_functions{}>(thing, buffer));
 #if defined(__GNUC__) && !defined(__clang__)
+#if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
+      // Old ABI uses std::basic_string<char> without __cxx11 namespace
+      expect(
+         buffer ==
+         R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})")
+         << buffer;
+#else
       expect(
          buffer ==
          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})")
          << buffer;
+#endif
 #else
       expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
          << buffer;

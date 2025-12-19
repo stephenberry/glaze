@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 
+#include "glaze/core/feature_test.hpp"
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
@@ -110,6 +111,8 @@ suite key_transformer_functions = [] {
 };
 
 // Test structures for JSON serialization
+// These tests require constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
+#if GLZ_HAS_CONSTEXPR_STRING
 struct test_struct_camel
 {
    int i_value = 287;
@@ -243,6 +246,7 @@ suite json_serialization_tests = [] {
       expect(parsed.max_retries == obj.max_retries);
    };
 };
+#endif // GLZ_HAS_CONSTEXPR_STRING
 
 // Test edge cases
 suite edge_cases = [] {

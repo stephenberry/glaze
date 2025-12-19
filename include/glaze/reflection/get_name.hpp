@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 
+#include "glaze/core/feature_test.hpp"
 #include "glaze/reflection/to_tuple.hpp"
 #include "glaze/util/string_literal.hpp"
 
@@ -124,16 +125,18 @@ namespace glz
    template <class T>
    struct meta;
 
-   // Concept for when rename_key returns exactly std::string (allocates)
-   template <class T>
-   concept meta_has_rename_key_string = requires(T t, const std::string_view s) {
-      { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::same_as<std::string>;
-   };
-
    template <std::pair V>
    struct make_static
    {
       static constexpr auto value = V;
+   };
+
+#if GLZ_HAS_CONSTEXPR_STRING
+   // Concept for when rename_key returns exactly std::string (allocates)
+   // Requires constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
+   template <class T>
+   concept meta_has_rename_key_string = requires(T t, const std::string_view s) {
+      { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::same_as<std::string>;
    };
 
    template <meta_has_rename_key_string T, size_t... I>
@@ -177,6 +180,11 @@ namespace glz
          }()...};
       }
    }
+#else
+   // When constexpr std::string is not available, this concept is always false
+   template <class T>
+   concept meta_has_rename_key_string = false;
+#endif
 
    // Concept for when rename_key returns anything convertible to std::string_view EXCEPT std::string (non-allocating)
    template <class T>

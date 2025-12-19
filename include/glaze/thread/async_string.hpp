@@ -40,6 +40,7 @@ namespace glz
       {
          std::unique_lock lock(other.mutex);
          str = std::move(other.str);
+         other.str.clear(); // Ensure moved-from state is empty for consistent behavior across ABIs
       }
 
       async_string& operator=(const async_string& other)
@@ -60,6 +61,7 @@ namespace glz
             std::unique_lock lock2(other.mutex, std::defer_lock);
             std::lock(lock1, lock2);
             str = std::move(other.str);
+            other.str.clear(); // Ensure moved-from state is empty for consistent behavior across ABIs
          }
          return *this;
       }

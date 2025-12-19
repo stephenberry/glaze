@@ -3,6 +3,22 @@
 
 #pragma once
 
+// Detect constexpr std::string support
+// The old GCC ABI (_GLIBCXX_USE_CXX11_ABI=0) does not have constexpr std::string::size()
+// This affects features like rename_key returning std::string
+#if defined(__GLIBCXX__) && defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
+#define GLZ_HAS_CONSTEXPR_STRING 0
+#else
+#define GLZ_HAS_CONSTEXPR_STRING 1
+#endif
+
+namespace glz
+{
+   // Constexpr bool for use in if constexpr or other compile-time contexts
+   // Use GLZ_HAS_CONSTEXPR_STRING macro for #if preprocessor guards
+   inline constexpr bool has_constexpr_string = GLZ_HAS_CONSTEXPR_STRING;
+}
+
 // Glaze Feature Test Macros for breaking changes
 
 // v6.2.0 moves append_arrays and error_on_const_read out of glz::opts
