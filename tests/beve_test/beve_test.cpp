@@ -3146,8 +3146,8 @@ suite delimited_beve_tests = [] {
 
       // Verify round-trip works correctly (more robust than counting raw delimiter bytes)
       std::vector<int> result{};
-      auto ec2 = glz::read_beve_delimited(result, buffer);
-      expect(!ec2);
+      ec = glz::read_beve_delimited(result, buffer);
+      expect(!ec);
       expect(result.size() == size_t(5));
       expect(result == values);
    };
@@ -3168,8 +3168,8 @@ suite delimited_beve_tests = [] {
 
       // Read them back
       std::vector<int> output{};
-      auto ec2 = glz::read_beve_delimited(output, buffer);
-      expect(!ec2);
+      ec = glz::read_beve_delimited(output, buffer);
+      expect(!ec);
       expect(output.size() == size_t(4));
       expect(output == input);
    };
@@ -3181,8 +3181,8 @@ suite delimited_beve_tests = [] {
       expect(!ec);
 
       std::vector<std::string> output{};
-      auto ec2 = glz::read_beve_delimited(output, buffer);
-      expect(!ec2);
+      ec = glz::read_beve_delimited(output, buffer);
+      expect(!ec);
       expect(output == input);
    };
 
@@ -3193,8 +3193,8 @@ suite delimited_beve_tests = [] {
       expect(!ec);
 
       std::vector<simple_obj> output{};
-      auto ec2 = glz::read_beve_delimited(output, buffer);
-      expect(!ec2);
+      ec = glz::read_beve_delimited(output, buffer);
+      expect(!ec);
       expect(output.size() == size_t(3));
       expect(output[0].x == 1);
       expect(output[0].y == "first");
@@ -3283,8 +3283,8 @@ suite delimited_beve_tests = [] {
 
       // Verify single value round-trips correctly
       std::vector<int> output{};
-      auto ec2 = glz::read_beve_delimited(output, buffer);
-      expect(!ec2);
+      ec = glz::read_beve_delimited(output, buffer);
+      expect(!ec);
       expect(output.size() == size_t(1));
       expect(output == input);
    };
@@ -3327,9 +3327,9 @@ suite delimited_beve_tests = [] {
       expect(!ec);
 
       int result{};
-      auto ec2 = glz::read_beve(result, buffer);
-      expect(!ec2);
-      expect(ec2.count == buffer.size()) << "count should equal bytes consumed";
+      ec = glz::read_beve(result, buffer);
+      expect(!ec);
+      expect(ec.count == buffer.size()) << "count should equal bytes consumed";
       expect(result == 42);
    };
 };

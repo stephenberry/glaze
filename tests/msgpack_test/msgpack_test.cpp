@@ -557,8 +557,8 @@ int main()
       expect(!ec);
 
       system_clock::time_point decoded;
-      auto ec2 = glz::read_msgpack(decoded, buffer);
-      expect(!ec2);
+      ec = glz::read_msgpack(decoded, buffer);
+      expect(!ec);
       expect(decoded == truncated);
    };
 
@@ -572,8 +572,8 @@ int main()
       expect(!ec);
 
       system_clock::time_point decoded;
-      auto ec2 = glz::read_msgpack(decoded, buffer);
-      expect(!ec2);
+      ec = glz::read_msgpack(decoded, buffer);
+      expect(!ec);
       expect(decoded == epoch);
    };
 

@@ -11453,8 +11453,8 @@ suite custom_error = [] {
       auto ec = glz::write_json(obj, buffer);
       expect(ec.custom_error_message == "custom_errors_t write error");
 
-      auto ec2 = glz::read_json(obj, "{}");
-      expect(ec2.custom_error_message == "custom_errors_t read error");
+      ec = glz::read_json(obj, "{}");
+      expect(ec.custom_error_message == "custom_errors_t read error");
    };
 };
 
