@@ -1,13 +1,13 @@
-# Result Type and Buffer Handling
+# Error Context and Buffer Handling
 
 Glaze provides a unified return type for all read and write operations that gives you both error information and the byte count.
 
-## The `result` Type
+## The `error_ctx` Type
 
-All read and write functions return `glz::result`:
+All read and write functions return `glz::error_ctx`:
 
 ```cpp
-struct result {
+struct error_ctx {
     size_t count{};                          // Bytes processed (read or written)
     error_code ec{};                         // Error code (none on success)
     std::string_view custom_error_message{}; // Optional error details
@@ -21,7 +21,7 @@ struct result {
 
 - **`count`**: Always contains the number of bytes processed, even on error (useful for debugging)
 - **`ec`**: The error code (`error_code::none` on success)
-- **`operator bool()`**: Returns `true` when there is an error (matches `error_ctx` semantics)
+- **`operator bool()`**: Returns `true` when there is an error (matches `std::error_code` semantics)
 
 ## Basic Usage
 
@@ -30,14 +30,14 @@ struct result {
 ```cpp
 my_struct obj{};
 std::string buffer{};
-auto result = glz::write_json(obj, buffer);
-if (result) {
+auto ec = glz::write_json(obj, buffer);
+if (ec) {
     // Error occurred
-    std::cerr << glz::format_error(result, buffer) << '\n';
+    std::cerr << glz::format_error(ec, buffer) << '\n';
     return;
 }
-// Success: buffer.size() == result.count
-std::cout << "Wrote " << result.count << " bytes\n";
+// Success: buffer.size() == ec.count
+std::cout << "Wrote " << ec.count << " bytes\n";
 ```
 
 ### Writing to Fixed-Size Buffers
@@ -46,22 +46,22 @@ Fixed-size buffers like `std::array` and `std::span` now have automatic bounds c
 
 ```cpp
 std::array<char, 256> buffer;
-auto result = glz::write_json(obj, buffer);
-if (result) {
-    if (result.ec == glz::error_code::buffer_overflow) {
+auto ec = glz::write_json(obj, buffer);
+if (ec) {
+    if (ec.ec == glz::error_code::buffer_overflow) {
         // Buffer was too small
-        std::cerr << "Buffer overflow after " << result.count << " bytes\n";
+        std::cerr << "Buffer overflow after " << ec.count << " bytes\n";
 
         // Use a larger buffer or the string-returning overload:
-        auto full_result = glz::write_json(obj);
-        if (full_result) {
-            size_t required_size = full_result->size();
+        auto result = glz::write_json(obj);
+        if (result) {
+            size_t required_size = result->size();
         }
     }
     return;
 }
-// Success: result.count contains bytes written
-std::string_view json(buffer.data(), result.count);
+// Success: ec.count contains bytes written
+std::string_view json(buffer.data(), ec.count);
 ```
 
 ### Writing to `std::span`
@@ -70,15 +70,15 @@ std::string_view json(buffer.data(), result.count);
 
 ```cpp
 std::span<char> shared_memory(ptr, size);
-auto result = glz::write_json(obj, shared_memory);
-if (result) {
-    if (result.ec == glz::error_code::buffer_overflow) {
+auto ec = glz::write_json(obj, shared_memory);
+if (ec) {
+    if (ec.ec == glz::error_code::buffer_overflow) {
         return error::insufficient_shared_memory;
     }
     return error::serialization_failed;
 }
 // Notify consumers of bytes written
-notify_consumers(result.count);
+notify_consumers(ec.count);
 ```
 
 ### Writing to Raw Pointers
@@ -87,25 +87,11 @@ Raw `char*` pointers are trusted to have sufficient space (no bounds checking):
 
 ```cpp
 char* dma_buffer = get_dma_buffer();  // Caller guarantees sufficient space
-auto result = glz::write_json(obj, dma_buffer);
-if (!result) {
-    trigger_dma_transfer(result.count);
+auto ec = glz::write_json(obj, dma_buffer);
+if (!ec) {
+    trigger_dma_transfer(ec.count);
 }
 ```
-
-## Backwards Compatibility
-
-The `result` type is interface-compatible with the legacy `error_ctx` type. Existing code patterns continue to work:
-
-| Pattern | Works? | Notes |
-|---------|--------|-------|
-| `auto ec = glz::write_json(...)` | Yes | `ec` is `result`, same interface |
-| `if (ec) { handle_error(); }` | Yes | Same semantics (truthy = error) |
-| `if (!ec) { success(); }` | Yes | Same semantics |
-| `glz::format_error(ec, buffer)` | Yes | Works directly |
-| `ec == glz::error_code::none` | Yes | Same comparison |
-
-**New capability**: `result.count` provides bytes processed, which was previously unavailable for fixed-size buffers.
 
 ## Buffer Overflow Handling
 
@@ -113,15 +99,15 @@ When writing to a fixed-size buffer that's too small, Glaze returns `error_code:
 
 ```cpp
 std::array<char, 64> small_buffer;
-auto result = glz::write_json(large_object, small_buffer);
-if (result.ec == glz::error_code::buffer_overflow) {
-    // result.count contains bytes written before overflow
+auto ec = glz::write_json(large_object, small_buffer);
+if (ec.ec == glz::error_code::buffer_overflow) {
+    // ec.count contains bytes written before overflow
     // This is a LOWER BOUND on required size (not total required)
 
     // The partial content is NOT valid JSON - do not parse or transmit
     // Useful only for debugging:
-    std::string_view partial(small_buffer.data(), result.count);
-    log_debug("Overflow after {} bytes: {}", result.count, partial);
+    std::string_view partial(small_buffer.data(), ec.count);
+    log_debug("Overflow after {} bytes: {}", ec.count, partial);
 
     // To get actual required size, use the string-returning overload:
     auto full = glz::write_json(large_object);
@@ -133,10 +119,10 @@ if (result.ec == glz::error_code::buffer_overflow) {
 
 ### Important Notes on Buffer Overflow
 
-1. **Content validity**: The first `result.count` bytes contain valid serialized output
+1. **Content validity**: The first `ec.count` bytes contain valid serialized output
 2. **Partial data is NOT valid**: The content is truncated mid-serialization and cannot be parsed
-3. **`result.count` is a lower bound**: It's the bytes written before failure, not total required size
-4. **Content beyond `result.count`**: Unspecified (may be uninitialized or previous data)
+3. **`ec.count` is a lower bound**: It's the bytes written before failure, not total required size
+4. **Content beyond `ec.count`**: Unspecified (may be uninitialized or previous data)
 
 ## Performance Optimization
 
@@ -150,7 +136,7 @@ struct fast_opts : glz::opts {
 };
 
 std::array<char, 8192> large_buffer;  // Known to be sufficient
-auto result = glz::write<fast_opts{}>(obj, large_buffer);
+auto ec = glz::write<fast_opts{}>(obj, large_buffer);
 // No bounds checking overhead
 ```
 
@@ -158,23 +144,23 @@ auto result = glz::write<fast_opts{}>(obj, large_buffer);
 
 ## Format Support
 
-The `result` type is used consistently across all serialization formats:
+The `error_ctx` type is used consistently across all serialization formats:
 
 ```cpp
 // JSON
-auto result = glz::write_json(obj, buffer);
+auto ec = glz::write_json(obj, buffer);
 
 // BEVE (Binary)
-auto result = glz::write_beve(obj, buffer);
+auto ec = glz::write_beve(obj, buffer);
 
 // CBOR
-auto result = glz::write_cbor(obj, buffer);
+auto ec = glz::write_cbor(obj, buffer);
 
 // MessagePack
-auto result = glz::write_msgpack(obj, buffer);
+auto ec = glz::write_msgpack(obj, buffer);
 
 // Generic with options
-auto result = glz::write<glz::opts{.format = glz::JSON}>(obj, buffer);
+auto ec = glz::write<glz::opts{.format = glz::JSON}>(obj, buffer);
 ```
 
 ## Extending Buffer Support
@@ -204,12 +190,12 @@ namespace glz {
 
 // Now works seamlessly
 my_lib::ring_buffer<4096> ring;
-auto result = glz::write_json(obj, ring);
+auto ec = glz::write_json(obj, ring);
 ```
 
 ## Read and Write Return Types
 
-Glaze uses `glz::result` for both read and write operations:
+Glaze uses `glz::error_ctx` for both read and write operations:
 
 | Operation | Byte Position Field | Purpose |
 |-----------|---------------------|---------|
@@ -222,12 +208,12 @@ Glaze uses `glz::result` for both read and write operations:
 std::string input = R"({"x":1}{"y":2})";  // Two JSON objects
 my_struct obj1{}, obj2{};
 
-auto ec1 = glz::read_json(obj1, input);
-if (!ec1) {
-    size_t consumed = ec1.count;  // Bytes consumed by first read
+auto ec = glz::read_json(obj1, input);
+if (!ec) {
+    size_t consumed = ec.count;  // Bytes consumed by first read
 
     // Read second object from remaining buffer
-    auto ec2 = glz::read_json(obj2, std::string_view(input).substr(consumed));
+    ec = glz::read_json(obj2, std::string_view(input).substr(consumed));
 }
 ```
 
@@ -235,9 +221,9 @@ if (!ec1) {
 
 ```cpp
 std::array<char, 1024> buffer;
-auto result = glz::write_json(obj, buffer);
-if (!result) {
-    size_t produced = result.count;  // Bytes written
+auto ec = glz::write_json(obj, buffer);
+if (!ec) {
+    size_t produced = ec.count;  // Bytes written
     std::string_view json(buffer.data(), produced);
 }
 ```

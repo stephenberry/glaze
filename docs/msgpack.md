@@ -53,8 +53,8 @@ if (read_error) {
 
 - They work with any reflected type, STL container, or custom specialization.
 - Overloads exist for output buffers (`std::string`, `std::vector<std::byte>`, `std::vector<char>`, etc.).
-- Write functions return `result` with `count` field for bytes written. Read functions also return `result`.
-- Check for success with `if (!result)` (falsy = success, truthy = error).
+- Write functions return `error_ctx` with `count` field for bytes written. Read functions also return `error_ctx`.
+- Check for success with `if (!ec)` (falsy = success, truthy = error).
 
 ## `glz::msgpack::ext`
 

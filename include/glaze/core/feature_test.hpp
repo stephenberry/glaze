@@ -21,12 +21,12 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
-// v6.5.0 introduces glz::result as the unified return type for read/write operations
-// - Field order: {count, ec, custom_error_message}
+// v6.5.0 updates glz::error_ctx with unified read/write support
+// - Field order changed: {count, ec, custom_error_message}
 // - 'location' field renamed to 'count' for consistency across read/write
 // - 'includer_error' field removed (use custom_error_message)
-// - error_ctx alias removed (use result)
-#define glaze_v6_5_0_result
+// - Now includes byte count for both read and write operations
+#define glaze_v6_5_0_error_ctx
 
 // v6.2.0 moves append_arrays and error_on_const_read out of glz::opts
 // Use a custom opts struct inheriting from glz::opts to enable these options

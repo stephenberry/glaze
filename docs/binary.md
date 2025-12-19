@@ -9,9 +9,9 @@ The binary specification is known as [BEVE](https://github.com/beve-org/beve).
 ```c++
 my_struct s{};
 std::vector<std::byte> buffer{};
-auto result = glz::write_beve(s, buffer);
-if (!result) {
-   // Success: result.count contains bytes written
+auto ec = glz::write_beve(s, buffer);
+if (!ec) {
+   // Success: ec.count contains bytes written
 }
 ```
 
@@ -106,9 +106,9 @@ This is useful for:
 | Function | Description |
 |----------|-------------|
 | `write_beve_delimiter(buffer)` | Writes a single delimiter byte (0x06) |
-| `write_beve_append(value, buffer)` | Appends a BEVE value to existing buffer. Returns `result` with `count` field for bytes written. |
-| `write_beve_append_with_delimiter(value, buffer)` | Writes delimiter + value. Returns `result` with bytes written including delimiter. |
-| `write_beve_delimited(container, buffer)` | Writes all container elements with delimiters between them. Returns `result`. |
+| `write_beve_append(value, buffer)` | Appends a BEVE value to existing buffer. Returns `error_ctx` with `count` field for bytes written. |
+| `write_beve_append_with_delimiter(value, buffer)` | Writes delimiter + value. Returns `error_ctx` with bytes written including delimiter. |
+| `write_beve_delimited(container, buffer)` | Writes all container elements with delimiters between them. Returns `error_ctx`. |
 
 **Reading Functions**
 
@@ -137,7 +137,7 @@ auto result2 = glz::write_beve_append_with_delimiter(my_struct{2, "second"}, buf
 auto result3 = glz::write_beve_append_with_delimiter(my_struct{3, "third"}, buffer);
 ```
 
-The `write_beve_append` function returns `glz::result` where `result.count` contains the number of bytes written.
+The `write_beve_append` function returns `glz::error_ctx` where `ec.count` contains the number of bytes written.
 
 #### Write a Delimiter
 
@@ -217,7 +217,7 @@ while (offset < buffer.size()) {
 
 #### Bytes Consumed Tracking
 
-The standard `read_beve` function tracks bytes consumed via `result.count`:
+The standard `read_beve` function tracks bytes consumed via `ec.count`:
 
 ```c++
 my_struct obj{};

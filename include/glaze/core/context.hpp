@@ -94,22 +94,19 @@ namespace glz
       buffer_overflow // Write would exceed fixed buffer capacity
    };
 
-   // Unified result type for all read/write operations
-   // Provides byte count processed and error information
-   struct result final
+   // Unified error context for all read/write operations
+   // Provides error information and byte count processed
+   struct error_ctx final
    {
       size_t count{}; // Bytes processed (read or written)
       error_code ec{}; // Error code (none on success)
       std::string_view custom_error_message{}; // Human-readable error context
 
-      // Returns true when there IS an error
+      // Returns true when there IS an error (matches std::error_code semantics)
       operator bool() const noexcept { return ec != error_code::none; }
 
       bool operator==(const error_code e) const noexcept { return ec == e; }
    };
-
-   // Backwards compatibility alias
-   using error_ctx = result;
 
    // Runtime context for configuration
    // We do not template the context on iterators so that it can be easily shared across buffer implementations

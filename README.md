@@ -984,27 +984,27 @@ if (!result) {
 
 ### Writing to Fixed-Size Buffers
 
-All write functions return `glz::result`, which provides both error information and the byte count:
+All write functions return `glz::error_ctx`, which provides both error information and the byte count:
 
 ```c++
 std::array<char, 1024> buffer;
-auto result = glz::write_json(my_obj, buffer);
-if (result) {
-   if (result.ec == glz::error_code::buffer_overflow) {
+auto ec = glz::write_json(my_obj, buffer);
+if (ec) {
+   if (ec.ec == glz::error_code::buffer_overflow) {
       // Buffer was too small
-      std::cerr << "Overflow after " << result.count << " bytes\n";
+      std::cerr << "Overflow after " << ec.count << " bytes\n";
    }
    return;
 }
-// Success: result.count contains bytes written
-std::string_view json(buffer.data(), result.count);
+// Success: ec.count contains bytes written
+std::string_view json(buffer.data(), ec.count);
 ```
 
-The `result` type is interface-compatible with `error_ctx`, so existing error checking code continues to work:
-- `if (result)` - true when there is an error (matches `error_ctx` semantics)
-- `result.count` - bytes written (always populated, even on error)
-- `result.ec` - the error code
-- `glz::format_error(result, buffer)` - works via implicit conversion to `error_ctx`
+The `error_ctx` type provides:
+- `if (ec)` - true when there is an error (matches `std::error_code` semantics)
+- `ec.count` - bytes processed (always populated, even on error)
+- `ec.ec` - the error code
+- `glz::format_error(ec, buffer)` - formatted error message
 
 ## Compile Time Options
 
