@@ -746,6 +746,7 @@ suite error_on_missing_keys_test = [] {
    };
 };
 
+#if GLZ_HAS_CONSTEXPR_STRING
 suite json_schema = [] {
    "json schema"_test = [] {
       Thing obj{};
@@ -758,6 +759,7 @@ suite json_schema = [] {
          << schema;
    };
 };
+#endif
 
 struct empty_t
 {};
@@ -857,6 +859,7 @@ struct local_schema_t
 static_assert(glz::local_json_schema_t<local_schema_t>);
 static_assert(glz::json_schema_t<local_schema_t>);
 
+#if GLZ_HAS_CONSTEXPR_STRING
 suite meta_schema_reflection_tests = [] {
    "meta_schema_reflection"_test = [] {
       meta_schema_t obj;
@@ -884,6 +887,7 @@ suite meta_schema_reflection_tests = [] {
          << json_schema;
    };
 };
+#endif
 
 struct animals_t
 {
