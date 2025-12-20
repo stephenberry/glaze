@@ -133,6 +133,16 @@ namespace
       std::ifstream key("wss_test_key.pem");
       return cert.good() && key.good();
    }
+
+   // Ensure certificates are available for testing.
+   // Returns true if certificates are ready, false if generation failed.
+   bool ensure_test_certificates()
+   {
+      if (certificates_exist()) {
+         return true;
+      }
+      return generate_test_certificates();
+   }
 } // namespace
 
 suite wss_client_tests = [] {
@@ -179,10 +189,10 @@ suite wss_client_tests = [] {
 
 suite wss_server_tests = [] {
    "wss_server_client_echo"_test = [] {
-      // Generate certificates if they don't exist
-      if (!certificates_exist()) {
-         expect(generate_test_certificates()) << "Failed to generate test certificates\n";
-      }
+      // Ensure certificates are available - fail test if generation fails
+      bool certs_ok = ensure_test_certificates();
+      expect(certs_ok) << "Failed to generate test certificates";
+      if (!certs_ok) return;
 
       // Create HTTPS server (supports WSS via WebSocket upgrade over HTTPS)
       https_server server;
@@ -279,9 +289,9 @@ suite wss_server_tests = [] {
    "wss_multiple_clients_test"_test = [] {
       // Test multiple concurrent WSS client connections
       // This verifies the server can handle multiple SSL handshakes concurrently
-      if (!certificates_exist()) {
-         expect(generate_test_certificates()) << "Failed to generate test certificates\n";
-      }
+      bool certs_ok = ensure_test_certificates();
+      expect(certs_ok) << "Failed to generate test certificates";
+      if (!certs_ok) return;
 
       https_server server;
       server.load_certificate("wss_test_cert.pem", "wss_test_key.pem");
@@ -373,9 +383,9 @@ suite wss_server_tests = [] {
 
    "wss_binary_message_test"_test = [] {
       // Test binary message handling over WSS
-      if (!certificates_exist()) {
-         expect(generate_test_certificates()) << "Failed to generate test certificates\n";
-      }
+      bool certs_ok = ensure_test_certificates();
+      expect(certs_ok) << "Failed to generate test certificates";
+      if (!certs_ok) return;
 
       https_server server;
       server.load_certificate("wss_test_cert.pem", "wss_test_key.pem");
@@ -468,9 +478,9 @@ suite wss_server_tests = [] {
    "wss_large_message_test"_test = [] {
       // Test large message handling over WSS
       // SSL has its own framing, so verify large payloads work correctly
-      if (!certificates_exist()) {
-         expect(generate_test_certificates()) << "Failed to generate test certificates\n";
-      }
+      bool certs_ok = ensure_test_certificates();
+      expect(certs_ok) << "Failed to generate test certificates";
+      if (!certs_ok) return;
 
       https_server server;
       server.load_certificate("wss_test_cert.pem", "wss_test_key.pem");
@@ -558,9 +568,9 @@ suite wss_server_tests = [] {
 
    "wss_graceful_close_test"_test = [] {
       // Test graceful close with close code and reason over WSS
-      if (!certificates_exist()) {
-         expect(generate_test_certificates()) << "Failed to generate test certificates\n";
-      }
+      bool certs_ok = ensure_test_certificates();
+      expect(certs_ok) << "Failed to generate test certificates";
+      if (!certs_ok) return;
 
       https_server server;
       server.load_certificate("wss_test_cert.pem", "wss_test_key.pem");
