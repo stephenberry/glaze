@@ -41,46 +41,6 @@
 
 namespace glz
 {
-   // Helper type traits and functions for SSL socket compatibility.
-   // ASIO 1.32+ ssl::stream<> doesn't have cancel/close/is_open methods directly.
-   namespace detail
-   {
-      template <typename T>
-      struct is_ssl_stream : std::false_type
-      {};
-
-#ifdef GLZ_ENABLE_SSL
-      template <typename T>
-      struct is_ssl_stream<asio::ssl::stream<T>> : std::true_type
-      {};
-#endif
-
-      template <typename T>
-      inline constexpr bool is_ssl_stream_v = is_ssl_stream<T>::value;
-
-      template <typename SocketType>
-      auto& get_lowest_layer(SocketType& socket)
-      {
-         if constexpr (is_ssl_stream_v<SocketType>) {
-            return socket.lowest_layer();
-         }
-         else {
-            return socket;
-         }
-      }
-
-      template <typename SocketType>
-      const auto& get_lowest_layer(const SocketType& socket)
-      {
-         if constexpr (is_ssl_stream_v<SocketType>) {
-            return socket.lowest_layer();
-         }
-         else {
-            return socket;
-         }
-      }
-   }
-
    // WebSocket opcode constants
    enum class ws_opcode : uint8_t { continuation = 0x0, text = 0x1, binary = 0x2, close = 0x8, ping = 0x9, pong = 0xa };
 
@@ -460,7 +420,7 @@ namespace glz
       {
          // Try to get remote endpoint, but don't fail if it's not available yet
          try {
-            remote_endpoint_ = detail::get_lowest_layer(*socket_).remote_endpoint();
+            remote_endpoint_ = socket_->lowest_layer().remote_endpoint();
          }
          catch (...) {
             // Endpoint not available yet (e.g., for client mode before connection)
@@ -544,8 +504,8 @@ namespace glz
             std::lock_guard<std::mutex> lock(socket_op_mutex_);
             if (socket_) {
                asio::error_code ec;
-               detail::get_lowest_layer(*socket_).cancel(ec);
-               detail::get_lowest_layer(*socket_).close(ec);
+               socket_->lowest_layer().cancel(ec);
+               socket_->lowest_layer().close(ec);
                socket_.reset();
             }
          }
@@ -636,7 +596,7 @@ namespace glz
          // Capture socket locally to prevent race condition
          auto socket = socket_;
          // Check both pointer validity AND that socket is still open
-         if (!socket || !detail::get_lowest_layer(*socket).is_open()) {
+         if (!socket || !socket->lowest_layer().is_open()) {
             return;
          }
 
@@ -993,7 +953,7 @@ namespace glz
          // Check both pointer validity AND that socket is still open.
          // The socket could be closed (is_open() == false) while the shared_ptr is still valid.
          // Calling async_write on a closed socket crashes in ASIO's reactor.
-         if (!socket || !detail::get_lowest_layer(*socket).is_open()) {
+         if (!socket || !socket->lowest_layer().is_open()) {
             // Socket was closed externally - ensure close callback fires if pending
             bool had_close_pending = false;
             {
@@ -1051,7 +1011,7 @@ namespace glz
          auto socket = socket_;
          if (socket) {
             asio::error_code ec;
-            detail::get_lowest_layer(*socket).shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+            socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, ec);
             // Ignore shutdown errors - socket may already be closed
          }
          do_close();
@@ -1208,8 +1168,8 @@ namespace glz
             std::lock_guard<std::mutex> lock(socket_op_mutex_);
             if (socket_) {
                asio::error_code ec;
-               detail::get_lowest_layer(*socket_).cancel(ec);
-               detail::get_lowest_layer(*socket_).close(ec);
+               socket_->lowest_layer().cancel(ec);
+               socket_->lowest_layer().close(ec);
                socket_.reset(); // Reset pointer so subsequent checks know socket is closed
             }
          }
@@ -1291,7 +1251,7 @@ namespace glz
 
          // Re-check under lock since socket may have been closed while waiting for mutex
          auto socket = socket_;
-         if (!socket || !detail::get_lowest_layer(*socket).is_open()) {
+         if (!socket || !socket->lowest_layer().is_open()) {
             return;
          }
 
