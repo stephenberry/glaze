@@ -34,7 +34,7 @@ namespace glz::repe
    {
       // Use zero-copy span-based call - parses request in-place, writes directly to response buffer
       // Exception handling is done internally by the registry
-      registry.call(std::span<const char>{request, request_size}, plugin_response_buffer);
+      registry.call(std::span<const char>{request, static_cast<size_t>(request_size)}, plugin_response_buffer);
       return {plugin_response_buffer.data(), plugin_response_buffer.size()};
    }
 
