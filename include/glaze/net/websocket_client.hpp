@@ -412,7 +412,7 @@ namespace glz
       // Set SSL verification mode before calling connect()
       // Use asio::ssl::verify_none to disable certificate verification
       // (useful for self-signed certificates in testing)
-      void set_ssl_verify_mode(int mode) { impl_->ssl_verify_mode_ = mode; }
+      void set_ssl_verify_mode(asio::ssl::verify_mode mode) { impl_->ssl_verify_mode_ = mode; }
 #endif
 
       std::shared_ptr<asio::io_context>& context() { return impl_->ctx; }
