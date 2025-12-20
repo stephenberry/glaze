@@ -677,17 +677,7 @@ namespace glz
             // Only call error handlers if not already closed (prevents calling handlers
             // after force_close() when user's captured references may be invalid)
             if (!closed_.load()) {
-               if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-                  if (auto srv = server_.lock()) {
-                     srv->notify_error(this->shared_from_this(), ec);
-                  }
-                  else if (client_error_handler_) {
-                     client_error_handler_(ec);
-                  }
-               }
-               else if (client_error_handler_) {
-                  client_error_handler_(ec);
-               }
+               dispatch_error(ec);
             }
             // Close the connection after a read error (connection is likely broken)
             do_close();
@@ -821,17 +811,7 @@ namespace glz
                // Only call message handlers if not closed (prevents calling handlers
                // after force_close() when user's captured references may be invalid)
                if (!closed_.load()) {
-                  if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-                     if (auto srv = server_.lock()) {
-                        srv->notify_message(this->shared_from_this(), message_view, opcode);
-                     }
-                     else if (client_message_handler_) {
-                        client_message_handler_(message_view, opcode);
-                     }
-                  }
-                  else if (client_message_handler_) {
-                     client_message_handler_(message_view, opcode);
-                  }
+                  dispatch_message(message_view, opcode);
                }
             }
             else {
@@ -871,17 +851,7 @@ namespace glz
                // Only call message handlers if not closed (prevents calling handlers
                // after force_close() when user's captured references may be invalid)
                if (!closed_.load()) {
-                  if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-                     if (auto srv = server_.lock()) {
-                        srv->notify_message(this->shared_from_this(), message_view, current_opcode_);
-                     }
-                     else if (client_message_handler_) {
-                        client_message_handler_(message_view, current_opcode_);
-                     }
-                  }
-                  else if (client_message_handler_) {
-                     client_message_handler_(message_view, current_opcode_);
-                  }
+                  dispatch_message(message_view, current_opcode_);
                }
                message_buffer_.clear();
                current_opcode_ = ws_opcode::continuation;
@@ -1057,17 +1027,7 @@ namespace glz
                                  // Only call error handlers if not already closed (prevents calling handlers
                                  // after force_close() when user's captured references may be invalid)
                                  if (!self->closed_.load()) {
-                                    if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-                                       if (auto srv = self->server_.lock()) {
-                                          srv->notify_error(self, ec);
-                                       }
-                                       else if (self->client_error_handler_) {
-                                          self->client_error_handler_(ec);
-                                       }
-                                    }
-                                    else if (self->client_error_handler_) {
-                                       self->client_error_handler_(ec);
-                                    }
+                                    self->dispatch_error(ec);
                                  }
                                  // Close the connection after a write error (connection is likely broken)
                                  self->do_close();
@@ -1186,6 +1146,48 @@ namespace glz
          }
       }
 
+      // Helper to dispatch error notifications to server (TCP only) or client handler
+      void dispatch_error(std::error_code ec)
+      {
+         if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+            if (auto srv = server_.lock()) {
+               srv->notify_error(this->shared_from_this(), ec);
+               return;
+            }
+         }
+         if (client_error_handler_) {
+            client_error_handler_(ec);
+         }
+      }
+
+      // Helper to dispatch message notifications to server (TCP only) or client handler
+      void dispatch_message(std::string_view message, ws_opcode opcode)
+      {
+         if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+            if (auto srv = server_.lock()) {
+               srv->notify_message(this->shared_from_this(), message, opcode);
+               return;
+            }
+         }
+         if (client_message_handler_) {
+            client_message_handler_(message, opcode);
+         }
+      }
+
+      // Helper to dispatch close notifications to server (TCP only) or client handler
+      void dispatch_close()
+      {
+         if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+            if (auto srv = server_.lock()) {
+               srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
+               return;
+            }
+         }
+         if (client_close_handler_) {
+            client_close_handler_(close_code_, close_reason_);
+         }
+      }
+
       inline void do_close()
       {
          // Ensure we only close once and call on_close once
@@ -1197,17 +1199,7 @@ namespace glz
          // Synchronize with force_close() to prevent calling handlers with dangling references
          {
             std::lock_guard<std::mutex> lock(close_handler_mutex_);
-            if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-               if (auto srv = server_.lock()) {
-                  srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
-               }
-               else if (client_close_handler_) {
-                  client_close_handler_(close_code_, close_reason_);
-               }
-            }
-            else if (client_close_handler_) {
-               client_close_handler_(close_code_, close_reason_);
-            }
+            dispatch_close();
          }
 
          // Hold socket_op_mutex_ while closing to prevent race with async_read_some/async_write
