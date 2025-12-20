@@ -272,6 +272,40 @@ namespace glz
       virtual void force_close() = 0;
    };
 
+   // Type-erased interface for WebSocket connections.
+   // Allows handlers to work with both TCP (ws://) and SSL (wss://) WebSocket connections.
+   //
+   // NOTE: Handler types now use websocket_connection_interface instead of the concrete
+   // websocket_connection<tcp::socket>. Using `auto` in lambdas still works:
+   //   ws_server->on_message([](auto conn, std::string_view msg, ws_opcode op) {
+   //      conn->send_text("reply");  // interface methods work fine
+   //   });
+   // Only code that explicitly typed the concrete type or accessed internal members
+   // (like socket_) needs to be updated.
+   struct websocket_connection_interface : public closeable_connection
+   {
+      // Send operations
+      virtual void send_text(std::string_view message) = 0;
+      virtual void send_binary(std::string_view message) = 0;
+      virtual void send_ping(std::string_view payload = {}) = 0;
+      virtual void send_pong(std::string_view payload = {}) = 0;
+
+      // Close the connection
+      virtual void close(ws_close_code code = ws_close_code::normal, std::string_view reason = {}) = 0;
+
+      // Connection info
+      virtual std::string remote_address() const = 0;
+      virtual uint16_t remote_port() const = 0;
+
+      // User data
+      virtual void set_user_data(std::shared_ptr<void> data) = 0;
+      virtual std::shared_ptr<void> get_user_data() const = 0;
+
+      // Close info (valid after connection is closed)
+      virtual ws_close_code get_close_code() const = 0;
+      virtual std::string_view get_close_reason() const = 0;
+   };
+
    // WebSocket server class
    //
    // Message Handler Lifetime:
@@ -287,14 +321,14 @@ namespace glz
    //
    struct websocket_server
    {
+      // Handler types use websocket_connection_interface for type erasure.
+      // This allows handlers to work with both TCP (ws://) and SSL (wss://) connections.
       using message_handler =
-         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::string_view, ws_opcode)>;
-      using close_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>,
-                                               ws_close_code, std::string_view)>;
-      using error_handler =
-         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code)>;
-      using open_handler =
-         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, const request&)>;
+         std::function<void(std::shared_ptr<websocket_connection_interface>, std::string_view, ws_opcode)>;
+      using close_handler =
+         std::function<void(std::shared_ptr<websocket_connection_interface>, ws_close_code, std::string_view)>;
+      using error_handler = std::function<void(std::shared_ptr<websocket_connection_interface>, std::error_code)>;
+      using open_handler = std::function<void(std::shared_ptr<websocket_connection_interface>, const request&)>;
       using validate_handler = std::function<bool(const request&)>;
 
       websocket_server() = default;
@@ -348,23 +382,26 @@ namespace glz
       // Set connection validator
       inline void on_validate(validate_handler handler) { validate_handler_ = std::move(handler); }
 
-      // Internal methods called by websocket_connection
-      inline void notify_open(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request& req)
+      // Internal methods called by websocket_connection (templated to accept any socket type)
+      template <typename SocketType>
+      inline void notify_open(std::shared_ptr<websocket_connection<SocketType>> conn, const request& req)
       {
          if (open_handler_) {
             open_handler_(conn, req);
          }
       }
 
-      inline void notify_message(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn,
-                                 std::string_view message, ws_opcode opcode)
+      template <typename SocketType>
+      inline void notify_message(std::shared_ptr<websocket_connection<SocketType>> conn, std::string_view message,
+                                 ws_opcode opcode)
       {
          if (message_handler_) {
             message_handler_(conn, message, opcode);
          }
       }
 
-      inline void notify_close(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, ws_close_code code,
+      template <typename SocketType>
+      inline void notify_close(std::shared_ptr<websocket_connection<SocketType>> conn, ws_close_code code,
                                std::string_view reason)
       {
          if (close_handler_) {
@@ -372,7 +409,8 @@ namespace glz
          }
       }
 
-      inline void notify_error(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, std::error_code ec)
+      template <typename SocketType>
+      inline void notify_error(std::shared_ptr<websocket_connection<SocketType>> conn, std::error_code ec)
       {
          if (error_handler_) {
             error_handler_(conn, ec);
@@ -410,7 +448,7 @@ namespace glz
    // is only valid for the duration of the callback. Copy the data if you need to
    // retain it beyond the callback scope.
    template <typename SocketType>
-   struct websocket_connection : public closeable_connection,
+   struct websocket_connection : public websocket_connection_interface,
                                  public std::enable_shared_from_this<websocket_connection<SocketType>>
    {
      public:
@@ -450,22 +488,22 @@ namespace glz
       inline void start(const request& req) { perform_handshake(req); }
 
       // Send a text message
-      inline void send_text(std::string_view message) { send_frame(ws_opcode::text, message); }
+      void send_text(std::string_view message) override { send_frame(ws_opcode::text, message); }
 
       // Send a binary message
-      inline void send_binary(std::string_view message) { send_frame(ws_opcode::binary, message); }
+      void send_binary(std::string_view message) override { send_frame(ws_opcode::binary, message); }
 
       // Send a ping frame
-      inline void send_ping(std::string_view payload = {}) { send_frame(ws_opcode::ping, payload); }
+      void send_ping(std::string_view payload = {}) override { send_frame(ws_opcode::ping, payload); }
 
       // Send a pong frame
-      inline void send_pong(std::string_view payload = {}) { send_frame(ws_opcode::pong, payload); }
+      void send_pong(std::string_view payload = {}) override { send_frame(ws_opcode::pong, payload); }
 
       // Close the connection
       // RFC 6455 Section 7.1.2: "To Start the WebSocket Closing Handshake with a status code,
       // an endpoint MUST send a Close control frame"
       // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.2
-      inline void close(ws_close_code code = ws_close_code::normal, std::string_view reason = {})
+      void close(ws_close_code code = ws_close_code::normal, std::string_view reason = {}) override
       {
          // Atomically check and set is_closing_ to prevent race conditions
          bool expected = false;
@@ -512,17 +550,17 @@ namespace glz
       }
 
       // Get remote endpoint information
-      inline std::string remote_address() const { return remote_endpoint_.address().to_string(); }
+      std::string remote_address() const override { return remote_endpoint_.address().to_string(); }
 
-      inline uint16_t remote_port() const { return remote_endpoint_.port(); }
+      uint16_t remote_port() const override { return remote_endpoint_.port(); }
 
       // Set user data
-      inline void set_user_data(std::shared_ptr<void> data) { user_data_ = data; }
-      inline std::shared_ptr<void> get_user_data() const { return user_data_; }
+      void set_user_data(std::shared_ptr<void> data) override { user_data_ = data; }
+      std::shared_ptr<void> get_user_data() const override { return user_data_; }
 
       // Get close code and reason (valid after connection is closed)
-      inline ws_close_code get_close_code() const { return close_code_; }
-      inline std::string_view get_close_reason() const { return close_reason_; }
+      ws_close_code get_close_code() const override { return close_code_; }
+      std::string_view get_close_reason() const override { return close_reason_; }
 
       // Inject initial data read during handshake
       inline void set_initial_data(std::string_view data)
@@ -606,10 +644,8 @@ namespace glz
                            [self, req, response_buffer, socket](std::error_code ec, std::size_t) {
                               if (ec) {
                                  self->is_closing_ = true;
-                                 if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-                                    if (auto srv = self->server_.lock()) {
-                                       srv->notify_error(self, ec);
-                                    }
+                                 if (auto srv = self->server_.lock()) {
+                                    srv->notify_error(self, ec);
                                  }
                                  self->do_close();
                                  return;
@@ -618,11 +654,9 @@ namespace glz
                               self->handshake_complete_ = true;
 
                               // Register with server for clean shutdown tracking
-                              if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-                                 if (auto srv = self->server_.lock()) {
-                                    srv->register_connection(self);
-                                    srv->notify_open(self, req);
-                                 }
+                              if (auto srv = self->server_.lock()) {
+                                 srv->register_connection(self);
+                                 srv->notify_open(self, req);
                               }
 
                               // Start reading frames
@@ -1106,42 +1140,36 @@ namespace glz
          }
       }
 
-      // Helper to dispatch error notifications to server (TCP only) or client handler
+      // Helper to dispatch error notifications to server or client handler
       void dispatch_error(std::error_code ec)
       {
-         if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-            if (auto srv = server_.lock()) {
-               srv->notify_error(this->shared_from_this(), ec);
-               return;
-            }
+         if (auto srv = server_.lock()) {
+            srv->notify_error(this->shared_from_this(), ec);
+            return;
          }
          if (client_error_handler_) {
             client_error_handler_(ec);
          }
       }
 
-      // Helper to dispatch message notifications to server (TCP only) or client handler
+      // Helper to dispatch message notifications to server or client handler
       void dispatch_message(std::string_view message, ws_opcode opcode)
       {
-         if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-            if (auto srv = server_.lock()) {
-               srv->notify_message(this->shared_from_this(), message, opcode);
-               return;
-            }
+         if (auto srv = server_.lock()) {
+            srv->notify_message(this->shared_from_this(), message, opcode);
+            return;
          }
          if (client_message_handler_) {
             client_message_handler_(message, opcode);
          }
       }
 
-      // Helper to dispatch close notifications to server (TCP only) or client handler
+      // Helper to dispatch close notifications to server or client handler
       void dispatch_close()
       {
-         if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
-            if (auto srv = server_.lock()) {
-               srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
-               return;
-            }
+         if (auto srv = server_.lock()) {
+            srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
+            return;
          }
          if (client_close_handler_) {
             client_close_handler_(close_code_, close_reason_);
