@@ -83,8 +83,8 @@ namespace
       X509V3_CTX ctx;
       X509V3_set_ctx_nodb(&ctx);
       X509V3_set_ctx(&ctx, x509, x509, nullptr, nullptr, 0);
-      X509_EXTENSION* ext = X509V3_EXT_conf_nid(nullptr, &ctx, NID_subject_alt_name,
-                                                 const_cast<char*>("DNS:localhost,IP:127.0.0.1"));
+      X509_EXTENSION* ext =
+         X509V3_EXT_conf_nid(nullptr, &ctx, NID_subject_alt_name, const_cast<char*>("DNS:localhost,IP:127.0.0.1"));
       if (ext) {
          X509_add_ext(x509, ext, -1);
          X509_EXTENSION_free(ext);
@@ -206,9 +206,7 @@ suite wss_server_tests = [] {
       std::atomic<bool> client_connected{false};
       std::string received_message;
 
-      ws_server->on_open([&](auto /*conn*/, const request& /*req*/) {
-         client_connected = true;
-      });
+      ws_server->on_open([&](auto /*conn*/, const request& /*req*/) { client_connected = true; });
 
       ws_server->on_message([&](auto conn, std::string_view msg, ws_opcode opcode) {
          if (opcode == ws_opcode::text) {

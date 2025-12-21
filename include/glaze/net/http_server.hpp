@@ -333,21 +333,19 @@ namespace glz
          else {
             // For TCP sockets, use async_receive with message_peek for more responsive detection
             auto buffer = std::make_shared<std::array<uint8_t, 1>>();
-            socket_->async_receive(asio::buffer(*buffer), asio::socket_base::message_peek,
-                                   [self, buffer](std::error_code ec, std::size_t) {
-                                      if (ec && self->disconnect_handler_) {
-                                         self->is_closed_ = true;
-                                         self->disconnect_handler_();
-                                      }
-                                      else if (!ec && !self->is_closed_) {
-                                         // Continue monitoring
-                                         auto timer = std::make_shared<asio::steady_timer>(
-                                            self->socket_->lowest_layer().get_executor());
-                                         timer->expires_after(std::chrono::seconds(1));
-                                         timer->async_wait(
-                                            [self, timer](std::error_code) { self->start_disconnect_detection(); });
-                                      }
-                                   });
+            socket_->async_receive(
+               asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, std::size_t) {
+                  if (ec && self->disconnect_handler_) {
+                     self->is_closed_ = true;
+                     self->disconnect_handler_();
+                  }
+                  else if (!ec && !self->is_closed_) {
+                     // Continue monitoring
+                     auto timer = std::make_shared<asio::steady_timer>(self->socket_->lowest_layer().get_executor());
+                     timer->expires_after(std::chrono::seconds(1));
+                     timer->async_wait([self, timer](std::error_code) { self->start_disconnect_detection(); });
+                  }
+               });
          }
       }
 
@@ -1396,22 +1394,20 @@ namespace glz
                   if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
                      // For HTTPS: wrap socket in SSL stream and perform handshake
-                     auto ssl_socket =
-                        std::make_shared<socket_type>(std::move(socket), *ssl_context);
-                     ssl_socket->async_handshake(
-                        asio::ssl::stream_base::server,
-                        [this, ssl_socket, remote_endpoint](std::error_code handshake_ec) {
-                           if (!handshake_ec) {
-                              auto conn = std::make_shared<connection_state>(ssl_socket, remote_endpoint);
-                              start_connection(conn);
-                           }
-                           else {
-                              // SSL handshake failed - explicitly close the socket
-                              error_handler(handshake_ec, std::source_location::current());
-                              asio::error_code close_ec;
-                              ssl_socket->lowest_layer().close(close_ec);
-                           }
-                        });
+                     auto ssl_socket = std::make_shared<socket_type>(std::move(socket), *ssl_context);
+                     ssl_socket->async_handshake(asio::ssl::stream_base::server, [this, ssl_socket, remote_endpoint](
+                                                                                    std::error_code handshake_ec) {
+                        if (!handshake_ec) {
+                           auto conn = std::make_shared<connection_state>(ssl_socket, remote_endpoint);
+                           start_connection(conn);
+                        }
+                        else {
+                           // SSL handshake failed - explicitly close the socket
+                           error_handler(handshake_ec, std::source_location::current());
+                           asio::error_code close_ec;
+                           ssl_socket->lowest_layer().close(close_ec);
+                        }
+                     });
 #endif
                   }
                   else {
@@ -2336,8 +2332,7 @@ namespace glz
                            });
       }
 
-      inline void send_error_response(std::shared_ptr<socket_type> socket, int status_code,
-                                      const std::string& message)
+      inline void send_error_response(std::shared_ptr<socket_type> socket, int status_code, const std::string& message)
       {
          response response;
          response.status(status_code).content_type("text/plain").body(message);

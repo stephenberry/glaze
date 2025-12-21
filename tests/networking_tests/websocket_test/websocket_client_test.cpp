@@ -932,18 +932,18 @@ void run_broadcast_server(std::atomic<bool>& server_ready, std::atomic<bool>& sh
       connections.push_back(conn);
    });
 
-   ws_server->on_message([&](std::shared_ptr<websocket_connection_interface> /*conn*/, std::string_view message,
-                             ws_opcode opcode) {
-      if (opcode == ws_opcode::text && message == "START_BROADCAST") {
-         start_broadcast = true;
-      }
-   });
+   ws_server->on_message(
+      [&](std::shared_ptr<websocket_connection_interface> /*conn*/, std::string_view message, ws_opcode opcode) {
+         if (opcode == ws_opcode::text && message == "START_BROADCAST") {
+            start_broadcast = true;
+         }
+      });
 
-   ws_server->on_close([&](std::shared_ptr<websocket_connection_interface> conn, ws_close_code /*code*/,
-                           std::string_view /*reason*/) {
-      std::lock_guard<std::mutex> lock(conn_mutex);
-      connections.erase(std::remove(connections.begin(), connections.end(), conn), connections.end());
-   });
+   ws_server->on_close(
+      [&](std::shared_ptr<websocket_connection_interface> conn, ws_close_code /*code*/, std::string_view /*reason*/) {
+         std::lock_guard<std::mutex> lock(conn_mutex);
+         connections.erase(std::remove(connections.begin(), connections.end(), conn), connections.end());
+      });
 
    ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
 
