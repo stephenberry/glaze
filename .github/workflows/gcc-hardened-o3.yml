@@ -1,0 +1,421 @@
+name: gcc-hardened-o3
+
+# This workflow tests issue #2115: Test failures with -O3 on Gentoo Hardened
+# https://github.com/stephenberry/glaze/issues/2115
+# Tracking doc: docs/issues/2115-o3-test-failures.md
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  # Round 1: Basic hardened flags
+  test-basic-hardened:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "O2-baseline"
+            cxxflags: "-O2"
+          - name: "O3-basic"
+            cxxflags: "-O3"
+          - name: "O3-cf-protection"
+            cxxflags: "-O3 -fcf-protection=full"
+          - name: "O3-hardened-basic"
+            cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -D_FORTIFY_SOURCE=2"
+          - name: "O3-no-strict-aliasing"
+            cxxflags: "-O3 -fno-strict-aliasing"
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Show compiler info
+      run: |
+        gcc --version
+        echo "CXXFLAGS: ${{ matrix.cxxflags }}"
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="${{ matrix.cxxflags }}" cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23
+
+    - name: Build json_test and json_reflection_test
+      run: cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
+
+    - name: Run json_reflection_test
+      run: |
+        echo "=== Running json_reflection_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_reflection_test/json_reflection_test"
+
+    - name: Run json_test
+      run: |
+        echo "=== Running json_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_test/json_test"
+
+  # Round 2: Extended Gentoo-specific flags
+  test-gentoo-extended:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "O3-stack-clash"
+            cxxflags: "-O3 -fstack-clash-protection"
+          - name: "O3-fortify3"
+            cxxflags: "-O3 -D_FORTIFY_SOURCE=3"
+          - name: "O3-pie"
+            cxxflags: "-O3 -fPIE"
+            ldflags: "-pie"
+          - name: "O3-no-plt"
+            cxxflags: "-O3 -fno-plt"
+          - name: "O3-no-semantic-interposition"
+            cxxflags: "-O3 -fno-semantic-interposition"
+          - name: "O3-retpoline"
+            cxxflags: "-O3 -mindirect-branch=thunk -mfunction-return=thunk"
+          - name: "O3-sls-hardening"
+            cxxflags: "-O3 -mharden-sls=all"
+          - name: "O3-auto-var-init"
+            cxxflags: "-O3 -ftrivial-auto-var-init=zero"
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Show compiler info
+      run: |
+        gcc --version
+        echo "CXXFLAGS: ${{ matrix.cxxflags }}"
+        echo "LDFLAGS: ${{ matrix.ldflags }}"
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="${{ matrix.cxxflags }}" LDFLAGS="${{ matrix.ldflags }}" \
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23
+
+    - name: Build json_test and json_reflection_test
+      run: cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
+
+    - name: Run json_reflection_test
+      run: |
+        echo "=== Running json_reflection_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_reflection_test/json_reflection_test"
+
+    - name: Run json_test
+      run: |
+        echo "=== Running json_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_test/json_test"
+
+  # Round 2b: Combined full Gentoo hardened profile
+  test-full-gentoo-hardened:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "O3-full-gentoo-hardened-cet"
+            # CET-based hardening (modern Intel/AMD)
+            cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition"
+            ldflags: "-pie -Wl,-z,relro -Wl,-z,now"
+          - name: "O3-full-gentoo-hardened-retpoline"
+            # Retpoline-based hardening (older CPUs, incompatible with CET)
+            cxxflags: "-O3 -mindirect-branch=thunk -mfunction-return=thunk -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition"
+            ldflags: "-pie -Wl,-z,relro -Wl,-z,now"
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Show compiler info
+      run: |
+        gcc --version
+        echo "CXXFLAGS: ${{ matrix.cxxflags }}"
+        echo "LDFLAGS: ${{ matrix.ldflags }}"
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="${{ matrix.cxxflags }}" LDFLAGS="${{ matrix.ldflags }}" \
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23
+
+    - name: Build json_test and json_reflection_test
+      run: cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
+
+    - name: Run json_reflection_test
+      run: |
+        echo "=== Running json_reflection_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_reflection_test/json_reflection_test"
+
+    - name: Run json_test
+      run: |
+        echo "=== Running json_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_test/json_test"
+
+  # Round 3: LTO combinations (reporter mentioned LTO is NOT the issue, but test anyway)
+  test-lto:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "O3-lto"
+            cxxflags: "-O3 -flto=auto"
+            ldflags: "-flto=auto"
+          - name: "O3-lto-hardened"
+            cxxflags: "-O3 -flto=auto -fPIE -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3"
+            ldflags: "-flto=auto -pie -Wl,-z,relro -Wl,-z,now"
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Show compiler info
+      run: |
+        gcc --version
+        echo "CXXFLAGS: ${{ matrix.cxxflags }}"
+        echo "LDFLAGS: ${{ matrix.ldflags }}"
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="${{ matrix.cxxflags }}" LDFLAGS="${{ matrix.ldflags }}" \
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23
+
+    - name: Build json_test and json_reflection_test
+      run: cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
+
+    - name: Run json_reflection_test
+      run: |
+        echo "=== Running json_reflection_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_reflection_test/json_reflection_test"
+
+    - name: Run json_test
+      run: |
+        echo "=== Running json_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_test/json_test"
+
+  # Diagnostic job for detailed output
+  diagnostic-test:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Create diagnostic test
+      run: |
+        cat << 'EOF' > /tmp/hash_diagnostic.cpp
+        #include "glaze/glaze.hpp"
+        #include <iostream>
+
+        struct point3d {
+           int x{}, y{}, z{};
+        };
+
+        struct full_hash_t {
+           int collide{};
+           int collide2{};
+           int colllide{};
+           int colilide{};
+        };
+
+        struct front_32_t {
+           int aaaa{};
+           int aaab{};
+           int aaba{};
+           int bbbb{};
+        };
+
+        struct front_64_t {
+           int aaaaaaaa{};
+           int aaaaaaaz{};
+           int aaaaaaza{};
+           int zzzzzzzz{};
+        };
+
+        template<typename T>
+        void test_struct(const char* name, const char* json, auto check) {
+           T obj{};
+           auto ec = glz::read_json(obj, json);
+           std::cout << name << ": ";
+           if (ec) {
+              std::cout << "PARSE ERROR: " << glz::format_error(ec) << "\n";
+           } else if (check(obj)) {
+              std::cout << "PASS\n";
+           } else {
+              std::cout << "FAIL\n";
+           }
+        }
+
+        int main() {
+           using namespace glz;
+
+           std::cout << "=== Hash Type Info ===\n";
+           std::cout << "point3d: type=" << int(hash_info<point3d>.type) << " (4=mod4)\n";
+           std::cout << "full_hash_t: type=" << int(hash_info<full_hash_t>.type) << " (9=full_flat)\n";
+           std::cout << "front_32_t: type=" << int(hash_info<front_32_t>.type) << " (2=front_hash)\n";
+           std::cout << "front_64_t: type=" << int(hash_info<front_64_t>.type) << " (2=front_hash)\n";
+
+           std::cout << "\n=== Key Order ===\n";
+           std::cout << "point3d keys: ";
+           for (size_t i = 0; i < reflect<point3d>::size; ++i) {
+              std::cout << "[" << i << "]=" << reflect<point3d>::keys[i] << " ";
+           }
+           std::cout << "\n";
+
+           std::cout << "\n=== Parsing Tests ===\n";
+
+           test_struct<point3d>("point3d", R"({"x":1,"y":2,"z":3})",
+              [](auto& obj) { return obj.x == 1 && obj.y == 2 && obj.z == 3; });
+
+           test_struct<full_hash_t>("full_hash_t", R"({"collide":1,"collide2":2})",
+              [](auto& obj) { return obj.collide == 1 && obj.collide2 == 2; });
+
+           test_struct<front_32_t>("front_32_t", R"({"aaaa":1,"aaab":2,"aaba":3})",
+              [](auto& obj) { return obj.aaaa == 1 && obj.aaab == 2 && obj.aaba == 3; });
+
+           test_struct<front_64_t>("front_64_t", R"({"aaaaaaaa":1,"aaaaaaaz":2,"aaaaaaza":3})",
+              [](auto& obj) { return obj.aaaaaaaa == 1 && obj.aaaaaaaz == 2 && obj.aaaaaaza == 3; });
+
+           std::cout << "\n=== Detailed point3d test ===\n";
+           point3d p{100, 200, 300};
+           std::cout << "Before: x=" << p.x << " y=" << p.y << " z=" << p.z << "\n";
+           glz::read_json(p, R"({"x":1,"y":2,"z":3})");
+           std::cout << "After:  x=" << p.x << " y=" << p.y << " z=" << p.z << "\n";
+
+           return 0;
+        }
+        EOF
+
+    - name: Run diagnostic with O3 + full Gentoo hardened
+      run: |
+        echo "=== O3 + Full Gentoo Hardened ==="
+        g++ -std=c++23 -O3 \
+          -fcf-protection=full \
+          -fstack-protector-strong \
+          -fstack-clash-protection \
+          -D_FORTIFY_SOURCE=3 \
+          -fPIE \
+          -fno-plt \
+          -fno-semantic-interposition \
+          -I include /tmp/hash_diagnostic.cpp -o /tmp/diag -pie
+        /tmp/diag
+
+    - name: Run diagnostic with O3 + retpoline
+      run: |
+        echo "=== O3 + Retpoline ==="
+        g++ -std=c++23 -O3 \
+          -mindirect-branch=thunk \
+          -mfunction-return=thunk \
+          -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_retpoline
+        /tmp/diag_retpoline
+
+    - name: Run diagnostic with O3 + SLS hardening
+      run: |
+        echo "=== O3 + SLS Hardening ==="
+        g++ -std=c++23 -O3 \
+          -mharden-sls=all \
+          -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_sls
+        /tmp/diag_sls
