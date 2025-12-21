@@ -214,7 +214,7 @@ class working_test_server
          res.start_stream(200, {{"Content-Type", "text/plain"}});
          auto conn = res.stream;
 
-         auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
+         auto timer = std::make_shared<asio::steady_timer>(conn->get_executor());
          auto counter = std::make_shared<int>(0);
 
          // Use shared_ptr to safely handle recursive lambda calls and avoid compiler-specific segfaults

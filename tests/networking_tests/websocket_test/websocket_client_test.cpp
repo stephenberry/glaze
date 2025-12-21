@@ -924,21 +924,23 @@ void run_broadcast_server(std::atomic<bool>& server_ready, std::atomic<bool>& sh
 {
    http_server server;
    auto ws_server = std::make_shared<websocket_server>();
-   std::vector<std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>> connections;
+   std::vector<std::shared_ptr<websocket_connection_interface>> connections;
    std::mutex conn_mutex;
 
-   ws_server->on_open([&](auto conn, const request&) {
+   ws_server->on_open([&](std::shared_ptr<websocket_connection_interface> conn, const request&) {
       std::lock_guard<std::mutex> lock(conn_mutex);
       connections.push_back(conn);
    });
 
-   ws_server->on_message([&](auto /*conn*/, std::string_view message, ws_opcode opcode) {
+   ws_server->on_message([&](std::shared_ptr<websocket_connection_interface> /*conn*/, std::string_view message,
+                             ws_opcode opcode) {
       if (opcode == ws_opcode::text && message == "START_BROADCAST") {
          start_broadcast = true;
       }
    });
 
-   ws_server->on_close([&](auto conn, ws_close_code /*code*/, std::string_view /*reason*/) {
+   ws_server->on_close([&](std::shared_ptr<websocket_connection_interface> conn, ws_close_code /*code*/,
+                           std::string_view /*reason*/) {
       std::lock_guard<std::mutex> lock(conn_mutex);
       connections.erase(std::remove(connections.begin(), connections.end(), conn), connections.end());
    });

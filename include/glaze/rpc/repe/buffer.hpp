@@ -237,7 +237,7 @@ namespace glz::repe
          return {};
       }
 
-      return {data + sizeof(header), hdr.query_length};
+      return {data + sizeof(header), static_cast<size_t>(hdr.query_length)};
    }
 
    /// Extract just the query string from string_view

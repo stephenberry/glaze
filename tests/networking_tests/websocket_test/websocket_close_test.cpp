@@ -200,12 +200,12 @@ suite websocket_close_frame_tests = [] {
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_open([](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
+      ws_server->on_open([](auto conn, const request&) {
          // Server initiates close - this should send a close frame
          conn->close(ws_close_code::normal, "Test close");
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+      ws_server->on_close([&](auto, ws_close_code,
                               std::string_view) { on_close_called = true; });
 
       // Create HTTP server
@@ -277,7 +277,7 @@ suite websocket_close_frame_tests = [] {
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_open([](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
+      ws_server->on_open([](auto conn, const request&) {
          // Close with specific code and reason
          conn->close(ws_close_code::going_away, "Server shutdown");
       });
@@ -358,22 +358,22 @@ suite websocket_error_handling_tests = [] {
       std::atomic<bool> on_error_called{false};
       std::atomic<bool> on_close_called{false};
       std::atomic<bool> server_ready{false};
-      std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> server_conn;
+      std::shared_ptr<websocket_connection_interface> server_conn;
       std::mutex conn_mutex;
 
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_open([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
+      ws_server->on_open([&](auto conn, const request&) {
          std::lock_guard<std::mutex> lock(conn_mutex);
          server_conn = conn;
       });
 
-      ws_server->on_error([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code) {
+      ws_server->on_error([&](auto, std::error_code) {
          on_error_called = true;
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+      ws_server->on_close([&](auto, ws_close_code,
                               std::string_view) { on_close_called = true; });
 
       // Create HTTP server
@@ -442,11 +442,11 @@ suite websocket_error_handling_tests = [] {
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_error([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code) {
+      ws_server->on_error([&](auto, std::error_code) {
          on_error_called = true;
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+      ws_server->on_close([&](auto, ws_close_code,
                               std::string_view) { on_close_called = true; });
 
       // Create HTTP server
@@ -505,14 +505,14 @@ suite websocket_error_handling_tests = [] {
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_open([](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
+      ws_server->on_open([](auto conn, const request&) {
          // Try to close multiple times - should only send one close frame
          conn->close(ws_close_code::normal, "First close");
          conn->close(ws_close_code::normal, "Second close");
          conn->close(ws_close_code::normal, "Third close");
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+      ws_server->on_close([&](auto, ws_close_code,
                               std::string_view) { on_close_call_count++; });
 
       // Create HTTP server
