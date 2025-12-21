@@ -230,6 +230,43 @@ inline void should_fail()
       }
    };
 
+   "illegal control code u8string short tail"_test = [] {
+      constexpr sv s = "[\"ab\r\nd\"]";
+      {
+         std::vector<std::u8string> v;
+         expect(glz::read_json(v, s));
+      }
+   };
+
+   "illegal control code u8string middle tail"_test = [] {
+      constexpr sv s = "[\"ab\r\nd\",\"ab\"]";
+      {
+         std::vector<std::u8string> v;
+         expect(glz::read_json(v, s));
+      }
+   };
+
+   "illegal control code u8string long tail"_test = [] {
+      constexpr sv s = "[\"ab\r\nd\",\"abcdefghji\"]";
+      {
+         std::vector<std::u8string> v;
+         expect(glz::read_json(v, s));
+      }
+   };
+
+   "illegal control code non-null-terminated"_test = [] {
+      std::string input = "\"a\rb\"";
+      std::string_view s{input.data(), input.size()};
+      {
+         std::string v;
+         expect(glz::read<glz::opts{.null_terminated = false}>(v, s));
+      }
+      {
+         std::u8string v;
+         expect(glz::read<glz::opts{.null_terminated = false}>(v, s));
+      }
+   };
+
    "illegal backslash escape: \017"_test = [] {
       constexpr sv s = R"(["Illegal backslash escape: \017"])";
       {
