@@ -194,6 +194,42 @@ inline void should_fail()
       }
    };
 
+   "illegal control code short tail"_test = [] {
+      constexpr sv s = "[\"ab\r\nd\"]";
+      {
+         std::vector<std::string> v;
+         expect(glz::read_json(v, s));
+      }
+      {
+         glz::generic obj{};
+         expect(glz::read_json(obj, s));
+      }
+   };
+
+   "illegal control code middle tail"_test = [] {
+      constexpr sv s = "[\"ab\r\nd\",\"ab\"]";
+      {
+         std::vector<std::string> v;
+         expect(glz::read_json(v, s));
+      }
+      {
+         glz::generic obj{};
+         expect(glz::read_json(obj, s));
+      }
+   };
+
+   "illegal control code long tail"_test = [] {
+      constexpr sv s = "[\"ab\r\nd\",\"abcdefghji\"]";
+      {
+         std::vector<std::string> v;
+         expect(glz::read_json(v, s));
+      }
+      {
+         glz::generic obj{};
+         expect(glz::read_json(obj, s));
+      }
+   };
+
    "illegal backslash escape: \017"_test = [] {
       constexpr sv s = R"(["Illegal backslash escape: \017"])";
       {
