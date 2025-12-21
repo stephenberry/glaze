@@ -1079,6 +1079,11 @@ namespace glz
                            return;
                         }
 
+                        if ((*it & 0b11100000) == 0) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
                         *p = *it;
 
                         if (*it == '\\') {
@@ -1159,6 +1164,10 @@ namespace glz
                            ++p;
                            ++it;
                         }
+                     }
+                     else if ((*it & 0b11100000) == 0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
                      }
                      else {
                         ++it;
@@ -1500,6 +1509,11 @@ namespace glz
                            return;
                         }
 
+                        if ((*it & 0b11100000) == 0) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
                         *p = *it;
 
                         if (*it == '\\') {
@@ -1580,6 +1594,10 @@ namespace glz
                            ++p;
                            ++it;
                         }
+                     }
+                     else if ((*it & 0b11100000) == 0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
                      }
                      else {
                         ++it;
