@@ -284,7 +284,7 @@ namespace glz
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(ec)) {
-         return {ec};
+         return {0, ec};
       }
 
       return read<Opts>(value, buffer, ctx);
@@ -305,7 +305,14 @@ namespace glz
    template <write_supported<NDJSON> T>
    [[nodiscard]] error_ctx write_file_ndjson(T&& value, const std::string& file_name, auto&& buffer)
    {
-      write<opts{.format = NDJSON}>(std::forward<T>(value), buffer);
-      return {buffer_to_file(buffer, file_name)};
+      const auto ec = write<opts{.format = NDJSON}>(std::forward<T>(value), buffer);
+      if (bool(ec)) [[unlikely]] {
+         return ec;
+      }
+      const auto file_ec = buffer_to_file(buffer, file_name);
+      if (bool(file_ec)) [[unlikely]] {
+         return {0, file_ec};
+      }
+      return {buffer.size(), error_code::none};
    }
 }

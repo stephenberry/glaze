@@ -127,7 +127,7 @@ namespace glz::repe
 
       if (bool(ctx.error)) {
          state.out.header.ec = ctx.error;
-         error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
+         error_ctx ec{size_t(b - start), ctx.error, ctx.custom_error_message};
 
          auto& in = state.in;
          auto& out = state.out;
@@ -554,7 +554,7 @@ namespace glz::repe
       glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
       if (bool(ctx.error)) {
-         error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
+         error_ctx ec{size_t(b - start), ctx.error, ctx.custom_error_message};
          std::string error_message = format_error(ec, body);
          state.out.reset(state.in);
          state.out.set_error(ctx.error, error_message);

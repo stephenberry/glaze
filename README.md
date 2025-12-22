@@ -705,6 +705,26 @@ Produces this error:
 
 Denoting that x is invalid here.
 
+## Bytes Consumed on Read
+
+The `error_ctx` type returned by read operations includes a `location` field that indicates the byte position in the input buffer:
+
+```c++
+std::string buffer = R"({"x":1,"y":2})";
+my_struct obj{};
+auto ec = glz::read_json(obj, buffer);
+if (!ec) {
+   // Success: ec.location contains bytes consumed
+   size_t bytes_consumed = ec.location;
+   // bytes_consumed == 13 (entire JSON object)
+}
+```
+
+This is useful for:
+- **Streaming**: Reading multiple JSON values from a single buffer
+- **Partial parsing**: Knowing where parsing stopped with `partial_read` option
+- **Error diagnostics**: On failure, `location` indicates where the error occurred
+
 # Input Buffer (Null) Termination
 
 A non-const `std::string` is recommended for input buffers, as this allows Glaze to improve performance with temporary padding and the buffer will be null terminated.
@@ -954,11 +974,37 @@ assert(json[2]["pi"].get<double>() == 3.14);
 
 Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below, but it is not recommended.
 
-```
+```c++
 glz::read_json(obj, buffer);
-const auto n = glz::write_json(obj, buffer.data()).value_or(0);
-buffer.resize(n);
+const auto result = glz::write_json(obj, buffer.data());
+if (!result) {
+   buffer.resize(result.count);
+}
 ```
+
+### Writing to Fixed-Size Buffers
+
+All write functions return `glz::error_ctx`, which provides both error information and the byte count:
+
+```c++
+std::array<char, 1024> buffer;
+auto ec = glz::write_json(my_obj, buffer);
+if (ec) {
+   if (ec.ec == glz::error_code::buffer_overflow) {
+      // Buffer was too small
+      std::cerr << "Overflow after " << ec.count << " bytes\n";
+   }
+   return;
+}
+// Success: ec.count contains bytes written
+std::string_view json(buffer.data(), ec.count);
+```
+
+The `error_ctx` type provides:
+- `if (ec)` - true when there is an error (matches `std::error_code` semantics)
+- `ec.count` - bytes processed (always populated, even on error)
+- `ec.ec` - the error code
+- `glz::format_error(ec, buffer)` - formatted error message
 
 ## Compile Time Options
 

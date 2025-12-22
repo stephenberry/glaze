@@ -17,7 +17,7 @@ namespace glz
 
       if (layout.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
-         return {ctx.error, ctx.custom_error_message, 0};
+         return {0, ctx.error, ctx.custom_error_message};
       }
 
       auto [it, end] = read_iterators<Opts, false>(layout);
@@ -126,7 +126,7 @@ namespace glz
                         index);
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return {ctx.error, ctx.custom_error_message, size_t(it - start)};
+                        return {size_t(it - start), ctx.error, ctx.custom_error_message};
                      }
 
                      buffer.append(temp);
@@ -164,7 +164,7 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
+         return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
       }
 
       return {};

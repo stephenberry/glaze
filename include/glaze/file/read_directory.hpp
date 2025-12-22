@@ -30,7 +30,7 @@ namespace glz
       for (const auto& entry : std::filesystem::directory_iterator(directory_path)) {
          if (entry.is_regular_file() && (target_extension.empty() || (entry.path().extension() == target_extension))) {
             if (auto ec = file_to_buffer(files[entry.path()], entry.path().string()); bool(ec)) {
-               return {ec};
+               return {0, ec};
             }
          }
       }

@@ -1717,7 +1717,7 @@ namespace glz
       const auto file_error = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(file_error)) [[unlikely]] {
-         return error_ctx{file_error};
+         return error_ctx{0, file_error};
       }
 
       return read<set_beve<Opts>()>(value, buffer, ctx);
@@ -1809,13 +1809,13 @@ namespace glz
          }
 
          if (bool(ctx.error)) [[unlikely]] {
-            return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+            return {size_t(it - start), ctx.error, ctx.custom_error_message};
          }
 
          ++index;
       }
 
-      return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+      return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
    // Read multiple delimiter-separated BEVE values, returning the container
@@ -1849,7 +1849,7 @@ namespace glz
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       if (offset >= buffer.size()) {
-         return glz::unexpected(error_ctx{error_code::unexpected_end});
+         return glz::unexpected(error_ctx{0, error_code::unexpected_end});
       }
 
       context ctx{};
@@ -1861,13 +1861,13 @@ namespace glz
       skip_beve_delimiter(it, end);
 
       if (it >= end) {
-         return glz::unexpected(error_ctx{error_code::unexpected_end});
+         return glz::unexpected(error_ctx{0, error_code::unexpected_end});
       }
 
       parse<BEVE>::template op<set_beve<Opts>()>(value, ctx, it, end);
 
       if (bool(ctx.error)) [[unlikely]] {
-         return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+         return glz::unexpected(error_ctx{size_t(it - start), ctx.error, ctx.custom_error_message});
       }
 
       return size_t(it - start); // total bytes consumed from offset (delimiter + value)

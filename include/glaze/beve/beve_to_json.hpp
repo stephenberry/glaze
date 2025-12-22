@@ -620,7 +620,7 @@ namespace glz
       while (it < end) {
          detail::beve_to_json_value<Opts>(ctx, it, end, out, ix, 0);
          if (bool(ctx.error)) {
-            return {ctx.error};
+            return {0, ctx.error};
          }
       }
 

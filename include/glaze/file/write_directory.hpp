@@ -19,7 +19,9 @@ namespace glz
       }
 
       for (auto& [path, content] : buffers) {
-         return {buffer_to_file(content, path.string())};
+         if (auto ec = buffer_to_file(content, path.string()); bool(ec)) {
+            return {0, ec};
+         }
       }
 
       return {};
@@ -41,12 +43,12 @@ namespace glz
                return ec;
             }
             if (auto ec = buffer_to_file(buffer, path.string()); bool(ec)) {
-               return {ec};
+               return {0, ec};
             }
          }
          else {
             if (auto ec = buffer_to_file(content, path); bool(ec)) {
-               return {ec};
+               return {0, ec};
             }
          }
       }

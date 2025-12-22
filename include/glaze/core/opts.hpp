@@ -403,6 +403,16 @@ namespace glz
       }
    }
 
+   consteval bool check_assume_sufficient_buffer(auto&& Opts)
+   {
+      if constexpr (requires { Opts.assume_sufficient_buffer; }) {
+         return Opts.assume_sufficient_buffer;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_opening_handled(auto&& o) { return o.internal & uint32_t(opts_internal::opening_handled); }
 
    consteval bool check_closing_handled(auto&& o) { return o.internal & uint32_t(opts_internal::closing_handled); }

@@ -11,14 +11,20 @@ Glaze provides comprehensive support for [CBOR](https://cbor.io/) (RFC 8949), a 
 
 my_struct s{};
 std::string buffer{};
-glz::write_cbor(s, buffer);
+auto ec = glz::write_cbor(s, buffer);
+if (!ec) {
+   // Success: ec.count contains bytes written
+}
 ```
 
 **Read CBOR**
 
 ```c++
 my_struct s{};
-glz::read_cbor(s, buffer);
+auto ec = glz::read_cbor(s, buffer);
+if (!ec) {
+   // Success
+}
 ```
 
 > [!NOTE]

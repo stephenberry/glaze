@@ -53,6 +53,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `float_precision float_max_write_precision` | `full` | Maximum precision for writing floats |
 | `bool skip_null_members_on_read` | `false` | Skip null values when reading (preserve existing value) |
 | `bool skip_self_constraint` | `false` | Skip `self_constraint` validation during reading |
+| `bool assume_sufficient_buffer` | `false` | Skip bounds checking for fixed-size buffers (caller guarantees space) |
 
 ### CSV Options (`glz::opts_csv`)
 
@@ -167,6 +168,19 @@ Skips `self_constraint` validation during deserialization. Useful for performanc
 
 #### `error_on_const_read`
 When `true`, attempting to read into a const value produces an error. By default, const values are silently skipped.
+
+#### `assume_sufficient_buffer`
+When `true`, skips bounds checking for fixed-size buffers (`std::array`, `std::span`). Use this when you've pre-validated that the buffer is large enough, for maximum write performance. Has no effect on resizable buffers (`std::string`, `std::vector`) or raw pointers (`char*`).
+
+```c++
+struct fast_opts : glz::opts {
+   bool assume_sufficient_buffer = true;
+};
+
+std::array<char, 8192> large_buffer;
+auto result = glz::write<fast_opts{}>(obj, large_buffer);
+// No bounds checking overhead - caller guarantees sufficient space
+```
 
 ### Output Control Options
 

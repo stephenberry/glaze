@@ -280,10 +280,10 @@ namespace glz
          },
          std::forward<T>(root_value), json_ptr);
       if (!result) {
-         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+         return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
       else if (bool(ec)) {
-         return unexpected(error_ctx{ec});
+         return unexpected(error_ctx{0, ec});
       }
       return std::ref(*result);
    }
