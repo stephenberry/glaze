@@ -3,9 +3,9 @@
 #include <glaze/core/read.hpp>
 #include <glaze/core/reflect.hpp>
 
-#include "defs.hpp"
 #include "ei.hpp"
 #include "opts.hpp"
+#include "types.hpp"
 
 namespace glz
 {
