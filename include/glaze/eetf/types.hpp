@@ -33,45 +33,45 @@ namespace glz
       template <typename Tag>
       [[nodiscard]] bool is_atom(const Tag& tag)
       {
-         return cmp::is<in, eetf_tags::ATOM, eetf_tags::SMALL_ATOM, eetf_tags::ATOM_UTF8, eetf_tags::SMALL_ATOM_UTF8>(
+         return cmp::is<in, eetf_tag::ATOM, eetf_tag::SMALL_ATOM, eetf_tag::ATOM_UTF8, eetf_tag::SMALL_ATOM_UTF8>(
             tag);
       }
 
       template <typename Tag>
       [[nodiscard]] bool is_integer(const Tag& tag)
       {
-         return cmp::is<in, eetf_tags::INTEGER, eetf_tags::SMALL_INTEGER, eetf_tags::SMALL_BIG, eetf_tags::LARGE_BIG>(
+         return cmp::is<in, eetf_tag::INTEGER, eetf_tag::SMALL_INTEGER, eetf_tag::SMALL_BIG, eetf_tag::LARGE_BIG>(
             tag);
       }
 
       template <typename Tag>
       [[nodiscard]] bool is_floating_point(const Tag& tag)
       {
-         return cmp::is<in, eetf_tags::FLOAT, eetf_tags::FLOAT_NEW>(tag);
+         return cmp::is<in, eetf_tag::FLOAT, eetf_tag::FLOAT_NEW>(tag);
       }
 
       template <typename Tag>
       [[nodiscard]] bool is_string(const Tag& tag)
       {
-         return cmp::is<in, eetf_tags::STRING, eetf_tags::NIL>(tag);
+         return cmp::is<in, eetf_tag::STRING, eetf_tag::NIL>(tag);
       }
 
       template <typename Tag>
       [[nodiscard]] bool is_tuple(const Tag& tag)
       {
-         return cmp::is<in, eetf_tags::SMALL_TUPLE, eetf_tags::LARGE_TUPLE>(tag);
+         return cmp::is<in, eetf_tag::SMALL_TUPLE, eetf_tag::LARGE_TUPLE>(tag);
       }
 
       template <typename Tag>
       [[nodiscard]] bool is_list(const Tag& tag)
       {
-         return cmp::is<in, eetf_tags::LIST, eetf_tags::STRING, eetf_tags::NIL>(tag);
+         return cmp::is<in, eetf_tag::LIST, eetf_tag::STRING, eetf_tag::NIL>(tag);
       }
 
       template <typename Tag>
       [[nodiscard]] bool is_map(const Tag& tag)
       {
-         return cmp::is<in, eetf_tags::MAP>(tag);
+         return cmp::is<in, eetf_tag::MAP>(tag);
       }
 
    } // namespace eetf

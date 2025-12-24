@@ -101,12 +101,12 @@ namespace glz
          };
 
          if (value < 256 && value >= 0) {
-            write_type(eetf_tags::SMALL_INTEGER, ctx, b, ix);
+            write_type(eetf_tag::SMALL_INTEGER, ctx, b, ix);
             write_type(static_cast<uint8_t>(value), ctx, b, ix);
          }
          else if (value <= std::numeric_limits<int32_t>::max() && check_min_value()) {
             // TODO tests
-            write_type(eetf_tags::INTEGER, ctx, b, ix);
+            write_type(eetf_tag::INTEGER, ctx, b, ix);
             write_type(static_cast<int32_t>(value), ctx, b, ix);
          }
          else {
@@ -123,7 +123,7 @@ namespace glz
                }
             }();
 
-            write_type(eetf_tags::SMALL_BIG, ctx, b, ix);
+            write_type(eetf_tag::SMALL_BIG, ctx, b, ix);
             auto arity_ix = ix; // store index to write later
             write_type(arity, ctx, b, ix);
             write_type(uint8_t(value < 0), ctx, b, ix);
@@ -378,7 +378,7 @@ namespace glz
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_boolean(const bool value, Args&&... args)
    {
-      detail::write_type(eetf_tags::SMALL_ATOM_UTF8, std::forward<Args>(args)...);
+      detail::write_type(eetf_tag::SMALL_ATOM_UTF8, std::forward<Args>(args)...);
 
       using namespace std::string_view_literals;
       const std::string_view v{value ? "true"sv : "false"sv};
@@ -393,7 +393,7 @@ namespace glz
 
       using V = std::remove_cvref_t<T>;
       if constexpr (std::floating_point<V>) {
-         detail::write_type(eetf_tags::FLOAT_NEW, std::forward<Args>(args)...);
+         detail::write_type(eetf_tag::FLOAT_NEW, std::forward<Args>(args)...);
          detail::write_type<detail::BigEndian>(value, std::forward<Args>(args)...);
       }
       else {
@@ -409,7 +409,7 @@ namespace glz
          return;
       }
 
-      detail::write_type(eetf_tags::ATOM_UTF8, ctx, b, ix);
+      detail::write_type(eetf_tag::ATOM_UTF8, ctx, b, ix);
       detail::write_type<detail::BigEndian>(static_cast<uint16_t>(sz), ctx, b, ix);
       detail::write_buffer(value, ctx, b, ix);
    }
@@ -425,39 +425,39 @@ namespace glz
    {
       const auto len = value.size();
       if (len == 0) {
-         detail::write_type(eetf_tags::NIL, std::forward<Args>(args)...);
+         detail::write_type(eetf_tag::NIL, std::forward<Args>(args)...);
          return;
       }
 
       // TODO tests
       if (len <= 0xFFFF) {
-         detail::write_type(eetf_tags::STRING, std::forward<Args>(args)...);
+         detail::write_type(eetf_tag::STRING, std::forward<Args>(args)...);
          detail::write_type<detail::BigEndian>(static_cast<uint16_t>(len), std::forward<Args>(args)...);
          detail::write_buffer(value, std::forward<Args>(args)...);
          return;
       }
 
       // TODO tests
-      detail::write_type(eetf_tags::LIST, std::forward<Args>(args)...);
+      detail::write_type(eetf_tag::LIST, std::forward<Args>(args)...);
       detail::write_type<detail::BigEndian>(len, std::forward<Args>(args)...);
 
       for (const auto & c : value) {
-         detail::write_type(eetf_tags::SMALL_INTEGER, std::forward<Args>(args)...);
+         detail::write_type(eetf_tag::SMALL_INTEGER, std::forward<Args>(args)...);
          detail::write_type(c, std::forward<Args>(args)...);
       }
 
-      detail::write_type(eetf_tags::NIL, std::forward<Args>(args)...);
+      detail::write_type(eetf_tag::NIL, std::forward<Args>(args)...);
    }
 
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_tuple_header(std::uint32_t arity, Args&&... args)
    {
       if (arity <= 0xFF) {
-         detail::write_type(eetf_tags::SMALL_TUPLE, std::forward<Args>(args)...);
+         detail::write_type(eetf_tag::SMALL_TUPLE, std::forward<Args>(args)...);
          detail::write_type(static_cast<uint8_t>(arity), std::forward<Args>(args)...);
       } else {
          // TODO tests
-         detail::write_type(eetf_tags::LARGE_TUPLE, std::forward<Args>(args)...);
+         detail::write_type(eetf_tag::LARGE_TUPLE, std::forward<Args>(args)...);
          detail::write_type<detail::BigEndian>(arity, std::forward<Args>(args)...);
       }
    }
@@ -466,11 +466,11 @@ namespace glz
    GLZ_ALWAYS_INLINE void encode_list_header(std::uint32_t arity, Args&&... args)
    {
       if (arity == 0) {
-         detail::write_type(eetf_tags::NIL, std::forward<Args>(args)...);
+         detail::write_type(eetf_tag::NIL, std::forward<Args>(args)...);
          return;
       }
 
-      detail::write_type(eetf_tags::LIST, std::forward<Args>(args)...);
+      detail::write_type(eetf_tag::LIST, std::forward<Args>(args)...);
       detail::write_type<detail::BigEndian>(arity, std::forward<Args>(args)...);
    }
 
@@ -483,7 +483,7 @@ namespace glz
    template <class... Args>
    GLZ_ALWAYS_INLINE void encode_map_header(std::uint32_t arity, Args&&... args)
    {
-      detail::write_type(eetf_tags::MAP, std::forward<Args>(args)...);
+      detail::write_type(eetf_tag::MAP, std::forward<Args>(args)...);
       detail::write_type<detail::BigEndian>(arity, std::forward<Args>(args)...);
    }
 

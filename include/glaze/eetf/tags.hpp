@@ -4,7 +4,7 @@
 
 namespace glz
 {
-   enum eetf_tags : uint8_t {
+   enum eetf_tag : uint8_t {
       SMALL_INTEGER = 'a',
       INTEGER = 'b',
       FLOAT = 'c',
