@@ -28,9 +28,9 @@ namespace glz
       struct LittleEndian
       {};
 
-      template <class V, is_context Ctx, typename Endian = BigEndian>
+      template <class V, typename Endian = LittleEndian>
          requires std::is_integral_v<V>
-      V read(Ctx&& ctx, auto&& it, auto&& end)
+      V read(is_context auto&& ctx, auto&& it, auto&& end)
       {
          if (it + sizeof(V) > end) {
             ctx.error = error_code::seek_failure;
@@ -48,11 +48,11 @@ namespace glz
          return v;
       }
 
-      template <class V, is_context Ctx, typename Endian = BigEndian>
+      template <class V, typename Endian = LittleEndian>
          requires std::is_integral_v<V>
-      V reada(Ctx&& ctx, auto&& it, auto&& end)
+      V reada(auto&& ctx, auto&& it, auto&& end)
       {
-         auto v = read<V, Ctx, Endian>(ctx, it, end);
+         auto v = read<V, Endian>(ctx, it, end);
          std::advance(it, sizeof(V));
          return v;
       }
@@ -190,7 +190,7 @@ namespace glz
          [[fallthrough]];
       case ATOM:
       case STRING:
-         s = detail::read<uint16_t>(ctx, next, end);
+         s = detail::read<uint16_t, detail::BigEndian>(ctx, next, end);
          break;
 
       case FLOAT:
@@ -203,15 +203,15 @@ namespace glz
       case MAP:
       case BINARY:
       case BIT_BINARY:
-         s = detail::read<uint32_t>(ctx, next, end);
+         s = detail::read<uint32_t, detail::BigEndian>(ctx, next, end);
          break;
 
       case SMALL_BIG:
-         s = detail::read<uint8_t>(ctx, next, end);
+         s = detail::read<uint8_t, detail::BigEndian>(ctx, next, end);
          break;
 
       case LARGE_BIG:
-         s = detail::read<uint32_t>(ctx, next, end);
+         s = detail::read<uint32_t, detail::BigEndian>(ctx, next, end);
          break;
 
       case NEW_PID:
