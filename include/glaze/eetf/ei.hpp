@@ -23,6 +23,40 @@ namespace glz
 
    namespace detail
    {
+      struct BigEndian
+      {};
+      struct LittleEndian
+      {};
+
+      template <class V, is_context Ctx, typename Endian = BigEndian>
+         requires std::is_integral_v<V>
+      V read(Ctx&& ctx, auto&& it, auto&& end)
+      {
+         if (it + sizeof(V) > end) {
+            ctx.error = error_code::seek_failure;
+            return {};
+         }
+
+         V v{};
+         if constexpr (std::is_same_v<Endian, LittleEndian>) {
+            std::memcpy(&v, it, sizeof(V));
+         } else {
+            const auto view = std::views::counted(reinterpret_cast<const uint8_t*>(it), sizeof(V));
+            std::copy(std::ranges::rbegin(view), std::ranges::rend(view), &v);
+         }
+
+         return v;
+      }
+
+      template <class V, is_context Ctx, typename Endian = BigEndian>
+         requires std::is_integral_v<V>
+      V reada(Ctx&& ctx, auto&& it, auto&& end)
+      {
+         auto v = read<V, Ctx, Endian>(ctx, it, end);
+         std::advance(it, sizeof(V));
+         return v;
+      }
+
       template <class F, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE void decode_impl(F&& func, Ctx&& ctx, It0&& it, It1&& end)
       {
@@ -42,11 +76,6 @@ namespace glz
             b.resize(2 * k);
          }
       }
-
-      struct BigEndian
-      {};
-      struct LittleEndian
-      {};
 
       template <typename Endian = LittleEndian>
       GLZ_ALWAYS_INLINE void write_type(auto&& value, auto&& /* ctx */, auto&& b, auto&& ix)
@@ -138,32 +167,97 @@ namespace glz
 
    } // namespace detail
 
-   template <class It>
-   [[nodiscard]] GLZ_ALWAYS_INLINE int decode_version(is_context auto&& ctx, It&& it)
+   template <class It0, class It1>
+   GLZ_ALWAYS_INLINE eetf_tag get_type(size_t& s, is_context auto&& ctx, It0&& it, It1&& end)
    {
-      int index{};
-      int version{};
-      if (ei_decode_version(it, &index, &version) < 0) [[unlikely]] {
-         ctx.error = error_code::syntax_error;
-         return -1;
+      eetf_tag type = static_cast<eetf_tag>(detail::read<uint8_t>(ctx, it, end));
+      if (bool(ctx.error)) {
+         return {};
       }
 
-      std::advance(it, index);
-      return version;
-   }
+      auto next = it + 1;
+      switch (type) {
+      case SMALL_ATOM:
+      case SMALL_ATOM_UTF8:
+         type = ATOM_UTF8;
+         [[fallthrough]];
+      case SMALL_TUPLE:
+         s = detail::read<uint8_t>(ctx, next, end);
+         break;
 
-   template <class It>
-   GLZ_ALWAYS_INLINE int get_type(is_context auto&& ctx, It&& it)
-   {
-      int type{};
-      int size{};
-      int index{};
-      if (ei_get_type(it, &index, &type, &size) < 0) {
-         ctx.error = error_code::syntax_error;
-         return -1;
+      case ATOM_UTF8:
+         type = ATOM;
+         [[fallthrough]];
+      case ATOM:
+      case STRING:
+         s = detail::read<uint16_t>(ctx, next, end);
+         break;
+
+      case FLOAT:
+      case FLOAT_NEW:
+         type = FLOAT;
+         break;
+
+      case LARGE_TUPLE:
+      case LIST:
+      case MAP:
+      case BINARY:
+      case BIT_BINARY:
+         s = detail::read<uint32_t>(ctx, next, end);
+         break;
+
+      case SMALL_BIG:
+         s = detail::read<uint8_t>(ctx, next, end);
+         break;
+
+      case LARGE_BIG:
+         s = detail::read<uint32_t>(ctx, next, end);
+         break;
+
+      case NEW_PID:
+         type = PID;
+         break;
+      case V4_PORT:
+      case NEW_PORT:
+         type = PORT;
+         break;
+      case NEWER_REFERENCE:
+         type = NEW_REFERENCE;
+         break;
+
+      case INTEGER:
+      case SMALL_INTEGER:
+      case NEW_REFERENCE:
+      case PORT:
+      case PID:
+      case NIL:
+      case EXPORT:
+      case REFERENCE:
+      case NEW_FUN:
+      case FUN:
+         break;
+      }
+
+      if (bool(ctx.error)) {
+         return {};
       }
 
       return type;
+   }
+
+   template <class It0, class It1>
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool decode_version(is_context auto&& ctx, It0&& it, It1&& end)
+   {
+      const uint8_t v = detail::reada<uint8_t>(ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]] {
+         return false;
+      }
+
+      if (v != version_magic) [[unlikely]] {
+         ctx.error = error_code::version_mismatch;
+         return false;
+      }
+      return true;
    }
 
    template <class It0, class It1>
@@ -222,11 +316,9 @@ namespace glz
    {
       using namespace std::placeholders;
 
-      int index{};
-      int type{};
-      int sz{};
-      if (ei_get_type(it, &index, &type, &sz) < 0) [[unlikely]] {
-         ctx.error = error_code::syntax_error;
+      size_t sz;
+      const auto type = get_type(sz, ctx, it, end);
+      if (bool(ctx.error)) {
          return;
       }
 
@@ -441,7 +533,7 @@ namespace glz
       detail::write_type(eetf_tag::LIST, std::forward<Args>(args)...);
       detail::write_type<detail::BigEndian>(len, std::forward<Args>(args)...);
 
-      for (const auto & c : value) {
+      for (const auto& c : value) {
          detail::write_type(eetf_tag::SMALL_INTEGER, std::forward<Args>(args)...);
          detail::write_type(c, std::forward<Args>(args)...);
       }
@@ -455,7 +547,8 @@ namespace glz
       if (arity <= 0xFF) {
          detail::write_type(eetf_tag::SMALL_TUPLE, std::forward<Args>(args)...);
          detail::write_type(static_cast<uint8_t>(arity), std::forward<Args>(args)...);
-      } else {
+      }
+      else {
          // TODO tests
          detail::write_type(eetf_tag::LARGE_TUPLE, std::forward<Args>(args)...);
          detail::write_type<detail::BigEndian>(arity, std::forward<Args>(args)...);

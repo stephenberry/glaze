@@ -25,12 +25,9 @@ namespace glz
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
-         // TODO Check version
-         const auto version = decode_version(ctx, it);
-         if (version != 131) { // TODO find in erlang files
-            ctx.error = error_code::version_mismatch;
+         if (!decode_version(ctx, it, end)) {
             return;
          }
 
@@ -40,12 +37,12 @@ namespace glz
          }
 
          parse<Opts.format>::template op<no_header_on<Opts>()>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                               std::forward<It0>(it), end);
+                                                               std::forward<It0>(it), std::forward<It1>(end));
       }
 
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) {
             return;
@@ -62,7 +59,7 @@ namespace glz
          }
          else {
             from<EETF, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                  std::forward<It0>(it), end);
+                                                                  std::forward<It0>(it), std::forward<It1>(end));
          }
       }
    };
@@ -71,7 +68,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          decode_sequence<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
                                std::forward<It1>(end));
@@ -82,7 +79,7 @@ namespace glz
    struct from<EETF, T>
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -100,7 +97,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -118,7 +115,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -138,7 +135,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -159,7 +156,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -221,7 +218,7 @@ namespace glz
          field_iterator(error_code ec, Ctx&& ctx) : term_header{-1ull, -1ull} { ctx.error = ec; }
 
          template <auto Opts>
-         bool next(Ctx&& ctx, It0&& it, It1 end)
+         bool next(Ctx&& ctx, It0&& it, It1&& end)
          {
             if (term_header.first == 0) {
                return false;
@@ -257,10 +254,11 @@ namespace glz
       };
 
       template <auto Opts, is_context Ctx, class It0, class It1>
-      static auto make_term_iterator(Ctx&& ctx, It0&& it, It1 end)
+      static auto make_term_iterator(Ctx&& ctx, It0&& it, It1&& end)
       {
          using fi = field_iterator<Ctx, It0, It1>;
-         const auto tag = get_type(ctx, it);
+         size_t s;
+         const auto tag = get_type(s, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return fi(ctx.error, ctx);
          }
@@ -276,7 +274,7 @@ namespace glz
       }
 
       template <auto Opts, is_context Ctx, class It0, class It1>
-      static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
