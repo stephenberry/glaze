@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tags.hpp"
+
 namespace glz::eetf
 {
 
@@ -11,22 +13,22 @@ namespace glz::eetf
       struct in_impl;
 
       // Specialization for `int...`
-      template <int N, int... Vs>
-      struct in_impl<std::integer_sequence<int, N, Vs...>>
+      template <eetf_tag N, eetf_tag... Vs>
+      struct in_impl<std::integer_sequence<eetf_tag, N, Vs...>>
       {
          bool value{false};
 
-         template <int_t T>
-         constexpr in_impl(const T& val) : value{(val == N) || in_impl<std::integer_sequence<int, Vs...>>(val).value}
+         template <class T>
+         constexpr in_impl(const T& val) : value{(val == N) || in_impl<std::integer_sequence<eetf_tag, Vs...>>(val).value}
          {}
       };
 
-      template <int N>
-      struct in_impl<std::integer_sequence<int, N>>
+      template <eetf_tag N>
+      struct in_impl<std::integer_sequence<eetf_tag, N>>
       {
          bool value{false};
 
-         template <int_t T>
+         template <class T>
          constexpr in_impl(const T& val) : value{val == N}
          {}
       };
@@ -39,10 +41,10 @@ namespace glz::eetf
    namespace cmp
    {
 
-      template <template <class> class Op, int... Vs, typename T>
+      template <template <class> class Op, eetf_tag... Vs, typename T>
       constexpr bool is(const T& val)
       {
-         return Op<std::integer_sequence<int, Vs...>>(val).value;
+         return Op<std::integer_sequence<eetf_tag, Vs...>>(val).value;
       }
 
    };
