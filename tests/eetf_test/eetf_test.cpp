@@ -232,6 +232,29 @@ suite etf_tests = [] {
 
       trace.end("read_write_string_as_atom");
    };
+
+   "write_read_long_string"_test = [] {
+      trace.begin("write_read_long_string");
+
+      // 66000 elements (more than uint16)
+      constexpr std::size_t items = 66000;
+
+      std::vector<int> term_src;
+      term_src.reserve(items);
+      for (auto i = items; i != 0; --i) {
+         term_src.push_back('0');
+      }
+
+      std::vector<std::uint8_t> out;
+      expect(not glz::write_term(term_src, out)) << "can't write";
+
+      std::vector<int> term_dst;
+      expect(not glz::read_term(term_dst, out)) << "can't read";
+
+      expect(term_dst == term_src) << "terms mismatch";
+
+      trace.end("write_read_long_string");
+   };
 };
 
 int main()

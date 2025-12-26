@@ -19,6 +19,12 @@ namespace glz
       return;                                 \
    }
 
+#define CHECK_OFFSET_V(off)                   \
+   if ((it + (off)) > end) [[unlikely]] {     \
+      ctx.error = error_code::unexpected_end; \
+      return {};                              \
+   }
+
    using header_pair = std::pair<std::size_t, std::size_t>;
 
    namespace detail
@@ -32,15 +38,13 @@ namespace glz
          requires std::is_integral_v<V>
       V read(is_context auto&& ctx, auto&& it, auto&& end)
       {
-         if (it + sizeof(V) > end) {
-            ctx.error = error_code::seek_failure;
-            return {};
-         }
+         CHECK_OFFSET_V(sizeof(V));
 
          V v{};
          if constexpr (std::is_same_v<Endian, LittleEndian>) {
             std::memcpy(&v, it, sizeof(V));
-         } else {
+         }
+         else {
             const auto view = std::views::counted(reinterpret_cast<const uint8_t*>(it), sizeof(V));
             std::copy(std::ranges::rbegin(view), std::ranges::rend(view), &v);
          }
@@ -53,6 +57,10 @@ namespace glz
       V reada(auto&& ctx, auto&& it, auto&& end)
       {
          auto v = read<V, Endian>(ctx, it, end);
+         if (bool(ctx.error)) {
+            return {};
+         }
+
          std::advance(it, sizeof(V));
          return v;
       }
@@ -165,84 +173,114 @@ namespace glz
          }
       }
 
+      struct type_extract
+      {
+         type_extract(is_context auto&& ctx, auto&& it, auto&& end) : sz{0}, off_{sizeof(uint8_t)}
+         {
+            type = static_cast<eetf_tag>(read<uint8_t>(ctx, it, end));
+            if (bool(ctx.error)) {
+               return;
+            }
+
+            auto next = it + off_;
+            switch (type) {
+            case SMALL_ATOM:
+            case SMALL_ATOM_UTF8:
+               type = ATOM_UTF8;
+               [[fallthrough]];
+            case SMALL_TUPLE:
+               sz = read<uint8_t>(ctx, next, end);
+               off_ += sizeof(uint8_t);
+               break;
+
+            case ATOM_UTF8:
+               type = ATOM;
+               [[fallthrough]];
+            case ATOM:
+            case STRING:
+               sz = read<uint16_t, detail::BigEndian>(ctx, next, end);
+               off_ += sizeof(uint16_t);
+               break;
+
+            case FLOAT:
+            case FLOAT_NEW:
+               type = FLOAT;
+               break;
+
+            case LARGE_TUPLE:
+            case LIST:
+            case MAP:
+            case BINARY:
+            case BIT_BINARY:
+               sz = read<uint32_t, detail::BigEndian>(ctx, next, end);
+               off_ += sizeof(uint32_t);
+               break;
+
+            case SMALL_BIG:
+               sz = read<uint8_t, detail::BigEndian>(ctx, next, end);
+               off_ += sizeof(uint8_t);
+               break;
+
+            case LARGE_BIG:
+               sz = read<uint32_t, detail::BigEndian>(ctx, next, end);
+               off_ += sizeof(uint32_t);
+               break;
+
+            case NEW_PID:
+               type = PID;
+               break;
+            case V4_PORT:
+            case NEW_PORT:
+               type = PORT;
+               break;
+            case NEWER_REFERENCE:
+               type = NEW_REFERENCE;
+               break;
+
+            case INTEGER:
+            case SMALL_INTEGER:
+            case NEW_REFERENCE:
+            case PORT:
+            case PID:
+            case NIL:
+            case EXPORT:
+            case REFERENCE:
+            case NEW_FUN:
+            case FUN:
+               break;
+            }
+         }
+
+         void advance(is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            CHECK_OFFSET(off_);
+            std::advance(it, off_);
+         }
+
+         size_t sz;
+         eetf_tag type;
+
+        private:
+         ptrdiff_t off_;
+      };
+
    } // namespace detail
 
    template <class It0, class It1>
    GLZ_ALWAYS_INLINE eetf_tag get_type(size_t& s, is_context auto&& ctx, It0&& it, It1&& end)
    {
-      eetf_tag type = static_cast<eetf_tag>(detail::read<uint8_t>(ctx, it, end));
-      if (bool(ctx.error)) {
-         return {};
-      }
+      detail::type_extract tw(ctx, it, end);
+      s = tw.sz;
+      return tw.type;
+   }
 
-      auto next = it + 1;
-      switch (type) {
-      case SMALL_ATOM:
-      case SMALL_ATOM_UTF8:
-         type = ATOM_UTF8;
-         [[fallthrough]];
-      case SMALL_TUPLE:
-         s = detail::read<uint8_t>(ctx, next, end);
-         break;
-
-      case ATOM_UTF8:
-         type = ATOM;
-         [[fallthrough]];
-      case ATOM:
-      case STRING:
-         s = detail::read<uint16_t, detail::BigEndian>(ctx, next, end);
-         break;
-
-      case FLOAT:
-      case FLOAT_NEW:
-         type = FLOAT;
-         break;
-
-      case LARGE_TUPLE:
-      case LIST:
-      case MAP:
-      case BINARY:
-      case BIT_BINARY:
-         s = detail::read<uint32_t, detail::BigEndian>(ctx, next, end);
-         break;
-
-      case SMALL_BIG:
-         s = detail::read<uint8_t, detail::BigEndian>(ctx, next, end);
-         break;
-
-      case LARGE_BIG:
-         s = detail::read<uint32_t, detail::BigEndian>(ctx, next, end);
-         break;
-
-      case NEW_PID:
-         type = PID;
-         break;
-      case V4_PORT:
-      case NEW_PORT:
-         type = PORT;
-         break;
-      case NEWER_REFERENCE:
-         type = NEW_REFERENCE;
-         break;
-
-      case INTEGER:
-      case SMALL_INTEGER:
-      case NEW_REFERENCE:
-      case PORT:
-      case PID:
-      case NIL:
-      case EXPORT:
-      case REFERENCE:
-      case NEW_FUN:
-      case FUN:
-         break;
-      }
-
-      if (bool(ctx.error)) {
-         return {};
-      }
-
-      return type;
+   template <class It0, class It1>
+   GLZ_ALWAYS_INLINE eetf_tag get_typea(size_t& s, is_context auto&& ctx, It0&& it, It1&& end)
+   {
+      detail::type_extract tw(ctx, it, end);
+      s = tw.sz;
+      tw.advance(ctx, it, end);
+      return tw.type;
    }
 
    template <class It0, class It1>
@@ -312,24 +350,41 @@ namespace glz
    }
 
    template <class It0, class It1>
-   GLZ_ALWAYS_INLINE void decode_token(auto&& value, is_context auto&& ctx, It0&& it, It1&& end)
+   GLZ_ALWAYS_INLINE void decode_token(resizable auto&& value, is_context auto&& ctx, It0&& it, It1&& end)
    {
       using namespace std::placeholders;
 
       size_t sz;
-      const auto type = get_type(sz, ctx, it, end);
+      const auto type = get_typea(sz, ctx, it, end);
       if (bool(ctx.error)) {
          return;
       }
 
-      CHECK_OFFSET(sz);
-
       value.resize(sz);
-      if (eetf::is_atom(type)) {
-         detail::decode_impl(std::bind(ei_decode_atom, _1, _2, value.data()), ctx, it, end);
+      if (eetf::is_atom(type) || eetf::is_string(type)) {
+         CHECK_OFFSET(sz);
+         std::memcpy(value.data(), it, sz);
+         std::advance(it, sz);
       }
       else {
-         detail::decode_impl(std::bind(ei_decode_string, _1, _2, value.data()), ctx, it, end);
+         const auto offset = sz * sizeof(uint16_t);
+         CHECK_OFFSET(offset);
+         const auto only_small_int = [](const uint16_t& pair) -> bool {
+            return static_cast<eetf_tag>(*(reinterpret_cast<const uint8_t*>(&pair) + 0)) == eetf_tag::SMALL_INTEGER;
+         };
+
+         const auto extract = [](const uint16_t& pair) -> char {
+            return *(reinterpret_cast<const uint8_t*>(&pair) + 1);
+         };
+         auto view = std::views::counted(reinterpret_cast<const uint16_t*>(it), sz) |
+                     std::views::filter(only_small_int) | std::views::transform(extract);
+         std::copy(std::ranges::begin(view), std::ranges::end(view), value.data());
+         if (sz != value.size()) {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         std::advance(it, offset);
       }
    }
 
