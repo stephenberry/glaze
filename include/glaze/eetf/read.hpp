@@ -204,7 +204,7 @@ namespace glz
       {
         public:
          template <typename F>
-         field_iterator(F&& f, Ctx&& ctx, It0&& it, It1 end)
+         field_iterator(F&& f, Ctx&& ctx, It0&& it, It1&& end)
          {
             term_header = f(ctx, it);
             if (bool(ctx.error)) [[unlikely]] {

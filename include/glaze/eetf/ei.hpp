@@ -45,8 +45,9 @@ namespace glz
             std::memcpy(&v, it, sizeof(V));
          }
          else {
+            const auto dst = std::views::counted(reinterpret_cast<std::uint8_t*>(&v), sizeof(V));
             const auto view = std::views::counted(reinterpret_cast<const uint8_t*>(it), sizeof(V));
-            std::copy(std::ranges::rbegin(view), std::ranges::rend(view), &v);
+            std::copy(std::ranges::rbegin(view), std::ranges::rend(view), std::ranges::begin(dst));
          }
 
          return v;
