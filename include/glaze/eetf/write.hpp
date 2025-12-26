@@ -25,7 +25,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -44,7 +44,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -63,7 +63,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -83,7 +83,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -102,7 +102,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -122,7 +122,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -157,7 +157,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -186,7 +186,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
