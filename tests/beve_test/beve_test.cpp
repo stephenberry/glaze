@@ -1847,6 +1847,20 @@ suite example_reflection_without_keys_test = [] {
       expect(obj.d == 3.14);
       expect(obj.hello == "happy");
    };
+
+   "read_beve_untagged"_test = [] {
+      my_example obj{.i = 42, .d = 2.718, .hello = "world"};
+      auto encoded = glz::write_beve_untagged(obj);
+      expect(encoded.has_value());
+
+      my_example decoded{};
+      auto ec = glz::read_beve_untagged(decoded, *encoded);
+      expect(!ec);
+
+      expect(decoded.i == 42);
+      expect(decoded.d == 2.718);
+      expect(decoded.hello == "world");
+   };
 };
 
 suite my_struct_without_keys_test = [] {
