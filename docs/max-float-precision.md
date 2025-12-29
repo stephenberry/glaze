@@ -4,6 +4,9 @@ Glaze provides a compile time option (`float_max_write_precision`) to limit the 
 
 The wrappers `glz::write_float32` and `glz::write_float64` set this compile time option on individual numbers, arrays, or objects. The wrapper `glz::write_float_full` turns off higher level float precision wrapper options.
 
+> [!TIP]
+> For more control over float formatting (decimal places, scientific notation, etc.), see the [`float_format` option](options.md#float_format) and [`glz::float_format` wrapper](wrappers.md#float_format) which use `std::format` syntax.
+
 Example unit tests:
 
 ```c++

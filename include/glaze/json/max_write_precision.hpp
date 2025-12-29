@@ -24,7 +24,7 @@ namespace glz
    struct meta<write_float32_t<T>>
    {
       static constexpr bool custom_write = true;
-      static constexpr auto value{[](auto& s) -> auto& { return s.val; }}; // reading just uses the value directly
+      static constexpr auto value{[](auto&& s) -> auto& { return s.val; }}; // reading uses the value directly
    };
 
    template <class T>
@@ -39,7 +39,7 @@ namespace glz
    struct meta<write_float64_t<T>>
    {
       static constexpr bool custom_write = true;
-      static constexpr auto value{[](auto& s) -> auto& { return s.val; }}; // reading just uses the value directly
+      static constexpr auto value{[](auto&& s) -> auto& { return s.val; }}; // reading uses the value directly
    };
 
    template <class T>
@@ -54,7 +54,7 @@ namespace glz
    struct meta<write_float_full_t<T>>
    {
       static constexpr bool custom_write = true;
-      static constexpr auto value{[](auto& s) -> auto& { return s.val; }}; // reading just uses the value directly
+      static constexpr auto value{[](auto&& s) -> auto& { return s.val; }}; // reading uses the value directly
    };
 
    template <class T>
