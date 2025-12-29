@@ -11026,7 +11026,8 @@ suite float_format_tests = [] {
       std::string json_formatted = glz::write<float_format_2f{}>(pi).value_or("error");
 
       // Default should have full precision
-      expect(json_default.size() > json_formatted.size()) << "Default: " << json_default << ", Formatted: " << json_formatted;
+      expect(json_default.size() > json_formatted.size())
+         << "Default: " << json_default << ", Formatted: " << json_formatted;
       expect(json_default == "3.141592653589793") << json_default;
    };
 
@@ -11051,10 +11052,8 @@ template <>
 struct glz::meta<per_member_float_format_t>
 {
    using T = per_member_float_format_t;
-   static constexpr auto value = glz::object(
-      "value", glz::float_format<&T::value, "{:.2f}">,
-      "other", glz::float_format<&T::other, "{:.4f}">
-   );
+   static constexpr auto value =
+      glz::object("value", glz::float_format<&T::value, "{:.2f}">, "other", glz::float_format<&T::other, "{:.4f}">);
 };
 
 struct mixed_member_format_t
@@ -11068,11 +11067,8 @@ template <>
 struct glz::meta<mixed_member_format_t>
 {
    using T = mixed_member_format_t;
-   static constexpr auto value = glz::object(
-      "formatted", glz::float_format<&T::formatted, "{:.3f}">,
-      "unformatted", &T::unformatted,
-      "count", &T::count
-   );
+   static constexpr auto value = glz::object("formatted", glz::float_format<&T::formatted, "{:.3f}">, "unformatted",
+                                             &T::unformatted, "count", &T::count);
 };
 
 struct scientific_format_t
@@ -11085,10 +11081,8 @@ template <>
 struct glz::meta<scientific_format_t>
 {
    using T = scientific_format_t;
-   static constexpr auto value = glz::object(
-      "large", glz::float_format<&T::large, "{:.2e}">,
-      "small", glz::float_format<&T::small, "{:.3E}">
-   );
+   static constexpr auto value =
+      glz::object("large", glz::float_format<&T::large, "{:.2e}">, "small", glz::float_format<&T::small, "{:.3E}">);
 };
 
 suite float_format_wrapper_tests = [] {

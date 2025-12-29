@@ -102,7 +102,7 @@ namespace glz
                }
             }
             else if constexpr (uint8_t(check_float_max_write_precision(Opts)) > 0 &&
-                          uint8_t(check_float_max_write_precision(Opts)) < sizeof(V)) {
+                               uint8_t(check_float_max_write_precision(Opts)) < sizeof(V)) {
                // we cast to a lower precision floating point value before writing out
                if constexpr (uint8_t(check_float_max_write_precision(Opts)) == 8) {
                   const auto reduced = static_cast<double>(value);

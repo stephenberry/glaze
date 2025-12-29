@@ -100,9 +100,8 @@ namespace glz
    template <auto MemPtr, format_str Fmt>
    inline constexpr decltype(auto) float_format_impl() noexcept
    {
-      return [](auto&& val) {
-         return float_format_t<Fmt, std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr};
-      };
+      return
+         [](auto&& val) { return float_format_t<Fmt, std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
 
    // Usage: glz::float_format<&T::member, "{:.2f}">
