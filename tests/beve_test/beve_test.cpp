@@ -1841,7 +1841,7 @@ suite example_reflection_without_keys_test = [] {
       expect(without_keys != with_keys);
 
       obj = {};
-      expect(!glz::read_binary_untagged(obj, without_keys));
+      expect(!glz::read_beve_untagged(obj, without_keys));
 
       expect(obj.i == 55);
       expect(obj.d == 3.14);
@@ -3042,7 +3042,7 @@ suite static_variant_tags = [] {
          auto encoded = glz::write_beve_untagged(original);
          expect(encoded.has_value());
 
-         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         auto decoded = glz::read_beve_untagged<MsgEmpty>(*encoded);
          expect(decoded.has_value());
          expect(decoded->index() == 0);
       }
@@ -3052,7 +3052,7 @@ suite static_variant_tags = [] {
          auto encoded = glz::write_beve_untagged(original);
          expect(encoded.has_value());
 
-         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         auto decoded = glz::read_beve_untagged<MsgEmpty>(*encoded);
          expect(decoded.has_value());
          expect(decoded->index() == 1);
       }
@@ -3067,7 +3067,7 @@ suite static_variant_tags = [] {
          auto encoded = glz::write_beve_untagged(original);
          expect(encoded.has_value());
 
-         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         auto decoded = glz::read_beve_untagged<Msg>(*encoded);
          expect(decoded.has_value());
          expect(decoded->index() == 0);
          expect(std::get<0>(*decoded).value == 42);
@@ -3078,7 +3078,7 @@ suite static_variant_tags = [] {
          auto encoded = glz::write_beve_untagged(original);
          expect(encoded.has_value());
 
-         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         auto decoded = glz::read_beve_untagged<Msg>(*encoded);
          expect(decoded.has_value());
          expect(decoded->index() == 1);
          expect(std::get<1>(*decoded).text == "hello");
