@@ -149,6 +149,153 @@ struct glz::meta<telemetry_batch>
                                              "header", &T::header, "status", &T::status);
 };
 
+// ============================================================================
+// Structs for error_on_missing_keys tests
+// ============================================================================
+namespace msgpack_error_on_missing_keys_tests
+{
+   struct DataV1
+   {
+      int hp = 0;
+      bool is_alive = false;
+      bool operator==(const DataV1&) const = default;
+   };
+
+   struct DataV2
+   {
+      int hp = 0;
+      bool is_alive = false;
+      int new_field = 0;
+      bool operator==(const DataV2&) const = default;
+   };
+
+   struct DataWithOptional
+   {
+      int hp = 0;
+      std::optional<int> optional_field;
+      bool operator==(const DataWithOptional&) const = default;
+   };
+
+   struct DataWithNullablePtr
+   {
+      int hp = 0;
+      std::unique_ptr<int> nullable_ptr;
+   };
+
+   struct NestedInner
+   {
+      int a = 0;
+      bool operator==(const NestedInner&) const = default;
+   };
+
+   struct NestedInnerV2
+   {
+      int a = 0;
+      int b = 0;
+      bool operator==(const NestedInnerV2&) const = default;
+   };
+
+   struct NestedOuter
+   {
+      NestedInner inner;
+      int outer_value = 0;
+      bool operator==(const NestedOuter&) const = default;
+   };
+
+   struct NestedOuterV2
+   {
+      NestedInnerV2 inner;
+      int outer_value = 0;
+      int extra = 0;
+      bool operator==(const NestedOuterV2&) const = default;
+   };
+
+   struct MigrationV1
+   {
+      int id = 0;
+      std::string name;
+      bool operator==(const MigrationV1&) const = default;
+   };
+
+   struct MigrationV2
+   {
+      int id = 0;
+      std::string name;
+      int version = 0;
+      bool operator==(const MigrationV2&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::DataV1>
+{
+   using T = msgpack_error_on_missing_keys_tests::DataV1;
+   static constexpr auto value = object("hp", &T::hp, "is_alive", &T::is_alive);
+};
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::DataV2>
+{
+   using T = msgpack_error_on_missing_keys_tests::DataV2;
+   static constexpr auto value = object("hp", &T::hp, "is_alive", &T::is_alive, "new_field", &T::new_field);
+};
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::DataWithOptional>
+{
+   using T = msgpack_error_on_missing_keys_tests::DataWithOptional;
+   static constexpr auto value = object("hp", &T::hp, "optional_field", &T::optional_field);
+};
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::DataWithNullablePtr>
+{
+   using T = msgpack_error_on_missing_keys_tests::DataWithNullablePtr;
+   static constexpr auto value = object("hp", &T::hp, "nullable_ptr", &T::nullable_ptr);
+};
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::NestedInner>
+{
+   using T = msgpack_error_on_missing_keys_tests::NestedInner;
+   static constexpr auto value = object("a", &T::a);
+};
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::NestedInnerV2>
+{
+   using T = msgpack_error_on_missing_keys_tests::NestedInnerV2;
+   static constexpr auto value = object("a", &T::a, "b", &T::b);
+};
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::NestedOuter>
+{
+   using T = msgpack_error_on_missing_keys_tests::NestedOuter;
+   static constexpr auto value = object("inner", &T::inner, "outer_value", &T::outer_value);
+};
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::NestedOuterV2>
+{
+   using T = msgpack_error_on_missing_keys_tests::NestedOuterV2;
+   static constexpr auto value = object("inner", &T::inner, "outer_value", &T::outer_value, "extra", &T::extra);
+};
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::MigrationV1>
+{
+   using T = msgpack_error_on_missing_keys_tests::MigrationV1;
+   static constexpr auto value = object("id", &T::id, "name", &T::name);
+};
+
+template <>
+struct glz::meta<msgpack_error_on_missing_keys_tests::MigrationV2>
+{
+   using T = msgpack_error_on_missing_keys_tests::MigrationV2;
+   static constexpr auto value = object("id", &T::id, "name", &T::name, "version", &T::version);
+};
+
 int main()
 {
    "msgpack primitive roundtrip"_test = [] {
@@ -588,6 +735,162 @@ int main()
       event original{"test_event", {1700000000, 123000000}};
       expect_roundtrip_equal(original);
    };
+
+   // =========================================================================
+   // Tests for error_on_missing_keys
+   // =========================================================================
+   {
+      using namespace msgpack_error_on_missing_keys_tests;
+
+      "error_on_missing_keys=false allows missing keys"_test = [] {
+         using namespace msgpack_error_on_missing_keys_tests;
+         DataV1 v1{10, true};
+         std::string buffer{};
+         constexpr glz::opts write_opts = {.format = glz::MSGPACK};
+         expect(not glz::write<write_opts>(v1, buffer));
+
+         DataV2 v2{};
+         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_missing_keys = false};
+         auto ec = glz::read<read_opts>(v2, buffer);
+         expect(!ec) << glz::format_error(ec, buffer);
+         expect(v2.hp == 10);
+         expect(v2.is_alive == true);
+         expect(v2.new_field == 0); // Default value preserved
+      };
+
+      "error_on_missing_keys=true detects missing required key"_test = [] {
+         using namespace msgpack_error_on_missing_keys_tests;
+         DataV1 v1{10, true};
+         std::string buffer{};
+         constexpr glz::opts write_opts = {.format = glz::MSGPACK};
+         expect(not glz::write<write_opts>(v1, buffer));
+
+         DataV2 v2{};
+         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_missing_keys = true};
+         auto ec = glz::read<read_opts>(v2, buffer);
+         expect(ec.ec == glz::error_code::missing_key) << "Expected missing_key error";
+      };
+
+      "error_on_missing_keys=true with complete data succeeds"_test = [] {
+         using namespace msgpack_error_on_missing_keys_tests;
+         DataV2 v2_orig{10, true, 42};
+         std::string buffer{};
+         constexpr glz::opts write_opts = {.format = glz::MSGPACK};
+         expect(not glz::write<write_opts>(v2_orig, buffer));
+
+         DataV2 v2{};
+         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_missing_keys = true};
+         auto ec = glz::read<read_opts>(v2, buffer);
+         expect(!ec) << glz::format_error(ec, buffer);
+         expect(v2 == v2_orig);
+      };
+
+      "error_on_missing_keys=true allows missing optional fields"_test = [] {
+         using namespace msgpack_error_on_missing_keys_tests;
+         DataV1 v1{10, true};
+         std::string buffer{};
+         constexpr glz::opts write_opts = {.format = glz::MSGPACK};
+         expect(not glz::write<write_opts>(v1, buffer));
+
+         DataWithOptional v{};
+         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_unknown_keys = false, .error_on_missing_keys = true};
+         auto ec = glz::read<read_opts>(v, buffer);
+         // Should succeed because optional_field is nullable
+         expect(!ec) << glz::format_error(ec, buffer);
+         expect(v.hp == 10);
+         expect(!v.optional_field.has_value());
+      };
+
+      // Note: unique_ptr test skipped due to pre-existing bug in msgpack reader
+      // where it calls emplace() which doesn't exist for unique_ptr
+
+      "error_on_missing_keys with nested objects"_test = [] {
+         using namespace msgpack_error_on_missing_keys_tests;
+         NestedOuter outer{{5}, 100};
+         std::string buffer{};
+         constexpr glz::opts write_opts = {.format = glz::MSGPACK};
+         expect(not glz::write<write_opts>(outer, buffer));
+
+         NestedOuterV2 outer_v2{};
+         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_missing_keys = true};
+         auto ec = glz::read<read_opts>(outer_v2, buffer);
+         // Should fail because extra field is missing AND inner.b is missing
+         expect(ec.ec == glz::error_code::missing_key);
+      };
+
+      "error_on_missing_keys reports missing key in error message"_test = [] {
+         using namespace msgpack_error_on_missing_keys_tests;
+         DataV1 v1{10, true};
+         std::string buffer{};
+         constexpr glz::opts write_opts = {.format = glz::MSGPACK};
+         expect(not glz::write<write_opts>(v1, buffer));
+
+         DataV2 v2{};
+         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_missing_keys = true};
+         auto ec = glz::read<read_opts>(v2, buffer);
+         expect(ec.ec == glz::error_code::missing_key);
+         // The error message should contain the missing key name
+         std::string error_msg = glz::format_error(ec, buffer);
+         expect(error_msg.find("new_field") != std::string::npos) << "Error message should contain 'new_field': " << error_msg;
+      };
+
+      "error_on_unknown_keys with msgpack"_test = [] {
+         using namespace msgpack_error_on_missing_keys_tests;
+         DataV2 v2{10, true, 42};
+         std::string buffer{};
+         constexpr glz::opts write_opts = {.format = glz::MSGPACK};
+         expect(not glz::write<write_opts>(v2, buffer));
+
+         // With error_on_unknown_keys = false, should succeed
+         DataV1 v1{};
+         constexpr glz::opts read_opts_ok = {.format = glz::MSGPACK, .error_on_unknown_keys = false};
+         auto ec = glz::read<read_opts_ok>(v1, buffer);
+         expect(!ec) << glz::format_error(ec, buffer);
+         expect(v1.hp == 10);
+         expect(v1.is_alive == true);
+
+         // With error_on_unknown_keys = true, should fail
+         DataV1 v1_2{};
+         constexpr glz::opts read_opts_err = {.format = glz::MSGPACK, .error_on_unknown_keys = true};
+         ec = glz::read<read_opts_err>(v1_2, buffer);
+         expect(ec.ec == glz::error_code::unknown_key);
+      };
+
+      "msgpack migration scenario V1 to V2"_test = [] {
+         using namespace msgpack_error_on_missing_keys_tests;
+         // Write V1 data
+         MigrationV1 v1{42, "Alice"};
+         std::string buffer{};
+         constexpr glz::opts write_opts = {.format = glz::MSGPACK};
+         expect(not glz::write<write_opts>(v1, buffer));
+
+         // Read into V2 with defaults for missing fields
+         MigrationV2 v2{};
+         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_missing_keys = false};
+         auto ec = glz::read<read_opts>(v2, buffer);
+         expect(!ec) << glz::format_error(ec, buffer);
+         expect(v2.id == 42);
+         expect(v2.name == "Alice");
+         expect(v2.version == 0); // Default
+      };
+
+      "msgpack migration scenario V2 to V1"_test = [] {
+         using namespace msgpack_error_on_missing_keys_tests;
+         // Write V2 data
+         MigrationV2 v2{42, "Bob", 5};
+         std::string buffer{};
+         constexpr glz::opts write_opts = {.format = glz::MSGPACK};
+         expect(not glz::write<write_opts>(v2, buffer));
+
+         // Read into V1 (should skip unknown keys)
+         MigrationV1 v1{};
+         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_unknown_keys = false};
+         auto ec = glz::read<read_opts>(v1, buffer);
+         expect(!ec) << glz::format_error(ec, buffer);
+         expect(v1.id == 42);
+         expect(v1.name == "Bob");
+      };
+   }
 
    return 0;
 }
