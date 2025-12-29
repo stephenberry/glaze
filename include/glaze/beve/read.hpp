@@ -1724,6 +1724,7 @@ namespace glz
    }
 
    template <read_supported<BEVE> T, class Buffer>
+   [[deprecated("Use read_beve_untagged instead")]]
    [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer)
    {
       return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
@@ -1731,7 +1732,27 @@ namespace glz
    }
 
    template <read_supported<BEVE> T, class Buffer>
+   [[deprecated("Use read_beve_untagged instead")]]
    [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(Buffer&& buffer)
+   {
+      T value{};
+      const auto pe = read<opts{.format = BEVE, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
+      if (pe) [[unlikely]] {
+         return unexpected(pe);
+      }
+      return value;
+   }
+
+   // read_beve_untagged aliases for naming consistency with write_beve_untagged
+   template <read_supported<BEVE> T, class Buffer>
+   [[nodiscard]] inline error_ctx read_beve_untagged(T&& value, Buffer&& buffer)
+   {
+      return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
+                                                                   std::forward<Buffer>(buffer));
+   }
+
+   template <read_supported<BEVE> T, class Buffer>
+   [[nodiscard]] inline expected<T, error_ctx> read_beve_untagged(Buffer&& buffer)
    {
       T value{};
       const auto pe = read<opts{.format = BEVE, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
