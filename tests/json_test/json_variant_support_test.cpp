@@ -1574,7 +1574,8 @@ struct glz::meta<tagged_variant_extended::MultiEmptyWrapper>
 template <>
 struct glz::meta<tagged_variant_extended::NonEmpty>
 {
-   static constexpr auto value = glz::object(&tagged_variant_extended::NonEmpty::x, &tagged_variant_extended::NonEmpty::y);
+   static constexpr auto value =
+      glz::object(&tagged_variant_extended::NonEmpty::x, &tagged_variant_extended::NonEmpty::y);
 };
 
 template <>
@@ -1593,9 +1594,9 @@ struct glz::meta<tagged_variant_extended::MixedWrapper>
 template <>
 struct glz::meta<tagged_variant_extended::MultiFieldWrapper>
 {
-   static constexpr auto value = glz::object(&tagged_variant_extended::MultiFieldWrapper::before,
-                                             &tagged_variant_extended::MultiFieldWrapper::v,
-                                             &tagged_variant_extended::MultiFieldWrapper::after);
+   static constexpr auto value =
+      glz::object(&tagged_variant_extended::MultiFieldWrapper::before, &tagged_variant_extended::MultiFieldWrapper::v,
+                  &tagged_variant_extended::MultiFieldWrapper::after);
 };
 
 template <>
@@ -1721,7 +1722,8 @@ suite empty_struct_variant_extended = [] {
    };
 
    "empty variant in array"_test = [] {
-      std::vector<tagged_empty_variant::Wrapper> vec{{tagged_empty_variant::EmptyA{}}, {tagged_empty_variant::EmptyA{}}};
+      std::vector<tagged_empty_variant::Wrapper> vec{{tagged_empty_variant::EmptyA{}},
+                                                     {tagged_empty_variant::EmptyA{}}};
       std::string buffer{};
       expect(not glz::write_json(vec, buffer));
       expect(buffer == R"([{"v":{"tag":"A"}},{"v":{"tag":"A"}}])") << buffer;
