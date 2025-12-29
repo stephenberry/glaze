@@ -793,7 +793,7 @@ int main()
          expect(not glz::write<write_opts>(v1, buffer));
 
          DataWithOptional v{};
-         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_missing_keys = true, .error_on_unknown_keys = false};
+         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_unknown_keys = false, .error_on_missing_keys = true};
          auto ec = glz::read<read_opts>(v, buffer);
          // Should succeed because optional_field is nullable
          expect(!ec) << glz::format_error(ec, buffer);

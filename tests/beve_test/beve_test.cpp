@@ -3573,7 +3573,7 @@ suite beve_error_on_missing_keys = [] {
 
       // Read into struct where optional_field exists but is nullable
       DataWithOptional v{};
-      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_missing_keys = true, .error_on_unknown_keys = false};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false, .error_on_missing_keys = true};
       auto ec = glz::read<opts>(v, buffer);
       // Should succeed because optional_field is nullable
       expect(!ec) << glz::format_error(ec, buffer);
@@ -3587,7 +3587,7 @@ suite beve_error_on_missing_keys = [] {
       expect(not glz::write_beve(v1, buffer));
 
       DataWithNullablePtr v{};
-      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_missing_keys = true, .error_on_unknown_keys = false};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false, .error_on_missing_keys = true};
       auto ec = glz::read<opts>(v, buffer);
       // Should succeed because nullable_ptr is nullable
       expect(!ec) << glz::format_error(ec, buffer);
