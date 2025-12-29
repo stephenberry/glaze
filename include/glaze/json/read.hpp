@@ -3581,6 +3581,7 @@ namespace glz
                            if (skip_ws<Opts>(ctx, it, end)) {
                               return;
                            }
+                           continue; // Continue loop to find the tag
                         }
                      }
                      else if constexpr (Opts.error_on_unknown_keys) {
