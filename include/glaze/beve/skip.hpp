@@ -124,9 +124,30 @@ namespace glz
          break;
       }
       case 3: { // bool or string
-         const bool is_bool = (tag & 0b00'1'00'000) >> 5;
+         // Bit 5 indicates string (1) vs boolean (0)
+         const bool is_string = (tag & 0b00'1'00'000) >> 5;
          ++it;
-         if (is_bool) {
+         if (is_string) {
+            // String array: count of strings, then each string has length prefix + data
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            for (size_t i = 0; i < n; ++i) {
+               const auto length = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (uint64_t(end - it) < length) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               it += length;
+            }
+         }
+         else {
+            // Boolean array: count of bools, packed into bytes
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -138,18 +159,6 @@ namespace glz
                return;
             }
             it += num_bytes;
-         }
-         else {
-            const auto n = int_from_compressed(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            if (uint64_t(end - it) < n) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-
-            it += n;
          }
          break;
       }

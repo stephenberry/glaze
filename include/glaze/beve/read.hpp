@@ -1471,7 +1471,7 @@ namespace glz
          }();
 
          decltype(auto) fields = [&]() -> decltype(auto) {
-            if constexpr (Opts.partial_read) {
+            if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                return bit_array<N>{};
             }
             else {
@@ -1506,7 +1506,7 @@ namespace glz
                const auto index = decode_hash_with_size<BEVE, T, HashInfo, HashInfo.type>::op(it, end, n);
 
                if (index < N) [[likely]] {
-                  if constexpr (Opts.partial_read) {
+                  if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                      fields[index] = true;
                   }
 
@@ -1575,6 +1575,20 @@ namespace glz
                skip_value<BEVE>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
+            }
+         }
+
+         if constexpr (Opts.error_on_missing_keys) {
+            constexpr auto req_fields = required_fields<T, Opts>();
+            if ((req_fields & fields) != req_fields) {
+               for (size_t i = 0; i < N; ++i) {
+                  if (not fields[i] && req_fields[i]) {
+                     ctx.custom_error_message = reflect<T>::keys[i];
+                     break;
+                  }
+               }
+               ctx.error = error_code::missing_key;
+               return;
             }
          }
       }
