@@ -3618,7 +3618,8 @@ suite beve_error_on_missing_keys = [] {
       expect(ec.ec == glz::error_code::missing_key);
       // The error message should contain the missing key name
       std::string error_msg = glz::format_error(ec, buffer);
-      expect(error_msg.find("new_field") != std::string::npos) << "Error message should contain 'new_field': " << error_msg;
+      expect(error_msg.find("new_field") != std::string::npos)
+         << "Error message should contain 'new_field': " << error_msg;
    };
 
    "error_on_missing_keys with multiple missing keys reports first"_test = [] {

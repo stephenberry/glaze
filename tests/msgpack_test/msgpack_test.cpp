@@ -793,7 +793,8 @@ int main()
          expect(not glz::write<write_opts>(v1, buffer));
 
          DataWithOptional v{};
-         constexpr glz::opts read_opts = {.format = glz::MSGPACK, .error_on_unknown_keys = false, .error_on_missing_keys = true};
+         constexpr glz::opts read_opts = {
+            .format = glz::MSGPACK, .error_on_unknown_keys = false, .error_on_missing_keys = true};
          auto ec = glz::read<read_opts>(v, buffer);
          // Should succeed because optional_field is nullable
          expect(!ec) << glz::format_error(ec, buffer);
@@ -831,7 +832,8 @@ int main()
          expect(ec.ec == glz::error_code::missing_key);
          // The error message should contain the missing key name
          std::string error_msg = glz::format_error(ec, buffer);
-         expect(error_msg.find("new_field") != std::string::npos) << "Error message should contain 'new_field': " << error_msg;
+         expect(error_msg.find("new_field") != std::string::npos)
+            << "Error message should contain 'new_field': " << error_msg;
       };
 
       "error_on_unknown_keys with msgpack"_test = [] {
