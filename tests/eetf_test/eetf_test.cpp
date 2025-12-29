@@ -250,8 +250,7 @@ suite etf_tests = [] {
 
       std::string term_dst;
       expect(not glz::read_term(term_dst, out)) << "can't read";
-
-      // expect(term_dst == term_src) << "terms mismatch";
+      expect(std::equal(term_dst.begin(), term_dst.end(), term_src.begin(), term_src.end())) << "terms mismatch";
 
       term_src.push_back(0xFFFF);
       expect(not glz::write_term(term_src, out)) << "can't write";
