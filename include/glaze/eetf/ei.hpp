@@ -361,16 +361,17 @@ namespace glz
          return;
       }
 
-      value.resize(sz);
       if (eetf::is_atom(type) || eetf::is_string(type)) {
          CHECK_OFFSET(sz);
+         value.resize(sz);
          std::memcpy(value.data(), it, sz);
          std::advance(it, sz);
       }
       else {
          const auto offset = sz * sizeof(uint16_t);
          CHECK_OFFSET(offset);
-         const auto only_small_int = [](const uint16_t& pair) -> bool {
+         value.reserve(sz);
+         const auto filter_small_int = [](const uint16_t& pair) -> bool {
             return static_cast<eetf_tag>(*(reinterpret_cast<const uint8_t*>(&pair) + 0)) == eetf_tag::SMALL_INTEGER;
          };
 
@@ -378,8 +379,8 @@ namespace glz
             return *(reinterpret_cast<const uint8_t*>(&pair) + 1);
          };
          auto view = std::views::counted(reinterpret_cast<const uint16_t*>(it), sz) |
-                     std::views::filter(only_small_int) | std::views::transform(extract);
-         std::copy(std::ranges::begin(view), std::ranges::end(view), value.data());
+                     std::views::filter(filter_small_int) | std::views::transform(extract);
+         std::copy(std::ranges::begin(view), std::ranges::end(view), std::back_inserter(value));
          if (sz != value.size()) {
             ctx.error = error_code::parse_error;
             return;

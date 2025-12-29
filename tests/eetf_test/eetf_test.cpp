@@ -253,6 +253,12 @@ suite etf_tests = [] {
 
       // expect(term_dst == term_src) << "terms mismatch";
 
+      term_src.push_back(0xFFFF);
+      expect(not glz::write_term(term_src, out)) << "can't write";
+      const auto res = glz::read_term(term_dst, out);
+      expect(!!res);
+      expect(res.ec == glz::error_code::parse_error);
+
       trace.end("write_read_long_string");
    };
 };
