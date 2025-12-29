@@ -1519,8 +1519,8 @@ struct nested_bool_array
 
 suite nested_array_bool_tests = [] {
    "nested_array_bool"_test = [] {
-      nested_bool_array obj{42, {true, false, true, true, false, false, true, false, true, false, true, true, false},
-                            "test"};
+      nested_bool_array obj{
+         42, {true, false, true, true, false, false, true, false, true, false, true, true, false}, "test"};
 
       std::string s{};
       expect(not glz::write_beve(obj, s));
