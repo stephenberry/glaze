@@ -825,8 +825,7 @@ namespace glz
          else {
             static constexpr auto HashInfo = hash_info<T>;
 
-            const auto index =
-               decode_hash_with_size<TOML, T, HashInfo, HashInfo.type>::op(start, start + n, n);
+            const auto index = decode_hash_with_size<TOML, T, HashInfo, HashInfo.type>::op(start, start + n, n);
 
             if (index >= N) [[unlikely]] {
                ctx.error = error_code::unexpected_enum;

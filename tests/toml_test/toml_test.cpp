@@ -225,7 +225,8 @@ template <>
 struct glz::meta<config_with_enums>
 {
    using T = config_with_enums;
-   static constexpr auto value = object("name", &T::name, "color", &T::color, "status", &T::status, "priority", &T::priority);
+   static constexpr auto value =
+      object("name", &T::name, "color", &T::color, "status", &T::status, "priority", &T::priority);
 };
 
 suite starter = [] {
