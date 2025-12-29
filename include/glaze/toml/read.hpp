@@ -765,6 +765,105 @@ namespace glz
       }
    };
 
+   // Enum with glz::meta/glz::enumerate - reads string representation
+   template <class T>
+      requires(is_named_enum<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // TOML enum values are expected as quoted strings: "EnumValue"
+         if (*it != '"') [[unlikely]] {
+            ctx.error = error_code::expected_quote;
+            return;
+         }
+         ++it;
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Find the closing quote to determine string length
+         auto start = it;
+         while (it != end && *it != '"') {
+            ++it;
+         }
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         const auto n = static_cast<size_t>(it - start);
+         ++it; // skip closing quote
+
+         constexpr auto N = reflect<T>::size;
+
+         if constexpr (N == 1) {
+            // Single enum value - just verify it matches
+            static constexpr auto key = glz::get<0>(reflect<T>::keys);
+            if (n == key.size() && std::string_view(start, n) == key) {
+               value = glz::get<0>(reflect<T>::values);
+            }
+            else {
+               ctx.error = error_code::unexpected_enum;
+            }
+         }
+         else {
+            static constexpr auto HashInfo = hash_info<T>;
+
+            const auto index =
+               decode_hash_with_size<TOML, T, HashInfo, HashInfo.type>::op(start, start + n, n);
+
+            if (index >= N) [[unlikely]] {
+               ctx.error = error_code::unexpected_enum;
+               return;
+            }
+
+            // Use visit to convert runtime index to compile-time index
+            visit<N>(
+               [&]<size_t I>() {
+                  // Verify the key matches (hash collision check)
+                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                  if (n == key.size() && std::string_view(start, n) == key) [[likely]] {
+                     value = glz::get<I>(reflect<T>::values);
+                  }
+                  else {
+                     ctx.error = error_code::unexpected_enum;
+                  }
+               },
+               index);
+         }
+      }
+   };
+
+   // Raw enum (without glz::meta) - reads as underlying numeric type
+   template <class T>
+      requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         std::underlying_type_t<std::decay_t<T>> x{};
+         from<TOML, decltype(x)>::template op<Opts>(x, ctx, it, end);
+         value = static_cast<std::decay_t<T>>(x);
+      }
+   };
+
    template <readable_array_t T>
    struct from<TOML, T>
    {

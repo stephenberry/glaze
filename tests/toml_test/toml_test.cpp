@@ -168,6 +168,66 @@ struct glz::meta<non_null_term_struct>
    static constexpr auto value = object("value", &T::value);
 };
 
+// Enum types for TOML enum serialization tests
+enum class Color { Red, Green, Blue };
+
+template <>
+struct glz::meta<Color>
+{
+   using enum Color;
+   static constexpr auto value = glz::enumerate(Red, Green, Blue);
+};
+
+enum class Status { Pending, Active, Completed, Cancelled };
+
+template <>
+struct glz::meta<Status>
+{
+   using enum Status;
+   static constexpr auto value = glz::enumerate(Pending, Active, Completed, Cancelled);
+};
+
+// Enum with custom string names
+enum class LogLevel { Debug = 0, Info = 1, Warning = 2, Error = 3 };
+
+template <>
+struct glz::meta<LogLevel>
+{
+   using enum LogLevel;
+   static constexpr auto value = glz::enumerate("debug", Debug, "info", Info, "warning", Warning, "error", Error);
+};
+
+// Raw enum without glz::meta (should serialize as number)
+enum class RawEnum { A = 0, B = 1, C = 2 };
+
+// Single-value enum (edge case)
+enum class SingleEnum { OnlyValue };
+
+template <>
+struct glz::meta<SingleEnum>
+{
+   using enum SingleEnum;
+   static constexpr auto value = glz::enumerate(OnlyValue);
+};
+
+// Struct containing enum members
+struct config_with_enums
+{
+   std::string name{};
+   Color color{Color::Red};
+   Status status{Status::Pending};
+   int priority{0};
+
+   bool operator==(const config_with_enums&) const = default;
+};
+
+template <>
+struct glz::meta<config_with_enums>
+{
+   using T = config_with_enums;
+   static constexpr auto value = object("name", &T::name, "color", &T::color, "status", &T::status, "priority", &T::priority);
+};
+
 suite starter = [] {
    "example"_test = [] {
       my_struct s{};
@@ -1145,6 +1205,233 @@ b = "test string" # another eol comment
       error = glz::read_toml(s_val2, buffer_just_value);
       expect(!error) << glz::format_error(error, buffer_just_value);
       expect(s_val2.value == 456);
+   };
+
+   // ========== Enum serialization tests ==========
+
+   "write_enum_basic"_test = [] {
+      Color c = Color::Green;
+      auto result = glz::write_toml(c);
+      expect(result.has_value());
+      expect(result.value() == R"("Green")");
+   };
+
+   "read_enum_basic"_test = [] {
+      Color c{};
+      std::string input = R"("Blue")";
+      auto error = glz::read_toml(c, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(c == Color::Blue);
+   };
+
+   "enum_roundtrip"_test = [] {
+      for (auto color : {Color::Red, Color::Green, Color::Blue}) {
+         auto result = glz::write_toml(color);
+         expect(result.has_value());
+
+         Color parsed{};
+         auto error = glz::read_toml(parsed, result.value());
+         expect(!error) << glz::format_error(error, result.value());
+         expect(parsed == color);
+      }
+   };
+
+   "write_enum_all_values"_test = [] {
+      {
+         Status s = Status::Pending;
+         auto result = glz::write_toml(s);
+         expect(result.has_value());
+         expect(result.value() == R"("Pending")");
+      }
+      {
+         Status s = Status::Active;
+         auto result = glz::write_toml(s);
+         expect(result.has_value());
+         expect(result.value() == R"("Active")");
+      }
+      {
+         Status s = Status::Completed;
+         auto result = glz::write_toml(s);
+         expect(result.has_value());
+         expect(result.value() == R"("Completed")");
+      }
+      {
+         Status s = Status::Cancelled;
+         auto result = glz::write_toml(s);
+         expect(result.has_value());
+         expect(result.value() == R"("Cancelled")");
+      }
+   };
+
+   "read_enum_all_values"_test = [] {
+      {
+         Status s{};
+         std::string input = R"("Pending")";
+         auto error = glz::read_toml(s, input);
+         expect(!error) << glz::format_error(error, input);
+         expect(s == Status::Pending);
+      }
+      {
+         Status s{};
+         std::string input = R"("Active")";
+         auto error = glz::read_toml(s, input);
+         expect(!error) << glz::format_error(error, input);
+         expect(s == Status::Active);
+      }
+      {
+         Status s{};
+         std::string input = R"("Completed")";
+         auto error = glz::read_toml(s, input);
+         expect(!error) << glz::format_error(error, input);
+         expect(s == Status::Completed);
+      }
+      {
+         Status s{};
+         std::string input = R"("Cancelled")";
+         auto error = glz::read_toml(s, input);
+         expect(!error) << glz::format_error(error, input);
+         expect(s == Status::Cancelled);
+      }
+   };
+
+   "enum_custom_names"_test = [] {
+      // Write with custom names
+      {
+         LogLevel level = LogLevel::Warning;
+         auto result = glz::write_toml(level);
+         expect(result.has_value());
+         expect(result.value() == R"("warning")");
+      }
+      // Read with custom names
+      {
+         LogLevel level{};
+         std::string input = R"("error")";
+         auto error = glz::read_toml(level, input);
+         expect(!error) << glz::format_error(error, input);
+         expect(level == LogLevel::Error);
+      }
+      // Roundtrip all custom-named values
+      for (auto level : {LogLevel::Debug, LogLevel::Info, LogLevel::Warning, LogLevel::Error}) {
+         auto result = glz::write_toml(level);
+         expect(result.has_value());
+
+         LogLevel parsed{};
+         auto error = glz::read_toml(parsed, result.value());
+         expect(!error) << glz::format_error(error, result.value());
+         expect(parsed == level);
+      }
+   };
+
+   "enum_single_value"_test = [] {
+      // Single-value enum edge case
+      SingleEnum e = SingleEnum::OnlyValue;
+      auto result = glz::write_toml(e);
+      expect(result.has_value());
+      expect(result.value() == R"("OnlyValue")");
+
+      SingleEnum parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == SingleEnum::OnlyValue);
+   };
+
+   "raw_enum_write"_test = [] {
+      // Raw enum without glz::meta should serialize as number
+      RawEnum e = RawEnum::B;
+      auto result = glz::write_toml(e);
+      expect(result.has_value());
+      expect(result.value() == "1");
+   };
+
+   "raw_enum_read"_test = [] {
+      // Raw enum should read from number
+      RawEnum e{};
+      std::string input = "2";
+      auto error = glz::read_toml(e, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(e == RawEnum::C);
+   };
+
+   "raw_enum_roundtrip"_test = [] {
+      for (auto e : {RawEnum::A, RawEnum::B, RawEnum::C}) {
+         auto result = glz::write_toml(e);
+         expect(result.has_value());
+
+         RawEnum parsed{};
+         auto error = glz::read_toml(parsed, result.value());
+         expect(!error) << glz::format_error(error, result.value());
+         expect(parsed == e);
+      }
+   };
+
+   "struct_with_enum_write"_test = [] {
+      config_with_enums config{};
+      config.name = "test_config";
+      config.color = Color::Blue;
+      config.status = Status::Active;
+      config.priority = 5;
+
+      auto result = glz::write_toml(config);
+      expect(result.has_value());
+      expect(result.value() == R"(name = "test_config"
+color = "Blue"
+status = "Active"
+priority = 5)");
+   };
+
+   "struct_with_enum_read"_test = [] {
+      std::string input = R"(name = "my_config"
+color = "Green"
+status = "Completed"
+priority = 10)";
+
+      config_with_enums config{};
+      auto error = glz::read_toml(config, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(config.name == "my_config");
+      expect(config.color == Color::Green);
+      expect(config.status == Status::Completed);
+      expect(config.priority == 10);
+   };
+
+   "struct_with_enum_roundtrip"_test = [] {
+      config_with_enums original{};
+      original.name = "roundtrip_test";
+      original.color = Color::Red;
+      original.status = Status::Cancelled;
+      original.priority = 99;
+
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      config_with_enums parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == original);
+   };
+
+   "enum_invalid_value"_test = [] {
+      Color c{};
+      std::string input = R"("InvalidColor")";
+      auto error = glz::read_toml(c, input);
+      expect(error);
+      expect(error == glz::error_code::unexpected_enum);
+   };
+
+   "enum_missing_quote"_test = [] {
+      Color c{};
+      std::string input = "Red"; // Missing quotes
+      auto error = glz::read_toml(c, input);
+      expect(error);
+      expect(error == glz::error_code::expected_quote);
+   };
+
+   "enum_empty_string"_test = [] {
+      Color c{};
+      std::string input = R"("")"; // Empty string
+      auto error = glz::read_toml(c, input);
+      expect(error);
+      expect(error == glz::error_code::unexpected_enum);
    };
 };
 
