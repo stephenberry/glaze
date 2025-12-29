@@ -3455,9 +3455,9 @@ namespace error_on_missing_keys_tests
       bool operator==(const NestedOuterV2&) const = default;
    };
 
-   struct DataEmpty
+   struct EmptyStruct
    {
-      bool operator==(const DataEmpty&) const = default;
+      bool operator==(const EmptyStruct&) const = default;
    };
 
    struct DataMultipleFields
@@ -3512,9 +3512,9 @@ struct glz::meta<error_on_missing_keys_tests::NestedOuterV2>
 };
 
 template <>
-struct glz::meta<error_on_missing_keys_tests::DataEmpty>
+struct glz::meta<error_on_missing_keys_tests::EmptyStruct>
 {
-   using T = error_on_missing_keys_tests::DataEmpty;
+   using T = error_on_missing_keys_tests::EmptyStruct;
    static constexpr auto value = object();
 };
 
@@ -3622,7 +3622,7 @@ suite beve_error_on_missing_keys = [] {
    };
 
    "error_on_missing_keys with multiple missing keys reports first"_test = [] {
-      DataEmpty empty{};
+      EmptyStruct empty{};
       std::string buffer{};
       constexpr glz::opts write_opts = {.format = glz::BEVE};
       expect(not glz::write<write_opts>(empty, buffer));
