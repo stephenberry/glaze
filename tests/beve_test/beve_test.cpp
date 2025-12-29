@@ -1473,6 +1473,64 @@ suite bitset = [] {
    };
 };
 
+suite array_bool_tests = [] {
+   "array_bool_13"_test = [] {
+      std::array<bool, 13> arr = {true, false, true, true, false, false, true, false, true, false, true, true, false};
+
+      std::string s{};
+      expect(not glz::write_beve(arr, s));
+
+      std::array<bool, 13> arr2{};
+      expect(!glz::read_beve(arr2, s));
+      expect(arr == arr2);
+   };
+
+   "array_bool_8"_test = [] {
+      std::array<bool, 8> arr = {true, false, true, false, true, false, true, false};
+
+      std::string s{};
+      expect(not glz::write_beve(arr, s));
+
+      std::array<bool, 8> arr2{};
+      expect(!glz::read_beve(arr2, s));
+      expect(arr == arr2);
+   };
+
+   "array_bool_1"_test = [] {
+      std::array<bool, 1> arr = {true};
+
+      std::string s{};
+      expect(not glz::write_beve(arr, s));
+
+      std::array<bool, 1> arr2{};
+      expect(!glz::read_beve(arr2, s));
+      expect(arr == arr2);
+   };
+};
+
+struct nested_bool_array
+{
+   int id{};
+   std::array<bool, 13> flags{};
+   std::string name{};
+
+   bool operator==(const nested_bool_array&) const = default;
+};
+
+suite nested_array_bool_tests = [] {
+   "nested_array_bool"_test = [] {
+      nested_bool_array obj{42, {true, false, true, true, false, false, true, false, true, false, true, true, false},
+                            "test"};
+
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      nested_bool_array obj2{};
+      expect(!glz::read_beve(obj2, s));
+      expect(obj == obj2);
+   };
+};
+
 struct key_reflection
 {
    int i = 287;
