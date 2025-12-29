@@ -106,6 +106,46 @@ namespace glz
       }
    };
 
+   // Enum with glz::meta/glz::enumerate - writes string representation
+   template <class T>
+      requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class... Args>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      {
+         const sv str = get_enum_name(value);
+         if (!str.empty()) {
+            // Write as quoted string for TOML
+            if constexpr (not Opts.raw) {
+               dump<'"'>(args...);
+            }
+            dump_maybe_empty(str, args...);
+            if constexpr (not Opts.raw) {
+               dump<'"'>(args...);
+            }
+         }
+         else [[unlikely]] {
+            // Value doesn't have a mapped string, serialize as underlying number
+            serialize<TOML>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+         }
+      }
+   };
+
+   // Raw enum (without glz::meta) - writes as underlying numeric type
+   template <class T>
+      requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class... Args>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      {
+         // serialize as underlying number
+         serialize<TOML>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+                                   std::forward<Args>(args)...);
+      }
+   };
+
    template <class T>
       requires str_t<T> || char_t<T>
    struct to<TOML, T>
