@@ -11105,8 +11105,8 @@ suite float_format_wrapper_tests = [] {
       std::string input = R"({"value":1.5,"other":2.5})";
       auto ec = glz::read_json(obj, input);
       expect(!ec) << glz::format_error(ec, input);
-      expect(obj.value == 1.5_d);
-      expect(obj.other == 2.5_f);
+      expect(obj.value == 1.5);
+      expect(obj.other == 2.5f);
    };
 
    "float_format_wrapper_roundtrip"_test = [] {
@@ -11134,8 +11134,8 @@ suite float_format_wrapper_tests = [] {
       mixed_member_format_t obj{};
       std::string input = R"({"formatted":1.5,"unformatted":2.5,"count":100})";
       expect(!glz::read_json(obj, input));
-      expect(obj.formatted == 1.5_d);
-      expect(obj.unformatted == 2.5_d);
+      expect(obj.formatted == 1.5);
+      expect(obj.unformatted == 2.5);
       expect(obj.count == 100);
    };
 
@@ -11152,8 +11152,8 @@ suite float_format_wrapper_tests = [] {
       scientific_format_t obj{};
       std::string input = R"({"large":1e6,"small":1e-6})";
       expect(!glz::read_json(obj, input));
-      expect(obj.large == 1e6_d);
-      expect(obj.small == 1e-6_d);
+      expect(obj.large == 1e6);
+      expect(obj.small == 1e-6);
    };
 
    "float_format_wrapper_negative_values"_test = [] {
