@@ -127,3 +127,187 @@ glz::read_file_toml(loaded, "config.toml", buffer);
 ```
 
 `glz::read_toml` works with `std::string`, `std::string_view`, or any contiguous character buffer.
+
+## Datetime Support
+
+Glaze fully supports [TOML v1.1.0 datetime types](https://toml.io/en/v1.1.0#local-date-time), which are first-class values in TOML (not quoted strings). This enables seamless serialization of `std::chrono` types with native TOML datetime format.
+
+### TOML Datetime Types
+
+TOML defines four datetime types, each mapping to specific C++ chrono types:
+
+| TOML Type | C++ Type | Format Example |
+|-----------|----------|----------------|
+| Offset Date-Time | `std::chrono::system_clock::time_point` | `2024-06-15T10:30:45Z` |
+| Local Date-Time | `std::chrono::system_clock::time_point` | `2024-06-15T10:30:45` |
+| Local Date | `std::chrono::year_month_day` | `2024-06-15` |
+| Local Time | `std::chrono::hh_mm_ss<Duration>` | `10:30:45.123` |
+
+### Offset Date-Time (system_clock::time_point)
+
+`std::chrono::system_clock::time_point` serializes as an unquoted TOML Offset Date-Time in UTC:
+
+```cpp
+#include "glaze/toml.hpp"
+#include <chrono>
+
+auto now = std::chrono::system_clock::now();
+std::string toml = glz::write_toml(now).value();
+// Output: 2024-12-13T15:30:45Z (unquoted)
+```
+
+The parser supports multiple RFC 3339 formats:
+
+```cpp
+std::chrono::system_clock::time_point tp;
+
+// UTC with Z suffix
+glz::read_toml(tp, "2024-12-13T15:30:45Z");
+
+// Lowercase z is allowed
+glz::read_toml(tp, "2024-12-13T15:30:45z");
+
+// Space delimiter instead of T (per TOML spec)
+glz::read_toml(tp, "2024-12-13 15:30:45Z");
+
+// With timezone offset
+glz::read_toml(tp, "2024-12-13T15:30:45+05:00");
+glz::read_toml(tp, "2024-12-13T15:30:45-08:00");
+
+// With fractional seconds
+glz::read_toml(tp, "2024-12-13T15:30:45.123456Z");
+
+// Without seconds (per TOML spec)
+glz::read_toml(tp, "2024-12-13T15:30Z");
+
+// Local Date-Time (no timezone - treated as UTC)
+glz::read_toml(tp, "2024-12-13T15:30:45");
+```
+
+### Local Date (year_month_day)
+
+`std::chrono::year_month_day` serializes as an unquoted TOML Local Date:
+
+```cpp
+using namespace std::chrono;
+
+year_month_day date{year{2024}, month{6}, day{15}};
+std::string toml = glz::write_toml(date).value();
+// Output: 2024-06-15 (unquoted)
+
+// Reading
+year_month_day parsed;
+glz::read_toml(parsed, "2024-12-25");
+// parsed.year() == 2024, parsed.month() == December, parsed.day() == 25
+```
+
+### Local Time (hh_mm_ss)
+
+`std::chrono::hh_mm_ss<Duration>` serializes as an unquoted TOML Local Time:
+
+```cpp
+using namespace std::chrono;
+
+// Seconds precision
+hh_mm_ss<seconds> time_sec{hours{10} + minutes{30} + seconds{45}};
+std::string toml = glz::write_toml(time_sec).value();
+// Output: 10:30:45
+
+// Milliseconds precision
+hh_mm_ss<milliseconds> time_ms{hours{10} + minutes{30} + seconds{45} + milliseconds{123}};
+toml = glz::write_toml(time_ms).value();
+// Output: 10:30:45.123
+```
+
+Reading supports fractional seconds and optional seconds:
+
+```cpp
+using namespace std::chrono;
+
+hh_mm_ss<milliseconds> time{milliseconds{0}};
+
+// Standard format
+glz::read_toml(time, "23:59:59");
+
+// With fractional seconds
+glz::read_toml(time, "12:30:45.500");
+
+// Without seconds (per TOML spec)
+glz::read_toml(time, "14:30");
+```
+
+### Structs with Datetime Fields
+
+Datetime types work seamlessly in structs:
+
+```cpp
+struct Event {
+    std::string name;
+    std::chrono::system_clock::time_point timestamp;
+    std::chrono::year_month_day date;
+    std::chrono::hh_mm_ss<std::chrono::seconds> start_time;
+};
+
+Event event{
+    "Meeting",
+    std::chrono::system_clock::now(),
+    std::chrono::year_month_day{std::chrono::year{2024}, std::chrono::month{6}, std::chrono::day{15}},
+    std::chrono::hh_mm_ss<std::chrono::seconds>{std::chrono::hours{14} + std::chrono::minutes{30}}
+};
+
+auto toml = glz::write_toml(event).value();
+```
+
+Output:
+
+```toml
+name = "Meeting"
+timestamp = 2024-06-15T14:30:00Z
+date = 2024-06-15
+start_time = 14:30:00
+```
+
+### Duration Types
+
+`std::chrono::duration` types serialize as their numeric count value (not as TOML datetime):
+
+```cpp
+std::chrono::seconds sec{3600};
+std::string toml = glz::write_toml(sec).value();  // "3600"
+
+std::chrono::milliseconds ms{};
+glz::read_toml(ms, "12345");  // ms.count() == 12345
+```
+
+This works with any duration type including custom periods:
+
+```cpp
+std::chrono::hours h{24};               // "24"
+std::chrono::nanoseconds ns{123456789}; // "123456789"
+
+// Floating-point rep
+std::chrono::duration<double, std::milli> ms{123.456};  // "123.456"
+```
+
+### Steady Clock and High Resolution Clock
+
+`std::chrono::steady_clock::time_point` and `std::chrono::high_resolution_clock::time_point` serialize as numeric counts, since their epochs are implementation-defined:
+
+```cpp
+auto start = std::chrono::steady_clock::now();
+std::string toml = glz::write_toml(start).value();  // numeric count
+
+std::chrono::steady_clock::time_point parsed;
+glz::read_toml(parsed, toml);  // exact roundtrip
+```
+
+### Datetime Summary Table
+
+| C++ Type | TOML Format | Example Output |
+|----------|-------------|----------------|
+| `system_clock::time_point` | Offset Date-Time | `2024-06-15T10:30:45Z` |
+| `year_month_day` | Local Date | `2024-06-15` |
+| `hh_mm_ss<seconds>` | Local Time | `10:30:45` |
+| `hh_mm_ss<milliseconds>` | Local Time | `10:30:45.123` |
+| `duration<Rep, Period>` | Numeric | `3600` |
+| `steady_clock::time_point` | Numeric | `123456789012345` |

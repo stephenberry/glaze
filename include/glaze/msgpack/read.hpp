@@ -576,7 +576,7 @@ namespace glz
             }();
 
             auto fields = [&]() -> decltype(auto) {
-               if constexpr (Opts.partial_read) {
+               if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                   return bit_array<N>{};
                }
                else {
@@ -619,7 +619,7 @@ namespace glz
                      }
                      else {
                         parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
-                        if constexpr (Opts.partial_read) {
+                        if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                            fields[I] = true;
                         }
                      }
@@ -634,6 +634,20 @@ namespace glz
                      ctx.error = error_code::partial_read_complete;
                      return;
                   }
+               }
+            }
+
+            if constexpr (Opts.error_on_missing_keys) {
+               constexpr auto req_fields = required_fields<T, Opts>();
+               if ((req_fields & fields) != req_fields) {
+                  for (size_t i = 0; i < N; ++i) {
+                     if (not fields[i] && req_fields[i]) {
+                        ctx.custom_error_message = reflect<T>::keys[i];
+                        break;
+                     }
+                  }
+                  ctx.error = error_code::missing_key;
+                  return;
                }
             }
          }

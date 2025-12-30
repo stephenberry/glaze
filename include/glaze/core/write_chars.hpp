@@ -4,6 +4,7 @@
 #pragma once
 
 #include <charconv>
+#include <format>
 #include <type_traits>
 
 #include "glaze/concepts/container_concepts.hpp"
@@ -64,8 +65,44 @@ namespace glz
          using V = std::decay_t<decltype(value)>;
 
          if constexpr (std::floating_point<V>) {
-            if constexpr (uint8_t(check_float_max_write_precision(Opts)) > 0 &&
-                          uint8_t(check_float_max_write_precision(Opts)) < sizeof(V)) {
+            using opts_type = std::decay_t<decltype(Opts)>;
+            constexpr bool use_float_format = requires { opts_type::float_format; };
+
+            if constexpr (use_float_format && is_any_of<V, float, double>) {
+               // Use std::format with user-provided format string (e.g., "{:.2f}")
+               // Format string is validated at compile-time via std::format_string
+               constexpr auto fmt = std::format_string<V>{opts_type::float_format};
+
+               if constexpr (check_write_unchecked(Opts)) {
+                  // Caller guarantees buffer has enough space
+                  const auto start = reinterpret_cast<char*>(&b[ix]);
+                  auto result = std::format_to(start, fmt, V(value));
+                  ix += size_t(result - start);
+               }
+               else {
+                  // format_to_n writes up to 'available' chars and returns total size needed.
+                  // Common case: output fits in pre-allocated buffer (single pass).
+                  // Rare case: output exceeds buffer (e.g., "{:.100f}"), requires resize.
+                  const auto start = reinterpret_cast<char*>(&b[ix]);
+                  const auto available = b.size() - ix;
+                  auto [out, size] = std::format_to_n(start, available, fmt, V(value));
+
+                  if (static_cast<size_t>(size) > available) {
+                     // Output was truncated - size tells us exactly how much space we need
+                     if constexpr (resizable<B>) {
+                        b.resize(2 * (ix + size));
+                        std::format_to(reinterpret_cast<char*>(&b[ix]), fmt, V(value));
+                     }
+                     else {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                  }
+                  ix += size;
+               }
+            }
+            else if constexpr (uint8_t(check_float_max_write_precision(Opts)) > 0 &&
+                               uint8_t(check_float_max_write_precision(Opts)) < sizeof(V)) {
                // we cast to a lower precision floating point value before writing out
                if constexpr (uint8_t(check_float_max_write_precision(Opts)) == 8) {
                   const auto reduced = static_cast<double>(value);

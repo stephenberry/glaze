@@ -59,10 +59,14 @@ std::bitset<8> b = 0b10101010;
 ## Chrono Types
 
 - `std::chrono::duration<Rep, Period>` - serializes as numeric count
-- `std::chrono::system_clock::time_point` - serializes as ISO 8601 string
+- `std::chrono::system_clock::time_point` - serializes as ISO 8601 string (JSON) or native datetime (TOML)
 - `std::chrono::steady_clock::time_point` - serializes as numeric count
+- `std::chrono::high_resolution_clock::time_point` - serializes as numeric count
+- `std::chrono::year_month_day` - serializes as TOML Local Date
+- `std::chrono::hh_mm_ss<Duration>` - serializes as TOML Local Time
 
 See [Chrono Support](./chrono.md) for detailed information about time serialization and `epoch_time` wrappers.
+See [TOML Datetime Support](./toml.md#datetime-support) for TOML-specific native datetime format.
 
 ## std::expected
 

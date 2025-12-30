@@ -206,3 +206,14 @@ Output:
 - **Validation**: Invalid ISO 8601 strings return `glz::error_code::parse_error`
 - **Timezone Handling**: Time points are always converted to/from UTC; timezone offsets in input are properly applied
 - **Leap Seconds**: Not supported (`23:59:60` will return a parse error). `std::chrono::system_clock` uses Unix time which does not account for leap seconds
+
+## TOML Datetime Support
+
+TOML has native datetime types (not quoted strings). When using `glz::write_toml` / `glz::read_toml`, chrono types use TOML's native datetime format:
+
+- `system_clock::time_point` → TOML Offset Date-Time (`2024-06-15T10:30:45Z`)
+- `year_month_day` → TOML Local Date (`2024-06-15`)
+- `hh_mm_ss<Duration>` → TOML Local Time (`10:30:45.123`)
+- Durations and other time points → Numeric values
+
+See [TOML Documentation](./toml.md#datetime-support) for full details.

@@ -40,19 +40,87 @@
 
 namespace glz
 {
-   // Streaming connection handle for server-side streaming
-   struct streaming_connection : public std::enable_shared_from_this<streaming_connection>
+   namespace detail
+   {
+      // Type trait to detect SSL streams
+      template <typename T>
+      inline constexpr bool is_ssl_stream = false;
+
+#ifdef GLZ_ENABLE_SSL
+      template <typename T>
+      inline constexpr bool is_ssl_stream<asio::ssl::stream<T>> = true;
+#endif
+   }
+
+   // Interface for streaming connections (type-erased for HTTP/HTTPS compatibility)
+   struct streaming_connection_interface
    {
       using data_sent_handler = std::function<void(std::error_code)>;
       using disconnect_handler = std::function<void()>;
 
-      streaming_connection(std::shared_ptr<asio::ip::tcp::socket> socket)
+      virtual ~streaming_connection_interface() = default;
+
+      // Send initial headers for streaming response
+      virtual void send_headers(int status_code, const std::unordered_map<std::string, std::string>& headers = {},
+                                data_sent_handler handler = {}) = 0;
+
+      // Send a chunk of data
+      virtual void send_chunk(std::string_view data, data_sent_handler handler = {}) = 0;
+
+      // Send Server-Sent Event
+      virtual void send_event(std::string_view event_type, std::string_view data, std::string_view id = {},
+                              data_sent_handler handler = {}) = 0;
+
+      // Close the streaming connection
+      virtual void close(disconnect_handler handler = {}) = 0;
+
+      // Set disconnect handler for client disconnection
+      virtual void on_disconnect(disconnect_handler handler) = 0;
+
+      // Check if connection is still alive
+      virtual bool is_open() const = 0;
+
+      // Get remote endpoint info
+      virtual std::string remote_address() const = 0;
+      virtual uint16_t remote_port() const = 0;
+
+      // Check if headers have been sent
+      virtual bool is_headers_sent() const = 0;
+
+      // Get executor for async operations (timers, etc.)
+      virtual asio::any_io_executor get_executor() const = 0;
+
+      // Send JSON as Server-Sent Event (convenience method using send_event)
+      template <class T>
+      void send_json_event(const T& data, std::string_view event_type = "message", std::string_view id = {},
+                           data_sent_handler handler = {})
+      {
+         std::string json_str;
+         auto ec = glz::write_json(data, json_str);
+         if (!ec) {
+            send_event(event_type, json_str, id, handler);
+         }
+         else if (handler) {
+            handler(std::make_error_code(std::errc::invalid_argument));
+         }
+      }
+   };
+
+   // Streaming connection handle for server-side streaming
+   template <typename SocketType = asio::ip::tcp::socket>
+   struct streaming_connection : public streaming_connection_interface,
+                                 public std::enable_shared_from_this<streaming_connection<SocketType>>
+   {
+      using data_sent_handler = std::function<void(std::error_code)>;
+      using disconnect_handler = std::function<void()>;
+
+      streaming_connection(std::shared_ptr<SocketType> socket)
          : socket_(socket), is_headers_sent_(false), is_closed_(false)
       {}
 
       // Send initial headers for streaming response
       void send_headers(int status_code, const std::unordered_map<std::string, std::string>& headers = {},
-                        data_sent_handler handler = {})
+                        data_sent_handler handler = {}) override
       {
          if (is_headers_sent_) return;
          is_headers_sent_ = true;
@@ -89,7 +157,7 @@ namespace glz
          response_str.append("\r\n");
 
          auto buffer = std::make_shared<std::string>(std::move(response_str));
-         auto self = shared_from_this();
+         auto self = this->shared_from_this();
 
          asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code ec, std::size_t) {
             if (handler) handler(ec);
@@ -97,11 +165,11 @@ namespace glz
       }
 
       // Send a chunk of data
-      void send_chunk(std::string_view data, data_sent_handler handler = {})
+      void send_chunk(std::string_view data, data_sent_handler handler = {}) override
       {
          if (is_closed_) return;
 
-         auto self = shared_from_this();
+         auto self = this->shared_from_this();
 
          if (chunked_encoding_) {
             // Format as HTTP chunk
@@ -136,7 +204,7 @@ namespace glz
 
       // Send Server-Sent Event
       void send_event(std::string_view event_type, std::string_view data, std::string_view id = {},
-                      data_sent_handler handler = {})
+                      data_sent_handler handler = {}) override
       {
          std::string sse_data;
          sse_data.reserve(data.size() + 50);
@@ -160,28 +228,13 @@ namespace glz
          send_chunk(sse_data, handler);
       }
 
-      // Send JSON as Server-Sent Event
-      template <class T>
-      void send_json_event(const T& data, std::string_view event_type = "message", std::string_view id = {},
-                           data_sent_handler handler = {})
-      {
-         std::string json_str;
-         auto ec = glz::write_json(data, json_str);
-         if (!ec) {
-            send_event(event_type, json_str, id, handler);
-         }
-         else if (handler) {
-            handler(std::make_error_code(std::errc::invalid_argument));
-         }
-      }
-
       // Close the streaming connection
-      void close(disconnect_handler handler = {})
+      void close(disconnect_handler handler = {}) override
       {
          if (is_closed_) return;
          is_closed_ = true;
 
-         auto self = shared_from_this();
+         auto self = this->shared_from_this();
 
          if (chunked_encoding_) {
             // Send final chunk
@@ -191,32 +244,32 @@ namespace glz
             asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](asio::error_code, std::size_t) {
                if (handler) handler();
                asio::error_code close_ec;
-               self->socket_->close(close_ec);
+               self->socket_->lowest_layer().close(close_ec);
             });
          }
          else {
             if (handler) handler();
             asio::error_code ec;
-            socket_->close(ec);
+            socket_->lowest_layer().close(ec);
          }
       }
 
       // Set disconnect handler for client disconnection
-      void on_disconnect(disconnect_handler handler)
+      void on_disconnect(disconnect_handler handler) override
       {
          disconnect_handler_ = handler;
          start_disconnect_detection();
       }
 
       // Check if connection is still alive
-      bool is_open() const { return socket_ && socket_->is_open() && !is_closed_; }
+      bool is_open() const override { return socket_ && socket_->lowest_layer().is_open() && !is_closed_; }
 
       // Get remote endpoint info
-      std::string remote_address() const
+      std::string remote_address() const override
       {
          if (socket_) {
             try {
-               return socket_->remote_endpoint().address().to_string();
+               return socket_->lowest_layer().remote_endpoint().address().to_string();
             }
             catch (...) {
             }
@@ -224,11 +277,11 @@ namespace glz
          return "";
       }
 
-      uint16_t remote_port() const
+      uint16_t remote_port() const override
       {
          if (socket_) {
             try {
-               return socket_->remote_endpoint().port();
+               return socket_->lowest_layer().remote_endpoint().port();
             }
             catch (...) {
             }
@@ -236,9 +289,11 @@ namespace glz
          return 0;
       }
 
-      bool is_headers_sent() const { return is_headers_sent_; }
+      bool is_headers_sent() const override { return is_headers_sent_; }
 
-      std::shared_ptr<asio::ip::tcp::socket> socket_;
+      asio::any_io_executor get_executor() const override { return socket_->lowest_layer().get_executor(); }
+
+      std::shared_ptr<SocketType> socket_;
 
      private:
       disconnect_handler disconnect_handler_;
@@ -250,23 +305,48 @@ namespace glz
       {
          if (!socket_ || is_closed_) return;
 
-         auto self = shared_from_this();
-         auto buffer = std::make_shared<std::array<uint8_t, 1>>();
+         auto self = this->shared_from_this();
 
-         // Try to read - will fail when client disconnects
-         socket_->async_receive(
-            asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, std::size_t) {
-               if (ec && self->disconnect_handler_) {
-                  self->is_closed_ = true;
-                  self->disconnect_handler_();
+         // For SSL streams, we can't use async_receive with message_peek on lowest_layer()
+         // because it returns basic_socket which doesn't support async_receive.
+         // Use a timer-based check instead that verifies the socket is still open.
+         // Trade-off: SSL disconnect detection has up to 1-second latency vs TCP's immediate
+         // detection. This is acceptable for most streaming use cases where cleanup timing
+         // is not critical. For applications requiring faster detection, consider implementing
+         // application-level heartbeats.
+         if constexpr (detail::is_ssl_stream<SocketType>) {
+            auto timer = std::make_shared<asio::steady_timer>(socket_->lowest_layer().get_executor());
+            timer->expires_after(std::chrono::seconds(1));
+            timer->async_wait([self, timer](std::error_code ec) {
+               if (ec) return; // Timer cancelled
+               if (!self->socket_->lowest_layer().is_open()) {
+                  if (self->disconnect_handler_) {
+                     self->is_closed_ = true;
+                     self->disconnect_handler_();
+                  }
                }
-               else if (!ec && !self->is_closed_) {
-                  // Continue monitoring
-                  auto timer = std::make_shared<asio::steady_timer>(self->socket_->get_executor());
-                  timer->expires_after(std::chrono::seconds(1));
-                  timer->async_wait([self, timer](std::error_code) { self->start_disconnect_detection(); });
+               else if (!self->is_closed_) {
+                  self->start_disconnect_detection();
                }
             });
+         }
+         else {
+            // For TCP sockets, use async_receive with message_peek for more responsive detection
+            auto buffer = std::make_shared<std::array<uint8_t, 1>>();
+            socket_->async_receive(
+               asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, std::size_t) {
+                  if (ec && self->disconnect_handler_) {
+                     self->is_closed_ = true;
+                     self->disconnect_handler_();
+                  }
+                  else if (!ec && !self->is_closed_) {
+                     // Continue monitoring
+                     auto timer = std::make_shared<asio::steady_timer>(self->socket_->lowest_layer().get_executor());
+                     timer->expires_after(std::chrono::seconds(1));
+                     timer->async_wait([self, timer](std::error_code) { self->start_disconnect_detection(); });
+                  }
+               });
+         }
       }
 
       std::string_view get_status_message(int status_code)
@@ -297,9 +377,9 @@ namespace glz
    // Enhanced response class with streaming support
    struct streaming_response
    {
-      std::shared_ptr<streaming_connection> stream;
+      std::shared_ptr<streaming_connection_interface> stream;
 
-      streaming_response(std::shared_ptr<streaming_connection> conn) : stream(conn) {}
+      streaming_response(std::shared_ptr<streaming_connection_interface> conn) : stream(std::move(conn)) {}
 
       // Send headers and start streaming
       streaming_response& start_stream(int status_code = 200,
@@ -1259,20 +1339,21 @@ namespace glz
       connection_config conn_config_;
 
       // Connection state for managing keep-alive connections
+      // Uses socket_type which is either tcp::socket (HTTP) or ssl::stream<tcp::socket> (HTTPS)
       struct connection_state : public std::enable_shared_from_this<connection_state>
       {
-         std::shared_ptr<asio::ip::tcp::socket> socket;
+         std::shared_ptr<socket_type> socket;
          std::shared_ptr<asio::streambuf> buffer;
          asio::ip::tcp::endpoint remote_endpoint;
          std::shared_ptr<asio::steady_timer> idle_timer;
          uint32_t request_count = 0;
          bool should_close = false;
 
-         connection_state(std::shared_ptr<asio::ip::tcp::socket> sock, asio::ip::tcp::endpoint endpoint)
+         connection_state(std::shared_ptr<socket_type> sock, asio::ip::tcp::endpoint endpoint)
             : socket(std::move(sock)),
               buffer(std::make_shared<asio::streambuf>()),
               remote_endpoint(std::move(endpoint)),
-              idle_timer(std::make_shared<asio::steady_timer>(socket->get_executor()))
+              idle_timer(std::make_shared<asio::steady_timer>(socket->lowest_layer().get_executor()))
          {}
       };
 
@@ -1304,16 +1385,37 @@ namespace glz
       {
          acceptor->async_accept([this](std::error_code ec, asio::ip::tcp::socket socket) {
             if (!ec) {
-               // Create connection state for managing this connection's lifecycle
-               auto socket_ptr = std::make_shared<asio::ip::tcp::socket>(std::move(socket));
                asio::error_code endpoint_ec;
-               auto remote_endpoint = socket_ptr->remote_endpoint(endpoint_ec);
+               auto remote_endpoint = socket.remote_endpoint(endpoint_ec);
                if (endpoint_ec) {
                   error_handler(endpoint_ec, std::source_location::current());
                }
                else {
-                  auto conn = std::make_shared<connection_state>(std::move(socket_ptr), remote_endpoint);
-                  start_connection(conn);
+                  if constexpr (EnableTLS) {
+#ifdef GLZ_ENABLE_SSL
+                     // For HTTPS: wrap socket in SSL stream and perform handshake
+                     auto ssl_socket = std::make_shared<socket_type>(std::move(socket), *ssl_context);
+                     ssl_socket->async_handshake(asio::ssl::stream_base::server, [this, ssl_socket, remote_endpoint](
+                                                                                    std::error_code handshake_ec) {
+                        if (!handshake_ec) {
+                           auto conn = std::make_shared<connection_state>(ssl_socket, remote_endpoint);
+                           start_connection(conn);
+                        }
+                        else {
+                           // SSL handshake failed - explicitly close the socket
+                           error_handler(handshake_ec, std::source_location::current());
+                           asio::error_code close_ec;
+                           ssl_socket->lowest_layer().close(close_ec);
+                        }
+                     });
+#endif
+                  }
+                  else {
+                     // For HTTP: use TCP socket directly
+                     auto socket_ptr = std::make_shared<socket_type>(std::move(socket));
+                     auto conn = std::make_shared<connection_state>(std::move(socket_ptr), remote_endpoint);
+                     start_connection(conn);
+                  }
                }
             }
             else if (running) {
@@ -1343,8 +1445,8 @@ namespace glz
             if (!ec) {
                // Timer expired - close the connection
                std::error_code close_ec;
-               conn->socket->shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
-               conn->socket->close(close_ec);
+               conn->socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
+               conn->socket->lowest_layer().close(close_ec);
             }
             // If ec is operation_aborted, the timer was cancelled (new request arrived)
          });
@@ -1850,8 +1952,8 @@ namespace glz
                               if (conn->should_close) {
                                  // Close the connection gracefully
                                  std::error_code close_ec;
-                                 conn->socket->shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
-                                 conn->socket->close(close_ec);
+                                 conn->socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
+                                 conn->socket->lowest_layer().close(close_ec);
                               }
                               else {
                                  // Keep-alive: read the next request
@@ -1894,7 +1996,7 @@ namespace glz
          return connection_value.find("upgrade") != std::string::npos;
       }
 
-      inline void handle_websocket_upgrade(std::shared_ptr<asio::ip::tcp::socket> socket, http_method method,
+      inline void handle_websocket_upgrade(std::shared_ptr<socket_type> socket, http_method method,
                                            const std::string& target,
                                            const std::unordered_map<std::string, std::string>& headers,
                                            asio::ip::tcp::endpoint remote_endpoint)
@@ -1915,12 +2017,12 @@ namespace glz
          req.remote_port = remote_endpoint.port();
 
          // Create WebSocket connection and start it
-         // Need to include websocket_connection.hpp for this to work
-         auto ws_conn = std::make_shared<websocket_connection<asio::ip::tcp::socket>>(socket, ws_it->second);
+         // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
+         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(socket, ws_it->second);
          ws_conn->start(req);
       }
 
-      inline void handle_streaming_request(std::shared_ptr<asio::ip::tcp::socket> socket, http_method method,
+      inline void handle_streaming_request(std::shared_ptr<socket_type> socket, http_method method,
                                            const std::string& target,
                                            const std::unordered_map<std::string, std::string>& headers,
                                            std::string body, asio::ip::tcp::endpoint remote_endpoint,
@@ -1935,8 +2037,8 @@ namespace glz
          req.remote_ip = remote_endpoint.address().to_string();
          req.remote_port = remote_endpoint.port();
 
-         // Create streaming connection
-         auto stream_conn = std::make_shared<streaming_connection>(socket);
+         // Create streaming connection (works for both HTTP and HTTPS via interface)
+         auto stream_conn = std::make_shared<streaming_connection<socket_type>>(socket);
          streaming_response stream_res(stream_conn);
 
          try {
@@ -1955,7 +2057,7 @@ namespace glz
          }
       }
 
-      inline void process_full_request(std::shared_ptr<asio::ip::tcp::socket> socket, http_method method,
+      inline void process_full_request(std::shared_ptr<socket_type> socket, http_method method,
                                        const std::string& target,
                                        const std::unordered_map<std::string, std::string>& headers, std::string body,
                                        asio::ip::tcp::endpoint remote_endpoint)
@@ -2167,7 +2269,7 @@ namespace glz
          }
       }
 
-      inline void send_response(std::shared_ptr<asio::ip::tcp::socket> socket, const response& response)
+      inline void send_response(std::shared_ptr<socket_type> socket, const response& response)
       {
          // Note: We can't call response hooks here because we don't have access to the request object
          // Response hooks are called in process_full_request before calling this method
@@ -2230,8 +2332,7 @@ namespace glz
                            });
       }
 
-      inline void send_error_response(std::shared_ptr<asio::ip::tcp::socket> socket, int status_code,
-                                      const std::string& message)
+      inline void send_error_response(std::shared_ptr<socket_type> socket, int status_code, const std::string& message)
       {
          response response;
          response.status(status_code).content_type("text/plain").body(message);
@@ -2288,14 +2389,14 @@ namespace glz
    // Utility functions for common streaming patterns
    namespace streaming_utils
    {
-      // Create a periodic data sender
+      // Create a periodic data sender (works with both HTTP and HTTPS)
       template <typename T>
-      void send_periodic_data(std::shared_ptr<streaming_connection> conn, std::function<T()> data_generator,
+      void send_periodic_data(std::shared_ptr<streaming_connection_interface> conn, std::function<T()> data_generator,
                               std::chrono::milliseconds interval, size_t max_events = 0)
       {
          auto counter = std::make_shared<size_t>(0);
          if (!conn || !conn->is_open()) return;
-         auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
+         auto timer = std::make_shared<asio::steady_timer>(conn->get_executor());
 
          // Use shared_ptr to safely handle recursive lambda calls and avoid compiler-specific segfaults
          auto send_next = std::make_shared<std::function<void()>>();
@@ -2326,15 +2427,15 @@ namespace glz
          (*send_next)();
       }
 
-      // Create a data stream from a collection
+      // Create a data stream from a collection (works with both HTTP and HTTPS)
       template <typename Container>
-      void stream_collection(std::shared_ptr<streaming_connection> conn, const Container& data,
+      void stream_collection(std::shared_ptr<streaming_connection_interface> conn, const Container& data,
                              std::chrono::milliseconds delay_between_items = std::chrono::milliseconds(10))
       {
          auto it = std::make_shared<typename Container::const_iterator>(data.begin());
          auto end_it = data.end();
          if (!conn || !conn->is_open()) return;
-         auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
+         auto timer = std::make_shared<asio::steady_timer>(conn->get_executor());
 
          // Use shared_ptr to safely handle recursive lambda calls and avoid compiler-specific segfaults
          auto send_next = std::make_shared<std::function<void()>>();

@@ -1079,6 +1079,11 @@ namespace glz
                            return;
                         }
 
+                        if ((*it & 0b11100000) == 0) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
                         *p = *it;
 
                         if (*it == '\\') {
@@ -1159,6 +1164,10 @@ namespace glz
                            ++p;
                            ++it;
                         }
+                     }
+                     else if ((*it & 0b11100000) == 0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
                      }
                      else {
                         ++it;
@@ -1500,6 +1509,11 @@ namespace glz
                            return;
                         }
 
+                        if ((*it & 0b11100000) == 0) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
                         *p = *it;
 
                         if (*it == '\\') {
@@ -1580,6 +1594,10 @@ namespace glz
                            ++p;
                            ++it;
                         }
+                     }
+                     else if ((*it & 0b11100000) == 0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
                      }
                      else {
                         ++it;
@@ -2853,6 +2871,20 @@ namespace glz
                         return;
                      }
 
+                     // Check if this key is the variant tag that should be skipped
+                     if constexpr (not tag.sv().empty()) {
+                        if (key == tag.sv()) {
+                           // Skip the tag value
+                           skip_value<JSON>::op<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           if (skip_ws<Opts>(ctx, it, end)) {
+                              return;
+                           }
+                           continue;
+                        }
+                     }
+
                      parse<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -2861,6 +2893,9 @@ namespace glz
                            ctx.error = error_code::unexpected_end;
                            return;
                         }
+                     }
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
                      }
                   }
                }
@@ -3502,7 +3537,6 @@ namespace glz
                               it = start;
                               tag_specified_index = type_index; // Store the tag-specified type
                               if (value.index() != type_index) emplace_runtime_variant(value, type_index);
-                              return;
                            }
                            else {
                               // Check if we have a default type (ids array shorter than variant)
@@ -3514,17 +3548,40 @@ namespace glz
                                  const auto default_index = ids_size;
                                  tag_specified_index = default_index; // Store the default type index
                                  if (value.index() != default_index) emplace_runtime_variant(value, default_index);
-                                 return;
                               }
                               else {
                                  ctx.error = error_code::no_matching_variant_type;
                                  return;
                               }
                            }
+                           // Parse the empty type (handles tag skipping and unknown keys)
+                           std::visit(
+                              [&](auto&& v) {
+                                 using V = std::decay_t<decltype(v)>;
+                                 from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                              },
+                              value);
+                           if constexpr (Opts.null_terminated) {
+                              --ctx.indentation_level;
+                           }
+                           return;
                         }
                         else if constexpr (Opts.error_on_unknown_keys) {
                            ctx.error = error_code::unknown_key;
                            return;
+                        }
+                        else {
+                           // Skip unknown key's value (non-tag key in empty variant)
+                           if (parse_ws_colon<Opts>(ctx, it, end)) {
+                              return;
+                           }
+                           skip_value<JSON>::op<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           if (skip_ws<Opts>(ctx, it, end)) {
+                              return;
+                           }
+                           continue; // Continue loop to find the tag
                         }
                      }
                      else if constexpr (Opts.error_on_unknown_keys) {

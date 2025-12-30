@@ -1473,6 +1473,64 @@ suite bitset = [] {
    };
 };
 
+suite array_bool_tests = [] {
+   "array_bool_13"_test = [] {
+      std::array<bool, 13> arr = {true, false, true, true, false, false, true, false, true, false, true, true, false};
+
+      std::string s{};
+      expect(not glz::write_beve(arr, s));
+
+      std::array<bool, 13> arr2{};
+      expect(!glz::read_beve(arr2, s));
+      expect(arr == arr2);
+   };
+
+   "array_bool_8"_test = [] {
+      std::array<bool, 8> arr = {true, false, true, false, true, false, true, false};
+
+      std::string s{};
+      expect(not glz::write_beve(arr, s));
+
+      std::array<bool, 8> arr2{};
+      expect(!glz::read_beve(arr2, s));
+      expect(arr == arr2);
+   };
+
+   "array_bool_1"_test = [] {
+      std::array<bool, 1> arr = {true};
+
+      std::string s{};
+      expect(not glz::write_beve(arr, s));
+
+      std::array<bool, 1> arr2{};
+      expect(!glz::read_beve(arr2, s));
+      expect(arr == arr2);
+   };
+};
+
+struct nested_bool_array
+{
+   int id{};
+   std::array<bool, 13> flags{};
+   std::string name{};
+
+   bool operator==(const nested_bool_array&) const = default;
+};
+
+suite nested_array_bool_tests = [] {
+   "nested_array_bool"_test = [] {
+      nested_bool_array obj{
+         42, {true, false, true, true, false, false, true, false, true, false, true, true, false}, "test"};
+
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      nested_bool_array obj2{};
+      expect(!glz::read_beve(obj2, s));
+      expect(obj == obj2);
+   };
+};
+
 struct key_reflection
 {
    int i = 287;
@@ -1783,11 +1841,25 @@ suite example_reflection_without_keys_test = [] {
       expect(without_keys != with_keys);
 
       obj = {};
-      expect(!glz::read_binary_untagged(obj, without_keys));
+      expect(!glz::read_beve_untagged(obj, without_keys));
 
       expect(obj.i == 55);
       expect(obj.d == 3.14);
       expect(obj.hello == "happy");
+   };
+
+   "read_beve_untagged"_test = [] {
+      my_example obj{.i = 42, .d = 2.718, .hello = "world"};
+      auto encoded = glz::write_beve_untagged(obj);
+      expect(encoded.has_value());
+
+      my_example decoded{};
+      auto ec = glz::read_beve_untagged(decoded, *encoded);
+      expect(!ec);
+
+      expect(decoded.i == 42);
+      expect(decoded.d == 2.718);
+      expect(decoded.hello == "world");
    };
 };
 
@@ -2970,7 +3042,7 @@ suite static_variant_tags = [] {
          auto encoded = glz::write_beve_untagged(original);
          expect(encoded.has_value());
 
-         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         auto decoded = glz::read_beve_untagged<MsgEmpty>(*encoded);
          expect(decoded.has_value());
          expect(decoded->index() == 0);
       }
@@ -2980,7 +3052,7 @@ suite static_variant_tags = [] {
          auto encoded = glz::write_beve_untagged(original);
          expect(encoded.has_value());
 
-         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         auto decoded = glz::read_beve_untagged<MsgEmpty>(*encoded);
          expect(decoded.has_value());
          expect(decoded->index() == 1);
       }
@@ -2995,7 +3067,7 @@ suite static_variant_tags = [] {
          auto encoded = glz::write_beve_untagged(original);
          expect(encoded.has_value());
 
-         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         auto decoded = glz::read_beve_untagged<Msg>(*encoded);
          expect(decoded.has_value());
          expect(decoded->index() == 0);
          expect(std::get<0>(*decoded).value == 42);
@@ -3006,7 +3078,7 @@ suite static_variant_tags = [] {
          auto encoded = glz::write_beve_untagged(original);
          expect(encoded.has_value());
 
-         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         auto decoded = glz::read_beve_untagged<Msg>(*encoded);
          expect(decoded.has_value());
          expect(decoded->index() == 1);
          expect(std::get<1>(*decoded).text == "hello");
@@ -3331,6 +3403,540 @@ suite delimited_beve_tests = [] {
       expect(!ec);
       expect(ec.count == buffer.size()) << "count should equal bytes consumed";
       expect(result == 42);
+   };
+};
+
+// ============================================================================
+// Tests for error_on_missing_keys
+// ============================================================================
+
+namespace error_on_missing_keys_tests
+{
+   struct DataV1
+   {
+      int hp = 0;
+      bool is_alive = false;
+      bool operator==(const DataV1&) const = default;
+   };
+
+   struct DataV2
+   {
+      int hp = 0;
+      bool is_alive = false;
+      int new_field = 0;
+      bool operator==(const DataV2&) const = default;
+   };
+
+   struct DataWithOptional
+   {
+      int hp = 0;
+      std::optional<int> optional_field;
+      bool operator==(const DataWithOptional&) const = default;
+   };
+
+   struct DataWithNullablePtr
+   {
+      int hp = 0;
+      std::unique_ptr<int> nullable_ptr;
+   };
+
+   struct NestedOuter
+   {
+      DataV1 inner;
+      int outer_value = 0;
+      bool operator==(const NestedOuter&) const = default;
+   };
+
+   struct NestedOuterV2
+   {
+      DataV2 inner;
+      int outer_value = 0;
+      int extra = 0;
+      bool operator==(const NestedOuterV2&) const = default;
+   };
+
+   struct EmptyStruct
+   {
+      bool operator==(const EmptyStruct&) const = default;
+   };
+
+   struct DataMultipleFields
+   {
+      int a = 0;
+      int b = 0;
+      int c = 0;
+      bool operator==(const DataMultipleFields&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<error_on_missing_keys_tests::DataV1>
+{
+   using T = error_on_missing_keys_tests::DataV1;
+   static constexpr auto value = object("hp", &T::hp, "is_alive", &T::is_alive);
+};
+
+template <>
+struct glz::meta<error_on_missing_keys_tests::DataV2>
+{
+   using T = error_on_missing_keys_tests::DataV2;
+   static constexpr auto value = object("hp", &T::hp, "is_alive", &T::is_alive, "new_field", &T::new_field);
+};
+
+template <>
+struct glz::meta<error_on_missing_keys_tests::DataWithOptional>
+{
+   using T = error_on_missing_keys_tests::DataWithOptional;
+   static constexpr auto value = object("hp", &T::hp, "optional_field", &T::optional_field);
+};
+
+template <>
+struct glz::meta<error_on_missing_keys_tests::DataWithNullablePtr>
+{
+   using T = error_on_missing_keys_tests::DataWithNullablePtr;
+   static constexpr auto value = object("hp", &T::hp, "nullable_ptr", &T::nullable_ptr);
+};
+
+template <>
+struct glz::meta<error_on_missing_keys_tests::NestedOuter>
+{
+   using T = error_on_missing_keys_tests::NestedOuter;
+   static constexpr auto value = object("inner", &T::inner, "outer_value", &T::outer_value);
+};
+
+template <>
+struct glz::meta<error_on_missing_keys_tests::NestedOuterV2>
+{
+   using T = error_on_missing_keys_tests::NestedOuterV2;
+   static constexpr auto value = object("inner", &T::inner, "outer_value", &T::outer_value, "extra", &T::extra);
+};
+
+template <>
+struct glz::meta<error_on_missing_keys_tests::EmptyStruct>
+{
+   using T = error_on_missing_keys_tests::EmptyStruct;
+   static constexpr auto value = object();
+};
+
+template <>
+struct glz::meta<error_on_missing_keys_tests::DataMultipleFields>
+{
+   using T = error_on_missing_keys_tests::DataMultipleFields;
+   static constexpr auto value = object("a", &T::a, "b", &T::b, "c", &T::c);
+};
+
+suite beve_error_on_missing_keys = [] {
+   using namespace error_on_missing_keys_tests;
+
+   "error_on_missing_keys=false allows missing keys"_test = [] {
+      DataV1 v1{10, true};
+      std::string buffer{};
+      expect(not glz::write_beve(v1, buffer));
+
+      DataV2 v2{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_missing_keys = false};
+      auto ec = glz::read<opts>(v2, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(v2.hp == 10);
+      expect(v2.is_alive == true);
+      expect(v2.new_field == 0); // Default value preserved
+   };
+
+   "error_on_missing_keys=true detects missing required key"_test = [] {
+      DataV1 v1{10, true};
+      std::string buffer{};
+      expect(not glz::write_beve(v1, buffer));
+
+      DataV2 v2{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_missing_keys = true};
+      auto ec = glz::read<opts>(v2, buffer);
+      expect(ec.ec == glz::error_code::missing_key) << "Expected missing_key error";
+   };
+
+   "error_on_missing_keys=true with complete data succeeds"_test = [] {
+      DataV2 v2_orig{10, true, 42};
+      std::string buffer{};
+      expect(not glz::write_beve(v2_orig, buffer));
+
+      DataV2 v2{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_missing_keys = true};
+      auto ec = glz::read<opts>(v2, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(v2 == v2_orig);
+   };
+
+   "error_on_missing_keys=true allows missing optional fields"_test = [] {
+      // Write only hp (but optional_field is nullable so not required)
+      DataV1 v1{10, true};
+      std::string buffer{};
+      expect(not glz::write_beve(v1, buffer));
+
+      // Read into struct where optional_field exists but is nullable
+      DataWithOptional v{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false, .error_on_missing_keys = true};
+      auto ec = glz::read<opts>(v, buffer);
+      // Should succeed because optional_field is nullable
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(v.hp == 10);
+      expect(!v.optional_field.has_value());
+   };
+
+   "error_on_missing_keys=true allows missing unique_ptr fields"_test = [] {
+      DataV1 v1{10, true};
+      std::string buffer{};
+      expect(not glz::write_beve(v1, buffer));
+
+      DataWithNullablePtr v{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false, .error_on_missing_keys = true};
+      auto ec = glz::read<opts>(v, buffer);
+      // Should succeed because nullable_ptr is nullable
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(v.hp == 10);
+      expect(v.nullable_ptr == nullptr);
+   };
+
+   "error_on_missing_keys with nested objects"_test = [] {
+      NestedOuter outer{{5, true}, 100};
+      std::string buffer{};
+      expect(not glz::write_beve(outer, buffer));
+
+      NestedOuterV2 outer_v2{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_missing_keys = true};
+      auto ec = glz::read<opts>(outer_v2, buffer);
+      // Should fail because extra field is missing AND inner.new_field is missing
+      expect(ec.ec == glz::error_code::missing_key);
+   };
+
+   "error_on_missing_keys reports missing key in error message"_test = [] {
+      DataV1 v1{10, true};
+      std::string buffer{};
+      expect(not glz::write_beve(v1, buffer));
+
+      DataV2 v2{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_missing_keys = true};
+      auto ec = glz::read<opts>(v2, buffer);
+      expect(ec.ec == glz::error_code::missing_key);
+      // The error message should contain the missing key name
+      std::string error_msg = glz::format_error(ec, buffer);
+      expect(error_msg.find("new_field") != std::string::npos)
+         << "Error message should contain 'new_field': " << error_msg;
+   };
+
+   "error_on_missing_keys with multiple missing keys reports first"_test = [] {
+      EmptyStruct empty{};
+      std::string buffer{};
+      constexpr glz::opts write_opts = {.format = glz::BEVE};
+      expect(not glz::write<write_opts>(empty, buffer));
+
+      DataMultipleFields multi{};
+      constexpr glz::opts read_opts = {.format = glz::BEVE, .error_on_missing_keys = true};
+      auto ec = glz::read<read_opts>(multi, buffer);
+      expect(ec.ec == glz::error_code::missing_key);
+   };
+};
+
+// ============================================================================
+// Tests for skipping typed arrays (std::vector<bool>, std::vector<std::string>)
+// ============================================================================
+
+namespace skip_typed_array_tests
+{
+   struct WithBoolArray
+   {
+      int id = 0;
+      std::vector<bool> flags;
+      std::string name;
+      bool operator==(const WithBoolArray&) const = default;
+   };
+
+   struct WithoutBoolArray
+   {
+      int id = 0;
+      std::string name;
+      bool operator==(const WithoutBoolArray&) const = default;
+   };
+
+   struct WithStringArray
+   {
+      int id = 0;
+      std::vector<std::string> names;
+      int count = 0;
+      bool operator==(const WithStringArray&) const = default;
+   };
+
+   struct WithoutStringArray
+   {
+      int id = 0;
+      int count = 0;
+      bool operator==(const WithoutStringArray&) const = default;
+   };
+
+   struct WithIntArray
+   {
+      int id = 0;
+      std::vector<int> values;
+      std::string label;
+      bool operator==(const WithIntArray&) const = default;
+   };
+
+   struct WithoutIntArray
+   {
+      int id = 0;
+      std::string label;
+      bool operator==(const WithoutIntArray&) const = default;
+   };
+
+   struct WithFloatArray
+   {
+      int id = 0;
+      std::vector<float> values;
+      std::string label;
+      bool operator==(const WithFloatArray&) const = default;
+   };
+
+   struct ComplexStruct
+   {
+      int id = 0;
+      std::vector<bool> bool_arr;
+      std::vector<std::string> str_arr;
+      std::vector<int> int_arr;
+      std::string name;
+      bool operator==(const ComplexStruct&) const = default;
+   };
+
+   struct SimpleStruct
+   {
+      int id = 0;
+      std::string name;
+      bool operator==(const SimpleStruct&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<skip_typed_array_tests::WithBoolArray>
+{
+   using T = skip_typed_array_tests::WithBoolArray;
+   static constexpr auto value = object("id", &T::id, "flags", &T::flags, "name", &T::name);
+};
+
+template <>
+struct glz::meta<skip_typed_array_tests::WithoutBoolArray>
+{
+   using T = skip_typed_array_tests::WithoutBoolArray;
+   static constexpr auto value = object("id", &T::id, "name", &T::name);
+};
+
+template <>
+struct glz::meta<skip_typed_array_tests::WithStringArray>
+{
+   using T = skip_typed_array_tests::WithStringArray;
+   static constexpr auto value = object("id", &T::id, "names", &T::names, "count", &T::count);
+};
+
+template <>
+struct glz::meta<skip_typed_array_tests::WithoutStringArray>
+{
+   using T = skip_typed_array_tests::WithoutStringArray;
+   static constexpr auto value = object("id", &T::id, "count", &T::count);
+};
+
+template <>
+struct glz::meta<skip_typed_array_tests::WithIntArray>
+{
+   using T = skip_typed_array_tests::WithIntArray;
+   static constexpr auto value = object("id", &T::id, "values", &T::values, "label", &T::label);
+};
+
+template <>
+struct glz::meta<skip_typed_array_tests::WithoutIntArray>
+{
+   using T = skip_typed_array_tests::WithoutIntArray;
+   static constexpr auto value = object("id", &T::id, "label", &T::label);
+};
+
+template <>
+struct glz::meta<skip_typed_array_tests::WithFloatArray>
+{
+   using T = skip_typed_array_tests::WithFloatArray;
+   static constexpr auto value = object("id", &T::id, "values", &T::values, "label", &T::label);
+};
+
+template <>
+struct glz::meta<skip_typed_array_tests::ComplexStruct>
+{
+   using T = skip_typed_array_tests::ComplexStruct;
+   static constexpr auto value =
+      object("id", &T::id, "bool_arr", &T::bool_arr, "str_arr", &T::str_arr, "int_arr", &T::int_arr, "name", &T::name);
+};
+
+template <>
+struct glz::meta<skip_typed_array_tests::SimpleStruct>
+{
+   using T = skip_typed_array_tests::SimpleStruct;
+   static constexpr auto value = object("id", &T::id, "name", &T::name);
+};
+
+suite beve_skip_typed_arrays = [] {
+   using namespace skip_typed_array_tests;
+
+   "skip std::vector<bool> when reading unknown key"_test = [] {
+      WithBoolArray src{42, {true, false, true, true, false}, "test_name"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithoutBoolArray dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 42);
+      expect(dst.name == "test_name");
+   };
+
+   "skip std::vector<bool> with many elements"_test = [] {
+      std::vector<bool> large_bool_vec(1000);
+      for (size_t i = 0; i < large_bool_vec.size(); ++i) {
+         large_bool_vec[i] = (i % 3 == 0);
+      }
+      WithBoolArray src{99, large_bool_vec, "large_test"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithoutBoolArray dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 99);
+      expect(dst.name == "large_test");
+   };
+
+   "skip std::vector<std::string> when reading unknown key"_test = [] {
+      WithStringArray src{42, {"hello", "world", "test"}, 100};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithoutStringArray dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 42);
+      expect(dst.count == 100);
+   };
+
+   "skip std::vector<std::string> with many elements"_test = [] {
+      std::vector<std::string> large_str_vec;
+      for (int i = 0; i < 100; ++i) {
+         large_str_vec.push_back("string_" + std::to_string(i));
+      }
+      WithStringArray src{99, large_str_vec, 999};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithoutStringArray dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 99);
+      expect(dst.count == 999);
+   };
+
+   "skip std::vector<std::string> with empty strings"_test = [] {
+      WithStringArray src{42, {"", "non-empty", "", ""}, 50};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithoutStringArray dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 42);
+      expect(dst.count == 50);
+   };
+
+   "skip std::vector<int> when reading unknown key"_test = [] {
+      WithIntArray src{42, {1, 2, 3, 4, 5}, "label"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithoutIntArray dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 42);
+      expect(dst.label == "label");
+   };
+
+   "skip std::vector<float> when reading unknown key"_test = [] {
+      WithFloatArray src{42, {1.1f, 2.2f, 3.3f}, "float_label"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithoutIntArray dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 42);
+      expect(dst.label == "float_label");
+   };
+
+   "skip multiple typed arrays"_test = [] {
+      ComplexStruct src{42, {true, false}, {"a", "b", "c"}, {1, 2, 3, 4}, "complex"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SimpleStruct dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 42);
+      expect(dst.name == "complex");
+   };
+
+   "skip empty std::vector<bool>"_test = [] {
+      WithBoolArray src{42, {}, "empty_bool"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithoutBoolArray dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 42);
+      expect(dst.name == "empty_bool");
+   };
+
+   "skip empty std::vector<std::string>"_test = [] {
+      WithStringArray src{42, {}, 100};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithoutStringArray dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 42);
+      expect(dst.count == 100);
+   };
+
+   "roundtrip with bool array preserved"_test = [] {
+      WithBoolArray src{42, {true, false, true}, "roundtrip"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithBoolArray dst{};
+      auto ec = glz::read_beve(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst == src);
+   };
+
+   "roundtrip with string array preserved"_test = [] {
+      WithStringArray src{42, {"a", "bb", "ccc"}, 100};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      WithStringArray dst{};
+      auto ec = glz::read_beve(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst == src);
    };
 };
 

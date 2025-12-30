@@ -7,6 +7,7 @@
 #include <charconv>
 #include <iostream>
 
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
 // #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
@@ -765,7 +766,576 @@ namespace glz
       }
    };
 
-   template <readable_array_t T>
+   // Enum with glz::meta/glz::enumerate - reads string representation
+   template <class T>
+      requires(is_named_enum<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // TOML enum values are expected as quoted strings: "EnumValue"
+         if (*it != '"') [[unlikely]] {
+            ctx.error = error_code::expected_quote;
+            return;
+         }
+         ++it;
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Find the closing quote to determine string length
+         auto start = it;
+         while (it != end && *it != '"') {
+            ++it;
+         }
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         const auto n = static_cast<size_t>(it - start);
+         ++it; // skip closing quote
+
+         constexpr auto N = reflect<T>::size;
+
+         if constexpr (N == 1) {
+            // Single enum value - just verify it matches
+            static constexpr auto key = glz::get<0>(reflect<T>::keys);
+            if (n == key.size() && std::string_view(start, n) == key) {
+               value = glz::get<0>(reflect<T>::values);
+            }
+            else {
+               ctx.error = error_code::unexpected_enum;
+            }
+         }
+         else {
+            static constexpr auto HashInfo = hash_info<T>;
+
+            const auto index = decode_hash_with_size<TOML, T, HashInfo, HashInfo.type>::op(start, start + n, n);
+
+            if (index >= N) [[unlikely]] {
+               ctx.error = error_code::unexpected_enum;
+               return;
+            }
+
+            // Use visit to convert runtime index to compile-time index
+            visit<N>(
+               [&]<size_t I>() {
+                  // Verify the key matches (hash collision check)
+                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                  if (n == key.size() && std::string_view(start, n) == key) [[likely]] {
+                     value = glz::get<I>(reflect<T>::values);
+                  }
+                  else {
+                     ctx.error = error_code::unexpected_enum;
+                  }
+               },
+               index);
+         }
+      }
+   };
+
+   // Raw enum (without glz::meta) - reads as underlying numeric type
+   template <class T>
+      requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         std::underlying_type_t<std::decay_t<T>> x{};
+         from<TOML, decltype(x)>::template op<Opts>(x, ctx, it, end);
+         value = static_cast<std::decay_t<T>>(x);
+      }
+   };
+
+   // ============================================
+   // std::chrono deserialization
+   // ============================================
+
+   // Duration: parse from count
+   template <is_duration T>
+      requires(not custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         Rep count{};
+         from<TOML, Rep>::template op<Opts>(count, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = std::remove_cvref_t<T>(count);
+      }
+   };
+
+   // system_clock::time_point: parse from TOML native datetime (RFC 3339)
+   // TOML datetimes are NOT quoted - they're native values
+   // Format: YYYY-MM-DDTHH:MM:SS[.fraction][Z|+HH:MM|-HH:MM]
+   // Also accepts space instead of T, and seconds can be omitted
+   template <is_system_time_point T>
+      requires(not custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It0, class It1>
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Find the start of datetime and determine its length
+         const auto start = it;
+
+         // Helper to parse N digits starting at given pointer
+         auto parse_digits = [](const auto* s, size_t count) -> int {
+            int val = 0;
+            for (size_t i = 0; i < count; ++i) {
+               const char c = s[i];
+               if (c < '0' || c > '9') return -1;
+               val = val * 10 + (c - '0');
+            }
+            return val;
+         };
+
+         // Consume datetime characters (digits, -, :, T, space, ., Z, +)
+         while (it != end) {
+            const char c = *it;
+            if ((c >= '0' && c <= '9') || c == '-' || c == ':' || c == 'T' || c == 't' || c == ' ' || c == '.' ||
+                c == 'Z' || c == 'z' || c == '+') {
+               ++it;
+            }
+            else {
+               break;
+            }
+         }
+
+         const auto n = static_cast<size_t>(it - start);
+
+         // Minimum: YYYY-MM-DDTHH:MM = 16 chars (seconds optional in TOML)
+         if (n < 16) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         const char* s = &(*start);
+
+         // YYYY-MM-DDTHH:MM (T can be space)
+         const int yr = parse_digits(s, 4);
+         const int mo = parse_digits(s + 5, 2);
+         const int dy = parse_digits(s + 8, 2);
+         const int hr = parse_digits(s + 11, 2);
+         const int mi = parse_digits(s + 14, 2);
+
+         // Validate basic structure
+         if (yr < 0 || mo < 0 || dy < 0 || hr < 0 || mi < 0 || s[4] != '-' || s[7] != '-' ||
+             (s[10] != 'T' && s[10] != 't' && s[10] != ' ') || s[13] != ':') [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         // Validate ranges
+         if (mo < 1 || mo > 12 || dy < 1 || dy > 31 || hr > 23 || mi > 59) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         // Parse optional seconds
+         size_t pos = 16;
+         int sc = 0;
+         if (pos < n && s[pos] == ':') {
+            ++pos;
+            if (pos + 2 > n) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
+            sc = parse_digits(s + pos, 2);
+            if (sc < 0 || sc > 59) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
+            pos += 2;
+         }
+
+         // Parse optional fractional seconds
+         int64_t subsec_nanos = 0;
+         if (pos < n && s[pos] == '.') {
+            ++pos;
+            int64_t frac = 0;
+            int digits = 0;
+            while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
+               if (digits < 9) {
+                  frac = frac * 10 + (s[pos] - '0');
+                  ++digits;
+               }
+               ++pos;
+            }
+            // Scale to nanoseconds
+            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
+                                                10000,      1000,      100,      10,      1};
+            if (digits > 0 && digits <= 9) {
+               subsec_nanos = frac * scale[digits];
+            }
+         }
+
+         // Parse timezone: Z or +HH:MM or -HH:MM (defaults to UTC if missing - local datetime)
+         int tz_offset_seconds = 0;
+         if (pos < n) {
+            if (s[pos] == 'Z' || s[pos] == 'z') {
+               // UTC - no adjustment needed
+            }
+            else if (s[pos] == '+' || s[pos] == '-') {
+               const int utc_adjustment = (s[pos] == '+') ? -1 : 1;
+               ++pos;
+               if (pos + 2 > n) [[unlikely]] {
+                  ctx.error = error_code::parse_error;
+                  return;
+               }
+               const int tz_hour = parse_digits(s + pos, 2);
+               if (tz_hour < 0 || tz_hour > 23) [[unlikely]] {
+                  ctx.error = error_code::parse_error;
+                  return;
+               }
+               pos += 2;
+               int tz_min = 0;
+               if (pos < n && s[pos] == ':') ++pos;
+               if (pos + 2 <= n) {
+                  const int m = parse_digits(s + pos, 2);
+                  if (m >= 0 && m <= 59) {
+                     tz_min = m;
+                  }
+               }
+               tz_offset_seconds = utc_adjustment * (tz_hour * 3600 + tz_min * 60);
+            }
+         }
+
+         // Construct time_point using std::chrono calendar types
+         using namespace std::chrono;
+
+         const auto ymd = year_month_day{year{yr}, month{static_cast<unsigned>(mo)}, day{static_cast<unsigned>(dy)}};
+         if (!ymd.ok()) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         const auto tp = sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} +
+                         nanoseconds{subsec_nanos};
+
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         value = time_point_cast<Duration>(tp);
+      }
+   };
+
+   // year_month_day: parse from TOML Local Date (YYYY-MM-DD)
+   template <is_year_month_day T>
+      requires(not custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It0, class It1>
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Helper to parse N digits
+         auto parse_digits = [](const auto* s, size_t count) -> int {
+            int val = 0;
+            for (size_t i = 0; i < count; ++i) {
+               const char c = s[i];
+               if (c < '0' || c > '9') return -1;
+               val = val * 10 + (c - '0');
+            }
+            return val;
+         };
+
+         const auto start = it;
+
+         // Consume date characters (digits and -)
+         while (it != end) {
+            const char c = *it;
+            if ((c >= '0' && c <= '9') || c == '-') {
+               ++it;
+            }
+            else {
+               break;
+            }
+         }
+
+         const auto n = static_cast<size_t>(it - start);
+
+         // Minimum: YYYY-MM-DD = 10 chars
+         if (n < 10) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         const char* s = &(*start);
+
+         const int yr = parse_digits(s, 4);
+         const int mo = parse_digits(s + 5, 2);
+         const int dy = parse_digits(s + 8, 2);
+
+         if (yr < 0 || mo < 0 || dy < 0 || s[4] != '-' || s[7] != '-') [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         if (mo < 1 || mo > 12 || dy < 1 || dy > 31) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         using namespace std::chrono;
+         value = year_month_day{year{yr}, month{static_cast<unsigned>(mo)}, day{static_cast<unsigned>(dy)}};
+
+         if (!value.ok()) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+      }
+   };
+
+   // hh_mm_ss: parse from TOML Local Time (HH:MM:SS[.fraction])
+   template <is_hh_mm_ss T>
+      requires(not custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It0, class It1>
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Helper to parse N digits
+         auto parse_digits = [](const auto* s, size_t count) -> int {
+            int val = 0;
+            for (size_t i = 0; i < count; ++i) {
+               const char c = s[i];
+               if (c < '0' || c > '9') return -1;
+               val = val * 10 + (c - '0');
+            }
+            return val;
+         };
+
+         const auto start = it;
+
+         // Consume time characters (digits, :, .)
+         while (it != end) {
+            const char c = *it;
+            if ((c >= '0' && c <= '9') || c == ':' || c == '.') {
+               ++it;
+            }
+            else {
+               break;
+            }
+         }
+
+         const auto n = static_cast<size_t>(it - start);
+
+         // Minimum: HH:MM = 5 chars (seconds optional per TOML spec)
+         if (n < 5) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         const char* s = &(*start);
+
+         const int hr = parse_digits(s, 2);
+         const int mi = parse_digits(s + 3, 2);
+
+         if (hr < 0 || mi < 0 || s[2] != ':') [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         if (hr > 23 || mi > 59) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         // Parse optional seconds
+         size_t pos = 5;
+         int sc = 0;
+         if (pos < n && s[pos] == ':') {
+            ++pos;
+            if (pos + 2 > n) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
+            sc = parse_digits(s + pos, 2);
+            if (sc < 0 || sc > 59) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
+            pos += 2;
+         }
+
+         // Parse optional fractional seconds
+         int64_t subsec_nanos = 0;
+         if (pos < n && s[pos] == '.') {
+            ++pos;
+            int64_t frac = 0;
+            int digits = 0;
+            while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
+               if (digits < 9) {
+                  frac = frac * 10 + (s[pos] - '0');
+                  ++digits;
+               }
+               ++pos;
+            }
+            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
+                                                10000,      1000,      100,      10,      1};
+            if (digits > 0 && digits <= 9) {
+               subsec_nanos = frac * scale[digits];
+            }
+         }
+
+         using namespace std::chrono;
+         using Precision = typename std::remove_cvref_t<T>::precision;
+
+         auto total_duration =
+            hours{hr} + minutes{mi} + seconds{sc} + duration_cast<Precision>(nanoseconds{subsec_nanos});
+         value = std::remove_cvref_t<T>{total_duration};
+      }
+   };
+
+   // steady_clock::time_point: parse as count in the time_point's native duration
+   template <is_steady_time_point T>
+      requires(not custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         Rep count{};
+         from<TOML, Rep>::template op<Opts>(count, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = std::remove_cvref_t<T>(Duration(count));
+      }
+   };
+
+   // high_resolution_clock::time_point when it's a distinct type (rare)
+   template <is_high_res_time_point T>
+      requires(not custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         // Treat like steady_clock - parse as count
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         Rep count{};
+         from<TOML, Rep>::template op<Opts>(count, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = std::remove_cvref_t<T>(Duration(count));
+      }
+   };
+
+   // for set types (emplaceable but not emplace_backable)
+   template <class T>
+      requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end || *it != '[') {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         ++it; // Skip '['
+         skip_ws_and_comments(it, end);
+
+         value.clear();
+
+         // Handle empty array
+         if (it != end && *it == ']') {
+            ++it;
+            return;
+         }
+
+         while (it != end) {
+            using V = range_value_t<T>;
+            V v;
+            from<TOML, V>::template op<Opts>(v, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            value.emplace(std::move(v));
+
+            skip_ws_and_comments(it, end);
+
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            if (*it == ']') {
+               ++it;
+               return;
+            }
+            else if (*it == ',') {
+               ++it;
+               skip_ws_and_comments(it, end);
+            }
+            else {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+      }
+   };
+
+   // for types like std::vector, std::array, std::deque, etc.
+   template <class T>
+      requires(readable_array_t<T> && (emplace_backable<T> || !resizable<T>) && !emplaceable<T>)
    struct from<TOML, T>
    {
       template <auto Opts, class It>

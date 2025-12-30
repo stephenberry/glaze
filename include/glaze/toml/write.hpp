@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
@@ -103,6 +104,286 @@ namespace glz
          else {
             write_chars::op<Opts>(value, ctx, b, ix);
          }
+      }
+   };
+
+   // Enum with glz::meta/glz::enumerate - writes string representation
+   template <class T>
+      requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class... Args>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      {
+         const sv str = get_enum_name(value);
+         if (!str.empty()) {
+            // Write as quoted string for TOML
+            if constexpr (not Opts.raw) {
+               dump<'"'>(args...);
+            }
+            dump_maybe_empty(str, args...);
+            if constexpr (not Opts.raw) {
+               dump<'"'>(args...);
+            }
+         }
+         else [[unlikely]] {
+            // Value doesn't have a mapped string, serialize as underlying number
+            serialize<TOML>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+         }
+      }
+   };
+
+   // Raw enum (without glz::meta) - writes as underlying numeric type
+   template <class T>
+      requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class... Args>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      {
+         // serialize as underlying number
+         serialize<TOML>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+                                   std::forward<Args>(args)...);
+      }
+   };
+
+   // ============================================
+   // std::chrono serialization
+   // ============================================
+
+   // Duration: serialize as count
+   template <is_duration T>
+      requires(not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<TOML, Rep>::template op<Opts>(value.count(), ctx, b, ix);
+      }
+   };
+
+   // system_clock::time_point: serialize as TOML native datetime (RFC 3339)
+   // TOML datetimes are NOT quoted - they're native values
+   // Output format: YYYY-MM-DDTHH:MM:SS[.fraction]Z
+   template <is_system_time_point T>
+      requires(not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using namespace std::chrono;
+         using TP = std::remove_cvref_t<T>;
+         using Duration = typename TP::duration;
+
+         // Split into date and time-of-day
+         const auto dp = floor<days>(value);
+         const year_month_day ymd{dp};
+         const hh_mm_ss tod{floor<Duration>(value - dp)};
+
+         // Extract components
+         const int yr = static_cast<int>(ymd.year());
+         const unsigned mo = static_cast<unsigned>(ymd.month());
+         const unsigned dy = static_cast<unsigned>(ymd.day());
+         const auto hr = static_cast<unsigned>(tod.hours().count());
+         const auto mi = static_cast<unsigned>(tod.minutes().count());
+         const auto sc = static_cast<unsigned>(tod.seconds().count());
+
+         // Calculate fractional digits based on duration precision
+         constexpr size_t frac_digits = []() constexpr {
+            using Period = typename Duration::period;
+            if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+               return 0; // seconds or coarser
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
+               return 3; // milliseconds
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
+               return 6; // microseconds
+            }
+            else {
+               return 9; // nanoseconds or finer
+            }
+         }();
+
+         // Max size: YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ = 30 (no quotes for TOML)
+         constexpr size_t max_size = 21 + (frac_digits > 0 ? 1 + frac_digits : 0);
+         maybe_pad<max_size>(b, ix);
+
+         // Helper to write N-digit zero-padded number
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
+               b[ix + i - 1] = static_cast<char>('0' + val % 10);
+               val /= 10;
+            }
+            ix += N;
+         };
+
+         // Write datetime without quotes (TOML native format)
+         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
+         b[ix++] = '-';
+         write_digits.template operator()<2>(mo);
+         b[ix++] = '-';
+         write_digits.template operator()<2>(dy);
+         b[ix++] = 'T';
+         write_digits.template operator()<2>(hr);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(mi);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(sc);
+
+         // Write fractional seconds if duration is finer than seconds
+         if constexpr (frac_digits > 0) {
+            b[ix++] = '.';
+            const auto subsec = tod.subseconds();
+            if constexpr (frac_digits == 3) {
+               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+            }
+            else if constexpr (frac_digits == 6) {
+               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+            }
+            else {
+               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+            }
+         }
+
+         b[ix++] = 'Z'; // UTC timezone marker
+      }
+   };
+
+   // year_month_day: serialize as TOML Local Date (YYYY-MM-DD)
+   template <is_year_month_day T>
+      requires(not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using namespace std::chrono;
+
+         const int yr = static_cast<int>(value.year());
+         const unsigned mo = static_cast<unsigned>(value.month());
+         const unsigned dy = static_cast<unsigned>(value.day());
+
+         // YYYY-MM-DD = 10 chars
+         constexpr size_t max_size = 10;
+         maybe_pad<max_size>(b, ix);
+
+         // Helper to write N-digit zero-padded number
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
+               b[ix + i - 1] = static_cast<char>('0' + val % 10);
+               val /= 10;
+            }
+            ix += N;
+         };
+
+         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
+         b[ix++] = '-';
+         write_digits.template operator()<2>(mo);
+         b[ix++] = '-';
+         write_digits.template operator()<2>(dy);
+      }
+   };
+
+   // hh_mm_ss: serialize as TOML Local Time (HH:MM:SS[.fraction])
+   template <is_hh_mm_ss T>
+      requires(not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using namespace std::chrono;
+         using Precision = typename std::remove_cvref_t<T>::precision;
+
+         const auto hr = static_cast<unsigned>(value.hours().count());
+         const auto mi = static_cast<unsigned>(value.minutes().count());
+         const auto sc = static_cast<unsigned>(value.seconds().count());
+
+         // Calculate fractional digits based on precision
+         constexpr size_t frac_digits = []() constexpr {
+            using Period = typename Precision::period;
+            if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+               return 0; // seconds or coarser
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
+               return 3; // milliseconds
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
+               return 6; // microseconds
+            }
+            else {
+               return 9; // nanoseconds or finer
+            }
+         }();
+
+         // HH:MM:SS.nnnnnnnnn = max 18 chars
+         constexpr size_t max_size = 8 + (frac_digits > 0 ? 1 + frac_digits : 0);
+         maybe_pad<max_size>(b, ix);
+
+         // Helper to write N-digit zero-padded number
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
+               b[ix + i - 1] = static_cast<char>('0' + val % 10);
+               val /= 10;
+            }
+            ix += N;
+         };
+
+         write_digits.template operator()<2>(hr);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(mi);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(sc);
+
+         // Write fractional seconds if precision is finer than seconds
+         if constexpr (frac_digits > 0) {
+            b[ix++] = '.';
+            const auto subsec = value.subseconds();
+            if constexpr (frac_digits == 3) {
+               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+            }
+            else if constexpr (frac_digits == 6) {
+               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+            }
+            else {
+               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+            }
+         }
+      }
+   };
+
+   // steady_clock::time_point: serialize as count in the time_point's native duration
+   template <is_steady_time_point T>
+      requires(not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         const auto count = value.time_since_epoch().count();
+         to<TOML, Rep>::template op<Opts>(count, ctx, b, ix);
+      }
+   };
+
+   // high_resolution_clock::time_point when it's a distinct type (rare)
+   template <is_high_res_time_point T>
+      requires(not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         // Treat like steady_clock - serialize as count since epoch is implementation-defined
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         const auto count = value.time_since_epoch().count();
+         to<TOML, Rep>::template op<Opts>(count, ctx, b, ix);
       }
    };
 

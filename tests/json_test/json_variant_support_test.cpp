@@ -1385,4 +1385,356 @@ suite shared_ptr_variant_tests = [] {
    };
 };
 
+// Test for GitHub issue #2172
+// Empty struct in tagged variant roundtrip
+namespace tagged_empty_variant
+{
+   struct EmptyA
+   {
+      bool operator==(const EmptyA&) const = default;
+   };
+
+   using VariantWithEmpty = std::variant<EmptyA>;
+
+   struct Wrapper
+   {
+      VariantWithEmpty v;
+      bool operator==(const Wrapper&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<tagged_empty_variant::EmptyA>
+{
+   static constexpr auto value = glz::object();
+};
+
+template <>
+struct glz::meta<tagged_empty_variant::VariantWithEmpty>
+{
+   static constexpr std::string_view tag = "tag";
+   static constexpr auto ids = std::array{"A"};
+};
+
+template <>
+struct glz::meta<tagged_empty_variant::Wrapper>
+{
+   static constexpr auto value = glz::object(&tagged_empty_variant::Wrapper::v);
+};
+
+suite empty_struct_variant_roundtrip = [] {
+   "empty struct variant roundtrip minified"_test = [] {
+      tagged_empty_variant::Wrapper x{tagged_empty_variant::EmptyA{}};
+      std::string buffer{};
+      expect(not glz::write_json(x, buffer));
+      expect(buffer == R"({"v":{"tag":"A"}})") << buffer;
+
+      tagged_empty_variant::Wrapper parsed{};
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(parsed == x);
+   };
+
+   "empty struct variant roundtrip prettified"_test = [] {
+      tagged_empty_variant::Wrapper x{tagged_empty_variant::EmptyA{}};
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.prettify = true}>(x, buffer));
+
+      // Verify no extra blank lines in prettified output
+      expect(buffer == R"({
+   "v": {
+      "tag": "A"
+   }
+})") << buffer;
+
+      tagged_empty_variant::Wrapper parsed{};
+      auto ec = glz::read<glz::opts{.prettify = true}>(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(parsed == x);
+   };
+
+   "empty struct variant full roundtrip"_test = [] {
+      // Test that write -> read roundtrip works for both minified and prettified
+      tagged_empty_variant::Wrapper original{tagged_empty_variant::EmptyA{}};
+
+      // Minified roundtrip
+      std::string minified{};
+      expect(not glz::write_json(original, minified));
+      tagged_empty_variant::Wrapper parsed_min{};
+      expect(not glz::read_json(parsed_min, minified)) << minified;
+      expect(parsed_min == original);
+
+      // Prettified roundtrip
+      std::string prettified{};
+      expect(not glz::write<glz::opts{.prettify = true}>(original, prettified));
+      tagged_empty_variant::Wrapper parsed_pretty{};
+      expect(not glz::read<glz::opts{.prettify = true}>(parsed_pretty, prettified)) << prettified;
+      expect(parsed_pretty == original);
+   };
+
+   "empty struct variant direct parsing"_test = [] {
+      // Test parsing the variant directly (not wrapped in another struct)
+      std::string json = R"({"tag":"A"})";
+      tagged_empty_variant::VariantWithEmpty v;
+      auto ec = glz::read_json(v, json);
+      expect(not ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<tagged_empty_variant::EmptyA>(v));
+   };
+
+   "empty struct variant with extra whitespace"_test = [] {
+      // Test parsing with various whitespace patterns
+      std::string json = R"({  "v"  :  {  "tag"  :  "A"  }  })";
+      tagged_empty_variant::Wrapper parsed{};
+      auto ec = glz::read_json(parsed, json);
+      expect(not ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<tagged_empty_variant::EmptyA>(parsed.v));
+   };
+};
+
+// Additional test types for more comprehensive coverage
+namespace tagged_variant_extended
+{
+   // Multiple empty struct types in a variant
+   struct EmptyB
+   {
+      bool operator==(const EmptyB&) const = default;
+   };
+
+   struct EmptyC
+   {
+      bool operator==(const EmptyC&) const = default;
+   };
+
+   using MultiEmptyVariant = std::variant<tagged_empty_variant::EmptyA, EmptyB, EmptyC>;
+
+   struct MultiEmptyWrapper
+   {
+      MultiEmptyVariant v;
+      bool operator==(const MultiEmptyWrapper&) const = default;
+   };
+
+   // Mixed variant with empty and non-empty types
+   struct NonEmpty
+   {
+      int x{};
+      std::string y{};
+      bool operator==(const NonEmpty&) const = default;
+   };
+
+   using MixedVariant = std::variant<tagged_empty_variant::EmptyA, NonEmpty>;
+
+   struct MixedWrapper
+   {
+      MixedVariant v;
+      bool operator==(const MixedWrapper&) const = default;
+   };
+
+   // Wrapper with multiple fields including variant
+   struct MultiFieldWrapper
+   {
+      int before{};
+      tagged_empty_variant::VariantWithEmpty v;
+      std::string after{};
+      bool operator==(const MultiFieldWrapper&) const = default;
+   };
+
+   // Nested wrapper
+   struct OuterWrapper
+   {
+      tagged_empty_variant::Wrapper inner;
+      bool operator==(const OuterWrapper&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<tagged_variant_extended::EmptyB>
+{
+   static constexpr auto value = glz::object();
+};
+
+template <>
+struct glz::meta<tagged_variant_extended::EmptyC>
+{
+   static constexpr auto value = glz::object();
+};
+
+template <>
+struct glz::meta<tagged_variant_extended::MultiEmptyVariant>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"A", "B", "C"};
+};
+
+template <>
+struct glz::meta<tagged_variant_extended::MultiEmptyWrapper>
+{
+   static constexpr auto value = glz::object(&tagged_variant_extended::MultiEmptyWrapper::v);
+};
+
+template <>
+struct glz::meta<tagged_variant_extended::NonEmpty>
+{
+   static constexpr auto value =
+      glz::object(&tagged_variant_extended::NonEmpty::x, &tagged_variant_extended::NonEmpty::y);
+};
+
+template <>
+struct glz::meta<tagged_variant_extended::MixedVariant>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr auto ids = std::array{"empty", "non_empty"};
+};
+
+template <>
+struct glz::meta<tagged_variant_extended::MixedWrapper>
+{
+   static constexpr auto value = glz::object(&tagged_variant_extended::MixedWrapper::v);
+};
+
+template <>
+struct glz::meta<tagged_variant_extended::MultiFieldWrapper>
+{
+   static constexpr auto value =
+      glz::object(&tagged_variant_extended::MultiFieldWrapper::before, &tagged_variant_extended::MultiFieldWrapper::v,
+                  &tagged_variant_extended::MultiFieldWrapper::after);
+};
+
+template <>
+struct glz::meta<tagged_variant_extended::OuterWrapper>
+{
+   static constexpr auto value = glz::object(&tagged_variant_extended::OuterWrapper::inner);
+};
+
+suite empty_struct_variant_extended = [] {
+   using namespace tagged_variant_extended;
+
+   "multiple empty types in variant - type A"_test = [] {
+      MultiEmptyWrapper x{tagged_empty_variant::EmptyA{}};
+      std::string buffer{};
+      expect(not glz::write_json(x, buffer));
+      expect(buffer == R"({"v":{"type":"A"}})") << buffer;
+
+      MultiEmptyWrapper parsed{};
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(std::holds_alternative<tagged_empty_variant::EmptyA>(parsed.v));
+   };
+
+   "multiple empty types in variant - type B"_test = [] {
+      MultiEmptyWrapper x{EmptyB{}};
+      std::string buffer{};
+      expect(not glz::write_json(x, buffer));
+      expect(buffer == R"({"v":{"type":"B"}})") << buffer;
+
+      MultiEmptyWrapper parsed{};
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(std::holds_alternative<EmptyB>(parsed.v));
+   };
+
+   "multiple empty types in variant - type C"_test = [] {
+      MultiEmptyWrapper x{EmptyC{}};
+      std::string buffer{};
+      expect(not glz::write_json(x, buffer));
+      expect(buffer == R"({"v":{"type":"C"}})") << buffer;
+
+      MultiEmptyWrapper parsed{};
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(std::holds_alternative<EmptyC>(parsed.v));
+   };
+
+   "mixed variant with empty type"_test = [] {
+      MixedWrapper x{tagged_empty_variant::EmptyA{}};
+      std::string buffer{};
+      expect(not glz::write_json(x, buffer));
+      expect(buffer == R"({"v":{"kind":"empty"}})") << buffer;
+
+      MixedWrapper parsed{};
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(std::holds_alternative<tagged_empty_variant::EmptyA>(parsed.v));
+   };
+
+   "mixed variant with non-empty type"_test = [] {
+      MixedWrapper x{NonEmpty{42, "hello"}};
+      std::string buffer{};
+      expect(not glz::write_json(x, buffer));
+
+      MixedWrapper parsed{};
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(std::holds_alternative<NonEmpty>(parsed.v));
+      expect(std::get<NonEmpty>(parsed.v).x == 42);
+      expect(std::get<NonEmpty>(parsed.v).y == "hello");
+   };
+
+   "multi-field wrapper with empty variant"_test = [] {
+      MultiFieldWrapper x{10, tagged_empty_variant::EmptyA{}, "test"};
+      std::string buffer{};
+      expect(not glz::write_json(x, buffer));
+
+      MultiFieldWrapper parsed{};
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(parsed.before == 10);
+      expect(std::holds_alternative<tagged_empty_variant::EmptyA>(parsed.v));
+      expect(parsed.after == "test");
+   };
+
+   "nested wrapper with empty variant"_test = [] {
+      OuterWrapper x{{tagged_empty_variant::EmptyA{}}};
+      std::string buffer{};
+      expect(not glz::write_json(x, buffer));
+      expect(buffer == R"({"inner":{"v":{"tag":"A"}}})") << buffer;
+
+      OuterWrapper parsed{};
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(std::holds_alternative<tagged_empty_variant::EmptyA>(parsed.inner.v));
+   };
+
+   "nested wrapper prettified"_test = [] {
+      OuterWrapper x{{tagged_empty_variant::EmptyA{}}};
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.prettify = true}>(x, buffer));
+
+      OuterWrapper parsed{};
+      auto ec = glz::read<glz::opts{.prettify = true}>(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(std::holds_alternative<tagged_empty_variant::EmptyA>(parsed.inner.v));
+   };
+
+   "multi-field wrapper field order variations"_test = [] {
+      // Test that field order in JSON doesn't matter
+      std::string json1 = R"({"before":5,"v":{"tag":"A"},"after":"x"})";
+      std::string json2 = R"({"v":{"tag":"A"},"before":5,"after":"x"})";
+      std::string json3 = R"({"after":"x","before":5,"v":{"tag":"A"}})";
+
+      for (const auto& json : {json1, json2, json3}) {
+         MultiFieldWrapper parsed{};
+         auto ec = glz::read_json(parsed, json);
+         expect(not ec) << glz::format_error(ec, json);
+         expect(parsed.before == 5);
+         expect(std::holds_alternative<tagged_empty_variant::EmptyA>(parsed.v));
+         expect(parsed.after == "x");
+      }
+   };
+
+   "empty variant in array"_test = [] {
+      std::vector<tagged_empty_variant::Wrapper> vec{{tagged_empty_variant::EmptyA{}},
+                                                     {tagged_empty_variant::EmptyA{}}};
+      std::string buffer{};
+      expect(not glz::write_json(vec, buffer));
+      expect(buffer == R"([{"v":{"tag":"A"}},{"v":{"tag":"A"}}])") << buffer;
+
+      std::vector<tagged_empty_variant::Wrapper> parsed{};
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(parsed.size() == 2);
+      expect(std::holds_alternative<tagged_empty_variant::EmptyA>(parsed[0].v));
+      expect(std::holds_alternative<tagged_empty_variant::EmptyA>(parsed[1].v));
+   };
+};
+
 int main() { return 0; }

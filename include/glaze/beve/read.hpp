@@ -1471,7 +1471,7 @@ namespace glz
          }();
 
          decltype(auto) fields = [&]() -> decltype(auto) {
-            if constexpr (Opts.partial_read) {
+            if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                return bit_array<N>{};
             }
             else {
@@ -1506,7 +1506,7 @@ namespace glz
                const auto index = decode_hash_with_size<BEVE, T, HashInfo, HashInfo.type>::op(it, end, n);
 
                if (index < N) [[likely]] {
-                  if constexpr (Opts.partial_read) {
+                  if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                      fields[index] = true;
                   }
 
@@ -1575,6 +1575,20 @@ namespace glz
                skip_value<BEVE>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
+            }
+         }
+
+         if constexpr (Opts.error_on_missing_keys) {
+            constexpr auto req_fields = required_fields<T, Opts>();
+            if ((req_fields & fields) != req_fields) {
+               for (size_t i = 0; i < N; ++i) {
+                  if (not fields[i] && req_fields[i]) {
+                     ctx.custom_error_message = reflect<T>::keys[i];
+                     break;
+                  }
+               }
+               ctx.error = error_code::missing_key;
+               return;
             }
          }
       }
@@ -1724,14 +1738,35 @@ namespace glz
    }
 
    template <read_supported<BEVE> T, class Buffer>
-   [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer)
+   [[deprecated("Use read_beve_untagged instead")]] [[nodiscard]] inline error_ctx read_binary_untagged(T&& value,
+                                                                                                        Buffer&& buffer)
    {
       return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                    std::forward<Buffer>(buffer));
    }
 
    template <read_supported<BEVE> T, class Buffer>
-   [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(Buffer&& buffer)
+   [[deprecated("Use read_beve_untagged instead")]] [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(
+      Buffer&& buffer)
+   {
+      T value{};
+      const auto pe = read<opts{.format = BEVE, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
+      if (pe) [[unlikely]] {
+         return unexpected(pe);
+      }
+      return value;
+   }
+
+   // read_beve_untagged aliases for naming consistency with write_beve_untagged
+   template <read_supported<BEVE> T, class Buffer>
+   [[nodiscard]] inline error_ctx read_beve_untagged(T&& value, Buffer&& buffer)
+   {
+      return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
+                                                                   std::forward<Buffer>(buffer));
+   }
+
+   template <read_supported<BEVE> T, class Buffer>
+   [[nodiscard]] inline expected<T, error_ctx> read_beve_untagged(Buffer&& buffer)
    {
       T value{};
       const auto pe = read<opts{.format = BEVE, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));

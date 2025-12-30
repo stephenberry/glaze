@@ -7,6 +7,7 @@
 #include "glaze/core/manage.hpp"
 #include "glaze/core/wrapper_traits.hpp"
 #include "glaze/json/escape_unicode.hpp"
+#include "glaze/json/float_format.hpp"
 #include "glaze/json/generic.hpp"
 #include "glaze/json/invoke.hpp"
 #include "glaze/json/jmespath.hpp"

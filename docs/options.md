@@ -51,6 +51,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool hide_non_invocable` | `true` | Hide non-invocable members from `cli_menu` |
 | `bool escape_control_characters` | `false` | Escape control characters as unicode sequences |
 | `float_precision float_max_write_precision` | `full` | Maximum precision for writing floats |
+| `static constexpr std::string_view float_format` | (none) | Format string for float output using `std::format` (C++23) |
 | `bool skip_null_members_on_read` | `false` | Skip null values when reading (preserve existing value) |
 | `bool skip_self_constraint` | `false` | Skip `self_constraint` validation during reading |
 | `bool assume_sufficient_buffer` | `false` | Skip bounds checking for fixed-size buffers (caller guarantees space) |
@@ -238,6 +239,31 @@ When `true` (default), BEVE allows implicit type conversions (e.g., reading a `d
 
 #### `float_max_write_precision`
 Limits the precision used when writing floating-point numbers. Options: `full`, `float32`, `float64`, `float128`.
+
+#### `float_format`
+Formats all floating-point numbers using `std::format` syntax (C++23). This provides control over decimal places, scientific notation, and other formatting options.
+
+```c++
+struct format_opts : glz::opts
+{
+   static constexpr std::string_view float_format = "{:.2f}";
+};
+
+std::vector<double> values{3.14159, 2.71828, 1.41421};
+std::string json = glz::write<format_opts{}>(values).value_or("error");
+// Output: [3.14,2.72,1.41]
+```
+
+Common format specifiers:
+- `{:.2f}` - Fixed-point with 2 decimal places
+- `{:.0f}` - Fixed-point with no decimals (rounds)
+- `{:.2e}` - Scientific notation (lowercase)
+- `{:.4g}` - General format (auto-selects fixed or scientific)
+
+> [!NOTE]
+> The format string is validated at compile time via `std::format_string`. Invalid format strings will cause compilation errors.
+
+For per-member formatting control, see the [`glz::float_format` wrapper](wrappers.md#float_format).
 
 ---
 

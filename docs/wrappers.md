@@ -26,6 +26,7 @@ glz::invoke<&T::func> // Invoke a std::function, lambda, or member function with
 glz::write_float32<&T::x> // Writes out numbers with a maximum precision of float32_t
 glz::write_float64<&T::x> // Writes out numbers with a maximum precision of float64_t
 glz::write_float_full<&T::x> // Writes out numbers with full precision (turns off higher level float precision wrappers)
+glz::float_format<&T::x, "{:.2f}"> // Format floats using std::format syntax (C++23)
 
 glz::custom<&T::read, &T::write> // Calls custom read and write std::functions, lambdas, or member functions
 glz::manage<&T::x, &T::read_x, &T::write_x> // Calls read_x() after reading x and calls write_x() before writing x
@@ -677,6 +678,118 @@ Writes out numbers with a maximum precision of `float64_t`.
 ## write_float_full
 
 Writes out numbers with full precision  (turns off higher level float precision wrappers).
+
+## float_format
+
+Format floating-point numbers using `std::format` syntax (C++23). This wrapper provides per-member control over float formatting with the full flexibility of C++ format specifications.
+
+```c++
+struct coordinates
+{
+   double latitude{37.7749295};
+   double longitude{-122.4194155};
+   float altitude{10.5f};
+};
+
+template <>
+struct glz::meta<coordinates>
+{
+   using T = coordinates;
+   static constexpr auto value = glz::object(
+      "lat", glz::float_format<&T::latitude, "{:.4f}">,
+      "lon", glz::float_format<&T::longitude, "{:.4f}">,
+      "alt", glz::float_format<&T::altitude, "{:.1f}">
+   );
+};
+```
+
+In use:
+
+```c++
+coordinates point{};
+std::string json = glz::write_json(point).value_or("error");
+// Output: {"lat":37.7749,"lon":-122.4194,"alt":10.5}
+
+// Reading works normally - format only affects writing
+coordinates point2{};
+glz::read_json(point2, R"({"lat":40.7128,"lon":-74.0060,"alt":5.0})");
+```
+
+### Format String Syntax
+
+The format string follows `std::format` syntax. Common specifiers for floats:
+
+| Format | Description | Example Input | Example Output |
+|--------|-------------|---------------|----------------|
+| `{:.2f}` | Fixed, 2 decimal places | `3.14159` | `3.14` |
+| `{:.0f}` | Fixed, no decimals (rounds) | `3.7` | `4` |
+| `{:.6f}` | Fixed, 6 decimal places | `3.14159` | `3.141590` |
+| `{:.2e}` | Scientific (lowercase) | `1234567.89` | `1.23e+06` |
+| `{:.3E}` | Scientific (uppercase) | `0.000123` | `1.230E-04` |
+| `{:.4g}` | General (auto-selects f/e) | `0.0001234` | `0.0001234` |
+
+### Mixing Formatted and Unformatted Members
+
+You can combine `float_format` with regular member pointers:
+
+```c++
+struct sensor_data
+{
+   double temperature{23.456789};  // High precision needed
+   double display_value{23.456789}; // Formatted for display
+   int sensor_id{42};
+};
+
+template <>
+struct glz::meta<sensor_data>
+{
+   using T = sensor_data;
+   static constexpr auto value = glz::object(
+      "temperature", &T::temperature,  // Full precision (default behavior)
+      "display", glz::float_format<&T::display_value, "{:.1f}">,  // Formatted
+      "id", &T::sensor_id
+   );
+};
+```
+
+Output: `{"temperature":23.456789,"display":23.5,"id":42}`
+
+### Special Values
+
+The wrapper handles special floating-point values using `std::format` behavior:
+
+```c++
+coordinates point{std::numeric_limits<double>::infinity(), -0.0, 0.0f};
+// Output includes "inf" for infinity values
+```
+
+### Comparison with Global float_format Option
+
+| Feature | Per-member `glz::float_format` | Global `float_format` option |
+|---------|-------------------------------|------------------------------|
+| Scope | Individual members | All floats in serialization |
+| Flexibility | Different format per member | Same format for all |
+| Usage | `glz::meta` wrappers | Custom `glz::opts` struct |
+
+Use the per-member wrapper when different fields need different formatting. Use the global option when all floats should be formatted the same way.
+
+### Global float_format Option
+
+For formatting all floats globally, add `float_format` to a custom options struct:
+
+```c++
+struct format_opts : glz::opts
+{
+   static constexpr std::string_view float_format = "{:.2f}";
+};
+
+double pi = 3.14159265358979;
+std::string json = glz::write<format_opts{}>(pi).value_or("error");
+// Output: 3.14
+```
+
+> [!NOTE]
+> The `float_format` option uses `std::format` internally and requires C++23. The format string is validated at compile time via `std::format_string`.
 
 ## Associated glz::opts for float precision
 

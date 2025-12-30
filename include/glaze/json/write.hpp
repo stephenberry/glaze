@@ -1637,24 +1637,21 @@ namespace glz
                      if constexpr (std::integral<id_type>) {
                         dump<"\": ">(b, ix);
                         serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
-                        if constexpr (N == 0) {
-                           dump<"\n">(b, ix);
-                        }
-                        else {
+                        if constexpr (N > 0) {
                            dump<",\n">(b, ix);
+                           dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                         }
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                      }
                      else {
                         dump<"\": \"">(b, ix);
                         dump_maybe_empty(ids_v<T>[value.index()], b, ix);
                         if constexpr (N == 0) {
-                           dump<"\"\n">(b, ix);
+                           dump<'"'>(b, ix);
                         }
                         else {
                            dump<"\",\n">(b, ix);
+                           dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                         }
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                      }
                   }
                   else {

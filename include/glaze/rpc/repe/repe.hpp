@@ -287,8 +287,8 @@ namespace glz::repe
       }
 
       // Set up views into the original buffer
-      result.request.query = {buffer.data() + sizeof(header), hdr.query_length};
-      result.request.body = {buffer.data() + sizeof(header) + hdr.query_length, hdr.body_length};
+      result.request.query = {buffer.data() + sizeof(header), static_cast<size_t>(hdr.query_length)};
+      result.request.body = {buffer.data() + sizeof(header) + hdr.query_length, static_cast<size_t>(hdr.body_length)};
       result.ec = error_code::none;
 
       return result;
