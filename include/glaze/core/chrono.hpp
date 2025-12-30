@@ -77,4 +77,25 @@ namespace glz
    concept is_epoch_time = requires(T t) {
       { t.value } -> std::convertible_to<std::chrono::system_clock::time_point>;
    };
+
+   // ============================================
+   // TOML Local Date/Time support
+   // ============================================
+
+   // Concept for std::chrono::year_month_day (TOML Local Date)
+   template <class T>
+   concept is_year_month_day = std::is_same_v<std::remove_cvref_t<T>, std::chrono::year_month_day>;
+
+   // Concept for std::chrono::hh_mm_ss (TOML Local Time)
+   template <class T>
+   concept is_hh_mm_ss = requires {
+      typename std::remove_cvref_t<T>::precision;
+      requires requires(T t) {
+         { t.hours() } -> std::convertible_to<std::chrono::hours>;
+         { t.minutes() } -> std::convertible_to<std::chrono::minutes>;
+         { t.seconds() } -> std::convertible_to<std::chrono::seconds>;
+         { t.subseconds() };
+         { t.is_negative() } -> std::convertible_to<bool>;
+      };
+   };
 }
