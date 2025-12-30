@@ -213,8 +213,6 @@ struct local_time_test_struct
 {
    std::chrono::hh_mm_ss<std::chrono::seconds> time_sec{std::chrono::seconds{0}};
    std::chrono::hh_mm_ss<std::chrono::milliseconds> time_ms{std::chrono::milliseconds{0}};
-
-   bool operator==(const local_time_test_struct&) const = default;
 };
 
 // ========== Set test structures ==========
