@@ -1048,6 +1048,193 @@ namespace glz
       }
    };
 
+   // year_month_day: parse from TOML Local Date (YYYY-MM-DD)
+   template <is_year_month_day T>
+      requires(not custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It0, class It1>
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Helper to parse N digits
+         auto parse_digits = [](const auto* s, size_t count) -> int {
+            int val = 0;
+            for (size_t i = 0; i < count; ++i) {
+               const char c = s[i];
+               if (c < '0' || c > '9') return -1;
+               val = val * 10 + (c - '0');
+            }
+            return val;
+         };
+
+         const auto start = it;
+
+         // Consume date characters (digits and -)
+         while (it != end) {
+            const char c = *it;
+            if ((c >= '0' && c <= '9') || c == '-') {
+               ++it;
+            }
+            else {
+               break;
+            }
+         }
+
+         const auto n = static_cast<size_t>(it - start);
+
+         // Minimum: YYYY-MM-DD = 10 chars
+         if (n < 10) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         const char* s = &(*start);
+
+         const int yr = parse_digits(s, 4);
+         const int mo = parse_digits(s + 5, 2);
+         const int dy = parse_digits(s + 8, 2);
+
+         if (yr < 0 || mo < 0 || dy < 0 || s[4] != '-' || s[7] != '-') [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         if (mo < 1 || mo > 12 || dy < 1 || dy > 31) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         using namespace std::chrono;
+         value = year_month_day{year{yr}, month{static_cast<unsigned>(mo)}, day{static_cast<unsigned>(dy)}};
+
+         if (!value.ok()) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+      }
+   };
+
+   // hh_mm_ss: parse from TOML Local Time (HH:MM:SS[.fraction])
+   template <is_hh_mm_ss T>
+      requires(not custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It0, class It1>
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Helper to parse N digits
+         auto parse_digits = [](const auto* s, size_t count) -> int {
+            int val = 0;
+            for (size_t i = 0; i < count; ++i) {
+               const char c = s[i];
+               if (c < '0' || c > '9') return -1;
+               val = val * 10 + (c - '0');
+            }
+            return val;
+         };
+
+         const auto start = it;
+
+         // Consume time characters (digits, :, .)
+         while (it != end) {
+            const char c = *it;
+            if ((c >= '0' && c <= '9') || c == ':' || c == '.') {
+               ++it;
+            }
+            else {
+               break;
+            }
+         }
+
+         const auto n = static_cast<size_t>(it - start);
+
+         // Minimum: HH:MM = 5 chars (seconds optional per TOML spec)
+         if (n < 5) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         const char* s = &(*start);
+
+         const int hr = parse_digits(s, 2);
+         const int mi = parse_digits(s + 3, 2);
+
+         if (hr < 0 || mi < 0 || s[2] != ':') [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         if (hr > 23 || mi > 59) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         // Parse optional seconds
+         size_t pos = 5;
+         int sc = 0;
+         if (pos < n && s[pos] == ':') {
+            ++pos;
+            if (pos + 2 > n) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
+            sc = parse_digits(s + pos, 2);
+            if (sc < 0 || sc > 59) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
+            pos += 2;
+         }
+
+         // Parse optional fractional seconds
+         int64_t subsec_nanos = 0;
+         if (pos < n && s[pos] == '.') {
+            ++pos;
+            int64_t frac = 0;
+            int digits = 0;
+            while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
+               if (digits < 9) {
+                  frac = frac * 10 + (s[pos] - '0');
+                  ++digits;
+               }
+               ++pos;
+            }
+            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
+                                                10000,      1000,      100,      10,      1};
+            if (digits > 0 && digits <= 9) {
+               subsec_nanos = frac * scale[digits];
+            }
+         }
+
+         using namespace std::chrono;
+         using Precision = typename std::remove_cvref_t<T>::precision;
+
+         auto total_duration =
+            hours{hr} + minutes{mi} + seconds{sc} + duration_cast<Precision>(nanoseconds{subsec_nanos});
+         value = std::remove_cvref_t<T>{total_duration};
+      }
+   };
+
    // steady_clock::time_point: parse as count in the time_point's native duration
    template <is_steady_time_point T>
       requires(not custom_read<T>)

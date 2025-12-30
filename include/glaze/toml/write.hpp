@@ -253,6 +253,109 @@ namespace glz
       }
    };
 
+   // year_month_day: serialize as TOML Local Date (YYYY-MM-DD)
+   template <is_year_month_day T>
+      requires(not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using namespace std::chrono;
+
+         const int yr = static_cast<int>(value.year());
+         const unsigned mo = static_cast<unsigned>(value.month());
+         const unsigned dy = static_cast<unsigned>(value.day());
+
+         // YYYY-MM-DD = 10 chars
+         constexpr size_t max_size = 10;
+         maybe_pad<max_size>(b, ix);
+
+         // Helper to write N-digit zero-padded number
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
+               b[ix + i - 1] = static_cast<char>('0' + val % 10);
+               val /= 10;
+            }
+            ix += N;
+         };
+
+         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
+         b[ix++] = '-';
+         write_digits.template operator()<2>(mo);
+         b[ix++] = '-';
+         write_digits.template operator()<2>(dy);
+      }
+   };
+
+   // hh_mm_ss: serialize as TOML Local Time (HH:MM:SS[.fraction])
+   template <is_hh_mm_ss T>
+      requires(not custom_write<T>)
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      {
+         using namespace std::chrono;
+         using Precision = typename std::remove_cvref_t<T>::precision;
+
+         const auto hr = static_cast<unsigned>(value.hours().count());
+         const auto mi = static_cast<unsigned>(value.minutes().count());
+         const auto sc = static_cast<unsigned>(value.seconds().count());
+
+         // Calculate fractional digits based on precision
+         constexpr size_t frac_digits = []() constexpr {
+            using Period = typename Precision::period;
+            if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+               return 0; // seconds or coarser
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
+               return 3; // milliseconds
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
+               return 6; // microseconds
+            }
+            else {
+               return 9; // nanoseconds or finer
+            }
+         }();
+
+         // HH:MM:SS.nnnnnnnnn = max 18 chars
+         constexpr size_t max_size = 8 + (frac_digits > 0 ? 1 + frac_digits : 0);
+         maybe_pad<max_size>(b, ix);
+
+         // Helper to write N-digit zero-padded number
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
+               b[ix + i - 1] = static_cast<char>('0' + val % 10);
+               val /= 10;
+            }
+            ix += N;
+         };
+
+         write_digits.template operator()<2>(hr);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(mi);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(sc);
+
+         // Write fractional seconds if precision is finer than seconds
+         if constexpr (frac_digits > 0) {
+            b[ix++] = '.';
+            const auto subsec = value.subseconds();
+            if constexpr (frac_digits == 3) {
+               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+            }
+            else if constexpr (frac_digits == 6) {
+               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+            }
+            else {
+               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+            }
+         }
+      }
+   };
+
    // steady_clock::time_point: serialize as count in the time_point's native duration
    template <is_steady_time_point T>
       requires(not custom_write<T>)
