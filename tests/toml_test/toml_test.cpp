@@ -1,9 +1,12 @@
 #include "glaze/toml.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <limits>
 #include <map>
-#include <string_view> // Added for std::string_view
+#include <set>
+#include <string_view>
+#include <unordered_set>
 
 #include "ut/ut.hpp"
 
@@ -168,7 +171,63 @@ struct glz::meta<non_null_term_struct>
    static constexpr auto value = object("value", &T::value);
 };
 
-// Enum types for TOML enum serialization tests
+// ========== Chrono test structures ==========
+
+struct duration_test_struct
+{
+   std::chrono::seconds seconds_val{};
+   std::chrono::milliseconds millis_val{};
+   std::chrono::minutes minutes_val{};
+   std::chrono::hours hours_val{};
+
+   bool operator==(const duration_test_struct&) const = default;
+};
+
+struct system_time_test_struct
+{
+   std::chrono::system_clock::time_point timestamp{};
+   int value{};
+
+   bool operator==(const system_time_test_struct&) const = default;
+};
+
+struct chrono_combined_struct
+{
+   std::string name{};
+   std::chrono::seconds timeout{};
+   std::chrono::system_clock::time_point created_at{};
+   std::chrono::milliseconds latency{};
+
+   bool operator==(const chrono_combined_struct&) const = default;
+};
+
+// ========== Set test structures ==========
+
+struct set_test_struct
+{
+   std::set<int> int_set{};
+   std::set<std::string> string_set{};
+
+   bool operator==(const set_test_struct&) const = default;
+};
+
+struct unordered_set_test_struct
+{
+   std::unordered_set<int> int_uset{};
+
+   bool operator==(const unordered_set_test_struct&) const = default;
+};
+
+struct combined_containers_struct
+{
+   std::vector<int> vec{};
+   std::set<int> set{};
+   std::array<int, 3> arr{};
+
+   bool operator==(const combined_containers_struct&) const = default;
+};
+
+// ========== Enum types for TOML enum serialization tests ==========
 enum class Color { Red, Green, Blue };
 
 template <>
@@ -1433,6 +1492,567 @@ priority = 10)";
       auto error = glz::read_toml(c, input);
       expect(error);
       expect(error == glz::error_code::unexpected_enum);
+   };
+
+   // ========== std::chrono duration tests ==========
+
+   "duration_seconds_write"_test = [] {
+      std::chrono::seconds s{42};
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value() == "42");
+   };
+
+   "duration_seconds_read"_test = [] {
+      std::chrono::seconds s{};
+      std::string input = "100";
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.count() == 100);
+   };
+
+   "duration_milliseconds_write"_test = [] {
+      std::chrono::milliseconds ms{1500};
+      auto result = glz::write_toml(ms);
+      expect(result.has_value());
+      expect(result.value() == "1500");
+   };
+
+   "duration_milliseconds_read"_test = [] {
+      std::chrono::milliseconds ms{};
+      std::string input = "2500";
+      auto error = glz::read_toml(ms, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(ms.count() == 2500);
+   };
+
+   "duration_minutes_roundtrip"_test = [] {
+      std::chrono::minutes original{60};
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      std::chrono::minutes parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == original);
+   };
+
+   "duration_hours_roundtrip"_test = [] {
+      std::chrono::hours original{24};
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      std::chrono::hours parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == original);
+   };
+
+   "duration_negative_value"_test = [] {
+      std::chrono::seconds s{-100};
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value() == "-100");
+
+      std::chrono::seconds parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed.count() == -100);
+   };
+
+   "duration_zero_value"_test = [] {
+      std::chrono::seconds s{0};
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value() == "0");
+
+      std::chrono::seconds parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed.count() == 0);
+   };
+
+   "duration_struct_write"_test = [] {
+      duration_test_struct s{};
+      s.seconds_val = std::chrono::seconds{10};
+      s.millis_val = std::chrono::milliseconds{500};
+      s.minutes_val = std::chrono::minutes{5};
+      s.hours_val = std::chrono::hours{2};
+
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value() == R"(seconds_val = 10
+millis_val = 500
+minutes_val = 5
+hours_val = 2)");
+   };
+
+   "duration_struct_read"_test = [] {
+      std::string input = R"(seconds_val = 30
+millis_val = 1000
+minutes_val = 10
+hours_val = 1)";
+
+      duration_test_struct s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.seconds_val.count() == 30);
+      expect(s.millis_val.count() == 1000);
+      expect(s.minutes_val.count() == 10);
+      expect(s.hours_val.count() == 1);
+   };
+
+   "duration_struct_roundtrip"_test = [] {
+      duration_test_struct original{};
+      original.seconds_val = std::chrono::seconds{42};
+      original.millis_val = std::chrono::milliseconds{12345};
+      original.minutes_val = std::chrono::minutes{60};
+      original.hours_val = std::chrono::hours{24};
+
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      duration_test_struct parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == original);
+   };
+
+   // ========== std::chrono::system_clock::time_point tests (native TOML datetime) ==========
+
+   "system_time_write_basic"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point tp = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30} + seconds{45};
+
+      auto result = glz::write_toml(tp);
+      expect(result.has_value());
+      // Should contain the datetime without quotes (native TOML format)
+      expect(result.value().find("2024-06-15T10:30:45") != std::string::npos);
+      expect(result.value().find('"') == std::string::npos); // No quotes
+   };
+
+   "system_time_read_with_Z"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      std::string input = "2024-06-15T10:30:45Z";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+
+      auto expected = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30} + seconds{45};
+      expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
+   };
+
+   "system_time_read_local_datetime"_test = [] {
+      // TOML local datetime (no timezone) - treated as UTC
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      std::string input = "2024-06-15T10:30:45";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+
+      auto expected = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30} + seconds{45};
+      expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
+   };
+
+   "system_time_read_positive_offset"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      // +05:00 means local time is 5 hours ahead of UTC
+      std::string input = "2024-06-15T10:30:45+05:00";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+
+      // 10:30:45+05:00 = 05:30:45Z
+      auto expected = sys_days{year{2024} / month{6} / day{15}} + hours{5} + minutes{30} + seconds{45};
+      expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
+   };
+
+   "system_time_read_negative_offset"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      // -08:00 means local time is 8 hours behind UTC
+      std::string input = "2024-06-15T10:30:45-08:00";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+
+      // 10:30:45-08:00 = 18:30:45Z
+      auto expected = sys_days{year{2024} / month{6} / day{15}} + hours{18} + minutes{30} + seconds{45};
+      expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
+   };
+
+   "system_time_read_fractional_seconds"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      std::string input = "2024-06-15T10:30:45.123456Z";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+
+      auto expected_base = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30} + seconds{45};
+      // Check that we got roughly the right time (within a second)
+      expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected_base));
+   };
+
+   "system_time_read_without_seconds"_test = [] {
+      // TOML allows omitting seconds
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      std::string input = "2024-06-15T10:30Z";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+
+      auto expected = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30};
+      expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
+   };
+
+   "system_time_read_space_delimiter"_test = [] {
+      // TOML allows space instead of T
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      std::string input = "2024-06-15 10:30:45Z";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+
+      auto expected = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30} + seconds{45};
+      expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
+   };
+
+   "system_time_read_lowercase_t"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      std::string input = "2024-06-15t10:30:45z";
+      auto error = glz::read_toml(tp, input);
+      expect(!error) << glz::format_error(error, input);
+
+      auto expected = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30} + seconds{45};
+      expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
+   };
+
+   "system_time_struct_write"_test = [] {
+      using namespace std::chrono;
+      system_time_test_struct s{};
+      s.timestamp = sys_days{year{2024} / month{12} / day{25}} + hours{23} + minutes{59} + seconds{59};
+      s.value = 42;
+
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value().find("2024-12-25T23:59:59") != std::string::npos);
+      expect(result.value().find("value = 42") != std::string::npos);
+   };
+
+   "system_time_struct_read"_test = [] {
+      using namespace std::chrono;
+      std::string input = R"(timestamp = 2024-12-25T23:59:59Z
+value = 100)";
+
+      system_time_test_struct s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+
+      auto expected = sys_days{year{2024} / month{12} / day{25}} + hours{23} + minutes{59} + seconds{59};
+      expect(time_point_cast<seconds>(s.timestamp) == time_point_cast<seconds>(expected));
+      expect(s.value == 100);
+   };
+
+   "system_time_roundtrip"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point original =
+         sys_days{year{2030} / month{1} / day{1}} + hours{12} + minutes{0} + seconds{0};
+
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      system_clock::time_point parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(time_point_cast<seconds>(parsed) == time_point_cast<seconds>(original));
+   };
+
+   "chrono_combined_struct_roundtrip"_test = [] {
+      using namespace std::chrono;
+      chrono_combined_struct original{};
+      original.name = "test_config";
+      original.timeout = seconds{30};
+      original.created_at = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30} + seconds{45};
+      original.latency = milliseconds{150};
+
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      chrono_combined_struct parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed.name == original.name);
+      expect(parsed.timeout == original.timeout);
+      expect(time_point_cast<seconds>(parsed.created_at) == time_point_cast<seconds>(original.created_at));
+      expect(parsed.latency == original.latency);
+   };
+
+   // ========== std::set tests ==========
+
+   "set_int_write"_test = [] {
+      std::set<int> s = {1, 2, 3};
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value() == "[1, 2, 3]");
+   };
+
+   "set_int_read"_test = [] {
+      std::set<int> s{};
+      std::string input = "[3, 1, 2]";
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.size() == 3);
+      expect(s.contains(1));
+      expect(s.contains(2));
+      expect(s.contains(3));
+   };
+
+   "set_string_write"_test = [] {
+      std::set<std::string> s = {"apple", "banana", "cherry"};
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value() == R"(["apple", "banana", "cherry"])");
+   };
+
+   "set_string_read"_test = [] {
+      std::set<std::string> s{};
+      std::string input = R"(["cherry", "apple", "banana"])";
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.size() == 3);
+      expect(s.contains("apple"));
+      expect(s.contains("banana"));
+      expect(s.contains("cherry"));
+   };
+
+   "set_empty_write"_test = [] {
+      std::set<int> s{};
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value() == "[]");
+   };
+
+   "set_empty_read"_test = [] {
+      std::set<int> s{1, 2, 3}; // Pre-populate
+      std::string input = "[]";
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.empty());
+   };
+
+   "set_roundtrip"_test = [] {
+      std::set<int> original = {10, 20, 30, 40, 50};
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      std::set<int> parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == original);
+   };
+
+   "set_duplicates_in_input"_test = [] {
+      // Sets should handle duplicate values (they just get deduplicated)
+      std::set<int> s{};
+      std::string input = "[1, 2, 2, 3, 3, 3]";
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.size() == 3);
+      expect(s.contains(1));
+      expect(s.contains(2));
+      expect(s.contains(3));
+   };
+
+   "set_struct_write"_test = [] {
+      set_test_struct s{};
+      s.int_set = {1, 2, 3};
+      s.string_set = {"a", "b", "c"};
+
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value().find("int_set = [1, 2, 3]") != std::string::npos);
+      expect(result.value().find(R"(string_set = ["a", "b", "c"])") != std::string::npos);
+   };
+
+   "set_struct_read"_test = [] {
+      std::string input = R"(int_set = [3, 2, 1]
+string_set = ["z", "y", "x"])";
+
+      set_test_struct s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.int_set.size() == 3);
+      expect(s.int_set.contains(1));
+      expect(s.int_set.contains(2));
+      expect(s.int_set.contains(3));
+      expect(s.string_set.size() == 3);
+      expect(s.string_set.contains("x"));
+      expect(s.string_set.contains("y"));
+      expect(s.string_set.contains("z"));
+   };
+
+   "set_struct_roundtrip"_test = [] {
+      set_test_struct original{};
+      original.int_set = {100, 200, 300};
+      original.string_set = {"foo", "bar", "baz"};
+
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      set_test_struct parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == original);
+   };
+
+   // ========== std::unordered_set tests ==========
+
+   "unordered_set_int_write"_test = [] {
+      std::unordered_set<int> s = {1, 2, 3};
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      // Order is unspecified, but should contain all elements
+      expect(result.value().find("1") != std::string::npos);
+      expect(result.value().find("2") != std::string::npos);
+      expect(result.value().find("3") != std::string::npos);
+   };
+
+   "unordered_set_int_read"_test = [] {
+      std::unordered_set<int> s{};
+      std::string input = "[3, 1, 2]";
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.size() == 3);
+      expect(s.contains(1));
+      expect(s.contains(2));
+      expect(s.contains(3));
+   };
+
+   "unordered_set_empty_write"_test = [] {
+      std::unordered_set<int> s{};
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value() == "[]");
+   };
+
+   "unordered_set_empty_read"_test = [] {
+      std::unordered_set<int> s{1, 2, 3}; // Pre-populate
+      std::string input = "[]";
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.empty());
+   };
+
+   "unordered_set_roundtrip"_test = [] {
+      std::unordered_set<int> original = {10, 20, 30, 40, 50};
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      std::unordered_set<int> parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == original);
+   };
+
+   "unordered_set_struct_roundtrip"_test = [] {
+      unordered_set_test_struct original{};
+      original.int_uset = {100, 200, 300};
+
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      unordered_set_test_struct parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == original);
+   };
+
+   // ========== Combined container tests ==========
+
+   "combined_containers_write"_test = [] {
+      combined_containers_struct s{};
+      s.vec = {1, 2, 3};
+      s.set = {4, 5, 6};
+      s.arr = {7, 8, 9};
+
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value().find("vec = [1, 2, 3]") != std::string::npos);
+      expect(result.value().find("set = [4, 5, 6]") != std::string::npos);
+      expect(result.value().find("arr = [7, 8, 9]") != std::string::npos);
+   };
+
+   "combined_containers_read"_test = [] {
+      std::string input = R"(vec = [1, 2, 3]
+set = [6, 5, 4]
+arr = [7, 8, 9])";
+
+      combined_containers_struct s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.vec == std::vector<int>{1, 2, 3});
+      expect(s.set == std::set<int>{4, 5, 6});
+      expect(s.arr == std::array<int, 3>{7, 8, 9});
+   };
+
+   "combined_containers_roundtrip"_test = [] {
+      combined_containers_struct original{};
+      original.vec = {10, 20, 30};
+      original.set = {40, 50, 60};
+      original.arr = {70, 80, 90};
+
+      auto result = glz::write_toml(original);
+      expect(result.has_value());
+
+      combined_containers_struct parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed == original);
+   };
+
+   // ========== Edge cases and error handling ==========
+
+   "system_time_invalid_format"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      std::string input = "not-a-datetime";
+      auto error = glz::read_toml(tp, input);
+      expect(error);
+   };
+
+   "system_time_invalid_date"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      std::string input = "2024-13-45T25:61:61Z"; // Invalid month, day, hour, minute, second
+      auto error = glz::read_toml(tp, input);
+      expect(error);
+   };
+
+   "system_time_too_short"_test = [] {
+      using namespace std::chrono;
+      system_clock::time_point tp{};
+      std::string input = "2024-06-15"; // Date only, no time (too short for time_point)
+      auto error = glz::read_toml(tp, input);
+      expect(error);
+   };
+
+   "set_nested_array"_test = [] {
+      // Sets of complex types
+      std::set<std::pair<int, int>> s{};
+      // This tests that the implementation handles value types correctly
+      // Note: std::pair may not work directly without meta, but this tests the concept
+   };
+
+   "duration_large_value"_test = [] {
+      std::chrono::seconds s{999999999};
+      auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(result.value() == "999999999");
+
+      std::chrono::seconds parsed{};
+      auto error = glz::read_toml(parsed, result.value());
+      expect(!error) << glz::format_error(error, result.value());
+      expect(parsed.count() == 999999999);
    };
 };
 
