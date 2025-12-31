@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <limits>
 #include <ostream>
@@ -68,8 +69,16 @@ namespace glz
       ~basic_ostream_buffer() = default;
 
       // Element access - maps logical position to physical buffer
-      reference operator[](size_t ix) { return buffer_[ix - flush_offset_]; }
-      const_reference operator[](size_t ix) const { return buffer_[ix - flush_offset_]; }
+      reference operator[](size_t ix)
+      {
+         assert(ix >= flush_offset_ && "Index before flush offset");
+         return buffer_[ix - flush_offset_];
+      }
+      const_reference operator[](size_t ix) const
+      {
+         assert(ix >= flush_offset_ && "Index before flush offset");
+         return buffer_[ix - flush_offset_];
+      }
 
       // Current logical size
       size_t size() const noexcept { return logical_size_; }
@@ -77,13 +86,10 @@ namespace glz
       // Resize - called by serialization when more space is needed
       void resize(size_t new_size)
       {
-         // The actual write end position is new_size/2 (due to Glaze's 2x pattern)
-         const size_t actual_write_end = new_size / 2;
-
-         if (actual_write_end > buffer_.size() + flush_offset_) {
-            buffer_.resize(actual_write_end - flush_offset_);
+         // Ensure buffer can hold data from flush_offset_ to new_size
+         if (new_size > buffer_.size() + flush_offset_) {
+            buffer_.resize(new_size - flush_offset_);
          }
-
          logical_size_ = new_size;
       }
 
