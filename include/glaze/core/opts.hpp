@@ -478,12 +478,12 @@ namespace glz
       return ret;
    }
 
-   // For linear_search mode, skip ws_handled optimization to reduce template instantiations
+   // Skip ws_handled optimization when minified (skip_ws is a no-op, so the flag is pointless)
    template <auto Opts>
    constexpr auto ws_handled()
    {
-      if constexpr (check_linear_search(Opts)) {
-         return Opts; // Don't set ws_handled flag to avoid duplicate instantiations
+      if constexpr (Opts.minified) {
+         return Opts;
       }
       else {
          auto ret = Opts;
