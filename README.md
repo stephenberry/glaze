@@ -199,13 +199,13 @@ The CMake has the option `glaze_ENABLE_AVX2`. This will attempt to use `AVX2` SI
 
 ### Disable Forced Inlining
 
-For reduced binary size and faster compilation at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
+For faster compilation at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
 
 ```cmake
 set(glaze_DISABLE_ALWAYS_INLINE ON)
 ```
 
-See [Optimizing Performance](https://stephenberry.github.io/glaze/optimizing-performance/) for more details.
+> **Note:** This primarily reduces compilation time, not binary size. For binary size reduction, use the `linear_search` option. See [Optimizing Performance](https://stephenberry.github.io/glaze/optimizing-performance/) for more details.
 
 ## How To Use Glaze
 
