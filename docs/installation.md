@@ -165,6 +165,29 @@ For cross-compilation to ARM or other architectures:
 set(glaze_ENABLE_AVX2 OFF)
 ```
 
+### Disable Forced Inlining
+
+By default, Glaze uses compiler-specific attributes (`__attribute__((always_inline))` on GCC/Clang, `[[msvc::forceinline]]` on MSVC) to force inlining of performance-critical functions. This maximizes runtime performance but increases binary size and compilation time.
+
+To disable forced inlining:
+
+```cmake
+set(glaze_DISABLE_ALWAYS_INLINE ON)
+FetchContent_MakeAvailable(glaze)
+```
+
+Or define the macro directly before including Glaze headers:
+```cpp
+#define GLZ_DISABLE_ALWAYS_INLINE
+#include "glaze/glaze.hpp"
+```
+
+When disabled, `GLZ_ALWAYS_INLINE` and `GLZ_FLATTEN` fall back to regular `inline` hints, allowing the compiler to make its own inlining decisions. This is useful when:
+- Binary size is a concern
+- Compilation time is a priority
+- You're building for debug or development purposes
+- Peak runtime performance is not critical
+
 ## Optional Dependencies
 
 The core Glaze library (JSON, BEVE, CSV, TOML serialization) is **header-only with no external dependencies**.

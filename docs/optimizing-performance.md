@@ -14,6 +14,22 @@ The Glaze CMake has the option `glaze_ENABLE_AVX2`. This will attempt to use `AV
 >
 > Glaze uses SIMD Within A Resgister (SWAR) for most optimizations, which are fully cross-platform and does not require any SIMD instrisics or special compiler flags. So, SIMD flags don't usually have a large impact with Glaze.
 
+## Reducing Binary Size and Compilation Time
+
+Glaze aggressively uses forced inlining (`GLZ_ALWAYS_INLINE`) for peak runtime performance. If binary size or compilation time is more important than peak performance, you can disable forced inlining:
+
+```cmake
+set(glaze_DISABLE_ALWAYS_INLINE ON)
+```
+
+Or define `GLZ_DISABLE_ALWAYS_INLINE` before including Glaze headers.
+
+This causes `GLZ_ALWAYS_INLINE` and `GLZ_FLATTEN` to fall back to regular `inline` hints, letting the compiler decide what to inline. The compiler's optimizer will still inline many hot paths, but will use its own heuristics rather than being forced.
+
+> [!NOTE]
+>
+> Forced inlining is automatically disabled in debug builds (when `NDEBUG` is not defined), so this option primarily affects release builds.
+
 ## Best Data Structures/Layout
 
 It is typically best to match the JSON and C++ object layout. C++ structs should mimic JSON objects, and vice versa.
