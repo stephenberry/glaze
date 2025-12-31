@@ -44,7 +44,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - [JSON Schema generation](https://stephenberry.github.io/glaze/json-schema/)
 - [Partial Read](https://stephenberry.github.io/glaze/partial-read/) and [Partial Write](https://stephenberry.github.io/glaze/partial-write/) support
-- [Stream I/O](https://stephenberry.github.io/glaze/writing/#reading-from-streams-basic_istream_buffer) for reading/writing large files with bounded memory
+- [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for reading/writing large files with bounded memory
 - [Much more!](#more-features)
 
 ## Performance
@@ -190,7 +190,7 @@ glz::basic_ostream_buffer<std::ofstream> buffer(file);  // Concrete type for per
 auto ec = glz::write_json(obj, buffer);
 ```
 
-The buffer flushes incrementally during serialization, enabling arbitrarily large outputs with fixed memory. See [Writing](https://stephenberry.github.io/glaze/writing/) for details on buffer types and the `byte_output_stream` concept.
+The buffer flushes incrementally during serialization, enabling arbitrarily large outputs with fixed memory. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for details on buffer types and stream concepts.
 
 ### Reading from Streams
 
@@ -206,7 +206,7 @@ for (auto&& event : glz::ndjson_stream<Event>(file)) {
 }
 ```
 
-The `json_stream_reader` reads and parses values incrementally, enabling processing of arbitrarily large streams with fixed memory. See [Writing](https://stephenberry.github.io/glaze/writing/) for details on `basic_istream_buffer` and the `byte_input_stream` concept.
+The `json_stream_reader` reads and parses values incrementally, enabling processing of arbitrarily large streams with fixed memory. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for details on `basic_istream_buffer` and the `byte_input_stream` concept.
 
 ## Compiler/System Support
 
@@ -1217,7 +1217,7 @@ auto ec = glz::read_ndjson(x, s);
 
 ### [Shared Library API](https://stephenberry.github.io/glaze/glaze-interfaces/)
 
-### [Stream I/O](https://stephenberry.github.io/glaze/writing/#reading-from-streams-basic_istream_buffer)
+### [Streaming I/O](https://stephenberry.github.io/glaze/streaming/)
 
 ### [Tagged Binary Messages](https://stephenberry.github.io/glaze/binary/)
 
