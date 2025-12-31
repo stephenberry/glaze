@@ -306,7 +306,7 @@ namespace glz
    // compare_sv checks sizes
    inline constexpr bool compare_sv(const std::string_view lhs, const std::string_view rhs) noexcept
    {
-      if (std::is_constant_evaluated()) {
+      if consteval {
          return lhs == rhs;
       }
       else {
@@ -317,7 +317,7 @@ namespace glz
    template <const std::string_view& lhs>
    inline constexpr bool compare_sv(const std::string_view rhs) noexcept
    {
-      if (std::is_constant_evaluated()) {
+      if consteval {
          return lhs == rhs;
       }
       else {

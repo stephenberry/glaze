@@ -159,7 +159,7 @@ namespace glz
    // compute 64-bit a*b
    GLZ_ALWAYS_INLINE constexpr value128 full_multiplication(uint64_t a, uint64_t b)
    {
-      if (std::is_constant_evaluated()) {
+      if consteval {
          value128 answer;
          answer.low = umul128_generic(a, b, &answer.high);
          return answer;
