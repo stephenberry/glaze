@@ -19,8 +19,7 @@ namespace glz
    //   std::ifstream file("events.ndjson");
    //   glz::json_stream_reader<Event> reader(file);
    //   Event event;
-   //   glz::error_ctx ec;
-   //   while (reader.read_next(event, ec)) {
+   //   while (!reader.read_next(event)) {
    //      process(event);
    //   }
    //
@@ -28,6 +27,7 @@ namespace glz
    //   for (auto&& event : glz::json_stream_reader<Event>(file)) {
    //      process(event);
    //   }
+   //   if (reader.last_error()) { /* handle error */ }
    //
    // Template parameters:
    //   T - The type to deserialize each value into
@@ -48,12 +48,11 @@ namespace glz
       explicit json_stream_reader(Stream& stream) : buffer_(stream) {}
 
       // Read the next complete JSON value
-      // Returns true if a value was read, false if EOF or error
-      bool read_next(T& value, error_ctx& ec)
+      // Returns error_ctx with error_code::none on success, or an error on EOF/failure
+      error_ctx read_next(T& value)
       {
          if (eof_) {
-            ec = last_error_;
-            return false;
+            return last_error_;
          }
 
          // Skip leading whitespace and newlines (for NDJSON)
@@ -61,36 +60,23 @@ namespace glz
 
          if (buffer_.eof()) {
             eof_ = true;
-            ec = {buffer_.bytes_consumed(), error_code::none};
-            last_error_ = ec;
-            return false;
+            last_error_ = {buffer_.bytes_consumed(), error_code::end_reached};
+            return last_error_;
          }
 
          // Try to read a complete value
-         ec = read_streaming<opts{}>(value, buffer_, ctx_);
+         auto ec = read_streaming<opts{}>(value, buffer_, ctx_);
 
          if (ec) {
             // Error occurred
             eof_ = true;
             last_error_ = ec;
-            return false;
+            return ec;
          }
 
          // Reset context for next value
          ctx_ = streaming_context{};
-         return true;
-      }
-
-      // Read the next value, returning it in an optional
-      // Returns std::nullopt on EOF or error
-      std::optional<T> read_next()
-      {
-         T value{};
-         error_ctx ec;
-         if (read_next(value, ec)) {
-            return value;
-         }
-         return std::nullopt;
+         return {};
       }
 
       // Check if more values might be available
@@ -150,8 +136,12 @@ namespace glz
          void advance()
          {
             if (reader_ && !at_end_) {
-               current_ = reader_->read_next();
-               if (!current_) {
+               T value{};
+               if (!reader_->read_next(value)) {
+                  current_ = std::move(value);
+               }
+               else {
+                  current_.reset();
                   at_end_ = true;
                }
             }
@@ -203,12 +193,11 @@ namespace glz
    [[nodiscard]] error_ctx read_json_stream(std::vector<T>& values, Stream& stream)
    {
       json_stream_reader<T, Stream> reader(stream);
-      error_ctx ec;
       T value;
-      while (reader.read_next(value, ec)) {
+      while (!reader.read_next(value)) {
          values.push_back(std::move(value));
       }
-      return ec;
+      return reader.last_error();
    }
 
 } // namespace glz

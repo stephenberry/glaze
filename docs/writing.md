@@ -36,7 +36,7 @@ if (ec) {
     std::cerr << glz::format_error(ec, buffer) << '\n';
     return;
 }
-// Success: buffer.size() == ec.count
+// Success: for resizable buffers, buffer.size() == ec.count
 std::cout << "Wrote " << ec.count << " bytes\n";
 ```
 

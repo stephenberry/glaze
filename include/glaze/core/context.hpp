@@ -110,6 +110,7 @@ namespace glz
 
    // Runtime context for configuration
    // We do not template the context on iterators so that it can be easily shared across buffer implementations
+   // Not final: streaming_context inherits from this to add streaming-specific state
    struct context
    {
       error_code error{};

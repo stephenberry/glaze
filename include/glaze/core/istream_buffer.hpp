@@ -37,6 +37,13 @@ namespace glz
    //   Stream - Byte-oriented input stream (must satisfy byte_input_stream concept)
    //   DefaultCapacity - Buffer size in bytes (default 64KB).
    //                     Larger values reduce refill frequency but use more memory.
+   //
+   // EOF Detection:
+   //   This buffer detects end-of-stream when gcount() returns 0, not by checking
+   //   eofbit directly. This provides robustness against stream implementations that
+   //   may set eofbit before all data is exhausted. The eofbit is cleared after each
+   //   successful read to allow continued reading. For standard file streams, this
+   //   has no practical impact beyond one extra read attempt at EOF.
 
    template <byte_input_stream Stream, size_t DefaultCapacity = 65536>
    class basic_istream_buffer
@@ -110,9 +117,8 @@ namespace glz
                eof_reached_ = true;
             }
             else if (stream_->eof()) {
-               // Stream returned fewer bytes than requested but did return some data.
-               // For slow streams, this doesn't necessarily mean true EOF - clear the
-               // error state and try again. True EOF will be detected when bytes_read == 0.
+               // Stream set eofbit but returned data. Clear eofbit to allow retry.
+               // True EOF is detected above when bytes_read == 0.
                stream_->clear();
             }
          }

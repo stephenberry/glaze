@@ -10,8 +10,21 @@
 
 namespace glz
 {
-   // Type-erased interface for streaming buffer operations
-   // Allows parsers to trigger refill without knowing the concrete buffer type
+   // Type-erased interface for streaming buffer operations.
+   // Allows parsers to trigger refill without knowing the concrete buffer type.
+   //
+   // Design Note:
+   //   This uses function pointers for type erasure rather than templates. This prevents
+   //   the core parsing logic from being templated on buffer type, avoiding code bloat
+   //   and compile time increases. The trade-off is that function pointer calls cannot
+   //   be inlined. In practice, this overhead is negligible because:
+   //   - These functions are called infrequently relative to parsing work
+   //   - I/O latency (disk/network) dominates CPU overhead
+   //   - The function bodies are trivial (return pointer/size)
+   //
+   //   Streaming parsing is inherently slower than buffer-based parsing due to this
+   //   overhead and the need to handle data spanning buffer boundaries. Users choosing
+   //   streaming trade some performance for bounded memory usage.
    struct streaming_state
    {
       void* buffer_ptr = nullptr;
