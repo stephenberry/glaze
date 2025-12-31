@@ -20,6 +20,7 @@ namespace glz
    {
       static constexpr bool is_resizable = resizable<std::remove_cvref_t<Buffer>>;
       static constexpr bool has_bounded_capacity = !is_resizable && has_size<std::remove_cvref_t<Buffer>>;
+      static constexpr bool is_streaming = false; // True for buffers that support incremental flushing
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(const Buffer& b) noexcept
       {
@@ -57,7 +58,22 @@ namespace glz
          }
          // For fixed buffers: no-op, count is returned in result
       }
+
+      // Flush written data to underlying storage (for streaming buffers)
+      // Default: no-op for regular buffers
+      GLZ_ALWAYS_INLINE static void flush([[maybe_unused]] Buffer& b, [[maybe_unused]] size_t written) noexcept {}
    };
+
+   // Concept to check if a buffer type supports streaming
+   template <class B>
+   concept is_streaming = buffer_traits<std::remove_cvref_t<B>>::is_streaming;
+
+   // Flush helper for streaming buffers
+   template <class B>
+   GLZ_ALWAYS_INLINE void flush_buffer(B&& b, size_t written) noexcept
+   {
+      buffer_traits<std::remove_cvref_t<B>>::flush(b, written);
+   }
 
    // Specialization for raw char pointers
    // Raw pointers have unknown capacity and must trust the caller
@@ -66,6 +82,7 @@ namespace glz
    {
       static constexpr bool is_resizable = false;
       static constexpr bool has_bounded_capacity = false;
+      static constexpr bool is_streaming = false;
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(char*) noexcept
       {
@@ -86,6 +103,7 @@ namespace glz
    {
       static constexpr bool is_resizable = false;
       static constexpr bool has_bounded_capacity = true;
+      static constexpr bool is_streaming = false;
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(const std::span<T, Extent>& b) noexcept { return b.size(); }
 
@@ -103,6 +121,7 @@ namespace glz
    {
       static constexpr bool is_resizable = false;
       static constexpr bool has_bounded_capacity = true;
+      static constexpr bool is_streaming = false;
       static constexpr size_t static_capacity = N;
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(const std::array<T, N>&) noexcept { return N; }

@@ -93,6 +93,75 @@ if (!ec) {
 }
 ```
 
+### Writing to Streams (`basic_ostream_buffer`)
+
+For writing directly to files or other output streams, use `glz::basic_ostream_buffer`:
+
+```cpp
+#include "glaze/core/ostream_buffer.hpp"
+
+// Write to file with concrete type (enables devirtualization)
+std::ofstream file("output.json");
+glz::basic_ostream_buffer<std::ofstream> buffer(file);
+auto ec = glz::write_json(obj, buffer);
+if (ec || !file.good()) {
+    // Handle error
+}
+
+// Write to any std::ostream (polymorphic)
+std::ostringstream oss;
+glz::ostream_buffer<> buffer2(oss);  // Alias for basic_ostream_buffer<std::ostream>
+glz::write_json(obj, buffer2);
+std::string result = oss.str();
+```
+
+The buffer accumulates serialized data internally and flushes incrementally to the stream during serialization. This enables bounded memory usage for arbitrarily large outputs.
+
+**Template parameters:**
+
+```cpp
+// basic_ostream_buffer<Stream, Capacity>
+// - Stream: Output stream type (must satisfy byte_output_stream concept)
+// - Capacity: Initial buffer size in bytes (default 64KB)
+
+// Concrete stream type for potential devirtualization
+glz::basic_ostream_buffer<std::ofstream> buf1(file);
+
+// Concrete type with custom capacity
+glz::basic_ostream_buffer<std::ofstream, 4096> buf2(file);  // 4KB
+
+// Polymorphic (works with any std::ostream derivative)
+glz::ostream_buffer<> buf3(any_ostream);           // 64KB default
+glz::ostream_buffer<4096> buf4(any_ostream);       // 4KB
+glz::ostream_buffer<262144> buf5(any_ostream);     // 256KB
+```
+
+**The `byte_output_stream` concept:**
+
+Only byte-oriented streams are supported. Wide character streams (`std::wostream`, `std::wofstream`) are rejected at compile time:
+
+```cpp
+// OK - byte streams
+static_assert(glz::byte_output_stream<std::ostream>);
+static_assert(glz::byte_output_stream<std::ofstream>);
+static_assert(glz::byte_output_stream<std::ostringstream>);
+
+// Compile error - wide streams not supported (JSON is UTF-8)
+// glz::basic_ostream_buffer<std::wostream> bad(wstream);  // Error!
+```
+
+**Checking stream state:**
+
+```cpp
+glz::basic_ostream_buffer<std::ofstream> buffer(file);
+auto ec = glz::write_json(obj, buffer);
+
+// Check if stream is still healthy after write
+if (!ec && buffer.good()) {
+    // Success
+}
+```
+
 ## Buffer Overflow Handling
 
 When writing to a fixed-size buffer that's too small, Glaze returns `error_code::buffer_overflow`:

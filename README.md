@@ -177,6 +177,20 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 >
 > The file name (2nd argument), must be null terminated.
 
+### Writing to Streams
+
+For streaming to `std::ostream` destinations (files, network, etc.) with bounded memory:
+
+```c++
+#include "glaze/core/ostream_buffer.hpp"
+
+std::ofstream file("output.json");
+glz::basic_ostream_buffer<std::ofstream> buffer(file);  // Concrete type for performance
+auto ec = glz::write_json(obj, buffer);
+```
+
+The buffer flushes incrementally during serialization, enabling arbitrarily large outputs with fixed memory. See [Writing](https://stephenberry.github.io/glaze/writing/) for details on buffer types and the `byte_output_stream` concept.
+
 ## Compiler/System Support
 
 - Requires C++23

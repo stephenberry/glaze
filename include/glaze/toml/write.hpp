@@ -557,6 +557,9 @@ namespace glz
       }
       std::memcpy(&b[ix], ", ", 2);
       ix += 2;
+      if constexpr (is_streaming<B>) {
+         flush_buffer(b, ix);
+      }
    }
 
    template <auto Opts, bool minified_check = true, class B>
@@ -565,6 +568,9 @@ namespace glz
    {
       std::memcpy(&b[ix], "\n", 1);
       ++ix;
+      if constexpr (is_streaming<B>) {
+         flush_buffer(b, ix);
+      }
    }
 
    template <class T>

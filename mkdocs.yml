@@ -103,7 +103,7 @@ nav:
    - Partial Read/Write:
      - Partial Read: partial-read.md
      - Partial Write: partial-write.md
-   - Write Result & Buffer Handling: write-result.md
+   - Writing: writing.md
    - Max Float Precision: max-float-precision.md
    - Ranges: ranges.md
  - Networking:

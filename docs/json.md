@@ -215,7 +215,7 @@ On error, `count` indicates where the parse error occurred, which `format_error`
 
 ### Bytes Written (Write Operations)
 
-Write operations return `error_ctx` with a `count` field. See [Error Context and Buffer Handling](./write-result.md) for details.
+Write operations return `error_ctx` with a `count` field. See [Writing](./writing.md) for details.
 
 ### Input Buffer Requirements
 
@@ -616,7 +616,7 @@ auto ec = glz::read<strict_opts>(obj, json_data);
 
 ## See Also
 
-- [Error Context and Buffer Handling](./write-result.md) - Understanding `error_ctx` and fixed-buffer support
+- [Writing](./writing.md) - Understanding `error_ctx` and buffer handling
 - [Generic JSON](./generic-json.md) - Working with `glz::generic` for dynamic JSON
 - [JSON Patch (RFC 6902)](./json-patch.md) - Apply structured patches to JSON documents
 - [JSON Merge Patch (RFC 7386)](./json-merge-patch.md) - Apply partial updates to JSON documents

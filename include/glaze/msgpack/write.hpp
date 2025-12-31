@@ -8,6 +8,7 @@
 #include <limits>
 #include <utility>
 
+#include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/seek.hpp"
@@ -421,6 +422,9 @@ namespace glz
             for_each<N>([&]<size_t I>() {
                if constexpr (!std::same_as<field_t<T, I>, hidden> && !std::same_as<field_t<T, I>, skip>) {
                   serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                  if constexpr (is_streaming<decltype(b)>) {
+                     flush_buffer(b, ix);
+                  }
                }
             });
          }
@@ -432,6 +436,9 @@ namespace glz
                   msgpack::detail::write_str_header(key.size(), b, ix);
                   msgpack::detail::dump_raw_bytes(key.data(), key.size(), b, ix);
                   serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                  if constexpr (is_streaming<decltype(b)>) {
+                     flush_buffer(b, ix);
+                  }
                }
             });
          }
@@ -459,6 +466,9 @@ namespace glz
          for (auto&& item : value) {
             serialize<MSGPACK>::op<Opts>(item.first, ctx, b, ix);
             serialize<MSGPACK>::op<Opts>(item.second, ctx, b, ix);
+            if constexpr (is_streaming<decltype(b)>) {
+               flush_buffer(b, ix);
+            }
          }
       }
    };
@@ -483,6 +493,9 @@ namespace glz
          msgpack::detail::write_array_header(value.size(), b, ix);
          for (auto&& element : value) {
             serialize<MSGPACK>::op<Opts>(element, ctx, b, ix);
+            if constexpr (is_streaming<decltype(b)>) {
+               flush_buffer(b, ix);
+            }
          }
       }
    };

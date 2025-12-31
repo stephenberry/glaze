@@ -706,6 +706,9 @@ namespace glz
 
             for (auto&& x : value) {
                serialize<BEVE>::op<Opts>(x, ctx, b, ix);
+               if constexpr (is_streaming<decltype(b)>) {
+                  flush_buffer(b, ix);
+               }
             }
          }
       }
@@ -749,18 +752,21 @@ namespace glz
    template <writable_map_t T>
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      static auto op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static auto op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          using Key = typename T::key_type;
 
          constexpr uint8_t tag = beve_key_traits<Key>::header;
-         dump_type(tag, args...);
+         dump_type(tag, b, ix);
 
-         dump_compressed_int<Opts>(value.size(), args...);
+         dump_compressed_int<Opts>(value.size(), b, ix);
          for (auto&& [k, v] : value) {
-            serialize<BEVE>::no_header<Opts>(k, ctx, args...);
-            serialize<BEVE>::op<Opts>(v, ctx, args...);
+            serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+            serialize<BEVE>::op<Opts>(v, ctx, b, ix);
+            if constexpr (is_streaming<B>) {
+               flush_buffer(b, ix);
+            }
          }
       }
    };
@@ -1080,6 +1086,9 @@ namespace glz
                   }();
 
                   serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
+                  if constexpr (is_streaming<decltype(b)>) {
+                     flush_buffer(b, ix);
+                  }
                }
             });
          }
@@ -1110,6 +1119,9 @@ namespace glz
                   }();
 
                   serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
+                  if constexpr (is_streaming<decltype(b)>) {
+                     flush_buffer(b, ix);
+                  }
                }
             });
          }

@@ -108,6 +108,9 @@ namespace glz
          std::memcpy(&b[ix], ",", 1);
          ++ix;
       }
+      if constexpr (is_streaming<B>) {
+         flush_buffer(b, ix);
+      }
    }
 
    // Only object types are supported for partial
@@ -1162,6 +1165,9 @@ namespace glz
          std::memcpy(&b[ix], ",", 1);
          ++ix;
       }
+      if constexpr (is_streaming<B>) {
+         flush_buffer(b, ix);
+      }
    }
 
    // "key":value pair output
@@ -1271,6 +1277,9 @@ namespace glz
                      std::memcpy(&b[ix], ",", 1);
                      ++ix;
                   }
+                  if constexpr (is_streaming<B>) {
+                     flush_buffer(b, ix);
+                  }
 
                   to<JSON, val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
                }
@@ -1361,6 +1370,9 @@ namespace glz
                      else {
                         std::memcpy(&b[ix], ",", 1);
                         ++ix;
+                     }
+                     if constexpr (is_streaming<B>) {
+                        flush_buffer(b, ix);
                      }
 
                      to<JSON, val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
@@ -2159,6 +2171,9 @@ namespace glz
                         else {
                            std::memcpy(&b[ix], ",", 1);
                            ++ix;
+                        }
+                        if constexpr (is_streaming<B>) {
+                           flush_buffer(b, ix);
                         }
                      }
 
