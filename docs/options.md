@@ -148,7 +148,7 @@ When `true` (default), Glaze assumes input buffers are null-terminated, enabling
 Enable JSONC-style comment parsing (`//` and `/* */`).
 
 #### `minified`
-When `true`, assumes input JSON has no unnecessary whitespace. Provides faster parsing but will fail on prettified input.
+When `true`, assumes input JSON has no unnecessary whitespace. This skips all whitespace checking during parsing, providing faster performance and slightly smaller binary size. Will fail on prettified input with whitespace between tokens.
 
 ### Validation Options
 

@@ -2057,7 +2057,7 @@ namespace glz
                return N; // error
             }
             uint16_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 2; ++i) {
                   h |= static_cast<uint16_t>(it[i]) << (8 * i);
@@ -2076,7 +2076,7 @@ namespace glz
                return N;
             }
             uint32_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 4; ++i) {
                   h |= static_cast<uint32_t>(it[i]) << (8 * i);
@@ -2095,7 +2095,7 @@ namespace glz
                return N;
             }
             uint64_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 8; ++i) {
                   h |= static_cast<uint64_t>(it[i]) << (8 * i);
@@ -2303,7 +2303,7 @@ namespace glz
       {
          if constexpr (HashInfo.front_hash_bytes == 2) {
             uint16_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 2; ++i) {
                   h |= static_cast<uint16_t>(it[i]) << (8 * i);
@@ -2319,7 +2319,7 @@ namespace glz
          }
          else if constexpr (HashInfo.front_hash_bytes == 4) {
             uint32_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 4; ++i) {
                   h |= static_cast<uint32_t>(it[i]) << (8 * i);
@@ -2335,7 +2335,7 @@ namespace glz
          }
          else if constexpr (HashInfo.front_hash_bytes == 8) {
             uint64_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 8; ++i) {
                   h |= static_cast<uint64_t>(it[i]) << (8 * i);
