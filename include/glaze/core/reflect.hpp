@@ -2000,14 +2000,8 @@ namespace glz
                   }
                }
                // Avoids using a hash table
-               if consteval {
-                  constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-                  return size_t(bool(it[uindex] ^ first_key_char));
-               }
-               else {
-                  static constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-                  return size_t(bool(it[uindex] ^ first_key_char));
-               }
+               constexpr auto first_key_char = reflect<T>::keys[0][uindex];
+               return size_t(bool(it[uindex] ^ first_key_char));
             }
             else {
                if constexpr (uindex > 0) {
@@ -2035,14 +2029,8 @@ namespace glz
             }
          }
          // Avoids using a hash table
-         if consteval {
-            constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
-         }
-         else {
-            static constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
-         }
+         constexpr auto first_key_char = reflect<T>::keys[0][uindex];
+         return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
       }
    };
 
@@ -2251,14 +2239,8 @@ namespace glz
                   return N; // error
                }
                // Avoids using a hash table
-               if consteval {
-                  constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-                  return size_t(bool(it[uindex] ^ first_key_char));
-               }
-               else {
-                  static constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-                  return size_t(bool(it[uindex] ^ first_key_char));
-               }
+               constexpr auto first_key_char = reflect<T>::keys[0][uindex];
+               return size_t(bool(it[uindex] ^ first_key_char));
             }
             else {
                if ((it + uindex) >= end) [[unlikely]] {
@@ -2284,14 +2266,8 @@ namespace glz
             }
          }
          // Avoids using a hash table
-         if consteval {
-            constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
-         }
-         else {
-            static constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
-         }
+         constexpr auto first_key_char = reflect<T>::keys[0][uindex];
+         return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
       }
    };
 
