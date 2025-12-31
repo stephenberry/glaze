@@ -706,7 +706,7 @@ namespace glz
 
             for (auto&& x : value) {
                serialize<BEVE>::op<Opts>(x, ctx, b, ix);
-               if constexpr (is_streaming<decltype(b)>) {
+               if constexpr (is_output_streaming<decltype(b)>) {
                   flush_buffer(b, ix);
                }
             }
@@ -764,7 +764,7 @@ namespace glz
          for (auto&& [k, v] : value) {
             serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
             serialize<BEVE>::op<Opts>(v, ctx, b, ix);
-            if constexpr (is_streaming<B>) {
+            if constexpr (is_output_streaming<B>) {
                flush_buffer(b, ix);
             }
          }
@@ -1086,7 +1086,7 @@ namespace glz
                   }();
 
                   serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
-                  if constexpr (is_streaming<decltype(b)>) {
+                  if constexpr (is_output_streaming<decltype(b)>) {
                      flush_buffer(b, ix);
                   }
                }
@@ -1119,7 +1119,7 @@ namespace glz
                   }();
 
                   serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
-                  if constexpr (is_streaming<decltype(b)>) {
+                  if constexpr (is_output_streaming<decltype(b)>) {
                      flush_buffer(b, ix);
                   }
                }

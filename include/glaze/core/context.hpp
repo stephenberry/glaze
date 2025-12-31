@@ -110,7 +110,7 @@ namespace glz
 
    // Runtime context for configuration
    // We do not template the context on iterators so that it can be easily shared across buffer implementations
-   struct context final
+   struct context
    {
       error_code error{};
       std::string_view custom_error_message;
@@ -123,6 +123,10 @@ namespace glz
       // because debuggers like jumping to std::string_view initialization calls
    };
 
+   // Concept for any context type (base or streaming)
    template <class T>
-   concept is_context = std::same_as<std::decay_t<T>, context>;
+   concept is_context = requires(T& ctx) {
+      { ctx.error } -> std::same_as<error_code&>;
+      { ctx.indentation_level } -> std::same_as<uint32_t&>;
+   };
 }

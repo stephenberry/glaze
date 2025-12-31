@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/core/as_array_wrapper.hpp"
+#include "glaze/core/istream_buffer.hpp"
 #include "glaze/core/manage.hpp"
 #include "glaze/core/wrapper_traits.hpp"
 #include "glaze/json/escape_unicode.hpp"
@@ -13,6 +14,7 @@
 #include "glaze/json/jmespath.hpp"
 #include "glaze/json/json_concepts.hpp"
 #include "glaze/json/json_ptr.hpp"
+#include "glaze/json/json_stream.hpp"
 #include "glaze/json/max_write_precision.hpp"
 #include "glaze/json/minify.hpp"
 #include "glaze/json/ndjson.hpp"

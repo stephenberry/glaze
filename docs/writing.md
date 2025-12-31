@@ -162,6 +162,110 @@ if (!ec && buffer.good()) {
 }
 ```
 
+### Reading from Streams (`basic_istream_buffer`)
+
+For reading directly from files or other input streams, use `glz::basic_istream_buffer`:
+
+```cpp
+#include "glaze/core/istream_buffer.hpp"
+
+// Read from file with concrete type (enables devirtualization)
+std::ifstream file("input.json");
+glz::basic_istream_buffer<std::ifstream> buffer(file);
+my_struct obj;
+auto ec = glz::read_streaming<glz::opts{}>(obj, buffer);
+if (ec) {
+    // Handle error
+}
+
+// Read from any std::istream (polymorphic)
+std::istringstream iss(json_string);
+glz::istream_buffer<> buffer2(iss);  // Alias for basic_istream_buffer<std::istream>
+glz::read_streaming<glz::opts{}>(obj, buffer2);
+```
+
+The buffer reads chunks from the stream and presents them as contiguous memory to the parser. When more data is needed, it refills automatically.
+
+**Template parameters:**
+
+```cpp
+// basic_istream_buffer<Stream, Capacity>
+// - Stream: Input stream type (must satisfy byte_input_stream concept)
+// - Capacity: Buffer size in bytes (default 64KB)
+
+// Concrete stream type for potential devirtualization
+glz::basic_istream_buffer<std::ifstream> buf1(file);
+
+// Concrete type with custom capacity
+glz::basic_istream_buffer<std::ifstream, 4096> buf2(file);  // 4KB
+
+// Polymorphic (works with any std::istream derivative)
+glz::istream_buffer<> buf3(any_istream);           // 64KB default
+glz::istream_buffer<4096> buf4(any_istream);       // 4KB
+```
+
+**The `byte_input_stream` concept:**
+
+Only byte-oriented streams are supported. Wide character streams (`std::wistream`, `std::wifstream`) are rejected at compile time:
+
+```cpp
+// OK - byte streams
+static_assert(glz::byte_input_stream<std::istream>);
+static_assert(glz::byte_input_stream<std::ifstream>);
+static_assert(glz::byte_input_stream<std::istringstream>);
+
+// Compile error - wide streams not supported (JSON is UTF-8)
+// glz::basic_istream_buffer<std::wistream> bad(wstream);  // Error!
+```
+
+### Streaming JSON/NDJSON with `json_stream_reader`
+
+For processing streams of JSON objects (NDJSON or multiple JSON values), use `json_stream_reader`:
+
+```cpp
+#include "glaze/json/json_stream.hpp"
+
+struct Event {
+    int id;
+    std::string type;
+};
+
+// Manual iteration
+std::ifstream file("events.ndjson");
+glz::json_stream_reader<Event> reader(file);
+Event event;
+glz::error_ctx ec;
+while (reader.read_next(event, ec)) {
+    process(event);
+}
+
+// Range-based for loop
+std::ifstream file2("events.ndjson");
+for (auto&& event : glz::json_stream_reader<Event>(file2)) {
+    process(event);
+}
+
+// Using the ndjson_stream alias
+for (auto&& event : glz::ndjson_stream<Event>(file)) {
+    process(event);
+}
+```
+
+**Convenience function for reading all values:**
+
+```cpp
+std::ifstream file("events.ndjson");
+std::vector<Event> events;
+auto ec = glz::read_json_stream(events, file);
+```
+
+**Key features:**
+
+- Processes one complete value at a time (bounded memory)
+- Supports NDJSON (newline-delimited) and consecutive JSON values
+- Iterator interface for range-based for loops
+- Automatic whitespace/newline skipping between values
+
 ## Buffer Overflow Handling
 
 When writing to a fixed-size buffer that's too small, Glaze returns `error_code::buffer_overflow`:

@@ -108,7 +108,7 @@ namespace glz
          std::memcpy(&b[ix], ",", 1);
          ++ix;
       }
-      if constexpr (is_streaming<B>) {
+      if constexpr (is_output_streaming<B>) {
          flush_buffer(b, ix);
       }
    }
@@ -1165,7 +1165,7 @@ namespace glz
          std::memcpy(&b[ix], ",", 1);
          ++ix;
       }
-      if constexpr (is_streaming<B>) {
+      if constexpr (is_output_streaming<B>) {
          flush_buffer(b, ix);
       }
    }
@@ -1277,7 +1277,7 @@ namespace glz
                      std::memcpy(&b[ix], ",", 1);
                      ++ix;
                   }
-                  if constexpr (is_streaming<B>) {
+                  if constexpr (is_output_streaming<B>) {
                      flush_buffer(b, ix);
                   }
 
@@ -1371,7 +1371,7 @@ namespace glz
                         std::memcpy(&b[ix], ",", 1);
                         ++ix;
                      }
-                     if constexpr (is_streaming<B>) {
+                     if constexpr (is_output_streaming<B>) {
                         flush_buffer(b, ix);
                      }
 
@@ -2172,7 +2172,7 @@ namespace glz
                            std::memcpy(&b[ix], ",", 1);
                            ++ix;
                         }
-                        if constexpr (is_streaming<B>) {
+                        if constexpr (is_output_streaming<B>) {
                            flush_buffer(b, ix);
                         }
                      }

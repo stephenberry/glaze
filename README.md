@@ -191,6 +191,22 @@ auto ec = glz::write_json(obj, buffer);
 
 The buffer flushes incrementally during serialization, enabling arbitrarily large outputs with fixed memory. See [Writing](https://stephenberry.github.io/glaze/writing/) for details on buffer types and the `byte_output_stream` concept.
 
+### Reading from Streams
+
+For streaming from `std::istream` sources (files, network, etc.) with bounded memory:
+
+```c++
+#include "glaze/json/json_stream.hpp"
+
+// Process NDJSON records one at a time
+std::ifstream file("events.ndjson");
+for (auto&& event : glz::ndjson_stream<Event>(file)) {
+   process(event);  // One record in memory at a time
+}
+```
+
+The `json_stream_reader` reads and parses values incrementally, enabling processing of arbitrarily large streams with fixed memory. See [Writing](https://stephenberry.github.io/glaze/writing/) for details on `basic_istream_buffer` and the `byte_input_stream` concept.
+
 ## Compiler/System Support
 
 - Requires C++23

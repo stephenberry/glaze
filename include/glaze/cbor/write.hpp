@@ -425,7 +425,7 @@ namespace glz
                serialize<CBOR>::op<Opts>(item, ctx, b, ix);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               if constexpr (is_streaming<decltype(b)>) {
+               if constexpr (is_output_streaming<decltype(b)>) {
                   flush_buffer(b, ix);
                }
             }
@@ -449,7 +449,7 @@ namespace glz
             serialize<CBOR>::op<Opts>(v, ctx, b, ix);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            if constexpr (is_streaming<decltype(b)>) {
+            if constexpr (is_output_streaming<decltype(b)>) {
                flush_buffer(b, ix);
             }
          }
@@ -626,7 +626,7 @@ namespace glz
                   }();
 
                   serialize<CBOR>::op<Opts>(get_member(value, member), ctx, b, ix);
-                  if constexpr (is_streaming<decltype(b)>) {
+                  if constexpr (is_output_streaming<decltype(b)>) {
                      flush_buffer(b, ix);
                   }
                }
@@ -662,7 +662,7 @@ namespace glz
                   }();
 
                   serialize<CBOR>::op<Opts>(get_member(value, member), ctx, b, ix);
-                  if constexpr (is_streaming<decltype(b)>) {
+                  if constexpr (is_output_streaming<decltype(b)>) {
                      flush_buffer(b, ix);
                   }
                }

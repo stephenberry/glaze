@@ -20,7 +20,8 @@ namespace glz
    {
       static constexpr bool is_resizable = resizable<std::remove_cvref_t<Buffer>>;
       static constexpr bool has_bounded_capacity = !is_resizable && has_size<std::remove_cvref_t<Buffer>>;
-      static constexpr bool is_streaming = false; // True for buffers that support incremental flushing
+      static constexpr bool is_output_streaming = false; // True for output buffers that support incremental flushing
+      static constexpr bool is_input_streaming = false; // True for input buffers that support incremental refilling
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(const Buffer& b) noexcept
       {
@@ -64,15 +65,42 @@ namespace glz
       GLZ_ALWAYS_INLINE static void flush([[maybe_unused]] Buffer& b, [[maybe_unused]] size_t written) noexcept {}
    };
 
-   // Concept to check if a buffer type supports streaming
+   // Concept to check if a buffer type supports output streaming (flushing)
    template <class B>
-   concept is_streaming = buffer_traits<std::remove_cvref_t<B>>::is_streaming;
+   concept is_output_streaming = buffer_traits<std::remove_cvref_t<B>>::is_output_streaming;
 
-   // Flush helper for streaming buffers
+   // Flush helper for streaming output buffers
    template <class B>
    GLZ_ALWAYS_INLINE void flush_buffer(B&& b, size_t written) noexcept
    {
       buffer_traits<std::remove_cvref_t<B>>::flush(b, written);
+   }
+
+   // Concept to check if a buffer type supports input streaming (refilling)
+   template <class B>
+   concept is_input_streaming = buffer_traits<std::remove_cvref_t<B>>::is_input_streaming;
+
+   // Refill helper for streaming input buffers
+   // Returns true if buffer has data available after refill, false if EOF
+   template <class B>
+   GLZ_ALWAYS_INLINE bool refill_buffer(B&& b) noexcept
+   {
+      if constexpr (is_input_streaming<B>) {
+         return buffer_traits<std::remove_cvref_t<B>>::refill(b);
+      }
+      else {
+         return false; // Non-streaming buffers cannot refill
+      }
+   }
+
+   // Consume helper for streaming input buffers
+   // Marks bytes as consumed after successful parsing
+   template <class B>
+   GLZ_ALWAYS_INLINE void consume_buffer(B&& b, size_t bytes) noexcept
+   {
+      if constexpr (is_input_streaming<B>) {
+         buffer_traits<std::remove_cvref_t<B>>::consume(b, bytes);
+      }
    }
 
    // Specialization for raw char pointers
@@ -82,7 +110,8 @@ namespace glz
    {
       static constexpr bool is_resizable = false;
       static constexpr bool has_bounded_capacity = false;
-      static constexpr bool is_streaming = false;
+      static constexpr bool is_output_streaming = false;
+      static constexpr bool is_input_streaming = false;
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(char*) noexcept
       {
@@ -103,7 +132,8 @@ namespace glz
    {
       static constexpr bool is_resizable = false;
       static constexpr bool has_bounded_capacity = true;
-      static constexpr bool is_streaming = false;
+      static constexpr bool is_output_streaming = false;
+      static constexpr bool is_input_streaming = false;
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(const std::span<T, Extent>& b) noexcept { return b.size(); }
 
@@ -121,7 +151,8 @@ namespace glz
    {
       static constexpr bool is_resizable = false;
       static constexpr bool has_bounded_capacity = true;
-      static constexpr bool is_streaming = false;
+      static constexpr bool is_output_streaming = false;
+      static constexpr bool is_input_streaming = false;
       static constexpr size_t static_capacity = N;
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(const std::array<T, N>&) noexcept { return N; }

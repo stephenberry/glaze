@@ -557,7 +557,7 @@ namespace glz
       }
       std::memcpy(&b[ix], ", ", 2);
       ix += 2;
-      if constexpr (is_streaming<B>) {
+      if constexpr (is_output_streaming<B>) {
          flush_buffer(b, ix);
       }
    }
@@ -568,7 +568,7 @@ namespace glz
    {
       std::memcpy(&b[ix], "\n", 1);
       ++ix;
-      if constexpr (is_streaming<B>) {
+      if constexpr (is_output_streaming<B>) {
          flush_buffer(b, ix);
       }
    }

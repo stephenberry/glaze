@@ -6,7 +6,9 @@
 #include <span>
 
 #include "glaze/api/std/span.hpp"
+#include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/streaming_state.hpp"
 #include "glaze/util/parse.hpp"
 
 namespace glz
@@ -140,5 +142,65 @@ namespace glz
    {
       context ctx{};
       return read<Opts>(value, std::forward<Buffer>(buffer), ctx);
+   }
+
+   // Streaming read for input streaming buffers
+   // Uses incremental parsing with internal refill points for arrays/objects
+   // Returns error_ctx with total bytes consumed across all refills
+   template <auto Opts, class T, class Buffer, has_streaming_state Ctx>
+      requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
+   [[nodiscard]] error_ctx read_streaming(T& value, Buffer&& buffer, Ctx&& ctx)
+   {
+      // For streaming, we need null_terminated = false to track indentation_level
+      static constexpr auto StreamingOpts = [] {
+         auto o = is_padded_off<Opts>();
+         o.null_terminated = false;
+         return o;
+      }();
+
+      // Initial fill if buffer is empty
+      if (buffer.empty()) {
+         if (!refill_buffer(buffer)) {
+            if constexpr (Opts.format != NDJSON) {
+               ctx.error = error_code::no_read_input;
+               return {0, ctx.error, ctx.custom_error_message};
+            }
+         }
+      }
+
+      // Set up streaming state so parsers can trigger internal refills
+      ctx.stream = make_streaming_state(buffer);
+
+      auto [it, end] = read_iterators<Opts>(buffer);
+
+      // Parse with streaming-aware context
+      // The parser will internally refill as needed at safe points (between array elements, etc.)
+      parse<Opts.format>::template op<StreamingOpts>(value, ctx, it, end);
+
+      // Calculate final consumed bytes
+      // Note: During streaming, the buffer may have been refilled multiple times,
+      // so we use bytes_consumed() which tracks total consumption
+      const size_t final_consumed = static_cast<size_t>(it - ctx.stream.data());
+      consume_buffer(buffer, final_consumed);
+
+      // Handle end_reached as success when parsing completed at depth 0
+      // (same logic as non-streaming read)
+      if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
+         ctx.error = error_code::none;
+      }
+
+      if (bool(ctx.error)) {
+         return {buffer.bytes_consumed(), ctx.error, ctx.custom_error_message};
+      }
+
+      return {buffer.bytes_consumed(), error_code::none, ctx.custom_error_message};
+   }
+
+   template <auto Opts, class T, class Buffer>
+      requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
+   [[nodiscard]] error_ctx read_streaming(T& value, Buffer&& buffer)
+   {
+      streaming_context ctx{};
+      return read_streaming<Opts>(value, std::forward<Buffer>(buffer), ctx);
    }
 }

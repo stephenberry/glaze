@@ -73,34 +73,34 @@ suite byte_output_stream_concept_tests = [] {
 
 // Verify buffer_traits static properties
 suite buffer_traits_tests = [] {
-   "buffer_traits::is_streaming for std::string"_test = [] {
-      static_assert(glz::buffer_traits<std::string>::is_streaming == false);
-      static_assert(!glz::is_streaming<std::string>);
+   "buffer_traits::is_output_streaming for std::string"_test = [] {
+      static_assert(glz::buffer_traits<std::string>::is_output_streaming == false);
+      static_assert(!glz::is_output_streaming<std::string>);
    };
 
-   "buffer_traits::is_streaming for basic_ostream_buffer"_test = [] {
-      static_assert(glz::buffer_traits<glz::basic_ostream_buffer<std::ostream, 32>>::is_streaming == true);
-      static_assert(glz::is_streaming<glz::basic_ostream_buffer<std::ostream, 32>>);
+   "buffer_traits::is_output_streaming for basic_ostream_buffer"_test = [] {
+      static_assert(glz::buffer_traits<glz::basic_ostream_buffer<std::ostream, 32>>::is_output_streaming == true);
+      static_assert(glz::is_output_streaming<glz::basic_ostream_buffer<std::ostream, 32>>);
    };
 
-   "buffer_traits::is_streaming for ostream_buffer alias"_test = [] {
-      static_assert(glz::buffer_traits<glz::ostream_buffer<32>>::is_streaming == true);
-      static_assert(glz::is_streaming<glz::ostream_buffer<32>>);
+   "buffer_traits::is_output_streaming for ostream_buffer alias"_test = [] {
+      static_assert(glz::buffer_traits<glz::ostream_buffer<32>>::is_output_streaming == true);
+      static_assert(glz::is_output_streaming<glz::ostream_buffer<32>>);
    };
 
-   "buffer_traits::is_streaming for concrete stream type"_test = [] {
-      static_assert(glz::buffer_traits<glz::basic_ostream_buffer<std::ostringstream>>::is_streaming == true);
-      static_assert(glz::is_streaming<glz::basic_ostream_buffer<std::ostringstream>>);
+   "buffer_traits::is_output_streaming for concrete stream type"_test = [] {
+      static_assert(glz::buffer_traits<glz::basic_ostream_buffer<std::ostringstream>>::is_output_streaming == true);
+      static_assert(glz::is_output_streaming<glz::basic_ostream_buffer<std::ostringstream>>);
    };
 
-   "buffer_traits::is_streaming for std::vector<char>"_test = [] {
-      static_assert(glz::buffer_traits<std::vector<char>>::is_streaming == false);
-      static_assert(!glz::is_streaming<std::vector<char>>);
+   "buffer_traits::is_output_streaming for std::vector<char>"_test = [] {
+      static_assert(glz::buffer_traits<std::vector<char>>::is_output_streaming == false);
+      static_assert(!glz::is_output_streaming<std::vector<char>>);
    };
 
-   "buffer_traits::is_streaming for char*"_test = [] {
-      static_assert(glz::buffer_traits<char*>::is_streaming == false);
-      static_assert(!glz::is_streaming<char*>);
+   "buffer_traits::is_output_streaming for char*"_test = [] {
+      static_assert(glz::buffer_traits<char*>::is_output_streaming == false);
+      static_assert(!glz::is_output_streaming<char*>);
    };
 };
 

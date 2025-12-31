@@ -150,7 +150,7 @@ namespace glz
    {
       static constexpr bool is_resizable = true;
       static constexpr bool has_bounded_capacity = false;
-      static constexpr bool is_streaming = true;
+      static constexpr bool is_output_streaming = true;
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(const basic_ostream_buffer<Stream, N>&) noexcept
       {

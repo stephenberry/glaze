@@ -177,7 +177,7 @@ namespace glz
 
          for (auto& i : value) {
             serialize<EETF>::op<Opts>(i, ctx, b, ix);
-            if constexpr (is_streaming<B>) {
+            if constexpr (is_output_streaming<B>) {
                flush_buffer(b, ix);
             }
          }
@@ -210,7 +210,7 @@ namespace glz
          for (auto&& [k, v] : value) {
             serialize<EETF>::op<Opts>(k, ctx, b, ix);
             serialize<EETF>::op<Opts>(v, ctx, b, ix);
-            if constexpr (is_streaming<B>) {
+            if constexpr (is_output_streaming<B>) {
                flush_buffer(b, ix);
             }
          }
@@ -273,7 +273,7 @@ namespace glz
             }();
 
             serialize<EETF>::op<Opts>(get_member(value, member), ctx, b, ix);
-            if constexpr (is_streaming<B>) {
+            if constexpr (is_output_streaming<B>) {
                flush_buffer(b, ix);
             }
          });
