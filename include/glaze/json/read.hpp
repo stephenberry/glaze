@@ -431,6 +431,20 @@ namespace glz
                }
             }
 
+            // Check for operation-specific skipping
+            if constexpr (meta_has_skip<std::remove_cvref_t<T>>) {
+               constexpr auto Key = get<I>(reflect<T>::keys);
+               if constexpr (meta<std::remove_cvref_t<T>>::skip(Key, {glz::operation::parse})) {
+                  skip_value<JSON>::op<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+                     ((selected_index = I), ...);
+                  }
+                  return;
+               }
+            }
+
             using V = refl_t<T, I>;
             if constexpr (const_value_v<V>) {
                if constexpr (check_error_on_const_read(Opts)) {
@@ -457,7 +471,7 @@ namespace glz
             }
          };
          [&]<size_t... Is>(std::index_sequence<Is...>) {
-            ((index == Is ? (parse_field.template operator()<Is>(), true) : false) || ...);
+            (void)(((index == Is ? (parse_field.template operator()<Is>(), true) : false) || ...));
          }(std::make_index_sequence<N>{});
       }
       else {
@@ -1949,7 +1963,7 @@ namespace glz
 
             // Simply assign the enum value - fold expression dispatch
             [&]<size_t... Is>(std::index_sequence<Is...>) {
-               ((index == Is ? (value = get<Is>(reflect<T>::values), true) : false) || ...);
+               (void)(((index == Is ? (value = get<Is>(reflect<T>::values), true) : false) || ...));
             }(std::make_index_sequence<N>{});
          }
          else {
