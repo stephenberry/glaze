@@ -197,7 +197,12 @@ namespace glz
       while (!reader.read_next(value)) {
          values.push_back(std::move(value));
       }
-      return reader.last_error();
+      // end_reached is expected (not an error), only return actual parse errors
+      auto ec = reader.last_error();
+      if (ec.ec == error_code::end_reached) {
+         return {};
+      }
+      return ec;
    }
 
 } // namespace glz
