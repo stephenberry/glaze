@@ -239,8 +239,7 @@ struct Event {
 std::ifstream file("events.ndjson");
 glz::json_stream_reader<Event> reader(file);
 Event event;
-glz::error_ctx ec;
-while (reader.read_next(event, ec)) {
+while (!reader.read_next(event)) {
     process(event);
 }
 

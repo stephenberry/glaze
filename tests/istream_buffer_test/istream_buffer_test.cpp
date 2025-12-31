@@ -513,12 +513,11 @@ suite json_stream_reader_tests = [] {
       std::vector<Record> records;
 
       Record r;
-      glz::error_ctx ec;
-      while (reader.read_next(r, ec)) {
+      while (!reader.read_next(r)) {
          records.push_back(r);
       }
 
-      expect(!ec);
+      expect(reader.last_error().ec == glz::error_code::end_reached);
       expect(records.size() == 3u);
       expect(records[0].id == 1);
       expect(records[2].id == 3);
@@ -541,8 +540,7 @@ suite json_stream_reader_tests = [] {
       glz::json_stream_reader<Record> reader(iss);
 
       Record r;
-      glz::error_ctx ec;
-      expect(!reader.read_next(r, ec));
+      expect(reader.read_next(r)); // Should return error (end_reached)
       expect(reader.eof());
    };
 
@@ -575,14 +573,14 @@ suite json_stream_reader_tests = [] {
       glz::json_stream_reader<Record> reader(iss);
 
       Record r;
-      glz::error_ctx ec;
 
-      expect(reader.read_next(r, ec));
-      expect(!ec);
+      expect(!reader.read_next(r)); // First read should succeed
       expect(r.id == 1);
 
-      expect(!reader.read_next(r, ec));
+      auto ec = reader.read_next(r); // Second read should fail
+      expect(ec);
       expect(ec.ec != glz::error_code::none);
+      expect(ec.ec != glz::error_code::end_reached); // Should be a parse error, not EOF
    };
 };
 
