@@ -197,16 +197,15 @@ The buffer flushes incrementally during serialization, enabling arbitrarily larg
 For streaming from `std::istream` sources (files, network, etc.) with bounded memory:
 
 ```c++
-#include "glaze/json/json_stream.hpp"
+#include "glaze/core/istream_buffer.hpp"
 
-// Process NDJSON records one at a time
-std::ifstream file("events.ndjson");
-for (auto&& event : glz::ndjson_stream<Event>(file)) {
-   process(event);  // One record in memory at a time
-}
+std::ifstream file("input.json");
+glz::basic_istream_buffer<std::ifstream> buffer(file);
+my_struct obj;
+auto ec = glz::read_json(obj, buffer);
 ```
 
-The `json_stream_reader` reads and parses values incrementally, enabling processing of arbitrarily large streams with fixed memory. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for details on `basic_istream_buffer` and the `byte_input_stream` concept.
+The buffer refills automatically during parsing, enabling reading of arbitrarily large inputs with fixed memory. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for NDJSON processing and other streaming patterns.
 
 ## Compiler/System Support
 
@@ -738,15 +737,15 @@ Denoting that x is invalid here.
 
 ## Bytes Consumed on Read
 
-The `error_ctx` type returned by read operations includes a `location` field that indicates the byte position in the input buffer:
+The `error_ctx` type returned by read operations includes a `count` field that indicates the byte position in the input buffer:
 
 ```c++
 std::string buffer = R"({"x":1,"y":2})";
 my_struct obj{};
 auto ec = glz::read_json(obj, buffer);
 if (!ec) {
-   // Success: ec.location contains bytes consumed
-   size_t bytes_consumed = ec.location;
+   // Success: ec.count contains bytes consumed
+   size_t bytes_consumed = ec.count;
    // bytes_consumed == 13 (entire JSON object)
 }
 ```
@@ -754,7 +753,7 @@ if (!ec) {
 This is useful for:
 - **Streaming**: Reading multiple JSON values from a single buffer
 - **Partial parsing**: Knowing where parsing stopped with `partial_read` option
-- **Error diagnostics**: On failure, `location` indicates where the error occurred
+- **Error diagnostics**: On failure, `count` indicates where the error occurred
 
 # Input Buffer (Null) Termination
 
