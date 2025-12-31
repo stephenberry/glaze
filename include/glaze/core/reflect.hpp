@@ -2050,7 +2050,7 @@ namespace glz
             if consteval {
                h = 0;
                for (size_t i = 0; i < 2; ++i) {
-                  h |= static_cast<uint16_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint16_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2069,7 +2069,7 @@ namespace glz
             if consteval {
                h = 0;
                for (size_t i = 0; i < 4; ++i) {
-                  h |= static_cast<uint32_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint32_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2088,7 +2088,7 @@ namespace glz
             if consteval {
                h = 0;
                for (size_t i = 0; i < 8; ++i) {
-                  h |= static_cast<uint64_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint64_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2284,7 +2284,7 @@ namespace glz
             if consteval {
                h = 0;
                for (size_t i = 0; i < 2; ++i) {
-                  h |= static_cast<uint16_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint16_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2300,7 +2300,7 @@ namespace glz
             if consteval {
                h = 0;
                for (size_t i = 0; i < 4; ++i) {
-                  h |= static_cast<uint32_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint32_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2316,7 +2316,7 @@ namespace glz
             if consteval {
                h = 0;
                for (size_t i = 0; i < 8; ++i) {
-                  h |= static_cast<uint64_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint64_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
