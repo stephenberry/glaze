@@ -44,6 +44,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - [JSON Schema generation](https://stephenberry.github.io/glaze/json-schema/)
 - [Partial Read](https://stephenberry.github.io/glaze/partial-read/) and [Partial Write](https://stephenberry.github.io/glaze/partial-write/) support
+- [Stream I/O](https://stephenberry.github.io/glaze/writing/#reading-from-streams-basic_istream_buffer) for reading/writing large files with bounded memory
 - [Much more!](#more-features)
 
 ## Performance
@@ -1215,6 +1216,8 @@ auto ec = glz::read_ndjson(x, s);
 ### [JSON Schema](https://stephenberry.github.io/glaze/json-schema/)
 
 ### [Shared Library API](https://stephenberry.github.io/glaze/glaze-interfaces/)
+
+### [Stream I/O](https://stephenberry.github.io/glaze/writing/#reading-from-streams-basic_istream_buffer)
 
 ### [Tagged Binary Messages](https://stephenberry.github.io/glaze/binary/)
 

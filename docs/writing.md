@@ -173,7 +173,7 @@ For reading directly from files or other input streams, use `glz::basic_istream_
 std::ifstream file("input.json");
 glz::basic_istream_buffer<std::ifstream> buffer(file);
 my_struct obj;
-auto ec = glz::read_streaming<glz::opts{}>(obj, buffer);
+auto ec = glz::read_json(obj, buffer);  // Convenience overload for streaming
 if (ec) {
     // Handle error
 }
@@ -181,10 +181,15 @@ if (ec) {
 // Read from any std::istream (polymorphic)
 std::istringstream iss(json_string);
 glz::istream_buffer<> buffer2(iss);  // Alias for basic_istream_buffer<std::istream>
+glz::read_json(obj, buffer2);
+
+// Or use read_streaming directly with custom options
 glz::read_streaming<glz::opts{}>(obj, buffer2);
 ```
 
-The buffer reads chunks from the stream and presents them as contiguous memory to the parser. When more data is needed, it refills automatically.
+The buffer reads chunks from the stream and presents them as contiguous memory to the parser. When more data is needed, it refills automatically at safe points (between array elements, object key-value pairs, etc.).
+
+**Key feature: Incremental streaming** - The buffer can be much smaller than the JSON input. This enables parsing arbitrarily large files (gigabytes) with bounded memory (e.g., 64KB buffer).
 
 **Template parameters:**
 
@@ -265,6 +270,14 @@ auto ec = glz::read_json_stream(events, file);
 - Supports NDJSON (newline-delimited) and consecutive JSON values
 - Iterator interface for range-based for loops
 - Automatic whitespace/newline skipping between values
+
+### Streaming Format Support
+
+| Format | Output Streaming | Input Streaming |
+|--------|-----------------|-----------------|
+| JSON   | ✅ `ostream_buffer` | ✅ `istream_buffer` |
+| BEVE   | ✅ `ostream_buffer` | ✅ `istream_buffer` |
+| NDJSON | ✅ `ostream_buffer` | ✅ `json_stream_reader` |
 
 ## Buffer Overflow Handling
 
