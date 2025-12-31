@@ -91,6 +91,7 @@ namespace glz
       // Shifts unconsumed data to beginning and fills rest of buffer
       // For slow streams, keeps reading until buffer is full or EOF
       // Returns true if buffer has data available, false if EOF and empty
+      // Note: Invalidates pointers/iterators obtained before this call
       bool refill()
       {
          if (eof_reached_) {
@@ -140,7 +141,7 @@ namespace glz
       bool eof() const noexcept { return eof_reached_ && empty(); }
 
       // Reset for reuse with same stream
-      void reset() noexcept
+      void reset()
       {
          read_pos_ = 0;
          data_end_ = 0;

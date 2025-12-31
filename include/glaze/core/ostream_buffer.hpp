@@ -69,12 +69,12 @@ namespace glz
       ~basic_ostream_buffer() = default;
 
       // Element access - maps logical position to physical buffer
-      reference operator[](size_t ix)
+      reference operator[](size_t ix) noexcept
       {
          assert(ix >= flush_offset_ && "Index before flush offset");
          return buffer_[ix - flush_offset_];
       }
-      const_reference operator[](size_t ix) const
+      const_reference operator[](size_t ix) const noexcept
       {
          assert(ix >= flush_offset_ && "Index before flush offset");
          return buffer_[ix - flush_offset_];
@@ -103,9 +103,12 @@ namespace glz
          }
       }
 
-      // Incremental flush - called during serialization at safe points
-      // Flushes written data to the stream to keep memory usage bounded
-      // Only flushes when buffer usage exceeds 50% of DefaultCapacity to reduce write syscalls
+      // Incremental flush - called during serialization at safe points (between array
+      // elements, object fields) to keep memory usage bounded.
+      //
+      // Flushes when buffer usage exceeds 50% of DefaultCapacity. This threshold balances
+      // memory usage against syscall overhead. To control flush frequency, adjust
+      // DefaultCapacity: smaller capacity = more frequent flushes, larger = fewer flushes.
       void flush(size_t written_so_far)
       {
          if (written_so_far > flush_offset_ && stream_) {
