@@ -333,8 +333,8 @@ namespace glz
                }
 
                if (it >= end || *it != ':') {
-                  return result_t{unexpected(error_ctx{size_t(it - start),
-                     it >= end ? error_code::unexpected_end : error_code::expected_colon})};
+                  return result_t{unexpected(error_ctx{
+                     size_t(it - start), it >= end ? error_code::unexpected_end : error_code::expected_colon})};
                }
                ++it;
 

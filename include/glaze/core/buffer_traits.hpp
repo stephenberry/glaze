@@ -113,10 +113,7 @@ namespace glz
       static constexpr bool is_output_streaming = false;
       static constexpr bool is_input_streaming = false;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t capacity(char*) noexcept
-      {
-         return std::numeric_limits<size_t>::max();
-      }
+      GLZ_ALWAYS_INLINE static constexpr size_t capacity(char*) noexcept { return std::numeric_limits<size_t>::max(); }
 
       GLZ_ALWAYS_INLINE static constexpr bool ensure_capacity(char*, size_t) noexcept
       {

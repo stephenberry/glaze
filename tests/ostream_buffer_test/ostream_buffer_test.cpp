@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/core/ostream_buffer.hpp"
+
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -9,7 +11,6 @@
 
 #include "glaze/beve.hpp"
 #include "glaze/cbor.hpp"
-#include "glaze/core/ostream_buffer.hpp"
 #include "glaze/csv.hpp"
 #include "glaze/json.hpp"
 #include "glaze/msgpack.hpp"
@@ -46,25 +47,17 @@ struct EmptyObj
 
 // Verify byte_output_stream concept
 suite byte_output_stream_concept_tests = [] {
-   "byte_output_stream accepts std::ostream"_test = [] {
-      static_assert(glz::byte_output_stream<std::ostream>);
-   };
+   "byte_output_stream accepts std::ostream"_test = [] { static_assert(glz::byte_output_stream<std::ostream>); };
 
-   "byte_output_stream accepts std::ofstream"_test = [] {
-      static_assert(glz::byte_output_stream<std::ofstream>);
-   };
+   "byte_output_stream accepts std::ofstream"_test = [] { static_assert(glz::byte_output_stream<std::ofstream>); };
 
    "byte_output_stream accepts std::ostringstream"_test = [] {
       static_assert(glz::byte_output_stream<std::ostringstream>);
    };
 
-   "byte_output_stream rejects std::wostream"_test = [] {
-      static_assert(!glz::byte_output_stream<std::wostream>);
-   };
+   "byte_output_stream rejects std::wostream"_test = [] { static_assert(!glz::byte_output_stream<std::wostream>); };
 
-   "byte_output_stream rejects std::wofstream"_test = [] {
-      static_assert(!glz::byte_output_stream<std::wofstream>);
-   };
+   "byte_output_stream rejects std::wofstream"_test = [] { static_assert(!glz::byte_output_stream<std::wofstream>); };
 
    "byte_output_stream rejects std::wostringstream"_test = [] {
       static_assert(!glz::byte_output_stream<std::wostringstream>);
@@ -553,8 +546,7 @@ suite flush_behavior_tests = [] {
       glz::context ctx{};
       size_t ix = 0;
 
-      std::map<std::string, int> map_data{
-         {"alpha", 1}, {"beta", 2}, {"gamma", 3}, {"delta", 4}, {"epsilon", 5}};
+      std::map<std::string, int> map_data{{"alpha", 1}, {"beta", 2}, {"gamma", 3}, {"delta", 4}, {"epsilon", 5}};
       glz::serialize<glz::JSON>::op<glz::opts{}>(map_data, ctx, buf, ix);
       buf.finalize(ix);
 
@@ -622,9 +614,7 @@ suite flush_behavior_tests = [] {
 
       // Nested structure
       std::map<std::string, std::vector<int>> nested{
-         {"first", {1, 2, 3, 4, 5}},
-         {"second", {10, 20, 30, 40, 50}},
-         {"third", {100, 200, 300}}};
+         {"first", {1, 2, 3, 4, 5}}, {"second", {10, 20, 30, 40, 50}}, {"third", {100, 200, 300}}};
       glz::serialize<glz::JSON>::op<glz::opts{}>(nested, ctx, buf, ix);
       buf.finalize(ix);
 

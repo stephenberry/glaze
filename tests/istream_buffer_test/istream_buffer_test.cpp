@@ -23,12 +23,12 @@ class slow_stringbuf : public std::stringbuf
 {
    size_t max_bytes_per_read_;
 
- public:
+  public:
    slow_stringbuf(const std::string& s, size_t max_bytes_per_read)
       : std::stringbuf(s, std::ios_base::in), max_bytes_per_read_(max_bytes_per_read)
    {}
 
- protected:
+  protected:
    // Override xsgetn to limit how many bytes are returned per read() call
    std::streamsize xsgetn(char* s, std::streamsize n) override
    {
@@ -47,7 +47,7 @@ class pipe_buffer : public std::streambuf
    mutable std::mutex mutex_;
    std::condition_variable cv_;
 
- public:
+  public:
    pipe_buffer() : buffer_(65536) {} // 64KB buffer
 
    // Writer side: append data to the buffer
@@ -70,7 +70,7 @@ class pipe_buffer : public std::streambuf
       cv_.notify_all();
    }
 
- protected:
+  protected:
    // Called when the internal buffer needs more data
    int_type underflow() override
    {
@@ -127,8 +127,10 @@ class slow_ostringbuf : public std::stringbuf
    size_t max_bytes_per_write_;
    size_t total_write_calls_ = 0;
 
- public:
-   explicit slow_ostringbuf(size_t max_bytes_per_write) : std::stringbuf(std::ios_base::out), max_bytes_per_write_(max_bytes_per_write) {}
+  public:
+   explicit slow_ostringbuf(size_t max_bytes_per_write)
+      : std::stringbuf(std::ios_base::out), max_bytes_per_write_(max_bytes_per_write)
+   {}
 
    // Get the accumulated output
    std::string output() const { return str(); }
@@ -136,7 +138,7 @@ class slow_ostringbuf : public std::stringbuf
    // Get number of write calls made (for verification)
    size_t write_calls() const { return total_write_calls_; }
 
- protected:
+  protected:
    // Override xsputn to simulate slow writes by writing in chunks
    // but ensuring all data is eventually written (simulating a slow network that
    // accepts data in small pieces)
@@ -224,14 +226,8 @@ template <>
 struct glz::meta<ComplexObj>
 {
    using T = ComplexObj;
-   static constexpr auto value = object(
-      "id", &T::id,
-      "name", &T::name,
-      "value", &T::value,
-      "numbers", &T::numbers,
-      "mapping", &T::mapping,
-      "optional_field", &T::optional_field
-   );
+   static constexpr auto value = object("id", &T::id, "name", &T::name, "value", &T::value, "numbers", &T::numbers,
+                                        "mapping", &T::mapping, "optional_field", &T::optional_field);
 };
 
 suite istream_buffer_concept_tests = [] {
@@ -482,14 +478,12 @@ suite json_read_streaming_tests = [] {
 
 suite json_roundtrip_tests = [] {
    "JSON roundtrip - write to ostream, read from istream"_test = [] {
-      ComplexObj original{
-         .id = 42,
-         .name = "roundtrip test",
-         .value = 2.71828,
-         .numbers = {1, 2, 3, 4, 5},
-         .mapping = {{"key1", 100}, {"key2", 200}},
-         .optional_field = "optional value"
-      };
+      ComplexObj original{.id = 42,
+                          .name = "roundtrip test",
+                          .value = 2.71828,
+                          .numbers = {1, 2, 3, 4, 5},
+                          .mapping = {{"key1", 100}, {"key2", 200}},
+                          .optional_field = "optional value"};
 
       // Write to stringstream using ostream_buffer
       std::ostringstream oss;
@@ -508,11 +502,7 @@ suite json_roundtrip_tests = [] {
    };
 
    "JSON roundtrip - array of objects"_test = [] {
-      std::vector<Record> original = {
-         {1, "first"},
-         {2, "second"},
-         {3, "third"}
-      };
+      std::vector<Record> original = {{1, "first"}, {2, "second"}, {3, "third"}};
 
       std::ostringstream oss;
       glz::basic_ostream_buffer<std::ostringstream> write_buffer(oss);
@@ -612,14 +602,12 @@ suite json_stream_reader_tests = [] {
 
 suite beve_streaming_tests = [] {
    "BEVE roundtrip with streaming buffers"_test = [] {
-      ComplexObj original{
-         .id = 999,
-         .name = "beve test",
-         .value = 1.41421,
-         .numbers = {10, 20, 30},
-         .mapping = {{"x", 1}, {"y", 2}},
-         .optional_field = std::nullopt
-      };
+      ComplexObj original{.id = 999,
+                          .name = "beve test",
+                          .value = 1.41421,
+                          .numbers = {10, 20, 30},
+                          .mapping = {{"x", 1}, {"y", 2}},
+                          .optional_field = std::nullopt};
 
       // Write BEVE to stringstream
       std::ostringstream oss;
@@ -781,23 +769,21 @@ suite complex_nested_structure_tests = [] {
    "deeply nested - department with employees"_test = [] {
       Department original{
          .name = "Engineering",
-         .employees =
-            {Person{.name = "Bob",
-                    .age = 25,
-                    .address = {.street = "456 Oak Ave", .city = "Seattle", .zip = 98101},
-                    .emails = {"bob@company.com"},
-                    .metadata = {{"team", "backend"}}},
-             Person{.name = "Carol",
-                    .age = 28,
-                    .address = {.street = "789 Pine Rd", .city = "Portland", .zip = 97201},
-                    .emails = {"carol@company.com", "carol.personal@email.com"},
-                    .metadata = {{"team", "frontend"}, {"remote", "true"}}}},
-         .managers = {{"tech_lead",
-                       Person{.name = "Dave",
-                              .age = 35,
-                              .address = {.street = "321 Elm St", .city = "Denver", .zip = 80201},
-                              .emails = {"dave@company.com"},
-                              .metadata = {{"reports", "5"}}}}},
+         .employees = {Person{.name = "Bob",
+                              .age = 25,
+                              .address = {.street = "456 Oak Ave", .city = "Seattle", .zip = 98101},
+                              .emails = {"bob@company.com"},
+                              .metadata = {{"team", "backend"}}},
+                       Person{.name = "Carol",
+                              .age = 28,
+                              .address = {.street = "789 Pine Rd", .city = "Portland", .zip = 97201},
+                              .emails = {"carol@company.com", "carol.personal@email.com"},
+                              .metadata = {{"team", "frontend"}, {"remote", "true"}}}},
+         .managers = {{"tech_lead", Person{.name = "Dave",
+                                           .age = 35,
+                                           .address = {.street = "321 Elm St", .city = "Denver", .zip = 80201},
+                                           .emails = {"dave@company.com"},
+                                           .metadata = {{"reports", "5"}}}}},
          .head = Person{.name = "Eve",
                         .age = 45,
                         .address = {.street = "555 Cedar Ln", .city = "Austin", .zip = 78701},
@@ -942,14 +928,14 @@ suite complex_nested_structure_tests = [] {
                     .numbers = {1, 2, 3},
                     .mapping = {{"a", 10}},
                     .optional_field = "present"},
+         ComplexObj{.id = 2,
+                    .name = "second",
+                    .value = 2.5,
+                    .numbers = {4, 5},
+                    .mapping = {{"b", 20}, {"c", 30}},
+                    .optional_field = std::nullopt},
          ComplexObj{
-            .id = 2, .name = "second", .value = 2.5, .numbers = {4, 5}, .mapping = {{"b", 20}, {"c", 30}}, .optional_field = std::nullopt},
-         ComplexObj{.id = 3,
-                    .name = "third",
-                    .value = 3.5,
-                    .numbers = {},
-                    .mapping = {},
-                    .optional_field = "also present"}};
+            .id = 3, .name = "third", .value = 3.5, .numbers = {}, .mapping = {}, .optional_field = "also present"}};
 
       std::string json;
       auto wec = glz::write_json(original, json);
@@ -965,21 +951,18 @@ suite complex_nested_structure_tests = [] {
    };
 
    "map with complex object values"_test = [] {
-      std::map<std::string, ComplexObj> original = {
-         {"item1",
-          ComplexObj{.id = 100,
-                     .name = "complex one",
-                     .value = 99.9,
-                     .numbers = {10, 20, 30, 40},
-                     .mapping = {{"key1", 1}, {"key2", 2}},
-                     .optional_field = "has value"}},
-         {"item2",
-          ComplexObj{.id = 200,
-                     .name = "complex two",
-                     .value = 88.8,
-                     .numbers = {50},
-                     .mapping = {},
-                     .optional_field = std::nullopt}}};
+      std::map<std::string, ComplexObj> original = {{"item1", ComplexObj{.id = 100,
+                                                                         .name = "complex one",
+                                                                         .value = 99.9,
+                                                                         .numbers = {10, 20, 30, 40},
+                                                                         .mapping = {{"key1", 1}, {"key2", 2}},
+                                                                         .optional_field = "has value"}},
+                                                    {"item2", ComplexObj{.id = 200,
+                                                                         .name = "complex two",
+                                                                         .value = 88.8,
+                                                                         .numbers = {50},
+                                                                         .mapping = {},
+                                                                         .optional_field = std::nullopt}}};
 
       std::string json;
       auto wec = glz::write_json(original, json);
@@ -1027,24 +1010,22 @@ suite complex_nested_structure_tests = [] {
    };
 
    "streaming roundtrip with complex nested data"_test = [] {
-      Company original{
-         .name = "StreamTest Corp",
-         .departments =
-            {Department{
-                .name = "R&D",
-                .employees = {Person{.name = "Researcher",
-                                     .age = 35,
-                                     .address = {.street = "Lab Lane 1", .city = "Cambridge", .zip = 2139},
-                                     .emails = {"research@streamtest.com"},
-                                     .metadata = {{"publications", "15"}, {"patents", "3"}}}},
-                .managers = {},
-                .head = Person{.name = "Chief Scientist",
-                               .age = 50,
-                               .address = {.street = "Innovation Blvd", .city = "Boston", .zip = 2101},
-                               .emails = {"chief@streamtest.com"},
-                               .metadata = {}}}},
-         .teams = {},
-         .nested_maps = {{"metrics", {{"accuracy", 95}, {"precision", 92}}}}};
+      Company original{.name = "StreamTest Corp",
+                       .departments = {Department{
+                          .name = "R&D",
+                          .employees = {Person{.name = "Researcher",
+                                               .age = 35,
+                                               .address = {.street = "Lab Lane 1", .city = "Cambridge", .zip = 2139},
+                                               .emails = {"research@streamtest.com"},
+                                               .metadata = {{"publications", "15"}, {"patents", "3"}}}},
+                          .managers = {},
+                          .head = Person{.name = "Chief Scientist",
+                                         .age = 50,
+                                         .address = {.street = "Innovation Blvd", .city = "Boston", .zip = 2101},
+                                         .emails = {"chief@streamtest.com"},
+                                         .metadata = {}}}},
+                       .teams = {},
+                       .nested_maps = {{"metrics", {{"accuracy", 95}, {"precision", 92}}}}};
 
       // Write using ostream_buffer
       std::ostringstream oss;
@@ -1168,15 +1149,14 @@ suite slow_streaming_tests = [] {
    };
 
    "slow stream - deeply nested with 15 bytes per read"_test = [] {
-      Department original{
-         .name = "SlowDept",
-         .employees = {Person{.name = "SlowWorker",
-                              .age = 30,
-                              .address = {.street = "123 Slow St", .city = "SlowCity", .zip = 12345},
-                              .emails = {"slow@test.com"},
-                              .metadata = {{"speed", "slow"}}}},
-         .managers = {},
-         .head = std::nullopt};
+      Department original{.name = "SlowDept",
+                          .employees = {Person{.name = "SlowWorker",
+                                               .age = 30,
+                                               .address = {.street = "123 Slow St", .city = "SlowCity", .zip = 12345},
+                                               .emails = {"slow@test.com"},
+                                               .metadata = {{"speed", "slow"}}}},
+                          .managers = {},
+                          .head = std::nullopt};
 
       std::string json;
       auto wec = glz::write_json(original, json);
@@ -1194,10 +1174,9 @@ suite slow_streaming_tests = [] {
    };
 
    "slow stream - map of vectors with 25 bytes per read"_test = [] {
-      std::map<std::string, std::vector<int>> original = {
-         {"primes", {2, 3, 5, 7, 11, 13, 17, 19}},
-         {"evens", {2, 4, 6, 8, 10, 12, 14, 16}},
-         {"odds", {1, 3, 5, 7, 9, 11, 13, 15}}};
+      std::map<std::string, std::vector<int>> original = {{"primes", {2, 3, 5, 7, 11, 13, 17, 19}},
+                                                          {"evens", {2, 4, 6, 8, 10, 12, 14, 16}},
+                                                          {"odds", {1, 3, 5, 7, 9, 11, 13, 15}}};
 
       std::string json;
       auto wec = glz::write_json(original, json);
@@ -1332,8 +1311,7 @@ suite async_streaming_tests = [] {
       std::istream pipe_stream(&pbuf);
 
       std::thread writer([&pbuf] {
-         std::vector<Record> original = {
-            {1, "first"}, {2, "second"}, {3, "third"}, {4, "fourth"}, {5, "fifth"}};
+         std::vector<Record> original = {{1, "first"}, {2, "second"}, {3, "third"}, {4, "fourth"}, {5, "fifth"}};
 
          std::string json;
          (void)glz::write_json(original, json);
@@ -1366,14 +1344,15 @@ suite async_streaming_tests = [] {
 
       std::thread writer([&pbuf] {
          Company original{.name = "AsyncCorp",
-                          .departments = {Department{.name = "AsyncDept",
-                                                     .employees = {Person{.name = "AsyncWorker",
-                                                                          .age = 25,
-                                                                          .address = {.street = "Async St", .city = "AsyncCity", .zip = 11111},
-                                                                          .emails = {"async@corp.com"},
-                                                                          .metadata = {{"async", "true"}}}},
-                                                     .managers = {},
-                                                     .head = std::nullopt}},
+                          .departments = {Department{
+                             .name = "AsyncDept",
+                             .employees = {Person{.name = "AsyncWorker",
+                                                  .age = 25,
+                                                  .address = {.street = "Async St", .city = "AsyncCity", .zip = 11111},
+                                                  .emails = {"async@corp.com"},
+                                                  .metadata = {{"async", "true"}}}},
+                             .managers = {},
+                             .head = std::nullopt}},
                           .teams = {},
                           .nested_maps = {{"metrics", {{"latency", 50}, {"throughput", 1000}}}}};
 
@@ -1463,10 +1442,9 @@ suite incremental_streaming_tests = [] {
    };
 
    "object larger than buffer - map<string,string> with 512-byte buffer"_test = [] {
-      std::map<std::string, std::string> original = {
-         {"first_key_here", "first_value_here"},
-         {"second_key_here", "second_value_here"},
-         {"third_key_here", "third_value_here"}};
+      std::map<std::string, std::string> original = {{"first_key_here", "first_value_here"},
+                                                     {"second_key_here", "second_value_here"},
+                                                     {"third_key_here", "third_value_here"}};
 
       std::string json;
       auto wec = glz::write_json(original, json);
@@ -1506,7 +1484,8 @@ suite incremental_streaming_tests = [] {
    };
 
    "nested vectors larger than buffer"_test = [] {
-      std::vector<std::vector<int>> original = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}, {13, 14, 15}, {16, 17, 18}, {19, 20, 21}};
+      std::vector<std::vector<int>> original = {{1, 2, 3},    {4, 5, 6},    {7, 8, 9},   {10, 11, 12},
+                                                {13, 14, 15}, {16, 17, 18}, {19, 20, 21}};
 
       std::string json;
       auto wec = glz::write_json(original, json);
@@ -1544,7 +1523,8 @@ suite incremental_streaming_tests = [] {
    };
 
    "map of vectors larger than buffer"_test = [] {
-      std::map<std::string, std::vector<int>> original = {{"first", {1, 2, 3}}, {"second", {4, 5, 6}}, {"third", {7, 8, 9}}};
+      std::map<std::string, std::vector<int>> original = {
+         {"first", {1, 2, 3}}, {"second", {4, 5, 6}}, {"third", {7, 8, 9}}};
 
       std::string json;
       auto wec = glz::write_json(original, json);
@@ -1598,12 +1578,11 @@ suite incremental_streaming_tests = [] {
                               .address = {.street = "456 Another Street Blvd", .city = "Los Angeles", .zip = 90001},
                               .emails = {"employee2@company.com"},
                               .metadata = {{"role", "manager"}}}},
-         .managers = {{"lead",
-                       Person{.name = "Tech Lead",
-                              .age = 40,
-                              .address = {.street = "789 Manager Lane", .city = "Seattle", .zip = 98101},
-                              .emails = {"lead@company.com"},
-                              .metadata = {}}}},
+         .managers = {{"lead", Person{.name = "Tech Lead",
+                                      .age = 40,
+                                      .address = {.street = "789 Manager Lane", .city = "Seattle", .zip = 98101},
+                                      .emails = {"lead@company.com"},
+                                      .metadata = {}}}},
          .head = Person{.name = "Department Head",
                         .age = 50,
                         .address = {.street = "Executive Suite", .city = "New York", .zip = 10001},
@@ -1660,10 +1639,9 @@ suite incremental_streaming_tests = [] {
    };
 
    "array of strings larger than buffer"_test = [] {
-      std::vector<std::string> original = {"this is a fairly long string that takes up space",
-                                           "another long string with lots of characters in it",
-                                           "yet another string to make the array larger than buffer",
-                                           "and one more for good measure with extra padding"};
+      std::vector<std::string> original = {
+         "this is a fairly long string that takes up space", "another long string with lots of characters in it",
+         "yet another string to make the array larger than buffer", "and one more for good measure with extra padding"};
 
       std::string json;
       auto wec = glz::write_json(original, json);
@@ -1685,19 +1663,20 @@ suite incremental_streaming_tests = [] {
       Company original{
          .name = "Large Corporation Inc",
          .departments =
-            {Department{.name = "Engineering",
-                        .employees = {Person{.name = "Engineer 1",
-                                             .age = 28,
-                                             .address = {.street = "100 Tech Blvd", .city = "Palo Alto", .zip = 94301},
-                                             .emails = {"eng1@corp.com"},
-                                             .metadata = {{"team", "backend"}}},
-                                      Person{.name = "Engineer 2",
-                                             .age = 32,
-                                             .address = {.street = "200 Code Ave", .city = "Mountain View", .zip = 94043},
-                                             .emails = {"eng2@corp.com", "eng2.personal@gmail.com"},
-                                             .metadata = {{"team", "frontend"}, {"remote", "yes"}}}},
-                        .managers = {},
-                        .head = std::nullopt},
+            {Department{
+                .name = "Engineering",
+                .employees = {Person{.name = "Engineer 1",
+                                     .age = 28,
+                                     .address = {.street = "100 Tech Blvd", .city = "Palo Alto", .zip = 94301},
+                                     .emails = {"eng1@corp.com"},
+                                     .metadata = {{"team", "backend"}}},
+                              Person{.name = "Engineer 2",
+                                     .age = 32,
+                                     .address = {.street = "200 Code Ave", .city = "Mountain View", .zip = 94043},
+                                     .emails = {"eng2@corp.com", "eng2.personal@gmail.com"},
+                                     .metadata = {{"team", "frontend"}, {"remote", "yes"}}}},
+                .managers = {},
+                .head = std::nullopt},
              Department{.name = "Sales",
                         .employees = {},
                         .managers = {{"regional",
@@ -1707,8 +1686,18 @@ suite incremental_streaming_tests = [] {
                                              .emails = {"sales@corp.com"},
                                              .metadata = {}}}},
                         .head = std::nullopt}},
-         .teams = {{"alpha", {Person{.name = "Alpha Lead", .age = 35, .address = {.street = "A St", .city = "Austin", .zip = 78701}, .emails = {"alpha@corp.com"}, .metadata = {}}}},
-                   {"beta", {Person{.name = "Beta Lead", .age = 33, .address = {.street = "B St", .city = "Denver", .zip = 80201}, .emails = {"beta@corp.com"}, .metadata = {}}}}},
+         .teams = {{"alpha",
+                    {Person{.name = "Alpha Lead",
+                            .age = 35,
+                            .address = {.street = "A St", .city = "Austin", .zip = 78701},
+                            .emails = {"alpha@corp.com"},
+                            .metadata = {}}}},
+                   {"beta",
+                    {Person{.name = "Beta Lead",
+                            .age = 33,
+                            .address = {.street = "B St", .city = "Denver", .zip = 80201},
+                            .emails = {"beta@corp.com"},
+                            .metadata = {}}}}},
          .nested_maps = {{"budget", {{"q1", 1000000}, {"q2", 1500000}, {"q3", 1200000}, {"q4", 1800000}}},
                          {"headcount", {{"engineering", 150}, {"sales", 75}, {"marketing", 50}, {"hr", 20}}}}};
 
@@ -1866,8 +1855,9 @@ suite slow_streaming_write_tests = [] {
    };
 
    "slow write - map of vectors with 25 bytes per write"_test = [] {
-      std::map<std::string, std::vector<int>> original = {
-         {"primes", {2, 3, 5, 7, 11, 13, 17, 19}}, {"evens", {2, 4, 6, 8, 10, 12, 14, 16}}, {"odds", {1, 3, 5, 7, 9, 11, 13, 15}}};
+      std::map<std::string, std::vector<int>> original = {{"primes", {2, 3, 5, 7, 11, 13, 17, 19}},
+                                                          {"evens", {2, 4, 6, 8, 10, 12, 14, 16}},
+                                                          {"odds", {1, 3, 5, 7, 9, 11, 13, 15}}};
 
       slow_ostringbuf sbuf(25);
       std::ostream slow_stream(&sbuf);
@@ -1936,8 +1926,7 @@ suite slow_streaming_write_tests = [] {
 
    "slow write - large array with small buffer and slow writes"_test = [] {
       std::vector<int> original(100);
-      for (int i = 0; i < 100; ++i)
-         original[i] = i;
+      for (int i = 0; i < 100; ++i) original[i] = i;
 
       slow_ostringbuf sbuf(8);
       std::ostream slow_stream(&sbuf);
@@ -2011,15 +2000,21 @@ suite slow_streaming_write_tests = [] {
 
    "slow write - company structure with 50 bytes per write"_test = [] {
       Company original{.name = "SlowWriteCorp",
-                       .departments = {Department{.name = "Engineering",
-                                                  .employees = {Person{.name = "Engineer",
-                                                                       .age = 30,
-                                                                       .address = {.street = "123 Tech St", .city = "TechCity", .zip = 12345},
-                                                                       .emails = {"eng@corp.com"},
-                                                                       .metadata = {{"role", "dev"}}}},
-                                                  .managers = {},
-                                                  .head = std::nullopt}},
-                       .teams = {{"alpha", {Person{.name = "Lead", .age = 35, .address = {.street = "A St", .city = "Austin", .zip = 78701}, .emails = {"lead@corp.com"}, .metadata = {}}}}},
+                       .departments = {Department{
+                          .name = "Engineering",
+                          .employees = {Person{.name = "Engineer",
+                                               .age = 30,
+                                               .address = {.street = "123 Tech St", .city = "TechCity", .zip = 12345},
+                                               .emails = {"eng@corp.com"},
+                                               .metadata = {{"role", "dev"}}}},
+                          .managers = {},
+                          .head = std::nullopt}},
+                       .teams = {{"alpha",
+                                  {Person{.name = "Lead",
+                                          .age = 35,
+                                          .address = {.street = "A St", .city = "Austin", .zip = 78701},
+                                          .emails = {"lead@corp.com"},
+                                          .metadata = {}}}}},
                        .nested_maps = {{"budget", {{"q1", 100000}, {"q2", 150000}}}}};
 
       slow_ostringbuf sbuf(50);
@@ -2039,8 +2034,7 @@ suite slow_streaming_write_tests = [] {
    "slow write - verify multiple write calls happen"_test = [] {
       // Generate enough data to require multiple flushes
       std::vector<int> original(500);
-      for (int i = 0; i < 500; ++i)
-         original[i] = i;
+      for (int i = 0; i < 500; ++i) original[i] = i;
 
       slow_ostringbuf sbuf(64);
       std::ostream slow_stream(&sbuf);
@@ -2759,10 +2753,7 @@ suite json_stream_reader_edge_cases = [] {
 // ============================================================================
 
 // Helper to create temp file path
-inline std::string temp_file_path(const std::string& name)
-{
-   return "/tmp/glaze_streaming_test_" + name;
-}
+inline std::string temp_file_path(const std::string& name) { return "/tmp/glaze_streaming_test_" + name; }
 
 suite file_io_streaming_tests = [] {
    "write JSON to file then read back"_test = [] {
@@ -2936,10 +2927,12 @@ suite file_io_streaming_tests = [] {
       std::vector<LargeRecord> original;
       original.reserve(50000);
       for (int i = 0; i < 50000; ++i) {
-         original.push_back({i, "record_" + std::to_string(i),
-                             "This is a longer description field with more text to increase file size for record number " +
-                                std::to_string(i),
-                             {i, i + 1, i + 2, i + 3, i + 4}});
+         original.push_back(
+            {i,
+             "record_" + std::to_string(i),
+             "This is a longer description field with more text to increase file size for record number " +
+                std::to_string(i),
+             {i, i + 1, i + 2, i + 3, i + 4}});
       }
 
       // Write
@@ -3143,14 +3136,15 @@ suite file_io_streaming_tests = [] {
       std::string filepath = temp_file_path("deep_nested.json");
 
       Company original{.name = "FileCorp",
-                       .departments = {Department{.name = "Engineering",
-                                                  .employees = {Person{.name = "Alice",
-                                                                       .age = 30,
-                                                                       .address = {.street = "123 Main St", .city = "Boston", .zip = 12345},
-                                                                       .emails = {"alice@company.com"},
-                                                                       .metadata = {{"role", "engineer"}}}},
-                                                  .managers = {},
-                                                  .head = std::nullopt}},
+                       .departments = {Department{
+                          .name = "Engineering",
+                          .employees = {Person{.name = "Alice",
+                                               .age = 30,
+                                               .address = {.street = "123 Main St", .city = "Boston", .zip = 12345},
+                                               .emails = {"alice@company.com"},
+                                               .metadata = {{"role", "engineer"}}}},
+                          .managers = {},
+                          .head = std::nullopt}},
                        .teams = {},
                        .nested_maps = {{"budget", {{"q1", 100000}}}}};
 
@@ -3512,8 +3506,7 @@ suite buffer_size_requirements = [] {
       expect(!rec);
       expect(parsed.size() == 2u);
    };
-
-   };
+};
 
 // ============================================================================
 // STREAMING_STATE UNIT TESTS

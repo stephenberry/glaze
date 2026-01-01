@@ -60,8 +60,8 @@ namespace glz
 
       Stream* stream_;
       std::vector<char> buffer_;
-      size_t read_pos_ = 0;       // Current read position in buffer
-      size_t data_end_ = 0;       // End of valid data in buffer
+      size_t read_pos_ = 0; // Current read position in buffer
+      size_t data_end_ = 0; // End of valid data in buffer
       size_t total_consumed_ = 0; // Total bytes consumed (for error reporting)
       bool eof_reached_ = false;
 
@@ -184,7 +184,7 @@ namespace glz
       static constexpr bool is_resizable = false;
       static constexpr bool has_bounded_capacity = false;
       static constexpr bool is_output_streaming = false; // Output streaming
-      static constexpr bool is_input_streaming = true;   // Input streaming
+      static constexpr bool is_input_streaming = true; // Input streaming
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(const basic_istream_buffer<Stream, N>& b) noexcept
       {

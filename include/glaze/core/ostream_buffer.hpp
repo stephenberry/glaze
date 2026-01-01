@@ -17,9 +17,7 @@ namespace glz
    // Requires write(const char*, std::streamsize) method
    // Excludes wide streams (wostream) which use wchar_t
    template <class S>
-   concept byte_output_stream = requires(S& s, const char* data, std::streamsize n) {
-      s.write(data, n);
-   };
+   concept byte_output_stream = requires(S& s, const char* data, std::streamsize n) { s.write(data, n); };
 
    // A streaming buffer adapter that writes to an output stream.
    // Supports incremental flushing during serialization for bounded memory usage.
@@ -63,8 +61,7 @@ namespace glz
       using stream_type = Stream;
 
       // Construct with output stream and optional initial capacity
-      explicit basic_ostream_buffer(Stream& stream, size_t initial_capacity = DefaultCapacity)
-          : stream_(&stream)
+      explicit basic_ostream_buffer(Stream& stream, size_t initial_capacity = DefaultCapacity) : stream_(&stream)
       {
          buffer_.resize(initial_capacity);
          logical_size_ = initial_capacity;
@@ -182,7 +179,10 @@ namespace glz
          return true;
       }
 
-      GLZ_ALWAYS_INLINE static void finalize(basic_ostream_buffer<Stream, N>& b, size_t written) { b.finalize(written); }
+      GLZ_ALWAYS_INLINE static void finalize(basic_ostream_buffer<Stream, N>& b, size_t written)
+      {
+         b.finalize(written);
+      }
 
       GLZ_ALWAYS_INLINE static void flush(basic_ostream_buffer<Stream, N>& b, size_t written) { b.flush(written); }
    };

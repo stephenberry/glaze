@@ -188,8 +188,8 @@ namespace glz
             }
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
-                  return unexpected(
-                     error_ctx{0, error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
+                  return unexpected(error_ctx{
+                     0, error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
                double start{};
@@ -383,8 +383,8 @@ namespace glz
             }
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
-                  return unexpected(
-                     error_ctx{0, error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
+                  return unexpected(error_ctx{
+                     0, error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
                double start{};
@@ -407,8 +407,8 @@ namespace glz
             }
             else if (dist.distribution == "uniform") {
                if (dist.range.size() != 2) {
-                  return unexpected(
-                     error_ctx{0, error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
+                  return unexpected(error_ctx{
+                     0, error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
                double start{};
@@ -431,8 +431,8 @@ namespace glz
             }
             else if (dist.distribution == "normal") {
                if (dist.range.size() != 2) {
-                  return unexpected(
-                     error_ctx{0, error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
+                  return unexpected(error_ctx{
+                     0, error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
                double mean{};
