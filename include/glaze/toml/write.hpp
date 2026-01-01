@@ -557,6 +557,9 @@ namespace glz
       }
       std::memcpy(&b[ix], ", ", 2);
       ix += 2;
+      if constexpr (is_output_streaming<B>) {
+         flush_buffer(b, ix);
+      }
    }
 
    template <auto Opts, bool minified_check = true, class B>
@@ -565,6 +568,9 @@ namespace glz
    {
       std::memcpy(&b[ix], "\n", 1);
       ++ix;
+      if constexpr (is_output_streaming<B>) {
+         flush_buffer(b, ix);
+      }
    }
 
    template <class T>
@@ -847,6 +853,10 @@ namespace glz
       if (bool(ec)) [[unlikely]] {
          return ec;
       }
-      return {buffer_to_file(buffer, file_name)};
+      const auto file_ec = buffer_to_file(buffer, file_name);
+      if (bool(file_ec)) [[unlikely]] {
+         return {0, file_ec};
+      }
+      return {buffer.size(), error_code::none};
    }
 }

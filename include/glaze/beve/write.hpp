@@ -706,6 +706,9 @@ namespace glz
 
             for (auto&& x : value) {
                serialize<BEVE>::op<Opts>(x, ctx, b, ix);
+               if constexpr (is_output_streaming<decltype(b)>) {
+                  flush_buffer(b, ix);
+               }
             }
          }
       }
@@ -749,18 +752,21 @@ namespace glz
    template <writable_map_t T>
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      static auto op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static auto op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          using Key = typename T::key_type;
 
          constexpr uint8_t tag = beve_key_traits<Key>::header;
-         dump_type(tag, args...);
+         dump_type(tag, b, ix);
 
-         dump_compressed_int<Opts>(value.size(), args...);
+         dump_compressed_int<Opts>(value.size(), b, ix);
          for (auto&& [k, v] : value) {
-            serialize<BEVE>::no_header<Opts>(k, ctx, args...);
-            serialize<BEVE>::op<Opts>(v, ctx, args...);
+            serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+            serialize<BEVE>::op<Opts>(v, ctx, b, ix);
+            if constexpr (is_output_streaming<B>) {
+               flush_buffer(b, ix);
+            }
          }
       }
    };
@@ -1080,6 +1086,9 @@ namespace glz
                   }();
 
                   serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
+                  if constexpr (is_output_streaming<decltype(b)>) {
+                     flush_buffer(b, ix);
+                  }
                }
             });
          }
@@ -1110,6 +1119,9 @@ namespace glz
                   }();
 
                   serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
+                  if constexpr (is_output_streaming<decltype(b)>) {
+                     flush_buffer(b, ix);
+                  }
                }
             });
          }
@@ -1194,7 +1206,7 @@ namespace glz
          file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
       }
       else {
-         return {error_code::file_open_failure};
+         return {0, error_code::file_open_failure};
       }
 
       return {};
@@ -1230,14 +1242,15 @@ namespace glz
    }
 
    // Append a BEVE value to an existing buffer without clearing it
-   // Returns the number of bytes written via the expected value
+   // Returns the number of bytes written via result.count
    template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
       requires output_buffer<Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_beve_append(T&& value, Buffer& buffer)
+   [[nodiscard]] error_ctx write_beve_append(T&& value, Buffer& buffer)
    {
+      using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
       const size_t start_ix = buffer.size();
 
-      if constexpr (resizable<Buffer>) {
+      if constexpr (traits::is_resizable) {
          if (buffer.size() < start_ix + 2 * write_padding_bytes) {
             buffer.resize(start_ix + 2 * write_padding_bytes);
          }
@@ -1247,27 +1260,24 @@ namespace glz
       size_t ix = start_ix;
       to<BEVE, std::remove_cvref_t<T>>::template op<set_beve<Opts>()>(std::forward<T>(value), ctx, buffer, ix);
 
-      if constexpr (resizable<Buffer>) {
-         buffer.resize(ix);
-      }
-
       if (bool(ctx.error)) [[unlikely]] {
-         return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message});
+         return {ix - start_ix, ctx.error, ctx.custom_error_message};
       }
 
-      return ix - start_ix; // bytes written
+      traits::finalize(buffer, ix);
+      return {ix - start_ix, error_code::none, ctx.custom_error_message}; // bytes written
    }
 
    // Append a BEVE value to an existing buffer with a delimiter prefix
    // Useful for streaming multiple values
    template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
       requires output_buffer<Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_beve_append_with_delimiter(T&& value, Buffer& buffer)
+   [[nodiscard]] error_ctx write_beve_append_with_delimiter(T&& value, Buffer& buffer)
    {
       write_beve_delimiter(buffer);
       auto result = write_beve_append<Opts>(std::forward<T>(value), buffer);
-      if (result) {
-         return *result + 1; // +1 for delimiter
+      if (!result) {
+         result.count += 1; // +1 for delimiter
       }
       return result;
    }
@@ -1277,9 +1287,10 @@ namespace glz
       requires output_buffer<Buffer> && readable_array_t<Container>
    [[nodiscard]] error_ctx write_beve_delimited(const Container& values, Buffer& buffer)
    {
+      using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
       context ctx{};
 
-      if constexpr (resizable<Buffer>) {
+      if constexpr (traits::is_resizable) {
          if (buffer.size() < 2 * write_padding_bytes) {
             buffer.resize(2 * write_padding_bytes);
          }
@@ -1298,18 +1309,13 @@ namespace glz
          to<BEVE, std::remove_cvref_t<decltype(value)>>::template op<set_beve<Opts>()>(value, ctx, buffer, ix);
 
          if (bool(ctx.error)) [[unlikely]] {
-            if constexpr (resizable<Buffer>) {
-               buffer.resize(ix);
-            }
-            return {ctx.error, ctx.custom_error_message};
+            traits::finalize(buffer, ix);
+            return {ix, ctx.error, ctx.custom_error_message};
          }
       }
 
-      if constexpr (resizable<Buffer>) {
-         buffer.resize(ix);
-      }
-
-      return {};
+      traits::finalize(buffer, ix);
+      return {ix, error_code::none, ctx.custom_error_message};
    }
 
    // Write multiple BEVE values to a buffer with delimiters, returning the buffer
@@ -1318,9 +1324,9 @@ namespace glz
    [[nodiscard]] glz::expected<std::string, error_ctx> write_beve_delimited(const Container& values)
    {
       std::string buffer{};
-      const auto ec = write_beve_delimited<Opts>(values, buffer);
-      if (bool(ec)) [[unlikely]] {
-         return glz::unexpected(ec);
+      const auto result = write_beve_delimited<Opts>(values, buffer);
+      if (result) [[unlikely]] {
+         return glz::unexpected(static_cast<error_ctx>(result));
       }
       return buffer;
    }

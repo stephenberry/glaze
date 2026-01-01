@@ -21,6 +21,32 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
+// v6.5.0 unified error_ctx and streaming I/O support
+//
+// error_ctx struct:
+// - Field order changed: {count, ec, custom_error_message}
+//   (was {ec, custom_error_message, location, includer_error})
+// - 'location' field renamed to 'count' for consistency across read/write
+// - 'includer_error' field removed (use custom_error_message)
+//
+// context struct:
+// - No longer 'final' (now inheritable for streaming_context)
+// - 'includer_error' field removed (use custom_error_message)
+//
+// is_context concept:
+// - Changed from exact type match to structural concept
+// - Old: std::same_as<std::decay_t<T>, context>
+// - New: Checks for 'error' and 'indentation_level' members
+//
+// Return types:
+// - Raw buffer writes (write_json(value, char*)) now return error_ctx
+//   instead of expected<size_t, error_ctx>. Byte count is in error_ctx::count.
+//
+// New error code:
+// - error_code::buffer_overflow: Returned when writing to fixed-size buffers
+//   that are too small
+#define glaze_v6_5_0_error_ctx
+
 // v6.2.0 moves append_arrays and error_on_const_read out of glz::opts
 // Use a custom opts struct inheriting from glz::opts to enable these options
 #define glaze_v6_2_0_opts_append_arrays

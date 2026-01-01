@@ -16,6 +16,10 @@ Glaze also supports:
 >
 > Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
 
+> [!TIP]
+>
+> **New: Streaming I/O Support** - Glaze now supports streaming serialization and deserialization for processing large files with bounded memory usage. Write JSON/BEVE directly to output streams with automatic flushing, or read from input streams with automatic refilling. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for details.
+
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
@@ -44,6 +48,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - [JSON Schema generation](https://stephenberry.github.io/glaze/json-schema/)
 - [Partial Read](https://stephenberry.github.io/glaze/partial-read/) and [Partial Write](https://stephenberry.github.io/glaze/partial-write/) support
+- [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for reading/writing large files with bounded memory
 - [Much more!](#more-features)
 
 ## Performance
@@ -176,6 +181,35 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 > [!IMPORTANT]
 >
 > The file name (2nd argument), must be null terminated.
+
+### Writing to Streams
+
+For streaming to `std::ostream` destinations (files, network, etc.) with bounded memory:
+
+```c++
+#include "glaze/core/ostream_buffer.hpp"
+
+std::ofstream file("output.json");
+glz::basic_ostream_buffer<std::ofstream> buffer(file);  // Concrete type for performance
+auto ec = glz::write_json(obj, buffer);
+```
+
+The buffer flushes incrementally during serialization, enabling arbitrarily large outputs with fixed memory. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for details on buffer types and stream concepts.
+
+### Reading from Streams
+
+For streaming from `std::istream` sources (files, network, etc.) with bounded memory:
+
+```c++
+#include "glaze/core/istream_buffer.hpp"
+
+std::ifstream file("input.json");
+glz::basic_istream_buffer<std::ifstream> buffer(file);
+my_struct obj;
+auto ec = glz::read_json(obj, buffer);
+```
+
+The buffer refills automatically during parsing, enabling reading of arbitrarily large inputs with fixed memory. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for NDJSON processing and other streaming patterns.
 
 ## Compiler/System Support
 
@@ -715,6 +749,26 @@ Produces this error:
 
 Denoting that x is invalid here.
 
+## Bytes Consumed on Read
+
+The `error_ctx` type returned by read operations includes a `count` field that indicates the byte position in the input buffer:
+
+```c++
+std::string buffer = R"({"x":1,"y":2})";
+my_struct obj{};
+auto ec = glz::read_json(obj, buffer);
+if (!ec) {
+   // Success: ec.count contains bytes consumed
+   size_t bytes_consumed = ec.count;
+   // bytes_consumed == 13 (entire JSON object)
+}
+```
+
+This is useful for:
+- **Streaming**: Reading multiple JSON values from a single buffer
+- **Partial parsing**: Knowing where parsing stopped with `partial_read` option
+- **Error diagnostics**: On failure, `count` indicates where the error occurred
+
 # Input Buffer (Null) Termination
 
 A non-const `std::string` is recommended for input buffers, as this allows Glaze to improve performance with temporary padding and the buffer will be null terminated.
@@ -964,11 +1018,37 @@ assert(json[2]["pi"].get<double>() == 3.14);
 
 Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below, but it is not recommended.
 
-```
+```c++
 glz::read_json(obj, buffer);
-const auto n = glz::write_json(obj, buffer.data()).value_or(0);
-buffer.resize(n);
+const auto result = glz::write_json(obj, buffer.data());
+if (!result) {
+   buffer.resize(result.count);
+}
 ```
+
+### Writing to Fixed-Size Buffers
+
+All write functions return `glz::error_ctx`, which provides both error information and the byte count:
+
+```c++
+std::array<char, 1024> buffer;
+auto ec = glz::write_json(my_obj, buffer);
+if (ec) {
+   if (ec.ec == glz::error_code::buffer_overflow) {
+      // Buffer was too small
+      std::cerr << "Overflow after " << ec.count << " bytes\n";
+   }
+   return;
+}
+// Success: ec.count contains bytes written
+std::string_view json(buffer.data(), ec.count);
+```
+
+The `error_ctx` type provides:
+- `if (ec)` - true when there is an error (matches `std::error_code` semantics)
+- `ec.count` - bytes processed (always populated, even on error)
+- `ec.ec` - the error code
+- `glz::format_error(ec, buffer)` - formatted error message
 
 ## Compile Time Options
 
@@ -1149,6 +1229,8 @@ auto ec = glz::read_ndjson(x, s);
 ### [JSON Schema](https://stephenberry.github.io/glaze/json-schema/)
 
 ### [Shared Library API](https://stephenberry.github.io/glaze/glaze-interfaces/)
+
+### [Streaming I/O](https://stephenberry.github.io/glaze/streaming/)
 
 ### [Tagged Binary Messages](https://stephenberry.github.io/glaze/binary/)
 

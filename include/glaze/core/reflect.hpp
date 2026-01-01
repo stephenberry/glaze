@@ -2658,9 +2658,6 @@ namespace glz
    [[nodiscard]] inline std::string format_error(const error_ctx& pe)
    {
       std::string error_str{meta<error_code>::keys[uint32_t(pe.ec)]};
-      if (pe.includer_error.size()) {
-         error_str.append(pe.includer_error);
-      }
       if (pe.custom_error_message.size()) {
          error_str.append(" ");
          error_str.append(pe.custom_error_message.begin(), pe.custom_error_message.end());
@@ -2672,11 +2669,8 @@ namespace glz
    {
       const auto error_type_str = meta<error_code>::keys[uint32_t(pe.ec)];
 
-      const auto info = detail::get_source_info(buffer, pe.location);
+      const auto info = detail::get_source_info(buffer, pe.count);
       auto error_str = detail::generate_error_string(error_type_str, info);
-      if (pe.includer_error.size()) {
-         error_str.append(pe.includer_error);
-      }
       if (pe.custom_error_message.size()) {
          error_str.append(" ");
          error_str.append(pe.custom_error_message.begin(), pe.custom_error_message.end());

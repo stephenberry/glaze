@@ -34,6 +34,7 @@
 
 #include "glaze/base64/base64.hpp"
 #include "glaze/beve.hpp"
+#include "glaze/core/ostream_buffer.hpp"
 #include "glaze/beve/beve_to_json.hpp"
 #include "glaze/csv.hpp"
 #include "glaze/file/file_ops.hpp"

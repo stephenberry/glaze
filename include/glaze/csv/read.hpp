@@ -1550,7 +1550,7 @@ namespace glz
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(ec)) {
-         return {ec};
+         return {0, ec};
       }
 
       return read<opts_csv{.layout = layout}>(value, buffer, ctx);

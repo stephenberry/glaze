@@ -46,7 +46,7 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return result_t{unexpected(error_ctx{ctx.error})};
+         return result_t{unexpected(error_ctx{0, ctx.error})};
       }
 
       if constexpr (N == 0) {
@@ -198,7 +198,7 @@ namespace glz
          });
 
          if (bool(ctx.error)) [[unlikely]] {
-            return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+            return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
          }
 
          return ret;
@@ -268,7 +268,7 @@ namespace glz
       auto start = it;
 
       if (buffer.empty()) [[unlikely]] {
-         return result_t{unexpected(error_ctx{error_code::no_read_input})};
+         return result_t{unexpected(error_ctx{0, error_code::no_read_input})};
       }
 
       // Empty pointer means return the whole document
@@ -289,11 +289,11 @@ namespace glz
          const bool is_last = remaining_ptr.empty();
 
          if (skip_ws<Opts>(ctx, it, end)) {
-            return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+            return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
          }
 
          if (it >= end) {
-            return result_t{unexpected(error_ctx{error_code::unexpected_end, "", size_t(it - start)})};
+            return result_t{unexpected(error_ctx{size_t(it - start), error_code::unexpected_end})};
          }
 
          const bool is_numeric = runtime_maybe_numeric(token);
@@ -304,11 +304,11 @@ namespace glz
 
             while (true) {
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
                }
 
                if (it >= end) {
-                  return result_t{unexpected(error_ctx{error_code::unexpected_end, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), error_code::unexpected_end})};
                }
 
                if (*it == '}') {
@@ -316,30 +316,30 @@ namespace glz
                }
 
                if (*it != '"') {
-                  return result_t{unexpected(error_ctx{error_code::expected_quote, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), error_code::expected_quote})};
                }
                ++it;
 
                auto key_start = it;
                skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
-                  return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
                }
                const sv key_content{key_start, size_t(it - key_start)};
                ++it; // skip closing quote
 
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
                }
 
                if (it >= end || *it != ':') {
-                  return result_t{unexpected(error_ctx{
-                     it >= end ? error_code::unexpected_end : error_code::expected_colon, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start),
+                     it >= end ? error_code::unexpected_end : error_code::expected_colon})};
                }
                ++it;
 
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
                }
 
                if (token.size() == key_content.size() && std::equal(token.begin(), token.end(), key_content.begin())) {
@@ -353,11 +353,11 @@ namespace glz
                // Skip this value
                skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
-                  return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
                }
 
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
                }
 
                if (it < end && *it == ',') {
@@ -366,35 +366,35 @@ namespace glz
             }
 
             if (!found) {
-               return result_t{unexpected(error_ctx{error_code::key_not_found, "", size_t(it - start)})};
+               return result_t{unexpected(error_ctx{size_t(it - start), error_code::key_not_found})};
             }
          }
          else if (*it == '[') {
             if (!is_numeric) {
-               return result_t{unexpected(error_ctx{error_code::array_element_not_found, "", size_t(it - start)})};
+               return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
             }
 
             size_t index{};
             auto [p, ec] = std::from_chars(token.data(), token.data() + token.size(), index);
             if (ec != std::errc{}) {
-               return result_t{unexpected(error_ctx{error_code::array_element_not_found, "", size_t(it - start)})};
+               return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
             }
 
             ++it; // skip '['
 
             for (size_t i = 0; i < index; ++i) {
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
                }
                if (it >= end || *it == ']') {
-                  return result_t{unexpected(error_ctx{error_code::array_element_not_found, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
                }
                skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
-                  return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
                }
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+                  return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
                }
                if (it < end && *it == ',') {
                   ++it;
@@ -402,10 +402,10 @@ namespace glz
             }
 
             if (skip_ws<Opts>(ctx, it, end)) {
-               return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
+               return result_t{unexpected(error_ctx{size_t(it - start), ctx.error})};
             }
             if (it >= end || *it == ']') {
-               return result_t{unexpected(error_ctx{error_code::array_element_not_found, "", size_t(it - start)})};
+               return result_t{unexpected(error_ctx{size_t(it - start), error_code::array_element_not_found})};
             }
 
             if (is_last) {
@@ -413,11 +413,11 @@ namespace glz
             }
          }
          else {
-            return result_t{unexpected(error_ctx{error_code::syntax_error, "", size_t(it - start)})};
+            return result_t{unexpected(error_ctx{size_t(it - start), error_code::syntax_error})};
          }
       }
 
-      return result_t{unexpected(error_ctx{error_code::syntax_error, "", size_t(it - start)})};
+      return result_t{unexpected(error_ctx{size_t(it - start), error_code::syntax_error})};
    }
 
    // Runtime version of write_at - write a JSON value at a runtime JSON pointer location

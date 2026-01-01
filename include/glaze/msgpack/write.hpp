@@ -8,6 +8,7 @@
 #include <limits>
 #include <utility>
 
+#include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/seek.hpp"
@@ -421,6 +422,9 @@ namespace glz
             for_each<N>([&]<size_t I>() {
                if constexpr (!std::same_as<field_t<T, I>, hidden> && !std::same_as<field_t<T, I>, skip>) {
                   serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                  if constexpr (is_output_streaming<decltype(b)>) {
+                     flush_buffer(b, ix);
+                  }
                }
             });
          }
@@ -432,6 +436,9 @@ namespace glz
                   msgpack::detail::write_str_header(key.size(), b, ix);
                   msgpack::detail::dump_raw_bytes(key.data(), key.size(), b, ix);
                   serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                  if constexpr (is_output_streaming<decltype(b)>) {
+                     flush_buffer(b, ix);
+                  }
                }
             });
          }
@@ -459,6 +466,9 @@ namespace glz
          for (auto&& item : value) {
             serialize<MSGPACK>::op<Opts>(item.first, ctx, b, ix);
             serialize<MSGPACK>::op<Opts>(item.second, ctx, b, ix);
+            if constexpr (is_output_streaming<decltype(b)>) {
+               flush_buffer(b, ix);
+            }
          }
       }
    };
@@ -483,6 +493,9 @@ namespace glz
          msgpack::detail::write_array_header(value.size(), b, ix);
          for (auto&& element : value) {
             serialize<MSGPACK>::op<Opts>(element, ctx, b, ix);
+            if constexpr (is_output_streaming<decltype(b)>) {
+               flush_buffer(b, ix);
+            }
          }
       }
    };
@@ -832,7 +845,7 @@ namespace glz
    }
 
    template <write_supported<MSGPACK> T, raw_buffer Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -850,7 +863,7 @@ namespace glz
    }
 
    template <auto& Partial, write_supported<MSGPACK> T, raw_buffer Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write_msgpack(T&& value, Buffer&& buffer)
+   [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -859,9 +872,9 @@ namespace glz
    [[nodiscard]] glz::expected<std::string, error_ctx> write_msgpack(T&& value)
    {
       std::string buffer{};
-      const auto ec = write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), buffer);
-      if (bool(ec)) [[unlikely]] {
-         return glz::unexpected(ec);
+      const auto result = write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), buffer);
+      if (result) [[unlikely]] {
+         return glz::unexpected(static_cast<error_ctx>(result));
       }
       return {buffer};
    }
@@ -873,6 +886,9 @@ namespace glz
       if (ec) {
          return ec;
       }
-      return {buffer_to_file(buffer, file_name)};
+      if (auto file_ec = buffer_to_file(buffer, file_name); bool(file_ec)) {
+         return {0, file_ec};
+      }
+      return {};
    }
 }

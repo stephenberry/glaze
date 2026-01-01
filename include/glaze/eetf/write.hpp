@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glaze/core/buffer_traits.hpp>
 #include <glaze/core/reflect.hpp>
 #include <glaze/core/write.hpp>
 
@@ -164,21 +165,24 @@ namespace glz
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
       }
 
-      template <auto Opts, is_context Ctx, class... Args>
+      template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
       {
          const auto n = value.size();
-         encode_list_header(n, ctx, std::forward<Args>(args)...);
+         encode_list_header(n, ctx, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
          for (auto& i : value) {
-            serialize<EETF>::op<Opts>(i, ctx, args...);
+            serialize<EETF>::op<Opts>(i, ctx, b, ix);
+            if constexpr (is_output_streaming<B>) {
+               flush_buffer(b, ix);
+            }
          }
 
-         encode_list_tail(ctx, std::forward<Args>(args)...);
+         encode_list_tail(ctx, b, ix);
       }
    };
 
@@ -193,19 +197,22 @@ namespace glz
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
       }
 
-      template <auto Opts, is_context Ctx, class... Args>
+      template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
       {
          const auto n = value.size();
-         encode_map_header(n, ctx, std::forward<Args>(args)...);
+         encode_map_header(n, ctx, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
          for (auto&& [k, v] : value) {
-            serialize<EETF>::op<Opts>(k, ctx, args...);
-            serialize<EETF>::op<Opts>(v, ctx, args...);
+            serialize<EETF>::op<Opts>(k, ctx, b, ix);
+            serialize<EETF>::op<Opts>(v, ctx, b, ix);
+            if constexpr (is_output_streaming<B>) {
+               flush_buffer(b, ix);
+            }
          }
       }
    };
@@ -222,17 +229,17 @@ namespace glz
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
       }
 
-      template <auto Opts, class... Args>
+      template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
       {
          static constexpr auto N = reflect<T>::size;
 
          if constexpr (Opts.layout == eetf::map_layout) {
-            encode_map_header(N, ctx, std::forward<Args>(args)...);
+            encode_map_header(N, ctx, b, ix);
          }
          else {
-            encode_list_header(N, ctx, std::forward<Args>(args)...);
+            encode_list_header(N, ctx, b, ix);
          }
 
          if (bool(ctx.error)) [[unlikely]] {
@@ -250,11 +257,11 @@ namespace glz
 
          for_each<N>([&]<size_t I>() {
             if constexpr (Opts.layout == eetf::proplist_layout) {
-               encode_tuple_header(2, ctx, std::forward<Args>(args)...);
+               encode_tuple_header(2, ctx, b, ix);
             }
 
             static constexpr sv key = reflect<T>::keys[I];
-            serialize<EETF>::op<Opts>(key, ctx, std::forward<Args>(args)...);
+            serialize<EETF>::op<Opts>(key, ctx, b, ix);
 
             decltype(auto) member = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
@@ -265,7 +272,10 @@ namespace glz
                }
             }();
 
-            serialize<EETF>::op<Opts>(get_member(value, member), ctx, std::forward<Args>(args)...);
+            serialize<EETF>::op<Opts>(get_member(value, member), ctx, b, ix);
+            if constexpr (is_output_streaming<B>) {
+               flush_buffer(b, ix);
+            }
          });
       }
    };

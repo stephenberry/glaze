@@ -73,6 +73,9 @@ namespace glz
 
                   if (i != (n - 1)) {
                      dump<','>(b, ix);
+                     if constexpr (is_output_streaming<B>) {
+                        flush_buffer(b, ix);
+                     }
                   }
                }
             }
@@ -87,6 +90,9 @@ namespace glz
 
                if (i != (n - 1)) {
                   dump<','>(b, ix);
+                  if constexpr (is_output_streaming<B>) {
+                     flush_buffer(b, ix);
+                  }
                }
             }
          }
@@ -119,11 +125,17 @@ namespace glz
 
                   if (c < n_cols - 1) {
                      dump<','>(b, ix);
+                     if constexpr (is_output_streaming<B>) {
+                        flush_buffer(b, ix);
+                     }
                   }
                }
 
                if (r < n_rows - 1) {
                   dump<'\n'>(b, ix);
+                  if constexpr (is_output_streaming<B>) {
+                     flush_buffer(b, ix);
+                  }
                }
             }
 
@@ -158,11 +170,17 @@ namespace glz
 
                   if (r < value.size() - 1) {
                      dump<','>(b, ix);
+                     if constexpr (is_output_streaming<B>) {
+                        flush_buffer(b, ix);
+                     }
                   }
                }
 
                if (c < max_cols - 1) {
                   dump<'\n'>(b, ix);
+                  if constexpr (is_output_streaming<B>) {
+                     flush_buffer(b, ix);
+                  }
                }
             }
 
@@ -284,9 +302,15 @@ namespace glz
                   serialize<CSV>::op<Opts>(data[i], ctx, b, ix);
                   if (i < n - 1) {
                      dump<','>(b, ix);
+                     if constexpr (is_output_streaming<B>) {
+                        flush_buffer(b, ix);
+                     }
                   }
                }
                dump<'\n'>(b, ix);
+               if constexpr (is_output_streaming<B>) {
+                  flush_buffer(b, ix);
+               }
             }
          }
          else {
@@ -299,9 +323,15 @@ namespace glz
                   ++i;
                   if (i < n) {
                      dump<','>(b, ix);
+                     if constexpr (is_output_streaming<B>) {
+                        flush_buffer(b, ix);
+                     }
                   }
                }
                dump<'\n'>(b, ix);
+               if constexpr (is_output_streaming<B>) {
+                  flush_buffer(b, ix);
+               }
             }
 
             size_t row = 0;
@@ -318,6 +348,9 @@ namespace glz
                   ++i;
                   if (i < n) {
                      dump<','>(b, ix);
+                     if constexpr (is_output_streaming<B>) {
+                        flush_buffer(b, ix);
+                     }
                   }
                }
 
@@ -326,6 +359,9 @@ namespace glz
                }
 
                dump<'\n'>(b, ix);
+               if constexpr (is_output_streaming<B>) {
+                  flush_buffer(b, ix);
+               }
 
                ++row;
             }
@@ -569,6 +605,10 @@ namespace glz
       if (bool(ec)) [[unlikely]] {
          return ec;
       }
-      return {buffer_to_file(buffer, file_name)};
+      const auto file_ec = buffer_to_file(buffer, file_name);
+      if (bool(file_ec)) [[unlikely]] {
+         return {0, file_ec};
+      }
+      return {buffer.size(), error_code::none};
    }
 }

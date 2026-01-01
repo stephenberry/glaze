@@ -47,7 +47,7 @@ namespace glz
 
       if (layout.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
-         return {ctx.error, ctx.custom_error_message, 0};
+         return {0, ctx.error, ctx.custom_error_message};
       }
 
       auto p = read_iterators<Opts, false>(layout);
@@ -103,7 +103,7 @@ namespace glz
 
                   if (it == end) {
                      ctx.error = error_code::unexpected_end;
-                     return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
+                     return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                   }
 
                   const sv key{start, size_t(it - start)};
@@ -127,7 +127,7 @@ namespace glz
 
                      if (closing_pos == end) {
                         ctx.error = error_code::unexpected_end;
-                        return {ctx.error, "Closing tag not found for section", size_t(it - outer_start)};
+                        return {size_t(it - outer_start), ctx.error, "Closing tag not found for section"};
                      }
 
                      if (it + 1 < end) {
@@ -151,7 +151,7 @@ namespace glz
 
                         if (index >= N) {
                            ctx.error = error_code::unknown_key;
-                           return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
+                           return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                         }
                         else {
                            visit<N>(
@@ -240,7 +240,7 @@ namespace glz
                      }
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
+                        return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                      }
 
                      // Handle inverted sections and boolean sections
@@ -284,7 +284,7 @@ namespace glz
 
                   if (index >= N) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
-                     return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
+                     return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                   }
                   else [[likely]] {
                      // For triple braces, we need to expect three closing braces
@@ -300,7 +300,7 @@ namespace glz
 
                      if (closing_brace_count < expected_closing_braces) {
                         ctx.error = error_code::syntax_error;
-                        return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
+                        return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                      }
 
                      // Serialize the value
@@ -333,7 +333,7 @@ namespace glz
                         index);
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
+                        return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                      }
 
                      // Apply HTML escaping for double braces, leave unescaped for triple braces
@@ -367,7 +367,7 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
+         return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
       }
 
       return {};

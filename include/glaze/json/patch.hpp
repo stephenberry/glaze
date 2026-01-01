@@ -99,7 +99,7 @@ namespace glz
       for (size_t i = 0; i < token.size(); ++i) {
          if (token[i] == '~') {
             if (i + 1 >= token.size()) {
-               return unexpected(error_ctx{error_code::invalid_json_pointer});
+               return unexpected(error_ctx{0, error_code::invalid_json_pointer});
             }
             if (token[i + 1] == '0') {
                result += '~';
@@ -110,7 +110,7 @@ namespace glz
                ++i;
             }
             else {
-               return unexpected(error_ctx{error_code::invalid_json_pointer});
+               return unexpected(error_ctx{0, error_code::invalid_json_pointer});
             }
          }
          else {
@@ -171,7 +171,7 @@ namespace glz
          }
 
          if (path[0] != '/') {
-            return unexpected(error_ctx{error_code::invalid_json_pointer});
+            return unexpected(error_ctx{0, error_code::invalid_json_pointer});
          }
 
          auto last_slash = path.rfind('/');
@@ -217,7 +217,7 @@ namespace glz
    {
       if (path.empty()) {
          // Empty path refers to root itself, which has no parent
-         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+         return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
 
       auto split = detail::split_path(path);
@@ -239,7 +239,7 @@ namespace glz
       }
 
       if (!parent) {
-         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+         return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
 
       return std::pair<generic*, std::string>{parent, std::move(token)};
@@ -265,7 +265,7 @@ namespace glz
          // Create intermediate objects along the path
          // Parse path into segments and create missing intermediate objects
          if (path.empty() || path[0] != '/') {
-            return error_ctx{error_code::invalid_json_pointer};
+            return error_ctx{0, error_code::invalid_json_pointer};
          }
 
          generic* current = &root;
@@ -301,13 +301,13 @@ namespace glz
                   }
                   auto index_opt = detail::parse_array_index(*segment);
                   if (!index_opt || *index_opt > arr.size()) {
-                     return error_ctx{error_code::nonexistent_json_ptr};
+                     return error_ctx{0, error_code::nonexistent_json_ptr};
                   }
                   arr.insert(arr.begin() + static_cast<ptrdiff_t>(*index_opt), std::move(value));
                   return {};
                }
                else {
-                  return error_ctx{error_code::nonexistent_json_ptr};
+                  return error_ctx{0, error_code::nonexistent_json_ptr};
                }
             }
             else {
@@ -330,16 +330,16 @@ namespace glz
                else if (current->is_array()) {
                   auto index_opt = detail::parse_array_index(*segment);
                   if (!index_opt) {
-                     return error_ctx{error_code::nonexistent_json_ptr};
+                     return error_ctx{0, error_code::nonexistent_json_ptr};
                   }
                   auto& arr = current->get_array();
                   if (*index_opt >= arr.size()) {
-                     return error_ctx{error_code::nonexistent_json_ptr};
+                     return error_ctx{0, error_code::nonexistent_json_ptr};
                   }
                   current = &arr[*index_opt];
                }
                else {
-                  return error_ctx{error_code::nonexistent_json_ptr};
+                  return error_ctx{0, error_code::nonexistent_json_ptr};
                }
 
                remaining = remaining.substr(slash_pos + 1);
@@ -367,19 +367,19 @@ namespace glz
 
          auto index_opt = detail::parse_array_index(token);
          if (!index_opt) {
-            return error_ctx{error_code::nonexistent_json_ptr};
+            return error_ctx{0, error_code::nonexistent_json_ptr};
          }
 
          size_t index = *index_opt;
          if (index > arr.size()) {
-            return error_ctx{error_code::nonexistent_json_ptr};
+            return error_ctx{0, error_code::nonexistent_json_ptr};
          }
 
          arr.insert(arr.begin() + static_cast<ptrdiff_t>(index), std::move(value));
          return {};
       }
       else {
-         return error_ctx{error_code::nonexistent_json_ptr};
+         return error_ctx{0, error_code::nonexistent_json_ptr};
       }
    }
 
@@ -388,7 +388,7 @@ namespace glz
    {
       if (path.empty()) {
          // Cannot remove root
-         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+         return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
 
       auto nav = navigate_to_parent(root, path);
@@ -402,7 +402,7 @@ namespace glz
          auto& obj = parent->get_object();
          auto it = obj.find(token);
          if (it == obj.end()) {
-            return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+            return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
          }
          generic removed = std::move(it->second);
          obj.erase(it);
@@ -413,12 +413,12 @@ namespace glz
 
          auto index_opt = detail::parse_array_index(token);
          if (!index_opt) {
-            return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+            return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
          }
 
          size_t index = *index_opt;
          if (index >= arr.size()) {
-            return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+            return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
          }
 
          generic removed = std::move(arr[index]);
@@ -426,7 +426,7 @@ namespace glz
          return removed;
       }
       else {
-         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
+         return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
    }
 
@@ -463,7 +463,7 @@ namespace glz
 
          generic* target = navigate_to(&doc, path);
          if (!target) {
-            return error_ctx{error_code::nonexistent_json_ptr};
+            return error_ctx{0, error_code::nonexistent_json_ptr};
          }
 
          *target = value;
@@ -476,13 +476,13 @@ namespace glz
       {
          // Check for move into self (path cannot start with from)
          if (path.starts_with(from) && (path.size() == from.size() || path[from.size()] == '/')) {
-            return error_ctx{error_code::syntax_error};
+            return error_ctx{0, error_code::syntax_error};
          }
 
          // Remove from source
          auto removed = remove_at(doc, from);
          if (!removed) {
-            return error_ctx{error_code::nonexistent_json_ptr};
+            return error_ctx{0, error_code::nonexistent_json_ptr};
          }
 
          // Add to destination
@@ -495,7 +495,7 @@ namespace glz
       {
          const generic* source = navigate_to(&doc, from);
          if (!source) {
-            return error_ctx{error_code::nonexistent_json_ptr};
+            return error_ctx{0, error_code::nonexistent_json_ptr};
          }
 
          return insert_at(doc, path, *source, opts.create_intermediate);
@@ -506,18 +506,18 @@ namespace glz
       {
          if (path.empty()) {
             if (!equal(doc, expected)) {
-               return error_ctx{error_code::patch_test_failed};
+               return error_ctx{0, error_code::patch_test_failed};
             }
             return {};
          }
 
          const generic* target = navigate_to(&doc, path);
          if (!target) {
-            return error_ctx{error_code::nonexistent_json_ptr};
+            return error_ctx{0, error_code::nonexistent_json_ptr};
          }
 
          if (!equal(*target, expected)) {
-            return error_ctx{error_code::patch_test_failed};
+            return error_ctx{0, error_code::patch_test_failed};
          }
 
          return {};
@@ -529,7 +529,7 @@ namespace glz
          switch (op.op) {
          case patch_op_type::add:
             if (!op.value) {
-               return error_ctx{error_code::missing_key};
+               return error_ctx{0, error_code::missing_key};
             }
             return apply_add(doc, op.path, *op.value, opts);
 
@@ -538,30 +538,30 @@ namespace glz
 
          case patch_op_type::replace:
             if (!op.value) {
-               return error_ctx{error_code::missing_key};
+               return error_ctx{0, error_code::missing_key};
             }
             return apply_replace(doc, op.path, *op.value);
 
          case patch_op_type::move:
             if (!op.from) {
-               return error_ctx{error_code::missing_key};
+               return error_ctx{0, error_code::missing_key};
             }
             return apply_move(doc, *op.from, op.path, opts);
 
          case patch_op_type::copy:
             if (!op.from) {
-               return error_ctx{error_code::missing_key};
+               return error_ctx{0, error_code::missing_key};
             }
             return apply_copy(doc, *op.from, op.path, opts);
 
          case patch_op_type::test:
             if (!op.value) {
-               return error_ctx{error_code::missing_key};
+               return error_ctx{0, error_code::missing_key};
             }
             return apply_test(doc, op.path, *op.value);
 
          default:
-            return error_ctx{error_code::syntax_error};
+            return error_ctx{0, error_code::syntax_error};
          }
       }
    } // namespace detail
@@ -759,7 +759,7 @@ namespace glz
       [[nodiscard]] inline error_ctx apply_merge_patch_impl(generic& target, const generic& patch, uint32_t depth = 0)
       {
          if (depth >= max_recursive_depth_limit) [[unlikely]] {
-            return error_ctx{error_code::exceeded_max_recursive_depth};
+            return error_ctx{0, error_code::exceeded_max_recursive_depth};
          }
 
          if (patch.is_object()) {

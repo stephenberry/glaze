@@ -2217,6 +2217,25 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T> || has_try_emplace_back<T>) {
                while (it < end) {
+                  // Streaming refill point: at start of each iteration, ensure buffer has data
+                  if constexpr (has_streaming_state<decltype(ctx)>) {
+                     if (ctx.stream.enabled()) {
+                        const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
+                        const size_t remaining = ctx.stream.size() - consumed;
+                        // Refill when less than half of buffer remains to ensure space for next element
+                        if (remaining <= ctx.stream.size() / 2 || it >= end) {
+                           const char* new_it;
+                           const char* new_end;
+                           ctx.stream.consume_and_refill(consumed, new_it, new_end);
+                           it = new_it;
+                           end = new_end;
+                           if (it >= end && ctx.stream.at_eof()) {
+                              break; // No more data, exit loop normally
+                           }
+                        }
+                     }
+                  }
+
                   if constexpr (has_try_emplace_back<T>) {
                      if (value.try_emplace_back() != nullptr)
                         parse<JSON>::op<ws_handled<Opts>()>(value.back(), ctx, it, end);
@@ -2229,6 +2248,26 @@ namespace glz
 
                   if (bool(ctx.error)) [[unlikely]]
                      return;
+
+                  // Streaming refill point: after parsing each element, refill if buffer is low
+                  if constexpr (has_streaming_state<decltype(ctx)>) {
+                     if (ctx.stream.enabled()) {
+                        const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
+                        // Refill when less than 25% of buffer remains to ensure enough space for next element
+                        if (ctx.stream.size() - consumed <= ctx.stream.size() / 4 || it >= end) {
+                           const char* new_it;
+                           const char* new_end;
+                           ctx.stream.consume_and_refill(consumed, new_it, new_end);
+                           it = new_it;
+                           end = new_end;
+                           if (it >= end && ctx.stream.at_eof()) {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
+                     }
+                  }
+
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
@@ -2664,7 +2703,7 @@ namespace glz
             ctx.error = error_code::includer_error;
             auto& error_msg = error_buffer();
             error_msg = "file failed to open: " + string_file_path;
-            ctx.includer_error = error_msg;
+            ctx.custom_error_message = error_msg;
             return;
          }
 
@@ -2679,7 +2718,7 @@ namespace glz
             ctx.error = error_code::includer_error;
             auto& error_msg = error_buffer();
             error_msg = glz::format_error(ecode, nested_buffer);
-            ctx.includer_error = error_msg;
+            ctx.custom_error_message = error_msg;
             return;
          }
 
@@ -2919,6 +2958,26 @@ namespace glz
                   if ((all_fields & fields) == all_fields) {
                      ctx.error = error_code::partial_read_complete;
                      return;
+                  }
+               }
+
+               // Streaming refill point: at start of each iteration, ensure buffer has data
+               if constexpr (has_streaming_state<decltype(ctx)>) {
+                  if (ctx.stream.enabled()) {
+                     const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
+                     const size_t remaining = ctx.stream.size() - consumed;
+                     // Refill when less than half of buffer remains to ensure space for next key-value pair
+                     if (remaining <= ctx.stream.size() / 2 || it >= end) {
+                        const char* new_it;
+                        const char* new_end;
+                        ctx.stream.consume_and_refill(consumed, new_it, new_end);
+                        it = new_it;
+                        end = new_end;
+                        if (it >= end && ctx.stream.at_eof()) {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                     }
                   }
                }
 
@@ -3199,6 +3258,26 @@ namespace glz
                         return;
                   }
                }
+
+               // Streaming refill point: after parsing each key-value pair, refill if buffer is low
+               if constexpr (has_streaming_state<decltype(ctx)>) {
+                  if (ctx.stream.enabled()) {
+                     const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
+                     // Refill when less than 25% of buffer remains to ensure enough space for next element
+                     if (ctx.stream.size() - consumed <= ctx.stream.size() / 4 || it >= end) {
+                        const char* new_it;
+                        const char* new_end;
+                        ctx.stream.consume_and_refill(consumed, new_it, new_end);
+                        it = new_it;
+                        end = new_end;
+                        if (it >= end && ctx.stream.at_eof()) {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                     }
+                  }
+               }
+
                if (skip_ws<Opts>(ctx, it, end)) {
                   return;
                }
@@ -4569,18 +4648,41 @@ namespace glz
    }
 
    template <read_supported<JSON> T, is_buffer Buffer>
+      requires(!is_input_streaming<std::remove_reference_t<Buffer>>)
    [[nodiscard]] error_ctx read_json(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
+   // Overload for streaming input buffers (istream_buffer)
+   template <read_supported<JSON> T, class Buffer>
+      requires is_input_streaming<std::remove_reference_t<Buffer>>
+   [[nodiscard]] error_ctx read_json(T& value, Buffer&& buffer)
+   {
+      return read_streaming<opts{}>(value, std::forward<Buffer>(buffer));
+   }
+
    template <read_supported<JSON> T, is_buffer Buffer>
+      requires(!is_input_streaming<std::remove_reference_t<Buffer>>)
    [[nodiscard]] expected<T, error_ctx> read_json(Buffer&& buffer)
    {
       T value{};
       context ctx{};
       const error_ctx ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
+      if (ec) {
+         return unexpected<error_ctx>(ec);
+      }
+      return value;
+   }
+
+   // Overload for streaming input buffers (istream_buffer)
+   template <read_supported<JSON> T, class Buffer>
+      requires is_input_streaming<std::remove_reference_t<Buffer>>
+   [[nodiscard]] expected<T, error_ctx> read_json(Buffer&& buffer)
+   {
+      T value{};
+      const error_ctx ec = read_streaming<opts{}>(value, std::forward<Buffer>(buffer));
       if (ec) {
          return unexpected<error_ctx>(ec);
       }
@@ -4615,7 +4717,7 @@ namespace glz
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(ec)) {
-         return {ec};
+         return {0, ec};
       }
 
       return read<set_json<Opts>()>(value, buffer, ctx);
@@ -4630,7 +4732,7 @@ namespace glz
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(ec)) {
-         return {ec};
+         return {0, ec};
       }
 
       constexpr auto Options = opt_true<set_json<Opts>(), &opts::comments>;
