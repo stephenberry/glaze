@@ -16,6 +16,10 @@ Glaze also supports:
 >
 > Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
 
+> [!TIP]
+>
+> **New: Streaming I/O Support** - Glaze now supports streaming serialization and deserialization for processing large files with bounded memory usage. Write JSON/BEVE directly to output streams with automatic flushing, or read from input streams with automatic refilling. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for details.
+
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
