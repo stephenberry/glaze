@@ -45,9 +45,19 @@ namespace glz
    //   successful read to allow continued reading. For standard file streams, this
    //   has no practical impact beyond one extra read attempt at EOF.
 
+   // Minimum buffer capacity for streaming.
+   // Must be large enough to hold any single JSON value (floats can be ~24 bytes,
+   // plus overhead for keys, syntax, etc.). Set to 2 * write_padding_bytes for
+   // consistency with output buffers which resize to this value on first write.
+   inline constexpr size_t min_streaming_buffer_size = 512;
+
    template <byte_input_stream Stream, size_t DefaultCapacity = 65536>
+      requires(DefaultCapacity >= min_streaming_buffer_size)
    class basic_istream_buffer
    {
+      static_assert(DefaultCapacity >= min_streaming_buffer_size,
+                    "Buffer capacity must be at least 256 bytes to handle all JSON value types");
+
       Stream* stream_;
       std::vector<char> buffer_;
       size_t read_pos_ = 0;       // Current read position in buffer
