@@ -32,7 +32,7 @@ namespace glz
    inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
    {
       uint64_t res{};
-      if (std::is_constant_evaluated()) {
+      if consteval {
          // Compile-time: build value byte-by-byte in little-endian order
          for (size_t i = 0; i < N; ++i) {
             res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
@@ -90,28 +90,30 @@ namespace glz
    constexpr uint64_t to_uint64(const char* bytes) noexcept
    {
       static_assert(N <= sizeof(uint64_t));
-      if (std::is_constant_evaluated()) {
+      if consteval {
          uint64_t res{};
          for (size_t i = 0; i < N; ++i) {
             res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
          }
          return res;
       }
-      else if constexpr (N == 8) {
-         uint64_t res;
-         std::memcpy(&res, bytes, N);
-         if constexpr (std::endian::native == std::endian::big) {
-            res = std::byteswap(res);
-         }
-         return res;
-      }
       else {
-         uint64_t res{};
-         std::memcpy(&res, bytes, N);
-         if constexpr (std::endian::native == std::endian::big) {
-            res = std::byteswap(res);
+         if constexpr (N == 8) {
+            uint64_t res;
+            std::memcpy(&res, bytes, N);
+            if constexpr (std::endian::native == std::endian::big) {
+               res = std::byteswap(res);
+            }
+            return res;
          }
-         return res;
+         else {
+            uint64_t res{};
+            std::memcpy(&res, bytes, N);
+            if constexpr (std::endian::native == std::endian::big) {
+               res = std::byteswap(res);
+            }
+            return res;
+         }
       }
    }
 
@@ -1903,7 +1905,7 @@ namespace glz
    template <size_t min_length>
    GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto end) noexcept
    {
-      if (std::is_constant_evaluated()) {
+      if consteval {
          const auto count = size_t(end - it);
          for (std::size_t i = 0; i < count; ++i) {
             if (it[i] == '"') {
@@ -1998,14 +2000,8 @@ namespace glz
                   }
                }
                // Avoids using a hash table
-               if (std::is_constant_evaluated()) {
-                  constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-                  return size_t(bool(it[uindex] ^ first_key_char));
-               }
-               else {
-                  static constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-                  return size_t(bool(it[uindex] ^ first_key_char));
-               }
+               constexpr auto first_key_char = reflect<T>::keys[0][uindex];
+               return size_t(bool(it[uindex] ^ first_key_char));
             }
             else {
                if constexpr (uindex > 0) {
@@ -2033,14 +2029,8 @@ namespace glz
             }
          }
          // Avoids using a hash table
-         if (std::is_constant_evaluated()) {
-            constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
-         }
-         else {
-            static constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
-         }
+         constexpr auto first_key_char = reflect<T>::keys[0][uindex];
+         return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
       }
    };
 
@@ -2057,10 +2047,10 @@ namespace glz
                return N; // error
             }
             uint16_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 2; ++i) {
-                  h |= static_cast<uint16_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint16_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2076,10 +2066,10 @@ namespace glz
                return N;
             }
             uint32_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 4; ++i) {
-                  h |= static_cast<uint32_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint32_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2095,10 +2085,10 @@ namespace glz
                return N;
             }
             uint64_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 8; ++i) {
-                  h |= static_cast<uint64_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint64_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2249,14 +2239,8 @@ namespace glz
                   return N; // error
                }
                // Avoids using a hash table
-               if (std::is_constant_evaluated()) {
-                  constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-                  return size_t(bool(it[uindex] ^ first_key_char));
-               }
-               else {
-                  static constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-                  return size_t(bool(it[uindex] ^ first_key_char));
-               }
+               constexpr auto first_key_char = reflect<T>::keys[0][uindex];
+               return size_t(bool(it[uindex] ^ first_key_char));
             }
             else {
                if ((it + uindex) >= end) [[unlikely]] {
@@ -2282,14 +2266,8 @@ namespace glz
             }
          }
          // Avoids using a hash table
-         if (std::is_constant_evaluated()) {
-            constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
-         }
-         else {
-            static constexpr auto first_key_char = reflect<T>::keys[0][uindex];
-            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
-         }
+         constexpr auto first_key_char = reflect<T>::keys[0][uindex];
+         return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
       }
    };
 
@@ -2303,10 +2281,10 @@ namespace glz
       {
          if constexpr (HashInfo.front_hash_bytes == 2) {
             uint16_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 2; ++i) {
-                  h |= static_cast<uint16_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint16_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2319,10 +2297,10 @@ namespace glz
          }
          else if constexpr (HashInfo.front_hash_bytes == 4) {
             uint32_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 4; ++i) {
-                  h |= static_cast<uint32_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint32_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {
@@ -2335,10 +2313,10 @@ namespace glz
          }
          else if constexpr (HashInfo.front_hash_bytes == 8) {
             uint64_t h;
-            if (std::is_constant_evaluated()) {
+            if consteval {
                h = 0;
                for (size_t i = 0; i < 8; ++i) {
-                  h |= static_cast<uint64_t>(it[i]) << (8 * i);
+                  h |= static_cast<uint64_t>(static_cast<uint8_t>(it[i])) << (8 * i);
                }
             }
             else {

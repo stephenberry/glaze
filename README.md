@@ -227,6 +227,16 @@ Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:
 
 The CMake has the option `glaze_ENABLE_AVX2`. This will attempt to use `AVX2` SIMD instructions in some cases to improve performance, as long as the system you are configuring on supports it. Set this option to `OFF` to disable the AVX2 instruction set, such as if you are cross-compiling for Arm. If you aren't using CMake the macro `GLZ_USE_AVX2` enables the feature if defined.
 
+### Disable Forced Inlining
+
+For faster compilation at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
+
+```cmake
+set(glaze_DISABLE_ALWAYS_INLINE ON)
+```
+
+> **Note:** This primarily reduces compilation time, not binary size. For binary size reduction, use the `linear_search` option. See [Optimizing Performance](https://stephenberry.github.io/glaze/optimizing-performance/) for more details.
+
 ## How To Use Glaze
 
 ### [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html)

@@ -1,0 +1,111 @@
+name: disable-always-inline
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  gcc15:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+        std: [23]
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: |
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -Dglaze_DISABLE_ALWAYS_INLINE=ON
+
+    - name: Build
+      run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
+
+    - name: Test
+      run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
+
+  clang19:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+        std: [23]
+
+    env:
+      CC: clang-19
+      CXX: clang++-19
+      LLVM_VERSION: 19
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Clang 19
+      run: |
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        sudo apt-get clean
+        sudo apt-get update
+        sudo apt-get install -y --fix-missing clang-19 libc++-19-dev libc++abi-19-dev
+
+    - name: Set path for clang
+      run: |
+        echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
+        clang-19 --version
+        clang++-19 --version
+
+    - name: Configure CMake
+      run: |
+        cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -DCMAKE_C_COMPILER=${{env.CC}} \
+          -DCMAKE_CXX_COMPILER=${{env.CXX}} \
+          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+          -Dglaze_DISABLE_ALWAYS_INLINE=ON
+
+    - name: Build
+      run: cmake --build build -j $(nproc)
+
+    - name: Test
+      working-directory: build
+      run: ctest -j $(nproc) --output-on-failure

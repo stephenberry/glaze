@@ -211,6 +211,32 @@ namespace glz
       }
    }
 
+   // Linear search for key matching - eliminates hash tables for smaller binaries
+   // Returns the index of the matching key, or N if not found
+   // Advances it past the key and closing quote
+   template <class T>
+   GLZ_ALWAYS_INLINE size_t decode_linear(is_context auto&& ctx, auto&& it, auto&& end)
+   {
+      static constexpr auto N = reflect<T>::size;
+      static constexpr auto& keys = reflect<T>::keys;
+
+      auto key_start = it;
+      skip_string_view(ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]]
+         return N;
+      const sv key{key_start, size_t(it - key_start)};
+      ++it; // skip closing quote
+
+      // Linear search through known keys
+      for (size_t i = 0; i < N; ++i) {
+         if (keys[i] == key) {
+            return i;
+         }
+      }
+
+      return N; // not found
+   }
+
    template <auto Opts, class T, size_t I, class Value, class... SelectedIndex>
       requires(glaze_object_t<T> || reflectable<T>)
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, SelectedIndex&&... selected_index)
@@ -332,20 +358,128 @@ namespace glz
       }
    }
 
-   template <auto Opts, class T, auto& HashInfo, class Value, class... SelectedIndex>
+   template <auto Opts, class T, class Value, class... SelectedIndex>
       requires(glaze_object_t<T> || reflectable<T>)
    GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Value&& value, is_context auto&& ctx, auto&& it, auto&& end,
                                                      SelectedIndex&&... selected_index)
    {
-      constexpr auto type = HashInfo.type;
       constexpr auto N = reflect<T>::size;
-
-      static_assert(bool(type), "invalid hash algorithm");
 
       if constexpr (N == 1) {
          decode_index<Opts, T, 0>(value, ctx, it, end, selected_index...);
       }
+      else if constexpr (check_linear_search(Opts)) {
+         // Linear search path
+         auto key_start = it;
+         const auto index = decode_linear<T>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         if (index >= N) [[unlikely]] {
+            if constexpr (Opts.error_on_unknown_keys) {
+               ctx.error = error_code::unknown_key;
+               return;
+            }
+            else {
+               const sv key{key_start, size_t(it - key_start - 1)};
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
+               if (parse_ws_colon<Opts>(ctx, it, end)) {
+                  return;
+               }
+               parse<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
+               return;
+            }
+         }
+
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return;
+         }
+         if (match_invalid_end<':', Opts>(ctx, it, end)) {
+            return;
+         }
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return;
+         }
+
+         // Fold expression dispatch - avoids jump table overhead for smaller binary size
+         auto parse_field = [&]<size_t I>() {
+            if constexpr (check_skip_null_members_on_read(Opts)) {
+               if (*it == 'n') {
+                  ++it;
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                  }
+                  match<"ull", Opts>(ctx, it, end);
+                  if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+                     ((selected_index = I), ...);
+                  }
+                  return;
+               }
+            }
+
+            // Check for operation-specific skipping
+            if constexpr (meta_has_skip<std::remove_cvref_t<T>>) {
+               constexpr auto Key = get<I>(reflect<T>::keys);
+               if constexpr (meta<std::remove_cvref_t<T>>::skip(Key, {glz::operation::parse})) {
+                  skip_value<JSON>::op<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+                     ((selected_index = I), ...);
+                  }
+                  return;
+               }
+            }
+
+            using V = refl_t<T, I>;
+            if constexpr (const_value_v<V>) {
+               if constexpr (check_error_on_const_read(Opts)) {
+                  ctx.error = error_code::attempt_const_read;
+               }
+               else {
+                  skip_value<JSON>::op<Opts>(ctx, it, end);
+               }
+            }
+            else {
+               // For linear_search, use Opts directly to avoid duplicate template instantiations
+               // We've already skipped whitespace before reaching here
+               if constexpr (glaze_object_t<T>) {
+                  from<JSON, std::remove_cvref_t<V>>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)),
+                                                                        ctx, it, end);
+               }
+               else {
+                  from<JSON, std::remove_cvref_t<V>>::template op<Opts>(get_member(value, get<I>(to_tie(value))), ctx,
+                                                                        it, end);
+               }
+            }
+            if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+               ((selected_index = I), ...);
+            }
+         };
+         [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (void)(((index == Is ? (parse_field.template operator()<Is>(), true) : false) || ...));
+         }(std::make_index_sequence<N>{});
+      }
       else {
+         // Hash-based lookup
+         constexpr auto& HashInfo = hash_info<T>;
+         constexpr auto type = HashInfo.type;
+         static_assert(bool(type), "invalid hash algorithm");
+
          const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
 
          if (index >= N) [[unlikely]] {
@@ -354,7 +488,6 @@ namespace glz
                return;
             }
             else {
-               // we need to search until we find the ending quote of the key
                auto start = it;
                skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -367,11 +500,9 @@ namespace glz
                      return;
                   }
                }
-
                if (parse_ws_colon<Opts>(ctx, it, end)) {
                   return;
                }
-
                parse<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                return;
             }
@@ -1819,6 +1950,22 @@ namespace glz
          if constexpr (N == 1) {
             decode_index<Opts, T, 0>(value, ctx, it, end);
          }
+         else if constexpr (check_linear_search(Opts)) {
+            // Linear search path for enums - decode_linear advances past closing quote
+            const auto index = decode_linear<T>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            if (index >= N) [[unlikely]] {
+               ctx.error = error_code::unexpected_enum;
+               return;
+            }
+
+            // Simply assign the enum value - fold expression dispatch
+            [&]<size_t... Is>(std::index_sequence<Is...>) {
+               (void)(((index == Is ? (value = get<Is>(reflect<T>::values), true) : false) || ...));
+            }(std::make_index_sequence<N>{});
+         }
          else {
             static constexpr auto HashInfo = hash_info<T>;
 
@@ -3011,7 +3158,7 @@ namespace glz
 
                   if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                      size_t index = num_members;
-                     parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end, index);
+                     parse_and_invoke<Opts, T>(value, ctx, it, end, index);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      if (index < num_members) {
@@ -3019,7 +3166,7 @@ namespace glz
                      }
                   }
                   else {
-                     parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end);
+                     parse_and_invoke<Opts, T>(value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
