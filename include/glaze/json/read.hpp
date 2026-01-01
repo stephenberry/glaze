@@ -458,12 +458,12 @@ namespace glz
                // For linear_search, use Opts directly to avoid duplicate template instantiations
                // We've already skipped whitespace before reaching here
                if constexpr (glaze_object_t<T>) {
-                  from<JSON, std::remove_cvref_t<V>>::template op<Opts>(
-                     get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                  from<JSON, std::remove_cvref_t<V>>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)),
+                                                                        ctx, it, end);
                }
                else {
-                  from<JSON, std::remove_cvref_t<V>>::template op<Opts>(
-                     get_member(value, get<I>(to_tie(value))), ctx, it, end);
+                  from<JSON, std::remove_cvref_t<V>>::template op<Opts>(get_member(value, get<I>(to_tie(value))), ctx,
+                                                                        it, end);
                }
             }
             if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
