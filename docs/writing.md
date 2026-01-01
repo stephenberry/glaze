@@ -45,7 +45,7 @@ std::cout << "Wrote " << ec.count << " bytes\n";
 Fixed-size buffers like `std::array` and `std::span` have automatic bounds checking:
 
 ```cpp
-std::array<char, 256> buffer;
+std::array<char, 512> buffer;  // Minimum 512 bytes recommended
 auto ec = glz::write_json(obj, buffer);
 if (ec) {
     if (ec.ec == glz::error_code::buffer_overflow) {
@@ -127,6 +127,21 @@ if (ec.ec == glz::error_code::buffer_overflow) {
 2. **Partial data is NOT valid**: The content is truncated mid-serialization and cannot be parsed
 3. **`ec.count` is a lower bound**: It's the bytes written before failure, not total required size
 4. **Content beyond `ec.count`**: Unspecified (may be uninitialized or previous data)
+
+### Minimum Buffer Size Requirement
+
+Bounded buffers (`std::array`, `std::span`, etc.) must be **at least 512 bytes** for reliable serialization. This requirement exists because Glaze uses internal padding for efficient writes. Buffers smaller than 512 bytes may return `buffer_overflow` even when the serialized output would fit.
+
+```cpp
+// Good: 512+ bytes
+std::array<char, 512> buffer;
+auto ec = glz::write_json(obj, buffer);
+
+// May fail unexpectedly for small outputs
+std::array<char, 64> small_buffer;  // Not recommended
+```
+
+For very small payloads where memory is extremely constrained, use a resizable buffer (`std::string`) and copy the result, or use `raw char*` if you can guarantee sufficient space.
 
 ## Performance Optimization
 

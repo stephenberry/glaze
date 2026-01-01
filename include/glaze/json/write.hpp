@@ -29,6 +29,7 @@
 #pragma warning(disable : 4702)
 #endif
 
+#include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
@@ -87,10 +88,8 @@ namespace glz
    GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
    {
       if constexpr (Opts.prettify) {
-         if constexpr (vector_like<B>) {
-            if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
-            }
+         if (!ensure_space(ctx, b, ix, ctx.indentation_level + write_padding_bytes)) [[unlikely]] {
+            return;
          }
          std::memcpy(&b[ix], ",\n", 2);
          ix += 2;
@@ -98,11 +97,9 @@ namespace glz
          ix += ctx.indentation_level;
       }
       else {
-         if constexpr (vector_like<B>) {
-            if constexpr (minified_check) {
-               if (ix >= b.size()) [[unlikely]] {
-                  b.resize(2 * ix);
-               }
+         if constexpr (minified_check) {
+            if (!ensure_space<1>(ctx, b, ix)) [[unlikely]] {
+               return;
             }
          }
          std::memcpy(&b[ix], ",", 1);
@@ -289,11 +286,8 @@ namespace glz
                }
 
                // Write the quoted key at runtime
-               if constexpr (vector_like<B>) {
-                  const auto k = ix + key.size() + 4 + (Opts.prettify ? 1 : 0);
-                  if (k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               if (!ensure_space(ctx, b, ix, key.size() + 4 + (Opts.prettify ? 1 : 0))) [[unlikely]] {
+                  return;
                }
                dump<'"'>(b, ix);
                dump(key, b, ix);
@@ -418,11 +412,8 @@ namespace glz
 
                // Write the quoted key
                static constexpr sv key = reflect<V>::keys[I];
-               if constexpr (vector_like<B>) {
-                  const auto k = ix + key.size() + 4 + (Opts.prettify ? 1 : 0);
-                  if (k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               if (!ensure_space(ctx, b, ix, key.size() + 4 + (Opts.prettify ? 1 : 0))) [[unlikely]] {
+                  return;
                }
                dump<'"'>(b, ix);
                dump<key>(b, ix);
@@ -533,13 +524,10 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts, class B>
-      static void op(auto&& value, auto&&, B&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
-         if constexpr (vector_like<B>) {
-            const auto n = ix + 2 + value.size(); // 2 quotes + spaces for character
-            if (n >= b.size()) [[unlikely]] {
-               b.resize(2 * n);
-            }
+         if (!ensure_space(ctx, b, ix, 2 + value.size())) [[unlikely]] {
+            return;
          }
 
          std::memcpy(&b[ix], "\"", 1);
@@ -562,7 +550,7 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts, class B>
-      static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          static constexpr auto N = reflect<T>::size;
 
@@ -574,10 +562,8 @@ namespace glz
             return length;
          }() + 4 + 4 * N; // add extra characters
 
-         if constexpr (vector_like<B>) {
-            if (const auto n = ix + max_length; n > b.size()) [[unlikely]] {
-               b.resize(2 * n);
-            }
+         if (!ensure_space(ctx, b, ix, max_length)) [[unlikely]] {
+            return;
          }
 
          std::memcpy(&b[ix], "[", 1);
@@ -643,11 +629,9 @@ namespace glz
          static_assert(num_t<typename T::value_type>);
          // we need to know it is a number type to allocate buffer space
 
-         if constexpr (vector_like<B>) {
-            static constexpr size_t max_length = 256;
-            if (const auto n = ix + max_length; n > b.size()) [[unlikely]] {
-               b.resize(2 * n);
-            }
+         static constexpr size_t max_length = 256;
+         if (!ensure_space<max_length>(ctx, b, ix)) [[unlikely]] {
+            return;
          }
 
          static constexpr auto O = write_unchecked_on<Opts>();
@@ -668,12 +652,12 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, B&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          static constexpr auto checked = not check_write_unchecked(Opts);
-         if constexpr (checked && vector_like<B>) {
-            if (const auto n = ix + 8; n > b.size()) [[unlikely]] {
-               b.resize(2 * n);
+         if constexpr (checked) {
+            if (!ensure_space<8>(ctx, b, ix)) [[unlikely]] {
+               return;
             }
          }
 
@@ -705,10 +689,10 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
-         if constexpr (not check_write_unchecked(Opts) && vector_like<B>) {
+         if constexpr (not check_write_unchecked(Opts)) {
             static_assert(required_padding<T>());
-            if (const auto n = ix + required_padding<T>(); n > b.size()) [[unlikely]] {
-               b.resize(2 * n);
+            if (!ensure_space(ctx, b, ix, required_padding<T>())) [[unlikely]] {
+               return;
             }
          }
 
@@ -1072,15 +1056,13 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          static constexpr auto name = name_v<std::decay_t<decltype(value)>>;
          constexpr auto n = name.size();
 
-         if constexpr (vector_like<B>) {
-            if (const auto k = ix + 8 + n; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
-            }
+         if (!ensure_space(ctx, b, ix, 8 + n)) [[unlikely]] {
+            return;
          }
 
          std::memcpy(&b[ix], "\"", 1);
@@ -1098,14 +1080,12 @@ namespace glz
    struct to<JSON, basic_raw_json<T>>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          const auto n = value.str.size();
          if (n) {
-            if constexpr (vector_like<B>) {
-               if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-                  b.resize(2 * k);
-               }
+            if (!ensure_space(ctx, b, ix, n + write_padding_bytes)) [[unlikely]] {
+               return;
             }
 
             std::memcpy(&b[ix], value.str.data(), n);
@@ -1118,14 +1098,12 @@ namespace glz
    struct to<JSON, basic_text<T>>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          const auto n = value.str.size();
          if (n) {
-            if constexpr (vector_like<B>) {
-               if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-                  b.resize(2 * k);
-               }
+            if (!ensure_space(ctx, b, ix, n + write_padding_bytes)) [[unlikely]] {
+               return;
             }
 
             std::memcpy(&b[ix], value.str.data(), n);
@@ -1138,10 +1116,8 @@ namespace glz
    GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
    {
       if constexpr (Opts.prettify) {
-         if constexpr (vector_like<B>) {
-            if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
-            }
+         if (!ensure_space(ctx, b, ix, ctx.indentation_level + write_padding_bytes)) [[unlikely]] {
+            return;
          }
          if constexpr (Opts.new_lines_in_arrays) {
             std::memcpy(&b[ix], ",\n", 2);
@@ -1155,11 +1131,9 @@ namespace glz
          }
       }
       else {
-         if constexpr (vector_like<B>) {
-            if constexpr (minified_check) {
-               if (ix >= b.size()) [[unlikely]] {
-                  b.resize(2 * ix);
-               }
+         if constexpr (minified_check) {
+            if (!ensure_space<1>(ctx, b, ix)) [[unlikely]] {
+               return;
             }
          }
          std::memcpy(&b[ix], ",", 1);
@@ -1212,7 +1186,9 @@ namespace glz
             dump<"[]">(b, ix);
          }
          else {
-            if constexpr (has_size<T> && array_padding_known<T>) {
+            // For bounded buffers, skip pre-allocation path since value_padding is for SIMD, not actual size
+            if constexpr (has_size<T> && array_padding_known<T> &&
+                          !has_bounded_capacity<B>) {
                const auto n = value.size();
 
                static constexpr auto value_padding = required_padding<typename T::value_type>();
@@ -1222,14 +1198,12 @@ namespace glz
                      ctx.indentation_level += Opts.indentation_width;
                   }
 
-                  if constexpr (vector_like<B>) {
-                     // add space for '\n' and ',' characters for each element, hence `+ 2`
-                     // use n + 1 because we put the end array character after the last element with whitespace
-                     if (const auto k =
-                            ix + (n + 1) * (value_padding + ctx.indentation_level + 2) + write_padding_bytes;
-                         k > b.size()) {
-                        b.resize(2 * k);
-                     }
+                  // add space for '\n' and ',' characters for each element, hence `+ 2`
+                  // use n + 1 because we put the end array character after the last element with whitespace
+                  if (!ensure_space(ctx, b, ix,
+                                    (n + 1) * (value_padding + ctx.indentation_level + 2) + write_padding_bytes))
+                     [[unlikely]] {
+                     return;
                   }
 
                   if constexpr (Opts.new_lines_in_arrays) {
@@ -1244,12 +1218,9 @@ namespace glz
                   }
                }
                else {
-                  if constexpr (vector_like<B>) {
-                     static constexpr auto comma_padding = 1;
-                     if (const auto k = ix + n * (value_padding + comma_padding) + write_padding_bytes; k > b.size())
-                        [[unlikely]] {
-                        b.resize(2 * k);
-                     }
+                  static constexpr auto comma_padding = 1;
+                  if (!ensure_space(ctx, b, ix, n * (value_padding + comma_padding) + write_padding_bytes)) [[unlikely]] {
+                     return;
                   }
                   std::memcpy(&b[ix], "[", 1);
                   ++ix;
@@ -1302,10 +1273,8 @@ namespace glz
                      ctx.indentation_level += Opts.indentation_width;
                   }
 
-                  if constexpr (vector_like<B>) {
-                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize(2 * k);
-                     }
+                  if (!ensure_space(ctx, b, ix, ctx.indentation_level + write_padding_bytes)) [[unlikely]] {
+                     return;
                   }
 
                   if constexpr (Opts.new_lines_in_arrays) {
@@ -1320,10 +1289,8 @@ namespace glz
                   }
                }
                else {
-                  if constexpr (vector_like<B>) {
-                     if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize(2 * k);
-                     }
+                  if (!ensure_space(ctx, b, ix, write_padding_bytes)) [[unlikely]] {
+                     return;
                   }
                   std::memcpy(&b[ix], "[", 1);
                   ++ix;
@@ -1341,17 +1308,14 @@ namespace glz
                ++it;
                for (const auto fin = std::end(value); it != fin; ++it) {
                   if constexpr (required_padding<val_t>()) {
-                     if constexpr (vector_like<B>) {
-                        if constexpr (Opts.prettify) {
-                           if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                              [[unlikely]] {
-                              b.resize(2 * k);
-                           }
+                     if constexpr (Opts.prettify) {
+                        if (!ensure_space(ctx, b, ix, ctx.indentation_level + write_padding_bytes)) [[unlikely]] {
+                           return;
                         }
-                        else {
-                           if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
-                              b.resize(2 * k);
-                           }
+                     }
+                     else {
+                        if (!ensure_space(ctx, b, ix, write_padding_bytes)) [[unlikely]] {
+                           return;
                         }
                      }
 
@@ -1404,10 +1368,8 @@ namespace glz
             if constexpr (!check_opening_handled(Opts)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
-                  if constexpr (vector_like<B>) {
-                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize(2 * k);
-                     }
+                  if (!ensure_space(ctx, b, ix, ctx.indentation_level + write_padding_bytes)) [[unlikely]] {
+                     return;
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
@@ -1470,10 +1432,8 @@ namespace glz
             if constexpr (!check_closing_handled(Opts)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
-                  if constexpr (vector_like<B>) {
-                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize(2 * k);
-                     }
+                  if (!ensure_space(ctx, b, ix, ctx.indentation_level + write_padding_bytes)) [[unlikely]] {
+                     return;
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
@@ -1502,10 +1462,8 @@ namespace glz
 
          if constexpr (Opts.prettify) {
             ctx.indentation_level += Opts.indentation_width;
-            if constexpr (vector_like<B>) {
-               if (const auto k = ix + ctx.indentation_level + 2; k > b.size()) [[unlikely]] {
-                  b.resize(2 * k);
-               }
+            if (!ensure_space(ctx, b, ix, ctx.indentation_level + 2)) [[unlikely]] {
+               return;
             }
             dump<"{\n", false>(b, ix);
             std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
@@ -1709,11 +1667,8 @@ namespace glz
 
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level -= Opts.indentation_width;
-                     if constexpr (vector_like<B>) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                           [[unlikely]] {
-                           b.resize(2 * k);
-                        }
+                     if (!ensure_space(ctx, b, ix, ctx.indentation_level + write_padding_bytes)) [[unlikely]] {
+                        return;
                      }
                      std::memcpy(&b[ix], "\n", 1);
                      ++ix;
@@ -2066,10 +2021,8 @@ namespace glz
             if constexpr (not check_opening_handled(Options)) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level += Options.indentation_width;
-                  if constexpr (vector_like<B>) {
-                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize(2 * k);
-                     }
+                  if (!ensure_space(ctx, b, ix, ctx.indentation_level + write_padding_bytes)) [[unlikely]] {
+                     return;
                   }
                   std::memcpy(&b[ix], "{\n", 2);
                   ix += 2;
@@ -2077,6 +2030,9 @@ namespace glz
                   ix += ctx.indentation_level;
                }
                else {
+                  if (!ensure_space<1>(ctx, b, ix)) [[unlikely]] {
+                     return;
+                  }
                   dump<'{'>(b, ix);
                }
             }
@@ -2151,10 +2107,14 @@ namespace glz
                      }
 
                      if constexpr (Opts.prettify) {
-                        maybe_pad(padding + ctx.indentation_level, b, ix);
+                        if (!ensure_space(ctx, b, ix, padding + ctx.indentation_level)) [[unlikely]] {
+                           return;
+                        }
                      }
                      else {
-                        maybe_pad<padding>(b, ix);
+                        if (!ensure_space<padding>(ctx, b, ix)) [[unlikely]] {
+                           return;
+                        }
                      }
 
                      if (first) {
@@ -2198,16 +2158,25 @@ namespace glz
             else {
                static constexpr size_t fixed_max_size = fixed_padding<T>;
                if constexpr (fixed_max_size) {
-                  maybe_pad<fixed_max_size>(b, ix);
+                  if (!ensure_space<fixed_max_size>(ctx, b, ix)) [[unlikely]] {
+                     return;
+                  }
                }
 
                for_each<N>([&]<size_t I>() {
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   if constexpr (not fixed_max_size) {
                      if constexpr (Opts.prettify) {
-                        maybe_pad(padding + ctx.indentation_level, b, ix);
+                        if (!ensure_space(ctx, b, ix, padding + ctx.indentation_level)) [[unlikely]] {
+                           return;
+                        }
                      }
                      else {
-                        maybe_pad<padding>(b, ix);
+                        if (!ensure_space<padding>(ctx, b, ix)) [[unlikely]] {
+                           return;
+                        }
                      }
                   }
 
@@ -2266,10 +2235,8 @@ namespace glz
             if constexpr (not check_closing_handled(Options)) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;
-                  if constexpr (vector_like<B>) {
-                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize(2 * k);
-                     }
+                  if (!ensure_space(ctx, b, ix, ctx.indentation_level + write_padding_bytes)) [[unlikely]] {
+                     return;
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
@@ -2348,7 +2315,9 @@ namespace glz
 
          // Max size: "YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ" = 30 + quotes = 32
          constexpr size_t max_size = 22 + (frac_digits > 0 ? 1 + frac_digits : 0);
-         maybe_pad<max_size>(b, ix);
+         if (!ensure_space<max_size>(ctx, b, ix)) [[unlikely]] {
+            return;
+         }
 
          // Helper to write N-digit zero-padded number
          auto write_digits = [&]<size_t N>(uint64_t val) {

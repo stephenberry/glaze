@@ -13080,6 +13080,123 @@ suite requires_key_parsing_tests = [] {
    };
 };
 
+// Tests for bounded buffer overflow detection (issue #1285)
+namespace bounded_buffer_test_types
+{
+   struct simple_short
+   {
+      int x = 42;
+      std::string name = "hi";
+   };
+
+   struct simple_long
+   {
+      int x = 42;
+      std::string name = "hello world this is a long string";
+   };
+
+   struct simple_int_only
+   {
+      int x = 42;
+   };
+
+   struct simple_medium
+   {
+      int x = 42;
+      std::string name = "hello";
+   };
+
+   struct simple_very_long
+   {
+      int x = 42;
+      std::string long_name = "this is a very long string that won't fit";
+   };
+}
+
+suite bounded_buffer_overflow_tests = [] {
+   using namespace bounded_buffer_test_types;
+
+   "write to std::array with sufficient space succeeds"_test = [] {
+      simple_short obj{};
+      std::array<char, 512> buffer{}; // Must be >= write_padding_bytes + overhead
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "write should succeed with sufficient buffer";
+      expect(result.count > 0) << "count should be non-zero";
+      expect(result.count < buffer.size()) << "count should be less than buffer size";
+
+      std::string_view json(buffer.data(), result.count);
+      expect(json == R"({"x":42,"name":"hi"})") << "JSON should match expected";
+   };
+
+   "write to std::array that is too small returns buffer_overflow"_test = [] {
+      simple_long obj{};
+      std::array<char, 10> buffer{}; // Too small
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "write to std::span with sufficient space succeeds"_test = [] {
+      simple_int_only obj{};
+      std::array<char, 512> storage{}; // Must be >= write_padding_bytes + overhead
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "write should succeed with sufficient buffer";
+      expect(result.count > 0) << "count should be non-zero";
+
+      std::string_view json(buffer.data(), result.count);
+      expect(json == R"({"x":42})") << "JSON should match expected";
+   };
+
+   "write to std::span that is too small returns buffer_overflow"_test = [] {
+      simple_medium obj{};
+      std::array<char, 5> storage{};
+      std::span<char> buffer(storage); // Too small
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "write array to bounded buffer works correctly"_test = [] {
+      std::vector<int> arr{1, 2, 3, 4, 5};
+      std::array<char, 512> buffer{}; // Must be >= write_padding_bytes + overhead
+
+      auto result = glz::write_json(arr, buffer);
+      expect(not result) << "write should succeed";
+      std::string_view json(buffer.data(), result.count);
+      expect(json == "[1,2,3,4,5]") << "JSON array should match";
+   };
+
+   "write large array to small bounded buffer fails"_test = [] {
+      std::vector<int> arr{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+      std::array<char, 8> buffer{}; // Too small
+
+      auto result = glz::write_json(arr, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow for large array";
+   };
+
+   "resizable buffer still works as before"_test = [] {
+      simple_medium obj{};
+      std::string buffer;
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "write to resizable buffer should succeed";
+      expect(buffer == R"({"x":42,"name":"hello"})") << "JSON should match expected";
+   };
+
+   "error_ctx count reflects bytes written before overflow"_test = [] {
+      simple_very_long obj{};
+      std::array<char, 20> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow";
+      // count should reflect some bytes were written before overflow
+      expect(result.count > 0) << "some bytes should have been written before overflow";
+   };
+};
+
 int main()
 {
    trace.end("json_test");
