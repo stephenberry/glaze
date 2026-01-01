@@ -201,6 +201,13 @@ namespace glz
    // Skip self_constraint validation during reading. Useful for performance when constraints are known to be valid
    // or when validation should be deferred.
 
+   // ---
+   // bool linear_search = false;
+   // Uses linear key search instead of hash-based lookup for JSON object fields.
+   // This eliminates 256-byte hash tables per struct type, significantly reducing binary size.
+   // Trades O(1) hash lookup for O(N) linear search - faster for small structs (< ~8 fields)
+   // due to cache effects, and much smaller binaries for embedded systems.
+
    struct append_arrays_opt_tag
    {};
 
@@ -410,6 +417,16 @@ namespace glz
       }
    }
 
+   consteval bool check_linear_search(auto&& Opts)
+   {
+      if constexpr (requires { Opts.linear_search; }) {
+         return Opts.linear_search;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_opening_handled(auto&& o) { return o.internal & uint32_t(opts_internal::opening_handled); }
 
    consteval bool check_closing_handled(auto&& o) { return o.internal & uint32_t(opts_internal::closing_handled); }
@@ -461,12 +478,18 @@ namespace glz
       return ret;
    }
 
+   // Skip ws_handled optimization when minified (skip_ws is a no-op, so the flag is pointless)
    template <auto Opts>
    constexpr auto ws_handled()
    {
-      auto ret = Opts;
-      ret.internal |= uint32_t(opts_internal::ws_handled);
-      return ret;
+      if constexpr (Opts.minified) {
+         return Opts;
+      }
+      else {
+         auto ret = Opts;
+         ret.internal |= uint32_t(opts_internal::ws_handled);
+         return ret;
+      }
    }
 
    template <auto Opts>

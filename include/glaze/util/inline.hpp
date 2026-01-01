@@ -3,9 +3,13 @@
 
 #pragma once
 
+// GLZ_DISABLE_ALWAYS_INLINE can be defined to disable forced inlining,
+// reducing binary size and compilation time at the cost of peak performance.
+#if !defined(GLZ_DISABLE_ALWAYS_INLINE)
 #if defined(__clang__) || defined(__GNUC__) || defined(_MSC_VER)
 #ifndef GLZ_USE_ALWAYS_INLINE
 #define GLZ_USE_ALWAYS_INLINE
+#endif
 #endif
 #endif
 
@@ -28,9 +32,11 @@
 // It should only be applied in very specific circumstances.
 // It is best to more often rely on the compiler.
 
+#if !defined(GLZ_DISABLE_ALWAYS_INLINE)
 #if (defined(__clang__) || defined(__GNUC__)) && defined(NDEBUG)
 #ifndef GLZ_FLATTEN
 #define GLZ_FLATTEN inline __attribute__((flatten))
+#endif
 #endif
 #endif
 

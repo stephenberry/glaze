@@ -54,6 +54,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `static constexpr std::string_view float_format` | (none) | Format string for float output using `std::format` (C++23) |
 | `bool skip_null_members_on_read` | `false` | Skip null values when reading (preserve existing value) |
 | `bool skip_self_constraint` | `false` | Skip `self_constraint` validation during reading |
+| `bool linear_search` | `false` | Use linear key search instead of hash tables for smaller binary size |
 
 ### CSV Options (`glz::opts_csv`)
 
@@ -147,7 +148,7 @@ When `true` (default), Glaze assumes input buffers are null-terminated, enabling
 Enable JSONC-style comment parsing (`//` and `/* */`).
 
 #### `minified`
-When `true`, assumes input JSON has no unnecessary whitespace. Provides faster parsing but will fail on prettified input.
+When `true`, assumes input JSON has no unnecessary whitespace. This skips all whitespace checking during parsing, providing faster performance and slightly smaller binary size. Will fail on prettified input with whitespace between tokens.
 
 ### Validation Options
 
@@ -199,6 +200,50 @@ When reading into arrays, appends new elements instead of replacing existing con
 
 #### `shrink_to_fit`
 Calls `shrink_to_fit()` on dynamic containers after reading to minimize memory usage.
+
+### Binary Size Options
+
+#### `linear_search`
+When `true`, uses linear search for object key lookup instead of compile-time generated hash tables. This significantly reduces binary size (typically 40-50% smaller) at the cost of slightly slower parsing for objects with many fields.
+
+```cpp
+struct small_opts : glz::opts {
+   bool linear_search = true;
+};
+
+auto ec = glz::read<small_opts{}>(obj, buffer);
+```
+
+**How it works:**
+
+By default, Glaze generates perfect hash tables at compile time for each struct type, enabling O(1) key lookup. This provides excellent runtime performance but increases binary size because:
+- Each struct type gets its own hash table stored in the binary
+- Jump tables are generated for field dispatch
+- Multiple template instantiations may be created for optimization
+
+With `linear_search = true`:
+- Keys are matched using simple linear comparison (O(n) where n = number of fields)
+- Hash tables are not generated
+- Fold-expression dispatch replaces jump tables
+- Template instantiation bloat is reduced
+
+**When to use:**
+
+- Embedded systems with limited flash/ROM
+- Applications where binary size matters more than peak parsing speed
+- Objects with few fields (< 10) where linear search has negligible overhead
+- Shipping smaller binaries to reduce download/install size
+
+**Trade-offs:**
+
+| Aspect | Default (hash) | `linear_search = true` |
+|--------|----------------|------------------------|
+| Key lookup | O(1) | O(n) |
+| Binary size | Larger | ~40-50% smaller |
+| Parse speed | Fastest | Slightly slower for large objects |
+| Compile time | Longer | Shorter |
+
+For objects with few fields, the performance difference is negligible. For objects with many fields (20+), hash-based lookup will be noticeably faster.
 
 ### Type Handling Options
 
@@ -258,3 +303,4 @@ For per-member formatting control, see the [`glz::float_format` wrapper](wrapper
 - [Wrappers](wrappers.md) - Per-field options using wrappers
 - [Field Validation](field-validation.md) - Customizing required field validation
 - [Partial Read](partial-read.md) - Reading partial documents
+- [Optimizing Performance](optimizing-performance.md) - Binary size and compilation time optimization

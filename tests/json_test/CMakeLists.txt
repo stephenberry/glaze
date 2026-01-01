@@ -125,3 +125,11 @@ add_executable(json_merge_patch_test json_merge_patch_test.cpp)
 target_link_libraries(json_merge_patch_test PRIVATE glz_test_common)
 
 add_test(NAME json_merge_patch_test COMMAND json_merge_patch_test)
+
+## Linear search test - test for linear_search compile-time option
+
+add_executable(linear_search_test linear_search_test.cpp)
+
+target_link_libraries(linear_search_test PRIVATE glz_test_common)
+
+add_test(NAME linear_search_test COMMAND linear_search_test)
