@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/core/feature_test.hpp"
 #include "glaze/glaze.hpp" // Glaze main header (most Glaze headers are included)
 #include "ut/ut.hpp"
 
@@ -466,15 +467,17 @@ struct glz::json_schema<SchemaDemo>
    schema flag{.description = "A boolean flag"};
 };
 
+#if GLZ_HAS_CONSTEXPR_STRING
 suite schema_generation = [] {
    "schema_demo"_test = [] {
       auto schema = glz::write_json_schema<SchemaDemo>().value_or("error");
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"flag":{"$ref":"#/$defs/bool","description":"A boolean flag"},"name":{"$ref":"#/$defs/std::string","description":"A name for something"},"x":{"$ref":"#/$defs/int32_t","description":"An integer x"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"SchemaDemo"})")
+         R"({"type":["object"],"properties":{"flag":{"$ref":"#/$defs/bool","description":"A boolean flag","default":false},"name":{"$ref":"#/$defs/std::string","description":"A name for something"},"x":{"$ref":"#/$defs/int32_t","description":"An integer x","default":0}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"SchemaDemo"})")
          << schema;
    };
 };
+#endif
 
 //------------------------------------
 // Local Schemas
@@ -495,15 +498,17 @@ struct LocalSchema
    };
 };
 
+#if GLZ_HAS_CONSTEXPR_STRING
 suite local_schema_test = [] {
    "local_schema"_test = [] {
       auto schema = glz::write_json_schema<LocalSchema>().value_or("error");
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"count":{"$ref":"#/$defs/int32_t","description":"A count"},"file":{"$ref":"#/$defs/std::string","description":"A file path"},"valid":{"$ref":"#/$defs/bool","description":"Validity flag"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"LocalSchema"})")
+         R"({"type":["object"],"properties":{"count":{"$ref":"#/$defs/int32_t","description":"A count","default":0},"file":{"$ref":"#/$defs/std::string","description":"A file path"},"valid":{"$ref":"#/$defs/bool","description":"Validity flag","default":false}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"LocalSchema"})")
          << schema;
    };
 };
+#endif
 
 //------------------------------------
 // Unknown Keys and Unknown Fields
