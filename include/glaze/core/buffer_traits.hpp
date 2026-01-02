@@ -172,8 +172,8 @@ namespace glz
    // Unified buffer space checking for write operations
    // Handles resizable buffers (resize), bounded buffers (error on overflow), and raw pointers (trust caller)
    template <class B>
-   GLZ_ALWAYS_INLINE bool ensure_space(is_context auto& ctx, B& b, size_t required) noexcept(
-      not vector_like<std::remove_cvref_t<B>>)
+   GLZ_ALWAYS_INLINE bool ensure_space(is_context auto& ctx, B& b,
+                                       size_t required) noexcept(not vector_like<std::remove_cvref_t<B>>)
    {
       using Buffer = std::remove_cvref_t<B>;
 

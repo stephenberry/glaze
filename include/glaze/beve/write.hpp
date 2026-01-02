@@ -1462,16 +1462,12 @@ namespace glz
 
          if constexpr (is_std_tuple<T>) {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               ((serialize<BEVE>::op<Opts>(std::get<I>(value), ctx, b, ix),
-                 bool(ctx.error) ? void() : void()),
-                ...);
+               ((serialize<BEVE>::op<Opts>(std::get<I>(value), ctx, b, ix), bool(ctx.error) ? void() : void()), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               ((serialize<BEVE>::op<Opts>(glz::get<I>(value), ctx, b, ix),
-                 bool(ctx.error) ? void() : void()),
-                ...);
+               ((serialize<BEVE>::op<Opts>(glz::get<I>(value), ctx, b, ix), bool(ctx.error) ? void() : void()), ...);
             }(std::make_index_sequence<N>{});
          }
       }

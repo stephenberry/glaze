@@ -2411,11 +2411,11 @@ namespace csv_bounded_buffer_tests
    struct large_csv_row
    {
       std::vector<int> id{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-      std::vector<std::string> name{
-         "this_is_a_very_long_name_1", "this_is_a_very_long_name_2", "this_is_a_very_long_name_3",
-         "this_is_a_very_long_name_4", "this_is_a_very_long_name_5", "this_is_a_very_long_name_6",
-         "this_is_a_very_long_name_7", "this_is_a_very_long_name_8", "this_is_a_very_long_name_9",
-         "this_is_a_very_long_name_10"};
+      std::vector<std::string> name{"this_is_a_very_long_name_1", "this_is_a_very_long_name_2",
+                                    "this_is_a_very_long_name_3", "this_is_a_very_long_name_4",
+                                    "this_is_a_very_long_name_5", "this_is_a_very_long_name_6",
+                                    "this_is_a_very_long_name_7", "this_is_a_very_long_name_8",
+                                    "this_is_a_very_long_name_9", "this_is_a_very_long_name_10"};
    };
 
    struct csv_with_quotes

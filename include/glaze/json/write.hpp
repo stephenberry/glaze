@@ -1192,8 +1192,7 @@ namespace glz
          }
          else {
             // For bounded buffers, skip pre-allocation path since value_padding is for SIMD, not actual size
-            if constexpr (has_size<T> && array_padding_known<T> &&
-                          !has_bounded_capacity<B>) {
+            if constexpr (has_size<T> && array_padding_known<T> && !has_bounded_capacity<B>) {
                const auto n = value.size();
 
                static constexpr auto value_padding = required_padding<typename T::value_type>();
@@ -1224,7 +1223,8 @@ namespace glz
                }
                else {
                   static constexpr auto comma_padding = 1;
-                  if (!ensure_space(ctx, b, ix + n * (value_padding + comma_padding) + write_padding_bytes)) [[unlikely]] {
+                  if (!ensure_space(ctx, b, ix + n * (value_padding + comma_padding) + write_padding_bytes))
+                     [[unlikely]] {
                      return;
                   }
                   std::memcpy(&b[ix], "[", 1);

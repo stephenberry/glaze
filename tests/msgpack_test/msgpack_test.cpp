@@ -986,10 +986,7 @@ int main()
 
       "msgpack nested struct to bounded buffer"_test = [] {
          telemetry_batch batch{
-            .active = true,
-            .readings = {{.id = "sensor1", .value = 3.14}},
-            .header = {1, "test", true},
-            .status = 42};
+            .active = true, .readings = {{.id = "sensor1", .value = 3.14}}, .header = {1, "test", true}, .status = 42};
          std::array<char, 512> buffer{};
 
          auto result = glz::write_msgpack(batch, buffer);

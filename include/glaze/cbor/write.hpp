@@ -508,7 +508,8 @@ namespace glz
             using Scalar = typename V::value_type;
 
             // Write tag 43001 (complex array)
-            if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::complex_array, b, ix)) [[unlikely]] {
+            if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::complex_array, b, ix))
+               [[unlikely]] {
                return;
             }
 

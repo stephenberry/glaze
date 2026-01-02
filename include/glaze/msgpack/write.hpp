@@ -994,12 +994,16 @@ namespace glz
          }
          if constexpr (is_std_tuple<T>) {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               ((void)(bool(ctx.error) ? void() : (serialize<MSGPACK>::op<Opts>(std::get<I>(value), ctx, b, ix), void())), ...);
+               ((void)(bool(ctx.error) ? void()
+                                       : (serialize<MSGPACK>::op<Opts>(std::get<I>(value), ctx, b, ix), void())),
+                ...);
             }(std::make_index_sequence<N>{});
          }
          else {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               ((void)(bool(ctx.error) ? void() : (serialize<MSGPACK>::op<Opts>(glz::get<I>(value), ctx, b, ix), void())), ...);
+               ((void)(bool(ctx.error) ? void()
+                                       : (serialize<MSGPACK>::op<Opts>(glz::get<I>(value), ctx, b, ix), void())),
+                ...);
             }(std::make_index_sequence<N>{});
          }
       }
@@ -1018,7 +1022,8 @@ namespace glz
          if (!msgpack::detail::write_str_header(ctx, ids[value.index()].size(), b, ix)) [[unlikely]] {
             return;
          }
-         if (!msgpack::detail::dump_raw_bytes(ctx, ids[value.index()].data(), ids[value.index()].size(), b, ix)) [[unlikely]] {
+         if (!msgpack::detail::dump_raw_bytes(ctx, ids[value.index()].data(), ids[value.index()].size(), b, ix))
+            [[unlikely]] {
             return;
          }
          std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value);
