@@ -13118,7 +13118,7 @@ suite bounded_buffer_overflow_tests = [] {
 
    "write to std::array with sufficient space succeeds"_test = [] {
       simple_short obj{};
-      std::array<char, 512> buffer{}; // Must be >= write_padding_bytes + overhead
+      std::array<char, 512> buffer{}; // Minimum 512 bytes for bounded buffers
 
       auto result = glz::write_json(obj, buffer);
       expect(not result) << "write should succeed with sufficient buffer";
@@ -13139,7 +13139,7 @@ suite bounded_buffer_overflow_tests = [] {
 
    "write to std::span with sufficient space succeeds"_test = [] {
       simple_int_only obj{};
-      std::array<char, 512> storage{}; // Must be >= write_padding_bytes + overhead
+      std::array<char, 512> storage{}; // Minimum 512 bytes for bounded buffers
       std::span<char> buffer(storage);
 
       auto result = glz::write_json(obj, buffer);
@@ -13161,7 +13161,7 @@ suite bounded_buffer_overflow_tests = [] {
 
    "write array to bounded buffer works correctly"_test = [] {
       std::vector<int> arr{1, 2, 3, 4, 5};
-      std::array<char, 512> buffer{}; // Must be >= write_padding_bytes + overhead
+      std::array<char, 512> buffer{}; // Minimum 512 bytes for bounded buffers
 
       auto result = glz::write_json(arr, buffer);
       expect(not result) << "write should succeed";
