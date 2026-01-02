@@ -29,9 +29,29 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
+   GLZ_ALWAYS_INLINE bool write_nil(is_context auto& ctx, B& b, size_t& ix)
+   {
+      if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+      dump(std::byte{nil}, b, ix);
+      return true;
+   }
+
+   template <class B>
    GLZ_ALWAYS_INLINE void write_bool(const bool value, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       dump(std::byte{static_cast<uint8_t>(value ? bool_true : bool_false)}, b, ix);
+   }
+
+   template <class B>
+   GLZ_ALWAYS_INLINE bool write_bool(is_context auto& ctx, const bool value, B& b, size_t& ix)
+   {
+      if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+      dump(std::byte{static_cast<uint8_t>(value ? bool_true : bool_false)}, b, ix);
+      return true;
    }
 
    template <class B>
@@ -59,6 +79,35 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
+   GLZ_ALWAYS_INLINE bool write_unsigned(is_context auto& ctx, uint64_t value, B& b, size_t& ix)
+   {
+      // Max size is 9 bytes (1 byte type + 8 bytes value)
+      if (!ensure_space(ctx, b, ix + 9 + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+      if (value <= 0x7F) {
+         dump(std::byte{static_cast<uint8_t>(value)}, b, ix);
+      }
+      else if (value <= std::numeric_limits<uint8_t>::max()) {
+         dump(std::byte{uint8}, b, ix);
+         dump_uint8(static_cast<uint8_t>(value), b, ix);
+      }
+      else if (value <= std::numeric_limits<uint16_t>::max()) {
+         dump(std::byte{uint16}, b, ix);
+         dump_uint16(static_cast<uint16_t>(value), b, ix);
+      }
+      else if (value <= std::numeric_limits<uint32_t>::max()) {
+         dump(std::byte{uint32}, b, ix);
+         dump_uint32(static_cast<uint32_t>(value), b, ix);
+      }
+      else {
+         dump(std::byte{uint64}, b, ix);
+         dump_uint64(value, b, ix);
+      }
+      return true;
+   }
+
+   template <class B>
    GLZ_ALWAYS_INLINE void write_signed(int64_t value, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if (value >= -32 && value <= 127) {
@@ -83,6 +132,35 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
+   GLZ_ALWAYS_INLINE bool write_signed(is_context auto& ctx, int64_t value, B& b, size_t& ix)
+   {
+      // Max size is 9 bytes (1 byte type + 8 bytes value)
+      if (!ensure_space(ctx, b, ix + 9 + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+      if (value >= -32 && value <= 127) {
+         dump(std::byte{static_cast<uint8_t>(value)}, b, ix);
+      }
+      else if (value >= std::numeric_limits<int8_t>::min() && value <= std::numeric_limits<int8_t>::max()) {
+         dump(std::byte{int8}, b, ix);
+         dump_uint8(static_cast<uint8_t>(value), b, ix);
+      }
+      else if (value >= std::numeric_limits<int16_t>::min() && value <= std::numeric_limits<int16_t>::max()) {
+         dump(std::byte{int16}, b, ix);
+         dump_uint16(static_cast<uint16_t>(value), b, ix);
+      }
+      else if (value >= std::numeric_limits<int32_t>::min() && value <= std::numeric_limits<int32_t>::max()) {
+         dump(std::byte{int32}, b, ix);
+         dump_uint32(static_cast<uint32_t>(value), b, ix);
+      }
+      else {
+         dump(std::byte{int64}, b, ix);
+         dump_uint64(static_cast<uint64_t>(value), b, ix);
+      }
+      return true;
+   }
+
+   template <class B>
    GLZ_ALWAYS_INLINE void write_floating(const auto value, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       using T = std::decay_t<decltype(value)>;
@@ -94,6 +172,25 @@ namespace glz::msgpack::detail
          dump(std::byte{float64}, b, ix);
          dump_float64(static_cast<double>(value), b, ix);
       }
+   }
+
+   template <class B>
+   GLZ_ALWAYS_INLINE bool write_floating(is_context auto& ctx, const auto value, B& b, size_t& ix)
+   {
+      using T = std::decay_t<decltype(value)>;
+      // Max size is 9 bytes (1 byte type + 8 bytes value)
+      if (!ensure_space(ctx, b, ix + 9 + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+      if constexpr (sizeof(T) <= sizeof(float)) {
+         dump(std::byte{float32}, b, ix);
+         dump_float32(static_cast<float>(value), b, ix);
+      }
+      else {
+         dump(std::byte{float64}, b, ix);
+         dump_float64(static_cast<double>(value), b, ix);
+      }
+      return true;
    }
 
    template <class B>
@@ -117,6 +214,31 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
+   GLZ_ALWAYS_INLINE bool write_str_header(is_context auto& ctx, size_t size, B& b, size_t& ix)
+   {
+      // Max header size is 5 bytes (1 byte type + 4 bytes length)
+      if (!ensure_space(ctx, b, ix + 5 + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+      if (size <= 31) {
+         dump(std::byte{static_cast<uint8_t>(fixstr_bits | size)}, b, ix);
+      }
+      else if (size <= std::numeric_limits<uint8_t>::max()) {
+         dump(std::byte{str8}, b, ix);
+         dump_uint8(static_cast<uint8_t>(size), b, ix);
+      }
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
+         dump(std::byte{str16}, b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
+      }
+      else {
+         dump(std::byte{str32}, b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
+      }
+      return true;
+   }
+
+   template <class B>
    GLZ_ALWAYS_INLINE void write_array_header(size_t size, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if (size <= 15) {
@@ -133,6 +255,27 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
+   GLZ_ALWAYS_INLINE bool write_array_header(is_context auto& ctx, size_t size, B& b, size_t& ix)
+   {
+      // Max header size is 5 bytes (1 byte type + 4 bytes length)
+      if (!ensure_space(ctx, b, ix + 5 + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+      if (size <= 15) {
+         dump(std::byte{static_cast<uint8_t>(fixarray_bits | size)}, b, ix);
+      }
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
+         dump(std::byte{array16}, b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
+      }
+      else {
+         dump(std::byte{array32}, b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
+      }
+      return true;
+   }
+
+   template <class B>
    GLZ_ALWAYS_INLINE void write_map_header(size_t size, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if (size <= 15) {
@@ -146,6 +289,27 @@ namespace glz::msgpack::detail
          dump(std::byte{map32}, b, ix);
          dump_uint32(static_cast<uint32_t>(size), b, ix);
       }
+   }
+
+   template <class B>
+   GLZ_ALWAYS_INLINE bool write_map_header(is_context auto& ctx, size_t size, B& b, size_t& ix)
+   {
+      // Max header size is 5 bytes (1 byte type + 4 bytes length)
+      if (!ensure_space(ctx, b, ix + 5 + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+      if (size <= 15) {
+         dump(std::byte{static_cast<uint8_t>(fixmap_bits | size)}, b, ix);
+      }
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
+         dump(std::byte{map16}, b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
+      }
+      else {
+         dump(std::byte{map32}, b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
+      }
+      return true;
    }
 
    template <class B>
@@ -166,16 +330,40 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void dump_raw_bytes(const char* data, size_t size, B& b, size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE bool write_binary_header(is_context auto& ctx, size_t size, B& b, size_t& ix)
+   {
+      // Max header size is 5 bytes (1 byte type + 4 bytes length)
+      if (!ensure_space(ctx, b, ix + 5 + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+      if (size <= std::numeric_limits<uint8_t>::max()) {
+         dump(std::byte{bin8}, b, ix);
+         dump_uint8(static_cast<uint8_t>(size), b, ix);
+      }
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
+         dump(std::byte{bin16}, b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
+      }
+      else {
+         dump(std::byte{bin32}, b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
+      }
+      return true;
+   }
+
+   template <class B>
+   GLZ_ALWAYS_INLINE bool dump_raw_bytes(is_context auto& ctx, const char* data, size_t size, B& b,
+                                         size_t& ix) noexcept(not vector_like<B>)
    {
       if (size == 0) {
-         return;
+         return true;
       }
-      if constexpr (vector_like<B>) {
-         maybe_pad(size, b, ix);
+      if (!ensure_space(ctx, b, ix + size + write_padding_bytes)) [[unlikely]] {
+         return false;
       }
       std::memcpy(&b[ix], data, size);
       ix += size;
+      return true;
    }
 
 }
@@ -235,10 +423,12 @@ namespace glz
    template <always_null_t T>
    struct to<MSGPACK, T>
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args)
+      template <auto Opts, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, B&& b, IX&& ix)
       {
-         msgpack::detail::write_nil(std::forward<Args>(args)...);
+         if (!msgpack::detail::write_nil(ctx, b, ix)) [[unlikely]] {
+            return;
+         }
       }
    };
 
@@ -249,7 +439,9 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          if (!value) {
-            msgpack::detail::write_nil(b, ix);
+            if (!msgpack::detail::write_nil(ctx, b, ix)) [[unlikely]] {
+               return;
+            }
             return;
          }
          serialize<MSGPACK>::op<Opts>(*value, ctx, b, ix);
@@ -264,7 +456,9 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          if (!value.has_value()) {
-            msgpack::detail::write_nil(b, ix);
+            if (!msgpack::detail::write_nil(ctx, b, ix)) [[unlikely]] {
+               return;
+            }
             return;
          }
          serialize<MSGPACK>::op<Opts>(value.value(), ctx, b, ix);
@@ -278,7 +472,9 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          if (!value.val) {
-            msgpack::detail::write_nil(b, ix);
+            if (!msgpack::detail::write_nil(ctx, b, ix)) [[unlikely]] {
+               return;
+            }
             return;
          }
          serialize<MSGPACK>::op<Opts>(*value.val, ctx, b, ix);
@@ -288,10 +484,12 @@ namespace glz
    template <boolean_like T>
    struct to<MSGPACK, T>
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args)
+      template <auto Opts, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&& ctx, B&& b, IX&& ix)
       {
-         msgpack::detail::write_bool(value, std::forward<Args>(args)...);
+         if (!msgpack::detail::write_bool(ctx, value, b, ix)) [[unlikely]] {
+            return;
+         }
       }
    };
 
@@ -299,7 +497,7 @@ namespace glz
    struct to<MSGPACK, T>
    {
       template <auto Opts, class B, class IX>
-      static void op(auto&& value, is_context auto&&, B&& b, IX&& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, IX&& ix)
       {
          const auto num_bytes = (value.size() + 7) / 8;
          std::vector<uint8_t> bytes(num_bytes);
@@ -308,8 +506,10 @@ namespace glz
                bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
             }
          }
-         msgpack::detail::write_binary_header(bytes.size(), b, ix);
-         msgpack::detail::dump_raw_bytes(reinterpret_cast<const char*>(bytes.data()), bytes.size(), b, ix);
+         if (!msgpack::detail::write_binary_header(ctx, bytes.size(), b, ix)) [[unlikely]] {
+            return;
+         }
+         msgpack::detail::dump_raw_bytes(ctx, reinterpret_cast<const char*>(bytes.data()), bytes.size(), b, ix);
       }
    };
 
@@ -334,8 +534,12 @@ namespace glz
       {
          const sv str = get_enum_name(value);
          if (!str.empty()) {
-            msgpack::detail::write_str_header(str.size(), b, ix);
-            msgpack::detail::dump_raw_bytes(str.data(), str.size(), b, ix);
+            if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix)) [[unlikely]] {
+               return;
+            }
          }
          else {
             // fallback to numeric representation
@@ -348,17 +552,23 @@ namespace glz
       requires(num_t<T> || char_t<T>)
    struct to<MSGPACK, T>
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args)
+      template <auto Opts, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, IX&& ix)
       {
          if constexpr (std::floating_point<std::remove_cvref_t<decltype(value)>>) {
-            msgpack::detail::write_floating(value, std::forward<Args>(args)...);
+            if (!msgpack::detail::write_floating(ctx, value, b, ix)) [[unlikely]] {
+               return;
+            }
          }
          else if constexpr (std::is_signed_v<std::remove_cvref_t<decltype(value)>>) {
-            msgpack::detail::write_signed(static_cast<int64_t>(value), std::forward<Args>(args)...);
+            if (!msgpack::detail::write_signed(ctx, static_cast<int64_t>(value), b, ix)) [[unlikely]] {
+               return;
+            }
          }
          else {
-            msgpack::detail::write_unsigned(static_cast<uint64_t>(value), std::forward<Args>(args)...);
+            if (!msgpack::detail::write_unsigned(ctx, static_cast<uint64_t>(value), b, ix)) [[unlikely]] {
+               return;
+            }
          }
       }
    };
@@ -367,11 +577,13 @@ namespace glz
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&&, B&& b, IX&& ix)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          const std::string_view str{value.data(), value.size()};
-         msgpack::detail::write_str_header(str.size(), b, ix);
-         msgpack::detail::dump_raw_bytes(str.data(), str.size(), b, ix);
+         if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
+            return;
+         }
+         msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix);
       }
    };
 
@@ -379,11 +591,13 @@ namespace glz
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&&, B&& b, IX&& ix)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          const std::string_view str{value.data(), value.size()};
-         msgpack::detail::write_str_header(str.size(), b, ix);
-         msgpack::detail::dump_raw_bytes(str.data(), str.size(), b, ix);
+         if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
+            return;
+         }
+         msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix);
       }
    };
 
@@ -391,11 +605,13 @@ namespace glz
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&&, B&& b, IX&& ix)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          const std::string_view str{value};
-         msgpack::detail::write_str_header(str.size(), b, ix);
-         msgpack::detail::dump_raw_bytes(str.data(), str.size(), b, ix);
+         if (!msgpack::detail::write_str_header(ctx, str.size(), b, ix)) [[unlikely]] {
+            return;
+         }
+         msgpack::detail::dump_raw_bytes(ctx, str.data(), str.size(), b, ix);
       }
    };
 
@@ -418,8 +634,13 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          if constexpr (Opts.structs_as_arrays) {
-            msgpack::detail::write_array_header(count_members<Opts>(), b, ix);
+            if (!msgpack::detail::write_array_header(ctx, count_members<Opts>(), b, ix)) [[unlikely]] {
+               return;
+            }
             for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if constexpr (!std::same_as<field_t<T, I>, hidden> && !std::same_as<field_t<T, I>, skip>) {
                   serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
                   if constexpr (is_output_streaming<decltype(b)>) {
@@ -429,12 +650,21 @@ namespace glz
             });
          }
          else {
-            msgpack::detail::write_map_header(count_members<Opts>(), b, ix);
+            if (!msgpack::detail::write_map_header(ctx, count_members<Opts>(), b, ix)) [[unlikely]] {
+               return;
+            }
             for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if constexpr (!std::same_as<field_t<T, I>, hidden> && !std::same_as<field_t<T, I>, skip>) {
                   static constexpr sv key = reflect<T>::keys[I];
-                  msgpack::detail::write_str_header(key.size(), b, ix);
-                  msgpack::detail::dump_raw_bytes(key.data(), key.size(), b, ix);
+                  if (!msgpack::detail::write_str_header(ctx, key.size(), b, ix)) [[unlikely]] {
+                     return;
+                  }
+                  if (!msgpack::detail::dump_raw_bytes(ctx, key.data(), key.size(), b, ix)) [[unlikely]] {
+                     return;
+                  }
                   serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
                   if constexpr (is_output_streaming<decltype(b)>) {
                      flush_buffer(b, ix);
@@ -462,8 +692,13 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         msgpack::detail::write_map_header(value.size(), b, ix);
+         if (!msgpack::detail::write_map_header(ctx, value.size(), b, ix)) [[unlikely]] {
+            return;
+         }
          for (auto&& item : value) {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             serialize<MSGPACK>::op<Opts>(item.first, ctx, b, ix);
             serialize<MSGPACK>::op<Opts>(item.second, ctx, b, ix);
             if constexpr (is_output_streaming<decltype(b)>) {
@@ -481,17 +716,24 @@ namespace glz
       {
          if constexpr (msgpack::binary_range_v<Value>) {
             const size_t size = value.size();
-            msgpack::detail::write_binary_header(size, b, ix);
+            if (!msgpack::detail::write_binary_header(ctx, size, b, ix)) [[unlikely]] {
+               return;
+            }
             if (size == 0) {
                return;
             }
             const auto* data = reinterpret_cast<const char*>(value.data());
-            msgpack::detail::dump_raw_bytes(data, size, b, ix);
+            msgpack::detail::dump_raw_bytes(ctx, data, size, b, ix);
             return;
          }
 
-         msgpack::detail::write_array_header(value.size(), b, ix);
+         if (!msgpack::detail::write_array_header(ctx, value.size(), b, ix)) [[unlikely]] {
+            return;
+         }
          for (auto&& element : value) {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             serialize<MSGPACK>::op<Opts>(element, ctx, b, ix);
             if constexpr (is_output_streaming<decltype(b)>) {
                flush_buffer(b, ix);
@@ -509,12 +751,19 @@ namespace glz
          const size_t len = value.data.size();
          const auto type_byte = static_cast<uint8_t>(value.type);
 
+         // Calculate max header + data size and check upfront
+         // Max header is 6 bytes (ext32: 1 byte type + 4 bytes len + 1 byte ext type)
+         if (!ensure_space(ctx, b, ix + 6 + len + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+
          auto dump_payload = [&](auto&& emit_header) {
             emit_header();
             dump(std::byte{type_byte}, b, ix);
             if (len > 0) {
                const auto* data = reinterpret_cast<const char*>(value.data.data());
-               msgpack::detail::dump_raw_bytes(data, len, b, ix);
+               std::memcpy(&b[ix], data, len);
+               ix += len;
             }
          };
 
@@ -571,8 +820,13 @@ namespace glz
    struct to<MSGPACK, msgpack::timestamp>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&&, B&& b, IX&& ix)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
+         // Max size is 15 bytes (timestamp 96: 3 header + 12 payload)
+         if (!ensure_space(ctx, b, ix + 15 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+
          const auto type_byte = static_cast<uint8_t>(msgpack::timestamp_type);
 
          // Timestamp 32: seconds only, fits in uint32, no nanoseconds
@@ -636,7 +890,9 @@ namespace glz
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
 
-         msgpack::detail::write_map_header(N, b, ix);
+         if (!msgpack::detail::write_map_header(ctx, N, b, ix)) [[unlikely]] {
+            return;
+         }
 
          if constexpr (glaze_object_t<T>) {
             for_each<N>([&]<auto I>() {
@@ -650,8 +906,12 @@ namespace glz
                static constexpr auto index = key_index<T>(key);
                static_assert(index < reflect<T>::size, "Invalid key passed to partial write");
 
-               msgpack::detail::write_str_header(key.size(), b, ix);
-               msgpack::detail::dump_raw_bytes(key.data(), key.size(), b, ix);
+               if (!msgpack::detail::write_str_header(ctx, key.size(), b, ix)) [[unlikely]] {
+                  return;
+               }
+               if (!msgpack::detail::dump_raw_bytes(ctx, key.data(), key.size(), b, ix)) [[unlikely]] {
+                  return;
+               }
                if constexpr (glaze_object_t<T>) {
                   static constexpr auto member = get<index>(reflect<T>::values);
                   serialize_partial<MSGPACK>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
@@ -709,8 +969,13 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          static constexpr auto N = reflect<T>::size;
-         msgpack::detail::write_array_header(N, b, ix);
+         if (!msgpack::detail::write_array_header(ctx, N, b, ix)) [[unlikely]] {
+            return;
+         }
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
          });
       }
@@ -724,15 +989,17 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          static constexpr auto N = glz::tuple_size_v<T>;
-         msgpack::detail::write_array_header(N, b, ix);
+         if (!msgpack::detail::write_array_header(ctx, N, b, ix)) [[unlikely]] {
+            return;
+         }
          if constexpr (is_std_tuple<T>) {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               (serialize<MSGPACK>::op<Opts>(std::get<I>(value), ctx, b, ix), ...);
+               ((void)(bool(ctx.error) ? void() : (serialize<MSGPACK>::op<Opts>(std::get<I>(value), ctx, b, ix), void())), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               (serialize<MSGPACK>::op<Opts>(glz::get<I>(value), ctx, b, ix), ...);
+               ((void)(bool(ctx.error) ? void() : (serialize<MSGPACK>::op<Opts>(glz::get<I>(value), ctx, b, ix), void())), ...);
             }(std::make_index_sequence<N>{});
          }
       }
@@ -744,10 +1011,16 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         msgpack::detail::write_array_header(2, b, ix);
+         if (!msgpack::detail::write_array_header(ctx, 2, b, ix)) [[unlikely]] {
+            return;
+         }
          static constexpr auto ids = ids_v<T>;
-         msgpack::detail::write_str_header(ids[value.index()].size(), b, ix);
-         msgpack::detail::dump_raw_bytes(ids[value.index()].data(), ids[value.index()].size(), b, ix);
+         if (!msgpack::detail::write_str_header(ctx, ids[value.index()].size(), b, ix)) [[unlikely]] {
+            return;
+         }
+         if (!msgpack::detail::dump_raw_bytes(ctx, ids[value.index()].data(), ids[value.index()].size(), b, ix)) [[unlikely]] {
+            return;
+         }
          std::visit([&](auto&& v) { serialize<MSGPACK>::op<Opts>(v, ctx, b, ix); }, value);
       }
    };
@@ -761,8 +1034,15 @@ namespace glz
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
-         msgpack::detail::write_array_header(N, b, ix);
-         for_each<N>([&]<size_t I>() { serialize<MSGPACK>::op<Opts>(glz::get<I>(value.value), ctx, b, ix); });
+         if (!msgpack::detail::write_array_header(ctx, N, b, ix)) [[unlikely]] {
+            return;
+         }
+         for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            serialize<MSGPACK>::op<Opts>(glz::get<I>(value.value), ctx, b, ix);
+         });
       }
    };
 
@@ -775,8 +1055,15 @@ namespace glz
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
-         msgpack::detail::write_array_header(N, b, ix);
-         for_each<N>([&]<size_t I>() { serialize<MSGPACK>::op<Opts>(glz::get<I>(value.value), ctx, b, ix); });
+         if (!msgpack::detail::write_array_header(ctx, N, b, ix)) [[unlikely]] {
+            return;
+         }
+         for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            serialize<MSGPACK>::op<Opts>(glz::get<I>(value.value), ctx, b, ix);
+         });
       }
    };
 
@@ -789,8 +1076,13 @@ namespace glz
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V> / 2;
-         msgpack::detail::write_map_header(N, b, ix);
+         if (!msgpack::detail::write_map_header(ctx, N, b, ix)) [[unlikely]] {
+            return;
+         }
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             serialize<MSGPACK>::op<Opts>(glz::get<2 * I>(value.value), ctx, b, ix);
             serialize<MSGPACK>::op<Opts>(glz::get<2 * I + 1>(value.value), ctx, b, ix);
          });
@@ -806,8 +1098,13 @@ namespace glz
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V> / 2;
-         msgpack::detail::write_map_header(N, b, ix);
+         if (!msgpack::detail::write_map_header(ctx, N, b, ix)) [[unlikely]] {
+            return;
+         }
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             serialize<MSGPACK>::op<Opts>(glz::get<2 * I>(value.value), ctx, b, ix);
             serialize<MSGPACK>::op<Opts>(glz::get<2 * I + 1>(value.value), ctx, b, ix);
          });
@@ -818,10 +1115,12 @@ namespace glz
       requires is_includer<T>
    struct to<MSGPACK, T>
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args)
+      template <auto Opts, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, B&& b, IX&& ix)
       {
-         msgpack::detail::write_str_header(0, std::forward<Args>(args)...);
+         if (!msgpack::detail::write_str_header(ctx, 0, b, ix)) [[unlikely]] {
+            return;
+         }
       }
    };
 
@@ -830,11 +1129,13 @@ namespace glz
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&&, B&& b, IX&& ix)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          constexpr auto name = name_v<std::decay_t<decltype(value)>>;
-         msgpack::detail::write_str_header(name.size(), b, ix);
-         msgpack::detail::dump_raw_bytes(name.data(), name.size(), b, ix);
+         if (!msgpack::detail::write_str_header(ctx, name.size(), b, ix)) [[unlikely]] {
+            return;
+         }
+         msgpack::detail::dump_raw_bytes(ctx, name.data(), name.size(), b, ix);
       }
    };
 

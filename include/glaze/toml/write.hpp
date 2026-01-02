@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
@@ -45,7 +46,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if (value) {
             serialize<TOML>::op<Opts>(*value, ctx, b, ix);
@@ -57,12 +58,12 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, B&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&& ctx, B&& b, auto& ix)
       {
          static constexpr auto checked = not check_write_unchecked(Opts);
-         if constexpr (checked && vector_like<B>) {
-            if (const auto n = ix + 8; n > b.size()) [[unlikely]] {
-               b.resize(2 * n);
+         if constexpr (checked) {
+            if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
+               return;
             }
          }
 
@@ -92,8 +93,12 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         // Numbers can be up to ~25 chars for doubles
+         if (!ensure_space(ctx, b, ix + 32 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
          if constexpr (Opts.quoted_num) {
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
@@ -112,23 +117,26 @@ namespace glz
       requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
    struct to<TOML, T>
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const sv str = get_enum_name(value);
          if (!str.empty()) {
             // Write as quoted string for TOML
-            if constexpr (not Opts.raw) {
-               dump<'"'>(args...);
+            if (!ensure_space(ctx, b, ix + str.size() + 3 + write_padding_bytes)) [[unlikely]] {
+               return;
             }
-            dump_maybe_empty(str, args...);
             if constexpr (not Opts.raw) {
-               dump<'"'>(args...);
+               dump<'"'>(b, ix);
+            }
+            dump_maybe_empty(str, b, ix);
+            if constexpr (not Opts.raw) {
+               dump<'"'>(b, ix);
             }
          }
          else [[unlikely]] {
             // Value doesn't have a mapped string, serialize as underlying number
-            serialize<TOML>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+            serialize<TOML>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, b, ix);
          }
       }
    };
@@ -157,7 +165,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using Rep = typename std::remove_cvref_t<T>::rep;
          to<TOML, Rep>::template op<Opts>(value.count(), ctx, b, ix);
@@ -172,7 +180,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using namespace std::chrono;
          using TP = std::remove_cvref_t<T>;
@@ -210,7 +218,9 @@ namespace glz
 
          // Max size: YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ = 30 (no quotes for TOML)
          constexpr size_t max_size = 21 + (frac_digits > 0 ? 1 + frac_digits : 0);
-         maybe_pad<max_size>(b, ix);
+         if (!ensure_space(ctx, b, ix + max_size + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
 
          // Helper to write N-digit zero-padded number
          auto write_digits = [&]<size_t N>(uint64_t val) {
@@ -259,7 +269,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using namespace std::chrono;
 
@@ -269,7 +279,9 @@ namespace glz
 
          // YYYY-MM-DD = 10 chars
          constexpr size_t max_size = 10;
-         maybe_pad<max_size>(b, ix);
+         if (!ensure_space(ctx, b, ix + max_size + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
 
          // Helper to write N-digit zero-padded number
          auto write_digits = [&]<size_t N>(uint64_t val) {
@@ -294,7 +306,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using namespace std::chrono;
          using Precision = typename std::remove_cvref_t<T>::precision;
@@ -322,7 +334,9 @@ namespace glz
 
          // HH:MM:SS.nnnnnnnnn = max 18 chars
          constexpr size_t max_size = 8 + (frac_digits > 0 ? 1 + frac_digits : 0);
-         maybe_pad<max_size>(b, ix);
+         if (!ensure_space(ctx, b, ix + max_size + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
 
          // Helper to write N-digit zero-padded number
          auto write_digits = [&]<size_t N>(uint64_t val) {
@@ -362,7 +376,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using Duration = typename std::remove_cvref_t<T>::duration;
          using Rep = typename Duration::rep;
@@ -377,7 +391,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          // Treat like steady_clock - serialize as count since epoch is implementation-defined
          using Duration = typename std::remove_cvref_t<T>::duration;
@@ -392,21 +406,35 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if constexpr (Opts.number) {
+            const sv str = [&]() -> const sv {
+               if constexpr (char_t<T>) {
+                  return sv{&value, 1};
+               }
+               else if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+                  return value ? value : "";
+               }
+               else {
+                  return sv{value};
+               }
+            }();
+            if (!ensure_space(ctx, b, ix + str.size() + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
             dump_maybe_empty(value, b, ix);
          }
          else if constexpr (char_t<T>) {
             if constexpr (Opts.raw) {
+               if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+                  return;
+               }
                dump(value, b, ix);
             }
             else {
-               if constexpr (resizable<B>) {
-                  const auto k = ix + 8;
-                  if (k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               if (!ensure_space(ctx, b, ix + 8 + write_padding_bytes)) [[unlikely]] {
+                  return;
                }
 
                std::memcpy(&b[ix], "\"", 1);
@@ -437,12 +465,8 @@ namespace glz
                   }
                }();
 
-               if constexpr (resizable<B>) {
-                  const auto n = str.size();
-                  const auto k = ix + 8 + n;
-                  if (k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               if (!ensure_space(ctx, b, ix + 8 + str.size() + write_padding_bytes)) [[unlikely]] {
+                  return;
                }
 
                std::memcpy(&b[ix], "\"", 1);
@@ -468,11 +492,9 @@ namespace glz
                   }
                }();
                const auto n = str.size();
-               if constexpr (resizable<B>) {
-                  const auto k = ix + 10 + 2 * n;
-                  if (k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               // Worst case: each char becomes 2 chars when escaped, plus quotes
+               if (!ensure_space(ctx, b, ix + 10 + 2 * n + write_padding_bytes)) [[unlikely]] {
+                  return;
                }
 
                if constexpr (Opts.raw) {
@@ -546,13 +568,11 @@ namespace glz
 
    template <auto Opts, bool minified_check = true, class B>
       requires(Opts.format == TOML)
-   GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&&, B&& b, auto&& ix)
+   GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&& ctx, B&& b, auto& ix)
    {
-      if constexpr (vector_like<B>) {
-         if constexpr (minified_check) {
-            if (ix >= b.size()) [[unlikely]] {
-               b.resize(2 * ix);
-            }
+      if constexpr (minified_check) {
+         if (!ensure_space(ctx, b, ix + 2)) [[unlikely]] {
+            return;
          }
       }
       std::memcpy(&b[ix], ", ", 2);
@@ -564,8 +584,11 @@ namespace glz
 
    template <auto Opts, bool minified_check = true, class B>
       requires(Opts.format == TOML)
-   GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&&, B&& b, auto&& ix)
+   GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&& ctx, B&& b, auto& ix)
    {
+      if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+         return;
+      }
       std::memcpy(&b[ix], "\n", 1);
       ++ix;
       if constexpr (is_output_streaming<B>) {
@@ -579,7 +602,7 @@ namespace glz
    {
       template <auto Options, class V, class B>
          requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
-      static void op(V&& value, is_context auto&& ctx, B&& b, auto&& ix)
+      static void op(V&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          // Do not write opening/closing braces.
          static constexpr auto N = reflect<T>::size;
@@ -596,6 +619,9 @@ namespace glz
          bool first = true;
 
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             using val_t = field_t<T, I>;
 
             constexpr bool write_member_functions = check_write_member_functions(Options);
@@ -627,7 +653,9 @@ namespace glz
                   }
                }
 
-               maybe_pad<padding>(b, ix);
+               if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
+                  return;
+               }
 
                // --- Check if this field is a nested object ---
                if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
@@ -654,7 +682,13 @@ namespace glz
                   else {
                      to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
                   }
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   // Add an extra newline to separate this table section from following keys.
+                  if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+                     return;
+                  }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
                }
@@ -695,49 +729,72 @@ namespace glz
       // --- Array-like container writer ---
       template <auto Opts, class B>
          requires(writable_array_t<T> && (map_like_array ? check_concatenate(Opts) == false : true))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (empty_range(value)) {
+            if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
             dump<"[]">(b, ix);
          }
          else {
             if constexpr (has_size<T>) {
                const auto n = value.size();
-               if constexpr (vector_like<B>) {
-                  // Use 2 bytes per separator (", ")
-                  static constexpr auto comma_padding = 2;
-                  if (const auto k = ix + n * comma_padding + write_padding_bytes; k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               // Use 2 bytes per separator (", ")
+               static constexpr auto comma_padding = 2;
+               if (!ensure_space(ctx, b, ix + n * comma_padding + write_padding_bytes)) [[unlikely]] {
+                  return;
                }
                std::memcpy(&b[ix], "[", 1);
                ++ix;
                auto it = std::begin(value);
                using val_t = std::remove_cvref_t<decltype(*it)>;
                to<TOML, val_t>::template op<Opts>(*it, ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                ++it;
                for (const auto fin = std::end(value); it != fin; ++it) {
                   write_array_entry_separator<Opts>(ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   to<TOML, val_t>::template op<Opts>(*it, ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+               }
+               if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+                  return;
                }
                std::memcpy(&b[ix], "]", 1);
                ++ix;
             }
             else {
-               if constexpr (vector_like<B>) {
-                  if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               if (!ensure_space(ctx, b, ix + write_padding_bytes)) [[unlikely]] {
+                  return;
                }
                std::memcpy(&b[ix], "[", 1);
                ++ix;
                auto it = std::begin(value);
                using val_t = std::remove_cvref_t<decltype(*it)>;
                to<TOML, val_t>::template op<Opts>(*it, ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                ++it;
                for (const auto fin = std::end(value); it != fin; ++it) {
                   write_array_entry_separator<Opts>(ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   to<TOML, val_t>::template op<Opts>(*it, ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+               }
+               if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+                  return;
                }
                dump<']'>(b, ix);
             }
@@ -747,17 +804,26 @@ namespace glz
       // --- Map-like container writer ---
       template <auto Opts, class B>
          requires(writable_map_t<T> || (map_like_array && check_concatenate(Opts) == true))
-      static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          bool first = true;
          for (auto&& [key, val] : value) {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             if (!first) {
                write_object_entry_separator<Opts>(ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
             else {
                first = false;
             }
             // Write the key as a bare key
+            if (!ensure_space(ctx, b, ix + key.size() + 4 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
             std::memcpy(&b[ix], key.data(), key.size());
             ix += key.size();
             std::memcpy(&b[ix], " = ", 3);
@@ -783,8 +849,8 @@ namespace glz
       requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || is_std_tuple<T>
    struct to<TOML, T>
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -795,36 +861,51 @@ namespace glz
             }
          }();
 
-         dump<'['>(args...);
+         if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump<'['>(b, ix);
          using V = std::decay_t<T>;
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             if constexpr (glaze_array_t<V>) {
-               serialize<TOML>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
+               serialize<TOML>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
             }
             else if constexpr (is_std_tuple<T>) {
                using Value = core_t<decltype(std::get<I>(value))>;
-               to<TOML, Value>::template op<Opts>(std::get<I>(value), ctx, args...);
+               to<TOML, Value>::template op<Opts>(std::get<I>(value), ctx, b, ix);
             }
             else {
                using Value = core_t<decltype(glz::get<I>(value))>;
-               to<TOML, Value>::template op<Opts>(glz::get<I>(value), ctx, args...);
+               to<TOML, Value>::template op<Opts>(glz::get<I>(value), ctx, b, ix);
             }
             constexpr bool needs_comma = I < N - 1;
             if constexpr (needs_comma) {
-               write_array_entry_separator<Opts>(ctx, args...);
+               write_array_entry_separator<Opts>(ctx, b, ix);
             }
          });
-         dump<']'>(args...);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+            return;
+         }
+         dump<']'>(b, ix);
       }
    };
 
    template <is_includer T>
    struct to<TOML, T>
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump<R"("")">(args...); // dump an empty string
+         if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump<R"("")">(b, ix); // dump an empty string
       }
    };
 

@@ -76,7 +76,7 @@ namespace glz
    struct to<JSON, raw_or_file>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto& ix)
       {
          dump_maybe_empty(value.str, b, ix);
       }

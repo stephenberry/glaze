@@ -32,7 +32,7 @@ namespace glz
    struct to<JSON, quoted_t<T>>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          static thread_local std::string s(128, ' ');
          size_t oix = 0; // overwrite index
@@ -78,7 +78,7 @@ namespace glz
    struct to<JSON, escape_bytes_t<T>>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          const auto sv = [&]() -> std::string_view {
             using V = std::remove_reference_t<T>;

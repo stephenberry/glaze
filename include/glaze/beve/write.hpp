@@ -7,6 +7,7 @@
 
 #include "glaze/beve/header.hpp"
 #include "glaze/beve/key_traits.hpp"
+#include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/seek.hpp"
@@ -36,22 +37,68 @@ namespace glz
       }
    };
 
-   GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto&& ix)
+   template <class B>
+   GLZ_ALWAYS_INLINE bool dump_type(is_context auto& ctx, auto&& value, B& b, auto& ix)
    {
       using V = std::decay_t<decltype(value)>;
       constexpr auto n = sizeof(V);
 
+      if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+         return false;
+      }
+
+      if constexpr (n == 1) {
+         b[ix] = static_cast<std::decay_t<decltype(b[0])>>(value);
+         ++ix;
+      }
+      else {
+         constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
+
+         if constexpr (is_volatile) {
+            V temp = value;
+            if constexpr (std::endian::native == std::endian::big) {
+               byteswap_le(temp);
+            }
+            std::memcpy(&b[ix], &temp, n);
+         }
+         else {
+            if constexpr (std::endian::native == std::endian::big &&
+                          (std::integral<V> || std::floating_point<V> || std::is_enum_v<V>)) {
+               V temp = value;
+               byteswap_le(temp);
+               std::memcpy(&b[ix], &temp, n);
+            }
+            else {
+               std::memcpy(&b[ix], &value, n);
+            }
+         }
+         ix += n;
+      }
+      return true;
+   }
+
+   // Legacy version for internal use where context is not available
+   GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto& ix)
+   {
+      using V = std::decay_t<decltype(value)>;
+      using Buffer = std::remove_cvref_t<decltype(b)>;
+      constexpr auto n = sizeof(V);
+
       if constexpr (n == 1) {
          // Optimized single-byte path: direct assignment instead of memcpy
-         if (ix == b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+         if constexpr (vector_like<Buffer>) {
+            if (ix == b.size()) [[unlikely]] {
+               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            }
          }
          b[ix] = static_cast<std::decay_t<decltype(b[0])>>(value);
          ++ix;
       }
       else {
-         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if constexpr (vector_like<Buffer>) {
+            if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
+            }
          }
 
          constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
@@ -99,6 +146,58 @@ namespace glz
       }
       else {
          static_assert(i >= 4611686018427387904, "size not supported");
+      }
+   }
+
+   // Context-aware version of dump_compressed_int (compile-time known size)
+   template <uint64_t i, class B>
+   GLZ_ALWAYS_INLINE bool dump_compressed_int(is_context auto& ctx, B& b, size_t& ix)
+   {
+      if constexpr (i < 64) {
+         const uint8_t c = uint8_t(i) << 2;
+         return dump_type(ctx, c, b, ix);
+      }
+      else if constexpr (i < 16384) {
+         const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
+         return dump_type(ctx, c, b, ix);
+      }
+      else if constexpr (i < 1073741824) {
+         const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
+         return dump_type(ctx, c, b, ix);
+      }
+      else if constexpr (i < 4611686018427387904) {
+         const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
+         return dump_type(ctx, c, b, ix);
+      }
+      else {
+         static_assert(i >= 4611686018427387904, "size not supported");
+         return false;
+      }
+   }
+
+   // Context-aware version of dump_compressed_int (runtime size)
+   template <class B>
+   GLZ_ALWAYS_INLINE bool dump_compressed_int(is_context auto& ctx, uint64_t i, B& b, size_t& ix)
+   {
+      if (i < 64) {
+         const uint8_t c = uint8_t(i) << 2;
+         return dump_type(ctx, c, b, ix);
+      }
+      else if (i < 16384) {
+         const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
+         return dump_type(ctx, c, b, ix);
+      }
+      else if (i < 1073741824) {
+         const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
+         return dump_type(ctx, c, b, ix);
+      }
+      else if (i < 4611686018427387904) {
+         const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
+         return dump_type(ctx, c, b, ix);
+      }
+      else {
+         std::abort(); // this should never happen because we should never allocate containers of this size
+         return false;
       }
    }
 
@@ -157,7 +256,7 @@ namespace glz
    struct to_partial<BEVE, T> final
    {
       template <auto& Partial, auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          static constexpr auto sorted = sort_json_ptrs(Partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
@@ -258,23 +357,27 @@ namespace glz
    template <always_null_t T>
    struct to<BEVE, T>
    {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump_type(uint8_t{0}, args...);
+         dump_type(ctx, uint8_t{0}, b, ix);
       }
    };
 
    template <is_bitset T>
    struct to<BEVE, T>
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&&, auto&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr uint8_t type = uint8_t(3) << 3;
          constexpr uint8_t tag = tag::typed_array | type;
-         dump_type(tag, args...);
-         dump_compressed_int<Opts>(value.size(), args...);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
+         if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+            return;
+         }
 
          // constexpr auto num_bytes = (value.size() + 7) / 8;
          const auto num_bytes = (value.size() + 7) / 8;
@@ -286,24 +389,31 @@ namespace glz
                bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
             }
          }
-         dump(bytes, args...);
+         if (!ensure_space(ctx, b, ix + bytes.size() + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump(bytes, b, ix);
       }
    };
 
    template <glaze_flags_t T>
    struct to<BEVE, T>
    {
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          static constexpr auto N = reflect<T>::size;
+         static constexpr auto data_size = byte_length<T>();
 
-         std::array<uint8_t, byte_length<T>()> data{};
+         std::array<uint8_t, data_size> data{};
 
          for_each<N>([&]<size_t I>() {
             data[I / 8] |= static_cast<uint8_t>(get_member(value, get<I>(reflect<T>::values))) << (7 - (I % 8));
          });
 
+         if (!ensure_space(ctx, b, ix + data_size + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
          dump(data, b, ix);
       }
    };
@@ -320,23 +430,25 @@ namespace glz
    template <is_includer T>
    struct to<BEVE, T>
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr uint8_t tag = tag::string;
 
-         dump_type(tag, args...);
-         dump_compressed_int<Opts>(0, args...);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
+         dump_compressed_int<0>(ctx, b, ix);
       }
    };
 
    template <boolean_like T>
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump_type(value ? tag::bool_true : tag::bool_false, args...);
+         dump_type(ctx, value ? tag::bool_true : tag::bool_false, b, ix);
       }
    };
 
@@ -378,8 +490,8 @@ namespace glz
    template <is_variant T>
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using Variant = std::decay_t<decltype(value)>;
 
@@ -391,9 +503,13 @@ namespace glz
 
                constexpr uint8_t tag = tag::extensions | 0b00001'000;
 
-               dump_type(tag, args...);
-               dump_compressed_int<index>(args...);
-               serialize<BEVE>::op<Opts>(v, ctx, args...);
+               if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+                  return;
+               }
+               if (!dump_compressed_int<index>(ctx, b, ix)) [[unlikely]] {
+                  return;
+               }
+               serialize<BEVE>::op<Opts>(v, ctx, b, ix);
             },
             value);
       }
@@ -403,19 +519,21 @@ namespace glz
       requires num_t<T> || char_t<T> || glaze_enum_t<T>
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr uint8_t type = std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t tag = tag::number | type | (byte_count<T> << 5);
-         dump_type(tag, args...);
-         dump_type(value, args...);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
+         dump_type(ctx, value, b, ix);
       }
 
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump_type(value, args...);
+         dump_type(ctx, value, b, ix);
       }
    };
 
@@ -423,21 +541,23 @@ namespace glz
       requires(std::is_enum_v<T> && !glaze_enum_t<T>)
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = std::underlying_type_t<std::decay_t<T>>;
 
          constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t tag = tag::number | type | (byte_count<V> << 5);
-         dump_type(tag, args...);
-         dump_type(value, args...);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
+         dump_type(ctx, value, b, ix);
       }
 
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump_type(value, args...);
+         dump_type(ctx, value, b, ix);
       }
    };
 
@@ -445,34 +565,42 @@ namespace glz
       requires complex_t<T>
    struct to<BEVE, T> final
    {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr uint8_t tag = tag::extensions | 0b00011'000;
-         dump_type(tag, args...);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
 
          using V = typename T::value_type;
          constexpr uint8_t complex_number = 0;
          constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t complex_header = complex_number | type | (byte_count<V> << 5);
-         dump_type(complex_header, args...);
-         dump_type(value.real(), args...);
-         dump_type(value.imag(), args...);
+         if (!dump_type(ctx, complex_header, b, ix)) [[unlikely]] {
+            return;
+         }
+         if (!dump_type(ctx, value.real(), b, ix)) [[unlikely]] {
+            return;
+         }
+         dump_type(ctx, value.imag(), b, ix);
       }
 
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump_type(value.real(), args...);
-         dump_type(value.imag(), args...);
+         if (!dump_type(ctx, value.real(), b, ix)) [[unlikely]] {
+            return;
+         }
+         dump_type(ctx, value.imag(), b, ix);
       }
    };
 
    template <str_t T>
    struct to<BEVE, T> final
    {
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const sv str = [&]() -> const sv {
             if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
@@ -485,12 +613,16 @@ namespace glz
 
          constexpr uint8_t tag = tag::string;
 
-         dump_type(tag, b, ix);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
          const auto n = str.size();
-         dump_compressed_int<Opts>(n, b, ix);
+         if (!dump_compressed_int(ctx, n, b, ix)) [[unlikely]] {
+            return;
+         }
 
-         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+            return;
          }
 
          if (n) {
@@ -499,14 +631,16 @@ namespace glz
          }
       }
 
-      template <auto Opts>
-      GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump_compressed_int<Opts>(value.size(), b, ix);
+         if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+            return;
+         }
 
          const auto n = value.size();
-         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+            return;
          }
 
          if (n) {
@@ -516,13 +650,15 @@ namespace glz
       }
 
       // Compile-time optimized version for known string sizes
-      template <uint64_t N>
-      GLZ_ALWAYS_INLINE static void no_header_cx(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      template <uint64_t N, class B>
+      GLZ_ALWAYS_INLINE static void no_header_cx(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump_compressed_int<N>(b, ix);
+         if (!dump_compressed_int<N>(ctx, b, ix)) [[unlikely]] {
+            return;
+         }
 
-         if (const auto k = ix + N; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if (!ensure_space(ctx, b, ix + N + write_padding_bytes)) [[unlikely]] {
+            return;
          }
 
          if constexpr (N > 0) {
@@ -537,17 +673,21 @@ namespace glz
    {
       static constexpr bool map_like_array = pair_t<range_value_t<T>>;
 
-      template <auto Opts>
+      template <auto Opts, class B>
          requires(map_like_array ? check_concatenate(Opts) == false : true)
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = range_value_t<std::decay_t<T>>;
 
          if constexpr (boolean_like<V>) {
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t tag = tag::typed_array | type;
-            dump_type(tag, b, ix);
-            dump_compressed_int<Opts>(value.size(), b, ix);
+            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+               return;
+            }
 
             // booleans must be dumped using single bits
             if constexpr (has_static_size<T>) {
@@ -559,16 +699,22 @@ namespace glz
                      bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
                }
+               if (!ensure_space(ctx, b, ix + num_bytes + write_padding_bytes)) [[unlikely]] {
+                  return;
+               }
                dump(bytes, b, ix);
             }
             else if constexpr (accessible<T>) {
                const auto num_bytes = (value.size() + 7) / 8;
+               if (!ensure_space(ctx, b, ix + num_bytes + write_padding_bytes)) [[unlikely]] {
+                  return;
+               }
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                   uint8_t byte{};
                   for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
                      byte |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
-                  dump_type(byte, b, ix);
+                  dump_type(ctx, byte, b, ix);
                }
             }
             else {
@@ -578,54 +724,58 @@ namespace glz
          else if constexpr (num_t<V>) {
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t tag = tag::typed_array | type | (byte_count<V> << 5);
-            dump_type(tag, b, ix);
-            dump_compressed_int<Opts>(value.size(), b, ix);
+            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+               return;
+            }
 
             if constexpr (contiguous<T>) {
                constexpr auto is_volatile =
                   std::is_volatile_v<std::remove_reference_t<std::remove_pointer_t<decltype(value.data())>>>;
 
-               auto dump_array = [&](auto&& b, auto&& ix) {
-                  const auto n = value.size() * sizeof(V);
-                  if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               const auto n = value.size() * sizeof(V);
+               if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+                  return;
+               }
 
-                  if constexpr (is_volatile) {
-                     const auto n_elements = value.size();
-                     for (size_t i = 0; i < n_elements; ++i) {
-                        V temp = value[i];
-                        if constexpr (std::endian::native == std::endian::big) {
-                           byteswap_le(temp);
-                        }
-                        std::memcpy(&b[ix], &temp, sizeof(V));
-                        ix += sizeof(V);
-                     }
-                  }
-                  else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
-                     // On big endian, swap each element
-                     const auto n_elements = static_cast<size_t>(value.size());
-                     for (size_t i = 0; i < n_elements; ++i) {
-                        V temp = value[i];
+               if constexpr (is_volatile) {
+                  const auto n_elements = value.size();
+                  for (size_t i = 0; i < n_elements; ++i) {
+                     V temp = value[i];
+                     if constexpr (std::endian::native == std::endian::big) {
                         byteswap_le(temp);
-                        std::memcpy(&b[ix], &temp, sizeof(V));
-                        ix += sizeof(V);
                      }
+                     std::memcpy(&b[ix], &temp, sizeof(V));
+                     ix += sizeof(V);
                   }
-                  else {
-                     // Little endian or single-byte: bulk memcpy
-                     if (n) {
-                        std::memcpy(&b[ix], value.data(), n);
-                        ix += n;
-                     }
+               }
+               else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
+                  // On big endian, swap each element
+                  const auto n_elements = static_cast<size_t>(value.size());
+                  for (size_t i = 0; i < n_elements; ++i) {
+                     V temp = value[i];
+                     byteswap_le(temp);
+                     std::memcpy(&b[ix], &temp, sizeof(V));
+                     ix += sizeof(V);
                   }
-               };
-
-               dump_array(b, ix);
+               }
+               else {
+                  // Little endian or single-byte: bulk memcpy
+                  if (n) {
+                     std::memcpy(&b[ix], value.data(), n);
+                     ix += n;
+                  }
+               }
             }
             else {
+               // Non-contiguous: need to check space for each element
+               if (!ensure_space(ctx, b, ix + value.size() * sizeof(V) + write_padding_bytes)) [[unlikely]] {
+                  return;
+               }
                for (auto& x : value) {
-                  dump_type(x, b, ix);
+                  dump_type(ctx, x, b, ix);
                }
             }
          }
@@ -633,43 +783,51 @@ namespace glz
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t string_indicator = uint8_t(1) << 5;
             constexpr uint8_t tag = tag::typed_array | type | string_indicator;
-            dump_type(tag, b, ix);
-            dump_compressed_int<Opts>(value.size(), b, ix);
+            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+               return;
+            }
 
             for (auto& x : value) {
-               dump_compressed_int<Opts>(x.size(), b, ix);
+               if (!dump_compressed_int(ctx, x.size(), b, ix)) [[unlikely]] {
+                  return;
+               }
 
-               auto dump_array = [&](auto&& b, auto&& ix) {
-                  const auto n = x.size();
-                  if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               const auto n = x.size();
+               if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+                  return;
+               }
 
-                  if (n) {
-                     std::memcpy(&b[ix], x.data(), n);
-                     ix += n;
-                  }
-               };
-
-               dump_array(b, ix);
+               if (n) {
+                  std::memcpy(&b[ix], x.data(), n);
+                  ix += n;
+               }
             }
          }
          else if constexpr (complex_t<V>) {
             constexpr uint8_t tag = tag::extensions | 0b00011'000;
-            dump_type(tag, b, ix);
+            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+               return;
+            }
 
             using X = typename V::value_type;
             constexpr uint8_t complex_array = 1;
             constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
-            dump_type(complex_header, b, ix);
+            if (!dump_type(ctx, complex_header, b, ix)) [[unlikely]] {
+               return;
+            }
 
-            dump_compressed_int<Opts>(value.size(), b, ix);
+            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+               return;
+            }
 
             if constexpr (contiguous<T>) {
                const auto n = value.size() * sizeof(V);
-               if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-                  b.resize(2 * k);
+               if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+                  return;
                }
 
                if constexpr (std::endian::native == std::endian::big) {
@@ -696,37 +854,57 @@ namespace glz
             else {
                for (auto&& x : value) {
                   serialize<BEVE>::no_header<Opts>(x, ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                }
             }
          }
          else {
             constexpr uint8_t tag = tag::generic_array;
-            dump_type(tag, b, ix);
-            dump_compressed_int<Opts>(value.size(), b, ix);
+            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+               return;
+            }
 
             for (auto&& x : value) {
                serialize<BEVE>::op<Opts>(x, ctx, b, ix);
-               if constexpr (is_output_streaming<decltype(b)>) {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if constexpr (is_output_streaming<std::remove_cvref_t<B>>) {
                   flush_buffer(b, ix);
                }
             }
          }
       }
 
-      template <auto Opts>
+      template <auto Opts, class B>
          requires(map_like_array && check_concatenate(Opts) == true)
-      static auto op(auto&& value, is_context auto&& ctx, auto&&... args)
+      static auto op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using Element = typename T::value_type;
          using Key = typename Element::first_type;
 
          constexpr uint8_t tag = beve_key_traits<Key>::header;
-         dump_type(tag, args...);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
 
-         dump_compressed_int<Opts>(value.size(), args...);
+         if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+            return;
+         }
          for (auto&& [k, v] : value) {
-            serialize<BEVE>::no_header<Opts>(k, ctx, args...);
-            serialize<BEVE>::op<Opts>(v, ctx, args...);
+            serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            serialize<BEVE>::op<Opts>(v, ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
          }
       }
    };
@@ -734,18 +912,25 @@ namespace glz
    template <pair_t T>
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using Key = typename T::first_type;
 
          constexpr uint8_t tag = beve_key_traits<Key>::header;
-         dump_type(tag, args...);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
 
-         dump_compressed_int<Opts>(1, args...);
+         if (!dump_compressed_int<1>(ctx, b, ix)) [[unlikely]] {
+            return;
+         }
          const auto& [k, v] = value;
-         serialize<BEVE>::no_header<Opts>(k, ctx, args...);
-         serialize<BEVE>::op<Opts>(v, ctx, args...);
+         serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         serialize<BEVE>::op<Opts>(v, ctx, b, ix);
       }
    };
 
@@ -753,18 +938,28 @@ namespace glz
    struct to<BEVE, T> final
    {
       template <auto Opts, class B>
-      static auto op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
+      static auto op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using Key = typename T::key_type;
 
          constexpr uint8_t tag = beve_key_traits<Key>::header;
-         dump_type(tag, b, ix);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
 
-         dump_compressed_int<Opts>(value.size(), b, ix);
+         if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+            return;
+         }
          for (auto&& [k, v] : value) {
             serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             serialize<BEVE>::op<Opts>(v, ctx, b, ix);
-            if constexpr (is_output_streaming<B>) {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if constexpr (is_output_streaming<std::remove_cvref_t<B>>) {
                flush_buffer(b, ix);
             }
          }
@@ -786,14 +981,17 @@ namespace glz
       requires(!std::is_array_v<T>)
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (value) {
-            serialize<BEVE>::op<Opts>(*value, ctx, args...);
+            serialize<BEVE>::op<Opts>(*value, ctx, b, ix);
          }
          else {
-            dump<tag::null>(args...);
+            if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+            dump<tag::null>(b, ix);
          }
       }
    };
@@ -802,14 +1000,17 @@ namespace glz
       requires(nullable_value_t<T> && not nullable_like<T> && not is_expected<T>)
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (value.has_value()) {
-            serialize<BEVE>::op<Opts>(value.value(), ctx, args...);
+            serialize<BEVE>::op<Opts>(value.value(), ctx, b, ix);
          }
          else {
-            dump<tag::null>(args...);
+            if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+            dump<tag::null>(b, ix);
          }
       }
    };
@@ -818,8 +1019,8 @@ namespace glz
       requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
    struct to<BEVE, T>
    {
-      template <auto Options>
-      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+      template <auto Options, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V> / 2;
@@ -827,14 +1028,24 @@ namespace glz
          if constexpr (!check_opening_handled(Options)) {
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
-            dump_type(tag, args...);
-            dump_compressed_int<N>(args...);
+            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+               return;
+            }
+            if (!dump_compressed_int<N>(ctx, b, ix)) [[unlikely]] {
+               return;
+            }
          }
 
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             constexpr auto Opts = opening_handled_off<Options>();
-            serialize<BEVE>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
-            serialize<BEVE>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
+            serialize<BEVE>::no_header<Opts>(get<2 * I>(value.value), ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            serialize<BEVE>::op<Opts>(get<2 * I + 1>(value.value), ctx, b, ix);
          });
       }
    };
@@ -885,19 +1096,25 @@ namespace glz
          return count;
       }
 
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
 
          constexpr uint8_t type = 0; // string key
          constexpr uint8_t tag = tag::object | type;
-         dump_type(tag, b, ix);
-         dump_compressed_int<merge_element_count<Opts>()>(b, ix);
+         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            return;
+         }
+         if (!dump_compressed_int<merge_element_count<Opts>()>(ctx, b, ix)) [[unlikely]] {
+            return;
+         }
 
          [&]<size_t... I>(std::index_sequence<I...>) {
-            (serialize<BEVE>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix), ...);
+            ((serialize<BEVE>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix),
+              bool(ctx.error) ? void() : void()),
+             ...);
          }(std::make_index_sequence<N>{});
       }
    };
@@ -932,12 +1149,17 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
 
-      template <auto Opts, class... Args>
+      template <auto Opts, class B>
          requires(Opts.structs_as_arrays == true)
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump<tag::generic_array>(args...);
-         dump_compressed_int<count_to_write<Opts>()>(args...);
+         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump<tag::generic_array>(b, ix);
+         if (!dump_compressed_int<count_to_write<Opts>()>(ctx, b, ix)) [[unlikely]] {
+            return;
+         }
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
@@ -949,23 +1171,26 @@ namespace glz
          }();
 
          for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             if constexpr (should_skip_field<Opts, I>()) {
                return;
             }
             else {
                if constexpr (reflectable<T>) {
-                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, args...);
+                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, b, ix);
                }
                else {
-                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...);
+                  serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
                }
             }
          });
       }
 
-      template <auto Options>
+      template <auto Options, class B>
          requires(Options.structs_as_arrays == false)
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr auto Opts = opening_handled_off<Options>();
 
@@ -1030,12 +1255,19 @@ namespace glz
             if constexpr (!check_opening_handled(Options)) {
                constexpr uint8_t type = 0; // string key
                constexpr uint8_t tag = tag::object | type;
-               dump_type(tag, b, ix);
-               dump_compressed_int<Options>(member_count, b, ix);
+               if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+                  return;
+               }
+               if (!dump_compressed_int(ctx, member_count, b, ix)) [[unlikely]] {
+                  return;
+               }
             }
 
             // Second pass: write members
             for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if constexpr (should_skip_field<Options, I>()) {
                   return;
                }
@@ -1075,6 +1307,9 @@ namespace glz
 
                   static constexpr sv key = reflect<T>::keys[I];
                   to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
 
                   decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
@@ -1086,7 +1321,7 @@ namespace glz
                   }();
 
                   serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
-                  if constexpr (is_output_streaming<decltype(b)>) {
+                  if constexpr (is_output_streaming<std::remove_cvref_t<B>>) {
                      flush_buffer(b, ix);
                   }
                }
@@ -1097,17 +1332,27 @@ namespace glz
             if constexpr (!check_opening_handled(Options)) {
                constexpr uint8_t type = 0; // string key
                constexpr uint8_t tag = tag::object | type;
-               dump_type(tag, b, ix);
-               dump_compressed_int<count_to_write<Options>()>(b, ix);
+               if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+                  return;
+               }
+               if (!dump_compressed_int<count_to_write<Options>()>(ctx, b, ix)) [[unlikely]] {
+                  return;
+               }
             }
 
             for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if constexpr (should_skip_field<Options, I>()) {
                   return;
                }
                else {
                   static constexpr sv key = reflect<T>::keys[I];
                   to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
 
                   decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
@@ -1119,7 +1364,7 @@ namespace glz
                   }();
 
                   serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
-                  if constexpr (is_output_streaming<decltype(b)>) {
+                  if constexpr (is_output_streaming<std::remove_cvref_t<B>>) {
                      flush_buffer(b, ix);
                   }
                }
@@ -1132,16 +1377,24 @@ namespace glz
       requires glaze_array_t<T>
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump<tag::generic_array>(args...);
+         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump<tag::generic_array>(b, ix);
 
          static constexpr auto N = reflect<T>::size;
-         dump_compressed_int<N>(args...);
+         if (!dump_compressed_int<N>(ctx, b, ix)) [[unlikely]] {
+            return;
+         }
 
          for_each<reflect<T>::size>([&]<size_t I>() {
-            serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
          });
       }
    };
@@ -1150,22 +1403,31 @@ namespace glz
       requires(tuple_t<T> || is_std_tuple<T>)
    struct to<BEVE, T> final
    {
-      template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump<tag::generic_array>(args...);
+         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump<tag::generic_array>(b, ix);
 
          static constexpr auto N = glz::tuple_size_v<T>;
-         dump_compressed_int<N>(args...);
+         if (!dump_compressed_int<N>(ctx, b, ix)) [[unlikely]] {
+            return;
+         }
 
          if constexpr (is_std_tuple<T>) {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               (serialize<BEVE>::op<Opts>(std::get<I>(value), ctx, args...), ...);
+               ((serialize<BEVE>::op<Opts>(std::get<I>(value), ctx, b, ix),
+                 bool(ctx.error) ? void() : void()),
+                ...);
             }(std::make_index_sequence<N>{});
          }
          else {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               (serialize<BEVE>::op<Opts>(glz::get<I>(value), ctx, args...), ...);
+               ((serialize<BEVE>::op<Opts>(glz::get<I>(value), ctx, b, ix),
+                 bool(ctx.error) ? void() : void()),
+                ...);
             }(std::make_index_sequence<N>{});
          }
       }

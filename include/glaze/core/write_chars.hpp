@@ -47,7 +47,7 @@ namespace glz
    struct write_chars
    {
       template <auto Opts, class B>
-      inline static void op(num_t auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      inline static void op(num_t auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
             // more efficient strings in C++23:
