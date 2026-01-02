@@ -13111,6 +13111,42 @@ namespace bounded_buffer_test_types
       int x = 42;
       std::string long_name = "this is a very long string that won't fit";
    };
+
+   // For deeply nested test
+   struct Inner
+   {
+      int x = 42;
+   };
+
+   struct Middle
+   {
+      Inner inner{};
+      std::string name = "test";
+   };
+
+   struct Outer
+   {
+      Middle middle{};
+      std::vector<int> data = {1, 2, 3, 4, 5};
+   };
+
+   // For round-trip test
+   struct ComplexStruct
+   {
+      int id = 123;
+      std::string name = "test object";
+      std::vector<double> values = {1.1, 2.2, 3.3};
+      std::optional<std::string> optional_field = "present";
+      bool active = true;
+   };
+
+   // For ec.count accuracy test - use vector to trigger overflow (string serialization has gaps)
+   struct OverflowTest
+   {
+      int a = 1;
+      std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+      int b = 2;
+   };
 }
 
 suite bounded_buffer_overflow_tests = [] {
@@ -13194,6 +13230,250 @@ suite bounded_buffer_overflow_tests = [] {
       expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow";
       // count should reflect some bytes were written before overflow
       expect(result.count > 0) << "some bytes should have been written before overflow";
+   };
+
+   // Test #3: Prettified output to bounded buffer
+   "prettified json to bounded buffer"_test = [] {
+      simple_short obj{};
+      std::array<char, 1024> buffer{};
+
+      auto result = glz::write<glz::opts{.prettify = true}>(obj, buffer);
+      expect(not result) << "prettified write should succeed";
+      expect(result.count > 0) << "count should be non-zero";
+
+      std::string_view json(buffer.data(), result.count);
+      // Verify output is actually prettified (contains newlines and indentation)
+      expect(json.find('\n') != std::string_view::npos) << "prettified output should contain newlines";
+      expect(json.find("   ") != std::string_view::npos) << "prettified output should contain indentation";
+   };
+
+   // Test #4: Deeply nested structures
+   "deeply nested struct to bounded buffer"_test = [] {
+      Outer obj{};
+      std::array<char, 1024> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "nested struct write should succeed";
+      expect(result.count > 0) << "count should be non-zero";
+
+      // Verify round-trip
+      Outer parsed{};
+      auto read_result = glz::read_json(parsed, std::string_view(buffer.data(), result.count));
+      expect(not read_result) << "read should succeed";
+      expect(parsed.middle.inner.x == obj.middle.inner.x) << "nested value should match";
+      expect(parsed.middle.name == obj.middle.name) << "nested string should match";
+      expect(parsed.data == obj.data) << "nested vector should match";
+   };
+
+   // Test #5: Array serialization (map with string keys triggers unimplemented string path)
+   "vector to bounded buffer succeeds"_test = [] {
+      std::vector<int> obj{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "vector write should succeed";
+      expect(result.count > 0) << "count should be non-zero";
+
+      std::string_view json(buffer.data(), result.count);
+      expect(json == "[1,2,3,4,5,6,7,8,9,10]") << "should match expected array";
+   };
+
+   "large vector to small bounded buffer fails"_test = [] {
+      std::vector<int> obj;
+      for (int i = 0; i < 200; ++i) {
+         obj.push_back(i);
+      }
+      // 512 bytes minimum - but too small for 200 integers
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "large vector should overflow small buffer";
+   };
+
+   // Test: Map with string keys to bounded buffer
+   "map with string keys to bounded buffer succeeds"_test = [] {
+      std::map<std::string, int> obj{{"alpha", 1}, {"beta", 2}, {"gamma", 3}};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "map write should succeed";
+      expect(result.count > 0) << "count should be non-zero";
+
+      std::string_view json(buffer.data(), result.count);
+      // Map order is sorted by key
+      expect(json == R"({"alpha":1,"beta":2,"gamma":3})") << "should match expected map JSON";
+   };
+
+   "map with long string keys to small buffer fails"_test = [] {
+      std::map<std::string, int> obj;
+      // Create keys that will exceed the buffer
+      for (int i = 0; i < 50; ++i) {
+         obj["key_with_a_reasonably_long_name_" + std::to_string(i)] = i;
+      }
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "large map should overflow small buffer";
+   };
+
+   "struct with string member to bounded buffer"_test = [] {
+      ComplexStruct obj{};
+      obj.name = "a test string that should serialize correctly";
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "struct with string should serialize successfully";
+      expect(result.count > 0) << "count should be non-zero";
+
+      // Verify round-trip
+      std::string_view json(buffer.data(), result.count);
+      ComplexStruct parsed{};
+      auto read_result = glz::read_json(parsed, json);
+      expect(not read_result) << "read should succeed";
+      expect(parsed.name == obj.name) << "string member should match";
+   };
+
+   // Test #8: Round-trip test with complex structure
+   "bounded buffer round-trip"_test = [] {
+      ComplexStruct original{};
+      std::array<char, 2048> buffer{};
+
+      auto write_result = glz::write_json(original, buffer);
+      expect(not write_result) << "write should succeed";
+
+      std::string_view json(buffer.data(), write_result.count);
+      ComplexStruct parsed{};
+      auto read_result = glz::read_json(parsed, json);
+      expect(not read_result) << "read should succeed";
+
+      expect(parsed.id == original.id) << "id should match";
+      expect(parsed.name == original.name) << "name should match";
+      expect(parsed.values == original.values) << "values should match";
+      expect(parsed.optional_field == original.optional_field) << "optional_field should match";
+      expect(parsed.active == original.active) << "active should match";
+   };
+
+   // Test #10: ec.count accuracy on overflow (more detailed)
+   "ec.count accurately reflects bytes written before overflow"_test = [] {
+      OverflowTest obj{};
+      // Add more data to ensure overflow
+      for (int i = 21; i < 200; ++i) {
+         obj.data.push_back(i);
+      }
+
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow";
+      expect(result.count > 0) << "count should be positive";
+      expect(result.count <= buffer.size()) << "count should not exceed buffer size";
+
+      // The partial output should start with {"a":1,"data":[
+      std::string_view partial(buffer.data(), result.count);
+      expect(partial.find("{\"a\":1") != std::string_view::npos) << "partial should contain start of object";
+   };
+
+   // Test: String with escape characters to bounded buffer
+   "string with escapes to bounded buffer"_test = [] {
+      std::string obj = "Hello \"World\"\nWith\tEscapes\\And\\More";
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "string with escapes should serialize successfully";
+      expect(result.count > 0) << "count should be non-zero";
+
+      // Verify round-trip
+      std::string_view json(buffer.data(), result.count);
+      std::string parsed;
+      auto read_result = glz::read_json(parsed, json);
+      expect(not read_result) << "read should succeed";
+      expect(parsed == obj) << "escaped string should round-trip correctly";
+   };
+
+   "long string with escapes overflows small buffer"_test = [] {
+      // Create a string with many escape characters
+      std::string obj;
+      for (int i = 0; i < 100; ++i) {
+         obj += "\"escape\"\t";
+      }
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "long escaped string should overflow";
+   };
+
+   // Test: Vector of strings to bounded buffer
+   "vector of strings to bounded buffer"_test = [] {
+      std::vector<std::string> obj{"hello", "world", "test", "strings"};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "vector of strings should serialize successfully";
+
+      std::string_view json(buffer.data(), result.count);
+      expect(json == R"(["hello","world","test","strings"])") << "should match expected JSON";
+
+      // Verify round-trip
+      std::vector<std::string> parsed;
+      auto read_result = glz::read_json(parsed, json);
+      expect(not read_result) << "read should succeed";
+      expect(parsed == obj) << "vector of strings should round-trip correctly";
+   };
+
+   "large vector of strings overflows"_test = [] {
+      std::vector<std::string> obj;
+      for (int i = 0; i < 100; ++i) {
+         obj.push_back("string_number_" + std::to_string(i));
+      }
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "large vector of strings should overflow";
+   };
+
+   // Test: Single character serialization
+   "single char to bounded buffer"_test = [] {
+      char obj = 'X';
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "single char should serialize successfully";
+
+      std::string_view json(buffer.data(), result.count);
+      expect(json == "\"X\"") << "should be quoted character";
+   };
+
+   "escaped char to bounded buffer"_test = [] {
+      char obj = '\n';
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "escaped char should serialize successfully";
+
+      std::string_view json(buffer.data(), result.count);
+      expect(json == "\"\\n\"") << "should be escaped newline";
+   };
+
+   // Test: Empty string edge case
+   "empty string to bounded buffer"_test = [] {
+      std::string obj;
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "empty string should serialize successfully";
+
+      std::string_view json(buffer.data(), result.count);
+      expect(json == "\"\"") << "should be empty quoted string";
+   };
+
+   // Test: Long string that causes overflow mid-serialization
+   "long string overflow detection"_test = [] {
+      // Create a string longer than the buffer
+      std::string obj(600, 'x');
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "long string should overflow";
    };
 };
 

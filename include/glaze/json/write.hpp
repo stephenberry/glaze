@@ -716,21 +716,33 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts, class B>
-      static void op(auto&& value, is_context auto&&, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if constexpr (Opts.number) {
-            dump_maybe_empty(value, b, ix);
+            const sv str = [&]() -> const sv {
+               if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+                  return value ? value : "";
+               }
+               else if constexpr (u8str_t<T>) {
+                  return sv{reinterpret_cast<const char*>(value.data()), value.size()};
+               }
+               else {
+                  return sv{value};
+               }
+            }();
+            if (!ensure_space(ctx, b, ix + str.size() + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+            dump_maybe_empty<false>(str, b, ix);
          }
          else if constexpr (char_t<T>) {
             if constexpr (Opts.raw) {
                dump(value, b, ix);
             }
             else {
-               if constexpr (resizable<B>) {
-                  const auto k = ix + 8; // 4 characters is enough for quotes and escaped character
-                  if (k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               // 8 bytes is enough for quotes and escaped character (worst case: \uXXXX = 6 + 2 quotes)
+               if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
+                  return;
                }
 
                std::memcpy(&b[ix], "\"", 1);
@@ -781,12 +793,8 @@ namespace glz
 
                // We need space for quotes and the string length: 2 + n.
                // Use +8 for extra buffer
-               if constexpr (resizable<B>) {
-                  const auto n = str.size();
-                  const auto k = ix + 8 + n;
-                  if (k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
-                  }
+               if (!ensure_space(ctx, b, ix + 8 + str.size())) [[unlikely]] {
+                  return;
                }
                // now we don't have to check writing
 
@@ -825,21 +833,15 @@ namespace glz
                // For each individual character we need room for two characters to handle escapes.
                // When using Unicode escapes, we might need up to 6 characters (\uXXXX) per character
                if constexpr (check_escape_control_characters(Opts)) {
-                  if constexpr (resizable<B>) {
-                     // We need 2 + 6 * n characters in the worst case (all control chars)
-                     const auto k = ix + 10 + 6 * n;
-                     if (k > b.size()) [[unlikely]] {
-                        b.resize(2 * k);
-                     }
+                  // We need 2 + 6 * n characters in the worst case (all control chars)
+                  if (!ensure_space(ctx, b, ix + 10 + 6 * n)) [[unlikely]] {
+                     return;
                   }
                }
                else {
                   // Using the original sizing
-                  if constexpr (resizable<B>) {
-                     const auto k = ix + 10 + 2 * n;
-                     if (k > b.size()) [[unlikely]] {
-                        b.resize(2 * k);
-                     }
+                  if (!ensure_space(ctx, b, ix + 10 + 2 * n)) [[unlikely]] {
+                     return;
                   }
                }
                // now we don't have to check writing
@@ -1157,6 +1159,9 @@ namespace glz
       else {
          serialize<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, b, ix);
       }
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
       if constexpr (Opts.prettify) {
          dump<": ">(b, ix);
       }
@@ -1303,6 +1308,9 @@ namespace glz
                }
                else {
                   to<JSON, val_t>::template op<Opts>(*it, ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                }
 
                ++it;
@@ -1344,6 +1352,9 @@ namespace glz
                   else {
                      write_array_entry_separator<Opts>(ctx, b, ix);
                      to<JSON, val_t>::template op<Opts>(*it, ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                   }
                }
                if constexpr (Opts.prettify && Opts.new_lines_in_arrays) {
@@ -1388,11 +1399,14 @@ namespace glz
                         return true;
                      }
                      write_pair_content<Opts>(key, entry_val, ctx, b, ix);
-                     return false;
+                     return bool(ctx.error);
                   };
 
                   auto it = std::begin(value);
                   bool first = write_first_entry(it);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   ++it;
                   for (const auto end = std::end(value); it != end; ++it) {
                      auto&& [key, entry_val] = *it;
@@ -1408,6 +1422,9 @@ namespace glz
                      }
 
                      write_pair_content<Opts>(key, entry_val, ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
 
                      first = false;
                   }
@@ -1420,11 +1437,17 @@ namespace glz
 
                   auto it = std::begin(value);
                   write_first_entry(it);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   ++it;
                   for (const auto end = std::end(value); it != end; ++it) {
                      auto&& [key, entry_val] = *it;
                      write_object_entry_separator<Opts>(ctx, b, ix);
                      write_pair_content<Opts>(key, entry_val, ctx, b, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                   }
                }
             }
@@ -1474,6 +1497,9 @@ namespace glz
          }
 
          write_pair_content<Opts>(key, val, ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
 
          if constexpr (Opts.prettify) {
             ctx.indentation_level -= Opts.indentation_width;
