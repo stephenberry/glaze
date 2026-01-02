@@ -28,7 +28,19 @@ namespace glz
 
    namespace cbor_detail
    {
-      // Dump a single byte to the buffer
+      // Dump a single byte to the buffer (context-aware version with overflow checking)
+      template <class B, class IX>
+      GLZ_ALWAYS_INLINE bool dump_byte(is_context auto& ctx, uint8_t byte, B& b, IX& ix)
+      {
+         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+            return false;
+         }
+         b[ix] = static_cast<typename std::decay_t<B>::value_type>(byte);
+         ++ix;
+         return true;
+      }
+
+      // Legacy dump_byte for internal use (no context)
       template <class B, class IX>
       GLZ_ALWAYS_INLINE void dump_byte(uint8_t byte, B& b, IX& ix)
       {
@@ -39,7 +51,24 @@ namespace glz
          ++ix;
       }
 
-      // Dump multiple bytes to the buffer (big-endian for CBOR)
+      // Dump multiple bytes to the buffer (big-endian for CBOR, context-aware)
+      template <class T, class B, class IX>
+      GLZ_ALWAYS_INLINE bool dump_be(is_context auto& ctx, T value, B& b, IX& ix)
+      {
+         constexpr auto n = sizeof(T);
+         if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+            return false;
+         }
+
+         if constexpr (std::endian::native == std::endian::little && n > 1) {
+            value = std::byteswap(value);
+         }
+         std::memcpy(&b[ix], &value, n);
+         ix += n;
+         return true;
+      }
+
+      // Legacy dump_be for internal use (no context)
       template <class T, class B, class IX>
       GLZ_ALWAYS_INLINE void dump_be(T value, B& b, IX& ix)
       {
@@ -55,14 +84,40 @@ namespace glz
          ix += n;
       }
 
-      // Encode CBOR argument with minimal bytes (preferred serialization per RFC 8949)
+      // Encode CBOR argument with minimal bytes (context-aware version)
+      template <class B, class IX>
+      GLZ_ALWAYS_INLINE bool encode_arg(is_context auto& ctx, uint8_t major_type, uint64_t value, B& b, IX& ix)
+      {
+         using namespace cbor;
+
+         if (value < 24) {
+            return dump_byte(ctx, initial_byte(major_type, static_cast<uint8_t>(value)), b, ix);
+         }
+         else if (value <= 0xFF) {
+            if (!dump_byte(ctx, initial_byte(major_type, info::uint8_follows), b, ix)) return false;
+            return dump_byte(ctx, static_cast<uint8_t>(value), b, ix);
+         }
+         else if (value <= 0xFFFF) {
+            if (!dump_byte(ctx, initial_byte(major_type, info::uint16_follows), b, ix)) return false;
+            return dump_be(ctx, static_cast<uint16_t>(value), b, ix);
+         }
+         else if (value <= 0xFFFFFFFF) {
+            if (!dump_byte(ctx, initial_byte(major_type, info::uint32_follows), b, ix)) return false;
+            return dump_be(ctx, static_cast<uint32_t>(value), b, ix);
+         }
+         else {
+            if (!dump_byte(ctx, initial_byte(major_type, info::uint64_follows), b, ix)) return false;
+            return dump_be(ctx, value, b, ix);
+         }
+      }
+
+      // Legacy encode_arg for internal use (no context)
       template <class B, class IX>
       GLZ_ALWAYS_INLINE void encode_arg(uint8_t major_type, uint64_t value, B& b, IX& ix)
       {
          using namespace cbor;
 
          if (value < 24) {
-            // Inline in initial byte
             dump_byte(initial_byte(major_type, static_cast<uint8_t>(value)), b, ix);
          }
          else if (value <= 0xFF) {
@@ -83,7 +138,34 @@ namespace glz
          }
       }
 
-      // Compile-time version for known sizes
+      // Compile-time version for known sizes (context-aware)
+      template <uint64_t value, class B, class IX>
+      GLZ_ALWAYS_INLINE bool encode_arg_cx(is_context auto& ctx, uint8_t major_type, B& b, IX& ix)
+      {
+         using namespace cbor;
+
+         if constexpr (value < 24) {
+            return dump_byte(ctx, initial_byte(major_type, static_cast<uint8_t>(value)), b, ix);
+         }
+         else if constexpr (value <= 0xFF) {
+            if (!dump_byte(ctx, initial_byte(major_type, info::uint8_follows), b, ix)) return false;
+            return dump_byte(ctx, static_cast<uint8_t>(value), b, ix);
+         }
+         else if constexpr (value <= 0xFFFF) {
+            if (!dump_byte(ctx, initial_byte(major_type, info::uint16_follows), b, ix)) return false;
+            return dump_be(ctx, static_cast<uint16_t>(value), b, ix);
+         }
+         else if constexpr (value <= 0xFFFFFFFF) {
+            if (!dump_byte(ctx, initial_byte(major_type, info::uint32_follows), b, ix)) return false;
+            return dump_be(ctx, static_cast<uint32_t>(value), b, ix);
+         }
+         else {
+            if (!dump_byte(ctx, initial_byte(major_type, info::uint64_follows), b, ix)) return false;
+            return dump_be(ctx, value, b, ix);
+         }
+      }
+
+      // Legacy compile-time version for internal use (no context)
       template <uint64_t value, class B, class IX>
       GLZ_ALWAYS_INLINE void encode_arg_cx(uint8_t major_type, B& b, IX& ix)
       {
@@ -116,9 +198,9 @@ namespace glz
    struct to<CBOR, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::dump_byte(cbor::initial_byte(cbor::major::simple, cbor::simple::null_value), b, ix);
+         cbor_detail::dump_byte(ctx, cbor::initial_byte(cbor::major::simple, cbor::simple::null_value), b, ix);
       }
    };
 
@@ -127,12 +209,14 @@ namespace glz
    struct to<CBOR, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          const auto num_bytes = (value.size() + 7) / 8;
 
          // Write byte string header
-         cbor_detail::encode_arg(cbor::major::bstr, num_bytes, b, ix);
+         if (!cbor_detail::encode_arg(ctx, cbor::major::bstr, num_bytes, b, ix)) [[unlikely]] {
+            return;
+         }
 
          // Pack bits into bytes (LSB first within each byte)
          for (size_t byte_i = 0, bit_idx = 0; byte_i < num_bytes; ++byte_i) {
@@ -140,7 +224,9 @@ namespace glz
             for (size_t bit_i = 0; bit_i < 8 && bit_idx < value.size(); ++bit_i, ++bit_idx) {
                byte_val |= uint8_t(value[bit_idx]) << uint8_t(bit_i);
             }
-            cbor_detail::dump_byte(byte_val, b, ix);
+            if (!cbor_detail::dump_byte(ctx, byte_val, b, ix)) [[unlikely]] {
+               return;
+            }
          }
       }
    };
@@ -151,15 +237,21 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          // Write tag 43000 (complex number)
-         cbor_detail::encode_arg(cbor::major::tag, cbor::semantic_tag::complex_number, b, ix);
+         if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::complex_number, b, ix)) [[unlikely]] {
+            return;
+         }
          // Write array header for 2 elements
-         cbor_detail::dump_byte(cbor::initial_byte(cbor::major::array, 2), b, ix);
+         if (!cbor_detail::dump_byte(ctx, cbor::initial_byte(cbor::major::array, 2), b, ix)) [[unlikely]] {
+            return;
+         }
          // Write real part
          using V = typename std::remove_cvref_t<T>::value_type;
          to<CBOR, V>::template op<Opts>(value.real(), ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
          // Write imaginary part
          to<CBOR, V>::template op<Opts>(value.imag(), ctx, b, ix);
       }
@@ -170,12 +262,12 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          using namespace cbor;
          const uint8_t byte =
             value ? initial_byte(major::simple, simple::true_value) : initial_byte(major::simple, simple::false_value);
-         cbor_detail::dump_byte(byte, b, ix);
+         cbor_detail::dump_byte(ctx, byte, b, ix);
       }
    };
 
@@ -185,9 +277,9 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(value), b, ix);
+         cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
       }
    };
 
@@ -197,17 +289,17 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if (value >= 0) {
-            cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(value), b, ix);
+            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
          }
          else {
             // CBOR negative: encode n where value = -1 - n, so n = ~value
             // Using two's complement identity: ~value = -value - 1 = -1 - value
             // This safely handles INT64_MIN without overflow
             const uint64_t n = static_cast<uint64_t>(~value);
-            cbor_detail::encode_arg(cbor::major::nint, n, b, ix);
+            cbor_detail::encode_arg(ctx, cbor::major::nint, n, b, ix);
          }
       }
    };
@@ -217,7 +309,7 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          using namespace cbor;
 
@@ -225,27 +317,33 @@ namespace glz
 
          // Try half precision first (preferred serialization)
          if (can_encode_half(d)) {
-            cbor_detail::dump_byte(initial_byte(major::simple, simple::float16), b, ix);
+            if (!cbor_detail::dump_byte(ctx, initial_byte(major::simple, simple::float16), b, ix)) [[unlikely]] {
+               return;
+            }
             uint16_t half = encode_half(d);
-            cbor_detail::dump_be(half, b, ix);
+            cbor_detail::dump_be(ctx, half, b, ix);
             return;
          }
 
          // Try single precision
          if (can_encode_float(d)) {
-            cbor_detail::dump_byte(initial_byte(major::simple, simple::float32), b, ix);
+            if (!cbor_detail::dump_byte(ctx, initial_byte(major::simple, simple::float32), b, ix)) [[unlikely]] {
+               return;
+            }
             const float f = static_cast<float>(d);
             uint32_t bits;
             std::memcpy(&bits, &f, sizeof(float));
-            cbor_detail::dump_be(bits, b, ix);
+            cbor_detail::dump_be(ctx, bits, b, ix);
             return;
          }
 
          // Fall back to double precision
-         cbor_detail::dump_byte(initial_byte(major::simple, simple::float64), b, ix);
+         if (!cbor_detail::dump_byte(ctx, initial_byte(major::simple, simple::float64), b, ix)) [[unlikely]] {
+            return;
+         }
          uint64_t bits;
          std::memcpy(&bits, &d, sizeof(double));
-         cbor_detail::dump_be(bits, b, ix);
+         cbor_detail::dump_be(ctx, bits, b, ix);
       }
    };
 
@@ -254,7 +352,7 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          const sv str = [&]() -> const sv {
             if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
@@ -265,11 +363,13 @@ namespace glz
             }
          }();
 
-         cbor_detail::encode_arg(cbor::major::tstr, str.size(), b, ix);
+         if (!cbor_detail::encode_arg(ctx, cbor::major::tstr, str.size(), b, ix)) [[unlikely]] {
+            return;
+         }
 
          const auto n = str.size();
-         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+            return;
          }
 
          if (n) {
@@ -285,13 +385,15 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      static void op(const auto& value, is_context auto&&, auto&& b, auto&& ix)
+      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::encode_arg(cbor::major::bstr, value.size(), b, ix);
+         if (!cbor_detail::encode_arg(ctx, cbor::major::bstr, value.size(), b, ix)) [[unlikely]] {
+            return;
+         }
 
          const auto n = value.size();
-         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+            return;
          }
          if (n) {
             std::memcpy(&b[ix], value.data(), n);
@@ -305,13 +407,15 @@ namespace glz
    struct to<CBOR, std::vector<uint8_t>> final
    {
       template <auto Opts>
-      static void op(const auto& value, is_context auto&&, auto&& b, auto&& ix)
+      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::encode_arg(cbor::major::bstr, value.size(), b, ix);
+         if (!cbor_detail::encode_arg(ctx, cbor::major::bstr, value.size(), b, ix)) [[unlikely]] {
+            return;
+         }
 
          const auto n = value.size();
-         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+            return;
          }
          if (n) {
             std::memcpy(&b[ix], value.data(), n);
@@ -325,12 +429,14 @@ namespace glz
    struct to<CBOR, std::array<std::byte, N>> final
    {
       template <auto Opts>
-      static void op(const auto& value, is_context auto&&, auto&& b, auto&& ix)
+      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::encode_arg_cx<N>(cbor::major::bstr, b, ix);
+         if (!cbor_detail::encode_arg_cx<N>(ctx, cbor::major::bstr, b, ix)) [[unlikely]] {
+            return;
+         }
 
-         if (const auto k = ix + N; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if (!ensure_space(ctx, b, ix + N + write_padding_bytes)) [[unlikely]] {
+            return;
          }
          if constexpr (N > 0) {
             std::memcpy(&b[ix], value.data(), N);
@@ -344,12 +450,14 @@ namespace glz
    struct to<CBOR, std::array<uint8_t, N>> final
    {
       template <auto Opts>
-      static void op(const auto& value, is_context auto&&, auto&& b, auto&& ix)
+      static void op(const auto& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::encode_arg_cx<N>(cbor::major::bstr, b, ix);
+         if (!cbor_detail::encode_arg_cx<N>(ctx, cbor::major::bstr, b, ix)) [[unlikely]] {
+            return;
+         }
 
-         if (const auto k = ix + N; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if (!ensure_space(ctx, b, ix + N + write_padding_bytes)) [[unlikely]] {
+            return;
          }
          if constexpr (N > 0) {
             std::memcpy(&b[ix], value.data(), N);
@@ -365,7 +473,7 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          using V = range_value_t<std::remove_cvref_t<T>>;
 
@@ -373,15 +481,19 @@ namespace glz
          if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T>) {
             // Write the tag for this type using native endianness
             constexpr uint64_t tag = cbor::typed_array::native_tag<V>();
-            cbor_detail::encode_arg(cbor::major::tag, tag, b, ix);
+            if (!cbor_detail::encode_arg(ctx, cbor::major::tag, tag, b, ix)) [[unlikely]] {
+               return;
+            }
 
             // Write byte string header
             const size_t byte_len = value.size() * sizeof(V);
-            cbor_detail::encode_arg(cbor::major::bstr, byte_len, b, ix);
+            if (!cbor_detail::encode_arg(ctx, cbor::major::bstr, byte_len, b, ix)) [[unlikely]] {
+               return;
+            }
 
             // Ensure buffer space
-            if (const auto k = ix + byte_len; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+            if (!ensure_space(ctx, b, ix + byte_len + write_padding_bytes)) [[unlikely]] {
+               return;
             }
 
             // Bulk write: native endianness matches tag
@@ -396,19 +508,25 @@ namespace glz
             using Scalar = typename V::value_type;
 
             // Write tag 43001 (complex array)
-            cbor_detail::encode_arg(cbor::major::tag, cbor::semantic_tag::complex_array, b, ix);
+            if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::complex_array, b, ix)) [[unlikely]] {
+               return;
+            }
 
             // Write typed array tag for the underlying scalar type
             constexpr uint64_t scalar_tag = cbor::typed_array::native_tag<Scalar>();
-            cbor_detail::encode_arg(cbor::major::tag, scalar_tag, b, ix);
+            if (!cbor_detail::encode_arg(ctx, cbor::major::tag, scalar_tag, b, ix)) [[unlikely]] {
+               return;
+            }
 
             // Write byte string header (2 scalars per complex: real and imag)
             const size_t byte_len = value.size() * sizeof(V); // sizeof(complex<T>) = 2 * sizeof(T)
-            cbor_detail::encode_arg(cbor::major::bstr, byte_len, b, ix);
+            if (!cbor_detail::encode_arg(ctx, cbor::major::bstr, byte_len, b, ix)) [[unlikely]] {
+               return;
+            }
 
             // Ensure buffer space
-            if (const auto k = ix + byte_len; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+            if (!ensure_space(ctx, b, ix + byte_len + write_padding_bytes)) [[unlikely]] {
+               return;
             }
 
             // Bulk write: std::complex stores [real, imag] contiguously
@@ -419,7 +537,9 @@ namespace glz
          }
          else {
             // Generic CBOR array for non-numeric or non-contiguous types
-            cbor_detail::encode_arg(cbor::major::array, value.size(), b, ix);
+            if (!cbor_detail::encode_arg(ctx, cbor::major::array, value.size(), b, ix)) [[unlikely]] {
+               return;
+            }
 
             for (auto&& item : value) {
                serialize<CBOR>::op<Opts>(item, ctx, b, ix);
@@ -438,9 +558,11 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::encode_arg(cbor::major::map, value.size(), b, ix);
+         if (!cbor_detail::encode_arg(ctx, cbor::major::map, value.size(), b, ix)) [[unlikely]] {
+            return;
+         }
 
          for (auto&& [k, v] : value) {
             serialize<CBOR>::op<Opts>(k, ctx, b, ix);
@@ -461,9 +583,11 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::encode_arg_cx<1>(cbor::major::map, b, ix);
+         if (!cbor_detail::encode_arg_cx<1>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
+            return;
+         }
          const auto& [k, v] = value;
          serialize<CBOR>::op<Opts>(k, ctx, b, ix);
          if (bool(ctx.error)) [[unlikely]]
@@ -504,7 +628,7 @@ namespace glz
       }
 
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
@@ -564,10 +688,14 @@ namespace glz
             });
 
             // Write map header with dynamic count
-            cbor_detail::encode_arg(cbor::major::map, member_count, b, ix);
+            if (!cbor_detail::encode_arg(ctx, cbor::major::map, member_count, b, ix)) [[unlikely]] {
+               return;
+            }
 
             // Second pass: write members
             for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                if constexpr (should_skip_field<Opts, I>()) {
                   return;
                }
@@ -607,9 +735,11 @@ namespace glz
 
                   static constexpr sv key = reflect<T>::keys[I];
                   // Write key as text string
-                  cbor_detail::encode_arg_cx<key.size()>(cbor::major::tstr, b, ix);
-                  if (const auto k = ix + key.size(); k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
+                  if (!cbor_detail::encode_arg_cx<key.size()>(ctx, cbor::major::tstr, b, ix)) [[unlikely]] {
+                     return;
+                  }
+                  if (!ensure_space(ctx, b, ix + key.size() + write_padding_bytes)) [[unlikely]] {
+                     return;
                   }
                   if constexpr (key.size() > 0) {
                      std::memcpy(&b[ix], key.data(), key.size());
@@ -634,18 +764,24 @@ namespace glz
          }
          else {
             // Static path: use compile-time count for better performance
-            cbor_detail::encode_arg_cx<count_to_write<Opts>()>(cbor::major::map, b, ix);
+            if (!cbor_detail::encode_arg_cx<count_to_write<Opts>()>(ctx, cbor::major::map, b, ix)) [[unlikely]] {
+               return;
+            }
 
             for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                if constexpr (should_skip_field<Opts, I>()) {
                   return;
                }
                else {
                   static constexpr sv key = reflect<T>::keys[I];
                   // Write key as text string
-                  cbor_detail::encode_arg_cx<key.size()>(cbor::major::tstr, b, ix);
-                  if (const auto k = ix + key.size(); k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
+                  if (!cbor_detail::encode_arg_cx<key.size()>(ctx, cbor::major::tstr, b, ix)) [[unlikely]] {
+                     return;
+                  }
+                  if (!ensure_space(ctx, b, ix + key.size() + write_padding_bytes)) [[unlikely]] {
+                     return;
                   }
                   if constexpr (key.size() > 0) {
                      std::memcpy(&b[ix], key.data(), key.size());
@@ -677,10 +813,12 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          static constexpr auto N = glz::tuple_size_v<T>;
-         cbor_detail::encode_arg_cx<N>(cbor::major::array, b, ix);
+         if (!cbor_detail::encode_arg_cx<N>(ctx, cbor::major::array, b, ix)) [[unlikely]] {
+            return;
+         }
 
          if constexpr (is_std_tuple<T>) {
             [&]<size_t... I>(std::index_sequence<I...>) {
@@ -701,13 +839,18 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          static constexpr auto N = reflect<T>::size;
-         cbor_detail::encode_arg_cx<N>(cbor::major::array, b, ix);
+         if (!cbor_detail::encode_arg_cx<N>(ctx, cbor::major::array, b, ix)) [[unlikely]] {
+            return;
+         }
 
-         for_each<N>(
-            [&]<size_t I>() { serialize<CBOR>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix); });
+         for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            serialize<CBOR>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+         });
       }
    };
 
@@ -717,13 +860,13 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if (value) {
             serialize<CBOR>::op<Opts>(*value, ctx, b, ix);
          }
          else {
-            cbor_detail::dump_byte(cbor::initial_byte(cbor::major::simple, cbor::simple::null_value), b, ix);
+            cbor_detail::dump_byte(ctx, cbor::initial_byte(cbor::major::simple, cbor::simple::null_value), b, ix);
          }
       }
    };
@@ -734,7 +877,7 @@ namespace glz
    struct to<CBOR, T>
    {
       template <auto Opts, class V, size_t N>
-      GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, auto&& b, auto& ix)
       {
          serialize<CBOR>::op<Opts>(std::span{value, N}, ctx, b, ix);
       }
@@ -745,7 +888,7 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          using Variant = std::decay_t<decltype(value)>;
 
@@ -758,8 +901,12 @@ namespace glz
                }(std::make_index_sequence<std::variant_size_v<Variant>>{});
 
                // Encode variant as array [index, value]
-               cbor_detail::encode_arg_cx<2>(cbor::major::array, b, ix);
-               cbor_detail::encode_arg(cbor::major::uint, index, b, ix);
+               if (!cbor_detail::encode_arg_cx<2>(ctx, cbor::major::array, b, ix)) [[unlikely]] {
+                  return;
+               }
+               if (!cbor_detail::encode_arg(ctx, cbor::major::uint, index, b, ix)) [[unlikely]] {
+                  return;
+               }
                serialize<CBOR>::op<Opts>(v, ctx, b, ix);
             },
             value);
@@ -785,20 +932,20 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          using V = std::underlying_type_t<std::decay_t<T>>;
          if constexpr (std::is_signed_v<V>) {
             const auto v = static_cast<V>(value);
             if (v >= 0) {
-               cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(v), b, ix);
+               cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(v), b, ix);
             }
             else {
-               cbor_detail::encode_arg(cbor::major::nint, static_cast<uint64_t>(~v), b, ix);
+               cbor_detail::encode_arg(ctx, cbor::major::nint, static_cast<uint64_t>(~v), b, ix);
             }
          }
          else {
-            cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(value), b, ix);
+            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
          }
       }
    };
@@ -809,20 +956,20 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          using V = std::underlying_type_t<std::decay_t<T>>;
          if constexpr (std::is_signed_v<V>) {
             const auto v = static_cast<V>(value);
             if (v >= 0) {
-               cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(v), b, ix);
+               cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(v), b, ix);
             }
             else {
-               cbor_detail::encode_arg(cbor::major::nint, static_cast<uint64_t>(~v), b, ix);
+               cbor_detail::encode_arg(ctx, cbor::major::nint, static_cast<uint64_t>(~v), b, ix);
             }
          }
          else {
-            cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(value), b, ix);
+            cbor_detail::encode_arg(ctx, cbor::major::uint, static_cast<uint64_t>(value), b, ix);
          }
       }
    };
@@ -841,9 +988,9 @@ namespace glz
    struct to<CBOR, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         cbor_detail::encode_arg_cx<0>(cbor::major::tstr, b, ix);
+         cbor_detail::encode_arg_cx<0>(ctx, cbor::major::tstr, b, ix);
       }
    };
 
@@ -852,7 +999,7 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          serialize<CBOR>::op<Opts>(name_v<std::decay_t<decltype(value)>>, ctx, b, ix);
       }
@@ -863,7 +1010,7 @@ namespace glz
    struct to<CBOR, basic_raw_json<T>> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          serialize<CBOR>::op<Opts>(value.str, ctx, b, ix);
       }
@@ -874,7 +1021,7 @@ namespace glz
    struct to<CBOR, basic_text<T>> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          serialize<CBOR>::op<Opts>(value.str, ctx, b, ix);
       }
@@ -886,13 +1033,13 @@ namespace glz
    struct to<CBOR, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if (value.has_value()) {
             serialize<CBOR>::op<Opts>(value.value(), ctx, b, ix);
          }
          else {
-            cbor_detail::dump_byte(cbor::initial_byte(cbor::major::simple, cbor::simple::null_value), b, ix);
+            cbor_detail::dump_byte(ctx, cbor::initial_byte(cbor::major::simple, cbor::simple::null_value), b, ix);
          }
       }
    };

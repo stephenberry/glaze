@@ -11,6 +11,7 @@
 #include <numbers>
 #include <random>
 #include <set>
+#include <span>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -3937,6 +3938,134 @@ suite beve_skip_typed_arrays = [] {
       auto ec = glz::read_beve(dst, buffer);
       expect(!ec) << glz::format_error(ec, buffer);
       expect(dst == src);
+   };
+};
+
+// Bounded buffer overflow tests for BEVE format
+namespace beve_bounded_buffer_tests
+{
+   struct simple_beve_obj
+   {
+      int x = 42;
+      std::string name = "hello";
+   };
+
+   struct large_beve_obj
+   {
+      int x = 42;
+      std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
+      std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+   };
+}
+
+suite beve_bounded_buffer_overflow_tests = [] {
+   using namespace beve_bounded_buffer_tests;
+
+   "beve write to std::array with sufficient space succeeds"_test = [] {
+      simple_beve_obj obj{};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_beve(obj, buffer);
+      expect(not result) << "write should succeed with sufficient buffer";
+      expect(result.count > 0) << "count should be non-zero";
+      expect(result.count < buffer.size()) << "count should be less than buffer size";
+
+      // Verify roundtrip
+      simple_beve_obj decoded{};
+      auto ec = glz::read_beve(decoded, std::string_view{buffer.data(), result.count});
+      expect(!ec) << "read should succeed";
+      expect(decoded.x == obj.x) << "x should match";
+      expect(decoded.name == obj.name) << "name should match";
+   };
+
+   "beve write to std::array that is too small returns buffer_overflow"_test = [] {
+      large_beve_obj obj{};
+      std::array<char, 10> buffer{};
+
+      auto result = glz::write_beve(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "beve write to std::span with sufficient space succeeds"_test = [] {
+      simple_beve_obj obj{};
+      std::array<char, 512> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_beve(obj, buffer);
+      expect(not result) << "write should succeed with sufficient buffer";
+      expect(result.count > 0) << "count should be non-zero";
+   };
+
+   "beve write to std::span that is too small returns buffer_overflow"_test = [] {
+      large_beve_obj obj{};
+      std::array<char, 5> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_beve(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "beve write array to bounded buffer works correctly"_test = [] {
+      std::vector<int> arr{1, 2, 3, 4, 5};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_beve(arr, buffer);
+      expect(not result) << "write should succeed";
+      expect(result.count > 0) << "count should be non-zero";
+
+      std::vector<int> decoded{};
+      auto ec = glz::read_beve(decoded, std::string_view{buffer.data(), result.count});
+      expect(!ec) << "read should succeed";
+      expect(decoded == arr) << "decoded array should match";
+   };
+
+   "beve write large array to small bounded buffer fails"_test = [] {
+      std::vector<int> arr(100, 42);
+      std::array<char, 8> buffer{};
+
+      auto result = glz::write_beve(arr, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow for large array";
+   };
+
+   "beve resizable buffer still works as before"_test = [] {
+      simple_beve_obj obj{};
+      std::string buffer;
+
+      auto result = glz::write_beve(obj, buffer);
+      expect(not result) << "write to resizable buffer should succeed";
+      expect(buffer.size() > 0) << "buffer should have data";
+   };
+
+   "beve nested struct to bounded buffer"_test = [] {
+      my_struct obj{};
+      obj.i = 100;
+      obj.d = 3.14;
+      obj.hello = "world";
+      obj.arr = {1, 2, 3};
+      std::array<char, 1024> buffer{};
+
+      auto result = glz::write_beve(obj, buffer);
+      expect(not result) << "write should succeed";
+
+      my_struct decoded{};
+      auto ec = glz::read_beve(decoded, std::string_view{buffer.data(), result.count});
+      expect(!ec) << "read should succeed";
+      expect(decoded.i == obj.i) << "i should match";
+      expect(decoded.d == obj.d) << "d should match";
+      expect(decoded.hello == obj.hello) << "hello should match";
+   };
+
+   "beve map to bounded buffer"_test = [] {
+      std::map<std::string, int> obj{{"one", 1}, {"two", 2}, {"three", 3}};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_beve(obj, buffer);
+      expect(not result) << "write should succeed";
+
+      std::map<std::string, int> decoded{};
+      auto ec = glz::read_beve(decoded, std::string_view{buffer.data(), result.count});
+      expect(!ec) << "read should succeed";
+      expect(decoded == obj) << "decoded map should match";
    };
 };
 

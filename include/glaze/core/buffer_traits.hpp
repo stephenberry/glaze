@@ -9,6 +9,7 @@
 #include <span>
 
 #include "glaze/concepts/container_concepts.hpp"
+#include "glaze/core/context.hpp"
 #include "glaze/util/inline.hpp"
 
 namespace glz
@@ -79,6 +80,12 @@ namespace glz
    // Concept to check if a buffer type supports input streaming (refilling)
    template <class B>
    concept is_input_streaming = buffer_traits<std::remove_cvref_t<B>>::is_input_streaming;
+
+   // Concept to check if a buffer type has bounded capacity (like std::array, std::span)
+   // Note: Bounded buffers must be at least 512 bytes for reliable serialization.
+   // Smaller buffers will return error_code::buffer_overflow.
+   template <class B>
+   concept has_bounded_capacity = buffer_traits<std::remove_cvref_t<B>>::has_bounded_capacity;
 
    // Refill helper for streaming input buffers
    // Returns true if buffer has data available after refill, false if EOF
@@ -161,4 +168,31 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr void finalize(std::array<T, N>&, size_t) noexcept {}
    };
+
+   // Unified buffer space checking for write operations
+   // Handles resizable buffers (resize), bounded buffers (error on overflow), and raw pointers (trust caller)
+   template <class B>
+   GLZ_ALWAYS_INLINE bool ensure_space(is_context auto& ctx, B& b, size_t required) noexcept(
+      not vector_like<std::remove_cvref_t<B>>)
+   {
+      using Buffer = std::remove_cvref_t<B>;
+
+      if constexpr (vector_like<Buffer>) {
+         if (required > b.size()) [[unlikely]] {
+            b.resize(2 * required);
+         }
+         return true;
+      }
+      else if constexpr (has_bounded_capacity<Buffer>) {
+         if (required > buffer_traits<Buffer>::capacity(b)) [[unlikely]] {
+            ctx.error = error_code::buffer_overflow;
+            return false;
+         }
+         return true;
+      }
+      else {
+         return true; // Raw pointer or other - trust caller
+      }
+   }
+
 }

@@ -121,7 +121,7 @@ namespace glz
       }
 
       template <auto Opts>
-      static void no_header(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void no_header(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          using V = std::decay_t<decltype(value)>;
          using Target = typename V::target_t;

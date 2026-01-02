@@ -132,7 +132,7 @@ namespace glz
    struct to<CBOR, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          using Scalar = typename std::remove_cvref_t<T>::Scalar;
          using EigenType = std::remove_cvref_t<T>;
@@ -273,7 +273,7 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          std::span<const typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(),
                                                                                                value.size());
@@ -288,7 +288,7 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          dump<'['>(b, ix);
          using RowColT = std::array<Eigen::Index, 2>;
@@ -349,7 +349,7 @@ namespace glz
    struct to<JSON, Eigen::Transform<Scalar, Dim, Mode>>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          constexpr auto size = Mode == Eigen::TransformTraits::AffineCompact ? (Dim + 1) * Dim : (Dim + 1) * (Dim + 1);
          std::span<const Scalar, size> view(value.data(), size);

@@ -45,7 +45,7 @@ namespace glz
    struct to<JSON, float_format_t<Fmt, T>>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using V = std::decay_t<decltype(wrapper.val)>;
          static_assert(std::floating_point<V>, "float_format wrapper requires a floating-point type");

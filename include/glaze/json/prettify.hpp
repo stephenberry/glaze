@@ -12,7 +12,7 @@ namespace glz
    namespace detail
    {
       template <auto Opts>
-      inline void prettify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix)
+      inline void prettify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto& ix)
       {
          constexpr bool use_tabs = Opts.indentation_char == '\t';
          constexpr auto indent_width = Opts.indentation_width;

@@ -165,7 +165,7 @@ namespace glz
    struct to<NDJSON, T>
    {
       template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          const auto is_empty = [&]() -> bool {
             if constexpr (has_size<T>) {

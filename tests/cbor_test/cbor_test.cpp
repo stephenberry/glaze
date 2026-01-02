@@ -9,6 +9,7 @@
 #include <deque>
 #include <map>
 #include <random>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -2263,6 +2264,135 @@ void exceptions_tests()
 }
 #endif
 
+// Bounded buffer overflow tests for CBOR format
+namespace cbor_bounded_buffer_test_types
+{
+   struct simple_cbor_obj
+   {
+      int x = 42;
+      std::string name = "hello";
+   };
+
+   struct large_cbor_obj
+   {
+      int x = 42;
+      std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
+      std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+   };
+}
+
+void bounded_buffer_tests()
+{
+   using namespace cbor_bounded_buffer_test_types;
+
+   "cbor write to std::array with sufficient space succeeds"_test = [] {
+      simple_cbor_obj obj{};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_cbor(obj, buffer);
+      expect(not result) << "write should succeed with sufficient buffer";
+      expect(result.count > 0) << "count should be non-zero";
+      expect(result.count < buffer.size()) << "count should be less than buffer size";
+
+      // Verify roundtrip
+      simple_cbor_obj decoded{};
+      auto ec = glz::read_cbor(decoded, std::string_view{buffer.data(), result.count});
+      expect(!ec) << "read should succeed";
+      expect(decoded.x == obj.x) << "x should match";
+      expect(decoded.name == obj.name) << "name should match";
+   };
+
+   "cbor write to std::array that is too small returns buffer_overflow"_test = [] {
+      large_cbor_obj obj{};
+      std::array<char, 10> buffer{};
+
+      auto result = glz::write_cbor(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "cbor write to std::span with sufficient space succeeds"_test = [] {
+      simple_cbor_obj obj{};
+      std::array<char, 512> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_cbor(obj, buffer);
+      expect(not result) << "write should succeed with sufficient buffer";
+      expect(result.count > 0) << "count should be non-zero";
+   };
+
+   "cbor write to std::span that is too small returns buffer_overflow"_test = [] {
+      large_cbor_obj obj{};
+      std::array<char, 5> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_cbor(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "cbor write array to bounded buffer works correctly"_test = [] {
+      std::vector<int> arr{1, 2, 3, 4, 5};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_cbor(arr, buffer);
+      expect(not result) << "write should succeed";
+      expect(result.count > 0) << "count should be non-zero";
+
+      std::vector<int> decoded{};
+      auto ec = glz::read_cbor(decoded, std::string_view{buffer.data(), result.count});
+      expect(!ec) << "read should succeed";
+      expect(decoded == arr) << "decoded array should match";
+   };
+
+   "cbor write large array to small bounded buffer fails"_test = [] {
+      std::vector<int> arr(100, 42);
+      std::array<char, 8> buffer{};
+
+      auto result = glz::write_cbor(arr, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow for large array";
+   };
+
+   "cbor resizable buffer still works as before"_test = [] {
+      simple_cbor_obj obj{};
+      std::string buffer;
+
+      auto result = glz::write_cbor(obj, buffer);
+      expect(not result) << "write to resizable buffer should succeed";
+      expect(buffer.size() > 0) << "buffer should have data";
+   };
+
+   "cbor nested struct to bounded buffer"_test = [] {
+      my_struct obj{};
+      obj.i = 100;
+      obj.d = 3.14;
+      obj.hello = "world";
+      obj.arr = {1, 2, 3};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_cbor(obj, buffer);
+      expect(not result) << "write should succeed";
+
+      my_struct decoded{};
+      auto ec = glz::read_cbor(decoded, std::string_view{buffer.data(), result.count});
+      expect(!ec) << "read should succeed";
+      expect(decoded.i == obj.i) << "i should match";
+      expect(decoded.d == obj.d) << "d should match";
+      expect(decoded.hello == obj.hello) << "hello should match";
+   };
+
+   "cbor map to bounded buffer"_test = [] {
+      std::map<std::string, int> obj{{"one", 1}, {"two", 2}, {"three", 3}};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_cbor(obj, buffer);
+      expect(not result) << "write should succeed";
+
+      std::map<std::string, int> decoded{};
+      auto ec = glz::read_cbor(decoded, std::string_view{buffer.data(), result.count});
+      expect(!ec) << "read should succeed";
+      expect(decoded == obj) << "decoded map should match";
+   };
+}
+
 int main()
 {
    basic_types_tests();
@@ -2295,6 +2425,7 @@ int main()
    cbor_to_json_tests();
    past_fuzzing_issues();
    error_tests();
+   bounded_buffer_tests();
 #if __cpp_exceptions
    exceptions_tests();
 #endif

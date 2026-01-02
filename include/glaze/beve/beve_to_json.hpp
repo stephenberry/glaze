@@ -11,7 +11,7 @@ namespace glz
    namespace detail
    {
       template <auto Opts>
-      inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&& end, auto& out, auto&& ix) noexcept
+      inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&& end, auto& out, auto& ix) noexcept
       {
          const auto number_type = (tag & 0b000'11'000) >> 3;
          const uint8_t byte_count = byte_count_lookup[tag >> 5];

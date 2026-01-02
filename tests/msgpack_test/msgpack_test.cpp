@@ -894,5 +894,113 @@ int main()
       };
    }
 
+   // Bounded buffer overflow tests for MessagePack
+   {
+      struct simple_msgpack_obj
+      {
+         int x = 42;
+         std::string name = "hello";
+      };
+
+      struct large_msgpack_obj
+      {
+         int x = 42;
+         std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
+         std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+      };
+
+      "msgpack write to std::array with sufficient space succeeds"_test = [] {
+         simple_msgpack_obj obj{};
+         std::array<char, 512> buffer{};
+
+         auto result = glz::write_msgpack(obj, buffer);
+         expect(not result) << "write should succeed with sufficient buffer";
+         expect(result.count > 0) << "count should be non-zero";
+         expect(result.count < buffer.size()) << "count should be less than buffer size";
+
+         // Verify roundtrip
+         simple_msgpack_obj decoded{};
+         auto ec = glz::read_msgpack(decoded, std::string_view{buffer.data(), result.count});
+         expect(!ec) << "read should succeed";
+         expect(decoded.x == obj.x) << "x should match";
+         expect(decoded.name == obj.name) << "name should match";
+      };
+
+      "msgpack write to std::array that is too small returns buffer_overflow"_test = [] {
+         large_msgpack_obj obj{};
+         std::array<char, 10> buffer{};
+
+         auto result = glz::write_msgpack(obj, buffer);
+         expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+      };
+
+      "msgpack write to std::span with sufficient space succeeds"_test = [] {
+         simple_msgpack_obj obj{};
+         std::array<char, 512> storage{};
+         std::span<char> buffer(storage);
+
+         auto result = glz::write_msgpack(obj, buffer);
+         expect(not result) << "write should succeed with sufficient buffer";
+         expect(result.count > 0) << "count should be non-zero";
+      };
+
+      "msgpack write to std::span that is too small returns buffer_overflow"_test = [] {
+         large_msgpack_obj obj{};
+         std::array<char, 5> storage{};
+         std::span<char> buffer(storage);
+
+         auto result = glz::write_msgpack(obj, buffer);
+         expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+      };
+
+      "msgpack write array to bounded buffer works correctly"_test = [] {
+         std::vector<int> arr{1, 2, 3, 4, 5};
+         std::array<char, 512> buffer{};
+
+         auto result = glz::write_msgpack(arr, buffer);
+         expect(not result) << "write should succeed";
+         expect(result.count > 0) << "count should be non-zero";
+
+         std::vector<int> decoded{};
+         auto ec = glz::read_msgpack(decoded, std::string_view{buffer.data(), result.count});
+         expect(!ec) << "read should succeed";
+         expect(decoded == arr) << "decoded array should match";
+      };
+
+      "msgpack write large array to small bounded buffer fails"_test = [] {
+         std::vector<int> arr(100, 42);
+         std::array<char, 8> buffer{};
+
+         auto result = glz::write_msgpack(arr, buffer);
+         expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow for large array";
+      };
+
+      "msgpack resizable buffer still works as before"_test = [] {
+         simple_msgpack_obj obj{};
+         std::string buffer;
+
+         auto result = glz::write_msgpack(obj, buffer);
+         expect(not result) << "write to resizable buffer should succeed";
+         expect(buffer.size() > 0) << "buffer should have data";
+      };
+
+      "msgpack nested struct to bounded buffer"_test = [] {
+         telemetry_batch batch{
+            .active = true,
+            .readings = {{.id = "sensor1", .value = 3.14}},
+            .header = {1, "test", true},
+            .status = 42};
+         std::array<char, 512> buffer{};
+
+         auto result = glz::write_msgpack(batch, buffer);
+         expect(not result) << "write should succeed";
+
+         telemetry_batch decoded{};
+         auto ec = glz::read_msgpack(decoded, std::string_view{buffer.data(), result.count});
+         expect(!ec) << "read should succeed";
+         expect(decoded.active == batch.active) << "active should match";
+      };
+   }
+
    return 0;
 }

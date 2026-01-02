@@ -13,7 +13,7 @@ namespace glz
    {
       // We can use unchecked dumping to the output because we know minifying will not make the output any larger
       template <auto Opts>
-      inline void minify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix) noexcept
+      inline void minify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto& ix) noexcept
       {
          using enum json_type;
 

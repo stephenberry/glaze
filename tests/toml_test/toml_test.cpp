@@ -5,6 +5,7 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <span>
 #include <string_view>
 #include <unordered_set>
 
@@ -2261,6 +2262,114 @@ arr = [7, 8, 9])";
       expect(parsed.time_ms.minutes() == original.time_ms.minutes());
       expect(parsed.time_ms.seconds() == original.time_ms.seconds());
       expect(parsed.time_ms.subseconds() == original.time_ms.subseconds());
+   };
+};
+
+// Bounded buffer overflow tests for TOML format
+namespace toml_bounded_buffer_tests
+{
+   struct simple_toml_obj
+   {
+      int x = 42;
+      std::string name = "hello";
+      bool active = true;
+   };
+
+   struct large_toml_obj
+   {
+      int x = 42;
+      std::string long_name = "this is a very long string that definitely won't fit in a tiny buffer";
+      std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+      double value = 3.14159265358979;
+   };
+
+   struct toml_nested
+   {
+      int id = 1;
+      ::nested child{};
+   };
+
+   struct toml_with_array
+   {
+      std::vector<int> numbers = {1, 2, 3, 4, 5};
+   };
+}
+
+suite toml_bounded_buffer_overflow_tests = [] {
+   using namespace toml_bounded_buffer_tests;
+
+   "toml write to std::array with sufficient space succeeds"_test = [] {
+      simple_toml_obj obj{};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_toml(obj, buffer);
+      expect(not result) << "write should succeed with sufficient buffer";
+      expect(result.count > 0) << "count should be non-zero";
+      expect(result.count < buffer.size()) << "count should be less than buffer size";
+
+      std::string_view toml(buffer.data(), result.count);
+      expect(toml.find("x = 42") != std::string_view::npos) << "TOML should contain x = 42";
+   };
+
+   "toml write to std::array that is too small returns buffer_overflow"_test = [] {
+      large_toml_obj obj{};
+      std::array<char, 10> buffer{};
+
+      auto result = glz::write_toml(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "toml write to std::span with sufficient space succeeds"_test = [] {
+      simple_toml_obj obj{};
+      std::array<char, 512> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_toml(obj, buffer);
+      expect(not result) << "write should succeed with sufficient buffer";
+      expect(result.count > 0) << "count should be non-zero";
+   };
+
+   "toml write to std::span that is too small returns buffer_overflow"_test = [] {
+      large_toml_obj obj{};
+      std::array<char, 5> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_toml(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow error";
+   };
+
+   "toml write nested struct to bounded buffer"_test = [] {
+      toml_nested obj{};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_toml(obj, buffer);
+      expect(not result) << "write should succeed";
+      expect(result.count > 0) << "count should be non-zero";
+   };
+
+   "toml resizable buffer still works as before"_test = [] {
+      simple_toml_obj obj{};
+      std::string buffer;
+
+      auto result = glz::write_toml(obj, buffer);
+      expect(not result) << "write to resizable buffer should succeed";
+      expect(buffer.size() > 0) << "buffer should have data";
+   };
+
+   "toml write array to bounded buffer"_test = [] {
+      toml_with_array obj{};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_toml(obj, buffer);
+      expect(not result) << "write should succeed";
+   };
+
+   "toml write map to bounded buffer"_test = [] {
+      std::map<std::string, int> obj{{"one", 1}, {"two", 2}, {"three", 3}};
+      std::array<char, 512> buffer{};
+
+      auto result = glz::write_toml(obj, buffer);
+      expect(not result) << "write should succeed";
    };
 };
 
