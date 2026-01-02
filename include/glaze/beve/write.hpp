@@ -37,14 +37,15 @@ namespace glz
       }
    };
 
+   // Context-aware dump_type: sets ctx.error on buffer overflow
    template <class B>
-   GLZ_ALWAYS_INLINE bool dump_type(is_context auto& ctx, auto&& value, B& b, auto& ix)
+   GLZ_ALWAYS_INLINE void dump_type(is_context auto& ctx, auto&& value, B& b, auto& ix)
    {
       using V = std::decay_t<decltype(value)>;
       constexpr auto n = sizeof(V);
 
       if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
-         return false;
+         return;
       }
 
       if constexpr (n == 1) {
@@ -74,7 +75,6 @@ namespace glz
          }
          ix += n;
       }
-      return true;
    }
 
    // Legacy version for internal use where context is not available
@@ -150,54 +150,54 @@ namespace glz
    }
 
    // Context-aware version of dump_compressed_int (compile-time known size)
+   // Sets ctx.error on buffer overflow
    template <uint64_t i, class B>
-   GLZ_ALWAYS_INLINE bool dump_compressed_int(is_context auto& ctx, B& b, size_t& ix)
+   GLZ_ALWAYS_INLINE void dump_compressed_int(is_context auto& ctx, B& b, size_t& ix)
    {
       if constexpr (i < 64) {
          const uint8_t c = uint8_t(i) << 2;
-         return dump_type(ctx, c, b, ix);
+         dump_type(ctx, c, b, ix);
       }
       else if constexpr (i < 16384) {
          const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
-         return dump_type(ctx, c, b, ix);
+         dump_type(ctx, c, b, ix);
       }
       else if constexpr (i < 1073741824) {
          const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
-         return dump_type(ctx, c, b, ix);
+         dump_type(ctx, c, b, ix);
       }
       else if constexpr (i < 4611686018427387904) {
          const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
-         return dump_type(ctx, c, b, ix);
+         dump_type(ctx, c, b, ix);
       }
       else {
          static_assert(i >= 4611686018427387904, "size not supported");
-         return false;
       }
    }
 
    // Context-aware version of dump_compressed_int (runtime size)
+   // Sets ctx.error on buffer overflow
    template <class B>
-   GLZ_ALWAYS_INLINE bool dump_compressed_int(is_context auto& ctx, uint64_t i, B& b, size_t& ix)
+   GLZ_ALWAYS_INLINE void dump_compressed_int(is_context auto& ctx, uint64_t i, B& b, size_t& ix)
    {
       if (i < 64) {
          const uint8_t c = uint8_t(i) << 2;
-         return dump_type(ctx, c, b, ix);
+         dump_type(ctx, c, b, ix);
       }
       else if (i < 16384) {
          const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
-         return dump_type(ctx, c, b, ix);
+         dump_type(ctx, c, b, ix);
       }
       else if (i < 1073741824) {
          const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
-         return dump_type(ctx, c, b, ix);
+         dump_type(ctx, c, b, ix);
       }
       else if (i < 4611686018427387904) {
          const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
-         return dump_type(ctx, c, b, ix);
+         dump_type(ctx, c, b, ix);
       }
       else {
          std::abort(); // this should never happen because we should never allocate containers of this size
-         return false;
       }
    }
 
@@ -372,10 +372,12 @@ namespace glz
       {
          constexpr uint8_t type = uint8_t(3) << 3;
          constexpr uint8_t tag = tag::typed_array | type;
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+         dump_compressed_int(ctx, value.size(), b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
@@ -435,7 +437,8 @@ namespace glz
       {
          constexpr uint8_t tag = tag::string;
 
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          dump_compressed_int<0>(ctx, b, ix);
@@ -503,10 +506,12 @@ namespace glz
 
                constexpr uint8_t tag = tag::extensions | 0b00001'000;
 
-               if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+               dump_type(ctx, tag, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if (!dump_compressed_int<index>(ctx, b, ix)) [[unlikely]] {
+               dump_compressed_int<index>(ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
                serialize<BEVE>::op<Opts>(v, ctx, b, ix);
@@ -524,7 +529,8 @@ namespace glz
       {
          constexpr uint8_t type = std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t tag = tag::number | type | (byte_count<T> << 5);
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          dump_type(ctx, value, b, ix);
@@ -548,7 +554,8 @@ namespace glz
 
          constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t tag = tag::number | type | (byte_count<V> << 5);
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          dump_type(ctx, value, b, ix);
@@ -569,7 +576,8 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr uint8_t tag = tag::extensions | 0b00011'000;
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
@@ -577,10 +585,12 @@ namespace glz
          constexpr uint8_t complex_number = 0;
          constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t complex_header = complex_number | type | (byte_count<V> << 5);
-         if (!dump_type(ctx, complex_header, b, ix)) [[unlikely]] {
+         dump_type(ctx, complex_header, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         if (!dump_type(ctx, value.real(), b, ix)) [[unlikely]] {
+         dump_type(ctx, value.real(), b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          dump_type(ctx, value.imag(), b, ix);
@@ -589,7 +599,8 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         if (!dump_type(ctx, value.real(), b, ix)) [[unlikely]] {
+         dump_type(ctx, value.real(), b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          dump_type(ctx, value.imag(), b, ix);
@@ -613,11 +624,13 @@ namespace glz
 
          constexpr uint8_t tag = tag::string;
 
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          const auto n = str.size();
-         if (!dump_compressed_int(ctx, n, b, ix)) [[unlikely]] {
+         dump_compressed_int(ctx, n, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
@@ -634,7 +647,8 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+         dump_compressed_int(ctx, value.size(), b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
@@ -653,7 +667,8 @@ namespace glz
       template <uint64_t N, class B>
       GLZ_ALWAYS_INLINE static void no_header_cx(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         if (!dump_compressed_int<N>(ctx, b, ix)) [[unlikely]] {
+         dump_compressed_int<N>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
@@ -682,10 +697,12 @@ namespace glz
          if constexpr (boolean_like<V>) {
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t tag = tag::typed_array | type;
-            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            dump_type(ctx, tag, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+            dump_compressed_int(ctx, value.size(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -724,10 +741,12 @@ namespace glz
          else if constexpr (num_t<V>) {
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t tag = tag::typed_array | type | (byte_count<V> << 5);
-            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            dump_type(ctx, tag, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+            dump_compressed_int(ctx, value.size(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -783,15 +802,18 @@ namespace glz
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t string_indicator = uint8_t(1) << 5;
             constexpr uint8_t tag = tag::typed_array | type | string_indicator;
-            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            dump_type(ctx, tag, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+            dump_compressed_int(ctx, value.size(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
             for (auto& x : value) {
-               if (!dump_compressed_int(ctx, x.size(), b, ix)) [[unlikely]] {
+               dump_compressed_int(ctx, x.size(), b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
 
@@ -808,7 +830,8 @@ namespace glz
          }
          else if constexpr (complex_t<V>) {
             constexpr uint8_t tag = tag::extensions | 0b00011'000;
-            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            dump_type(ctx, tag, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -816,11 +839,13 @@ namespace glz
             constexpr uint8_t complex_array = 1;
             constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
-            if (!dump_type(ctx, complex_header, b, ix)) [[unlikely]] {
+            dump_type(ctx, complex_header, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
-            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+            dump_compressed_int(ctx, value.size(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -862,10 +887,12 @@ namespace glz
          }
          else {
             constexpr uint8_t tag = tag::generic_array;
-            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            dump_type(ctx, tag, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+            dump_compressed_int(ctx, value.size(), b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -889,11 +916,13 @@ namespace glz
          using Key = typename Element::first_type;
 
          constexpr uint8_t tag = beve_key_traits<Key>::header;
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
-         if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+         dump_compressed_int(ctx, value.size(), b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          for (auto&& [k, v] : value) {
@@ -918,11 +947,13 @@ namespace glz
          using Key = typename T::first_type;
 
          constexpr uint8_t tag = beve_key_traits<Key>::header;
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
-         if (!dump_compressed_int<1>(ctx, b, ix)) [[unlikely]] {
+         dump_compressed_int<1>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          const auto& [k, v] = value;
@@ -943,11 +974,13 @@ namespace glz
          using Key = typename T::key_type;
 
          constexpr uint8_t tag = beve_key_traits<Key>::header;
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
-         if (!dump_compressed_int(ctx, value.size(), b, ix)) [[unlikely]] {
+         dump_compressed_int(ctx, value.size(), b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          for (auto&& [k, v] : value) {
@@ -1028,10 +1061,12 @@ namespace glz
          if constexpr (!check_opening_handled(Options)) {
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
-            if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+            dump_type(ctx, tag, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (!dump_compressed_int<N>(ctx, b, ix)) [[unlikely]] {
+            dump_compressed_int<N>(ctx, b, ix);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
          }
@@ -1104,10 +1139,12 @@ namespace glz
 
          constexpr uint8_t type = 0; // string key
          constexpr uint8_t tag = tag::object | type;
-         if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+         dump_type(ctx, tag, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         if (!dump_compressed_int<merge_element_count<Opts>()>(ctx, b, ix)) [[unlikely]] {
+         dump_compressed_int<merge_element_count<Opts>()>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
@@ -1157,7 +1194,8 @@ namespace glz
             return;
          }
          dump<tag::generic_array>(b, ix);
-         if (!dump_compressed_int<count_to_write<Opts>()>(ctx, b, ix)) [[unlikely]] {
+         dump_compressed_int<count_to_write<Opts>()>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
@@ -1255,10 +1293,12 @@ namespace glz
             if constexpr (!check_opening_handled(Options)) {
                constexpr uint8_t type = 0; // string key
                constexpr uint8_t tag = tag::object | type;
-               if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+               dump_type(ctx, tag, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if (!dump_compressed_int(ctx, member_count, b, ix)) [[unlikely]] {
+               dump_compressed_int(ctx, member_count, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
             }
@@ -1332,10 +1372,12 @@ namespace glz
             if constexpr (!check_opening_handled(Options)) {
                constexpr uint8_t type = 0; // string key
                constexpr uint8_t tag = tag::object | type;
-               if (!dump_type(ctx, tag, b, ix)) [[unlikely]] {
+               dump_type(ctx, tag, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if (!dump_compressed_int<count_to_write<Options>()>(ctx, b, ix)) [[unlikely]] {
+               dump_compressed_int<count_to_write<Options>()>(ctx, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
             }
@@ -1386,7 +1428,8 @@ namespace glz
          dump<tag::generic_array>(b, ix);
 
          static constexpr auto N = reflect<T>::size;
-         if (!dump_compressed_int<N>(ctx, b, ix)) [[unlikely]] {
+         dump_compressed_int<N>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
@@ -1412,7 +1455,8 @@ namespace glz
          dump<tag::generic_array>(b, ix);
 
          static constexpr auto N = glz::tuple_size_v<T>;
-         if (!dump_compressed_int<N>(ctx, b, ix)) [[unlikely]] {
+         dump_compressed_int<N>(ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
