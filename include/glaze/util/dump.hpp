@@ -63,6 +63,20 @@ namespace glz
       }
    }
 
+   // Low-level buffer write primitives (dump functions)
+   // ================================================
+   // These functions write directly to the buffer WITHOUT bounds checking for bounded buffers.
+   //
+   // Contract:
+   // - For resizable buffers (std::string, std::vector): Auto-resizes when Checked=true (default)
+   // - For bounded buffers (std::array, std::span): Caller MUST call ensure_space() first
+   // - For raw pointers: Caller assumes responsibility for sufficient space
+   //
+   // The Checked template parameter ONLY enables auto-resize for resizable buffers.
+   // It does NOT enable bounds checking for bounded buffers - that would require ctx for error reporting
+   // and would duplicate the ensure_space() logic. The padding model (ensure_space checks for
+   // ix + n + write_padding_bytes) guarantees sufficient space for subsequent dump calls.
+
    template <bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump(const byte_sized auto c, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
