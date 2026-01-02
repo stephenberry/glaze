@@ -171,49 +171,20 @@ namespace glz
 
    // Unified buffer space checking for write operations
    // Handles resizable buffers (resize), bounded buffers (error on overflow), and raw pointers (trust caller)
-
-   // Compile-time known size version
-   template <size_t N, class B>
-   GLZ_ALWAYS_INLINE bool ensure_space(is_context auto& ctx, B& b, size_t ix) noexcept(
-      not vector_like<std::remove_cvref_t<B>>)
-   {
-      using Buffer = std::remove_cvref_t<B>;
-      using traits = buffer_traits<Buffer>;
-
-      if constexpr (vector_like<Buffer>) {
-         if (const auto k = ix + N; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
-         }
-         return true;
-      }
-      else if constexpr (traits::has_bounded_capacity) {
-         if (ix + N > traits::capacity(b)) [[unlikely]] {
-            ctx.error = error_code::buffer_overflow;
-            return false;
-         }
-         return true;
-      }
-      else {
-         return true; // Raw pointer or other - trust caller
-      }
-   }
-
-   // Runtime size version
    template <class B>
-   GLZ_ALWAYS_INLINE bool ensure_space(is_context auto& ctx, B& b, size_t ix, size_t n) noexcept(
+   GLZ_ALWAYS_INLINE bool ensure_space(is_context auto& ctx, B& b, size_t required) noexcept(
       not vector_like<std::remove_cvref_t<B>>)
    {
       using Buffer = std::remove_cvref_t<B>;
-      using traits = buffer_traits<Buffer>;
 
       if constexpr (vector_like<Buffer>) {
-         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+         if (required > b.size()) [[unlikely]] {
+            b.resize(2 * required);
          }
          return true;
       }
-      else if constexpr (traits::has_bounded_capacity) {
-         if (ix + n > traits::capacity(b)) [[unlikely]] {
+      else if constexpr (has_bounded_capacity<Buffer>) {
+         if (required > buffer_traits<Buffer>::capacity(b)) [[unlikely]] {
             ctx.error = error_code::buffer_overflow;
             return false;
          }
