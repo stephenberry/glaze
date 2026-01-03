@@ -471,6 +471,16 @@ namespace glz
       }
    }
 
+   consteval size_t check_max_map_size(auto&& Opts)
+   {
+      if constexpr (requires { Opts.max_map_size; }) {
+         return Opts.max_map_size;
+      }
+      else {
+         return 0; // 0 means no limit
+      }
+   }
+
    consteval bool check_opening_handled(auto&& o) { return o.internal & uint32_t(opts_internal::opening_handled); }
 
    consteval bool check_closing_handled(auto&& o) { return o.internal & uint32_t(opts_internal::closing_handled); }

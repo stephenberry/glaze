@@ -4363,6 +4363,117 @@ suite allocation_limits = [] {
       expect(!ec) << "Default opts should allow any array size";
       expect(arr_result == large_array);
    };
+
+   "max_map_size applies to std::map"_test = [] {
+      std::map<std::string, int> large_map;
+      for (int i = 0; i < 100; ++i) {
+         large_map["key" + std::to_string(i)] = i;
+      }
+      std::string buffer;
+      expect(not glz::write_beve(large_map, buffer));
+
+      // Try to read with a limit of 50 entries
+      struct map_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_map_size = 50;
+      };
+
+      std::map<std::string, int> result;
+      auto ec = glz::read<map_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject oversized map";
+   };
+
+   "max_map_size accepts valid std::map"_test = [] {
+      std::map<std::string, int> small_map{{"a", 1}, {"b", 2}, {"c", 3}};
+      std::string buffer;
+      expect(not glz::write_beve(small_map, buffer));
+
+      struct map_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_map_size = 50;
+      };
+
+      std::map<std::string, int> result;
+      auto ec = glz::read<map_limited_opts{}>(result, buffer);
+      expect(!ec) << "Should accept map within limit";
+      expect(result == small_map);
+   };
+
+   "max_map_size applies to std::unordered_map"_test = [] {
+      std::unordered_map<std::string, int> large_map;
+      for (int i = 0; i < 100; ++i) {
+         large_map["key" + std::to_string(i)] = i;
+      }
+      std::string buffer;
+      expect(not glz::write_beve(large_map, buffer));
+
+      struct map_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_map_size = 50;
+      };
+
+      std::unordered_map<std::string, int> result;
+      auto ec = glz::read<map_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject oversized unordered_map";
+   };
+
+   "max_array_size does not affect maps"_test = [] {
+      // Verify that max_array_size doesn't limit maps (they use max_map_size)
+      std::map<std::string, int> large_map;
+      for (int i = 0; i < 100; ++i) {
+         large_map["key" + std::to_string(i)] = i;
+      }
+      std::string buffer;
+      expect(not glz::write_beve(large_map, buffer));
+
+      // max_array_size = 50 should NOT affect maps
+      struct array_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_array_size = 50;
+      };
+
+      std::map<std::string, int> result;
+      auto ec = glz::read<array_limited_opts{}>(result, buffer);
+      expect(!ec) << "max_array_size should not limit maps";
+      expect(result.size() == 100);
+   };
+
+   "extended opts usage with max_array_size"_test = [] {
+      std::vector<int> large_array(100, 42);
+      std::string buffer;
+      expect(not glz::write_beve(large_array, buffer));
+
+      // Extend opts to add allocation limits
+      struct array_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_array_size = 50;
+      };
+
+      std::vector<int> result;
+      auto ec = glz::read<array_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject using extended opts";
+   };
+
+   "extended opts usage with max_string_length"_test = [] {
+      std::string long_string(100, 'x');
+      std::string buffer;
+      expect(not glz::write_beve(long_string, buffer));
+
+      struct string_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_string_length = 50;
+      };
+
+      std::string result;
+      auto ec = glz::read<string_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject using extended opts";
+   };
 };
 
 // Structs for max_length wrapper tests

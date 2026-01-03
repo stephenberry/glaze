@@ -1194,6 +1194,20 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
+            // Validate count against remaining buffer size (minimum 2 bytes per key-value pair)
+            if (count * 2 > static_cast<uint64_t>(end - it)) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            // Check user-configured map size limit
+            if constexpr (check_max_map_size(Opts) > 0) {
+               if (count > check_max_map_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+
             for (size_t i = 0; i < count; ++i) {
                Key key{};
                parse<CBOR>::op<Opts>(key, ctx, it, end);

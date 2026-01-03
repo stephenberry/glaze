@@ -2496,6 +2496,59 @@ void allocation_limits_tests()
       auto ec = glz::read_cbor(result, malicious_buffer);
       expect(ec.ec == glz::error_code::unexpected_end) << "should reject memory bomb";
    };
+
+   "cbor max_map_size applies to std::map"_test = [] {
+      std::map<std::string, int> large_map;
+      for (int i = 0; i < 100; ++i) {
+         large_map["key" + std::to_string(i)] = i;
+      }
+      std::string buffer;
+      expect(not glz::write_cbor(large_map, buffer));
+
+      struct map_limited_opts : glz::opts
+      {
+         uint32_t format = glz::CBOR;
+         size_t max_map_size = 50;
+      };
+
+      std::map<std::string, int> result;
+      auto ec = glz::read<map_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject oversized map";
+   };
+
+   "cbor max_map_size accepts valid std::map"_test = [] {
+      std::map<std::string, int> small_map{{"a", 1}, {"b", 2}, {"c", 3}};
+      std::string buffer;
+      expect(not glz::write_cbor(small_map, buffer));
+
+      struct map_limited_opts : glz::opts
+      {
+         uint32_t format = glz::CBOR;
+         size_t max_map_size = 50;
+      };
+
+      std::map<std::string, int> result;
+      auto ec = glz::read<map_limited_opts{}>(result, buffer);
+      expect(!ec) << "should accept map within limit";
+      expect(result == small_map);
+   };
+
+   "cbor extended opts usage"_test = [] {
+      std::vector<int> large_array(100, 42);
+      std::string buffer;
+      expect(not glz::write_cbor(large_array, buffer));
+
+      // Extend opts to add allocation limits
+      struct array_limited_opts : glz::opts
+      {
+         uint32_t format = glz::CBOR;
+         size_t max_array_size = 50;
+      };
+
+      std::vector<int> result;
+      auto ec = glz::read<array_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "should reject using extended opts";
+   };
 }
 
 // Structs for max_length wrapper tests

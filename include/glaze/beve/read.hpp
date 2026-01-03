@@ -1298,6 +1298,21 @@ namespace glz
          if constexpr (Opts.partial_read) {
             n = value.size();
          }
+         else {
+            // Validate count against remaining buffer size (minimum 1 byte per key-value pair)
+            if (n > size_t(end - it)) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            // Check user-configured map size limit
+            if constexpr (check_max_map_size(Opts) > 0) {
+               if (n > check_max_map_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+         }
 
          constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
 
