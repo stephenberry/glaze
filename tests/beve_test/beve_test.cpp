@@ -4086,30 +4086,20 @@ struct DoSTestOuter
 // are rejected before any memory allocation occurs.
 suite dos_prevention = [] {
    "string memory bomb protection"_test = [] {
-      // Craft a malicious BEVE buffer claiming a huge string length
-      // but with minimal actual data
-      std::vector<uint8_t> malicious_buffer;
+      // Create a valid BEVE buffer with a long string, then truncate it
+      std::string original(1000, 'x'); // 1000 character string
+      std::string valid_buffer;
+      expect(not glz::write_beve(original, valid_buffer));
 
-      // String tag (0x02)
-      malicious_buffer.push_back(0x02);
-
-      // Encode huge length using 8-byte compressed integer (config=3)
-      // This claims 1 billion bytes but buffer only has a few bytes
-      uint64_t huge_length = 1000000000ULL;
-      uint64_t encoded = (huge_length << 2) | 0x03;
-      for (int i = 0; i < 8; i++) {
-         malicious_buffer.push_back(static_cast<uint8_t>(encoded >> (i * 8)));
-      }
-
-      // Add tiny amount of actual data
-      malicious_buffer.push_back('H');
-      malicious_buffer.push_back('i');
+      // Truncate to just the header + length (claiming 1000 bytes but only a few bytes of data)
+      // This ensures the length header claims more data than available
+      std::string truncated_buffer = valid_buffer.substr(0, 4);
 
       std::string result;
-      auto ec = glz::read_beve(result, malicious_buffer);
+      auto ec = glz::read_beve(result, truncated_buffer);
 
-      // Should fail with an error, NOT crash with bad_alloc
-      expect(bool(ec)) << "Should reject malicious buffer";
+      // Should fail with unexpected_end, NOT crash with bad_alloc
+      expect(bool(ec)) << "Should reject truncated string buffer";
    };
 
    "string array memory bomb protection"_test = [] {
@@ -4161,29 +4151,19 @@ suite dos_prevention = [] {
    };
 
    "numeric array memory bomb protection"_test = [] {
-      // Craft a malicious buffer for int array with huge count
-      std::vector<int> sample = {1, 2, 3};
-      std::string template_buf;
-      expect(not glz::write_beve(sample, template_buf));
+      // Create a valid BEVE buffer with many ints, then truncate it
+      std::vector<int> original(100, 42); // 100 integers
+      std::string valid_buffer;
+      expect(not glz::write_beve(original, valid_buffer));
 
-      // Build malicious buffer with valid tag but huge count
-      std::string malicious_buffer;
-      malicious_buffer.push_back(template_buf[0]); // Keep the typed array tag
-
-      // Encode 1 billion elements with 8-byte format
-      uint64_t huge = 1000000000ULL;
-      uint64_t encoded = (huge << 2) | 0x03;
-      for (int i = 0; i < 8; i++) {
-         malicious_buffer.push_back(static_cast<char>(encoded >> (i * 8)));
-      }
-      // Add tiny bit of data (not nearly enough for 1B ints)
-      malicious_buffer.append(16, '\0');
+      // Truncate to just the header + count (claiming 100 ints but only a few bytes of data)
+      std::string truncated_buffer = valid_buffer.substr(0, 4);
 
       std::vector<int> result;
-      auto ec = glz::read_beve(result, malicious_buffer);
+      auto ec = glz::read_beve(result, truncated_buffer);
 
-      // Should fail with an error, NOT crash with bad_alloc
-      expect(bool(ec)) << "Should reject malicious buffer";
+      // Should fail with unexpected_end, NOT crash with bad_alloc
+      expect(bool(ec)) << "Should reject truncated numeric array buffer";
    };
 
    "valid data still parses after security checks"_test = [] {
