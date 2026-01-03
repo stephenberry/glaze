@@ -125,6 +125,8 @@ namespace glz
                const auto end = glz::to_chars(start, value);
                ix += size_t(end - start);
             }
+// float128_t requires std::to_chars for floating-point, unavailable on older Apple platforms (iOS < 16.3)
+#if !defined(_LIBCPP_VERSION) || defined(_LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT)
             else if constexpr (is_float128<V>) {
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
@@ -134,6 +136,7 @@ namespace glz
                }
                ix += size_t(ptr - start);
             }
+#endif
             else {
                static_assert(false_v<V>, "type is not supported");
             }
