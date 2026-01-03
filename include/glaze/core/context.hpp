@@ -91,7 +91,8 @@ namespace glz
       // JSON Patch errors (RFC 6902)
       patch_test_failed, // Test operation value mismatch (unique to RFC 6902 test op)
       // Buffer errors
-      buffer_overflow // Write would exceed fixed buffer capacity
+      buffer_overflow, // Write would exceed fixed buffer capacity
+      invalid_length // Length/count header exceeds available buffer size
    };
 
    // Unified error context for all read/write operations

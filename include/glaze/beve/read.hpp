@@ -789,6 +789,12 @@ namespace glz
                return;
             }
 
+            const auto num_bytes = (n + 7) / 8;
+            if (uint64_t(end - it) < num_bytes) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
+               return;
+            }
+
             if constexpr (resizable<T>) {
                value.resize(n);
 
@@ -797,7 +803,6 @@ namespace glz
                }
             }
 
-            const auto num_bytes = (value.size() + 7) / 8;
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                if (invalid_end(ctx, it, end)) {
                   return;
@@ -965,6 +970,12 @@ namespace glz
                n = value.size();
             }
 
+            // Each string needs at least 1 byte for length header
+            if (uint64_t(end - it) < n) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
+               return;
+            }
+
             if constexpr (resizable<T>) {
                value.resize(n);
 
@@ -1082,6 +1093,12 @@ namespace glz
 
             if constexpr (Opts.partial_read) {
                n = value.size();
+            }
+
+            // Each element needs at least 1 byte for its tag
+            if (uint64_t(end - it) < n) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
+               return;
             }
 
             if constexpr (resizable<T>) {

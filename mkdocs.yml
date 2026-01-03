@@ -70,6 +70,7 @@ nav:
    - Quick Start: quick-start.md
    - Compile Time Options: options.md
    - Optimizing Performance: optimizing-performance.md
+   - Security: security.md
    - Rename Keys: rename-keys.md
    - Skip Keys: skip-keys.md
    - Generic JSON: generic-json.md
