@@ -14,13 +14,13 @@ Binary formats like BEVE encode length headers that indicate how many elements o
 
 #### How Glaze Protects Against This
 
-Glaze validates length headers against the remaining buffer size **before** any memory allocation. If a length header claims more data than exists in the buffer, parsing fails immediately with `error_code::unexpected_end`.
+Glaze validates length headers against the remaining buffer size **before** any memory allocation. If a length header claims more data than exists in the buffer, parsing fails immediately with `error_code::invalid_length`.
 
 ```cpp
 // Example: Malicious buffer claiming 1 billion strings
 std::vector<std::string> result;
 auto ec = glz::read_beve(result, malicious_buffer);
-// ec.ec == glz::error_code::unexpected_end
+// ec.ec == glz::error_code::invalid_length
 // No memory was allocated for the claimed 1 billion strings
 ```
 
