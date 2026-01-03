@@ -100,6 +100,44 @@ These options work together with buffer-based validation:
 
 This allows you to accept legitimately large data while protecting against excessive memory usage.
 
+#### Runtime Limits via Custom Context
+
+For applications that need to set limits dynamically at runtime (e.g., based on user permissions or request type), inherit from `glz::context` and add constraint fields:
+
+```cpp
+struct secure_context : glz::context
+{
+   size_t max_string_length = 0;  // 0 = no limit
+   size_t max_array_size = 0;
+   size_t max_map_size = 0;
+};
+
+// Set limits dynamically based on user tier
+secure_context ctx;
+if (user.is_premium()) {
+   ctx.max_array_size = 100000;
+} else {
+   ctx.max_array_size = 1000;
+}
+
+std::vector<Item> items;
+auto ec = glz::read<glz::opts{.format = glz::BEVE}>(items, buffer, ctx);
+if (ec.ec == glz::error_code::invalid_length) {
+   // Limit exceeded
+}
+```
+
+Runtime constraints use `if constexpr` to detect the presence of constraint fields, so there is **zero binary overhead** when using the base `glz::context`.
+
+**When to use each approach:**
+
+| Approach | Use Case |
+|----------|----------|
+| Compile-time (opts) | Fixed schema limits, per-field limits via `glz::meta` |
+| Runtime (context) | Dynamic limits based on user, request type, or configuration |
+
+Both mechanisms can be used together—either can reject a value that exceeds its limit.
+
 ### Best Practices for Network Applications
 
 1. **Limit input buffer size**: Control the maximum message size your application accepts at the network layer, before passing data to Glaze.

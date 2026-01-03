@@ -56,9 +56,9 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool skip_self_constraint` | `false` | Skip `self_constraint` validation during reading |
 | `bool assume_sufficient_buffer` | `false` | Skip bounds checking for fixed-size buffers (caller guarantees space) |
 | `bool linear_search` | `false` | Use linear key search instead of hash tables for smaller binary size |
-| `size_t max_string_length` | `0` | Maximum string length when reading (0 = no limit) |
-| `size_t max_array_size` | `0` | Maximum array size when reading (0 = no limit) |
-| `size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit) |
+| `size_t max_string_length` | `0` | Maximum string length when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
+| `size_t max_array_size` | `0` | Maximum array size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
+| `size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `bool allocate_raw_pointers` | `false` | Allocate memory for null raw pointers during deserialization |
 
 ### CSV Options (`glz::opts_csv`)
