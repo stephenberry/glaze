@@ -4069,6 +4069,191 @@ suite beve_bounded_buffer_overflow_tests = [] {
    };
 };
 
+// Structs for DoS prevention tests
+struct DoSTestInner
+{
+   std::string name;
+   std::string value;
+};
+
+struct DoSTestOuter
+{
+   std::vector<DoSTestInner> items;
+};
+
+// Security tests for DoS prevention (Issues #2187 and #2190)
+// These tests verify that malicious BEVE buffers with huge length headers
+// are rejected before any memory allocation occurs.
+suite dos_prevention = [] {
+   "string memory bomb protection"_test = [] {
+      // Craft a malicious BEVE buffer claiming a huge string length
+      // but with minimal actual data
+      std::vector<uint8_t> malicious_buffer;
+
+      // String tag (0x02)
+      malicious_buffer.push_back(0x02);
+
+      // Encode huge length using 8-byte compressed integer (config=3)
+      // This claims 1 billion bytes but buffer only has a few bytes
+      uint64_t huge_length = 1000000000ULL;
+      uint64_t encoded = (huge_length << 2) | 0x03;
+      for (int i = 0; i < 8; i++) {
+         malicious_buffer.push_back(static_cast<uint8_t>(encoded >> (i * 8)));
+      }
+
+      // Add tiny amount of actual data
+      malicious_buffer.push_back('H');
+      malicious_buffer.push_back('i');
+
+      std::string result;
+      auto ec = glz::read_beve(result, malicious_buffer);
+
+      // Should fail with unexpected_end, NOT crash with bad_alloc
+      expect(ec.ec == glz::error_code::unexpected_end) << "Should reject before allocation";
+      expect(result.empty()) << "Result should remain empty";
+   };
+
+   "string array memory bomb protection"_test = [] {
+      // Create a valid BEVE buffer with a few strings, then truncate it
+      std::vector<std::string> original = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"};
+      std::string valid_buffer;
+      expect(not glz::write_beve(original, valid_buffer));
+
+      // Truncate to just the header + count (claiming 10 strings but only a few bytes)
+      std::string truncated_buffer = valid_buffer.substr(0, 3);
+
+      std::vector<std::string> result;
+      auto ec = glz::read_beve(result, truncated_buffer);
+
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject truncated string array";
+   };
+
+   "boolean array memory bomb protection"_test = [] {
+      // Create valid buffer with many bools, then truncate
+      std::vector<bool> original(100, true);
+      std::string valid_buffer;
+      expect(not glz::write_beve(original, valid_buffer));
+
+      // Truncate to just header + count
+      std::string truncated_buffer = valid_buffer.substr(0, 3);
+
+      std::vector<bool> result;
+      auto ec = glz::read_beve(result, truncated_buffer);
+
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject truncated bool array";
+   };
+
+   "generic array memory bomb protection"_test = [] {
+      // Create valid buffer with many elements, then truncate
+      std::vector<glz::generic> original;
+      for (int i = 0; i < 50; i++) {
+         original.push_back(glz::generic{i});
+      }
+      std::string valid_buffer;
+      expect(not glz::write_beve(original, valid_buffer));
+
+      // Truncate to just header + count
+      std::string truncated_buffer = valid_buffer.substr(0, 3);
+
+      std::vector<glz::generic> result;
+      auto ec = glz::read_beve(result, truncated_buffer);
+
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject truncated generic array";
+   };
+
+   "numeric array memory bomb protection"_test = [] {
+      // Craft a malicious buffer for int array with huge count
+      std::vector<int> sample = {1, 2, 3};
+      std::string template_buf;
+      expect(not glz::write_beve(sample, template_buf));
+
+      // Build malicious buffer with valid tag but huge count
+      std::string malicious_buffer;
+      malicious_buffer.push_back(template_buf[0]); // Keep the typed array tag
+
+      // Encode 1 billion elements with 8-byte format
+      uint64_t huge = 1000000000ULL;
+      uint64_t encoded = (huge << 2) | 0x03;
+      for (int i = 0; i < 8; i++) {
+         malicious_buffer.push_back(static_cast<char>(encoded >> (i * 8)));
+      }
+      // Add tiny bit of data (not nearly enough for 1B ints)
+      malicious_buffer.append(16, '\0');
+
+      std::vector<int> result;
+      auto ec = glz::read_beve(result, malicious_buffer);
+
+      expect(ec.ec == glz::error_code::unexpected_end) << "Should reject before allocation";
+   };
+
+   "valid data still parses after security checks"_test = [] {
+      // Verify that legitimate data still works correctly
+
+      // String array
+      std::vector<std::string> str_original = {"hello", "world", "test"};
+      std::string str_buffer;
+      expect(not glz::write_beve(str_original, str_buffer));
+      std::vector<std::string> str_result;
+      expect(!glz::read_beve(str_result, str_buffer));
+      expect(str_result == str_original);
+
+      // Bool array
+      std::vector<bool> bool_original = {true, false, true, true, false};
+      std::string bool_buffer;
+      expect(not glz::write_beve(bool_original, bool_buffer));
+      std::vector<bool> bool_result;
+      expect(!glz::read_beve(bool_result, bool_buffer));
+      expect(bool_result == bool_original);
+
+      // Numeric array
+      std::vector<int> int_original = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+      std::string int_buffer;
+      expect(not glz::write_beve(int_original, int_buffer));
+      std::vector<int> int_result;
+      expect(!glz::read_beve(int_result, int_buffer));
+      expect(int_result == int_original);
+
+      // Single string
+      std::string single_original = "This is a test string with some content.";
+      std::string single_buffer;
+      expect(not glz::write_beve(single_original, single_buffer));
+      std::string single_result;
+      expect(!glz::read_beve(single_result, single_buffer));
+      expect(single_result == single_original);
+   };
+
+   "nested struct with strings memory bomb protection"_test = [] {
+      // Create valid buffer, then truncate
+      DoSTestOuter original;
+      for (int i = 0; i < 10; i++) {
+         original.items.push_back({.name = "item" + std::to_string(i), .value = "value" + std::to_string(i)});
+      }
+      std::string valid_buffer;
+      expect(not glz::write_beve(original, valid_buffer));
+
+      // Truncate significantly
+      std::string truncated = valid_buffer.substr(0, valid_buffer.size() / 4);
+
+      DoSTestOuter result;
+      auto ec = glz::read_beve(result, truncated);
+      expect(bool(ec)) << "Should fail on truncated nested struct";
+   };
+
+   "map with huge key count protection"_test = [] {
+      // Create valid map buffer, then truncate
+      std::map<std::string, int> original = {{"one", 1}, {"two", 2}, {"three", 3}};
+      std::string valid_buffer;
+      expect(not glz::write_beve(original, valid_buffer));
+
+      // Truncate to minimal data
+      std::string truncated = valid_buffer.substr(0, 4);
+
+      std::map<std::string, int> result;
+      auto ec = glz::read_beve(result, truncated);
+      expect(bool(ec)) << "Should fail on truncated map";
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");
