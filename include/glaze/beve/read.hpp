@@ -584,6 +584,12 @@ namespace glz
                return;
             }
          }
+         if constexpr (has_runtime_max_string_length<std::decay_t<decltype(ctx)>>) {
+            if (ctx.max_string_length > 0 && n > ctx.max_string_length) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
+               return;
+            }
+         }
          value.resize(n);
          std::memcpy(value.data(), it, n);
          it += n;
@@ -615,6 +621,12 @@ namespace glz
          }
          if constexpr (check_max_string_length(Opts) > 0) {
             if (n > check_max_string_length(Opts)) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
+               return;
+            }
+         }
+         if constexpr (has_runtime_max_string_length<std::decay_t<decltype(ctx)>>) {
+            if (ctx.max_string_length > 0 && n > ctx.max_string_length) [[unlikely]] {
                ctx.error = error_code::invalid_length;
                return;
             }
@@ -812,6 +824,12 @@ namespace glz
                   return;
                }
             }
+            if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+               if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
 
             if constexpr (resizable<T>) {
                value.resize(n);
@@ -857,6 +875,12 @@ namespace glz
                }
                if constexpr (check_max_array_size(Opts) > 0) {
                   if (n > check_max_array_size(Opts)) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return 0;
+                  }
+               }
+               if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+                  if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
                      ctx.error = error_code::invalid_length;
                      return 0;
                   }
@@ -1005,6 +1029,12 @@ namespace glz
                   return;
                }
             }
+            if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+               if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
 
             if constexpr (resizable<T>) {
                value.resize(n);
@@ -1025,6 +1055,12 @@ namespace glz
                }
                if constexpr (check_max_string_length(Opts) > 0) {
                   if (length > check_max_string_length(Opts)) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return;
+                  }
+               }
+               if constexpr (has_runtime_max_string_length<std::decay_t<decltype(ctx)>>) {
+                  if (ctx.max_string_length > 0 && length > ctx.max_string_length) [[unlikely]] {
                      ctx.error = error_code::invalid_length;
                      return;
                   }
@@ -1076,6 +1112,12 @@ namespace glz
             }
             if constexpr (check_max_array_size(Opts) > 0) {
                if (n > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+            if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+               if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
                   ctx.error = error_code::invalid_length;
                   return;
                }
@@ -1144,6 +1186,12 @@ namespace glz
             }
             if constexpr (check_max_array_size(Opts) > 0) {
                if (n > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+            if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+               if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
                   ctx.error = error_code::invalid_length;
                   return;
                }
@@ -1308,6 +1356,12 @@ namespace glz
             // Check user-configured map size limit
             if constexpr (check_max_map_size(Opts) > 0) {
                if (n > check_max_map_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+            if constexpr (has_runtime_max_map_size<std::decay_t<decltype(ctx)>>) {
+               if (ctx.max_map_size > 0 && n > ctx.max_map_size) [[unlikely]] {
                   ctx.error = error_code::invalid_length;
                   return;
                }

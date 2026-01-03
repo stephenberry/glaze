@@ -131,4 +131,29 @@ namespace glz
       { ctx.error } -> std::same_as<error_code&>;
       { ctx.indentation_level } -> std::same_as<uint32_t&>;
    };
+
+   // Runtime constraint concepts
+   // These detect if a user-defined context has runtime constraint fields.
+   // Users can inherit from glz::context and add these fields for runtime limits:
+   //   struct my_context : glz::context {
+   //      size_t max_string_length = 1024;
+   //      size_t max_array_size = 100;
+   //      size_t max_map_size = 50;
+   //   };
+   // Use with if constexpr to ensure zero binary overhead when not used.
+
+   template <class Ctx>
+   concept has_runtime_max_string_length = requires(Ctx& ctx) {
+      { ctx.max_string_length } -> std::convertible_to<size_t>;
+   };
+
+   template <class Ctx>
+   concept has_runtime_max_array_size = requires(Ctx& ctx) {
+      { ctx.max_array_size } -> std::convertible_to<size_t>;
+   };
+
+   template <class Ctx>
+   concept has_runtime_max_map_size = requires(Ctx& ctx) {
+      { ctx.max_map_size } -> std::convertible_to<size_t>;
+   };
 }
