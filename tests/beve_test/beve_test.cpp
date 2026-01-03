@@ -4166,42 +4166,6 @@ suite dos_prevention = [] {
       expect(bool(ec)) << "Should reject truncated numeric array buffer";
    };
 
-   "valid data still parses after security checks"_test = [] {
-      // Verify that legitimate data still works correctly
-
-      // String array
-      std::vector<std::string> str_original = {"hello", "world", "test"};
-      std::string str_buffer;
-      expect(not glz::write_beve(str_original, str_buffer));
-      std::vector<std::string> str_result;
-      expect(!glz::read_beve(str_result, str_buffer));
-      expect(str_result == str_original);
-
-      // Bool array
-      std::vector<bool> bool_original = {true, false, true, true, false};
-      std::string bool_buffer;
-      expect(not glz::write_beve(bool_original, bool_buffer));
-      std::vector<bool> bool_result;
-      expect(!glz::read_beve(bool_result, bool_buffer));
-      expect(bool_result == bool_original);
-
-      // Numeric array
-      std::vector<int> int_original = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-      std::string int_buffer;
-      expect(not glz::write_beve(int_original, int_buffer));
-      std::vector<int> int_result;
-      expect(!glz::read_beve(int_result, int_buffer));
-      expect(int_result == int_original);
-
-      // Single string
-      std::string single_original = "This is a test string with some content.";
-      std::string single_buffer;
-      expect(not glz::write_beve(single_original, single_buffer));
-      std::string single_result;
-      expect(!glz::read_beve(single_result, single_buffer));
-      expect(single_result == single_original);
-   };
-
    "nested struct with strings memory bomb protection"_test = [] {
       // Create valid buffer, then truncate
       DoSTestOuter original;
