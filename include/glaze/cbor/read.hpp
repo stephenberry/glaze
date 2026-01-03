@@ -557,6 +557,14 @@ namespace glz
                return;
             }
 
+            // Check user-configured string length limit
+            if constexpr (check_max_string_length(Opts) > 0) {
+               if (length > check_max_string_length(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+
             if constexpr (string_view_t<T>) {
                value = {reinterpret_cast<const char*>(it), static_cast<size_t>(length)};
             }
@@ -650,6 +658,14 @@ namespace glz
                return;
             }
 
+            // Check user-configured array size limit
+            if constexpr (check_max_array_size(Opts) > 0) {
+               if (length > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+
             value.resize(static_cast<size_t>(length));
             std::memcpy(value.data(), it, length);
             it += length;
@@ -737,6 +753,14 @@ namespace glz
                return;
             }
 
+            // Check user-configured array size limit
+            if constexpr (check_max_array_size(Opts) > 0) {
+               if (length > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+
             value.resize(static_cast<size_t>(length));
             std::memcpy(value.data(), it, length);
             it += length;
@@ -810,6 +834,14 @@ namespace glz
                   }
 
                   const size_t count = byte_len / sizeof(V);
+
+                  // Check user-configured array size limit
+                  if constexpr (check_max_array_size(Opts) > 0) {
+                     if (count > check_max_array_size(Opts)) [[unlikely]] {
+                        ctx.error = error_code::invalid_length;
+                        return;
+                     }
+                  }
 
                   if constexpr (resizable<T>) {
                      value.resize(count);
@@ -944,6 +976,14 @@ namespace glz
 
                   const size_t count = byte_len / complex_byte_size;
 
+                  // Check user-configured array size limit
+                  if constexpr (check_max_array_size(Opts) > 0) {
+                     if (count > check_max_array_size(Opts)) [[unlikely]] {
+                        ctx.error = error_code::invalid_length;
+                        return;
+                     }
+                  }
+
                   if constexpr (resizable<T>) {
                      value.resize(count);
                      if constexpr (check_shrink_to_fit(Opts)) {
@@ -1057,6 +1097,20 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
+            // Validate count against remaining buffer size (minimum 1 byte per element)
+            if (count > static_cast<uint64_t>(end - it)) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            // Check user-configured array size limit
+            if constexpr (check_max_array_size(Opts) > 0) {
+               if (count > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
+
             if constexpr (resizable<T>) {
                value.resize(static_cast<size_t>(count));
 
@@ -1139,6 +1193,20 @@ namespace glz
             uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
+
+            // Validate count against remaining buffer size (minimum 2 bytes per key-value pair)
+            if (count * 2 > static_cast<uint64_t>(end - it)) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            // Check user-configured map size limit
+            if constexpr (check_max_map_size(Opts) > 0) {
+               if (count > check_max_map_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
 
             for (size_t i = 0; i < count; ++i) {
                Key key{};

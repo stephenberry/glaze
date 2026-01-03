@@ -18,7 +18,9 @@ glz::escape_bytes_t<T> // A wrapper type for local use to treat char array or ve
 glz::escape_bytes<&T::x> // For meta usage: treats char array or vector as byte sequence to be fully escaped (prevents null termination truncation)
 
 glz::read_constraint<&T::x, constraint_function, "Message"> // Applies a constraint function when reading
-  
+
+glz::max_length<&T::x, N> // Limits string length or array size to N when reading (BEVE format)
+
 glz::partial_read<&T::x> // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
 glz::invoke<&T::func> // Invoke a std::function, lambda, or member function with n-arguments as an array input
@@ -591,6 +593,100 @@ auto ec = glz::read<opts>(obj, buffer);
 
 With this option enabled, the `self_constraint` is still defined in `glz::meta<T>` but will not be evaluated during
 deserialization. This allows you to toggle validation on or off at compile time based on your use case.
+
+## max_length
+
+Limits string length or array/vector size when reading from binary formats (currently BEVE). This wrapper provides per-field control over allocation limits to prevent memory exhaustion from malicious or malformed input.
+
+For strings (`std::string`), limits the maximum character count. For arrays/vectors, limits the maximum element count.
+
+```c++
+struct user_input
+{
+   std::string username;
+   std::string bio;
+   std::vector<int> scores;
+   std::vector<std::string> tags;
+};
+
+template <>
+struct glz::meta<user_input>
+{
+   using T = user_input;
+   static constexpr auto value = object(
+      "username", glz::max_length<&T::username, 64>,    // Max 64 characters
+      "bio", &T::bio,                                    // No limit
+      "scores", glz::max_length<&T::scores, 100>,       // Max 100 elements
+      "tags", glz::max_length<&T::tags, 10>             // Max 10 strings
+   );
+};
+```
+
+In use:
+
+```c++
+user_input obj{};
+std::string buffer;
+
+// Valid data within limits
+user_input valid{.username = "alice", .bio = "Hello!", .scores = {95, 87, 92}, .tags = {"cpp", "glaze"}};
+glz::write_beve(valid, buffer);
+
+auto ec = glz::read_beve(obj, buffer);
+expect(!ec); // Success
+
+// Data exceeding limits
+user_input oversized{.username = std::string(100, 'x'), .bio = "", .scores = {}, .tags = {}};
+buffer.clear();
+glz::write_beve(oversized, buffer);
+
+ec = glz::read_beve(obj, buffer);
+expect(ec.ec == glz::error_code::invalid_length); // Rejected - username exceeds 64 chars
+```
+
+### Works with complex types
+
+The wrapper also works with arrays of complex structs:
+
+```c++
+struct item
+{
+   std::string name;
+   int value;
+   std::vector<double> data;
+};
+
+struct container
+{
+   std::vector<item> items;
+};
+
+template <>
+struct glz::meta<container>
+{
+   using T = container;
+   static constexpr auto value = object(
+      "items", glz::max_length<&T::items, 50>  // Max 50 complex items
+   );
+};
+```
+
+### Associated options
+
+For global limits (applying to all strings/arrays), use custom options instead:
+
+```c++
+struct secure_opts : glz::opts
+{
+   uint32_t format = glz::BEVE;
+   size_t max_string_length = 1024;    // Max 1KB per string
+   size_t max_array_size = 10000;      // Max 10,000 elements per array
+};
+
+auto ec = glz::read<secure_opts{}>(obj, buffer);
+```
+
+See [Security](./security.md) for more details on allocation limits and DoS prevention.
 
 ## partial_read
 

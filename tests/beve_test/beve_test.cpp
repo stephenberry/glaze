@@ -4198,6 +4198,448 @@ suite dos_prevention = [] {
    };
 };
 
+// Custom opts for max_string_length and max_array_size tests
+struct limited_string_opts : glz::opts
+{
+   uint32_t format = glz::BEVE;
+   size_t max_string_length = 10;
+};
+
+struct limited_array_opts : glz::opts
+{
+   uint32_t format = glz::BEVE;
+   size_t max_array_size = 5;
+};
+
+struct limited_both_opts : glz::opts
+{
+   uint32_t format = glz::BEVE;
+   size_t max_string_length = 10;
+   size_t max_array_size = 5;
+};
+
+// Tests for user-configurable allocation limits (Issue #2190)
+suite allocation_limits = [] {
+   "max_string_length rejects oversized strings"_test = [] {
+      std::string long_string(100, 'x'); // 100 character string
+      std::string buffer;
+      expect(not glz::write_beve(long_string, buffer));
+
+      // Try to read with a limit of 10 characters
+      std::string result;
+      auto ec = glz::read<limited_string_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject string exceeding max_string_length";
+   };
+
+   "max_string_length allows strings under limit"_test = [] {
+      std::string short_string("hello"); // 5 characters, under 10 limit
+      std::string buffer;
+      expect(not glz::write_beve(short_string, buffer));
+
+      std::string result;
+      auto ec = glz::read<limited_string_opts{}>(result, buffer);
+      expect(!ec) << "Should accept string under max_string_length";
+      expect(result == short_string);
+   };
+
+   "max_array_size rejects oversized arrays"_test = [] {
+      std::vector<int> large_array(100, 42); // 100 integers
+      std::string buffer;
+      expect(not glz::write_beve(large_array, buffer));
+
+      // Try to read with a limit of 5 elements
+      std::vector<int> result;
+      auto ec = glz::read<limited_array_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject array exceeding max_array_size";
+   };
+
+   "max_array_size allows arrays under limit"_test = [] {
+      std::vector<int> small_array = {1, 2, 3}; // 3 elements, under 5 limit
+      std::string buffer;
+      expect(not glz::write_beve(small_array, buffer));
+
+      std::vector<int> result;
+      auto ec = glz::read<limited_array_opts{}>(result, buffer);
+      expect(!ec) << "Should accept array under max_array_size";
+      expect(result == small_array);
+   };
+
+   "max_string_length works for string arrays"_test = [] {
+      std::vector<std::string> strings = {"short", "hello", "world"};
+      std::string buffer;
+      expect(not glz::write_beve(strings, buffer));
+
+      // All strings are under 10 chars, so should succeed
+      std::vector<std::string> result;
+      auto ec = glz::read<limited_string_opts{}>(result, buffer);
+      expect(!ec) << "Should accept string array with all strings under limit";
+
+      // Now try with a long string
+      std::vector<std::string> long_strings = {"short", "this is a very long string indeed"};
+      buffer.clear();
+      expect(not glz::write_beve(long_strings, buffer));
+
+      result.clear();
+      ec = glz::read<limited_string_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject string array with string exceeding limit";
+   };
+
+   "max_array_size works for boolean arrays"_test = [] {
+      std::vector<bool> large_bools(100, true); // 100 booleans
+      std::string buffer;
+      expect(not glz::write_beve(large_bools, buffer));
+
+      std::vector<bool> result;
+      auto ec = glz::read<limited_array_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject boolean array exceeding max_array_size";
+   };
+
+   "max_array_size works for generic arrays"_test = [] {
+      std::vector<glz::generic> generics;
+      for (int i = 0; i < 100; i++) {
+         generics.push_back(glz::generic{i * 1.5});
+      }
+      std::string buffer;
+      expect(not glz::write_beve(generics, buffer));
+
+      std::vector<glz::generic> result;
+      auto ec = glz::read<limited_array_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject generic array exceeding max_array_size";
+   };
+
+   "both limits work together"_test = [] {
+      // Test that both limits can be used together
+      std::vector<std::string> data = {"hi", "yo"}; // 2 elements, short strings - OK
+      std::string buffer;
+      expect(not glz::write_beve(data, buffer));
+
+      std::vector<std::string> result;
+      auto ec = glz::read<limited_both_opts{}>(result, buffer);
+      expect(!ec) << "Should accept data under both limits";
+
+      // Exceed array limit
+      std::vector<std::string> many_strings(10, "hi"); // 10 elements, exceeds limit of 5
+      buffer.clear();
+      expect(not glz::write_beve(many_strings, buffer));
+
+      result.clear();
+      ec = glz::read<limited_both_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject when array size exceeds limit";
+
+      // Exceed string limit
+      std::vector<std::string> long_string_vec = {"hi", "this is way too long"};
+      buffer.clear();
+      expect(not glz::write_beve(long_string_vec, buffer));
+
+      result.clear();
+      ec = glz::read<limited_both_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject when string length exceeds limit";
+   };
+
+   "no limit by default"_test = [] {
+      // With default opts (max_string_length = 0, max_array_size = 0), no limits apply
+      std::string long_string(1000, 'x');
+      std::string buffer;
+      expect(not glz::write_beve(long_string, buffer));
+
+      std::string result;
+      auto ec = glz::read_beve(result, buffer);
+      expect(!ec) << "Default opts should allow any string length";
+      expect(result == long_string);
+
+      std::vector<int> large_array(1000, 42);
+      buffer.clear();
+      expect(not glz::write_beve(large_array, buffer));
+
+      std::vector<int> arr_result;
+      ec = glz::read_beve(arr_result, buffer);
+      expect(!ec) << "Default opts should allow any array size";
+      expect(arr_result == large_array);
+   };
+
+   "max_map_size applies to std::map"_test = [] {
+      std::map<std::string, int> large_map;
+      for (int i = 0; i < 100; ++i) {
+         large_map["key" + std::to_string(i)] = i;
+      }
+      std::string buffer;
+      expect(not glz::write_beve(large_map, buffer));
+
+      // Try to read with a limit of 50 entries
+      struct map_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_map_size = 50;
+      };
+
+      std::map<std::string, int> result;
+      auto ec = glz::read<map_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject oversized map";
+   };
+
+   "max_map_size accepts valid std::map"_test = [] {
+      std::map<std::string, int> small_map{{"a", 1}, {"b", 2}, {"c", 3}};
+      std::string buffer;
+      expect(not glz::write_beve(small_map, buffer));
+
+      struct map_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_map_size = 50;
+      };
+
+      std::map<std::string, int> result;
+      auto ec = glz::read<map_limited_opts{}>(result, buffer);
+      expect(!ec) << "Should accept map within limit";
+      expect(result == small_map);
+   };
+
+   "max_map_size applies to std::unordered_map"_test = [] {
+      std::unordered_map<std::string, int> large_map;
+      for (int i = 0; i < 100; ++i) {
+         large_map["key" + std::to_string(i)] = i;
+      }
+      std::string buffer;
+      expect(not glz::write_beve(large_map, buffer));
+
+      struct map_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_map_size = 50;
+      };
+
+      std::unordered_map<std::string, int> result;
+      auto ec = glz::read<map_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject oversized unordered_map";
+   };
+
+   "max_array_size does not affect maps"_test = [] {
+      // Verify that max_array_size doesn't limit maps (they use max_map_size)
+      std::map<std::string, int> large_map;
+      for (int i = 0; i < 100; ++i) {
+         large_map["key" + std::to_string(i)] = i;
+      }
+      std::string buffer;
+      expect(not glz::write_beve(large_map, buffer));
+
+      // max_array_size = 50 should NOT affect maps
+      struct array_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_array_size = 50;
+      };
+
+      std::map<std::string, int> result;
+      auto ec = glz::read<array_limited_opts{}>(result, buffer);
+      expect(!ec) << "max_array_size should not limit maps";
+      expect(result.size() == 100);
+   };
+
+   "extended opts usage with max_array_size"_test = [] {
+      std::vector<int> large_array(100, 42);
+      std::string buffer;
+      expect(not glz::write_beve(large_array, buffer));
+
+      // Extend opts to add allocation limits
+      struct array_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_array_size = 50;
+      };
+
+      std::vector<int> result;
+      auto ec = glz::read<array_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject using extended opts";
+   };
+
+   "extended opts usage with max_string_length"_test = [] {
+      std::string long_string(100, 'x');
+      std::string buffer;
+      expect(not glz::write_beve(long_string, buffer));
+
+      struct string_limited_opts : glz::opts
+      {
+         uint32_t format = glz::BEVE;
+         size_t max_string_length = 50;
+      };
+
+      std::string result;
+      auto ec = glz::read<string_limited_opts{}>(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length) << "Should reject using extended opts";
+   };
+};
+
+// Structs for max_length wrapper tests
+struct MaxLengthStringStruct
+{
+   std::string name;
+   std::string description;
+};
+
+template <>
+struct glz::meta<MaxLengthStringStruct>
+{
+   using T = MaxLengthStringStruct;
+   static constexpr auto value = object(
+      "name", glz::max_length<&T::name, 10>, // limit to 10 chars
+      "description", &T::description // no limit
+   );
+};
+
+struct MaxLengthArrayStruct
+{
+   std::vector<int> small_list;
+   std::vector<int> big_list;
+};
+
+template <>
+struct glz::meta<MaxLengthArrayStruct>
+{
+   using T = MaxLengthArrayStruct;
+   static constexpr auto value = object(
+      "small_list", glz::max_length<&T::small_list, 5>, // limit to 5 elements
+      "big_list", &T::big_list // no limit
+   );
+};
+
+// Complex struct for testing generic array path
+struct ComplexItem
+{
+   std::string name;
+   int value;
+   std::vector<double> data;
+};
+
+struct MaxLengthComplexArrayStruct
+{
+   std::vector<ComplexItem> items;
+};
+
+template <>
+struct glz::meta<MaxLengthComplexArrayStruct>
+{
+   using T = MaxLengthComplexArrayStruct;
+   static constexpr auto value = object(
+      "items", glz::max_length<&T::items, 3> // limit to 3 complex items
+   );
+};
+
+// Tests for max_length wrapper (per-field limits)
+suite max_length_wrapper = [] {
+   "max_length wrapper limits string field"_test = [] {
+      MaxLengthStringStruct original{.name = "hello", .description = "a long description"};
+      std::string buffer;
+      expect(not glz::write_beve(original, buffer));
+
+      MaxLengthStringStruct result;
+      auto ec = glz::read_beve(result, buffer);
+      expect(!ec) << "Should accept strings under limit";
+      expect(result.name == original.name);
+      expect(result.description == original.description);
+   };
+
+   "max_length wrapper rejects oversized string field"_test = [] {
+      MaxLengthStringStruct original{.name = "this name is way too long", .description = "ok"};
+      std::string buffer;
+      expect(not glz::write_beve(original, buffer));
+
+      MaxLengthStringStruct result;
+      auto ec = glz::read_beve(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject string field exceeding max_length";
+   };
+
+   "max_length wrapper allows unlimited field"_test = [] {
+      MaxLengthStringStruct original{.name = "short", .description = std::string(1000, 'x')};
+      std::string buffer;
+      expect(not glz::write_beve(original, buffer));
+
+      MaxLengthStringStruct result;
+      auto ec = glz::read_beve(result, buffer);
+      expect(!ec) << "Unlimited field should accept any length";
+      expect(result.description == original.description);
+   };
+
+   "max_length wrapper limits array field"_test = [] {
+      MaxLengthArrayStruct original{.small_list = {1, 2, 3}, .big_list = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}};
+      std::string buffer;
+      expect(not glz::write_beve(original, buffer));
+
+      MaxLengthArrayStruct result;
+      auto ec = glz::read_beve(result, buffer);
+      expect(!ec) << "Should accept array under limit";
+      expect(result.small_list == original.small_list);
+      expect(result.big_list == original.big_list);
+   };
+
+   "max_length wrapper rejects oversized array field"_test = [] {
+      MaxLengthArrayStruct original{.small_list = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, .big_list = {}};
+      std::string buffer;
+      expect(not glz::write_beve(original, buffer));
+
+      MaxLengthArrayStruct result;
+      auto ec = glz::read_beve(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject array field exceeding max_length";
+   };
+
+   "max_length wrapper roundtrip preserves data"_test = [] {
+      MaxLengthStringStruct original{.name = "test", .description = "desc"};
+      std::string buffer;
+      expect(not glz::write_beve(original, buffer));
+
+      MaxLengthStringStruct result;
+      auto ec = glz::read_beve(result, buffer);
+      expect(!ec);
+      expect(result.name == original.name);
+      expect(result.description == original.description);
+   };
+
+   "max_length wrapper limits complex struct array"_test = [] {
+      MaxLengthComplexArrayStruct original{
+         .items = {
+            {.name = "a", .value = 1, .data = {1.0, 2.0}},
+            {.name = "b", .value = 2, .data = {3.0}}
+         }
+      };
+      std::string buffer;
+      expect(not glz::write_beve(original, buffer));
+
+      MaxLengthComplexArrayStruct result;
+      auto ec = glz::read_beve(result, buffer);
+      expect(!ec) << "Should accept complex array under limit";
+      expect(result.items.size() == 2);
+      expect(result.items[0].name == "a");
+      expect(result.items[1].value == 2);
+   };
+
+   "max_length wrapper rejects oversized complex struct array"_test = [] {
+      MaxLengthComplexArrayStruct original{
+         .items = {
+            {.name = "a", .value = 1, .data = {1.0}},
+            {.name = "b", .value = 2, .data = {2.0}},
+            {.name = "c", .value = 3, .data = {3.0}},
+            {.name = "d", .value = 4, .data = {4.0}},
+            {.name = "e", .value = 5, .data = {5.0}}
+         }
+      };
+      std::string buffer;
+      expect(not glz::write_beve(original, buffer));
+
+      MaxLengthComplexArrayStruct result;
+      auto ec = glz::read_beve(result, buffer);
+      expect(ec.ec == glz::error_code::invalid_length)
+         << "Should reject complex struct array exceeding max_length";
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");

@@ -92,7 +92,7 @@ namespace glz
       patch_test_failed, // Test operation value mismatch (unique to RFC 6902 test op)
       // Buffer errors
       buffer_overflow, // Write would exceed fixed buffer capacity
-      invalid_length // Length/count header exceeds available buffer size
+      invalid_length // Length exceeds allowed limit (buffer size or user-configured max)
    };
 
    // Unified error context for all read/write operations
