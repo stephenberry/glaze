@@ -137,6 +137,34 @@ struct glz::meta<UserInput> {
 };
 ```
 
+### Raw Pointer Allocation Safety
+
+By default, Glaze refuses to allocate memory for null raw pointers during deserialization. This prevents a class of memory leaks where the parser would call `new` without any mechanism to ensure the memory is freed.
+
+```cpp
+struct example { int x, y, z; };
+
+std::vector<example*> vec;
+auto ec = glz::read_beve(vec, buffer);
+// ec.ec == glz::error_code::invalid_nullable_read (safe default)
+```
+
+If your application requires raw pointer allocation, you can enable it with `allocate_raw_pointers = true`:
+
+```cpp
+struct alloc_opts : glz::opts {
+   bool allocate_raw_pointers = true;
+};
+
+std::vector<example*> vec;
+auto ec = glz::read<alloc_opts{}>(vec, buffer);
+// Works, but you MUST manually delete allocated pointers
+for (auto* p : vec) delete p;
+```
+
+> [!WARNING]
+> When enabling `allocate_raw_pointers`, your application is responsible for tracking and freeing all allocated memory. Consider using smart pointers (`std::unique_ptr`, `std::shared_ptr`) instead, which Glaze handles automatically and safely.
+
 ## JSON Format Security
 
 ### Safe Parsing Defaults

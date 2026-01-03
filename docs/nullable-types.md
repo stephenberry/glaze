@@ -90,6 +90,72 @@ Raw pointers behave consistently with other nullable types like `std::optional` 
 >
 > When using raw pointers in structs, ensure the pointed-to data remains valid during serialization. Glaze does not manage the lifetime of pointed-to objects.
 
+### JSON Deserialization
+
+When deserializing into raw pointers, Glaze has the following behavior:
+
+#### Pre-allocated Pointers
+
+If the pointer is already non-null, Glaze will read directly into the pointed-to object:
+
+```c++
+struct example {
+   int x{}, y{}, z{};
+};
+
+example obj;
+example* ptr = &obj;  // Pre-allocated
+
+std::string json = R"({"x":1,"y":2,"z":3})";
+glz::read_json(ptr, json);  // Works: reads into existing object
+// obj.x == 1, obj.y == 2, obj.z == 3
+```
+
+#### Null Pointers (Default Behavior)
+
+By default, Glaze **refuses to allocate memory** for null raw pointers during deserialization. This is a safety feature because:
+- Glaze would need to call `new` without knowing how the memory will be freed
+- This makes memory leaks easy to introduce accidentally
+
+```c++
+example* ptr = nullptr;
+std::string json = R"({"x":1,"y":2,"z":3})";
+auto ec = glz::read_json(ptr, json);
+// ec == glz::error_code::invalid_nullable_read (fails by design)
+```
+
+#### Enabling Automatic Allocation with `allocate_raw_pointers`
+
+If you need Glaze to allocate memory for null raw pointers, enable the `allocate_raw_pointers` option. This is useful when deserializing containers of pointers where pre-allocation isn't practical:
+
+```c++
+struct alloc_opts : glz::opts {
+   bool allocate_raw_pointers = true;
+};
+
+// Single pointer
+example* ptr = nullptr;
+std::string json = R"({"x":1,"y":2,"z":3})";
+auto ec = glz::read<alloc_opts{}>(ptr, json);
+// ptr is now allocated with new and populated
+// IMPORTANT: You must manually delete ptr when done!
+delete ptr;
+
+// Vector of pointers
+std::vector<example*> vec;
+std::string json_array = R"([{"x":1,"y":2,"z":3},{"x":4,"y":5,"z":6}])";
+auto ec2 = glz::read<alloc_opts{}>(vec, json_array);
+// vec contains 2 newly allocated pointers
+// IMPORTANT: You must manually delete each pointer!
+for (auto* p : vec) delete p;
+```
+
+> [!CAUTION]
+>
+> When using `allocate_raw_pointers = true`, **you are responsible for managing the allocated memory**. Glaze allocates with `new` but has no way to track or free the memory. Failure to properly delete allocated pointers will result in memory leaks.
+
+This option works with all supported formats: JSON, BEVE, CBOR, and MSGPACK.
+
 > [!NOTE]
 >
 > If you want to read into a nullable type then you must have a `.reset()` method or your type must be assignable from empty braces: `value = {}`. This allows Glaze to reset the value if `"null"` is parsed.

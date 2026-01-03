@@ -3648,6 +3648,9 @@ namespace glz
                                              else if constexpr (constructible<V>) {
                                                 v = meta_construct_v<V>();
                                              }
+                                             else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<V>) {
+                                                v = new std::remove_pointer_t<V>{};
+                                             }
                                              else {
                                                 ctx.error = error_code::invalid_nullable_read;
                                                 return;
@@ -3702,6 +3705,9 @@ namespace glz
                                                    v = std::make_shared<typename V::element_type>();
                                                 else if constexpr (constructible<V>) {
                                                    v = meta_construct_v<V>();
+                                                }
+                                                else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<V>) {
+                                                   v = new std::remove_pointer_t<V>{};
                                                 }
                                                 else {
                                                    ctx.error = error_code::invalid_nullable_read;
@@ -3852,6 +3858,9 @@ namespace glz
                                        else if constexpr (constructible<V>) {
                                           v = meta_construct_v<V>();
                                        }
+                                       else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<V>) {
+                                          v = new std::remove_pointer_t<V>{};
+                                       }
                                        else {
                                           ctx.error = error_code::invalid_nullable_read;
                                           return;
@@ -3930,6 +3939,9 @@ namespace glz
                                        v = std::make_shared<typename V::element_type>();
                                     else if constexpr (constructible<V>) {
                                        v = meta_construct_v<V>();
+                                    }
+                                    else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<V>) {
+                                       v = new std::remove_pointer_t<V>{};
                                     }
                                     else {
                                        ctx.error = error_code::invalid_nullable_read;
@@ -4016,6 +4028,9 @@ namespace glz
                                           v = std::make_shared<typename V::element_type>();
                                        else if constexpr (constructible<V>) {
                                           v = meta_construct_v<V>();
+                                       }
+                                       else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<V>) {
+                                          v = new std::remove_pointer_t<V>{};
                                        }
                                        else {
                                           ctx.error = error_code::invalid_nullable_read;
@@ -4383,6 +4398,9 @@ namespace glz
                      value = std::make_shared<typename T::element_type>();
                   else if constexpr (constructible<T>) {
                      value = meta_construct_v<T>();
+                  }
+                  else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<T>) {
+                     value = new std::remove_pointer_t<T>{};
                   }
                   else {
                      // Cannot read into a null raw pointer
