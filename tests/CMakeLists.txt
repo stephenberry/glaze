@@ -31,13 +31,18 @@ option(glaze_USE_BUNDLED_ASIO
 )
 
 # First, try Boost.Asio
-find_package(Boost QUIET CONFIG COMPONENTS system)
+find_package(Boost QUIET CONFIG)
 
 if(Boost_FOUND)
     message(STATUS "Using Boost.Asio")
     add_library(glz_asio INTERFACE)
-    target_link_libraries(glz_asio INTERFACE Boost::system)
-    target_compile_definitions(glz_asio INTERFACE BOOST_ASIO_DYN_LINK)
+    # Boost.Asio is header-only, just need Boost headers
+    # Boost::system was removed in Boost 1.89 (it was header-only since 1.69)
+    if(TARGET Boost::headers)
+        target_link_libraries(glz_asio INTERFACE Boost::headers)
+    elseif(TARGET Boost::boost)
+        target_link_libraries(glz_asio INTERFACE Boost::boost)
+    endif()
 else()
     # Second, try standalone Asio
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
