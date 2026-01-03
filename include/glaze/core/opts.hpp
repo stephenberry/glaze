@@ -208,6 +208,20 @@ namespace glz
    // Trades O(1) hash lookup for O(N) linear search - faster for small structs (< ~8 fields)
    // due to cache effects, and much smaller binaries for embedded systems.
 
+   // ---
+   // size_t max_string_length = 0;
+   // Maximum length for string allocations when reading. 0 means no limit (default).
+   // When set, strings exceeding this length will fail with error_code::invalid_length.
+   // Useful for preventing memory exhaustion attacks from malicious input.
+   // Currently applies to BEVE format.
+
+   // ---
+   // size_t max_array_size = 0;
+   // Maximum size for array/vector allocations when reading. 0 means no limit (default).
+   // When set, arrays exceeding this size will fail with error_code::invalid_length.
+   // Useful for preventing memory exhaustion attacks from malicious input.
+   // Currently applies to BEVE format.
+
    struct append_arrays_opt_tag
    {};
 
@@ -434,6 +448,26 @@ namespace glz
       }
       else {
          return false;
+      }
+   }
+
+   consteval size_t check_max_string_length(auto&& Opts)
+   {
+      if constexpr (requires { Opts.max_string_length; }) {
+         return Opts.max_string_length;
+      }
+      else {
+         return 0; // 0 means no limit
+      }
+   }
+
+   consteval size_t check_max_array_size(auto&& Opts)
+   {
+      if constexpr (requires { Opts.max_array_size; }) {
+         return Opts.max_array_size;
+      }
+      else {
+         return 0; // 0 means no limit
       }
    }
 

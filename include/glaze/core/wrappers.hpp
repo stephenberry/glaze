@@ -116,4 +116,31 @@ namespace glz
    // Treat char arrays as byte sequences to be fully escaped
    template <auto MemPtr>
    constexpr auto escape_bytes = escape_bytes_impl<MemPtr>();
+
+   // Limit string length or array size when reading
+   // For strings: limits max_string_length
+   // For arrays/vectors: limits max_array_size
+   template <class T, size_t MaxLen>
+   struct max_length_t
+   {
+      static constexpr bool glaze_wrapper = true;
+      static constexpr auto glaze_reflect = false;
+      static constexpr size_t max_len = MaxLen;
+      using value_type = T;
+      T& val;
+   };
+
+   template <auto MemPtr, size_t MaxLen>
+   inline constexpr decltype(auto) max_length_impl() noexcept
+   {
+      return [](auto&& val) {
+         using V = std::remove_reference_t<decltype(val.*MemPtr)>;
+         return max_length_t<V, MaxLen>{val.*MemPtr};
+      };
+   }
+
+   // Limit string length or array size when reading from binary formats
+   // Usage: glz::max_length<&T::field, 100>
+   template <auto MemPtr, size_t MaxLen>
+   constexpr auto max_length = max_length_impl<MemPtr, MaxLen>();
 }

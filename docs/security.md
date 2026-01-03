@@ -45,6 +45,61 @@ This protection applies to:
 
 On 32-bit systems, BEVE length headers using 8-byte encoding (for values > 2^30) are rejected with `invalid_length` since these values cannot be addressed in 32-bit memory space.
 
+### User-Configurable Allocation Limits
+
+For applications that need stricter control over memory allocation, Glaze provides compile-time options to limit the maximum size of strings and arrays during parsing.
+
+#### Global Limits via Custom Options
+
+Apply limits to all strings/arrays in a parse operation:
+
+```cpp
+// Define custom options with allocation limits
+struct secure_opts : glz::opts
+{
+   uint32_t format = glz::BEVE;
+   size_t max_string_length = 1024;    // Max 1KB per string
+   size_t max_array_size = 10000;      // Max 10,000 elements per array
+};
+
+std::vector<std::string> data;
+auto ec = glz::read<secure_opts{}>(data, buffer);
+if (ec.ec == glz::error_code::invalid_length) {
+    // A string or array exceeded the configured limit
+}
+```
+
+#### Per-Field Limits via Wrapper
+
+Apply limits to specific fields using `glz::max_length`:
+
+```cpp
+struct UserInput
+{
+   std::string username;       // Should be limited
+   std::string bio;            // Can be longer
+   std::vector<int> scores;    // Should be limited
+};
+
+template <>
+struct glz::meta<UserInput>
+{
+   using T = UserInput;
+   static constexpr auto value = object(
+      "username", glz::max_length<&T::username, 64>,   // Max 64 chars
+      "bio", &T::bio,                                   // No limit
+      "scores", glz::max_length<&T::scores, 100>       // Max 100 elements
+   );
+};
+```
+
+These options work together with buffer-based validation:
+
+1. **Buffer validation**: Rejects claims that exceed buffer capacity (always enabled)
+2. **Allocation limits**: Rejects allocations that exceed user-defined limits (optional)
+
+This allows you to accept legitimately large data while protecting against excessive memory usage.
+
 ### Best Practices for Network Applications
 
 1. **Limit input buffer size**: Control the maximum message size your application accepts at the network layer, before passing data to Glaze.
@@ -126,7 +181,7 @@ Error codes that may indicate malicious input:
 
 | Error Code | Description |
 |------------|-------------|
-| `invalid_length` | Length/count header exceeds available buffer size (potential memory bomb) |
+| `invalid_length` | Length exceeds allowed limit (buffer size or user-configured max) |
 | `unexpected_end` | Buffer truncated during parsing |
 | `syntax_error` | Invalid data structure or type mismatch |
 | `parse_error` | Malformed data that doesn't match expected format |

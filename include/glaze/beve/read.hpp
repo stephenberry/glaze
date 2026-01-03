@@ -578,6 +578,12 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
+         if constexpr (check_max_string_length(Opts) > 0) {
+            if (n > check_max_string_length(Opts)) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
+               return;
+            }
+         }
          value.resize(n);
          std::memcpy(value.data(), it, n);
          it += n;
@@ -606,6 +612,12 @@ namespace glz
          if (uint64_t(end - it) < n) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
+         }
+         if constexpr (check_max_string_length(Opts) > 0) {
+            if (n > check_max_string_length(Opts)) [[unlikely]] {
+               ctx.error = error_code::invalid_length;
+               return;
+            }
          }
 
          if constexpr (string_view_t<T>) {
@@ -794,6 +806,12 @@ namespace glz
                ctx.error = error_code::invalid_length;
                return;
             }
+            if constexpr (check_max_array_size(Opts) > 0) {
+               if (n > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
 
             if constexpr (resizable<T>) {
                value.resize(n);
@@ -836,6 +854,12 @@ namespace glz
                if ((it + n * element_size) > end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return 0;
+               }
+               if constexpr (check_max_array_size(Opts) > 0) {
+                  if (n > check_max_array_size(Opts)) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return 0;
+                  }
                }
 
                if constexpr (resizable<T>) {
@@ -975,6 +999,12 @@ namespace glz
                ctx.error = error_code::invalid_length;
                return;
             }
+            if constexpr (check_max_array_size(Opts) > 0) {
+               if (n > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
+            }
 
             if constexpr (resizable<T>) {
                value.resize(n);
@@ -992,6 +1022,12 @@ namespace glz
                if (uint64_t(end - it) < length) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
+               }
+               if constexpr (check_max_string_length(Opts) > 0) {
+                  if (length > check_max_string_length(Opts)) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return;
+                  }
                }
 
                x.resize(length);
@@ -1037,6 +1073,12 @@ namespace glz
             if (uint64_t(end - it) < n * sizeof(V)) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
+            }
+            if constexpr (check_max_array_size(Opts) > 0) {
+               if (n > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
             }
 
             if constexpr (resizable<T>) {
@@ -1099,6 +1141,12 @@ namespace glz
             if (uint64_t(end - it) < n) [[unlikely]] {
                ctx.error = error_code::invalid_length;
                return;
+            }
+            if constexpr (check_max_array_size(Opts) > 0) {
+               if (n > check_max_array_size(Opts)) [[unlikely]] {
+                  ctx.error = error_code::invalid_length;
+                  return;
+               }
             }
 
             if constexpr (resizable<T>) {
