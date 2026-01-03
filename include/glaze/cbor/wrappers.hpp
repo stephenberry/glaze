@@ -37,7 +37,7 @@ namespace glz
    template <class T, size_t MaxLen>
    struct from<CBOR, max_length_t<T, MaxLen>>
    {
-   private:
+     private:
       template <auto Opts>
       static consteval auto make_limited_opts()
       {
@@ -74,7 +74,7 @@ namespace glz
          }
       }
 
-   public:
+     public:
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto end)
       {

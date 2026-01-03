@@ -2562,9 +2562,8 @@ template <>
 struct glz::meta<CborMaxLengthStringStruct>
 {
    using T = CborMaxLengthStringStruct;
-   static constexpr auto value = object(
-      "name", glz::max_length<&T::name, 10>, // limit to 10 chars
-      "description", &T::description // no limit
+   static constexpr auto value = object("name", glz::max_length<&T::name, 10>, // limit to 10 chars
+                                        "description", &T::description // no limit
    );
 };
 
@@ -2578,9 +2577,8 @@ template <>
 struct glz::meta<CborMaxLengthArrayStruct>
 {
    using T = CborMaxLengthArrayStruct;
-   static constexpr auto value = object(
-      "small_list", glz::max_length<&T::small_list, 5>, // limit to 5 elements
-      "big_list", &T::big_list // no limit
+   static constexpr auto value = object("small_list", glz::max_length<&T::small_list, 5>, // limit to 5 elements
+                                        "big_list", &T::big_list // no limit
    );
 };
 
