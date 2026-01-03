@@ -834,6 +834,8 @@ namespace glz
             }
          }
          else {
+// float128_t requires std::from_chars for floating-point, unavailable on older Apple platforms (iOS < 16.3)
+#if !defined(_LIBCPP_VERSION) || defined(_LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT)
             if constexpr (is_float128<V>) {
                auto [ptr, ec] = std::from_chars(it, end, value);
                if (ec != std::errc()) {
@@ -842,7 +844,9 @@ namespace glz
                }
                it = ptr;
             }
-            else {
+            else
+#endif
+            {
                if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
                   // Hardware may interact with value changes, so we parse into a temporary and assign in one
                   // place
