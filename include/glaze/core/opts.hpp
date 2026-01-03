@@ -222,6 +222,14 @@ namespace glz
    // Useful for preventing memory exhaustion attacks from malicious input.
    // Currently applies to BEVE format.
 
+   // ---
+   // bool allocate_raw_pointers = false;
+   // When true, allows Glaze to allocate memory for null raw pointers during deserialization using `new`.
+   // By default, Glaze refuses to read into null raw pointers because it would have to call `new`
+   // without any known way to delete the memory, making memory leaks easy.
+   // Enable this option only when you are prepared to manually manage the allocated memory.
+   // Works with JSON, BEVE, CBOR, and MSGPACK formats.
+
    struct append_arrays_opt_tag
    {};
 
@@ -478,6 +486,16 @@ namespace glz
       }
       else {
          return 0; // 0 means no limit
+      }
+   }
+
+   consteval bool check_allocate_raw_pointers(auto&& Opts)
+   {
+      if constexpr (requires { Opts.allocate_raw_pointers; }) {
+         return Opts.allocate_raw_pointers;
+      }
+      else {
+         return false;
       }
    }
 

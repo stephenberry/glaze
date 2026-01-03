@@ -133,3 +133,11 @@ add_executable(linear_search_test linear_search_test.cpp)
 target_link_libraries(linear_search_test PRIVATE glz_test_common)
 
 add_test(NAME linear_search_test COMMAND linear_search_test)
+
+## Allocate raw pointers test - test for allocate_raw_pointers compile-time option (issue #2192)
+
+add_executable(allocate_raw_pointers_test allocate_raw_pointers_test.cpp)
+
+target_link_libraries(allocate_raw_pointers_test PRIVATE glz_test_common)
+
+add_test(NAME allocate_raw_pointers_test COMMAND allocate_raw_pointers_test)

@@ -244,6 +244,7 @@ namespace glz
    };
 
    template <nullable_like T>
+      requires(!std::is_pointer_v<T>)
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -257,6 +258,31 @@ namespace glz
             value.emplace();
          }
          from<MSGPACK, std::remove_cvref_t<decltype(*value)>>::template op<Opts>(*value, tag, ctx, it, end);
+      }
+   };
+
+   // Raw pointer support
+   template <class T>
+      requires(std::is_pointer_v<T> && !std::is_array_v<T>)
+   struct from<MSGPACK, T>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         if (tag == msgpack::nil) {
+            // null pointer - do nothing (can't reset a raw pointer safely)
+            return;
+         }
+         if (!value) {
+            if constexpr (check_allocate_raw_pointers(Opts)) {
+               value = new std::remove_pointer_t<std::remove_cvref_t<Value>>{};
+            }
+            else {
+               ctx.error = error_code::invalid_nullable_read;
+               return;
+            }
+         }
+         from<MSGPACK, std::remove_pointer_t<std::remove_cvref_t<Value>>>::template op<Opts>(*value, tag, ctx, it, end);
       }
    };
 

@@ -1543,6 +1543,9 @@ namespace glz
                else if constexpr (constructible<T>) {
                   value = meta_construct_v<T>();
                }
+               else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<T>) {
+                  value = new std::remove_pointer_t<T>{};
+               }
                else {
                   ctx.error = error_code::invalid_nullable_read;
                   return;

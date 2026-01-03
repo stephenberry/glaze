@@ -56,6 +56,10 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool skip_self_constraint` | `false` | Skip `self_constraint` validation during reading |
 | `bool assume_sufficient_buffer` | `false` | Skip bounds checking for fixed-size buffers (caller guarantees space) |
 | `bool linear_search` | `false` | Use linear key search instead of hash tables for smaller binary size |
+| `size_t max_string_length` | `0` | Maximum string length when reading (0 = no limit) |
+| `size_t max_array_size` | `0` | Maximum array size when reading (0 = no limit) |
+| `size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit) |
+| `bool allocate_raw_pointers` | `false` | Allocate memory for null raw pointers during deserialization |
 
 ### CSV Options (`glz::opts_csv`)
 
@@ -281,6 +285,31 @@ When `true` (default), ranges of `std::pair` are written as a single object with
 
 #### `allow_conversions`
 When `true` (default), BEVE allows implicit type conversions (e.g., reading a `double` into a `float`).
+
+#### `allocate_raw_pointers`
+When `true`, allows Glaze to allocate memory for null raw pointers during deserialization using `new`. By default (`false`), Glaze refuses to read into null raw pointers because it would need to allocate memory without any mechanism to free it, making memory leaks likely.
+
+```c++
+struct alloc_opts : glz::opts {
+   bool allocate_raw_pointers = true;
+};
+
+struct example { int x, y, z; };
+
+// Without the option, this fails with invalid_nullable_read
+std::vector<example*> vec;
+std::string json = R"([{"x":1,"y":2,"z":3}])";
+auto ec = glz::read<alloc_opts{}>(vec, json);
+// vec[0] is now allocated and populated
+
+// IMPORTANT: You must manually delete allocated pointers
+for (auto* p : vec) delete p;
+```
+
+> [!CAUTION]
+> When using this option, **you are responsible for freeing the allocated memory**. Glaze uses `new` to allocate but cannot track or delete the memory. Use smart pointers (`std::unique_ptr`, `std::shared_ptr`) when possible instead.
+
+This option works with JSON, BEVE, CBOR, and MSGPACK formats. See [Nullable Types](nullable-types.md) for more details.
 
 #### `float_max_write_precision`
 Limits the precision used when writing floating-point numbers. Options: `full`, `float32`, `float64`, `float128`.
