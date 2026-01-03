@@ -157,10 +157,14 @@ namespace glz
             }
             return h;
          }
-         // Fallthrough in case we are in 32-bit mode
-         [[fallthrough]];
+         else {
+            // 8-byte length encoding not supported on 32-bit systems
+            ctx.error = error_code::invalid_length;
+            return 0;
+         }
       }
       default:
+         ctx.error = error_code::syntax_error;
          return 0;
       }
    }

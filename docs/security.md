@@ -41,6 +41,10 @@ This protection applies to:
 | `std::vector<std::string>` | Count ≤ remaining buffer bytes (minimum 1 byte per string header) |
 | Generic arrays | Count ≤ remaining buffer bytes (minimum 1 byte per element) |
 
+#### 32-bit System Considerations
+
+On 32-bit systems, BEVE length headers using 8-byte encoding (for values > 2^30) are rejected with `invalid_length` since these values cannot be addressed in 32-bit memory space.
+
 ### Best Practices for Network Applications
 
 1. **Limit input buffer size**: Control the maximum message size your application accepts at the network layer, before passing data to Glaze.
