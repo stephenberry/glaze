@@ -21,6 +21,17 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
+// v6.6.0 renames context::indentation_level to context::depth
+//
+// context struct:
+// - 'indentation_level' renamed to 'depth'
+// - This field tracks nesting depth of structures (objects/arrays)
+// - Used for indentation when writing and stack overflow protection when reading
+//
+// is_context concept:
+// - Now checks for 'depth' member instead of 'indentation_level'
+#define glaze_v6_6_0_depth
+
 // v6.5.0 unified error_ctx and streaming I/O support
 //
 // error_ctx struct:
@@ -36,7 +47,7 @@ namespace glz
 // is_context concept:
 // - Changed from exact type match to structural concept
 // - Old: std::same_as<std::decay_t<T>, context>
-// - New: Checks for 'error' and 'depth' members
+// - New: Checks for 'error' and 'indentation_level' members
 //
 // Return types:
 // - Raw buffer writes (write_json(value, char*)) now return error_ctx
