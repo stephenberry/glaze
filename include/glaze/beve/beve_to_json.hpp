@@ -168,7 +168,7 @@ namespace glz
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
                dump('\n', out, ix);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
             }
             else {
                ++ctx.indentation_level;
@@ -209,7 +209,7 @@ namespace glz
                      dump(',', out, ix);
                      if constexpr (Opts.prettify) {
                         dump('\n', out, ix);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                        dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                      }
                   }
                }
@@ -245,7 +245,7 @@ namespace glz
                      dump(',', out, ix);
                      if constexpr (Opts.prettify) {
                         dump('\n', out, ix);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                        dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                      }
                   }
                }
@@ -260,7 +260,7 @@ namespace glz
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
                dump('\n', out, ix);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
             }
             else {
                --ctx.indentation_level;
@@ -474,7 +474,7 @@ namespace glz
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump('\n', out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                }
                else {
                   ++ctx.indentation_level;
@@ -493,7 +493,7 @@ namespace glz
                dump(',', out, ix);
                if constexpr (Opts.prettify) {
                   dump('\n', out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                }
 
                if constexpr (Opts.prettify) {
@@ -511,7 +511,7 @@ namespace glz
                dump(',', out, ix);
                if constexpr (Opts.prettify) {
                   dump('\n', out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                }
 
                if constexpr (Opts.prettify) {
@@ -529,7 +529,7 @@ namespace glz
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
                   dump('\n', out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                }
                else {
                   --ctx.indentation_level;

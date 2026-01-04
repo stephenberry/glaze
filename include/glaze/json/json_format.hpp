@@ -63,10 +63,10 @@ namespace glz::detail
    {
       dump('\n', b, ix);
       if constexpr (use_tabs) {
-         dumpn<'\t'>(indent, b, ix);
+         dumpn('\t', indent, b, ix);
       }
       else {
-         dumpn<' '>(indent * indentation_width, b, ix);
+         dumpn(' ', indent * indentation_width, b, ix);
       }
    };
 

@@ -148,6 +148,19 @@ namespace glz
       ix += n;
    }
 
+   template <class B>
+   GLZ_ALWAYS_INLINE void dumpn(const byte_sized auto c, size_t n, B& b, size_t& ix) noexcept(not vector_like<B>)
+   {
+      if constexpr (vector_like<B>) {
+         const auto k = ix + n;
+         if (k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
+         }
+      }
+      std::memset(&b[ix], c, n);
+      ix += n;
+   }
+
    template <auto c, class B>
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, size_t& ix) noexcept
    {
@@ -167,6 +180,22 @@ namespace glz
       assign_maybe_cast<'\n'>(b, ix);
       ++ix;
       std::memset(&b[ix], IndentChar, n);
+      ix += n;
+   }
+
+   template <class B>
+   GLZ_ALWAYS_INLINE void dump_newline_indent(const byte_sized auto c, size_t n, B& b, size_t& ix) noexcept(
+      not vector_like<B>)
+   {
+      if constexpr (vector_like<B>) {
+         if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
+         }
+      }
+
+      assign_maybe_cast('\n', b, ix);
+      ++ix;
+      std::memset(&b[ix], c, n);
       ix += n;
    }
 
