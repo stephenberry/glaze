@@ -67,7 +67,7 @@ namespace glz
          }
 
 #if GLZ_USE_STD_FORMAT_FLOAT
-         constexpr auto fmt = std::format_string<V>{std::string_view{Fmt}};
+         constexpr auto fmt = std::format_string<V>{std::string_view { Fmt }};
 
          if constexpr (check_write_unchecked(Opts)) {
             // Caller guarantees buffer has enough space
