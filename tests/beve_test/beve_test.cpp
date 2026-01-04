@@ -20,6 +20,7 @@
 #include "glaze/beve/beve_to_json.hpp"
 #include "glaze/beve/key_traits.hpp"
 #include "glaze/beve/read.hpp"
+#include "glaze/beve/size.hpp"
 #include "glaze/beve/write.hpp"
 #include "glaze/hardware/volatile_array.hpp"
 #include "glaze/json/json_ptr.hpp"
@@ -4616,6 +4617,517 @@ suite max_length_wrapper = [] {
       MaxLengthComplexArrayStruct result;
       auto ec = glz::read_beve(result, buffer);
       expect(ec.ec == glz::error_code::invalid_length) << "Should reject complex struct array exceeding max_length";
+   };
+};
+
+// ============ beve_size tests ============
+
+suite beve_size_tests = [] {
+   "beve_size primitive types"_test = [] {
+      // Booleans: 1 byte tag
+      expect(glz::beve_size(true) == size_t(1));
+      expect(glz::beve_size(false) == size_t(1));
+
+      // Numbers: 1 byte tag + sizeof(type)
+      expect(glz::beve_size(int8_t{42}) == 1 + sizeof(int8_t));
+      expect(glz::beve_size(uint8_t{42}) == 1 + sizeof(uint8_t));
+      expect(glz::beve_size(int16_t{42}) == 1 + sizeof(int16_t));
+      expect(glz::beve_size(uint16_t{42}) == 1 + sizeof(uint16_t));
+      expect(glz::beve_size(int32_t{42}) == 1 + sizeof(int32_t));
+      expect(glz::beve_size(uint32_t{42}) == 1 + sizeof(uint32_t));
+      expect(glz::beve_size(int64_t{42}) == 1 + sizeof(int64_t));
+      expect(glz::beve_size(uint64_t{42}) == 1 + sizeof(uint64_t));
+      expect(glz::beve_size(float{3.14f}) == 1 + sizeof(float));
+      expect(glz::beve_size(double{3.14}) == 1 + sizeof(double));
+   };
+
+   "beve_size matches actual size for primitives"_test = [] {
+      auto verify = [](auto value) {
+         const size_t predicted = glz::beve_size(value);
+         auto buffer = glz::write_beve(value).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(true);
+      verify(false);
+      verify(int8_t{-128});
+      verify(uint8_t{255});
+      verify(int16_t{-32768});
+      verify(uint16_t{65535});
+      verify(int32_t{-2147483648});
+      verify(uint32_t{4294967295});
+      verify(int64_t{-9223372036854775807LL});
+      verify(uint64_t{18446744073709551615ULL});
+      verify(float{3.14159f});
+      verify(double{2.718281828459045});
+   };
+
+   "beve_size strings"_test = [] {
+      // Empty string: 1 byte tag + 1 byte compressed_int(0)
+      expect(glz::beve_size(std::string{}) == size_t(2));
+
+      // Short string (< 64 chars): 1 byte tag + 1 byte length + n chars
+      std::string hello = "Hello";
+      expect(glz::beve_size(hello) == size_t(1 + 1 + hello.size()));
+
+      // Verify against actual serialization
+      auto buffer = glz::write_beve(hello).value();
+      expect(glz::beve_size(hello) == buffer.size());
+   };
+
+   "beve_size string length encoding"_test = [] {
+      auto verify_string = [](size_t len) {
+         std::string s(len, 'x');
+         const size_t predicted = glz::beve_size(s);
+         auto buffer = glz::write_beve(s).value();
+         expect(predicted == buffer.size()) << "Length " << len << ": Predicted " << predicted << ", Actual "
+                                            << buffer.size();
+      };
+
+      // Test compressed int boundaries
+      verify_string(0); // empty
+      verify_string(1); // minimal
+      verify_string(63); // max 1-byte compressed int
+      verify_string(64); // min 2-byte compressed int
+      verify_string(100);
+      verify_string(16383); // max 2-byte compressed int
+      verify_string(16384); // min 4-byte compressed int
+   };
+
+   "beve_size vectors"_test = [] {
+      auto verify = [](auto vec) {
+         const size_t predicted = glz::beve_size(vec);
+         auto buffer = glz::write_beve(vec).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::vector<int>{});
+      verify(std::vector<int>{1, 2, 3, 4, 5});
+      verify(std::vector<double>{1.1, 2.2, 3.3});
+      verify(std::vector<std::string>{"hello", "world"});
+      verify(std::vector<bool>{true, false, true, true, false});
+   };
+
+   "beve_size arrays"_test = [] {
+      auto verify = [](auto arr) {
+         const size_t predicted = glz::beve_size(arr);
+         auto buffer = glz::write_beve(arr).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::array<int, 5>{1, 2, 3, 4, 5});
+      verify(std::array<double, 3>{1.1, 2.2, 3.3});
+      verify(std::array<std::string, 2>{"hello", "world"});
+   };
+
+   "beve_size maps"_test = [] {
+      auto verify = [](auto map) {
+         const size_t predicted = glz::beve_size(map);
+         auto buffer = glz::write_beve(map).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::map<std::string, int>{});
+      verify(std::map<std::string, int>{{"a", 1}, {"b", 2}, {"c", 3}});
+      verify(std::map<int, double>{{1, 1.1}, {2, 2.2}});
+      verify(std::unordered_map<std::string, std::string>{{"key1", "value1"}, {"key2", "value2"}});
+   };
+
+   "beve_size my_struct"_test = [] {
+      my_struct obj{};
+      const size_t predicted = glz::beve_size(obj);
+      auto buffer = glz::write_beve(obj).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size Thing (complex nested struct)"_test = [] {
+      Thing obj{};
+      const size_t predicted = glz::beve_size(obj);
+      auto buffer = glz::write_beve(obj).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size nested containers"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      // Vector of vectors
+      verify(std::vector<std::vector<int>>{{1, 2}, {3, 4, 5}, {6}});
+
+      // Map of vectors
+      verify(std::map<std::string, std::vector<int>>{{"a", {1, 2, 3}}, {"b", {4, 5}}});
+
+      // Vector of maps
+      verify(std::vector<std::map<std::string, int>>{{{"x", 1}}, {{"y", 2}, {"z", 3}}});
+   };
+
+   "beve_size optional"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::optional<int>{});
+      verify(std::optional<int>{42});
+      verify(std::optional<std::string>{"hello"});
+      verify(std::optional<std::vector<int>>{{1, 2, 3}});
+   };
+
+   "beve_size variant"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      using Var = std::variant<int, double, std::string>;
+      verify(Var{42});
+      verify(Var{3.14});
+      verify(Var{"hello"});
+   };
+
+   "beve_size tuple"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::tuple<int>{42});
+      verify(std::tuple<int, double, std::string>{42, 3.14, "hello"});
+      verify(std::make_tuple(1, 2.0, std::vector<int>{1, 2, 3}));
+   };
+
+   "beve_size pair"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::pair<int, double>{42, 3.14});
+      verify(std::pair<std::string, std::vector<int>>{"key", {1, 2, 3}});
+   };
+
+   "beve_size enum"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(Color::Red);
+      verify(Color::Green);
+      verify(Color::Blue);
+   };
+
+   "beve_size complex numbers"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::complex<float>{1.0f, 2.0f});
+      verify(std::complex<double>{3.14, 2.718});
+   };
+
+   "beve_size shared_ptr"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::shared_ptr<int>{});
+      verify(std::make_shared<int>(42));
+      verify(std::make_shared<std::string>("hello"));
+   };
+
+   "beve_size unique_ptr"_test = [] {
+      auto verify = [](auto&& val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      std::unique_ptr<int> null_ptr;
+      verify(null_ptr);
+      verify(std::make_unique<int>(42));
+      verify(std::make_unique<std::string>("hello"));
+   };
+
+   "beve_size_untagged"_test = [] {
+      my_struct obj{};
+      const size_t predicted = glz::beve_size_untagged(obj);
+      auto buffer = glz::write_beve_untagged(obj).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size deeply nested containers"_test = [] {
+      // Test with deeply nested container structures
+      std::map<std::string, std::vector<std::map<std::string, std::vector<int>>>> deeply_nested;
+      deeply_nested["level1"] = {
+         {{"a", {1, 2, 3}}, {"b", {4, 5}}}, {{"c", {6, 7, 8, 9}}, {"d", {10}}, {"e", {11, 12}}}};
+
+      const size_t predicted = glz::beve_size(deeply_nested);
+      auto buffer = glz::write_beve(deeply_nested).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size deque"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::deque<int>{1, 2, 3, 4, 5});
+      verify(std::deque<std::string>{"a", "b", "c"});
+   };
+
+   "beve_size list"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::list<int>{1, 2, 3, 4, 5});
+      verify(std::list<double>{1.1, 2.2, 3.3});
+   };
+
+   "beve_size set"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::set<int>{1, 2, 3, 4, 5});
+      verify(std::set<std::string>{"a", "b", "c"});
+   };
+
+   "beve_size bitset"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::bitset<8>{0b10101010});
+      verify(std::bitset<16>{0xABCD});
+      verify(std::bitset<64>{0xDEADBEEFCAFEBABE});
+   };
+
+   "beve_size glaze_array_t (V3)"_test = [] {
+      // V3 is defined with glz::meta using array()
+      V3 vec{1.0, 2.0, 3.0};
+      const size_t predicted = glz::beve_size(vec);
+      auto buffer = glz::write_beve(vec).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size glaze_value_t (ModuleID)"_test = [] {
+      // ModuleID wraps a uint64_t via glaze value wrapper
+      ModuleID id{42};
+      const size_t predicted = glz::beve_size(id);
+      auto buffer = glz::write_beve(id).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size sub_thing with lambda accessor"_test = [] {
+      // sub_thing has a lambda accessor in its meta
+      sub_thing st{};
+      const size_t predicted = glz::beve_size(st);
+      auto buffer = glz::write_beve(st).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size sub_thing2 with file_include"_test = [] {
+      // sub_thing2 has file_include in its meta which should serialize as empty string
+      sub_thing2 st2{};
+      const size_t predicted = glz::beve_size(st2);
+      auto buffer = glz::write_beve(st2).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size glz::obj inline object"_test = [] {
+      auto obj = glz::obj{"name", "test", "value", 42, "data", std::vector<int>{1, 2, 3}};
+      const size_t predicted = glz::beve_size(obj);
+      auto buffer = glz::write_beve(obj).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size raw_json"_test = [] {
+      // raw_json wraps a string
+      glz::raw_json rj{R"({"key": "value"})"};
+      const size_t predicted = glz::beve_size(rj);
+      auto buffer = glz::write_beve(rj).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size span"_test = [] {
+      std::vector<int> vec{1, 2, 3, 4, 5};
+      std::span<int> sp{vec};
+      const size_t predicted = glz::beve_size(sp);
+      auto buffer = glz::write_beve(sp).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size const char*"_test = [] {
+      const char* str = "hello world";
+      const size_t predicted = glz::beve_size(str);
+      auto buffer = glz::write_beve(str).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size nullptr const char*"_test = [] {
+      const char* str = nullptr;
+      const size_t predicted = glz::beve_size(str);
+      auto buffer = glz::write_beve(str).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size C-style array"_test = [] {
+      int arr[5] = {1, 2, 3, 4, 5};
+      const size_t predicted = glz::beve_size(arr);
+      auto buffer = glz::write_beve(arr).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size vector of complex"_test = [] {
+      std::vector<std::complex<double>> vec{{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
+      const size_t predicted = glz::beve_size(vec);
+      auto buffer = glz::write_beve(vec).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size vector of variant"_test = [] {
+      using Var = std::variant<int, std::string, double>;
+      std::vector<Var> vec{42, "hello", 3.14, "world", 100};
+      const size_t predicted = glz::beve_size(vec);
+      auto buffer = glz::write_beve(vec).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size nested optional"_test = [] {
+      std::optional<std::optional<int>> nested_null;
+      const size_t predicted1 = glz::beve_size(nested_null);
+      auto buffer1 = glz::write_beve(nested_null).value();
+      expect(predicted1 == buffer1.size()) << "Null nested: Predicted " << predicted1 << ", Actual " << buffer1.size();
+
+      std::optional<std::optional<int>> nested_inner_null = std::optional<int>{};
+      const size_t predicted2 = glz::beve_size(nested_inner_null);
+      auto buffer2 = glz::write_beve(nested_inner_null).value();
+      expect(predicted2 == buffer2.size()) << "Inner null: Predicted " << predicted2 << ", Actual " << buffer2.size();
+
+      std::optional<std::optional<int>> nested_value = std::optional<int>{42};
+      const size_t predicted3 = glz::beve_size(nested_value);
+      auto buffer3 = glz::write_beve(nested_value).value();
+      expect(predicted3 == buffer3.size()) << "Has value: Predicted " << predicted3 << ", Actual " << buffer3.size();
+   };
+
+   "beve_size map with int keys"_test = [] {
+      std::map<int32_t, std::string> map{{1, "one"}, {2, "two"}, {-5, "negative five"}};
+      const size_t predicted = glz::beve_size(map);
+      auto buffer = glz::write_beve(map).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size map with uint64 keys"_test = [] {
+      std::map<uint64_t, double> map{{1ULL, 1.1}, {1000000000000ULL, 2.2}};
+      const size_t predicted = glz::beve_size(map);
+      auto buffer = glz::write_beve(map).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size vector of pairs (concatenate)"_test = [] {
+      // Test with concatenate option which affects how vector<pair> is serialized
+      constexpr beve_concat_opts beve_concat{{glz::BEVE}};
+      std::vector<std::pair<std::string, int>> vec{{"a", 1}, {"b", 2}, {"c", 3}};
+
+      // Calculate size with concatenate option
+      const size_t predicted = glz::calculate_size<glz::BEVE, std::remove_cvref_t<decltype(vec)>>::template op<
+         beve_concat>(vec);
+      std::string buffer;
+      expect(not glz::write<beve_concat>(vec, buffer));
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size char type"_test = [] {
+      char c = 'A';
+      const size_t predicted = glz::beve_size(c);
+      auto buffer = glz::write_beve(c).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size compressed_int_size helper"_test = [] {
+      // Test the helper function directly
+      expect(glz::compressed_int_size(0) == size_t(1));
+      expect(glz::compressed_int_size(63) == size_t(1));
+      expect(glz::compressed_int_size(64) == size_t(2));
+      expect(glz::compressed_int_size(16383) == size_t(2));
+      expect(glz::compressed_int_size(16384) == size_t(4));
+      expect(glz::compressed_int_size(1073741823) == size_t(4));
+      expect(glz::compressed_int_size(1073741824) == size_t(8));
+
+      // Compile-time version
+      static_assert(glz::compressed_int_size<0>() == 1);
+      static_assert(glz::compressed_int_size<63>() == 1);
+      static_assert(glz::compressed_int_size<64>() == 2);
+      static_assert(glz::compressed_int_size<16383>() == 2);
+      static_assert(glz::compressed_int_size<16384>() == 4);
+      static_assert(glz::compressed_int_size<1073741823>() == 4);
+      static_assert(glz::compressed_int_size<1073741824>() == 8);
+   };
+
+   "beve_size large vector 4-byte compressed int"_test = [] {
+      // Test a vector with > 16383 elements to trigger 4-byte compressed int for count
+      std::vector<uint8_t> large_vec(20000, 42);
+      const size_t predicted = glz::beve_size(large_vec);
+      auto buffer = glz::write_beve(large_vec).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+   };
+
+   "beve_size empty containers"_test = [] {
+      auto verify = [](auto val) {
+         const size_t predicted = glz::beve_size(val);
+         auto buffer = glz::write_beve(val).value();
+         expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+      };
+
+      verify(std::vector<int>{});
+      verify(std::map<std::string, int>{});
+      verify(std::list<double>{});
+      verify(std::deque<std::string>{});
+      verify(std::set<int>{});
+      verify(std::unordered_map<std::string, int>{});
+   };
+
+   "beve_size structs with skip_null_members"_test = [] {
+      // Thing has optional members - when null and skip_null_members is true,
+      // the size should reflect fewer members
+      Thing obj{};
+      obj.optional = std::nullopt; // ensure optional is null
+      obj.sptr = nullptr; // null shared_ptr
+
+      const size_t predicted = glz::beve_size(obj);
+      auto buffer = glz::write_beve(obj).value();
+      expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
+
+      // Now with values
+      obj.optional = V3{1.0, 2.0, 3.0};
+      obj.sptr = std::make_shared<sub_thing>();
+
+      const size_t predicted2 = glz::beve_size(obj);
+      auto buffer2 = glz::write_beve(obj).value();
+      expect(predicted2 == buffer2.size()) << "With values - Predicted: " << predicted2 << ", Actual "
+                                           << buffer2.size();
    };
 };
 
