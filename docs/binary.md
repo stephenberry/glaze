@@ -29,6 +29,80 @@ if (!ec) {
 >
 > Reading binary is safe for invalid input and does not require null terminated buffers.
 
+## Calculate BEVE Size
+
+The `glz::beve_size` function calculates the exact number of bytes needed to serialize a value to BEVE format, without actually performing the serialization. This is useful when you need to pre-allocate a buffer of the exact size, such as when writing to shared memory for inter-process communication.
+
+**Basic Usage**
+
+```c++
+my_struct s{};
+size_t size = glz::beve_size(s);
+// size contains the exact number of bytes needed to serialize s
+```
+
+**Shared Memory Example**
+
+```c++
+#include "glaze/beve.hpp"
+
+struct SensorData {
+   uint64_t timestamp;
+   double temperature;
+   std::vector<double> readings;
+};
+
+// Calculate size before allocation
+SensorData data{12345, 98.6, {1.0, 2.0, 3.0}};
+size_t size = glz::beve_size(data);
+
+// Allocate shared memory with exact size
+void* shm = mmap(nullptr, size, PROT_READ | PROT_WRITE,
+                 MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+// Serialize directly to pre-allocated buffer
+std::span<char> buffer{static_cast<char*>(shm), size};
+glz::write_beve(data, buffer);
+```
+
+**Untagged Size Calculation**
+
+For untagged serialization (structs written as arrays without keys), use `glz::beve_size_untagged`:
+
+```c++
+my_struct s{};
+size_t tagged_size = glz::beve_size(s);           // with keys
+size_t untagged_size = glz::beve_size_untagged(s); // without keys (smaller)
+```
+
+**Compressed Integer Size Helper**
+
+BEVE uses variable-length encoding for integers in size/count fields. The `glz::compressed_int_size` helper calculates how many bytes a given integer will occupy:
+
+```c++
+glz::compressed_int_size(0);           // 1 byte (values < 64)
+glz::compressed_int_size(63);          // 1 byte
+glz::compressed_int_size(64);          // 2 bytes (values < 16384)
+glz::compressed_int_size(16383);       // 2 bytes
+glz::compressed_int_size(16384);       // 4 bytes (values < 1073741824)
+glz::compressed_int_size(1073741824);  // 8 bytes
+
+// Compile-time version
+static_assert(glz::compressed_int_size<100>() == 2);
+```
+
+**Supported Types**
+
+`glz::beve_size` supports all types that can be serialized to BEVE:
+
+- Primitives: `bool`, integers, floating-point, `char`, enums
+- Strings: `std::string`, `std::string_view`, `const char*`
+- Containers: `vector`, `array`, `map`, `set`, `list`, `deque`, `span`
+- Nullable: `optional`, `shared_ptr`, `unique_ptr`, raw pointers
+- Compound: `variant`, `tuple`, `pair`, `complex`
+- Glaze types: structs with `glz::meta`, `glz::obj`, `glz::raw_json`
+- Nested structures of arbitrary depth
+
 ## Untagged Binary
 
 By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_beve_untagged` and `glz::read_beve_untagged`.
