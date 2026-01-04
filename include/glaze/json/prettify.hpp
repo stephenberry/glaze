@@ -30,7 +30,7 @@ namespace glz
                break;
             }
             case Comma: {
-               dump<','>(b, ix);
+               dump(',', b, ix);
                ++it;
                if constexpr (Opts.new_lines_in_arrays) {
                   append_new_line<use_tabs, indent_width>(b, ix, indent);
@@ -41,10 +41,10 @@ namespace glz
                   }
                   else {
                      if constexpr (use_tabs) {
-                        dump<'\t'>(b, ix);
+                        dump('\t', b, ix);
                      }
                      else {
-                        dump<' '>(b, ix);
+                        dump(' ', b, ix);
                      }
                   }
                }
@@ -57,16 +57,16 @@ namespace glz
             }
             case Colon: {
                if constexpr (use_tabs) {
-                  dump<":\t">(b, ix);
+                  dump(":\t", b, ix);
                }
                else {
-                  dump<": ">(b, ix);
+                  dump(": ", b, ix);
                }
                ++it;
                break;
             }
             case Array_Start: {
-               dump<'['>(b, ix);
+               dump('[', b, ix);
                ++it;
                ++indent;
                if (size_t(indent) >= state.size()) [[unlikely]] {
@@ -102,29 +102,29 @@ namespace glz
                      append_new_line<use_tabs, indent_width>(b, ix, indent);
                   }
                }
-               dump<']'>(b, ix);
+               dump(']', b, ix);
                ++it;
                break;
             }
             case Null: {
-               dump<"null">(b, ix);
+               dump("null", b, ix);
                it += 4;
                break;
             }
             case Bool: {
                if (*it == 't') {
-                  dump<"true">(b, ix);
+                  dump("true", b, ix);
                   it += 4;
                   break;
                }
                else {
-                  dump<"false">(b, ix);
+                  dump("false", b, ix);
                   it += 5;
                   break;
                }
             }
             case Object_Start: {
-               dump<'{'>(b, ix);
+               dump('{', b, ix);
                ++it;
                ++indent;
                if (size_t(indent) >= state.size()) [[unlikely]] {
@@ -156,7 +156,7 @@ namespace glz
                if (it[-1] != '{') {
                   append_new_line<use_tabs, indent_width>(b, ix, indent);
                }
-               dump<'}'>(b, ix);
+               dump('}', b, ix);
                ++it;
                break;
             }

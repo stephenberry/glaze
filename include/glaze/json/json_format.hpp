@@ -61,12 +61,12 @@ namespace glz::detail
    template <bool use_tabs, uint8_t indentation_width>
    inline void append_new_line(auto&& b, auto&& ix, const int64_t indent)
    {
-      dump<'\n'>(b, ix);
+      dump('\n', b, ix);
       if constexpr (use_tabs) {
-         dumpn<'\t'>(indent, b, ix);
+         dumpn('\t', indent, b, ix);
       }
       else {
-         dumpn<' '>(indent * indentation_width, b, ix);
+         dumpn(' ', indent * indentation_width, b, ix);
       }
    };
 

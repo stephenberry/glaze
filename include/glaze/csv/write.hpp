@@ -55,10 +55,10 @@ namespace glz
             return;
          }
          if (value) {
-            dump<'1'>(b, ix);
+            dump('1', b, ix);
          }
          else {
-            dump<'0'>(b, ix);
+            dump('0', b, ix);
          }
       }
    };
@@ -82,7 +82,7 @@ namespace glz
                      if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                         return;
                      }
-                     dump<','>(b, ix);
+                     dump(',', b, ix);
                      if constexpr (is_output_streaming<B>) {
                         flush_buffer(b, ix);
                      }
@@ -105,7 +105,7 @@ namespace glz
                   if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
-                  dump<','>(b, ix);
+                  dump(',', b, ix);
                   if constexpr (is_output_streaming<B>) {
                      flush_buffer(b, ix);
                   }
@@ -143,7 +143,7 @@ namespace glz
                      if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                         return;
                      }
-                     dump<','>(b, ix);
+                     dump(',', b, ix);
                      if constexpr (is_output_streaming<B>) {
                         flush_buffer(b, ix);
                      }
@@ -154,7 +154,7 @@ namespace glz
                   if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
-                  dump<'\n'>(b, ix);
+                  dump('\n', b, ix);
                   if constexpr (is_output_streaming<B>) {
                      flush_buffer(b, ix);
                   }
@@ -166,7 +166,7 @@ namespace glz
                if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                   return;
                }
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
             }
          }
          else {
@@ -197,7 +197,7 @@ namespace glz
                      if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                         return;
                      }
-                     dump<','>(b, ix);
+                     dump(',', b, ix);
                      if constexpr (is_output_streaming<B>) {
                         flush_buffer(b, ix);
                      }
@@ -208,7 +208,7 @@ namespace glz
                   if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
-                  dump<'\n'>(b, ix);
+                  dump('\n', b, ix);
                   if constexpr (is_output_streaming<B>) {
                      flush_buffer(b, ix);
                   }
@@ -220,7 +220,7 @@ namespace glz
                if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                   return;
                }
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
             }
          }
       }
@@ -248,13 +248,13 @@ namespace glz
             return;
          }
 
-         dump<'"'>(b, ix);
+         dump('"', b, ix);
 
          // Write the string, escaping quotes by doubling them
          for (const auto c : str) {
             if (c == '"') {
-               dump<'"'>(b, ix);
-               dump<'"'>(b, ix);
+               dump('"', b, ix);
+               dump('"', b, ix);
             }
             else {
                b[ix] = c;
@@ -262,7 +262,7 @@ namespace glz
             }
          }
 
-         dump<'"'>(b, ix);
+         dump('"', b, ix);
       }
       else {
          // No special characters, write as-is
@@ -283,16 +283,16 @@ namespace glz
       }
 
       if (c == ',' || c == '"' || c == '\n' || c == '\r') {
-         dump<'"'>(b, ix);
+         dump('"', b, ix);
          if (c == '"') {
-            dump<'"'>(b, ix);
-            dump<'"'>(b, ix);
+            dump('"', b, ix);
+            dump('"', b, ix);
          }
          else {
             b[ix] = c;
             ++ix;
          }
-         dump<'"'>(b, ix);
+         dump('"', b, ix);
       }
       else {
          b[ix] = c;
@@ -329,7 +329,7 @@ namespace glz
                      return;
                   }
                   dump_maybe_empty(name, b, ix);
-                  dump<','>(b, ix);
+                  dump(',', b, ix);
                }
                const auto n = data.size();
                for (size_t i = 0; i < n; ++i) {
@@ -341,7 +341,7 @@ namespace glz
                      if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                         return;
                      }
-                     dump<','>(b, ix);
+                     dump(',', b, ix);
                      if constexpr (is_output_streaming<B>) {
                         flush_buffer(b, ix);
                      }
@@ -350,7 +350,7 @@ namespace glz
                if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                   return;
                }
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                if constexpr (is_output_streaming<B>) {
                   flush_buffer(b, ix);
                }
@@ -368,7 +368,7 @@ namespace glz
                   dump_maybe_empty(name, b, ix);
                   ++i;
                   if (i < n) {
-                     dump<','>(b, ix);
+                     dump(',', b, ix);
                      if constexpr (is_output_streaming<B>) {
                         flush_buffer(b, ix);
                      }
@@ -377,7 +377,7 @@ namespace glz
                if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                   return;
                }
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                if constexpr (is_output_streaming<B>) {
                   flush_buffer(b, ix);
                }
@@ -402,7 +402,7 @@ namespace glz
                      if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                         return;
                      }
-                     dump<','>(b, ix);
+                     dump(',', b, ix);
                      if constexpr (is_output_streaming<B>) {
                         flush_buffer(b, ix);
                      }
@@ -416,7 +416,7 @@ namespace glz
                if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                   return;
                }
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                if constexpr (is_output_streaming<B>) {
                   flush_buffer(b, ix);
                }
@@ -473,10 +473,10 @@ namespace glz
                            return;
                         }
                         dump<key>(b, ix);
-                        dump<'['>(b, ix);
+                        dump('[', b, ix);
                         write_chars::op<Opts>(i, ctx, b, ix);
-                        dump<']'>(b, ix);
-                        dump<','>(b, ix);
+                        dump(']', b, ix);
+                        dump(',', b, ix);
                      }
 
                      for (size_t j = 0; j < count; ++j) {
@@ -488,7 +488,7 @@ namespace glz
                            if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                               return;
                            }
-                           dump<','>(b, ix);
+                           dump(',', b, ix);
                         }
                      }
 
@@ -496,7 +496,7 @@ namespace glz
                         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                            return;
                         }
-                        dump<'\n'>(b, ix);
+                        dump('\n', b, ix);
                      }
                   }
                }
@@ -506,7 +506,7 @@ namespace glz
                         return;
                      }
                      dump<key>(b, ix);
-                     dump<','>(b, ix);
+                     dump(',', b, ix);
                   }
                   serialize<CSV>::op<Opts>(get_member(value, mem), ctx, b, ix);
                   if (bool(ctx.error)) [[unlikely]] {
@@ -515,7 +515,7 @@ namespace glz
                   if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
-                  dump<'\n'>(b, ix);
+                  dump('\n', b, ix);
                }
             });
          }
@@ -546,11 +546,11 @@ namespace glz
                            return;
                         }
                         dump<key>(b, ix);
-                        dump<'['>(b, ix);
+                        dump('[', b, ix);
                         write_chars::op<Opts>(i, ctx, b, ix);
-                        dump<']'>(b, ix);
+                        dump(']', b, ix);
                         if (i != size - 1) {
-                           dump<','>(b, ix);
+                           dump(',', b, ix);
                         }
                      }
                   }
@@ -562,14 +562,14 @@ namespace glz
                      if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                         return;
                      }
-                     dump<','>(b, ix);
+                     dump(',', b, ix);
                   }
                });
 
                if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                   return;
                }
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
             }
 
             size_t row = 0;
@@ -608,7 +608,7 @@ namespace glz
                            if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                               return;
                            }
-                           dump<','>(b, ix);
+                           dump(',', b, ix);
                         }
                      }
                   }
@@ -628,7 +628,7 @@ namespace glz
                         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                            return;
                         }
-                        dump<','>(b, ix);
+                        dump(',', b, ix);
                      }
                   }
                });
@@ -642,7 +642,7 @@ namespace glz
                if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                   return;
                }
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
             }
          }
       }
@@ -673,7 +673,7 @@ namespace glz
                   if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
-                  dump<','>(b, ix);
+                  dump(',', b, ix);
                }
             });
 
@@ -683,7 +683,7 @@ namespace glz
             if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                return;
             }
-            dump<'\n'>(b, ix);
+            dump('\n', b, ix);
          }
 
          // Write each struct as a row
@@ -710,7 +710,7 @@ namespace glz
                   if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
-                  dump<','>(b, ix);
+                  dump(',', b, ix);
                }
             });
 
@@ -720,7 +720,7 @@ namespace glz
             if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                return;
             }
-            dump<'\n'>(b, ix);
+            dump('\n', b, ix);
          }
       }
    };

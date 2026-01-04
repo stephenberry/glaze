@@ -127,11 +127,11 @@ namespace glz
                return;
             }
             if constexpr (not Opts.raw) {
-               dump<'"'>(b, ix);
+               dump('"', b, ix);
             }
             dump_maybe_empty(str, b, ix);
             if constexpr (not Opts.raw) {
-               dump<'"'>(b, ix);
+               dump('"', b, ix);
             }
          }
          else [[unlikely]] {
@@ -735,7 +735,7 @@ namespace glz
             if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
                return;
             }
-            dump<"[]">(b, ix);
+            dump("[]", b, ix);
          }
          else {
             if constexpr (has_size<T>) {
@@ -796,7 +796,7 @@ namespace glz
                if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
                   return;
                }
-               dump<']'>(b, ix);
+               dump(']', b, ix);
             }
          }
       }
@@ -864,7 +864,7 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         dump<'['>(b, ix);
+         dump('[', b, ix);
          using V = std::decay_t<T>;
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
@@ -892,7 +892,7 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
             return;
          }
-         dump<']'>(b, ix);
+         dump(']', b, ix);
       }
    };
 

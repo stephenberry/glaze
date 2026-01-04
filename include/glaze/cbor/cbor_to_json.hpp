@@ -166,14 +166,14 @@ namespace glz
                   }
                }
                // Write as base64-encoded string
-               dump<'"'>(out, ix);
+               dump('"', out, ix);
                // Simple hex encoding for now (TODO: proper base64)
                for (uint8_t b : bytes) {
                   static constexpr char hex[] = "0123456789abcdef";
                   dump(hex[(b >> 4) & 0xf], out, ix);
                   dump(hex[b & 0xf], out, ix);
                }
-               dump<'"'>(out, ix);
+               dump('"', out, ix);
             }
             else {
                const uint64_t length = cbor_to_json_decode_arg(ctx, it, end, additional_info);
@@ -186,7 +186,7 @@ namespace glz
                }
 
                // Write as hex-encoded string
-               dump<'"'>(out, ix);
+               dump('"', out, ix);
                for (uint64_t i = 0; i < length; ++i) {
                   static constexpr char hex[] = "0123456789abcdef";
                   uint8_t b;
@@ -194,7 +194,7 @@ namespace glz
                   dump(hex[(b >> 4) & 0xf], out, ix);
                   dump(hex[b & 0xf], out, ix);
                }
-               dump<'"'>(out, ix);
+               dump('"', out, ix);
                it += length;
             }
             break;
@@ -259,7 +259,7 @@ namespace glz
          }
 
          case major::array: {
-            dump<'['>(out, ix);
+            dump('[', out, ix);
 
             if (additional_info == info::indefinite) {
                // Indefinite-length array
@@ -278,9 +278,9 @@ namespace glz
                   }
 
                   if (!first) {
-                     dump<','>(out, ix);
+                     dump(',', out, ix);
                      if constexpr (Opts.prettify) {
-                        dump<' '>(out, ix);
+                        dump(' ', out, ix);
                      }
                   }
                   first = false;
@@ -297,9 +297,9 @@ namespace glz
 
                for (uint64_t i = 0; i < count; ++i) {
                   if (i > 0) {
-                     dump<','>(out, ix);
+                     dump(',', out, ix);
                      if constexpr (Opts.prettify) {
-                        dump<' '>(out, ix);
+                        dump(' ', out, ix);
                      }
                   }
                   cbor_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
@@ -308,12 +308,12 @@ namespace glz
                }
             }
 
-            dump<']'>(out, ix);
+            dump(']', out, ix);
             break;
          }
 
          case major::map: {
-            dump<'{'>(out, ix);
+            dump('{', out, ix);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
             }
@@ -335,11 +335,11 @@ namespace glz
                   }
 
                   if (!first) {
-                     dump<','>(out, ix);
+                     dump(',', out, ix);
                   }
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(out, ix);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                     dump('\n', out, ix);
+                     dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                   }
                   first = false;
 
@@ -349,10 +349,10 @@ namespace glz
                      return;
 
                   if constexpr (Opts.prettify) {
-                     dump<": ">(out, ix);
+                     dump(": ", out, ix);
                   }
                   else {
-                     dump<':'>(out, ix);
+                     dump(':', out, ix);
                   }
 
                   // Value
@@ -368,11 +368,11 @@ namespace glz
 
                for (uint64_t i = 0; i < count; ++i) {
                   if (i > 0) {
-                     dump<','>(out, ix);
+                     dump(',', out, ix);
                   }
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(out, ix);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                     dump('\n', out, ix);
+                     dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                   }
 
                   // Key
@@ -381,10 +381,10 @@ namespace glz
                      return;
 
                   if constexpr (Opts.prettify) {
-                     dump<": ">(out, ix);
+                     dump(": ", out, ix);
                   }
                   else {
-                     dump<':'>(out, ix);
+                     dump(':', out, ix);
                   }
 
                   // Value
@@ -397,11 +397,11 @@ namespace glz
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
                if (additional_info != 0 || additional_info == info::indefinite) {
-                  dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dump('\n', out, ix);
+                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                }
             }
-            dump<'}'>(out, ix);
+            dump('}', out, ix);
             break;
          }
 
@@ -447,11 +447,11 @@ namespace glz
                const size_t count = byte_len / ta_info.element_size;
                const bool need_swap = typed_array::needs_byteswap(tag_num);
 
-               dump<'['>(out, ix);
+               dump('[', out, ix);
 
                for (size_t i = 0; i < count; ++i) {
                   if (i > 0) {
-                     dump<','>(out, ix);
+                     dump(',', out, ix);
                   }
 
                   // Read and optionally byteswap the element
@@ -559,7 +559,7 @@ namespace glz
                   it += ta_info.element_size;
                }
 
-               dump<']'>(out, ix);
+               dump(']', out, ix);
             }
             else {
                // Other tags - just output the tagged content
@@ -571,14 +571,14 @@ namespace glz
          case major::simple: {
             switch (additional_info) {
             case simple::false_value:
-               dump<"false">(out, ix);
+               dump("false", out, ix);
                break;
             case simple::true_value:
-               dump<"true">(out, ix);
+               dump("true", out, ix);
                break;
             case simple::null_value:
             case simple::undefined:
-               dump<"null">(out, ix);
+               dump("null", out, ix);
                break;
             case simple::float16: {
                if ((it + 2) > end) [[unlikely]] {

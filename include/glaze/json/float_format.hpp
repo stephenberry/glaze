@@ -57,7 +57,7 @@ namespace glz
          }
 
          if constexpr (Opts.quoted_num) {
-            dump<'"'>(b, ix);
+            dump('"', b, ix);
          }
 
          constexpr auto fmt = std::format_string<V>{std::string_view{Fmt}};
@@ -91,7 +91,7 @@ namespace glz
          }
 
          if constexpr (Opts.quoted_num) {
-            dump<'"'>(b, ix);
+            dump('"', b, ix);
          }
       }
    };

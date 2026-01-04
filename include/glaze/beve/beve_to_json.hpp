@@ -128,14 +128,14 @@ namespace glz
          case tag::null: {
             if (tag & tag::boolean) {
                if (tag >> 4) {
-                  dump<"true">(out, ix);
+                  dump("true", out, ix);
                }
                else {
-                  dump<"false">(out, ix);
+                  dump("false", out, ix);
                }
             }
             else {
-               dump<"null">(out, ix);
+               dump("null", out, ix);
             }
             ++it;
             break;
@@ -164,11 +164,11 @@ namespace glz
          case tag::object: {
             ++it;
 
-            dump<'{'>(out, ix);
+            dump('{', out, ix);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(out, ix);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               dump('\n', out, ix);
+               dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
             }
             else {
                ++ctx.indentation_level;
@@ -195,10 +195,10 @@ namespace glz
                   const sv key{reinterpret_cast<const char*>(it), n};
                   to<JSON, sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
-                     dump<": ">(out, ix);
+                     dump(": ", out, ix);
                   }
                   else {
-                     dump<':'>(out, ix);
+                     dump(':', out, ix);
                   }
                   it += n;
                   beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
@@ -206,10 +206,10 @@ namespace glz
                      return;
                   }
                   if (i != n_fields - 1) {
-                     dump<','>(out, ix);
+                     dump(',', out, ix);
                      if constexpr (Opts.prettify) {
-                        dump<'\n'>(out, ix);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                        dump('\n', out, ix);
+                        dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                      }
                   }
                }
@@ -225,27 +225,27 @@ namespace glz
                }
                for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
-                  dump<'"'>(out, ix);
+                  dump('"', out, ix);
                   beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  dump<'"'>(out, ix);
+                  dump('"', out, ix);
                   if constexpr (Opts.prettify) {
-                     dump<": ">(out, ix);
+                     dump(": ", out, ix);
                   }
                   else {
-                     dump<':'>(out, ix);
+                     dump(':', out, ix);
                   }
                   beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
                   if (i != n_fields - 1) {
-                     dump<','>(out, ix);
+                     dump(',', out, ix);
                      if constexpr (Opts.prettify) {
-                        dump<'\n'>(out, ix);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                        dump('\n', out, ix);
+                        dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                      }
                   }
                }
@@ -259,13 +259,13 @@ namespace glz
 
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(out, ix);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               dump('\n', out, ix);
+               dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
             }
             else {
                --ctx.indentation_level;
             }
-            dump<'}'>(out, ix);
+            dump('}', out, ix);
             break;
          }
          case tag::typed_array: {
@@ -291,12 +291,12 @@ namespace glz
                   to<JSON, T>::template op<Opts>(value, ctx, out, ix);
                   it += sizeof(T);
                   if (i != n - 1) {
-                     dump<','>(out, ix);
+                     dump(',', out, ix);
                   }
                }
             };
 
-            dump<'['>(out, ix);
+            dump('[', out, ix);
 
             switch (value_type) {
             case 0: {
@@ -398,7 +398,7 @@ namespace glz
                      to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
                      it += n;
                      if (i != n_strings - 1) {
-                        dump<','>(out, ix);
+                        dump(',', out, ix);
                      }
                   }
                   break;
@@ -416,7 +416,7 @@ namespace glz
             }
             }
 
-            dump<']'>(out, ix);
+            dump(']', out, ix);
 
             break;
          }
@@ -426,17 +426,17 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            dump<'['>(out, ix);
+            dump('[', out, ix);
             for (size_t i = 0; i < n; ++i) {
                beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
                if (i != n - 1) {
-                  dump<','>(out, ix);
+                  dump(',', out, ix);
                }
             }
-            dump<']'>(out, ix);
+            dump(']', out, ix);
             break;
          }
          case tag::extensions: {
@@ -445,7 +445,7 @@ namespace glz
             case 0: {
                // delimiter
                ++it;
-               dump<'\n'>(out, ix);
+               dump('\n', out, ix);
                break;
             }
             case 1: {
@@ -470,11 +470,11 @@ namespace glz
                const auto matrix_header = uint8_t(*it);
                ++it;
 
-               dump<'{'>(out, ix);
+               dump('{', out, ix);
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
-                  dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dump('\n', out, ix);
+                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                }
                else {
                   ++ctx.indentation_level;
@@ -490,10 +490,10 @@ namespace glz
                const auto layout = matrix_header & 0b0000000'1;
                layout ? dump<R"("layout_right")">(out, ix) : dump<R"("layout_left")">(out, ix);
 
-               dump<','>(out, ix);
+               dump(',', out, ix);
                if constexpr (Opts.prettify) {
-                  dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dump('\n', out, ix);
+                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                }
 
                if constexpr (Opts.prettify) {
@@ -508,10 +508,10 @@ namespace glz
                   return;
                }
 
-               dump<','>(out, ix);
+               dump(',', out, ix);
                if constexpr (Opts.prettify) {
-                  dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dump('\n', out, ix);
+                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                }
 
                if constexpr (Opts.prettify) {
@@ -528,13 +528,13 @@ namespace glz
 
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
-                  dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dump('\n', out, ix);
+                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
                }
                else {
                   --ctx.indentation_level;
                }
-               dump<'}'>(out, ix);
+               dump('}', out, ix);
                break;
             }
             case 3: {
@@ -555,39 +555,39 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  dump<'['>(out, ix);
+                  dump('[', out, ix);
                   for (size_t i = 0; i < n; ++i) {
-                     dump<'['>(out, ix);
+                     dump('[', out, ix);
                      beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
-                     dump<','>(out, ix);
+                     dump(',', out, ix);
                      beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
-                     dump<']'>(out, ix);
+                     dump(']', out, ix);
                      if (i != n - 1) {
-                        dump<','>(out, ix);
+                        dump(',', out, ix);
                      }
                   }
-                  dump<']'>(out, ix);
+                  dump(']', out, ix);
                }
                else {
                   // complex number
                   const auto number_tag = complex_header & 0b111'00000;
-                  dump<'['>(out, ix);
+                  dump('[', out, ix);
                   beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  dump<','>(out, ix);
+                  dump(',', out, ix);
                   beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  dump<']'>(out, ix);
+                  dump(']', out, ix);
                }
 
                break;
