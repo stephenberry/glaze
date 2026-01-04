@@ -163,7 +163,8 @@ namespace glz
    }
 
    template <auto c, class B>
-   [[deprecated("use dumpn_unchecked(c, n, b, ix) instead of dumpn_unchecked<c>(n, b, ix) to reduce template instantiations")]]
+   [[deprecated(
+      "use dumpn_unchecked(c, n, b, ix) instead of dumpn_unchecked<c>(n, b, ix) to reduce template instantiations")]]
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, size_t& ix) noexcept
    {
       std::memset(&b[ix], c, n);
@@ -178,7 +179,9 @@ namespace glz
    }
 
    template <char IndentChar, class B>
-   [[deprecated("use dump_newline_indent(c, n, b, ix) instead of dump_newline_indent<c>(n, b, ix) to reduce template instantiations")]]
+   [[deprecated(
+      "use dump_newline_indent(c, n, b, ix) instead of dump_newline_indent<c>(n, b, ix) to reduce template "
+      "instantiations")]]
    GLZ_ALWAYS_INLINE void dump_newline_indent(size_t n, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if constexpr (vector_like<B>) {
@@ -194,8 +197,8 @@ namespace glz
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void dump_newline_indent(const byte_sized auto c, size_t n, B& b, size_t& ix) noexcept(
-      not vector_like<B>)
+   GLZ_ALWAYS_INLINE void dump_newline_indent(const byte_sized auto c, size_t n, B& b,
+                                              size_t& ix) noexcept(not vector_like<B>)
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
