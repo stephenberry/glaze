@@ -50,6 +50,7 @@ glz::read_json(n, "3.14");   // Tries int (fails), then float (succeeds)
 When using custom types with `glz::custom` read/write functions in variants, Glaze automatically infers the JSON type from your read function's parameter type.
 
 ### How It Works
+
 Glaze examines the second parameter of your `read_fn` lambda. If it's `const double&`, `const std::string&`, `const bool&`, etc., Glaze classifies your type accordingly:
 
 | Read parameter type | JSON type detected | Concept satisfied |
