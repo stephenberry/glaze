@@ -183,7 +183,7 @@ namespace glz
             ++it;
             const auto end = value.end();
             for (; it != end; ++it) {
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                to<JSON, Value>::template op<Opts>(*it, ctx, b, ix);
             }
          }
@@ -216,7 +216,7 @@ namespace glz
             }
             constexpr bool needs_new_line = I < N - 1;
             if constexpr (needs_new_line) {
-               dump<'\n'>(args...);
+               dump('\n', args...);
             }
          });
       }
@@ -248,7 +248,7 @@ namespace glz
             }
             constexpr bool needs_new_line = I < N - 1;
             if constexpr (needs_new_line) {
-               dump<'\n'>(std::forward<Args>(args)...);
+               dump('\n', std::forward<Args>(args)...);
             }
          });
       }

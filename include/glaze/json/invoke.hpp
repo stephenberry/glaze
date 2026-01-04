@@ -100,7 +100,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          using V = std::decay_t<decltype(value.val)>;
-         dump<'['>(args...);
+         dump('[', args...);
          if constexpr (is_specialization_v<V, std::function>) {
             using Ret = typename function_traits<V>::result_type;
 
@@ -114,7 +114,7 @@ namespace glz
                static_assert(false_v<T>, "std::function must have void return");
             }
          }
-         dump<']'>(args...);
+         dump(']', args...);
       }
    };
 
@@ -220,12 +220,12 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          using V = std::decay_t<decltype(value.val)>;
-         dump<'['>(args...);
+         dump('[', args...);
          using Tuple = typename function_traits<V>::arguments;
          Tuple inputs{};
          using Inputs = std::remove_cvref_t<decltype(inputs)>;
          to<JSON, Inputs>::template op<Opts>(inputs, ctx, args...);
-         dump<']'>(args...);
+         dump(']', args...);
       }
    };
 }

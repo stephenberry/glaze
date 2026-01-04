@@ -30,7 +30,7 @@ namespace glz
                break;
             }
             case Comma: {
-               dump<','>(b, ix);
+               dump(',', b, ix);
                ++it;
                if constexpr (Opts.new_lines_in_arrays) {
                   append_new_line<use_tabs, indent_width>(b, ix, indent);
@@ -41,10 +41,10 @@ namespace glz
                   }
                   else {
                      if constexpr (use_tabs) {
-                        dump<'\t'>(b, ix);
+                        dump('\t', b, ix);
                      }
                      else {
-                        dump<' '>(b, ix);
+                        dump(' ', b, ix);
                      }
                   }
                }
@@ -66,7 +66,7 @@ namespace glz
                break;
             }
             case Array_Start: {
-               dump<'['>(b, ix);
+               dump('[', b, ix);
                ++it;
                ++indent;
                if (size_t(indent) >= state.size()) [[unlikely]] {
@@ -102,7 +102,7 @@ namespace glz
                      append_new_line<use_tabs, indent_width>(b, ix, indent);
                   }
                }
-               dump<']'>(b, ix);
+               dump(']', b, ix);
                ++it;
                break;
             }
@@ -124,7 +124,7 @@ namespace glz
                }
             }
             case Object_Start: {
-               dump<'{'>(b, ix);
+               dump('{', b, ix);
                ++it;
                ++indent;
                if (size_t(indent) >= state.size()) [[unlikely]] {
@@ -156,7 +156,7 @@ namespace glz
                if (it[-1] != '{') {
                   append_new_line<use_tabs, indent_width>(b, ix, indent);
                }
-               dump<'}'>(b, ix);
+               dump('}', b, ix);
                ++it;
                break;
             }

@@ -71,7 +71,7 @@ namespace glz
                break;
             }
             case Comma: {
-               dump<',', false>(b, ix);
+               dump<false>(',', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
@@ -83,19 +83,19 @@ namespace glz
                break;
             }
             case Colon: {
-               dump<':', false>(b, ix);
+               dump<false>(':', b, ix);
                ++it;
                skip_whitespace();
                break;
             }
             case Array_Start: {
-               dump<'[', false>(b, ix);
+               dump<false>('[', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Array_End: {
-               dump<']', false>(b, ix);
+               dump<false>(']', b, ix);
                ++it;
                skip_whitespace();
                break;
@@ -121,13 +121,13 @@ namespace glz
                }
             }
             case Object_Start: {
-               dump<'{', false>(b, ix);
+               dump<false>('{', b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Object_End: {
-               dump<'}', false>(b, ix);
+               dump<false>('}', b, ix);
                ++it;
                skip_whitespace();
                break;

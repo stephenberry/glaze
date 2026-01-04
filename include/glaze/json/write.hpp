@@ -119,10 +119,10 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if constexpr (!check_opening_handled(Opts)) {
-            dump<'{'>(b, ix);
+            dump('{', b, ix);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
             }
          }
@@ -206,7 +206,7 @@ namespace glz
          }
 
          if (not bool(ctx.error)) [[likely]] {
-            dump<'}'>(b, ix);
+            dump('}', b, ix);
          }
       }
    };
@@ -221,10 +221,10 @@ namespace glz
       static void op(const Keys& keys, Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          if constexpr (!check_opening_handled(Opts)) {
-            dump<'{'>(b, ix);
+            dump('{', b, ix);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
             }
          }
@@ -289,7 +289,7 @@ namespace glz
                if (!ensure_space(ctx, b, ix + key.size() + 4 + (Opts.prettify ? 1 : 0))) [[unlikely]] {
                   return;
                }
-               dump<'"'>(b, ix);
+               dump('"', b, ix);
                dump(key, b, ix);
                if constexpr (Opts.prettify) {
                   dump("\": ", b, ix);
@@ -315,12 +315,12 @@ namespace glz
 
          if constexpr (Opts.prettify) {
             ctx.indentation_level -= Opts.indentation_width;
-            dump<'\n'>(b, ix);
+            dump('\n', b, ix);
             dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
          }
 
          if (not bool(ctx.error)) [[likely]] {
-            dump<'}'>(b, ix);
+            dump('}', b, ix);
          }
       }
    };
@@ -335,10 +335,10 @@ namespace glz
       static void op(const Keys& exclude_keys, Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          if constexpr (!check_opening_handled(Opts)) {
-            dump<'{'>(b, ix);
+            dump('{', b, ix);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
             }
          }
@@ -415,7 +415,7 @@ namespace glz
                if (!ensure_space(ctx, b, ix + key.size() + 4 + (Opts.prettify ? 1 : 0))) [[unlikely]] {
                   return;
                }
-               dump<'"'>(b, ix);
+               dump('"', b, ix);
                dump<key>(b, ix);
                if constexpr (Opts.prettify) {
                   dump("\": ", b, ix);
@@ -437,12 +437,12 @@ namespace glz
 
          if constexpr (Opts.prettify) {
             ctx.indentation_level -= Opts.indentation_width;
-            dump<'\n'>(b, ix);
+            dump('\n', b, ix);
             dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
          }
 
          if (not bool(ctx.error)) [[likely]] {
-            dump<'}'>(b, ix);
+            dump('}', b, ix);
          }
       }
    };
@@ -602,9 +602,9 @@ namespace glz
       {
          if constexpr (check_write_member_functions(Opts)) {
             constexpr sv type_name = name_v<T>;
-            dump<'"'>(b, ix);
+            dump('"', b, ix);
             dump(type_name, b, ix);
-            dump<'"'>(b, ix);
+            dump('"', b, ix);
          }
       }
    };
@@ -1027,11 +1027,11 @@ namespace glz
             // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
             // TODO: Could create a pre quoted map for better performance
             if constexpr (not Opts.raw) {
-               dump<'"'>(args...);
+               dump('"', args...);
             }
             dump_maybe_empty(str, args...);
             if constexpr (not Opts.raw) {
-               dump<'"'>(args...);
+               dump('"', args...);
             }
          }
          else [[unlikely]] {
@@ -1166,7 +1166,7 @@ namespace glz
          dump(": ", b, ix);
       }
       else {
-         dump<':'>(b, ix);
+         dump(':', b, ix);
       }
 
       using V = core_t<decltype(value)>;
@@ -1362,7 +1362,7 @@ namespace glz
                   dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
                }
 
-               dump<']'>(b, ix);
+               dump(']', b, ix);
             }
          }
       }
@@ -1372,7 +1372,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if constexpr (not check_opening_handled(Opts)) {
-            dump<'{'>(b, ix);
+            dump('{', b, ix);
          }
 
          if (!empty_range(value)) {
@@ -1467,7 +1467,7 @@ namespace glz
          }
 
          if constexpr (!check_closing_handled(Opts)) {
-            dump<'}'>(b, ix);
+            dump('}', b, ix);
          }
       }
    };
@@ -1493,7 +1493,7 @@ namespace glz
             ix += ctx.indentation_level;
          }
          else {
-            dump<'{'>(b, ix);
+            dump('{', b, ix);
          }
 
          write_pair_content<Opts>(key, val, ctx, b, ix);
@@ -1504,10 +1504,10 @@ namespace glz
          if constexpr (Opts.prettify) {
             ctx.indentation_level -= Opts.indentation_width;
             dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
-            dump<'}', false>(b, ix);
+            dump<false>('}', b, ix);
          }
          else {
-            dump<'}'>(b, ix);
+            dump('}', b, ix);
          }
       }
    };
@@ -1625,7 +1625,7 @@ namespace glz
                      dump("{\n", b, ix);
                      ctx.indentation_level += Opts.indentation_width;
                      dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
-                     dump<'"'>(b, ix);
+                     dump('"', b, ix);
                      dump_maybe_empty(tag_v<T>, b, ix);
 
                      using id_type = std::decay_t<decltype(ids_v<T>[value.index()])>;
@@ -1642,7 +1642,7 @@ namespace glz
                         dump("\": \"", b, ix);
                         dump_maybe_empty(ids_v<T>[value.index()], b, ix);
                         if constexpr (N == 0) {
-                           dump<'"'>(b, ix);
+                           dump('"', b, ix);
                         }
                         else {
                            dump("\",\n", b, ix);
@@ -1660,14 +1660,14 @@ namespace glz
                         dump("\":", b, ix);
                         serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
                         if constexpr (N > 0) {
-                           dump<','>(b, ix);
+                           dump(',', b, ix);
                         }
                      }
                      else {
                         dump("\":\"", b, ix);
                         dump_maybe_empty(ids_v<T>[value.index()], b, ix);
                         if constexpr (N == 0) {
-                           dump<'"'>(b, ix);
+                           dump('"', b, ix);
                         }
                         else {
                            dump("\",", b, ix);
@@ -1704,7 +1704,7 @@ namespace glz
                      ++ix;
                   }
                   else {
-                     dump<'}'>(b, ix);
+                     dump('}', b, ix);
                   }
                }
                else {
@@ -1722,12 +1722,12 @@ namespace glz
       static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args)
       {
          auto& value = wrapper.value;
-         dump<'['>(args...);
+         dump('[', args...);
          if constexpr (Opts.prettify) {
             ctx.indentation_level += Opts.indentation_width;
             dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
          }
-         dump<'"'>(args...);
+         dump('"', args...);
          dump_maybe_empty(ids_v<T>[value.index()], args...);
          dump("\",", args...);
          if constexpr (Opts.prettify) {
@@ -1738,7 +1738,7 @@ namespace glz
             ctx.indentation_level -= Opts.indentation_width;
             dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
          }
-         dump<']'>(args...);
+         dump(']', args...);
       }
    };
 
@@ -1752,7 +1752,7 @@ namespace glz
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
 
-         dump<'['>(args...);
+         dump('[', args...);
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (Opts.new_lines_in_arrays) {
                ctx.indentation_level += Opts.indentation_width;
@@ -1777,7 +1777,7 @@ namespace glz
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
          }
-         dump<']'>(args...);
+         dump(']', args...);
       }
    };
 
@@ -1797,7 +1797,7 @@ namespace glz
             }
          }();
 
-         dump<'['>(args...);
+         dump('[', args...);
          if constexpr (N > 0 && Opts.prettify) {
             if constexpr (Opts.new_lines_in_arrays) {
                ctx.indentation_level += Opts.indentation_width;
@@ -1828,7 +1828,7 @@ namespace glz
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
          }
-         dump<']'>(args...);
+         dump(']', args...);
       }
    };
 
@@ -1859,10 +1859,10 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if constexpr (!check_opening_handled(Options)) {
-            dump<'{'>(b, ix);
+            dump('{', b, ix);
             if constexpr (Options.prettify) {
                ctx.indentation_level += Options.indentation_width;
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
             }
          }
@@ -1900,13 +1900,13 @@ namespace glz
                if constexpr (str_t<Key> || char_t<Key>) {
                   const sv key = glz::get<2 * I>(value.value);
                   to<JSON, decltype(key)>::template op<Opts>(key, ctx, b, ix);
-                  dump<':'>(b, ix);
+                  dump(':', b, ix);
                   if constexpr (Opts.prettify) {
-                     dump<' '>(b, ix);
+                     dump(' ', b, ix);
                   }
                }
                else {
-                  dump<'"'>(b, ix);
+                  dump('"', b, ix);
                   to<JSON, val_t>::template op<Opts>(item, ctx, b, ix);
                   dump_not_empty(Opts.prettify ? "\": " : "\":", b, ix);
                }
@@ -1918,10 +1918,10 @@ namespace glz
          if constexpr (!check_closing_handled(Options)) {
             if constexpr (Options.prettify) {
                ctx.indentation_level -= Options.indentation_width;
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
             }
-            dump<'}'>(b, ix);
+            dump('}', b, ix);
          }
       }
    };
@@ -1934,10 +1934,10 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if constexpr (!check_opening_handled(Options)) {
-            dump<'{'>(b, ix);
+            dump('{', b, ix);
             if constexpr (Options.prettify) {
                ctx.indentation_level += Options.indentation_width;
-               dump<'\n'>(b, ix);
+               dump('\n', b, ix);
                dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
             }
          }
@@ -1957,7 +1957,7 @@ namespace glz
             to<JSON, Value>::template op<Opts>(get<I>(value.value), ctx, b, ix);
             if (ix > ix_start) // we wrote something
             {
-               dump<','>(b, ix);
+               dump(',', b, ix);
             }
          });
 
@@ -1968,10 +1968,10 @@ namespace glz
 
          if constexpr (Options.prettify) {
             ctx.indentation_level -= Options.indentation_width;
-            dump<'\n'>(b, ix);
+            dump('\n', b, ix);
             dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
          }
-         dump<'}'>(b, ix);
+         dump('}', b, ix);
       }
    };
 
@@ -2059,7 +2059,7 @@ namespace glz
                   if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
                      return;
                   }
-                  dump<'{'>(b, ix);
+                  dump('{', b, ix);
                }
             }
 
@@ -2272,7 +2272,7 @@ namespace glz
                   ++ix;
                }
                else {
-                  dump<'}'>(b, ix);
+                  dump('}', b, ix);
                }
             }
          }

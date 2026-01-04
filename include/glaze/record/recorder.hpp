@@ -71,11 +71,11 @@ namespace glz
       template <auto Opts, class... Args>
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
-         dump<'{'>(std::forward<Args>(args)...);
+         dump('{', std::forward<Args>(args)...);
 
          if constexpr (Opts.prettify) {
             ctx.indentation_level += Opts.indentation_width;
-            dump<'\n'>(args...);
+            dump('\n', args...);
             dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
          }
 
@@ -84,28 +84,28 @@ namespace glz
             auto& [name, v] = value.data[i];
             serialize<JSON>::op<Opts>(name, ctx, args...); // write name as key
 
-            dump<':'>(args...);
+            dump(':', args...);
             if constexpr (Opts.prettify) {
-               dump<' '>(args...);
+               dump(' ', args...);
             }
 
             serialize<JSON>::op<Opts>(v.first, ctx, args...); // write deque
             if (i < n - 1) {
-               dump<','>(std::forward<Args>(args)...);
+               dump(',', std::forward<Args>(args)...);
             }
 
             if constexpr (Opts.prettify) {
-               dump<'\n'>(args...);
+               dump('\n', args...);
                dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
          }
 
          if constexpr (Opts.prettify) {
             ctx.indentation_level -= Opts.indentation_width;
-            dump<'\n'>(args...);
+            dump('\n', args...);
             dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
          }
-         dump<'}'>(args...);
+         dump('}', args...);
       }
    };
 
@@ -197,7 +197,7 @@ namespace glz
                auto& [name, v] = value.data[i];
                dump_maybe_empty(name, args...);
 
-               dump<','>(args...);
+               dump(',', args...);
 
                std::visit(
                   [&](auto& x) {
@@ -206,7 +206,7 @@ namespace glz
                   v.first);
 
                if (i < n - 1) {
-                  dump<'\n'>(args...);
+                  dump('\n', args...);
                }
             }
          }
@@ -218,11 +218,11 @@ namespace glz
                dump_maybe_empty(name, args...);
                ++i;
                if (i < n) {
-                  dump<','>(args...);
+                  dump(',', args...);
                }
             }
 
-            dump<'\n'>(args...);
+            dump('\n', args...);
 
             size_t row = 0;
             bool end = false;
@@ -247,7 +247,7 @@ namespace glz
 
                   ++i;
                   if (i < n) {
-                     dump<','>(args...);
+                     dump(',', args...);
                   }
                }
 
@@ -255,7 +255,7 @@ namespace glz
                   break;
                }
 
-               dump<'\n'>(args...);
+               dump('\n', args...);
 
                ++row;
             }
