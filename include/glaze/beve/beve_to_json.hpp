@@ -128,14 +128,14 @@ namespace glz
          case tag::null: {
             if (tag & tag::boolean) {
                if (tag >> 4) {
-                  dump<"true">(out, ix);
+                  dump("true", out, ix);
                }
                else {
-                  dump<"false">(out, ix);
+                  dump("false", out, ix);
                }
             }
             else {
-               dump<"null">(out, ix);
+               dump("null", out, ix);
             }
             ++it;
             break;
@@ -195,7 +195,7 @@ namespace glz
                   const sv key{reinterpret_cast<const char*>(it), n};
                   to<JSON, sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
-                     dump<": ">(out, ix);
+                     dump(": ", out, ix);
                   }
                   else {
                      dump<':'>(out, ix);
@@ -232,7 +232,7 @@ namespace glz
                   }
                   dump<'"'>(out, ix);
                   if constexpr (Opts.prettify) {
-                     dump<": ">(out, ix);
+                     dump(": ", out, ix);
                   }
                   else {
                      dump<':'>(out, ix);

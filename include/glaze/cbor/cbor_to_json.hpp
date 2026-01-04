@@ -349,7 +349,7 @@ namespace glz
                      return;
 
                   if constexpr (Opts.prettify) {
-                     dump<": ">(out, ix);
+                     dump(": ", out, ix);
                   }
                   else {
                      dump<':'>(out, ix);
@@ -381,7 +381,7 @@ namespace glz
                      return;
 
                   if constexpr (Opts.prettify) {
-                     dump<": ">(out, ix);
+                     dump(": ", out, ix);
                   }
                   else {
                      dump<':'>(out, ix);
@@ -571,14 +571,14 @@ namespace glz
          case major::simple: {
             switch (additional_info) {
             case simple::false_value:
-               dump<"false">(out, ix);
+               dump("false", out, ix);
                break;
             case simple::true_value:
-               dump<"true">(out, ix);
+               dump("true", out, ix);
                break;
             case simple::null_value:
             case simple::undefined:
-               dump<"null">(out, ix);
+               dump("null", out, ix);
                break;
             case simple::float16: {
                if ((it + 2) > end) [[unlikely]] {

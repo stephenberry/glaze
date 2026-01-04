@@ -292,10 +292,10 @@ namespace glz
                dump<'"'>(b, ix);
                dump(key, b, ix);
                if constexpr (Opts.prettify) {
-                  dump<"\": ">(b, ix);
+                  dump("\": ", b, ix);
                }
                else {
-                  dump<"\":">(b, ix);
+                  dump("\":", b, ix);
                }
 
                // Use visit to dispatch to correct member and serialize value
@@ -418,10 +418,10 @@ namespace glz
                dump<'"'>(b, ix);
                dump<key>(b, ix);
                if constexpr (Opts.prettify) {
-                  dump<"\": ">(b, ix);
+                  dump("\": ", b, ix);
                }
                else {
-                  dump<"\":">(b, ix);
+                  dump("\":", b, ix);
                }
 
                // Serialize the value
@@ -1163,7 +1163,7 @@ namespace glz
          return;
       }
       if constexpr (Opts.prettify) {
-         dump<": ">(b, ix);
+         dump(": ", b, ix);
       }
       else {
          dump<':'>(b, ix);
@@ -1188,7 +1188,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (empty_range(value)) {
-            dump<"[]">(b, ix);
+            dump("[]", b, ix);
          }
          else {
             // For bounded buffers, skip pre-allocation path since value_padding is for SIMD, not actual size
@@ -1480,7 +1480,7 @@ namespace glz
       {
          const auto& [key, val] = value;
          if (skip_member<Opts>(val)) {
-            return dump<"{}">(b, ix);
+            return dump("{}", b, ix);
          }
 
          if constexpr (Opts.prettify) {
@@ -1488,7 +1488,7 @@ namespace glz
             if (!ensure_space(ctx, b, ix + ctx.indentation_level + 2)) [[unlikely]] {
                return;
             }
-            dump<"{\n", false>(b, ix);
+            dump<false>("{\n", b, ix);
             std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
             ix += ctx.indentation_level;
          }
@@ -1554,7 +1554,7 @@ namespace glz
             }
          }
          else {
-            dump<"null", not check_write_unchecked(Opts)>(b, ix);
+            dump<not check_write_unchecked(Opts)>("null", b, ix);
          }
       }
    };
@@ -1570,7 +1570,7 @@ namespace glz
             serialize<JSON>::op<Opts>(value.value(), ctx, b, ix);
          }
          else {
-            dump<"null">(b, ix);
+            dump("null", b, ix);
          }
       }
    };
@@ -1622,7 +1622,7 @@ namespace glz
 
                   // must first write out type
                   if constexpr (Opts.prettify) {
-                     dump<"{\n">(b, ix);
+                     dump("{\n", b, ix);
                      ctx.indentation_level += Opts.indentation_width;
                      dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                      dump<'"'>(b, ix);
@@ -1631,21 +1631,21 @@ namespace glz
                      using id_type = std::decay_t<decltype(ids_v<T>[value.index()])>;
 
                      if constexpr (std::integral<id_type>) {
-                        dump<"\": ">(b, ix);
+                        dump("\": ", b, ix);
                         serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
                         if constexpr (N > 0) {
-                           dump<",\n">(b, ix);
+                           dump(",\n", b, ix);
                            dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                         }
                      }
                      else {
-                        dump<"\": \"">(b, ix);
+                        dump("\": \"", b, ix);
                         dump_maybe_empty(ids_v<T>[value.index()], b, ix);
                         if constexpr (N == 0) {
                            dump<'"'>(b, ix);
                         }
                         else {
-                           dump<"\",\n">(b, ix);
+                           dump("\",\n", b, ix);
                            dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                         }
                      }
@@ -1653,24 +1653,24 @@ namespace glz
                   else {
                      using id_type = std::decay_t<decltype(ids_v<T>[value.index()])>;
 
-                     dump<"{\"">(b, ix);
+                     dump("{\"", b, ix);
                      dump_maybe_empty(tag_v<T>, b, ix);
 
                      if constexpr (std::integral<id_type>) {
-                        dump<"\":">(b, ix);
+                        dump("\":", b, ix);
                         serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
                         if constexpr (N > 0) {
-                           dump<R"(,)">(b, ix);
+                           dump<','>(b, ix);
                         }
                      }
                      else {
-                        dump<"\":\"">(b, ix);
+                        dump("\":\"", b, ix);
                         dump_maybe_empty(ids_v<T>[value.index()], b, ix);
                         if constexpr (N == 0) {
-                           dump<R"(")">(b, ix);
+                           dump<'"'>(b, ix);
                         }
                         else {
-                           dump<R"(",)">(b, ix);
+                           dump("\",", b, ix);
                         }
                      }
                   }
@@ -1729,7 +1729,7 @@ namespace glz
          }
          dump<'"'>(args...);
          dump_maybe_empty(ids_v<T>[value.index()], args...);
-         dump<"\",">(args...);
+         dump("\",", args...);
          if constexpr (Opts.prettify) {
             dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
          }

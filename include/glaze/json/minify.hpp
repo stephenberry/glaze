@@ -101,20 +101,20 @@ namespace glz
                break;
             }
             case Null: {
-               dump<"null", false>(b, ix);
+               dump<false>("null", b, ix);
                it += 4;
                skip_whitespace();
                break;
             }
             case Bool: {
                if (*it == 't') {
-                  dump<"true", false>(b, ix);
+                  dump<false>("true", b, ix);
                   it += 4;
                   skip_whitespace();
                   break;
                }
                else {
-                  dump<"false", false>(b, ix);
+                  dump<false>("false", b, ix);
                   it += 5;
                   skip_whitespace();
                   break;

@@ -735,7 +735,7 @@ namespace glz
             if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
                return;
             }
-            dump<"[]">(b, ix);
+            dump("[]", b, ix);
          }
          else {
             if constexpr (has_size<T>) {
