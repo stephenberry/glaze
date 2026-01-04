@@ -2015,8 +2015,14 @@ namespace glz
    //      if (!result) break;
    //      offset += *result;  // correctly advances past delimiter + value
    //   }
+   //
+   // Overload with context for runtime options (e.g., max_string_length, max_array_size):
+   //   my_context ctx{};
+   //   ctx.max_string_length = 1024;
+   //   auto result = glz::read_beve_at<glz::opts{}>(value, buffer, offset, ctx);
    template <auto Opts = opts{}, read_supported<BEVE> T, class Buffer>
-   [[nodiscard]] glz::expected<size_t, error_ctx> read_beve_at(T& value, Buffer&& buffer, size_t offset = 0)
+   [[nodiscard]] glz::expected<size_t, error_ctx> read_beve_at(T& value, Buffer&& buffer, size_t offset,
+                                                               is_context auto&& ctx)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
@@ -2024,7 +2030,6 @@ namespace glz
          return glz::unexpected(error_ctx{0, error_code::unexpected_end});
       }
 
-      context ctx{};
       auto it = reinterpret_cast<const char*>(buffer.data()) + offset;
       auto end = reinterpret_cast<const char*>(buffer.data()) + buffer.size();
       auto start = it;
@@ -2043,5 +2048,12 @@ namespace glz
       }
 
       return size_t(it - start); // total bytes consumed from offset (delimiter + value)
+   }
+
+   template <auto Opts = opts{}, read_supported<BEVE> T, class Buffer>
+   [[nodiscard]] glz::expected<size_t, error_ctx> read_beve_at(T& value, Buffer&& buffer, size_t offset = 0)
+   {
+      context ctx{};
+      return read_beve_at<Opts>(value, std::forward<Buffer>(buffer), offset, ctx);
    }
 }
