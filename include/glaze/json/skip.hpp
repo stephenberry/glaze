@@ -34,7 +34,7 @@ namespace glz
       }
       else {
          if constexpr (not Opts.null_terminated) {
-            ++ctx.indentation_level;
+            ++ctx.depth;
          }
          ++it;
          if constexpr (not Opts.null_terminated) {
@@ -48,7 +48,7 @@ namespace glz
          }
          if (*it == '}') {
             if constexpr (not Opts.null_terminated) {
-               --ctx.indentation_level;
+               --ctx.depth;
             }
             ++it;
             if constexpr (not Opts.null_terminated) {
@@ -96,7 +96,7 @@ namespace glz
          }
          match<'}'>(ctx, it);
          if constexpr (not Opts.null_terminated) {
-            --ctx.indentation_level;
+            --ctx.depth;
          }
          if constexpr (not Opts.null_terminated) {
             if (it == end) {
@@ -123,7 +123,7 @@ namespace glz
       }
       else {
          if constexpr (not Opts.null_terminated) {
-            ++ctx.indentation_level;
+            ++ctx.depth;
          }
          ++it;
          if constexpr (not Opts.null_terminated) {
@@ -137,7 +137,7 @@ namespace glz
          }
          if (*it == ']') {
             if constexpr (not Opts.null_terminated) {
-               --ctx.indentation_level;
+               --ctx.depth;
             }
             ++it;
             if constexpr (not Opts.null_terminated) {
@@ -169,7 +169,7 @@ namespace glz
          }
          match<']'>(ctx, it);
          if constexpr (not Opts.null_terminated) {
-            --ctx.indentation_level;
+            --ctx.depth;
          }
          if constexpr (not Opts.null_terminated) {
             if (it == end) {

@@ -36,7 +36,7 @@ namespace glz
 // is_context concept:
 // - Changed from exact type match to structural concept
 // - Old: std::same_as<std::decay_t<T>, context>
-// - New: Checks for 'error' and 'indentation_level' members
+// - New: Checks for 'error' and 'depth' members
 //
 // Return types:
 // - Raw buffer writes (write_json(value, char*)) now return error_ctx
