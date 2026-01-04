@@ -25,10 +25,14 @@ namespace glz
    template <uint64_t i>
    [[nodiscard]] consteval size_t compressed_int_size() noexcept
    {
-      if constexpr (i < 64) return 1;
-      else if constexpr (i < 16384) return 2;
-      else if constexpr (i < 1073741824) return 4;
-      else return 8;
+      if constexpr (i < 64)
+         return 1;
+      else if constexpr (i < 16384)
+         return 2;
+      else if constexpr (i < 1073741824)
+         return 4;
+      else
+         return 8;
    }
 
    // Forward declaration for the size calculation template
@@ -551,7 +555,8 @@ namespace glz
                   result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(t)));
                }
                else {
-                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)));
+                  result +=
+                     calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)));
                }
             }
          });
@@ -791,7 +796,7 @@ namespace glz
    template <auto Opts = opts{}, class T>
    [[nodiscard]] size_t beve_size_untagged(T&& value)
    {
-      return calculate_size<BEVE, std::remove_cvref_t<T>>::template op<opt_true<set_beve<Opts>(), &opts::structs_as_arrays>>(
-         std::forward<T>(value));
+      return calculate_size<BEVE, std::remove_cvref_t<T>>::template op<
+         opt_true<set_beve<Opts>(), &opts::structs_as_arrays>>(std::forward<T>(value));
    }
 }

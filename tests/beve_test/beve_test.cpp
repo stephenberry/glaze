@@ -4680,8 +4680,8 @@ suite beve_size_tests = [] {
          std::string s(len, 'x');
          const size_t predicted = glz::beve_size(s);
          auto buffer = glz::write_beve(s).value();
-         expect(predicted == buffer.size()) << "Length " << len << ": Predicted " << predicted << ", Actual "
-                                            << buffer.size();
+         expect(predicted == buffer.size())
+            << "Length " << len << ": Predicted " << predicted << ", Actual " << buffer.size();
       };
 
       // Test compressed int boundaries
@@ -4871,8 +4871,8 @@ suite beve_size_tests = [] {
    "beve_size deeply nested containers"_test = [] {
       // Test with deeply nested container structures
       std::map<std::string, std::vector<std::map<std::string, std::vector<int>>>> deeply_nested;
-      deeply_nested["level1"] = {
-         {{"a", {1, 2, 3}}, {"b", {4, 5}}}, {{"c", {6, 7, 8, 9}}, {"d", {10}}, {"e", {11, 12}}}};
+      deeply_nested["level1"] = {{{"a", {1, 2, 3}}, {"b", {4, 5}}},
+                                 {{"c", {6, 7, 8, 9}}, {"d", {10}}, {"e", {11, 12}}}};
 
       const size_t predicted = glz::beve_size(deeply_nested);
       auto buffer = glz::write_beve(deeply_nested).value();
@@ -5052,8 +5052,8 @@ suite beve_size_tests = [] {
       std::vector<std::pair<std::string, int>> vec{{"a", 1}, {"b", 2}, {"c", 3}};
 
       // Calculate size with concatenate option
-      const size_t predicted = glz::calculate_size<glz::BEVE, std::remove_cvref_t<decltype(vec)>>::template op<
-         beve_concat>(vec);
+      const size_t predicted =
+         glz::calculate_size<glz::BEVE, std::remove_cvref_t<decltype(vec)>>::template op<beve_concat>(vec);
       std::string buffer;
       expect(not glz::write<beve_concat>(vec, buffer));
       expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
@@ -5126,8 +5126,8 @@ suite beve_size_tests = [] {
 
       const size_t predicted2 = glz::beve_size(obj);
       auto buffer2 = glz::write_beve(obj).value();
-      expect(predicted2 == buffer2.size()) << "With values - Predicted: " << predicted2 << ", Actual "
-                                           << buffer2.size();
+      expect(predicted2 == buffer2.size())
+         << "With values - Predicted: " << predicted2 << ", Actual " << buffer2.size();
    };
 };
 
