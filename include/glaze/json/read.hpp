@@ -36,6 +36,68 @@ namespace glz
    template <class T>
    struct quoted_t;
 
+   // ============================================================================
+   // Auto-inference of JSON type from custom read/write functions
+   // ============================================================================
+   // These concepts allow automatic variant type deduction for types with
+   // glz::custom read/write functions by inspecting the input parameter type.
+
+   namespace detail
+   {
+      // Helper to check if invoking meta<T>::value with T& returns a custom_t
+      template <class T, class = void>
+      struct has_custom_meta_impl : std::false_type
+      {};
+
+      template <class T>
+      struct has_custom_meta_impl<T, std::void_t<decltype(glz::meta<T>::value(std::declval<T&>()))>>
+      {
+         using result_type = decltype(glz::meta<T>::value(std::declval<T&>()));
+         static constexpr bool value = is_specialization_v<result_type, custom_t>;
+      };
+
+      template <class T>
+      constexpr bool has_custom_meta_v = has_custom_meta_impl<T>::value;
+
+      // Extract the input type from a custom read function using struct-based approach
+      template <class T, class = void>
+      struct custom_read_input_type_impl
+      {
+         using type = void;
+      };
+
+      template <class T>
+      struct custom_read_input_type_impl<
+         T,
+         std::enable_if_t<has_custom_meta_v<T> &&
+                          is_invocable_concrete<typename decltype(glz::meta<T>::value(std::declval<T&>()))::from_t> &&
+                          (glz::tuple_size_v<invocable_args_t<
+                              typename decltype(glz::meta<T>::value(std::declval<T&>()))::from_t>> >= 2)>>
+      {
+         using CustomT = decltype(glz::meta<T>::value(std::declval<T&>()));
+         using From = typename CustomT::from_t;
+         using Args = invocable_args_t<From>;
+         using type = std::decay_t<glz::tuple_element_t<1, Args>>;
+      };
+
+      template <class T>
+      using custom_read_input_t = typename custom_read_input_type_impl<T>::type;
+   } // namespace detail
+
+   // Concept: type has custom read that takes a numeric input
+   template <class T>
+   concept custom_num_t = detail::has_custom_meta_v<T> && num_t<detail::custom_read_input_t<T>>;
+
+   // Concept: type has custom read that takes a string input
+   template <class T>
+   concept custom_str_t = detail::has_custom_meta_v<T> && str_t<detail::custom_read_input_t<T>>;
+
+   // Concept: type has custom read that takes a bool input
+   template <class T>
+   concept custom_bool_t = detail::has_custom_meta_v<T> && bool_t<detail::custom_read_input_t<T>>;
+
+   // ============================================================================
+
    template <>
    struct parse<JSON>
    {
@@ -3235,7 +3297,7 @@ namespace glz
                   }
                   else {
                      Key key_value{};
-                     if constexpr (glaze_enum_t<Key> || mimics_str_t<Key>) {
+                     if constexpr (glaze_enum_t<Key> || custom_str_t<Key>) {
                         parse<JSON>::op<Opts>(key_value, ctx, it, end);
                      }
                      else if constexpr (std::is_arithmetic_v<Key>) {
@@ -3296,14 +3358,15 @@ namespace glz
       // Contains at most one each of the basic json types bool, numeric, string, object, array
       // If all objects are meta-objects then we can attempt to deduce them as well either through a type tag or
       // unique combinations of keys
+      // Also considers custom types with inferable input types from their read functions
       int bools{}, numbers{}, strings{}, objects{}, meta_objects{}, arrays{};
       constexpr auto N = std::variant_size_v<T>;
       for_each<N>([&]<auto I>() {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          // ICE workaround
-         bools += bool_t<V>;
-         numbers += num_t<V>;
-         strings += str_t<V>;
+         bools += bool_t<V> || custom_bool_t<V>;
+         numbers += num_t<V> || custom_num_t<V>;
+         strings += str_t<V> || custom_str_t<V>;
          strings += glaze_enum_t<V>;
          objects += pair_t<V>;
          objects += (writable_map_t<V> || readable_map_t<V> || is_memory_object<V>);
@@ -3319,19 +3382,28 @@ namespace glz
    template <class>
    struct variant_types;
 
+   // Helper to check if type should be classified as boolean for variant deduction
+   template <class T>
+   concept variant_bool_type = bool_t<remove_meta_wrapper_t<T>> || custom_bool_t<T>;
+
+   // Helper to check if type should be classified as number for variant deduction
+   template <class T>
+   concept variant_num_type = num_t<remove_meta_wrapper_t<T>> || custom_num_t<T>;
+
+   // Helper to check if type should be classified as string for variant deduction
+   template <class T>
+   concept variant_str_type =
+      str_t<remove_meta_wrapper_t<T>> || glaze_enum_t<remove_meta_wrapper_t<T>> || glaze_enum_t<T> || custom_str_t<T>;
+
    template <class... Ts>
    struct variant_types<std::variant<Ts...>>
    {
       // TODO: this way of filtering types is compile time intensive.
-      using bool_types =
-         decltype(tuplet::tuple_cat(std::conditional_t<bool_t<remove_meta_wrapper_t<Ts>>, tuple<Ts>, tuple<>>{}...));
+      // Custom types with inferable read function input types are included in the appropriate type lists
+      using bool_types = decltype(tuplet::tuple_cat(std::conditional_t<variant_bool_type<Ts>, tuple<Ts>, tuple<>>{}...));
       using number_types =
-         decltype(tuplet::tuple_cat(std::conditional_t<num_t<remove_meta_wrapper_t<Ts>>, tuple<Ts>, tuple<>>{}...));
-      using string_types = decltype(tuplet::tuple_cat( // glaze_enum_t remove_meta_wrapper_t supports constexpr
-                                                       // types while the other supports non const
-         std::conditional_t < str_t<remove_meta_wrapper_t<Ts>> || glaze_enum_t<remove_meta_wrapper_t<Ts>> ||
-            glaze_enum_t<Ts>,
-         tuple<Ts>, tuple < >> {}...));
+         decltype(tuplet::tuple_cat(std::conditional_t<variant_num_type<Ts>, tuple<Ts>, tuple<>>{}...));
+      using string_types = decltype(tuplet::tuple_cat(std::conditional_t<variant_str_type<Ts>, tuple<Ts>, tuple<>>{}...));
       using object_types = decltype(tuplet::tuple_cat(std::conditional_t<json_object<Ts>, tuple<Ts>, tuple<>>{}...));
       using array_types = decltype(tuplet::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> ||
                                                         glaze_array_t<Ts> || tuple_t<Ts> || is_std_tuple<Ts>,

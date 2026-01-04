@@ -45,6 +45,125 @@ glz::read_json(n, "42");     // Tries int first, succeeds
 glz::read_json(n, "3.14");   // Tries int (fails), then float (succeeds)
 ```
 
+## Custom Types in Variants
+
+When using custom types with `glz::custom` read/write functions in variants, Glaze automatically infers the JSON type from your read function's parameter type.
+
+### How It Works
+Glaze examines the second parameter of your `read_fn` lambda. If it's `const double&`, `const std::string&`, `const bool&`, etc., Glaze classifies your type accordingly:
+
+| Read parameter type | JSON type detected | Concept satisfied |
+|--------------------|-------------------|-------------------|
+| `double`, `int`, etc. | number | `custom_num_t<T>` |
+| `std::string`, `std::string_view` | string | `custom_str_t<T>` |
+| `bool` | boolean | `custom_bool_t<T>` |
+
+### Example: Strong Typedefs
+
+Consider a strong typedef pattern where you want to distinguish between different kinds of doubles:
+
+```c++
+struct Percentage {
+   double value{};
+};
+
+template <>
+struct glz::meta<Percentage> {
+   // Glaze automatically detects that read_fn takes a double,
+   // so Percentage behaves like a number in variants
+   static constexpr auto read_fn = [](Percentage& p, const double& input) {
+      p.value = input;
+   };
+   static constexpr auto write_fn = [](const Percentage& p) -> const double& {
+      return p.value;
+   };
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
+};
+
+// Works automatically - no additional declarations needed!
+using MyVariant = std::variant<std::string, Percentage>;
+
+MyVariant v;
+glz::read_json(v, "1.5");      // → Percentage{1.5}
+glz::read_json(v, "\"hello\""); // → std::string{"hello"}
+```
+
+### Complete Example: Transaction with Amount
+
+```c++
+#include "glaze/glaze.hpp"
+
+// Strong typedef for monetary amounts
+struct Amount {
+   double value{};
+
+   constexpr Amount() = default;
+   constexpr Amount(double v) : value(v) {}
+};
+
+template <>
+struct glz::meta<Amount> {
+   static constexpr auto read_fn = [](Amount& a, const double& input) {
+      a.value = input;
+   };
+   static constexpr auto write_fn = [](const Amount& a) -> const double& {
+      return a.value;
+   };
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
+};
+
+// Use in a struct with variant
+struct Transaction {
+   std::string description;
+   std::variant<std::string, Amount> value;  // Either a string note or an amount
+};
+
+void example() {
+   Transaction t1;
+   glz::read_json(t1, R"({"description":"Payment","value":99.99})");
+   // t1.value holds Amount{99.99}
+
+   Transaction t2;
+   glz::read_json(t2, R"({"description":"Note","value":"Pending approval"})");
+   // t2.value holds std::string{"Pending approval"}
+}
+```
+
+### Schema Generation
+
+Auto-inference also ensures correct JSON schema generation. Custom types show their inferred JSON type in the schema:
+
+```json
+{
+   "oneOf": [
+      {"type": ["string"]},
+      {"type": ["number"], "minimum": -1.79e308, "maximum": 1.79e308}
+   ]
+}
+```
+
+### Checking Type Inference at Compile Time
+
+Glaze provides concepts to check type classifications:
+
+```c++
+static_assert(glz::custom_num_t<Percentage>);   // Custom type reads as number
+static_assert(glz::custom_str_t<StrongString>); // Custom type reads as string
+static_assert(glz::custom_bool_t<Enabled>);     // Custom type reads as boolean
+```
+
+### Important Notes
+
+1. **Use concrete types**: Your read function must use concrete parameter types (not `auto`) for auto-inference to work.
+
+2. **Default constructible**: Types used in variants should have a default constructor (non-explicit) for proper variant initialization during parsing.
+
+3. **One type per category**: A type can only represent one JSON type. Choose the type that best represents how your custom type serializes.
+
+4. **Multiple custom types**: If you have multiple custom types that all represent `double` in the same variant, Glaze will try them in order (like any other multiple-same-type scenario).
+
+5. **Combine with tags**: For variants with multiple custom types of the same JSON category, consider using [tagged variants](#deduction-of-tagged-object-types) for explicit type control.
+
 ## Object Types
 
 Glaze provides multiple strategies for deducing which variant type to use when reading JSON objects:

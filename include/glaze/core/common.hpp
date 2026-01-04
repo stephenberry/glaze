@@ -250,12 +250,6 @@ namespace glz
    template <class T>
    concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
 
-   // Concept: does T's mimic type satisfy str_t?
-   // This allows checking if a custom type mimics string behavior.
-   // Prevents double-quoting when used as a map key.
-   template <class T>
-   concept mimics_str_t = has_mimic<T> && str_t<mimic_type<T>>;
-
    template <class T>
    concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> &&
                             map_subscriptable<std::decay_t<T>>;

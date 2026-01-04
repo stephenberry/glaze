@@ -6560,41 +6560,43 @@ suite arbitrary_key_maps = [] {
 
 // Test for issue #1477: Double quoted keys for custom struct json write
 // When a custom type with custom serialization is used as a map key,
-// the mimics<T, std::string> concept prevents double-quoting
-struct mimics_string_key
+// the custom_str_t concept prevents double-quoting
+struct custom_string_key
 {
    std::string value{};
 
-   [[nodiscard]] std::strong_ordering operator<=>(const mimics_string_key&) const noexcept = default;
+   [[nodiscard]] std::strong_ordering operator<=>(const custom_string_key&) const noexcept = default;
 };
 
 template <>
-struct glz::meta<mimics_string_key>
+struct glz::meta<custom_string_key>
 {
-   using mimic = std::string;
-   static constexpr auto value = &mimics_string_key::value;
+   // Use glz::custom so that custom_str_t is satisfied via auto-inference
+   static constexpr auto read_fn = [](custom_string_key& k, const std::string& input) { k.value = input; };
+   static constexpr auto write_fn = [](const custom_string_key& k) -> const std::string& { return k.value; };
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
 };
 
-// Struct for testing mimics in nested context
-struct mimics_string_nested_struct
+// Struct for testing custom string keys in nested context
+struct custom_string_nested_struct
 {
-   std::map<mimics_string_key, bool> data;
+   std::map<custom_string_key, bool> data;
 
-   bool operator==(const mimics_string_nested_struct&) const = default;
+   bool operator==(const custom_string_nested_struct&) const = default;
 };
 
-suite mimics_string_key_tests = [] {
-   "mimics<T, std::string> key write"_test = [] {
-      std::map<mimics_string_key, int> m{{{"hello"}, 42}, {{"world"}, 99}};
+suite custom_string_key_tests = [] {
+   "custom_str_t key write"_test = [] {
+      std::map<custom_string_key, int> m{{{"hello"}, 42}, {{"world"}, 99}};
 
       std::string buffer{};
       expect(not glz::write_json(m, buffer));
-      // With using mimic = std::string, the key should be "hello" not "\"hello\""
+      // With custom_str_t, the key should be "hello" not "\"hello\""
       expect(buffer == R"({"hello":42,"world":99})") << buffer;
    };
 
-   "mimics<T, std::string> key read"_test = [] {
-      std::map<mimics_string_key, int> m{};
+   "custom_str_t key read"_test = [] {
+      std::map<custom_string_key, int> m{};
       std::string json = R"({"hello":42,"world":99})";
 
       expect(not glz::read_json(m, json));
@@ -6603,13 +6605,13 @@ suite mimics_string_key_tests = [] {
       expect(m[{"world"}] == 99);
    };
 
-   "mimics<T, std::string> key roundtrip"_test = [] {
-      std::map<mimics_string_key, std::string> original{{{"key1"}, "value1"}, {{"key2"}, "value2"}};
+   "custom_str_t key roundtrip"_test = [] {
+      std::map<custom_string_key, std::string> original{{{"key1"}, "value1"}, {{"key2"}, "value2"}};
 
       std::string buffer{};
       expect(not glz::write_json(original, buffer));
 
-      std::map<mimics_string_key, std::string> parsed{};
+      std::map<custom_string_key, std::string> parsed{};
       expect(not glz::read_json(parsed, buffer));
 
       expect(parsed.size() == original.size());
@@ -6619,23 +6621,23 @@ suite mimics_string_key_tests = [] {
       }
    };
 
-   "mimics<T, std::string> key in struct"_test = [] {
-      mimics_string_nested_struct obj{.data = {{{"enabled"}, true}, {{"disabled"}, false}}};
+   "custom_str_t key in struct"_test = [] {
+      custom_string_nested_struct obj{.data = {{{"enabled"}, true}, {{"disabled"}, false}}};
 
       std::string buffer{};
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"data":{"disabled":false,"enabled":true}})") << buffer;
 
-      mimics_string_nested_struct parsed{};
+      custom_string_nested_struct parsed{};
       expect(not glz::read_json(parsed, buffer));
       expect(parsed == obj);
    };
 
-   "mimic concepts"_test = [] {
-      // Test that the concepts work correctly
-      static_assert(glz::has_mimic<mimics_string_key>);
-      static_assert(glz::mimics<mimics_string_key, std::string>);
-      static_assert(glz::mimics_str_t<mimics_string_key>);
+   "custom_str_t concepts"_test = [] {
+      // Test that the auto-inference concepts work correctly
+      static_assert(glz::custom_str_t<custom_string_key>);
+      static_assert(!glz::custom_num_t<custom_string_key>);
+      static_assert(!glz::custom_bool_t<custom_string_key>);
       expect(true);
    };
 };
