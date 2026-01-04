@@ -4,8 +4,27 @@
 #pragma once
 
 #include <charconv>
-#include <format>
 #include <type_traits>
+
+// Detection: is std::format for floating-point available?
+// - Non-libc++ implementations (libstdc++, MSVC): always available
+// - libc++: only when _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT is defined
+// This is needed because std::format internally uses std::to_chars for float formatting,
+// which is unavailable on older Apple platforms (iOS < 16.3, macOS < 13.3)
+// Users can define GLZ_USE_STD_FORMAT_FLOAT before including glaze to override detection
+#ifndef GLZ_USE_STD_FORMAT_FLOAT
+#if !defined(_LIBCPP_VERSION) || defined(_LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT)
+#define GLZ_USE_STD_FORMAT_FLOAT 1
+#else
+#define GLZ_USE_STD_FORMAT_FLOAT 0
+#endif
+#endif
+
+#if GLZ_USE_STD_FORMAT_FLOAT
+#include <format>
+#else
+#include <cstdio>
+#endif
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/opts.hpp"
@@ -15,6 +34,139 @@
 
 namespace glz
 {
+   namespace detail
+   {
+      // Result type for compile-time format string conversion (std::format -> printf)
+      template <size_t N>
+      struct printf_fmt_t
+      {
+         char data[N + 4]{}; // Extra space for '%' and safety margin
+         size_t len = 0;
+      };
+
+      // Converts std::format float spec to printf format at compile time
+      // Only supports JSON-relevant formatting: precision and type specifier
+      // Examples: "{:.2f}" -> "%.2f", "{:.6g}" -> "%.6g", "{}" -> "%g"
+      template <size_t N>
+      consteval auto to_printf_fmt(const char (&fmt)[N]) -> printf_fmt_t<N>
+      {
+         printf_fmt_t<N> result;
+         size_t i = 0;
+
+         // Skip opening brace
+         if (i < N && fmt[i] == '{') ++i;
+
+         // Check for ':' indicating format spec
+         const bool has_spec = (i < N && fmt[i] == ':');
+         if (has_spec) ++i;
+
+         // Start printf format with '%'
+         result.data[result.len++] = '%';
+
+         // No spec or empty spec -> default to %g
+         if (!has_spec || (i < N && fmt[i] == '}')) {
+            result.data[result.len++] = 'g';
+            result.data[result.len] = '\0';
+            return result;
+         }
+
+         // Skip to precision (.) or type specifier
+         while (i < N && fmt[i] != '.' && fmt[i] != '}' && fmt[i] != '\0') {
+            // Check if this is a type specifier
+            if (fmt[i] == 'f' || fmt[i] == 'F' || fmt[i] == 'e' || fmt[i] == 'E' || fmt[i] == 'g' || fmt[i] == 'G') {
+               break;
+            }
+            ++i;
+         }
+
+         // Precision: .digits
+         if (i < N && fmt[i] == '.') {
+            result.data[result.len++] = '.';
+            ++i;
+            while (i < N && fmt[i] >= '0' && fmt[i] <= '9') {
+               result.data[result.len++] = fmt[i++];
+            }
+         }
+
+         // Type: e, E, f, F, g, G
+         if (i < N && fmt[i] != '}' && fmt[i] != '\0') {
+            const char type = fmt[i];
+            if (type == 'e' || type == 'E' || type == 'f' || type == 'F' || type == 'g' || type == 'G') {
+               result.data[result.len++] = type;
+            }
+            else {
+               result.data[result.len++] = 'g'; // default
+            }
+         }
+         else {
+            result.data[result.len++] = 'g'; // default type
+         }
+
+         result.data[result.len] = '\0';
+         return result;
+      }
+
+      // Overload for std::string_view (used when float_format is a string_view in opts)
+      consteval auto to_printf_fmt(std::string_view fmt) -> printf_fmt_t<32>
+      {
+         printf_fmt_t<32> result;
+         size_t i = 0;
+         const size_t N = fmt.size();
+
+         // Skip opening brace
+         if (i < N && fmt[i] == '{') ++i;
+
+         // Check for ':' indicating format spec
+         const bool has_spec = (i < N && fmt[i] == ':');
+         if (has_spec) ++i;
+
+         // Start printf format with '%'
+         result.data[result.len++] = '%';
+
+         // No spec or empty spec -> default to %g
+         if (!has_spec || (i < N && fmt[i] == '}')) {
+            result.data[result.len++] = 'g';
+            result.data[result.len] = '\0';
+            return result;
+         }
+
+         // Skip to precision (.) or type specifier
+         while (i < N && fmt[i] != '.' && fmt[i] != '}' && fmt[i] != '\0') {
+            // Check if this is a type specifier
+            if (fmt[i] == 'f' || fmt[i] == 'F' || fmt[i] == 'e' || fmt[i] == 'E' || fmt[i] == 'g' || fmt[i] == 'G') {
+               break;
+            }
+            ++i;
+         }
+
+         // Precision: .digits
+         if (i < N && fmt[i] == '.') {
+            result.data[result.len++] = '.';
+            ++i;
+            while (i < N && fmt[i] >= '0' && fmt[i] <= '9') {
+               result.data[result.len++] = fmt[i++];
+            }
+         }
+
+         // Type: e, E, f, F, g, G
+         if (i < N && fmt[i] != '}' && fmt[i] != '\0') {
+            const char type = fmt[i];
+            if (type == 'e' || type == 'E' || type == 'f' || type == 'F' || type == 'g' || type == 'G') {
+               result.data[result.len++] = type;
+            }
+            else {
+               result.data[result.len++] = 'g'; // default
+            }
+         }
+         else {
+            result.data[result.len++] = 'g'; // default type
+         }
+
+         result.data[result.len] = '\0';
+         return result;
+      }
+   }
+
    template <class T>
    GLZ_ALWAYS_INLINE constexpr auto sized_integer_conversion() noexcept
    {
@@ -69,6 +221,7 @@ namespace glz
             constexpr bool use_float_format = requires { opts_type::float_format; };
 
             if constexpr (use_float_format && is_any_of<V, float, double>) {
+#if GLZ_USE_STD_FORMAT_FLOAT
                // Use std::format with user-provided format string (e.g., "{:.2f}")
                // Format string is validated at compile-time via std::format_string
                constexpr auto fmt = std::format_string<V>{opts_type::float_format};
@@ -100,6 +253,36 @@ namespace glz
                   }
                   ix += size;
                }
+#else
+               // snprintf fallback for platforms without std::format float support (e.g., iOS < 16.3)
+               // Convert std::format spec to printf format at compile time
+               constexpr auto printf_fmt = detail::to_printf_fmt(opts_type::float_format);
+
+               const auto start = reinterpret_cast<char*>(&b[ix]);
+               const auto available = check_write_unchecked(Opts) ? size_t(64) : (b.size() - ix);
+
+               // snprintf returns chars that would be written (excluding null), or negative on error
+               const int len = std::snprintf(start, available, printf_fmt.data, static_cast<double>(value));
+
+               if (len < 0) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if (static_cast<size_t>(len) >= available) {
+                  // Output was truncated, need to resize and retry
+                  if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
+                     b.resize(2 * (ix + static_cast<size_t>(len) + 1));
+                     std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<size_t>(len) + 1, printf_fmt.data,
+                                   static_cast<double>(value));
+                  }
+                  else {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
+               ix += static_cast<size_t>(len);
+#endif
             }
             else if constexpr (uint8_t(check_float_max_write_precision(Opts)) > 0 &&
                                uint8_t(check_float_max_write_precision(Opts)) < sizeof(V)) {
