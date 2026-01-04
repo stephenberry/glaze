@@ -10,7 +10,7 @@ Glaze offers two JSON-RPC 2.0 implementations. Choose based on your needs:
 
 | Feature | Registry (this page) | [Client/Server](json-rpc.md) |
 |---------|---------------------|------------------------------|
-| **Method registration** | Automatic via reflection | Explicit compile-time declaration |
+| **Method registration** | Via glaze metadata or reflection | Explicit compile-time declaration |
 | **Client support** | Server only | Client and server (client works with either server) |
 | **Type safety** | Runtime (JSON parsing) | Compile-time enforced |
 | **Setup complexity** | Minimal (`server.on(obj)`) | Requires method declarations |
@@ -22,9 +22,9 @@ Glaze offers two JSON-RPC 2.0 implementations. Choose based on your needs:
 
 Use the JSON-RPC registry when you want to:
 
-- **Expose existing objects** - Turn any C++ struct into a JSON-RPC API with one line
-- **Access member variables** - Read and write fields directly, not just call methods
-- **Minimize boilerplate** - No need to declare method signatures separately
+- **Expose existing objects** - Register C++ structs as JSON-RPC endpoints
+- **Access member variables** - Read and write data members directly (auto-detected via reflection)
+- **Call member functions** - Expose methods via glaze metadata
 - **Navigate nested structures** - Access deep members via path-style method names
 
 ### When to Use the Client/Server
@@ -39,7 +39,8 @@ Use the [compile-time typed approach](json-rpc.md) when you need:
 
 The JSON-RPC registry is similar to the [REPE registry](repe-rpc.md) but uses the JSON-RPC 2.0 protocol format. It provides:
 
-- Automatic method registration from C++ objects
+- Automatic registration of data members via reflection
+- Member function registration via glaze metadata
 - Full JSON-RPC 2.0 compliance (requests, responses, notifications, batches)
 - Support for all ID types (string, integer, null)
 - Standard error codes and error responses
@@ -56,6 +57,19 @@ struct my_api
    std::string greet() { return "Hello, World!"; }
    int add(int value) { counter += value; return counter; }
    void reset() { counter = 0; }
+};
+
+// Glaze metadata to expose member functions
+template <>
+struct glz::meta<my_api>
+{
+   using T = my_api;
+   static constexpr auto value = glz::object(
+      &T::counter,
+      &T::greet,
+      &T::add,
+      &T::reset
+   );
 };
 
 int main()
@@ -212,7 +226,7 @@ server.call(R"({"jsonrpc":"2.0","method":"greet","id":null})");
 
 ## Member Functions
 
-Member functions are automatically registered and callable:
+Member functions require glaze metadata to be registered. Use `glz::object` to expose member function pointers:
 
 ```cpp
 struct calculator_t
@@ -222,6 +236,18 @@ struct calculator_t
    int get_value() { return value; }
    void set_value(int v) { value = v; }
    int add(int x) { return value += x; }
+};
+
+template <>
+struct glz::meta<calculator_t>
+{
+   using T = calculator_t;
+   static constexpr auto value = glz::object(
+      &T::value,
+      &T::get_value,
+      &T::set_value,
+      &T::add
+   );
 };
 
 calculator_t calc{};
@@ -238,6 +264,8 @@ server.call(R"({"jsonrpc":"2.0","method":"set_value","params":100,"id":2})");
 server.call(R"({"jsonrpc":"2.0","method":"add","params":50,"id":3})");
 // Returns: {"jsonrpc":"2.0","result":150,"id":3}
 ```
+
+> **Note:** Without glaze metadata, only data members are automatically detected via C++ reflection. Member functions are not discoverable through reflection alone.
 
 ## Using with `glz::merge`
 
