@@ -3297,7 +3297,7 @@ namespace glz
                   }
                   else {
                      Key key_value{};
-                     if constexpr (glaze_enum_t<Key> || custom_str_t<Key>) {
+                     if constexpr (glaze_enum_t<Key> || mimics_str_t<Key> || custom_str_t<Key>) {
                         parse<JSON>::op<Opts>(key_value, ctx, it, end);
                      }
                      else if constexpr (std::is_arithmetic_v<Key>) {
@@ -3358,15 +3358,15 @@ namespace glz
       // Contains at most one each of the basic json types bool, numeric, string, object, array
       // If all objects are meta-objects then we can attempt to deduce them as well either through a type tag or
       // unique combinations of keys
-      // Also considers custom types with inferable input types from their read functions
+      // Also considers types with mimic declarations or custom read/write with inferable input types
       int bools{}, numbers{}, strings{}, objects{}, meta_objects{}, arrays{};
       constexpr auto N = std::variant_size_v<T>;
       for_each<N>([&]<auto I>() {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          // ICE workaround
-         bools += bool_t<V> || custom_bool_t<V>;
-         numbers += num_t<V> || custom_num_t<V>;
-         strings += str_t<V> || custom_str_t<V>;
+         bools += bool_t<V> || mimics_bool_t<V> || custom_bool_t<V>;
+         numbers += num_t<V> || mimics_num_t<V> || custom_num_t<V>;
+         strings += str_t<V> || mimics_str_t<V> || custom_str_t<V>;
          strings += glaze_enum_t<V>;
          objects += pair_t<V>;
          objects += (writable_map_t<V> || readable_map_t<V> || is_memory_object<V>);
@@ -3384,22 +3384,23 @@ namespace glz
 
    // Helper to check if type should be classified as boolean for variant deduction
    template <class T>
-   concept variant_bool_type = bool_t<remove_meta_wrapper_t<T>> || custom_bool_t<T>;
+   concept variant_bool_type = bool_t<remove_meta_wrapper_t<T>> || mimics_bool_t<T> || custom_bool_t<T>;
 
    // Helper to check if type should be classified as number for variant deduction
    template <class T>
-   concept variant_num_type = num_t<remove_meta_wrapper_t<T>> || custom_num_t<T>;
+   concept variant_num_type = num_t<remove_meta_wrapper_t<T>> || mimics_num_t<T> || custom_num_t<T>;
 
    // Helper to check if type should be classified as string for variant deduction
    template <class T>
    concept variant_str_type =
-      str_t<remove_meta_wrapper_t<T>> || glaze_enum_t<remove_meta_wrapper_t<T>> || glaze_enum_t<T> || custom_str_t<T>;
+      str_t<remove_meta_wrapper_t<T>> || glaze_enum_t<remove_meta_wrapper_t<T>> || glaze_enum_t<T> || mimics_str_t<T> ||
+      custom_str_t<T>;
 
    template <class... Ts>
    struct variant_types<std::variant<Ts...>>
    {
       // TODO: this way of filtering types is compile time intensive.
-      // Custom types with inferable read function input types are included in the appropriate type lists
+      // Types with mimic declarations or custom read functions are included in the appropriate type lists
       using bool_types = decltype(tuplet::tuple_cat(std::conditional_t<variant_bool_type<Ts>, tuple<Ts>, tuple<>>{}...));
       using number_types =
          decltype(tuplet::tuple_cat(std::conditional_t<variant_num_type<Ts>, tuple<Ts>, tuple<>>{}...));

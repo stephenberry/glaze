@@ -385,6 +385,10 @@ namespace glz
                }
                to_json_schema<constexpr_val_t>::template op<Opts>(s, defs);
             }
+            else if constexpr (has_mimic<T>) {
+               // Type with mimic declaration: use the mimic type's schema
+               to_json_schema<mimic_type<T>>::template op<Opts>(s, defs);
+            }
             else if constexpr (custom_meta_input_type<T>::has_custom &&
                                !std::same_as<typename custom_meta_input_type<T>::type, void>) {
                // Type with custom read/write: infer schema from input type

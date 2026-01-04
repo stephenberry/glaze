@@ -47,21 +47,31 @@ glz::read_json(n, "3.14");   // Tries int (fails), then float (succeeds)
 
 ## Custom Types in Variants
 
-When using custom types with `glz::custom` read/write functions in variants, Glaze automatically infers the JSON type from your read function's parameter type.
+When using custom types in variants, Glaze needs to know what JSON type your custom type corresponds to. There are two approaches:
 
-### How It Works
+### Option 1: Using `mimic` (Simple Member Pointer)
 
-Glaze examines the second parameter of your `read_fn` lambda. If it's `const double&`, `const std::string&`, `const bool&`, etc., Glaze classifies your type accordingly:
+For types that serialize via a simple member pointer, use `using mimic = <type>`:
 
-| Read parameter type | JSON type detected | Concept satisfied |
-|--------------------|-------------------|-------------------|
-| `double`, `int`, etc. | number | `custom_num_t<T>` |
-| `std::string`, `std::string_view` | string | `custom_str_t<T>` |
-| `bool` | boolean | `custom_bool_t<T>` |
+```c++
+struct my_key {
+   std::string value{};
+};
 
-### Example: Strong Typedefs
+template <>
+struct glz::meta<my_key> {
+   using mimic = std::string;  // Declare that this type behaves like a string
+   static constexpr auto value = &my_key::value;
+};
 
-Consider a strong typedef pattern where you want to distinguish between different kinds of doubles:
+// Now works in variants and as map keys
+std::variant<int, my_key> v;
+glz::read_json(v, "\"hello\"");  // → my_key{"hello"}
+```
+
+### Option 2: Auto-Inference (Custom Read/Write)
+
+For types using `glz::custom`, Glaze automatically infers the JSON type from your read function's parameter:
 
 ```c++
 struct Percentage {
@@ -70,8 +80,7 @@ struct Percentage {
 
 template <>
 struct glz::meta<Percentage> {
-   // Glaze automatically detects that read_fn takes a double,
-   // so Percentage behaves like a number in variants
+   // Glaze infers this is a number from 'const double&'
    static constexpr auto read_fn = [](Percentage& p, const double& input) {
       p.value = input;
    };
@@ -81,15 +90,18 @@ struct glz::meta<Percentage> {
    static constexpr auto value = glz::custom<read_fn, write_fn>;
 };
 
-// Works automatically - no additional declarations needed!
-using MyVariant = std::variant<std::string, Percentage>;
-
-MyVariant v;
-glz::read_json(v, "1.5");      // → Percentage{1.5}
-glz::read_json(v, "\"hello\""); // → std::string{"hello"}
+// Works automatically - no mimic needed!
+std::variant<std::string, Percentage> v;
+glz::read_json(v, "1.5");  // → Percentage{1.5}
 ```
 
-### Complete Example: Transaction with Amount
+| Read parameter type | JSON type detected | Concept satisfied |
+|--------------------|-------------------|-------------------|
+| `double`, `int`, etc. | number | `custom_num_t<T>` |
+| `std::string`, `std::string_view` | string | `custom_str_t<T>` |
+| `bool` | boolean | `custom_bool_t<T>` |
+
+### Complete Example
 
 ```c++
 #include "glaze/glaze.hpp"
@@ -97,9 +109,6 @@ glz::read_json(v, "\"hello\""); // → std::string{"hello"}
 // Strong typedef for monetary amounts
 struct Amount {
    double value{};
-
-   constexpr Amount() = default;
-   constexpr Amount(double v) : value(v) {}
 };
 
 template <>
@@ -113,10 +122,9 @@ struct glz::meta<Amount> {
    static constexpr auto value = glz::custom<read_fn, write_fn>;
 };
 
-// Use in a struct with variant
 struct Transaction {
    std::string description;
-   std::variant<std::string, Amount> value;  // Either a string note or an amount
+   std::variant<std::string, Amount> value;
 };
 
 void example() {
@@ -130,40 +138,28 @@ void example() {
 }
 ```
 
-### Schema Generation
-
-Auto-inference also ensures correct JSON schema generation. Custom types show their inferred JSON type in the schema:
-
-```json
-{
-   "oneOf": [
-      {"type": ["string"]},
-      {"type": ["number"], "minimum": -1.79e308, "maximum": 1.79e308}
-   ]
-}
-```
-
-### Checking Type Inference at Compile Time
-
-Glaze provides concepts to check type classifications:
+### Compile-Time Concepts
 
 ```c++
-static_assert(glz::custom_num_t<Percentage>);   // Custom type reads as number
-static_assert(glz::custom_str_t<StrongString>); // Custom type reads as string
-static_assert(glz::custom_bool_t<Enabled>);     // Custom type reads as boolean
+// For mimic-based types
+static_assert(glz::has_mimic<my_key>);
+static_assert(glz::mimics<my_key, std::string>);
+static_assert(glz::mimics_str_t<my_key>);
+
+// For auto-inferred types
+static_assert(glz::custom_num_t<Percentage>);
+static_assert(glz::custom_str_t<StrongString>);
 ```
 
 ### Important Notes
 
-1. **Use concrete types**: Your read function must use concrete parameter types (not `auto`) for auto-inference to work.
+1. **Choose the right approach**: Use `mimic` for simple member pointers, auto-inference for `glz::custom`.
 
-2. **Default constructible**: Types used in variants should have a default constructor (non-explicit) for proper variant initialization during parsing.
+2. **Default constructible**: Types used in variants should have a non-explicit default constructor.
 
-3. **One type per category**: A type can only represent one JSON type. Choose the type that best represents how your custom type serializes.
+3. **One type per category**: A type can only represent one JSON type.
 
-4. **Multiple custom types**: If you have multiple custom types that all represent `double` in the same variant, Glaze will try them in order (like any other multiple-same-type scenario).
-
-5. **Combine with tags**: For variants with multiple custom types of the same JSON category, consider using [tagged variants](#deduction-of-tagged-object-types) for explicit type control.
+4. **Multiple custom types**: If you have multiple custom types of the same JSON category in a variant, Glaze will try them in order.
 
 ## Object Types
 
