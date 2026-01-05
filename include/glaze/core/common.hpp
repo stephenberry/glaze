@@ -418,10 +418,19 @@ namespace glz
    concept glaze_value_t =
       glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || meta_keys<T> || glaze_flags_t<T>);
 
+   // With C++26 P2996 reflection, we can reflect non-aggregate types (classes with custom constructors)
+   // Without P2996, we require aggregate types for reflection
+#if GLZ_REFLECTION26
+   template <class T>
+   concept reflectable = std::is_class_v<std::remove_cvref_t<T>> &&
+                         !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> ||
+                           glaze_flags_t<T> || range<T> || pair_t<T> || null_t<T> || meta_keys<T>);
+#else
    template <class T>
    concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
                          !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> ||
                            glaze_flags_t<T> || range<T> || pair_t<T> || null_t<T> || meta_keys<T>);
+#endif
 
    template <class T>
    concept is_memory_object = is_memory_type<T> && (glaze_object_t<memory_type<T>> || reflectable<memory_type<T>>);

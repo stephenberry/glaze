@@ -165,6 +165,19 @@ For cross-compilation to ARM or other architectures:
 set(glaze_ENABLE_AVX2 OFF)
 ```
 
+### C++26 P2996 Reflection
+
+Enable C++26 P2996 reflection support for use with Bloomberg clang-p2996 or future C++26 compilers:
+
+```cmake
+set(glaze_ENABLE_REFLECTION26 ON)
+FetchContent_MakeAvailable(glaze)
+```
+
+This replaces traditional `__PRETTY_FUNCTION__` reflection with standardized P2996 reflection primitives. Requires compiler flags: `-std=c++26 -freflection -fexpansion-statements -stdlib=libc++`
+
+See [P2996 Reflection](p2996-reflection.md) for details.
+
 ### Disable Forced Inlining
 
 By default, Glaze uses compiler-specific attributes (`__attribute__((always_inline))` on GCC/Clang, `[[msvc::forceinline]]` on MSVC) to force inlining of performance-critical functions. This maximizes runtime performance but increases compilation time.

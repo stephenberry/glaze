@@ -12928,7 +12928,10 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer{};
       expect(not glz::write<opts_with_member_functions{}>(thing, buffer));
-#if defined(__GNUC__) && !defined(__clang__)
+#if GLZ_REFLECTION26
+      // P2996 display_string_of returns a simplified representation for member function pointers
+      expect(buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") << buffer;
+#elif defined(__GNUC__) && !defined(__clang__)
 #if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
       // Old ABI uses std::basic_string<char> without __cxx11 namespace
       expect(buffer ==
@@ -12961,7 +12964,12 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer2{};
       expect(not glz::write<opts_with_member_functions{}>(s, buffer2));
+#if GLZ_REFLECTION26
+      // P2996 display_string_of returns a simplified representation for member function pointers
+      expect(buffer2 == R"json({"f1":"(member-function-pointer-type)"})json") << buffer2;
+#else
       expect(buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})") << buffer2;
+#endif
    };
 };
 

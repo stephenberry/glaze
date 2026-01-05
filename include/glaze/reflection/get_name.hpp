@@ -13,11 +13,60 @@
 #include "glaze/reflection/to_tuple.hpp"
 #include "glaze/util/string_literal.hpp"
 
+#if GLZ_REFLECTION26
+#include <meta>
+#endif
+
 #if defined(__clang__) || defined(__GNUC__)
 #define GLZ_PRETTY_FUNCTION __PRETTY_FUNCTION__
 #elif defined(_MSC_VER)
 #define GLZ_PRETTY_FUNCTION __FUNCSIG__
 #endif
+
+#if GLZ_REFLECTION26
+// ============================================================================
+// C++26 P2996 Reflection Implementation for member names
+// Supports inheritance - automatically includes base class member names
+// ============================================================================
+namespace glz::detail
+{
+   // Get member name using P2996 reflection (including inherited members)
+   // Uses collect_all_nonstatic_data_members from to_tuple.hpp
+   template <class T, size_t I>
+   consteval std::string_view get_member_name_p2996()
+   {
+      auto members = collect_all_nonstatic_data_members<T>();
+      return std::meta::identifier_of(members[I]);
+   }
+}
+
+namespace glz
+{
+   // P2996 implementation of member_nameof (including inherited members)
+   template <auto N, class T>
+   inline constexpr std::string_view member_nameof = detail::get_member_name_p2996<std::remove_cvref_t<T>, N>();
+
+   // P2996 type_name using display_string_of
+   template <class T>
+   constexpr auto type_name = std::meta::display_string_of(^^T);
+
+   // P2996 implementation of member_names_impl (base version)
+   template <class T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array<sv, sizeof...(I)>{member_nameof<I, T>...};
+      }
+   }
+}
+
+#else
+// ============================================================================
+// Traditional __PRETTY_FUNCTION__ implementation (pre-C++26)
+// ============================================================================
 
 // For struct fields
 namespace glz::detail
@@ -121,7 +170,14 @@ namespace glz
          return std::array{member_nameof<I, T>...};
       }
    }
+}
+#endif // GLZ_REFLECTION26
 
+// ============================================================================
+// Common code (works with both P2996 and traditional reflection)
+// ============================================================================
+namespace glz
+{
    template <class T>
    struct meta;
 

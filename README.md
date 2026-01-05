@@ -24,6 +24,7 @@ Glaze also supports:
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
 - See [example on Compiler Explorer](https://gcc.godbolt.org/z/T4To5fKfz)
+- Optional [C++26 P2996 reflection](https://stephenberry.github.io/glaze/p2996-reflection/) backend for future-proof standardized reflection
 
 ## [📖 Documentation](https://stephenberry.github.io/glaze/)
 
@@ -33,6 +34,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 
 - Pure, compile time reflection for structs
   - Powerful meta specialization system for custom names and behavior
+  - Optional [C++26 P2996](https://stephenberry.github.io/glaze/p2996-reflection/) backend
 - JSON [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) compliance with UTF-8 validation
 - Standard C++ library support
 - Header only
@@ -240,6 +242,21 @@ set(glaze_DISABLE_ALWAYS_INLINE ON)
 ```
 
 > **Note:** This primarily reduces compilation time, not binary size. For binary size reduction, see Optimization Levels below.
+
+### C++26 P2996 Reflection
+
+Glaze supports [C++26 P2996 reflection](https://wg21.link/P2996) as an alternative backend for struct reflection. This replaces traditional `__PRETTY_FUNCTION__` parsing with standardized reflection primitives.
+
+```cmake
+set(glaze_ENABLE_REFLECTION26 ON)
+```
+
+Requires [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996) or a future C++26 compiler with flags:
+```bash
+-std=c++26 -freflection -fexpansion-statements -stdlib=libc++
+```
+
+Benefits include unlimited struct members (vs 128 with traditional reflection), cleaner type names, and future C++ standards compliance. See [P2996 Reflection](https://stephenberry.github.io/glaze/p2996-reflection/) for details.
 
 ### Optimization Levels (Embedded/Size Optimization)
 

@@ -6,7 +6,7 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 
 ## Feature Shortlist
 
-- **Pure, compile time reflection** for structs
+- **Pure, compile time reflection** for structs (with optional [C++26 P2996](p2996-reflection.md) backend)
 - **JSON RFC 8259 compliance** with UTF-8 validation
 - **Standard C++ library support**
 - **Header only**
