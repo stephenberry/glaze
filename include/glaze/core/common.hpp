@@ -438,15 +438,10 @@ namespace glz
    template <class T>
    concept reflectable =
       std::is_class_v<std::remove_cvref_t<T>> &&
-      !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> || glaze_flags_t<T> ||
-        range<T> || pair_t<T> || null_t<T> || meta_keys<T> || str_t<T> || bool_t<T> || has_glaze_marker<T> ||
-        // Exclude standard library types with specialized Glaze handling
-        is_specialization_v<std::remove_cvref_t<T>, std::tuple> ||
-        is_specialization_v<std::remove_cvref_t<T>, std::variant> ||
-        is_specialization_v<std::remove_cvref_t<T>, std::reference_wrapper> ||
-        is_specialization_v<std::remove_cvref_t<T>, std::function> ||
-        is_specialization_v<std::remove_cvref_t<T>, std::complex> ||
-        is_bitset<T> || func_t<T>);
+      !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> ||
+        range<T> || pair_t<T> || null_t<T> || str_t<T> || bool_t<T> ||
+        tuple_t<T> || is_std_tuple<T> || is_variant<T> || is_reference_wrapper<T> || complex_t<T> ||
+        func_t<T> || is_bitset<T> || has_glaze_marker<T>);
 #else
    template <class T>
    concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
