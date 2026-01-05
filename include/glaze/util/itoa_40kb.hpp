@@ -11,50 +11,35 @@
 
 #include <array>
 #include <bit>
-#include <concepts>
 #include <cstdint>
 #include <cstring>
 
 #include "glaze/util/inline.hpp"
+#include "glaze/util/itoa.hpp" // For shared char_table and digit_pairs
 
 namespace glz
 {
    namespace itoa_40kb_impl
    {
-      // 2-digit character pairs table (200 bytes) - cache-line aligned
-      alignas(64) inline constexpr char char_table[200] = {
-         '0', '0', '0', '1', '0', '2', '0', '3', '0', '4', '0', '5', '0', '6', '0', '7', '0', '8', '0', '9',
-         '1', '0', '1', '1', '1', '2', '1', '3', '1', '4', '1', '5', '1', '6', '1', '7', '1', '8', '1', '9',
-         '2', '0', '2', '1', '2', '2', '2', '3', '2', '4', '2', '5', '2', '6', '2', '7', '2', '8', '2', '9',
-         '3', '0', '3', '1', '3', '2', '3', '3', '3', '4', '3', '5', '3', '6', '3', '7', '3', '8', '3', '9',
-         '4', '0', '4', '1', '4', '2', '4', '3', '4', '4', '4', '5', '4', '6', '4', '7', '4', '8', '4', '9',
-         '5', '0', '5', '1', '5', '2', '5', '3', '5', '4', '5', '5', '5', '6', '5', '7', '5', '8', '5', '9',
-         '6', '0', '6', '1', '6', '2', '6', '3', '6', '4', '6', '5', '6', '6', '6', '7', '6', '8', '6', '9',
-         '7', '0', '7', '1', '7', '2', '7', '3', '7', '4', '7', '5', '7', '6', '7', '7', '7', '8', '7', '9',
-         '8', '0', '8', '1', '8', '2', '8', '3', '8', '4', '8', '5', '8', '6', '8', '7', '8', '8', '8', '9',
-         '9', '0', '9', '1', '9', '2', '9', '3', '9', '4', '9', '5', '9', '6', '9', '7', '9', '8', '9', '9'};
-
-      // 2-digit uint16_t table for direct 2-byte memcpy (100 × 2 = 200 bytes)
-      alignas(64) inline constexpr uint16_t digit_pairs[100] = {
-         0x3030, 0x3130, 0x3230, 0x3330, 0x3430, 0x3530, 0x3630, 0x3730, 0x3830, 0x3930,
-         0x3031, 0x3131, 0x3231, 0x3331, 0x3431, 0x3531, 0x3631, 0x3731, 0x3831, 0x3931,
-         0x3032, 0x3132, 0x3232, 0x3332, 0x3432, 0x3532, 0x3632, 0x3732, 0x3832, 0x3932,
-         0x3033, 0x3133, 0x3233, 0x3333, 0x3433, 0x3533, 0x3633, 0x3733, 0x3833, 0x3933,
-         0x3034, 0x3134, 0x3234, 0x3334, 0x3434, 0x3534, 0x3634, 0x3734, 0x3834, 0x3934,
-         0x3035, 0x3135, 0x3235, 0x3335, 0x3435, 0x3535, 0x3635, 0x3735, 0x3835, 0x3935,
-         0x3036, 0x3136, 0x3236, 0x3336, 0x3436, 0x3536, 0x3636, 0x3736, 0x3836, 0x3936,
-         0x3037, 0x3137, 0x3237, 0x3337, 0x3437, 0x3537, 0x3637, 0x3737, 0x3837, 0x3937,
-         0x3038, 0x3138, 0x3238, 0x3338, 0x3438, 0x3538, 0x3638, 0x3738, 0x3838, 0x3938,
-         0x3039, 0x3139, 0x3239, 0x3339, 0x3439, 0x3539, 0x3639, 0x3739, 0x3839, 0x3939};
+      // Reuse tables from itoa.hpp to avoid duplication
+      using itoa_impl::char_table;
+      using itoa_impl::digit_pairs;
 
       // 4-digit uint32_t table for direct 4-byte memcpy (10000 × 4 = 40KB)
+      // Generated at compile-time with correct byte order for target endianness
       inline constexpr auto digit_quads = []() consteval {
          std::array<uint32_t, 10000> table{};
          for (uint32_t i = 0; i < 10000; ++i) {
-            table[i] = static_cast<uint32_t>(0x30 + (i / 1000)) |
-                       (static_cast<uint32_t>(0x30 + ((i / 100) % 10)) << 8) |
-                       (static_cast<uint32_t>(0x30 + ((i / 10) % 10)) << 16) |
-                       (static_cast<uint32_t>(0x30 + (i % 10)) << 24);
+            const auto d0 = uint32_t('0' + i / 1000);
+            const auto d1 = uint32_t('0' + (i / 100) % 10);
+            const auto d2 = uint32_t('0' + (i / 10) % 10);
+            const auto d3 = uint32_t('0' + i % 10);
+            if constexpr (std::endian::native == std::endian::little) {
+               table[i] = d0 | (d1 << 8) | (d2 << 16) | (d3 << 24);
+            }
+            else {
+               table[i] = (d0 << 24) | (d1 << 16) | (d2 << 8) | d3;
+            }
          }
          return table;
       }();
