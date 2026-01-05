@@ -9,8 +9,9 @@
 
 using namespace ut;
 
-template <class T>
-bool test_samples()
+// Test helper that tests both normal mode (to_chars_40kb) and size mode (to_chars)
+template <class T, class Opts = glz::opts>
+bool test_samples_with_opts()
 {
    std::mt19937 gen{std::random_device{}()};
    std::uniform_int_distribution<T> dist{std::numeric_limits<T>::lowest(), (std::numeric_limits<T>::max)()};
@@ -21,12 +22,12 @@ bool test_samples()
 
    for (size_t i = 0; i < 100000; ++i) {
       sample = dist(gen);
-      if (glz::write_json(sample, buffer)) {
+      if (glz::write<Opts{}>(sample, buffer)) {
          valid = false;
          break;
       }
       T value{};
-      if (glz::read_json(value, buffer)) {
+      if (glz::read<Opts{}>(value, buffer)) {
          valid = false;
          break;
       }
@@ -39,11 +40,11 @@ bool test_samples()
 
    // test max and min values
    sample = (std::numeric_limits<T>::max)();
-   if (glz::write_json(sample, buffer)) {
+   if (glz::write<Opts{}>(sample, buffer)) {
       valid = false;
    }
    T value{};
-   if (glz::read_json(value, buffer)) {
+   if (glz::read<Opts{}>(value, buffer)) {
       valid = false;
    }
    if (value != sample) {
@@ -51,11 +52,11 @@ bool test_samples()
    }
 
    sample = std::numeric_limits<T>::lowest();
-   if (glz::write_json(sample, buffer)) {
+   if (glz::write<Opts{}>(sample, buffer)) {
       valid = false;
    }
    value = {};
-   if (glz::read_json(value, buffer)) {
+   if (glz::read<Opts{}>(value, buffer)) {
       valid = false;
    }
    if (value != sample) {
@@ -67,18 +68,25 @@ bool test_samples()
 }
 
 template <class T>
-bool test_to_max()
+bool test_samples()
+{
+   // Test both normal mode (to_chars_40kb - 40KB tables) and size mode (to_chars - 400B tables)
+   return test_samples_with_opts<T, glz::opts>() && test_samples_with_opts<T, glz::opts_size>();
+}
+
+template <class T, class Opts = glz::opts>
+bool test_to_max_with_opts()
 {
    std::string buffer{};
    bool valid = true;
    if constexpr (std::is_unsigned_v<T>) {
       for (uint64_t i = 0; i < (std::numeric_limits<T>::max)(); ++i) {
-         if (glz::write_json(i, buffer)) {
+         if (glz::write<Opts{}>(i, buffer)) {
             valid = false;
             break;
          }
          T value{};
-         if (glz::read_json(value, buffer)) {
+         if (glz::read<Opts{}>(value, buffer)) {
             valid = false;
             break;
          }
@@ -90,12 +98,12 @@ bool test_to_max()
    }
    else {
       for (int64_t i = std::numeric_limits<T>::lowest(); i < (std::numeric_limits<T>::max)(); ++i) {
-         if (glz::write_json(i, buffer)) {
+         if (glz::write<Opts{}>(i, buffer)) {
             valid = false;
             break;
          }
          T value{};
-         if (glz::read_json(value, buffer)) {
+         if (glz::read<Opts{}>(value, buffer)) {
             valid = false;
             break;
          }
@@ -110,7 +118,14 @@ bool test_to_max()
 }
 
 template <class T>
-bool test_performance()
+bool test_to_max()
+{
+   // Test both normal mode (to_chars_40kb) and size mode (to_chars)
+   return test_to_max_with_opts<T, glz::opts>() && test_to_max_with_opts<T, glz::opts_size>();
+}
+
+template <class T, class Opts = glz::opts>
+bool test_performance_with_opts()
 {
 #ifdef NDEBUG
    constexpr size_t n = 10000000;
@@ -126,9 +141,9 @@ bool test_performance()
    bool valid = true;
    for (size_t i = 0; i < n; ++i) {
       const auto sample = dist(gen);
-      std::ignore = glz::write_json(sample, buffer);
+      std::ignore = glz::write<Opts{}>(sample, buffer);
       T v{};
-      const auto e = glz::read_json(v, buffer);
+      const auto e = glz::read<Opts{}>(v, buffer);
       if (bool(e)) {
          valid = false;
          break;
@@ -140,8 +155,16 @@ bool test_performance()
    }
    auto t1 = std::chrono::steady_clock::now();
    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
-   std::cout << glz::name_v<T> << " read/write: " << duration << '\n';
+   constexpr bool is_size_mode = std::same_as<Opts, glz::opts_size>;
+   std::cout << glz::name_v<T> << " read/write (" << (is_size_mode ? "size" : "normal") << "): " << duration << '\n';
    return valid;
+}
+
+template <class T>
+bool test_performance()
+{
+   // Test both normal mode (to_chars_40kb) and size mode (to_chars)
+   return test_performance_with_opts<T, glz::opts>() && test_performance_with_opts<T, glz::opts_size>();
 }
 
 template <class T>
@@ -167,8 +190,8 @@ void test_struct_with_array_minified()
    expect(not glz::read<glz::opts{.minified = true}>(obj, buffer));
 }
 
-template <class T>
-bool test_single_char_performance()
+template <class T, class Opts = glz::opts>
+bool test_single_char_performance_with_opts()
 {
 #ifdef NDEBUG
    constexpr size_t n = 10000000;
@@ -184,9 +207,9 @@ bool test_single_char_performance()
    bool valid = true;
    for (size_t i = 0; i < n; ++i) {
       const auto sample = dist(gen);
-      std::ignore = glz::write_json(sample, buffer);
+      std::ignore = glz::write<Opts{}>(sample, buffer);
       T v{};
-      const auto e = glz::read_json(v, buffer);
+      const auto e = glz::read<Opts{}>(v, buffer);
       if (bool(e)) {
          valid = false;
          break;
@@ -198,8 +221,16 @@ bool test_single_char_performance()
    }
    auto t1 = std::chrono::steady_clock::now();
    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
-   std::cout << glz::name_v<T> << " read/write: " << duration << '\n';
+   constexpr bool is_size_mode = std::same_as<Opts, glz::opts_size>;
+   std::cout << glz::name_v<T> << " single char read/write (" << (is_size_mode ? "size" : "normal") << "): " << duration << '\n';
    return valid;
+}
+
+template <class T>
+bool test_single_char_performance()
+{
+   // Test both normal mode (to_chars_40kb) and size mode (to_chars)
+   return test_single_char_performance_with_opts<T, glz::opts>() && test_single_char_performance_with_opts<T, glz::opts_size>();
 }
 
 template <class T>

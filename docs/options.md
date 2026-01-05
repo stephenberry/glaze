@@ -56,6 +56,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool skip_self_constraint` | `false` | Skip `self_constraint` validation during reading |
 | `bool assume_sufficient_buffer` | `false` | Skip bounds checking for fixed-size buffers (caller guarantees space) |
 | `bool linear_search` | `false` | Use linear key search instead of hash tables for smaller binary size |
+| `optimization_level optimization_level` | `normal` | Controls speed vs binary size tradeoff. See [Optimization Levels](optimization-levels.md) |
 | `size_t max_string_length` | `0` | Maximum string length when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `size_t max_array_size` | `0` | Maximum array size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
@@ -343,6 +344,7 @@ For per-member formatting control, see the [`glz::float_format` wrapper](wrapper
 
 ## See Also
 
+- [Optimization Levels](optimization-levels.md) - Control binary size vs performance tradeoff
 - [Wrappers](wrappers.md) - Per-field options using wrappers
 - [Field Validation](field-validation.md) - Customizing required field validation
 - [Partial Read](partial-read.md) - Reading partial documents

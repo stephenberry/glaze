@@ -69,6 +69,7 @@ nav:
    - Installation: installation.md
    - Quick Start: quick-start.md
    - Compile Time Options: options.md
+   - Optimization Levels: optimization-levels.md
    - Optimizing Performance: optimizing-performance.md
    - Security: security.md
    - Rename Keys: rename-keys.md

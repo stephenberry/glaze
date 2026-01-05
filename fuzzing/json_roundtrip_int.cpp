@@ -24,10 +24,22 @@ void test(const uint8_t* Data, size_t Size)
    else {
       return;
    }
-   auto str = glz::write_json(s).value_or(std::string{});
-   [[maybe_unused]] auto restored = glz::read_json<S>(str);
-   assert(restored);
-   assert(restored.value().value == s.value);
+
+   // Test normal mode (to_chars_40kb - 40KB tables)
+   {
+      auto str = glz::write_json(s).value_or(std::string{});
+      [[maybe_unused]] auto restored = glz::read_json<S>(str);
+      assert(restored);
+      assert(restored.value().value == s.value);
+   }
+
+   // Test size mode (to_chars - 400B tables)
+   {
+      auto str = glz::write<glz::opts_size{}>(s).value_or(std::string{});
+      [[maybe_unused]] auto restored = glz::read<glz::opts_size{}, S>(str);
+      assert(restored);
+      assert(restored.value().value == s.value);
+   }
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)

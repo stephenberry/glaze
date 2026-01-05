@@ -6,14 +6,14 @@
 #include <charconv>
 #include <type_traits>
 
-// Detection: is std::format for floating-point available?
+// Detection: is std::to_chars for floating-point available?
 // - Non-libc++ implementations (libstdc++, MSVC): always available
-// - libc++: only when _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT is defined
-// This is needed because std::format internally uses std::to_chars for float formatting,
-// which is unavailable on older Apple platforms (iOS < 16.3, macOS < 13.3)
+// - libc++: only when _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT is 1
+// This is needed because std::to_chars for floats is unavailable on older Apple platforms
+// (iOS < 16.3, macOS < 13.3). The macro is always defined in libc++, but set to 0 or 1.
 // Users can define GLZ_USE_STD_FORMAT_FLOAT before including glaze to override detection
 #ifndef GLZ_USE_STD_FORMAT_FLOAT
-#if !defined(_LIBCPP_VERSION) || defined(_LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT)
+#if !defined(_LIBCPP_VERSION) || _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT
 #define GLZ_USE_STD_FORMAT_FLOAT 1
 #else
 #define GLZ_USE_STD_FORMAT_FLOAT 0
@@ -31,6 +31,7 @@
 #include "glaze/util/dtoa.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/itoa.hpp"
+#include "glaze/util/itoa_40kb.hpp"
 
 namespace glz
 {
@@ -220,6 +221,7 @@ namespace glz
             using opts_type = std::decay_t<decltype(Opts)>;
             constexpr bool use_float_format = requires { opts_type::float_format; };
 
+            // User-specified float_format takes priority over all other options
             if constexpr (use_float_format && is_any_of<V, float, double>) {
 #if GLZ_USE_STD_FORMAT_FLOAT
                // Use std::format with user-provided format string (e.g., "{:.2f}")
@@ -303,13 +305,26 @@ namespace glz
                   static_assert(false_v<V>, "invalid float_max_write_precision");
                }
             }
+            // Size optimization: use std::to_chars to avoid dragonbox lookup tables (~238KB)
+            // Only available on platforms with floating-point std::to_chars support
+#if GLZ_USE_STD_FORMAT_FLOAT
+            else if constexpr (is_size_optimized(Opts) && is_any_of<V, float, double>) {
+               const auto start = reinterpret_cast<char*>(&b[ix]);
+               const auto [ptr, ec] = std::to_chars(start, start + 24, V(value));
+               if (ec != std::errc()) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               ix += size_t(ptr - start);
+            }
+#endif
             else if constexpr (is_any_of<V, float, double>) {
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto end = glz::to_chars(start, value);
                ix += size_t(end - start);
             }
 // float128_t requires std::to_chars for floating-point, unavailable on older Apple platforms (iOS < 16.3)
-#if !defined(_LIBCPP_VERSION) || defined(_LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT)
+#if !defined(_LIBCPP_VERSION) || _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT
             else if constexpr (is_float128<V>) {
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
@@ -326,14 +341,30 @@ namespace glz
          }
          else if constexpr (is_any_of<V, int32_t, uint32_t, int64_t, uint64_t>) {
             const auto start = reinterpret_cast<char*>(&b[ix]);
-            const auto end = glz::to_chars(start, value);
-            ix += size_t(end - start);
+            if constexpr (is_size_optimized(Opts)) {
+               // Size mode: use glz::to_chars (400B lookup tables)
+               const auto end = glz::to_chars(start, value);
+               ix += size_t(end - start);
+            }
+            else {
+               // Normal mode: use to_chars_40kb (40KB digit_quads table)
+               const auto end = glz::to_chars_40kb(start, value);
+               ix += size_t(end - start);
+            }
          }
          else if constexpr (std::integral<V>) {
             using X = std::decay_t<decltype(sized_integer_conversion<V>())>;
             const auto start = reinterpret_cast<char*>(&b[ix]);
-            const auto end = glz::to_chars(start, static_cast<X>(value));
-            ix += size_t(end - start);
+            if constexpr (is_size_optimized(Opts)) {
+               // Size mode: use glz::to_chars (400B lookup tables)
+               const auto end = glz::to_chars(start, static_cast<X>(value));
+               ix += size_t(end - start);
+            }
+            else {
+               // Normal mode: use to_chars_40kb (40KB digit_quads table)
+               const auto end = glz::to_chars_40kb(start, static_cast<X>(value));
+               ix += size_t(end - start);
+            }
          }
          else {
             static_assert(false_v<V>, "type is not supported");
