@@ -53,10 +53,7 @@ namespace glz
          return static_cast<uint64_t>((static_cast<__uint128_t>(value) * multiplier) >> shift);
       }
 #else
-      GLZ_ALWAYS_INLINE uint64_t div_1e8(uint64_t value) noexcept
-      {
-         return value / 100000000ULL;
-      }
+      GLZ_ALWAYS_INLINE uint64_t div_1e8(uint64_t value) noexcept { return value / 100000000ULL; }
 #endif
 
       // ==================== uint32_t implementations ====================
@@ -278,12 +275,16 @@ namespace glz
    {
       using namespace itoa_40kb_impl;
       if (val < 10000) {
-         if (val < 100) return u32_2(buf, val);
-         else return u32_4(buf, val);
+         if (val < 100)
+            return u32_2(buf, val);
+         else
+            return u32_4(buf, val);
       }
       else if (val < 100000000) {
-         if (val < 1000000) return u32_6(buf, val);
-         else return u32_8(buf, val);
+         if (val < 1000000)
+            return u32_6(buf, val);
+         else
+            return u32_8(buf, val);
       }
       else {
          return u32_10(buf, val);
@@ -295,7 +296,8 @@ namespace glz
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
       *buf = '-';
-      return to_chars_40kb(buf + (val < 0), static_cast<uint32_t>((static_cast<uint32_t>(val) ^ (val >> 31)) - (val >> 31)));
+      return to_chars_40kb(buf + (val < 0),
+                           static_cast<uint32_t>((static_cast<uint32_t>(val) ^ (val >> 31)) - (val >> 31)));
    }
 
    template <class T>
@@ -304,20 +306,28 @@ namespace glz
    {
       using namespace itoa_40kb_impl;
       if (val < 10000) {
-         if (val < 100) return u64_2(buf, val);
-         else return u64_4(buf, val);
+         if (val < 100)
+            return u64_2(buf, val);
+         else
+            return u64_4(buf, val);
       }
       else if (val < 100000000) {
-         if (val < 1000000) return u64_6(buf, val);
-         else return u64_8(buf, val);
+         if (val < 1000000)
+            return u64_6(buf, val);
+         else
+            return u64_8(buf, val);
       }
       else if (val < 1000000000000ULL) {
-         if (val < 10000000000ULL) return u64_10(buf, val);
-         else return u64_12(buf, val);
+         if (val < 10000000000ULL)
+            return u64_10(buf, val);
+         else
+            return u64_12(buf, val);
       }
       else if (val < 10000000000000000ULL) {
-         if (val < 100000000000000ULL) return u64_14(buf, val);
-         else return u64_16(buf, val);
+         if (val < 100000000000000ULL)
+            return u64_14(buf, val);
+         else
+            return u64_16(buf, val);
       }
       else if (val < 1000000000000000000ULL) {
          return u64_18(buf, val);
@@ -332,7 +342,8 @@ namespace glz
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
       *buf = '-';
-      return to_chars_40kb(buf + (val < 0), static_cast<uint64_t>((static_cast<uint64_t>(val) ^ (val >> 63)) - (val >> 63)));
+      return to_chars_40kb(buf + (val < 0),
+                           static_cast<uint64_t>((static_cast<uint64_t>(val) ^ (val >> 63)) - (val >> 63)));
    }
 
 } // namespace glz

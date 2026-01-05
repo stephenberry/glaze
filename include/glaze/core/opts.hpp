@@ -522,10 +522,7 @@ namespace glz
       }
    }
 
-   consteval bool is_size_optimized(auto&& Opts)
-   {
-      return check_optimization_level(Opts) == optimization_level::size;
-   }
+   consteval bool is_size_optimized(auto&& Opts) { return check_optimization_level(Opts) == optimization_level::size; }
 
    // Check if raw pointer allocation is possible (either compile-time or runtime option available)
    template <auto Opts, class Ctx>

@@ -32,8 +32,8 @@ bool validate_to_chars_exhaustive()
       std::string_view std_result(std_buf, std_end - std_buf);
 
       if (glz_result != std_result) {
-         std::cerr << "Mismatch for value " << int64_t(val)
-                   << ": glz='" << glz_result << "' std='" << std_result << "'\n";
+         std::cerr << "Mismatch for value " << int64_t(val) << ": glz='" << glz_result << "' std='" << std_result
+                   << "'\n";
          return false;
       }
       return true;
@@ -54,7 +54,7 @@ bool validate_to_chars_exhaustive()
 
 // Also test to_chars_40kb for 32/64-bit types
 template <class T>
-   requires (sizeof(T) >= 4)
+   requires(sizeof(T) >= 4)
 bool validate_to_chars_40kb_samples()
 {
    char glz_buf[32];
@@ -72,8 +72,7 @@ bool validate_to_chars_40kb_samples()
       std::string_view std_result(std_buf, std_end - std_buf);
 
       if (glz_result != std_result) {
-         std::cerr << "Mismatch for value " << val
-                   << ": glz='" << glz_result << "' std='" << std_result << "'\n";
+         std::cerr << "Mismatch for value " << val << ": glz='" << glz_result << "' std='" << std_result << "'\n";
          return false;
       }
       return true;
@@ -306,7 +305,8 @@ bool test_single_char_performance_with_opts()
    auto t1 = std::chrono::steady_clock::now();
    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
    constexpr bool is_size_mode = std::same_as<Opts, glz::opts_size>;
-   std::cout << glz::name_v<T> << " single char read/write (" << (is_size_mode ? "size" : "normal") << "): " << duration << '\n';
+   std::cout << glz::name_v<T> << " single char read/write (" << (is_size_mode ? "size" : "normal") << "): " << duration
+             << '\n';
    return valid;
 }
 
@@ -314,7 +314,8 @@ template <class T>
 bool test_single_char_performance()
 {
    // Test both normal mode (to_chars_40kb) and size mode (to_chars)
-   return test_single_char_performance_with_opts<T, glz::opts>() && test_single_char_performance_with_opts<T, glz::opts_size>();
+   return test_single_char_performance_with_opts<T, glz::opts>() &&
+          test_single_char_performance_with_opts<T, glz::opts_size>();
 }
 
 template <class T>
@@ -411,7 +412,8 @@ suite to_chars_validation = [] {
       // Test edge cases and random samples for to_chars (400B tables)
       char glz_buf[32], std_buf[32];
       std::mt19937 rng(42);
-      std::uniform_int_distribution<int32_t> dist(std::numeric_limits<int32_t>::lowest(), (std::numeric_limits<int32_t>::max)());
+      std::uniform_int_distribution<int32_t> dist(std::numeric_limits<int32_t>::lowest(),
+                                                  (std::numeric_limits<int32_t>::max)());
 
       auto test = [&](int32_t val) {
          auto glz_end = glz::to_chars(glz_buf, val);
