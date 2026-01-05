@@ -985,13 +985,6 @@ namespace glz
    template <opts Opts = opts{}, class Buffer>
    [[nodiscard]] inline expected<lazy_document<Opts>, error_ctx> read_lazy(Buffer&& buffer, lazy_buffer& node_buffer)
    {
-      // Ensure buffer has padding for SIMD operations
-      if constexpr (resizable<std::decay_t<Buffer>>) {
-         if (buffer.size() < 8) {
-            buffer.resize(8);
-         }
-      }
-
       // Record where root will be placed
       uint32_t root_index = static_cast<uint32_t>(node_buffer.size());
 
