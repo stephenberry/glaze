@@ -138,6 +138,7 @@ namespace glz
    //      size_t max_string_length = 1024;
    //      size_t max_array_size = 100;
    //      size_t max_map_size = 50;
+   //      bool allocate_raw_pointers = false;
    //   };
    // Use with if constexpr to ensure zero binary overhead when not used.
 
@@ -154,5 +155,10 @@ namespace glz
    template <class Ctx>
    concept has_runtime_max_map_size = requires(Ctx& ctx) {
       { ctx.max_map_size } -> std::convertible_to<size_t>;
+   };
+
+   template <class Ctx>
+   concept has_runtime_allocate_raw_pointers = requires(Ctx& ctx) {
+      { ctx.allocate_raw_pointers } -> std::convertible_to<bool>;
    };
 }

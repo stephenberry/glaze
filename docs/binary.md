@@ -103,6 +103,148 @@ static_assert(glz::compressed_int_size<100>() == 2);
 - Glaze types: structs with `glz::meta`, `glz::obj`, `glz::raw_json`
 - Nested structures of arbitrary depth
 
+## Peek BEVE Header
+
+The `glz::beve_peek_header` function examines a BEVE buffer's header to extract type and element count information **without performing full deserialization**. This is the counterpart to `glz::beve_size` - while `beve_size` calculates the size before writing, `beve_peek_header` inspects the size/count after receiving data.
+
+**Use Cases**
+
+- **Pre-allocation**: Know how many elements to `reserve()` before deserializing a vector
+- **Buffer validation**: Check structure and bounds before committing to full parse
+- **Routing decisions**: Determine the type of incoming data before processing
+- **Memory budgeting**: Verify element counts against limits before allocation
+
+**Basic Usage**
+
+```c++
+#include "glaze/beve.hpp"
+
+std::vector<int> data{1, 2, 3, 4, 5};
+auto buffer = glz::write_beve(data).value();
+
+// Peek at header without deserializing
+auto result = glz::beve_peek_header(buffer);
+if (result) {
+   // result->type == glz::tag::typed_array (4)
+   // result->count == 5 (number of elements)
+   // result->header_size == 2 (bytes consumed by header)
+}
+```
+
+**Return Type: `glz::beve_header`**
+
+```c++
+struct beve_header {
+   uint8_t tag{};        // Raw tag byte
+   uint8_t type{};       // Base type (see below)
+   uint8_t ext_type{};   // For extensions: subtype (variant, complex, etc.)
+   size_t count{};       // Element count, string length, variant index, etc.
+   size_t header_size{}; // Bytes consumed by tag + count encoding
+};
+```
+
+**Base Types (`type` field)**
+
+| Value | Type | `count` meaning |
+|-------|------|-----------------|
+| 0 | null/boolean | 0 for null, 1 for boolean |
+| 1 | number | 1 |
+| 2 | string | String length in bytes |
+| 3 | object | Number of key-value pairs |
+| 4 | typed_array | Number of elements |
+| 5 | generic_array | Number of elements |
+| 6 | extensions | See extension subtypes below |
+
+**Extension Subtypes (`ext_type` field when `type == 6`)**
+
+| ext_type | Name | `count` meaning | `header_size` |
+|----------|------|-----------------|---------------|
+| `glz::extension::delimiter` (0) | Delimiter | 0 | 1 |
+| `glz::extension::variant` (1) | Variant | Variant index | 1 + compressed_int size |
+| `glz::extension::complex` (3) | Complex number | 2 (real + imag) | 2 |
+| `glz::extension::complex` (3) | Complex array | Element count | 2 + compressed_int size |
+
+For complex types, distinguish single complex vs array by checking if `count == 2` and `header_size == 2` (single) or `header_size > 2` (array).
+
+**Pre-allocation Example**
+
+```c++
+// Receive BEVE data from network/file
+std::string buffer = receive_beve_data();
+
+// Peek to get element count
+auto header = glz::beve_peek_header(buffer);
+if (!header) {
+   handle_error(header.error());
+   return;
+}
+
+// Pre-allocate based on peeked count
+std::vector<double> values;
+values.reserve(header->count);
+
+// Now deserialize - vector won't need to reallocate
+glz::read_beve(values, buffer);
+```
+
+**Validation Example**
+
+```c++
+auto header = glz::beve_peek_header(buffer);
+if (!header) {
+   return unexpected(header.error());
+}
+
+// Reject oversized arrays
+constexpr size_t max_elements = 10000;
+if (header->type == glz::tag::typed_array && header->count > max_elements) {
+   return unexpected(error_code::invalid_length);
+}
+
+// Proceed with deserialization
+return glz::read_beve<std::vector<int>>(buffer);
+```
+
+**Variant Index Example**
+
+For variants, `count` contains the variant index, allowing you to determine which type is stored before deserializing:
+
+```c++
+using MyVariant = std::variant<int, std::string, double>;
+std::string buffer = receive_data();
+
+auto header = glz::beve_peek_header(buffer);
+if (header && header->type == glz::tag::extensions
+           && header->ext_type == glz::extension::variant) {
+   switch (header->count) {
+      case 0: std::cout << "Contains int\n"; break;
+      case 1: std::cout << "Contains string\n"; break;
+      case 2: std::cout << "Contains double\n"; break;
+   }
+}
+
+MyVariant value;
+glz::read_beve(value, buffer);
+```
+
+**Raw Pointer Overload**
+
+For C-style buffers:
+
+```c++
+const void* data = /* ... */;
+size_t size = /* ... */;
+
+auto result = glz::beve_peek_header(data, size);
+```
+
+**Error Handling**
+
+Returns `glz::expected<beve_header, error_ctx>`. Possible errors:
+
+- `error_code::unexpected_end` - Buffer too small to contain header
+- `error_code::syntax_error` - Invalid tag byte
+
 ## Untagged Binary
 
 By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_beve_untagged` and `glz::read_beve_untagged`.

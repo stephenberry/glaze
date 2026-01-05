@@ -149,3 +149,11 @@ add_executable(snprintf_fallback_test snprintf_fallback_test.cpp)
 target_link_libraries(snprintf_fallback_test PRIVATE glz_test_common)
 
 add_test(NAME snprintf_fallback_test COMMAND snprintf_fallback_test)
+
+## glz::lazy test - lazy JSON type that stores string_views
+
+add_executable(lazy_test lazy_test.cpp)
+
+target_link_libraries(lazy_test PRIVATE glz_test_common)
+
+add_test(NAME lazy_test COMMAND lazy_test)

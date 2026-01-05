@@ -78,6 +78,49 @@ namespace glz
       return t;
    }();
 
+   // Whitespace plus JSON separators (comma, colon)
+   inline constexpr std::array<bool, 256> whitespace_separator_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\t'] = true;
+      t['\r'] = true;
+      t[' '] = true;
+      t[','] = true;
+      t[':'] = true;
+      return t;
+   }();
+
+   // Character classification for lazy JSON value skipping
+   enum class lazy_char_type : uint8_t {
+      other = 0, // whitespace, separators, literals - just advance
+      quote = 1, // " - skip string
+      open = 2, // { or [ - increase depth
+      close = 3, // } or ] - decrease depth
+      number = 4 // - or 0-9 - skip number
+   };
+
+   inline constexpr std::array<lazy_char_type, 256> lazy_char_class = [] {
+      using enum lazy_char_type;
+      std::array<lazy_char_type, 256> t{};
+      t['"'] = quote;
+      t['{'] = open;
+      t['['] = open;
+      t['}'] = close;
+      t[']'] = close;
+      t['-'] = number;
+      t['0'] = number;
+      t['1'] = number;
+      t['2'] = number;
+      t['3'] = number;
+      t['4'] = number;
+      t['5'] = number;
+      t['6'] = number;
+      t['7'] = number;
+      t['8'] = number;
+      t['9'] = number;
+      return t;
+   }();
+
    inline constexpr std::array<bool, 256> whitespace_comment_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;

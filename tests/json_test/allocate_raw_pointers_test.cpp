@@ -704,6 +704,238 @@ suite msgpack_allocate_raw_pointers_tests = [] {
 };
 
 // =============================================================================
+// Runtime allocate_raw_pointers via Custom Context Tests
+// =============================================================================
+
+// Custom context with runtime allocate_raw_pointers control
+struct secure_context : glz::context
+{
+   bool allocate_raw_pointers = false;
+};
+
+suite runtime_allocate_raw_pointers_tests = [] {
+   "runtime_json_allocation_enabled"_test = [] {
+      simple_struct* ptr = nullptr;
+      std::string json = R"({"x":1,"y":2,"z":3})";
+
+      secure_context ctx;
+      ctx.allocate_raw_pointers = true; // Enable at runtime
+
+      auto ec = glz::read<glz::opts{}>(ptr, json, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, json);
+      expect(ptr != nullptr);
+      expect(ptr->x == 1);
+      expect(ptr->y == 2);
+      expect(ptr->z == 3);
+
+      delete ptr;
+   };
+
+   "runtime_json_allocation_disabled"_test = [] {
+      simple_struct* ptr = nullptr;
+      std::string json = R"({"x":1,"y":2,"z":3})";
+
+      secure_context ctx;
+      ctx.allocate_raw_pointers = false; // Disable at runtime
+
+      auto ec = glz::read<glz::opts{}>(ptr, json, ctx);
+      expect(ec == glz::error_code::invalid_nullable_read);
+      expect(ptr == nullptr);
+   };
+
+   "runtime_json_vector_of_pointers_enabled"_test = [] {
+      std::vector<simple_struct*> vec;
+      std::string json = R"([{"x":1,"y":2,"z":3},{"x":4,"y":5,"z":6}])";
+
+      secure_context ctx;
+      ctx.allocate_raw_pointers = true;
+
+      auto ec = glz::read<glz::opts{}>(vec, json, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, json);
+      expect(vec.size() == 2);
+      expect(vec[0]->x == 1);
+      expect(vec[1]->x == 4);
+
+      cleanup_vector(vec);
+   };
+
+   "runtime_json_trust_level_pattern"_test = [] {
+      // Simulates the use case from the GitHub issue - different trust levels
+      auto deserialize_with_trust = [](const std::string& json, bool is_trusted) -> simple_struct* {
+         simple_struct* ptr = nullptr;
+         secure_context ctx;
+         ctx.allocate_raw_pointers = is_trusted;
+
+         auto ec = glz::read<glz::opts{}>(ptr, json, ctx);
+         if (ec) {
+            return nullptr;
+         }
+         return ptr;
+      };
+
+      std::string json = R"({"x":42,"y":43,"z":44})";
+
+      // Trusted source - should allocate
+      auto* trusted_result = deserialize_with_trust(json, true);
+      expect(trusted_result != nullptr);
+      expect(trusted_result->x == 42);
+      delete trusted_result;
+
+      // Untrusted source - should fail
+      auto* untrusted_result = deserialize_with_trust(json, false);
+      expect(untrusted_result == nullptr);
+   };
+
+   "runtime_beve_allocation_enabled"_test = [] {
+      simple_struct original{10, 20, 30};
+      std::string buffer;
+      auto wec = glz::write_beve(original, buffer);
+      expect(!wec);
+
+      simple_struct* ptr = nullptr;
+      secure_context ctx;
+      ctx.allocate_raw_pointers = true;
+
+      auto ec = glz::read<glz::opts{.format = glz::BEVE}>(ptr, buffer, ctx);
+      expect(ec == glz::error_code::none);
+      expect(ptr != nullptr);
+      expect(ptr->x == 10);
+
+      delete ptr;
+   };
+
+   "runtime_beve_allocation_disabled"_test = [] {
+      simple_struct original{10, 20, 30};
+      std::string buffer;
+      auto wec = glz::write_beve(original, buffer);
+      expect(!wec);
+
+      simple_struct* ptr = nullptr;
+      secure_context ctx;
+      ctx.allocate_raw_pointers = false;
+
+      auto ec = glz::read<glz::opts{.format = glz::BEVE}>(ptr, buffer, ctx);
+      expect(ec == glz::error_code::invalid_nullable_read);
+      expect(ptr == nullptr);
+   };
+
+   "runtime_cbor_allocation_enabled"_test = [] {
+      int original = 12345;
+      std::string buffer;
+      auto wec = glz::write_cbor(original, buffer);
+      expect(!wec);
+
+      int* ptr = nullptr;
+      secure_context ctx;
+      ctx.allocate_raw_pointers = true;
+
+      auto ec = glz::read<glz::opts{.format = glz::CBOR}>(ptr, buffer, ctx);
+      expect(ec == glz::error_code::none);
+      expect(ptr != nullptr);
+      expect(*ptr == 12345);
+
+      delete ptr;
+   };
+
+   "runtime_cbor_allocation_disabled"_test = [] {
+      int original = 12345;
+      std::string buffer;
+      auto wec = glz::write_cbor(original, buffer);
+      expect(!wec);
+
+      int* ptr = nullptr;
+      secure_context ctx;
+      ctx.allocate_raw_pointers = false;
+
+      auto ec = glz::read<glz::opts{.format = glz::CBOR}>(ptr, buffer, ctx);
+      expect(ec == glz::error_code::invalid_nullable_read);
+      expect(ptr == nullptr);
+   };
+
+   "runtime_msgpack_allocation_enabled"_test = [] {
+      int original = 54321;
+      std::string buffer;
+      auto wec = glz::write_msgpack(original, buffer);
+      expect(!wec);
+
+      int* ptr = nullptr;
+      secure_context ctx;
+      ctx.allocate_raw_pointers = true;
+
+      auto ec = glz::read<glz::opts{.format = glz::MSGPACK}>(ptr, buffer, ctx);
+      expect(ec == glz::error_code::none);
+      expect(ptr != nullptr);
+      expect(*ptr == 54321);
+
+      delete ptr;
+   };
+
+   "runtime_msgpack_allocation_disabled"_test = [] {
+      int original = 54321;
+      std::string buffer;
+      auto wec = glz::write_msgpack(original, buffer);
+      expect(!wec);
+
+      int* ptr = nullptr;
+      secure_context ctx;
+      ctx.allocate_raw_pointers = false;
+
+      auto ec = glz::read<glz::opts{.format = glz::MSGPACK}>(ptr, buffer, ctx);
+      expect(ec == glz::error_code::invalid_nullable_read);
+      expect(ptr == nullptr);
+   };
+
+   "runtime_compile_time_option_takes_precedence"_test = [] {
+      // When compile-time option is set to true, runtime context is not checked
+      simple_struct* ptr = nullptr;
+      std::string json = R"({"x":1,"y":2,"z":3})";
+
+      secure_context ctx;
+      ctx.allocate_raw_pointers = false; // Runtime says no
+
+      // But compile-time option says yes - should still allocate
+      auto ec = glz::read<alloc_opts{}>(ptr, json, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, json);
+      expect(ptr != nullptr);
+
+      delete ptr;
+   };
+
+   "runtime_nested_pointers"_test = [] {
+      level0 obj;
+      std::string json = R"({"nested":{"nested":{"value":42}}})";
+
+      secure_context ctx;
+      ctx.allocate_raw_pointers = true;
+
+      auto ec = glz::read<glz::opts{}>(obj, json, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, json);
+      expect(obj.nested != nullptr);
+      expect(obj.nested->nested != nullptr);
+      expect(obj.nested->nested->value == 42);
+
+      delete obj.nested->nested;
+      delete obj.nested;
+   };
+
+   "runtime_map_with_pointer_values"_test = [] {
+      std::map<std::string, simple_struct*> m;
+      std::string json = R"({"first":{"x":1,"y":2,"z":3},"second":{"x":4,"y":5,"z":6}})";
+
+      secure_context ctx;
+      ctx.allocate_raw_pointers = true;
+
+      auto ec = glz::read<glz::opts{}>(m, json, ctx);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, json);
+      expect(m.size() == 2);
+      expect(m["first"]->x == 1);
+      expect(m["second"]->x == 4);
+
+      cleanup_map(m);
+   };
+};
+
+// =============================================================================
 // Edge Cases and Advanced Tests
 // =============================================================================
 

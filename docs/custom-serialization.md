@@ -172,70 +172,75 @@ struct glz::meta<T>
 
 # Mimicking Standard Types
 
-When a custom type serializes as a standard type (like `std::string`), you can declare this relationship using `mimic`. This is particularly useful when using custom types as **map keys**, where Glaze needs to know that the type behaves like a string to avoid double-quoting.
+When a custom type serializes as a standard type (like `std::string`), you can declare this relationship using `mimic`. This is useful for:
+- Using custom types as **map keys** without double-quoting
+- Using custom types in **variants** with proper type deduction
+- Generating correct **JSON schemas**
 
-## The Problem
+## Using `mimic`
 
-Without `mimic`, custom types used as map keys get wrapped in an extra quoting layer:
+Add `using mimic = <type>;` to indicate that your type serializes as a standard type:
 
 ```c++
-struct my_key
-{
+struct my_key {
    std::string value{};
    auto operator<=>(const my_key&) const = default;
 };
 
 template <>
-struct glz::meta<my_key>
-{
+struct glz::meta<my_key> {
+   using mimic = std::string;  // Declares string-like behavior
    static constexpr auto value = &my_key::value;
 };
 
+// Works correctly as map keys (no double-quoting)
 std::map<my_key, int> m{{{"hello"}, 42}};
-// Produces: {"\"hello\"":42}  -- double-quoted!
-```
+// Produces: {"hello":42}
 
-## The Solution
-
-Add `using mimic = std::string;` to indicate that your type serializes as a string:
-
-```c++
-struct my_key
-{
-   std::string value{};
-   auto operator<=>(const my_key&) const = default;
-};
-
-template <>
-struct glz::meta<my_key>
-{
-   using mimic = std::string;
-   static constexpr auto value = &my_key::value;
-};
-
-std::map<my_key, int> m{{{"hello"}, 42}};
-// Produces: {"hello":42}  -- correct!
+// Works in variants
+std::variant<int, my_key> v;
+glz::read_json(v, "\"hello\"");  // → my_key{"hello"}
 ```
 
 ## Available Concepts
 
-Glaze provides concepts to check mimic relationships:
-
 - `glz::has_mimic<T>` – checks if `T` has a `mimic` type defined
 - `glz::mimic_type<T>` – extracts the mimic type from `T`
 - `glz::mimics<T, Target>` – checks if `T` mimics exactly `Target`
-- `glz::mimics_str_t<T>` – checks if `T` mimics any string type (satisfies `str_t`)
+- `glz::mimics_str_t<T>` – checks if `T` mimics any string type
+- `glz::mimics_num_t<T>` – checks if `T` mimics any numeric type
+- `glz::mimics_bool_t<T>` – checks if `T` mimics a boolean type
+
+# Auto-Inference for Custom Types
+
+When using `glz::custom` read/write functions, Glaze automatically infers the JSON type from your read function's parameter:
+
+| Read parameter type | Concept satisfied |
+|--------------------|-------------------|
+| `double`, `int`, etc. | `custom_num_t<T>` |
+| `std::string`, `std::string_view` | `custom_str_t<T>` |
+| `bool` | `custom_bool_t<T>` |
 
 ```c++
-static_assert(glz::has_mimic<my_key>);
-static_assert(glz::mimics<my_key, std::string>);
-static_assert(glz::mimics_str_t<my_key>);
+struct Amount {
+   double value{};
+};
+
+template <>
+struct glz::meta<Amount> {
+   // Glaze infers this is numeric from 'const double&'
+   static constexpr auto read_fn = [](Amount& a, const double& input) {
+      a.value = input;
+   };
+   static constexpr auto write_fn = [](const Amount& a) -> const double& {
+      return a.value;
+   };
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
+};
+
+// Works automatically in variants - no mimic needed!
+std::variant<std::string, Amount> v;
+glz::read_json(v, "42.5");  // → Amount{42.5}
 ```
 
-## When to Use
-
-Use `mimic` when:
-
-1. Your custom type serializes directly as a standard type (string, number, etc.)
-2. You want to use it as a **map key** without double-quoting
-3. You want compile-time documentation of what JSON type your custom type represents
+See [Variant Handling - Custom Types in Variants](variant-handling.md#custom-types-in-variants) for more details.

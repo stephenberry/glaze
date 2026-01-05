@@ -56,10 +56,11 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool skip_self_constraint` | `false` | Skip `self_constraint` validation during reading |
 | `bool assume_sufficient_buffer` | `false` | Skip bounds checking for fixed-size buffers (caller guarantees space) |
 | `bool linear_search` | `false` | Use linear key search instead of hash tables for smaller binary size |
+| `optimization_level optimization_level` | `normal` | Controls speed vs binary size tradeoff. See [Optimization Levels](optimization-levels.md) |
 | `size_t max_string_length` | `0` | Maximum string length when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `size_t max_array_size` | `0` | Maximum array size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
-| `bool allocate_raw_pointers` | `false` | Allocate memory for null raw pointers during deserialization |
+| `bool allocate_raw_pointers` | `false` | Allocate memory for null raw pointers during deserialization. See also [Runtime Control](security.md#runtime-raw-pointer-allocation-control). |
 
 ### CSV Options (`glz::opts_csv`)
 
@@ -306,6 +307,20 @@ auto ec = glz::read<alloc_opts{}>(vec, json);
 for (auto* p : vec) delete p;
 ```
 
+**Runtime control**: You can also control this option at runtime using a custom context. This is useful for applications that need to toggle raw pointer allocation based on the trust level of the data source:
+
+```c++
+struct secure_context : glz::context {
+   bool allocate_raw_pointers = false;
+};
+
+secure_context ctx;
+ctx.allocate_raw_pointers = is_trusted_source;
+auto ec = glz::read<glz::opts{}>(obj, buffer, ctx);
+```
+
+See [Runtime Raw Pointer Allocation Control](security.md#runtime-raw-pointer-allocation-control) for more details.
+
 > [!CAUTION]
 > When using this option, **you are responsible for freeing the allocated memory**. Glaze uses `new` to allocate but cannot track or delete the memory. Use smart pointers (`std::unique_ptr`, `std::shared_ptr`) when possible instead.
 
@@ -343,6 +358,7 @@ For per-member formatting control, see the [`glz::float_format` wrapper](wrapper
 
 ## See Also
 
+- [Optimization Levels](optimization-levels.md) - Control binary size vs performance tradeoff
 - [Wrappers](wrappers.md) - Per-field options using wrappers
 - [Field Validation](field-validation.md) - Customizing required field validation
 - [Partial Read](partial-read.md) - Reading partial documents

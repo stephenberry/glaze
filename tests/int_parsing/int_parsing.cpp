@@ -1,3 +1,4 @@
+#include <charconv>
 #include <deque>
 #include <iostream>
 #include <map>
@@ -5,12 +6,95 @@
 #include <unordered_map>
 
 #include "glaze/glaze.hpp"
+#include "glaze/util/itoa.hpp"
+#include "glaze/util/itoa_40kb.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
 
+// ==================== Direct to_chars validation ====================
+// These tests validate to_chars output against std::to_chars for every possible value
+
 template <class T>
-bool test_samples()
+bool validate_to_chars_exhaustive()
+{
+   char glz_buf[32];
+   char std_buf[32];
+
+   auto test_value = [&](T val) -> bool {
+      // Test glz::to_chars
+      auto glz_end = glz::to_chars(glz_buf, val);
+      std::string_view glz_result(glz_buf, glz_end - glz_buf);
+
+      // Test std::to_chars as reference
+      auto [std_end, ec] = std::to_chars(std_buf, std_buf + 32, val);
+      if (ec != std::errc()) return false;
+      std::string_view std_result(std_buf, std_end - std_buf);
+
+      if (glz_result != std_result) {
+         std::cerr << "Mismatch for value " << int64_t(val) << ": glz='" << glz_result << "' std='" << std_result
+                   << "'\n";
+         return false;
+      }
+      return true;
+   };
+
+   if constexpr (std::is_unsigned_v<T>) {
+      for (uint64_t i = 0; i <= uint64_t((std::numeric_limits<T>::max)()); ++i) {
+         if (!test_value(T(i))) return false;
+      }
+   }
+   else {
+      for (int64_t i = int64_t(std::numeric_limits<T>::lowest()); i <= int64_t((std::numeric_limits<T>::max)()); ++i) {
+         if (!test_value(T(i))) return false;
+      }
+   }
+   return true;
+}
+
+// Also test to_chars_40kb for 32/64-bit types
+template <class T>
+   requires(sizeof(T) >= 4)
+bool validate_to_chars_40kb_samples()
+{
+   char glz_buf[32];
+   char std_buf[32];
+
+   std::mt19937_64 rng(42);
+   std::uniform_int_distribution<T> dist(std::numeric_limits<T>::lowest(), (std::numeric_limits<T>::max)());
+
+   auto test_value = [&](T val) -> bool {
+      auto glz_end = glz::to_chars_40kb(glz_buf, val);
+      std::string_view glz_result(glz_buf, glz_end - glz_buf);
+
+      auto [std_end, ec] = std::to_chars(std_buf, std_buf + 32, val);
+      if (ec != std::errc()) return false;
+      std::string_view std_result(std_buf, std_end - std_buf);
+
+      if (glz_result != std_result) {
+         std::cerr << "Mismatch for value " << val << ": glz='" << glz_result << "' std='" << std_result << "'\n";
+         return false;
+      }
+      return true;
+   };
+
+   // Test edge cases
+   if (!test_value(0)) return false;
+   if (!test_value(1)) return false;
+   if (!test_value(T(-1))) return false;
+   if (!test_value((std::numeric_limits<T>::max)())) return false;
+   if (!test_value(std::numeric_limits<T>::lowest())) return false;
+
+   // Test random samples
+   for (size_t i = 0; i < 100000; ++i) {
+      if (!test_value(dist(rng))) return false;
+   }
+   return true;
+}
+
+// Test helper that tests both normal mode (to_chars_40kb) and size mode (to_chars)
+template <class T, class Opts = glz::opts>
+bool test_samples_with_opts()
 {
    std::mt19937 gen{std::random_device{}()};
    std::uniform_int_distribution<T> dist{std::numeric_limits<T>::lowest(), (std::numeric_limits<T>::max)()};
@@ -21,12 +105,12 @@ bool test_samples()
 
    for (size_t i = 0; i < 100000; ++i) {
       sample = dist(gen);
-      if (glz::write_json(sample, buffer)) {
+      if (glz::write<Opts{}>(sample, buffer)) {
          valid = false;
          break;
       }
       T value{};
-      if (glz::read_json(value, buffer)) {
+      if (glz::read<Opts{}>(value, buffer)) {
          valid = false;
          break;
       }
@@ -39,11 +123,11 @@ bool test_samples()
 
    // test max and min values
    sample = (std::numeric_limits<T>::max)();
-   if (glz::write_json(sample, buffer)) {
+   if (glz::write<Opts{}>(sample, buffer)) {
       valid = false;
    }
    T value{};
-   if (glz::read_json(value, buffer)) {
+   if (glz::read<Opts{}>(value, buffer)) {
       valid = false;
    }
    if (value != sample) {
@@ -51,11 +135,11 @@ bool test_samples()
    }
 
    sample = std::numeric_limits<T>::lowest();
-   if (glz::write_json(sample, buffer)) {
+   if (glz::write<Opts{}>(sample, buffer)) {
       valid = false;
    }
    value = {};
-   if (glz::read_json(value, buffer)) {
+   if (glz::read<Opts{}>(value, buffer)) {
       valid = false;
    }
    if (value != sample) {
@@ -67,18 +151,25 @@ bool test_samples()
 }
 
 template <class T>
-bool test_to_max()
+bool test_samples()
+{
+   // Test both normal mode (to_chars_40kb - 40KB tables) and size mode (to_chars - 400B tables)
+   return test_samples_with_opts<T, glz::opts>() && test_samples_with_opts<T, glz::opts_size>();
+}
+
+template <class T, class Opts = glz::opts>
+bool test_to_max_with_opts()
 {
    std::string buffer{};
    bool valid = true;
    if constexpr (std::is_unsigned_v<T>) {
       for (uint64_t i = 0; i < (std::numeric_limits<T>::max)(); ++i) {
-         if (glz::write_json(i, buffer)) {
+         if (glz::write<Opts{}>(i, buffer)) {
             valid = false;
             break;
          }
          T value{};
-         if (glz::read_json(value, buffer)) {
+         if (glz::read<Opts{}>(value, buffer)) {
             valid = false;
             break;
          }
@@ -90,12 +181,12 @@ bool test_to_max()
    }
    else {
       for (int64_t i = std::numeric_limits<T>::lowest(); i < (std::numeric_limits<T>::max)(); ++i) {
-         if (glz::write_json(i, buffer)) {
+         if (glz::write<Opts{}>(i, buffer)) {
             valid = false;
             break;
          }
          T value{};
-         if (glz::read_json(value, buffer)) {
+         if (glz::read<Opts{}>(value, buffer)) {
             valid = false;
             break;
          }
@@ -110,7 +201,14 @@ bool test_to_max()
 }
 
 template <class T>
-bool test_performance()
+bool test_to_max()
+{
+   // Test both normal mode (to_chars_40kb) and size mode (to_chars)
+   return test_to_max_with_opts<T, glz::opts>() && test_to_max_with_opts<T, glz::opts_size>();
+}
+
+template <class T, class Opts = glz::opts>
+bool test_performance_with_opts()
 {
 #ifdef NDEBUG
    constexpr size_t n = 10000000;
@@ -126,9 +224,9 @@ bool test_performance()
    bool valid = true;
    for (size_t i = 0; i < n; ++i) {
       const auto sample = dist(gen);
-      std::ignore = glz::write_json(sample, buffer);
+      std::ignore = glz::write<Opts{}>(sample, buffer);
       T v{};
-      const auto e = glz::read_json(v, buffer);
+      const auto e = glz::read<Opts{}>(v, buffer);
       if (bool(e)) {
          valid = false;
          break;
@@ -140,8 +238,16 @@ bool test_performance()
    }
    auto t1 = std::chrono::steady_clock::now();
    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
-   std::cout << glz::name_v<T> << " read/write: " << duration << '\n';
+   constexpr bool is_size_mode = std::same_as<Opts, glz::opts_size>;
+   std::cout << glz::name_v<T> << " read/write (" << (is_size_mode ? "size" : "normal") << "): " << duration << '\n';
    return valid;
+}
+
+template <class T>
+bool test_performance()
+{
+   // Test both normal mode (to_chars_40kb) and size mode (to_chars)
+   return test_performance_with_opts<T, glz::opts>() && test_performance_with_opts<T, glz::opts_size>();
 }
 
 template <class T>
@@ -167,8 +273,8 @@ void test_struct_with_array_minified()
    expect(not glz::read<glz::opts{.minified = true}>(obj, buffer));
 }
 
-template <class T>
-bool test_single_char_performance()
+template <class T, class Opts = glz::opts>
+bool test_single_char_performance_with_opts()
 {
 #ifdef NDEBUG
    constexpr size_t n = 10000000;
@@ -184,9 +290,9 @@ bool test_single_char_performance()
    bool valid = true;
    for (size_t i = 0; i < n; ++i) {
       const auto sample = dist(gen);
-      std::ignore = glz::write_json(sample, buffer);
+      std::ignore = glz::write<Opts{}>(sample, buffer);
       T v{};
-      const auto e = glz::read_json(v, buffer);
+      const auto e = glz::read<Opts{}>(v, buffer);
       if (bool(e)) {
          valid = false;
          break;
@@ -198,8 +304,18 @@ bool test_single_char_performance()
    }
    auto t1 = std::chrono::steady_clock::now();
    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
-   std::cout << glz::name_v<T> << " read/write: " << duration << '\n';
+   constexpr bool is_size_mode = std::same_as<Opts, glz::opts_size>;
+   std::cout << glz::name_v<T> << " single char read/write (" << (is_size_mode ? "size" : "normal") << "): " << duration
+             << '\n';
    return valid;
+}
+
+template <class T>
+bool test_single_char_performance()
+{
+   // Test both normal mode (to_chars_40kb) and size mode (to_chars)
+   return test_single_char_performance_with_opts<T, glz::opts>() &&
+          test_single_char_performance_with_opts<T, glz::opts_size>();
 }
 
 template <class T>
@@ -263,6 +379,63 @@ bool test_lengths()
    }
    return valid;
 }
+
+// ==================== Direct to_chars validation test suite ====================
+// Tests that validate glz::to_chars output against std::to_chars for every possible value
+
+suite to_chars_validation = [] {
+   // Exhaustive tests for small integer types (every possible value)
+   "to_chars uint8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint8_t>()); };
+   "to_chars int8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int8_t>()); };
+   "to_chars uint16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint16_t>()); };
+   "to_chars int16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int16_t>()); };
+
+   // Sample tests for larger types (exhaustive would take too long)
+   "to_chars uint32_t samples"_test = [] {
+      char glz_buf[32], std_buf[32];
+      std::mt19937 rng(42);
+      std::uniform_int_distribution<uint32_t> dist(0, (std::numeric_limits<uint32_t>::max)());
+
+      auto test = [&](uint32_t val) {
+         auto glz_end = glz::to_chars(glz_buf, val);
+         auto [std_end, ec] = std::to_chars(std_buf, std_buf + 32, val);
+         expect(ec == std::errc{});
+         expect(std::string_view(glz_buf, glz_end) == std::string_view(std_buf, std_end)) << val;
+      };
+
+      test(0);
+      test(1);
+      test((std::numeric_limits<uint32_t>::max)());
+      for (int i = 0; i < 100000; ++i) test(dist(rng));
+   };
+   "to_chars int32_t samples"_test = [] {
+      // Test edge cases and random samples for to_chars (400B tables)
+      char glz_buf[32], std_buf[32];
+      std::mt19937 rng(42);
+      std::uniform_int_distribution<int32_t> dist(std::numeric_limits<int32_t>::lowest(),
+                                                  (std::numeric_limits<int32_t>::max)());
+
+      auto test = [&](int32_t val) {
+         auto glz_end = glz::to_chars(glz_buf, val);
+         auto [std_end, ec] = std::to_chars(std_buf, std_buf + 32, val);
+         expect(ec == std::errc{});
+         expect(std::string_view(glz_buf, glz_end) == std::string_view(std_buf, std_end)) << val;
+      };
+
+      test(0);
+      test(1);
+      test(-1);
+      test((std::numeric_limits<int32_t>::max)());
+      test(std::numeric_limits<int32_t>::lowest());
+      for (int i = 0; i < 100000; ++i) test(dist(rng));
+   };
+
+   // to_chars_40kb validation for 32/64-bit types
+   "to_chars_40kb int32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<int32_t>()); };
+   "to_chars_40kb uint32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<uint32_t>()); };
+   "to_chars_40kb int64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<int64_t>()); };
+   "to_chars_40kb uint64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<uint64_t>()); };
+};
 
 // We test parsing an array so that early termination triggers errors
 suite u8_test = [] {

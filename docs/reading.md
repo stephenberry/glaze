@@ -142,5 +142,6 @@ For reading directly from files or other input streams with bounded memory, see 
 ## See Also
 
 - [Writing](writing.md) - Writing to buffers and error handling
+- [Lazy JSON](lazy-json.md) - On-demand parsing for selective field access
 - [Streaming I/O](streaming.md) - Reading/writing with streams
 - [Options](options.md) - Compile time options

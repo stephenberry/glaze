@@ -1737,4 +1737,270 @@ suite empty_struct_variant_extended = [] {
    };
 };
 
+// ============================================================================
+// Tests for auto-inferred custom types in variants (issue #1641)
+// ============================================================================
+
+// Custom type with glz::custom that reads/writes as a number
+struct Amount
+{
+   double value{};
+   bool operator==(const Amount&) const = default;
+};
+
+template <>
+struct glz::meta<Amount>
+{
+   static constexpr auto read_fn = [](Amount& a, const double& input) { a.value = input; };
+   static constexpr auto write_fn = [](const Amount& a) -> const double& { return a.value; };
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
+};
+
+// Custom type with glz::custom that reads/writes as a string
+struct Label
+{
+   std::string text{};
+   bool operator==(const Label&) const = default;
+   auto operator<=>(const Label&) const = default;
+};
+
+template <>
+struct glz::meta<Label>
+{
+   static constexpr auto read_fn = [](Label& l, const std::string& input) { l.text = input; };
+   static constexpr auto write_fn = [](const Label& l) -> const std::string& { return l.text; };
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
+};
+
+// Custom type with glz::custom that reads/writes as a bool
+struct Flag
+{
+   bool state{};
+   bool operator==(const Flag&) const = default;
+};
+
+template <>
+struct glz::meta<Flag>
+{
+   static constexpr auto read_fn = [](Flag& f, const bool& input) { f.state = input; };
+   static constexpr auto write_fn = [](const Flag& f) -> const bool& { return f.state; };
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
+};
+
+// Custom type using mimic for numeric behavior
+struct MimicNumber
+{
+   int value{};
+   bool operator==(const MimicNumber&) const = default;
+};
+
+template <>
+struct glz::meta<MimicNumber>
+{
+   using mimic = int;
+   static constexpr auto value = &MimicNumber::value;
+};
+
+// Custom type using mimic for string behavior (map key test)
+struct StringKey
+{
+   std::string key{};
+   auto operator<=>(const StringKey&) const = default;
+};
+
+template <>
+struct glz::meta<StringKey>
+{
+   using mimic = std::string;
+   static constexpr auto value = &StringKey::key;
+};
+
+suite auto_inferred_custom_types = [] {
+   "custom_num_t concept check"_test = [] {
+      static_assert(glz::custom_num_t<Amount>);
+      static_assert(!glz::custom_str_t<Amount>);
+      static_assert(!glz::custom_bool_t<Amount>);
+   };
+
+   "custom_str_t concept check"_test = [] {
+      static_assert(glz::custom_str_t<Label>);
+      static_assert(!glz::custom_num_t<Label>);
+      static_assert(!glz::custom_bool_t<Label>);
+   };
+
+   "custom_bool_t concept check"_test = [] {
+      static_assert(glz::custom_bool_t<Flag>);
+      static_assert(!glz::custom_num_t<Flag>);
+      static_assert(!glz::custom_str_t<Flag>);
+   };
+
+   "auto-inferred numeric type in variant"_test = [] {
+      std::variant<std::string, Amount> v;
+
+      // Parse as Amount (number)
+      auto ec = glz::read_json(v, "42.5");
+      expect(not ec) << glz::format_error(ec, "42.5");
+      expect(std::holds_alternative<Amount>(v));
+      expect(std::get<Amount>(v).value == 42.5);
+
+      // Parse as string
+      ec = glz::read_json(v, R"("hello")");
+      expect(not ec) << glz::format_error(ec, R"("hello")");
+      expect(std::holds_alternative<std::string>(v));
+      expect(std::get<std::string>(v) == "hello");
+   };
+
+   "auto-inferred string type in variant"_test = [] {
+      std::variant<int, Label> v;
+
+      // Parse as Label (string)
+      auto ec = glz::read_json(v, R"("world")");
+      expect(not ec) << glz::format_error(ec, R"("world")");
+      expect(std::holds_alternative<Label>(v));
+      expect(std::get<Label>(v).text == "world");
+
+      // Parse as int
+      ec = glz::read_json(v, "123");
+      expect(not ec) << glz::format_error(ec, "123");
+      expect(std::holds_alternative<int>(v));
+      expect(std::get<int>(v) == 123);
+   };
+
+   "auto-inferred bool type in variant"_test = [] {
+      std::variant<std::string, Flag> v;
+
+      // Parse as Flag (bool)
+      auto ec = glz::read_json(v, "true");
+      expect(not ec) << glz::format_error(ec, "true");
+      expect(std::holds_alternative<Flag>(v));
+      expect(std::get<Flag>(v).state == true);
+
+      ec = glz::read_json(v, "false");
+      expect(not ec) << glz::format_error(ec, "false");
+      expect(std::holds_alternative<Flag>(v));
+      expect(std::get<Flag>(v).state == false);
+
+      // Parse as string
+      ec = glz::read_json(v, R"("text")");
+      expect(not ec) << glz::format_error(ec, R"("text")");
+      expect(std::holds_alternative<std::string>(v));
+   };
+
+   "auto-inferred type roundtrip"_test = [] {
+      std::variant<std::string, Amount> v = Amount{99.5};
+      std::string buffer;
+      expect(not glz::write_json(v, buffer));
+      expect(buffer == "99.5") << buffer;
+
+      std::variant<std::string, Amount> parsed;
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(std::holds_alternative<Amount>(parsed));
+      expect(std::get<Amount>(parsed).value == 99.5);
+   };
+
+   "multiple auto-inferred types in variant"_test = [] {
+      std::variant<Amount, Label, Flag> v;
+
+      // Number -> Amount
+      auto ec = glz::read_json(v, "3.14");
+      expect(not ec);
+      expect(std::holds_alternative<Amount>(v));
+
+      // String -> Label
+      ec = glz::read_json(v, R"("test")");
+      expect(not ec);
+      expect(std::holds_alternative<Label>(v));
+
+      // Bool -> Flag
+      ec = glz::read_json(v, "true");
+      expect(not ec);
+      expect(std::holds_alternative<Flag>(v));
+   };
+};
+
+suite mimic_types_in_variants = [] {
+   "mimics_num_t concept check"_test = [] {
+      static_assert(glz::has_mimic<MimicNumber>);
+      static_assert(glz::mimics_num_t<MimicNumber>);
+      static_assert(!glz::mimics_str_t<MimicNumber>);
+   };
+
+   "mimics_str_t concept check"_test = [] {
+      static_assert(glz::has_mimic<StringKey>);
+      static_assert(glz::mimics_str_t<StringKey>);
+      static_assert(!glz::mimics_num_t<StringKey>);
+   };
+
+   "mimic numeric type in variant"_test = [] {
+      std::variant<std::string, MimicNumber> v;
+
+      auto ec = glz::read_json(v, "42");
+      expect(not ec) << glz::format_error(ec, "42");
+      expect(std::holds_alternative<MimicNumber>(v));
+      expect(std::get<MimicNumber>(v).value == 42);
+
+      ec = glz::read_json(v, R"("text")");
+      expect(not ec);
+      expect(std::holds_alternative<std::string>(v));
+   };
+
+   "mimic string type in variant"_test = [] {
+      std::variant<int, StringKey> v;
+
+      auto ec = glz::read_json(v, R"("mykey")");
+      expect(not ec) << glz::format_error(ec, R"("mykey")");
+      expect(std::holds_alternative<StringKey>(v));
+      expect(std::get<StringKey>(v).key == "mykey");
+
+      ec = glz::read_json(v, "100");
+      expect(not ec);
+      expect(std::holds_alternative<int>(v));
+   };
+
+   "mimic string as map key (no double quoting)"_test = [] {
+      std::map<StringKey, int> m{{StringKey{"hello"}, 42}, {StringKey{"world"}, 99}};
+      std::string buffer;
+      expect(not glz::write_json(m, buffer));
+      // Should be {"hello":42,"world":99} not {"\"hello\"":42,...}
+      expect(buffer.find("\"hello\"") != std::string::npos) << buffer;
+      expect(buffer.find("\"\"hello\"\"") == std::string::npos) << buffer;
+
+      std::map<StringKey, int> parsed;
+      auto ec = glz::read_json(parsed, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(parsed.size() == 2);
+      expect(parsed[StringKey{"hello"}] == 42);
+      expect(parsed[StringKey{"world"}] == 99);
+   };
+};
+
+suite custom_type_schema_generation = [] {
+   "schema for auto-inferred numeric type"_test = [] {
+      std::string schema = glz::write_json_schema<Amount>().value_or("error");
+      // Schema uses array format: "type":["number"]
+      expect(schema.find("\"number\"") != std::string::npos) << schema;
+   };
+
+   "schema for auto-inferred string type"_test = [] {
+      std::string schema = glz::write_json_schema<Label>().value_or("error");
+      expect(schema.find("\"string\"") != std::string::npos) << schema;
+   };
+
+   "schema for auto-inferred bool type"_test = [] {
+      std::string schema = glz::write_json_schema<Flag>().value_or("error");
+      expect(schema.find("\"boolean\"") != std::string::npos) << schema;
+   };
+
+   "schema for mimic numeric type"_test = [] {
+      std::string schema = glz::write_json_schema<MimicNumber>().value_or("error");
+      expect(schema.find("\"integer\"") != std::string::npos) << schema;
+   };
+
+   "schema for mimic string type"_test = [] {
+      std::string schema = glz::write_json_schema<StringKey>().value_or("error");
+      expect(schema.find("\"string\"") != std::string::npos) << schema;
+   };
+};
+
 int main() { return 0; }
