@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/context.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/wrappers.hpp"
 #include "glaze/core/write.hpp"
@@ -36,6 +37,12 @@ namespace glz
                   else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                      parse<Format>::template op<Opts>(input, ctx, it, end);
+                     // end_reached is not an error for non-null-terminated buffers
+                     if constexpr (not Opts.null_terminated) {
+                        if (ctx.error == error_code::end_reached) {
+                           ctx.error = error_code::none;
+                        }
+                     }
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      (value.val.*(value.from))(std::move(input));
@@ -65,6 +72,12 @@ namespace glz
                      else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                         std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                         parse<Format>::template op<Opts>(input, ctx, it, end);
+                        // end_reached is not an error for non-null-terminated buffers
+                        if constexpr (not Opts.null_terminated) {
+                           if (ctx.error == error_code::end_reached) {
+                              ctx.error = error_code::none;
+                           }
+                        }
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         from(std::move(input));
@@ -103,6 +116,12 @@ namespace glz
                   else if constexpr (N > 1) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
                      parse<Format>::template op<Opts>(input, ctx, it, end);
+                     // end_reached is not an error for non-null-terminated buffers
+                     if constexpr (not Opts.null_terminated) {
+                        if (ctx.error == error_code::end_reached) {
+                           ctx.error = error_code::none;
+                        }
+                     }
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      if constexpr (N == 2) {
