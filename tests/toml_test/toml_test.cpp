@@ -25,6 +25,8 @@ struct nested
 {
    int x = 10;
    std::string y = "test";
+
+   bool operator==(const nested&) const = default;
 };
 
 struct simple_container
@@ -1015,16 +1017,16 @@ b = 2)");
    };
 
    // Test writing a nested structure.
+   // TOML spec: scalars should be written before tables for correct parsing
    "write_nested_struct"_test = [] {
       simple_container c{};
       std::string buffer{};
       expect(not glz::write_toml(c, buffer));
-      expect(buffer == R"([inner]
+      expect(buffer == R"(value = 5.5
+[inner]
 x = 10
 y = "test"
-
-value = 5.5)"); // TODO: This is not the right format, we need to refactor the output to match TOML syntax.
-                // For now, I'll leave it as is, but it should be fixed in the future.
+)");
    };
 
    "read_wrong_format_nested"_test = [] {
@@ -2370,6 +2372,567 @@ suite toml_bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_toml(obj, buffer);
       expect(not result) << "write should succeed";
+   };
+};
+
+// ========== Array-of-Tables test structures ==========
+
+struct product
+{
+   std::string name{};
+   int sku{};
+
+   bool operator==(const product&) const = default;
+};
+
+template <>
+struct glz::meta<product>
+{
+   using T = product;
+   static constexpr auto value = object("name", &T::name, "sku", &T::sku);
+};
+
+struct catalog
+{
+   std::string store_name{};
+   std::vector<product> products{};
+
+   bool operator==(const catalog&) const = default;
+};
+
+template <>
+struct glz::meta<catalog>
+{
+   using T = catalog;
+   static constexpr auto value = object("store_name", &T::store_name, "products", &T::products);
+};
+
+struct fruit_variety
+{
+   std::string name{};
+
+   bool operator==(const fruit_variety&) const = default;
+};
+
+template <>
+struct glz::meta<fruit_variety>
+{
+   using T = fruit_variety;
+   static constexpr auto value = object("name", &T::name);
+};
+
+struct fruit
+{
+   std::string name{};
+   std::vector<fruit_variety> varieties{};
+
+   bool operator==(const fruit&) const = default;
+};
+
+template <>
+struct glz::meta<fruit>
+{
+   using T = fruit;
+   static constexpr auto value = object("name", &T::name, "varieties", &T::varieties);
+};
+
+struct fruit_basket
+{
+   std::vector<fruit> fruits{};
+
+   bool operator==(const fruit_basket&) const = default;
+};
+
+template <>
+struct glz::meta<fruit_basket>
+{
+   using T = fruit_basket;
+   static constexpr auto value = object("fruits", &T::fruits);
+};
+
+// Reflectable struct for array-of-tables
+struct reflectable_item
+{
+   std::string id{};
+   int count{};
+
+   bool operator==(const reflectable_item&) const = default;
+};
+
+struct reflectable_container
+{
+   std::string name{};
+   std::vector<reflectable_item> items{};
+
+   bool operator==(const reflectable_container&) const = default;
+};
+
+// Struct for the TOML spec example test (needs external linkage)
+struct simple_catalog
+{
+   std::vector<product> products{};
+
+   bool operator==(const simple_catalog&) const = default;
+};
+
+template <>
+struct glz::meta<simple_catalog>
+{
+   using T = simple_catalog;
+   static constexpr auto value = object("products", &T::products);
+};
+
+// Structs for edge case tests (need external linkage)
+struct item_with_tags
+{
+   std::string name{};
+   std::vector<int> tags{};
+
+   bool operator==(const item_with_tags&) const = default;
+};
+
+template <>
+struct glz::meta<item_with_tags>
+{
+   using T = item_with_tags;
+   static constexpr auto value = object("name", &T::name, "tags", &T::tags);
+};
+
+struct container_with_tags
+{
+   std::vector<item_with_tags> items{};
+
+   bool operator==(const container_with_tags&) const = default;
+};
+
+template <>
+struct glz::meta<container_with_tags>
+{
+   using T = container_with_tags;
+   static constexpr auto value = object("items", &T::items);
+};
+
+struct mixed_container
+{
+   std::string title{};
+   nested inner{};
+   std::vector<product> items{};
+
+   bool operator==(const mixed_container&) const = default;
+};
+
+template <>
+struct glz::meta<mixed_container>
+{
+   using T = mixed_container;
+   static constexpr auto value = object("title", &T::title, "inner", &T::inner, "items", &T::items);
+};
+
+suite array_of_tables_tests = [] {
+   "write_array_of_tables_basic"_test = [] {
+      catalog c{};
+      c.store_name = "Hardware Store";
+      c.products = {{"Hammer", 738594937}, {"Nail", 284758393}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      // Scalar fields should come first, then array-of-tables
+      expect(buffer == R"(store_name = "Hardware Store"
+[[products]]
+name = "Hammer"
+sku = 738594937
+
+[[products]]
+name = "Nail"
+sku = 284758393
+)");
+   };
+
+   "write_array_of_tables_empty"_test = [] {
+      catalog c{};
+      c.store_name = "Empty Store";
+      c.products = {};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      // Empty array should be written as inline []
+      expect(buffer == R"(store_name = "Empty Store"
+products = [])");
+   };
+
+   "read_array_of_tables_basic"_test = [] {
+      std::string input = R"(store_name = "Hardware Store"
+[[products]]
+name = "Hammer"
+sku = 738594937
+
+[[products]]
+name = "Nail"
+sku = 284758393
+)";
+
+      catalog c{};
+      expect(not glz::read_toml(c, input));
+
+      expect(c.store_name == "Hardware Store");
+      expect(c.products.size() == 2);
+      expect(c.products[0].name == "Hammer");
+      expect(c.products[0].sku == 738594937);
+      expect(c.products[1].name == "Nail");
+      expect(c.products[1].sku == 284758393);
+   };
+
+   "read_array_of_tables_single_element"_test = [] {
+      std::string input = R"(store_name = "Single Item Store"
+[[products]]
+name = "Screwdriver"
+sku = 123456
+)";
+
+      catalog c{};
+      expect(not glz::read_toml(c, input));
+
+      expect(c.store_name == "Single Item Store");
+      expect(c.products.size() == 1);
+      expect(c.products[0].name == "Screwdriver");
+      expect(c.products[0].sku == 123456);
+   };
+
+   "roundtrip_array_of_tables"_test = [] {
+      catalog original{};
+      original.store_name = "Test Store";
+      original.products = {{"Item1", 111}, {"Item2", 222}, {"Item3", 333}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(original, buffer));
+
+      catalog parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+
+      expect(original == parsed);
+   };
+
+   "read_array_of_tables_toml_spec_example"_test = [] {
+      // Example from TOML spec
+      std::string input = R"([[products]]
+name = "Hammer"
+sku = 738594937
+
+[[products]]
+
+[[products]]
+name = "Nail"
+sku = 284758393
+)";
+
+      simple_catalog c{};
+      expect(not glz::read_toml(c, input));
+
+      expect(c.products.size() == 3);
+      expect(c.products[0].name == "Hammer");
+      expect(c.products[0].sku == 738594937);
+      // Second element is empty (default values)
+      expect(c.products[1].name == "");
+      expect(c.products[1].sku == 0);
+      expect(c.products[2].name == "Nail");
+      expect(c.products[2].sku == 284758393);
+   };
+
+   "write_nested_array_of_tables"_test = [] {
+      // Nested array-of-tables: fruits is an array, each fruit has varieties array
+      fruit_basket basket{};
+      basket.fruits = {{"apple", {{"red delicious"}, {"granny smith"}}}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(basket, buffer));
+
+      // Verify nested arrays use TOML-spec-compliant [[parent.child]] syntax
+      expect(buffer.find("[[fruits]]") != std::string::npos);
+      expect(buffer.find("name = \"apple\"") != std::string::npos);
+      expect(buffer.find("[[fruits.varieties]]") != std::string::npos);  // Full dotted path
+      expect(buffer.find("name = \"red delicious\"") != std::string::npos);
+      expect(buffer.find("name = \"granny smith\"") != std::string::npos);
+   };
+
+   "reflectable_array_of_tables_write"_test = [] {
+      reflectable_container c{};
+      c.name = "Test Container";
+      c.items = {{"A", 1}, {"B", 2}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      expect(buffer.find("name = \"Test Container\"") != std::string::npos);
+      expect(buffer.find("[[items]]") != std::string::npos);
+      expect(buffer.find("id = \"A\"") != std::string::npos);
+      expect(buffer.find("id = \"B\"") != std::string::npos);
+   };
+
+   "reflectable_array_of_tables_read"_test = [] {
+      std::string input = R"(name = "Parsed Container"
+[[items]]
+id = "X"
+count = 10
+
+[[items]]
+id = "Y"
+count = 20
+)";
+
+      reflectable_container c{};
+      expect(not glz::read_toml(c, input));
+
+      expect(c.name == "Parsed Container");
+      expect(c.items.size() == 2);
+      expect(c.items[0].id == "X");
+      expect(c.items[0].count == 10);
+      expect(c.items[1].id == "Y");
+      expect(c.items[1].count == 20);
+   };
+
+   "reflectable_array_of_tables_roundtrip"_test = [] {
+      reflectable_container original{};
+      original.name = "Roundtrip Test";
+      original.items = {{"First", 100}, {"Second", 200}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(original, buffer));
+
+      reflectable_container parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+
+      expect(original == parsed);
+   };
+
+   // ========== Edge Case Tests ==========
+
+   "read_array_of_tables_at_file_start"_test = [] {
+      // Array-of-tables can appear at the start of a file without preceding scalars
+      std::string input = R"([[products]]
+name = "First"
+sku = 100
+
+[[products]]
+name = "Second"
+sku = 200
+)";
+
+      simple_catalog c{};
+      expect(not glz::read_toml(c, input));
+
+      expect(c.products.size() == 2);
+      expect(c.products[0].name == "First");
+      expect(c.products[1].name == "Second");
+   };
+
+   "read_array_of_tables_with_comments"_test = [] {
+      // Comments should be ignored around array-of-tables headers
+      std::string input = R"(store_name = "Test"
+# Comment before array-of-tables
+[[products]]
+name = "Item1"
+sku = 1
+# Comment between entries
+
+[[products]]
+# Comment after header
+name = "Item2"
+sku = 2
+)";
+
+      catalog c{};
+      expect(not glz::read_toml(c, input));
+
+      expect(c.store_name == "Test");
+      expect(c.products.size() == 2);
+      expect(c.products[0].name == "Item1");
+      expect(c.products[1].name == "Item2");
+   };
+
+   "read_array_of_tables_multiple_empty"_test = [] {
+      // Multiple consecutive empty array-of-tables entries
+      std::string input = R"([[products]]
+[[products]]
+[[products]]
+name = "OnlyThird"
+sku = 3
+)";
+
+      simple_catalog c{};
+      expect(not glz::read_toml(c, input));
+
+      expect(c.products.size() == 3);
+      expect(c.products[0].name == "");
+      expect(c.products[0].sku == 0);
+      expect(c.products[1].name == "");
+      expect(c.products[1].sku == 0);
+      expect(c.products[2].name == "OnlyThird");
+      expect(c.products[2].sku == 3);
+   };
+
+   "read_array_of_tables_with_whitespace"_test = [] {
+      // Whitespace in various positions should be handled
+      std::string input = R"(  [[  products  ]]
+name = "Spaced"
+sku = 42
+)";
+
+      simple_catalog c{};
+      expect(not glz::read_toml(c, input));
+
+      expect(c.products.size() == 1);
+      expect(c.products[0].name == "Spaced");
+   };
+
+   "read_array_of_tables_error_missing_bracket"_test = [] {
+      // Missing closing bracket should error
+      std::string input = R"([[products]
+name = "Bad"
+)";
+
+      simple_catalog c{};
+      auto error = glz::read_toml(c, input);
+      expect(error);
+      expect(error == glz::error_code::syntax_error);
+   };
+
+   "read_array_of_tables_error_single_bracket"_test = [] {
+      // Using single bracket when expecting array-of-tables should be handled
+      // This is a normal table, not array-of-tables, so it would try to write to "products" as a table
+      std::string input = R"([products]
+name = "NotArray"
+)";
+
+      simple_catalog c{};
+      auto error = glz::read_toml(c, input);
+      // This should error because products is an array, not a single object
+      expect(error);
+   };
+
+   "write_array_of_tables_with_inline_array_field"_test = [] {
+      // Array-of-tables where each element has an inline array field
+      container_with_tags c{};
+      c.items = {{"First", {1, 2, 3}}, {"Second", {4, 5}}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      // Should have [[items]] with inline array tags = [...]
+      expect(buffer.find("[[items]]") != std::string::npos);
+      expect(buffer.find("tags = [1, 2, 3]") != std::string::npos);
+      expect(buffer.find("tags = [4, 5]") != std::string::npos);
+   };
+
+   "nested_array_of_tables_roundtrip"_test = [] {
+      // Complete roundtrip for nested array-of-tables with TOML-spec-compliant [[parent.child]] syntax
+      fruit_basket original{};
+      original.fruits = {
+         {"apple", {{"red delicious"}, {"granny smith"}, {"fuji"}}},
+         {"banana", {{"cavendish"}}},
+         {"orange", {}}  // Empty varieties
+      };
+
+      std::string buffer{};
+      expect(not glz::write_toml(original, buffer));
+
+      // Verify spec-compliant output
+      expect(buffer.find("[[fruits]]") != std::string::npos);
+      expect(buffer.find("[[fruits.varieties]]") != std::string::npos);
+
+      fruit_basket parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+
+      expect(parsed.fruits.size() == 3);
+      expect(parsed.fruits[0].name == "apple");
+      expect(parsed.fruits[0].varieties.size() == 3);
+      expect(parsed.fruits[0].varieties[0].name == "red delicious");
+      expect(parsed.fruits[0].varieties[1].name == "granny smith");
+      expect(parsed.fruits[0].varieties[2].name == "fuji");
+      expect(parsed.fruits[1].name == "banana");
+      expect(parsed.fruits[1].varieties.size() == 1);
+      expect(parsed.fruits[1].varieties[0].name == "cavendish");
+      expect(parsed.fruits[2].name == "orange");
+      expect(parsed.fruits[2].varieties.size() == 0);
+   };
+
+   "write_array_of_tables_single_element"_test = [] {
+      // Single element should still use [[]] syntax
+      catalog c{};
+      c.store_name = "Single";
+      c.products = {{"Only", 1}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      expect(buffer.find("[[products]]") != std::string::npos);
+      expect(buffer.find("name = \"Only\"") != std::string::npos);
+   };
+
+   "array_of_tables_preserves_order"_test = [] {
+      // Verify elements maintain their order through roundtrip
+      catalog original{};
+      original.store_name = "Ordered";
+      original.products = {{"A", 1}, {"B", 2}, {"C", 3}, {"D", 4}, {"E", 5}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(original, buffer));
+
+      catalog parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+
+      expect(parsed.products.size() == 5);
+      for (size_t i = 0; i < 5; ++i) {
+         expect(parsed.products[i] == original.products[i]);
+      }
+   };
+
+   "read_array_of_tables_partial_fields"_test = [] {
+      // Some entries have all fields, some have partial
+      std::string input = R"([[products]]
+name = "Full"
+sku = 100
+
+[[products]]
+name = "NameOnly"
+
+[[products]]
+sku = 200
+)";
+
+      simple_catalog c{};
+      expect(not glz::read_toml(c, input));
+
+      expect(c.products.size() == 3);
+      expect(c.products[0].name == "Full");
+      expect(c.products[0].sku == 100);
+      expect(c.products[1].name == "NameOnly");
+      expect(c.products[1].sku == 0);  // Default
+      expect(c.products[2].name == "");  // Default
+      expect(c.products[2].sku == 200);
+   };
+
+   "array_of_tables_mixed_with_scalars_and_tables"_test = [] {
+      // Test struct with scalar, nested table, AND array of tables
+      mixed_container original{};
+      original.title = "Mixed";
+      original.inner = {42, "nested_value"};
+      original.items = {{"Item1", 1}, {"Item2", 2}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(original, buffer));
+
+      // Scalars should come first, then [inner], then [[items]]
+      auto title_pos = buffer.find("title");
+      auto inner_pos = buffer.find("[inner]");
+      auto items_pos = buffer.find("[[items]]");
+
+      expect(title_pos != std::string::npos);
+      expect(inner_pos != std::string::npos);
+      expect(items_pos != std::string::npos);
+      expect(title_pos < inner_pos);
+      expect(inner_pos < items_pos);
    };
 };
 

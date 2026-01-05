@@ -78,6 +78,137 @@ retry.backoff_ms = 500
 
 Glaze understands standard TOML number formats (binary, octal, hex), quoted and multiline strings, arrays, inline tables, and comments (`#`).
 
+## Array of Tables
+
+Glaze supports TOML's array-of-tables syntax (`[[array_name]]`) for serializing and deserializing `std::vector` of objects. This provides a clean, readable format for arrays of structured data.
+
+### Basic Array of Tables
+
+```cpp
+struct product
+{
+   std::string name;
+   int sku;
+};
+
+template <>
+struct glz::meta<product>
+{
+   using T = product;
+   static constexpr auto value = object(&T::name, &T::sku);
+};
+
+struct catalog
+{
+   std::string store_name;
+   std::vector<product> products;
+};
+
+template <>
+struct glz::meta<catalog>
+{
+   using T = catalog;
+   static constexpr auto value = object(&T::store_name, &T::products);
+};
+
+catalog c{
+   "Hardware Store",
+   {{"Hammer", 738594937}, {"Nail", 284758393}}
+};
+
+std::string toml{};
+glz::write_toml(c, toml);
+```
+
+Output:
+
+```toml
+store_name = "Hardware Store"
+[[products]]
+name = "Hammer"
+sku = 738594937
+
+[[products]]
+name = "Nail"
+sku = 284758393
+```
+
+### Nested Array of Tables
+
+Glaze produces TOML-spec-compliant output for nested arrays using dotted paths (`[[parent.child]]`):
+
+```cpp
+struct variety
+{
+   std::string name;
+};
+
+struct fruit
+{
+   std::string name;
+   std::vector<variety> varieties;
+};
+
+struct fruit_basket
+{
+   std::vector<fruit> fruits;
+};
+
+fruit_basket basket{
+   {{"apple", {{"red delicious"}, {"granny smith"}}},
+    {"banana", {{"cavendish"}}}}
+};
+
+std::string toml{};
+glz::write_toml(basket, toml);
+```
+
+Output:
+
+```toml
+[[fruits]]
+name = "apple"
+[[fruits.varieties]]
+name = "red delicious"
+
+[[fruits.varieties]]
+name = "granny smith"
+
+[[fruits]]
+name = "banana"
+[[fruits.varieties]]
+name = "cavendish"
+```
+
+### Reading Array of Tables
+
+Glaze reads array-of-tables syntax correctly, including:
+- Multiple `[[name]]` sections that append to the same array
+- Empty table entries (`[[name]]` followed immediately by another `[[name]]`)
+- Nested dotted paths like `[[parent.child]]`
+
+```cpp
+std::string input = R"(
+[[products]]
+name = "Hammer"
+sku = 738594937
+
+[[products]]
+
+[[products]]
+name = "Nail"
+sku = 284758393
+)";
+
+catalog c{};
+glz::read_toml(c, input);
+// c.products.size() == 3 (second entry is empty/default)
+```
+
+### Write Ordering
+
+Glaze writes TOML in spec-compliant order: scalar key-value pairs appear before tables and array-of-tables sections. This ensures the output is valid TOML that can be parsed by any compliant reader.
+
 ## Using the Generic API
 
 The convenience wrappers call into the generic `glz::read`/`glz::write` pipeline. You can reuse the same options struct you already use for JSON while switching the format to TOML:

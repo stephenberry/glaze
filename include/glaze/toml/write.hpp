@@ -596,6 +596,20 @@ namespace glz
       }
    }
 
+   // Type trait to detect if a type is an array of objects (for array-of-tables)
+   template <class T>
+   constexpr bool is_array_of_objects_v = []() constexpr {
+      if constexpr (writable_array_t<T> && !str_t<T>) {
+         using element_t = range_value_t<T>;
+         return glaze_object_t<element_t> || reflectable<element_t>;
+      }
+      return false;
+   }();
+
+   // Forward declaration for recursive calls with path
+   template <auto Options, class T, class V, class B>
+   void write_toml_object_with_path(V&& value, is_context auto&& ctx, B&& b, auto& ix, std::string_view path_prefix);
+
    template <class T>
       requires(glaze_object_t<T> || reflectable<T>)
    struct to<TOML, T>
@@ -604,121 +618,292 @@ namespace glz
          requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
       static void op(V&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         // Do not write opening/closing braces.
-         static constexpr auto N = reflect<T>::size;
-         decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T>) {
-               return to_tie(value);
+         // Call the path-aware version with empty prefix for top-level
+         write_toml_object_with_path<Options, T>(std::forward<V>(value), ctx, b, ix, "");
+      }
+   };
+
+   // Implementation of path-aware TOML object writer
+   template <auto Options, class T, class V, class B>
+   void write_toml_object_with_path(V&& value, is_context auto&& ctx, B&& b, auto& ix, std::string_view path_prefix)
+   {
+      static constexpr auto N = reflect<T>::size;
+      decltype(auto) t = [&]() -> decltype(auto) {
+         if constexpr (reflectable<T>) {
+            return to_tie(value);
+         }
+         else {
+            return nullptr;
+         }
+      }();
+
+      static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
+      bool first = true;
+
+      // Helper lambda to check if a field should be skipped
+      auto should_skip_field = [&]<size_t I>() constexpr {
+         using val_t = field_t<T, I>;
+         constexpr bool write_member_functions = check_write_member_functions(Options);
+         return always_skipped<val_t> || (!write_member_functions && is_member_function_pointer<val_t>);
+      };
+
+      // Helper lambda to check if nullable field is null
+      auto is_null_field = [&]<size_t I>() -> bool {
+         using val_t = field_t<T, I>;
+         if constexpr (null_t<val_t>) {
+            if constexpr (always_null_t<val_t>) {
+               return true;
             }
             else {
-               return nullptr;
+               decltype(auto) element = [&]() -> decltype(auto) {
+                  if constexpr (reflectable<T>) {
+                     return get<I>(t);
+                  }
+                  else {
+                     return get<I>(reflect<T>::values);
+                  }
+               };
+
+               if constexpr (nullable_wrapper<val_t>)
+                  return !bool(element()(value).val);
+               else if constexpr (nullable_value_t<val_t>)
+                  return !get_member(value, element()).has_value();
+               else
+                  return !bool(get_member(value, element()));
+            }
+         }
+         return false;
+      };
+
+      // Helper lambda to write a scalar key-value pair
+      auto write_scalar_field = [&]<size_t I>() {
+         using val_t = field_t<T, I>;
+
+         if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
+            return;
+         }
+
+         if (!first) {
+            std::memcpy(&b[ix], "\n", 1);
+            ++ix;
+         }
+         else {
+            first = false;
+         }
+         static constexpr auto key = glz::get<I>(reflect<T>::keys);
+         std::memcpy(&b[ix], key.data(), key.size());
+         ix += key.size();
+
+         std::memcpy(&b[ix], " = ", 3);
+         ix += 3;
+
+         if constexpr (reflectable<T>) {
+            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+         }
+         else {
+            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+         }
+      };
+
+      // Helper lambda to write a nested table [table] - not used when inside array-of-tables context
+      auto write_table_field = [&]<size_t I>() {
+         using val_t = field_t<T, I>;
+
+         if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
+            return;
+         }
+
+         if (!first) {
+            std::memcpy(&b[ix], "\n", 1);
+            ++ix;
+         }
+         else {
+            first = false;
+         }
+         static constexpr auto key = glz::get<I>(reflect<T>::keys);
+
+         // Write [path_prefix.key] or [key] if no prefix
+         std::memcpy(&b[ix], "[", 1);
+         ++ix;
+         if (!path_prefix.empty()) {
+            if (!ensure_space(ctx, b, ix + path_prefix.size() + 1)) [[unlikely]] {
+               return;
+            }
+            std::memcpy(&b[ix], path_prefix.data(), path_prefix.size());
+            ix += path_prefix.size();
+            std::memcpy(&b[ix], ".", 1);
+            ++ix;
+         }
+         std::memcpy(&b[ix], key.data(), key.size());
+         ix += key.size();
+         std::memcpy(&b[ix], "]\n", 2);
+         ix += 2;
+
+         // Build new path prefix for nested content
+         std::string new_prefix;
+         if (path_prefix.empty()) {
+            new_prefix = std::string(key);
+         }
+         else {
+            new_prefix.reserve(path_prefix.size() + 1 + key.size());
+            new_prefix = path_prefix;
+            new_prefix += '.';
+            new_prefix += key;
+         }
+
+         // Serialize the nested object with the new path
+         if constexpr (reflectable<T>) {
+            write_toml_object_with_path<Options, val_t>(get_member(value, get<I>(t)), ctx, b, ix, new_prefix);
+         }
+         else {
+            write_toml_object_with_path<Options, val_t>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix,
+                                                        new_prefix);
+         }
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         // Add an extra newline to separate this table section from following keys.
+         if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+            return;
+         }
+         std::memcpy(&b[ix], "\n", 1);
+         ++ix;
+      };
+
+      // Helper lambda to write an array of tables [[array]]
+      auto write_array_of_tables_field = [&]<size_t I>() {
+         using val_t = field_t<T, I>;
+         using element_t = range_value_t<val_t>;
+
+         decltype(auto) arr = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return get_member(value, get<I>(t));
+            }
+            else {
+               return get_member(value, get<I>(reflect<T>::values));
             }
          }();
 
-         static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
-         bool first = true;
+         static constexpr auto key = glz::get<I>(reflect<T>::keys);
 
-         for_each<N>([&]<size_t I>() {
+         if (empty_range(arr)) {
+            // Empty array - write as inline empty array
+            if (!ensure_space(ctx, b, ix + padding + 5)) [[unlikely]] {
+               return;
+            }
+            if (!first) {
+               std::memcpy(&b[ix], "\n", 1);
+               ++ix;
+            }
+            else {
+               first = false;
+            }
+            std::memcpy(&b[ix], key.data(), key.size());
+            ix += key.size();
+            std::memcpy(&b[ix], " = []", 5);
+            ix += 5;
+            return;
+         }
+
+         // Build the full path for array-of-tables header
+         std::string full_path;
+         if (path_prefix.empty()) {
+            full_path = std::string(key);
+         }
+         else {
+            full_path.reserve(path_prefix.size() + 1 + key.size());
+            full_path = path_prefix;
+            full_path += '.';
+            full_path += key;
+         }
+
+         for (auto&& element : arr) {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            using val_t = field_t<T, I>;
 
-            constexpr bool write_member_functions = check_write_member_functions(Options);
-            if constexpr (always_skipped<val_t> || (!write_member_functions && is_member_function_pointer<val_t>))
+            if (!ensure_space(ctx, b, ix + padding + full_path.size() + 6)) [[unlikely]] {
                return;
-            else {
-               if constexpr (null_t<val_t>) {
-                  if constexpr (always_null_t<val_t>)
-                     return;
-                  else {
-                     const auto is_null = [&]() {
-                        decltype(auto) element = [&]() -> decltype(auto) {
-                           if constexpr (reflectable<T>) {
-                              return get<I>(t);
-                           }
-                           else {
-                              return get<I>(reflect<T>::values);
-                           }
-                        };
-
-                        if constexpr (nullable_wrapper<val_t>)
-                           return !bool(element()(value).val);
-                        else if constexpr (nullable_value_t<val_t>)
-                           return !get_member(value, element()).has_value();
-                        else
-                           return !bool(get_member(value, element()));
-                     }();
-                     if (is_null) return;
-                  }
-               }
-
-               if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
-                  return;
-               }
-
-               // --- Check if this field is a nested object ---
-               if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
-                  // Print the table header (e.g. "[inner]") for the nested object.
-                  if (!first) {
-                     std::memcpy(&b[ix], "\n", 1);
-                     ++ix;
-                  }
-                  else {
-                     first = false;
-                  }
-                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
-                  std::memcpy(&b[ix], "[", 1);
-                  ++ix;
-                  std::memcpy(&b[ix], key.data(), key.size());
-                  ix += key.size();
-                  std::memcpy(&b[ix], "]\n", 2);
-                  ix += 2;
-
-                  // Serialize the nested object.
-                  if constexpr (reflectable<T>) {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
-                  }
-                  else {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
-                  }
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  // Add an extra newline to separate this table section from following keys.
-                  if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
-                     return;
-                  }
-                  std::memcpy(&b[ix], "\n", 1);
-                  ++ix;
-               }
-               else {
-                  // --- Field is not an object, so output a key/value pair ---
-                  if (!first) {
-                     std::memcpy(&b[ix], "\n", 1);
-                     ++ix;
-                  }
-                  else {
-                     first = false;
-                  }
-                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
-                  std::memcpy(&b[ix], key.data(), key.size());
-                  ix += key.size();
-
-                  std::memcpy(&b[ix], " = ", 3);
-                  ix += 3;
-
-                  if constexpr (reflectable<T>) {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
-                  }
-                  else {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
-                  }
-               }
             }
-         });
-      }
-   };
+
+            if (!first) {
+               std::memcpy(&b[ix], "\n", 1);
+               ++ix;
+            }
+            else {
+               first = false;
+            }
+
+            // Write [[full_path]]
+            std::memcpy(&b[ix], "[[", 2);
+            ix += 2;
+            std::memcpy(&b[ix], full_path.data(), full_path.size());
+            ix += full_path.size();
+            std::memcpy(&b[ix], "]]\n", 3);
+            ix += 3;
+
+            // Serialize the element with the full_path as prefix for nested arrays
+            write_toml_object_with_path<Options, element_t>(element, ctx, b, ix, full_path);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            // Add newline after element
+            if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+               return;
+            }
+            std::memcpy(&b[ix], "\n", 1);
+            ++ix;
+         }
+      };
+
+      // PASS 1: Write all scalar fields first (TOML spec conformance)
+      for_each<N>([&]<size_t I>() {
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         using val_t = field_t<T, I>;
+
+         if constexpr (should_skip_field.template operator()<I>()) {
+            return;
+         }
+
+         // Skip null fields
+         if (is_null_field.template operator()<I>()) {
+            return;
+         }
+
+         // Only process scalar fields in this pass (not objects or arrays of objects)
+         if constexpr (!(glaze_object_t<val_t> || reflectable<val_t>) && !is_array_of_objects_v<val_t>) {
+            write_scalar_field.template operator()<I>();
+         }
+      });
+
+      // PASS 2: Write nested tables [table] and arrays of tables [[array]]
+      for_each<N>([&]<size_t I>() {
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         using val_t = field_t<T, I>;
+
+         if constexpr (should_skip_field.template operator()<I>()) {
+            return;
+         }
+
+         // Skip null fields
+         if (is_null_field.template operator()<I>()) {
+            return;
+         }
+
+         // Process nested objects and arrays of objects
+         if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
+            write_table_field.template operator()<I>();
+         }
+         else if constexpr (is_array_of_objects_v<val_t>) {
+            write_array_of_tables_field.template operator()<I>();
+         }
+      });
+   }
 
    template <class T>
       requires(writable_array_t<T> || writable_map_t<T>)
