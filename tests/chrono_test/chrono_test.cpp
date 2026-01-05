@@ -589,8 +589,14 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(ns);
          std::chrono::nanoseconds parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i;
-         expect(parsed == ns) << "Mismatch at i=" << i;
+         if (err) {
+            expect(!err) << "Failed at i=" << i;
+            break;
+         }
+         if (parsed != ns) {
+            expect(parsed == ns) << "Mismatch at i=" << i;
+            break;
+         }
       }
    };
 
@@ -611,8 +617,14 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(original);
          sys_time<seconds> parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i << " secs=" << secs;
-         expect(parsed == original) << "Mismatch at i=" << i;
+         if (err) {
+            expect(!err) << "Failed at i=" << i << " secs=" << secs;
+            break;
+         }
+         if (parsed != original) {
+            expect(parsed == original) << "Mismatch at i=" << i;
+            break;
+         }
       }
    };
 
@@ -632,8 +644,14 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(original);
          sys_time<milliseconds> parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i;
-         expect(parsed == original) << "Mismatch at i=" << i << " expected=" << ms_val;
+         if (err) {
+            expect(!err) << "Failed at i=" << i;
+            break;
+         }
+         if (parsed != original) {
+            expect(parsed == original) << "Mismatch at i=" << i << " expected=" << ms_val;
+            break;
+         }
       }
    };
 
@@ -651,8 +669,14 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(original);
          sys_time<microseconds> parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i;
-         expect(parsed == original) << "Mismatch at i=" << i;
+         if (err) {
+            expect(!err) << "Failed at i=" << i;
+            break;
+         }
+         if (parsed != original) {
+            expect(parsed == original) << "Mismatch at i=" << i;
+            break;
+         }
       }
    };
 
@@ -670,8 +694,14 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(original);
          sys_time<nanoseconds> parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i;
-         expect(parsed == original) << "Mismatch at i=" << i;
+         if (err) {
+            expect(!err) << "Failed at i=" << i;
+            break;
+         }
+         if (parsed != original) {
+            expect(parsed == original) << "Mismatch at i=" << i;
+            break;
+         }
       }
    };
 
@@ -686,8 +716,14 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(original);
          steady_clock::time_point parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i;
-         expect(parsed == original) << "Mismatch at i=" << i;
+         if (err) {
+            expect(!err) << "Failed at i=" << i;
+            break;
+         }
+         if (parsed != original) {
+            expect(parsed == original) << "Mismatch at i=" << i;
+            break;
+         }
       }
    };
 
@@ -705,11 +741,17 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(original);
          glz::epoch_seconds parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i;
+         if (err) {
+            expect(!err) << "Failed at i=" << i;
+            break;
+         }
 
          auto orig_sec = time_point_cast<seconds>(original.value);
          auto parsed_sec = time_point_cast<seconds>(parsed.value);
-         expect(orig_sec == parsed_sec) << "Mismatch at i=" << i;
+         if (orig_sec != parsed_sec) {
+            expect(orig_sec == parsed_sec) << "Mismatch at i=" << i;
+            break;
+         }
       }
    };
 
@@ -727,11 +769,17 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(original);
          glz::epoch_millis parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i;
+         if (err) {
+            expect(!err) << "Failed at i=" << i;
+            break;
+         }
 
          auto orig_ms = time_point_cast<milliseconds>(original.value);
          auto parsed_ms = time_point_cast<milliseconds>(parsed.value);
-         expect(orig_ms == parsed_ms) << "Mismatch at i=" << i;
+         if (orig_ms != parsed_ms) {
+            expect(orig_ms == parsed_ms) << "Mismatch at i=" << i;
+            break;
+         }
       }
    };
 
@@ -749,11 +797,17 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(original);
          glz::epoch_micros parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i;
+         if (err) {
+            expect(!err) << "Failed at i=" << i;
+            break;
+         }
 
          auto orig_us = time_point_cast<microseconds>(original.value);
          auto parsed_us = time_point_cast<microseconds>(parsed.value);
-         expect(orig_us == parsed_us) << "Mismatch at i=" << i;
+         if (orig_us != parsed_us) {
+            expect(orig_us == parsed_us) << "Mismatch at i=" << i;
+            break;
+         }
       }
    };
 
@@ -774,10 +828,16 @@ suite chrono_roundtrip_1000_tests = [] {
          auto json = glz::write_json(original);
          glz::epoch_nanos parsed{};
          auto err = glz::read_json(parsed, json.value());
-         expect(!err) << "Failed at i=" << i;
+         if (err) {
+            expect(!err) << "Failed at i=" << i;
+            break;
+         }
 
          // Compare at system_clock precision (may be less than nanoseconds)
-         expect(original.value == parsed.value) << "Mismatch at i=" << i;
+         if (original.value != parsed.value) {
+            expect(original.value == parsed.value) << "Mismatch at i=" << i;
+            break;
+         }
       }
    };
 };

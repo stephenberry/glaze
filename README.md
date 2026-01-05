@@ -239,7 +239,23 @@ For faster compilation at the cost of peak performance, use `glaze_DISABLE_ALWAY
 set(glaze_DISABLE_ALWAYS_INLINE ON)
 ```
 
-> **Note:** This primarily reduces compilation time, not binary size. For binary size reduction, use the `linear_search` option. See [Optimizing Performance](https://stephenberry.github.io/glaze/optimizing-performance/) for more details.
+> **Note:** This primarily reduces compilation time, not binary size. For binary size reduction, see Optimization Levels below.
+
+### Optimization Levels (Embedded/Size Optimization)
+
+Glaze provides optimization levels to control the trade-off between binary size and runtime performance. This is useful for embedded systems:
+
+```cpp
+auto json = glz::write<glz::opts_size{}>(obj);
+auto ec = glz::read<glz::opts_size{}>(obj, buffer);
+```
+
+| Level | Preset | Description |
+|-------|--------|-------------|
+| `normal` | (default) | Maximum performance with 40KB+ lookup tables |
+| `size` | `opts_size` | Minimal binary using `std::to_chars`, linear search |
+
+See [Optimization Levels](https://stephenberry.github.io/glaze/optimization-levels/) for full details.
 
 ## How To Use Glaze
 

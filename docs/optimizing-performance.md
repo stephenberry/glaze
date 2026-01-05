@@ -32,14 +32,34 @@ This causes `GLZ_ALWAYS_INLINE` and `GLZ_FLATTEN` to fall back to regular `inlin
 
 ## Reducing Binary Size
 
-For embedded systems or other size-constrained environments, use the `linear_search` compile-time option:
+### Optimization Levels
+
+Glaze provides an `optimization_level` option for controlling the trade-off between binary size and performance. For embedded systems, WebAssembly, or mobile apps where binary size matters:
+
+```cpp
+// Use the size-optimized preset
+auto ec = glz::read<glz::opts_size{}>(value, buffer);
+auto json = glz::write<glz::opts_size{}>(obj);
+```
+
+The `size` optimization level:
+
+- Uses `std::to_chars` instead of lookup tables for number serialization
+- Defaults to linear search for key matching
+- Can reduce binary size by ~280KB or more
+
+See [Optimization Levels](optimization-levels.md) for full details on available levels and their characteristics.
+
+### Linear Search Option
+
+For finer control, you can enable linear search independently:
 
 ```cpp
 struct small_binary_opts : glz::opts {
    bool linear_search = true;  // Use linear key search instead of hash tables
 };
 
-auto ec = glz::read<small_binary_opts>(value, buffer);
+auto ec = glz::read<small_binary_opts{}>(value, buffer);
 ```
 
 This provides significant binary size reduction (typically 40-50% smaller than default) by:

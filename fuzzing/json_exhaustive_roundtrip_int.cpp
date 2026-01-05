@@ -20,35 +20,66 @@ void test()
    using S = Value<T>;
    using UT = std::make_unsigned_t<T>;
 
-   auto testone = [](const UT loopvar, auto& outbuf) {
+   auto testone = [](const UT loopvar, auto& outbuf, auto& outbuf_size) {
       S s;
       std::memcpy(&s.value, &loopvar, sizeof(T));
 
+      // Test normal mode (to_chars_40kb - 40KB tables)
       outbuf.clear();
       const auto writeec = glz::write_json(s, outbuf);
 
       if (writeec) [[unlikely]] {
-         std::cerr << "failed writing " << s.value << " to json\n";
+         std::cerr << "failed writing " << s.value << " to json (normal mode)\n";
          std::abort();
       }
 
       auto restored = glz::read_json<S>(outbuf);
       if (!restored) [[unlikely]] {
-         std::cerr << "failed parsing " << outbuf << '\n';
+         std::cerr << "failed parsing " << outbuf << " (normal mode)\n";
          std::abort();
       }
 
       if (const auto r = restored.value().value; r != s.value) [[unlikely]] {
-         std::cerr << "failed roundtrip, got " << r << " instead of " << s.value << //
+         std::cerr << "failed roundtrip (normal mode), got " << r << " instead of " << s.value << //
             " (diff is " << r - s.value << ") when parsing " << outbuf << '\n';
+         std::abort();
+      }
+
+      // Test size mode (to_chars - 400B tables)
+      outbuf_size.clear();
+      const auto writeec_size = glz::write<glz::opts_size{}>(s, outbuf_size);
+
+      if (writeec_size) [[unlikely]] {
+         std::cerr << "failed writing " << s.value << " to json (size mode)\n";
+         std::abort();
+      }
+
+      S restored_size{};
+      const auto readec_size = glz::read<glz::opts_size{}>(restored_size, outbuf_size);
+      if (readec_size) [[unlikely]] {
+         std::cerr << "failed parsing " << outbuf_size << " (size mode)\n";
+         std::abort();
+      }
+
+      if (const auto r = restored_size.value; r != s.value) [[unlikely]] {
+         std::cerr << "failed roundtrip (size mode), got " << r << " instead of " << s.value << //
+            " (diff is " << r - s.value << ") when parsing " << outbuf_size << '\n';
+         std::abort();
+      }
+
+      // Verify both modes produce identical output
+      if (outbuf != outbuf_size) [[unlikely]] {
+         std::cerr << "normal and size mode produced different output for " << s.value << //
+            ": normal=" << outbuf << ", size=" << outbuf_size << '\n';
          std::abort();
       }
    };
 
    auto testrange = [&](const UT start, const UT stop) {
       std::string outbuf;
+      std::string outbuf_size;
       for (UT i = start; i < stop; ++i) {
-         testone(i, outbuf);
+         testone(i, outbuf, outbuf_size);
       }
    };
 
@@ -67,7 +98,8 @@ void test()
    // test the last value here.
    {
       std::string buf;
-      testone((std::numeric_limits<UT>::max)(), buf);
+      std::string buf_size;
+      testone((std::numeric_limits<UT>::max)(), buf, buf_size);
    }
 
    std::cout << "started testing in " << nthreads << " threads." << std::endl;
