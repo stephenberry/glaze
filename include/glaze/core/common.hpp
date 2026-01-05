@@ -4,7 +4,9 @@
 #pragma once
 
 #include <array>
+#include <complex>
 #include <cstddef>
+#include <functional>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -308,6 +310,10 @@ namespace glz
    template <class T>
    concept is_no_reflect = requires(T t) { requires std::remove_cvref_t<T>::glaze_reflect == false; };
 
+   // Check for types with internal glaze marker (e.g., invoke_update)
+   template <class T>
+   concept has_glaze_marker = requires { requires std::remove_cvref_t<T>::glaze == true; };
+
    /// \brief check if container has fixed size and its subsequent T::value_type
    template <class T>
    concept has_static_size =
@@ -421,10 +427,19 @@ namespace glz
    // With C++26 P2996 reflection, we can reflect non-aggregate types (classes with custom constructors)
    // Without P2996, we require aggregate types for reflection
 #if GLZ_REFLECTION26
+   // P2996 can reflect any class, but we must exclude types with their own Glaze specializations
    template <class T>
-   concept reflectable = std::is_class_v<std::remove_cvref_t<T>> &&
-                         !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> ||
-                           glaze_flags_t<T> || range<T> || pair_t<T> || null_t<T> || meta_keys<T>);
+   concept reflectable =
+      std::is_class_v<std::remove_cvref_t<T>> &&
+      !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> || glaze_flags_t<T> ||
+        range<T> || pair_t<T> || null_t<T> || meta_keys<T> || str_t<T> || bool_t<T> || has_glaze_marker<T> ||
+        // Exclude standard library types with specialized Glaze handling
+        is_specialization_v<std::remove_cvref_t<T>, std::tuple> ||
+        is_specialization_v<std::remove_cvref_t<T>, std::variant> ||
+        is_specialization_v<std::remove_cvref_t<T>, std::reference_wrapper> ||
+        is_specialization_v<std::remove_cvref_t<T>, std::function> ||
+        is_specialization_v<std::remove_cvref_t<T>, std::complex> ||
+        is_bitset<T> || func_t<T>);
 #else
    template <class T>
    concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&

@@ -33,42 +33,21 @@ namespace glz
          return std::meta::access_context::unchecked();
       }
 
-      // Collect all non-static data members including inherited ones
-      // Base class members come first (in inheritance order), then derived class members
-      template <class T>
-      consteval auto collect_all_nonstatic_data_members()
-      {
-         std::vector<std::meta::info> members;
-
-         // First, recursively collect from base classes
-         template for (constexpr auto base : std::meta::bases_of(^^T)) {
-            auto base_members = collect_all_nonstatic_data_members<[:std::meta::type_of(base):]>();
-            for (auto m : base_members) {
-               members.push_back(m);
-            }
-         }
-
-         // Then add direct members of T
-         for (auto m : std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx())) {
-            members.push_back(m);
-         }
-
-         return members;
-      }
-
-      // Count members using P2996 reflection (including inherited)
+      // Count members using P2996 reflection
       // Works for any class type, including non-aggregates (classes with custom constructors)
+      // Note: Currently reflects direct members only. For inherited members, use glz::meta.
       template <class T>
          requires(std::is_class_v<std::remove_cvref_t<T>>)
-      inline constexpr size_t count_members = collect_all_nonstatic_data_members<std::remove_cvref_t<T>>().size();
+      inline constexpr size_t count_members =
+         std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<T>, reflection_access_ctx()).size();
 
-      // Helper struct to get member info at a specific index (including inherited)
+      // Helper struct to get member info at a specific index
       template <class T, size_t I>
       struct member_info_at
       {
          static consteval auto info()
          {
-            auto members = collect_all_nonstatic_data_members<T>();
+            auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
             return members[I];
          }
       };

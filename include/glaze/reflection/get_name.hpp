@@ -26,23 +26,21 @@
 #if GLZ_REFLECTION26
 // ============================================================================
 // C++26 P2996 Reflection Implementation for member names
-// Supports inheritance - automatically includes base class member names
 // ============================================================================
 namespace glz::detail
 {
-   // Get member name using P2996 reflection (including inherited members)
-   // Uses collect_all_nonstatic_data_members from to_tuple.hpp
+   // Get member name using P2996 reflection
    template <class T, size_t I>
    consteval std::string_view get_member_name_p2996()
    {
-      auto members = collect_all_nonstatic_data_members<T>();
+      auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
       return std::meta::identifier_of(members[I]);
    }
 }
 
 namespace glz
 {
-   // P2996 implementation of member_nameof (including inherited members)
+   // P2996 implementation of member_nameof
    template <auto N, class T>
    inline constexpr std::string_view member_nameof = detail::get_member_name_p2996<std::remove_cvref_t<T>, N>();
 
