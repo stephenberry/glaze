@@ -90,6 +90,29 @@ namespace glz
       return t;
    }();
 
+   // Character classification for lazy JSON value skipping
+   // 0: other (advance), 1: quote, 2: open bracket, 3: close bracket, 4: number start
+   inline constexpr std::array<uint8_t, 256> lazy_char_class = [] {
+      std::array<uint8_t, 256> t{};
+      t['"'] = 1;  // quote - skip string
+      t['{'] = 2;  // open - depth++
+      t['['] = 2;
+      t['}'] = 3;  // close - depth--
+      t[']'] = 3;
+      t['-'] = 4;  // number start
+      t['0'] = 4;
+      t['1'] = 4;
+      t['2'] = 4;
+      t['3'] = 4;
+      t['4'] = 4;
+      t['5'] = 4;
+      t['6'] = 4;
+      t['7'] = 4;
+      t['8'] = 4;
+      t['9'] = 4;
+      return t;
+   }();
+
    inline constexpr std::array<bool, 256> whitespace_comment_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;

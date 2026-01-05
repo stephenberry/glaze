@@ -24,10 +24,54 @@ namespace glz
 
    namespace detail
    {
-      // SWAR helper to check for bracket chars
-      GLZ_ALWAYS_INLINE uint64_t has_brackets(uint64_t chunk) noexcept
+      // Skip from current position to depth zero (end of enclosing container)
+      // Used after partial scanning to find container end efficiently
+      template <opts Opts>
+      GLZ_ALWAYS_INLINE const char* skip_to_depth_zero(const char* p, const char* end, int depth) noexcept
       {
-         return has_char<'['>(chunk) | has_char<']'>(chunk) | has_char<'{'>(chunk) | has_char<'}'>(chunk);
+         while (p < end && depth > 0) {
+            switch (lazy_char_class[uint8_t(*p)]) {
+            case 1: // quote - skip string
+               ++p; // skip opening quote
+               while (p < end) {
+                  const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
+                  if (!quote) {
+                     return end;
+                  }
+                  // Check for escape
+                  size_t backslashes = 0;
+                  const char* check = quote - 1;
+                  while (check >= p && *check == '\\') {
+                     ++backslashes;
+                     --check;
+                  }
+                  p = quote + 1;
+                  if ((backslashes & 1) == 0) break;
+               }
+               break;
+            case 2: // open bracket
+               ++depth;
+               ++p;
+               break;
+            case 3: // close bracket
+               --depth;
+               ++p;
+               break;
+            case 4: // number
+               ++p;
+               if constexpr (Opts.null_terminated) {
+                  while (numeric_table[uint8_t(*p)]) ++p;
+               }
+               else {
+                  while (p < end && numeric_table[uint8_t(*p)]) ++p;
+               }
+               break;
+            default:
+               ++p;
+               break;
+            }
+         }
+         return p;
       }
 
       // Skip string - returns position after closing quote
@@ -81,32 +125,20 @@ namespace glz
             ++p;
 
             while (p < end && depth > 0) {
-               // Direct character checks for common cases (avoid SWAR overhead for short spans)
-               const char c = *p;
-
-               if (c == '"') {
+               // Use character classification table for better branch prediction
+               switch (lazy_char_class[uint8_t(*p)]) {
+               case 1: // quote - skip string
                   p = skip_string_fast<Opts>(p, end);
-                  continue;
-               }
-               if (c == '{' || c == '[') {
+                  break;
+               case 2: // open bracket
                   ++depth;
                   ++p;
-                  continue;
-               }
-               if (c == '}' || c == ']') {
+                  break;
+               case 3: // close bracket
                   --depth;
                   ++p;
-                  continue;
-               }
-
-               // For whitespace, comma, colon - just advance
-               if (whitespace_separator_table[uint8_t(c)]) {
-                  ++p;
-                  continue;
-               }
-
-               // Number - skip it
-               if (c == '-' || is_digit(uint8_t(c))) {
+                  break;
+               case 4: // number
                   ++p;
                   if constexpr (Opts.null_terminated) {
                      while (numeric_table[uint8_t(*p)]) ++p;
@@ -114,25 +146,11 @@ namespace glz
                   else {
                      while (p < end && numeric_table[uint8_t(*p)]) ++p;
                   }
-                  continue;
-               }
-
-               // Unknown char - use SWAR to find next interesting position
-               while (p + 8 <= end) {
-                  uint64_t chunk;
-                  std::memcpy(&chunk, p, 8);
-                  if constexpr (std::endian::native == std::endian::big) {
-                     chunk = std::byteswap(chunk);
-                  }
-                  const uint64_t interesting = has_brackets(chunk) | has_quote(chunk);
-                  if (interesting == 0) {
-                     p += 8;
-                     continue;
-                  }
-                  p += (countr_zero(interesting) >> 3);
+                  break;
+               default: // whitespace, separators, literals (t/f/n)
+                  ++p;
                   break;
                }
-               if (p < end && p + 8 > end) ++p; // Handle remainder
             }
             return p;
          }
@@ -355,25 +373,26 @@ namespace glz
    {
      private:
       const lazy_document<Opts>* doc_{};
-      const char* pos_{};
       const char* json_end_{};
       char close_char_{};
       bool is_object_{};
       bool at_end_{true};
-      std::string_view current_key_{};
+      lazy_json_view<Opts> current_view_{};  // Stored view for parse_pos_ optimization
 
      public:
       using iterator_category = std::forward_iterator_tag;
       using value_type = lazy_json_view<Opts>;
       using difference_type = std::ptrdiff_t;
       using pointer = void;
-      using reference = lazy_json_view<Opts>;
+      using reference = lazy_json_view<Opts>&;
 
       lazy_iterator() = default;
 
       lazy_iterator(const lazy_document<Opts>* doc, const char* container_start, const char* end, bool is_object);
 
-      reference operator*() const { return {doc_, pos_, current_key_}; }
+      // Return reference to stored view - allows parse_pos_ optimization when user uses auto&
+      reference operator*() { return current_view_; }
+      const lazy_json_view<Opts>& operator*() const { return current_view_; }
 
       lazy_iterator& operator++();
 
@@ -388,14 +407,14 @@ namespace glz
       bool operator!=(const lazy_iterator& other) const { return !(*this == other); }
 
      private:
-      void advance_to_next_element();
-      void skip_ws() noexcept
+      void advance_to_next_element(const char*& pos);
+      void skip_ws(const char*& p) noexcept
       {
          if constexpr (Opts.null_terminated) {
-            while (whitespace_table[uint8_t(*pos_)]) ++pos_;
+            while (whitespace_table[uint8_t(*p)]) ++p;
          }
          else {
-            while (pos_ < json_end_ && whitespace_table[uint8_t(*pos_)]) ++pos_;
+            while (p < json_end_ && whitespace_table[uint8_t(*p)]) ++p;
          }
       }
    };
@@ -683,41 +702,44 @@ namespace glz
       : doc_(doc), json_end_(end), is_object_(is_object), at_end_(false)
    {
       close_char_ = is_object ? '}' : ']';
-      pos_ = container_start + 1; // skip '[' or '{'
-      skip_ws();
+      const char* pos = container_start + 1; // skip '[' or '{'
+      skip_ws(pos);
 
       // Check for empty container
       if constexpr (Opts.null_terminated) {
-         if (*pos_ == close_char_) {
+         if (*pos == close_char_) {
             at_end_ = true;
             return;
          }
       }
       else {
-         if (pos_ >= json_end_ || *pos_ == close_char_) {
+         if (pos >= json_end_ || *pos == close_char_) {
             at_end_ = true;
             return;
          }
       }
 
-      // Position at first element
-      advance_to_next_element();
+      // Position at first element and initialize current_view_
+      advance_to_next_element(pos);
    }
 
    template <opts Opts>
-   inline void lazy_iterator<Opts>::advance_to_next_element()
+   inline void lazy_iterator<Opts>::advance_to_next_element(const char*& pos)
    {
+      std::string_view key{};
       if (is_object_) {
          // Parse key
-         current_key_ = lazy_json_view<Opts>::parse_key(pos_, json_end_);
-         skip_ws();
+         key = lazy_json_view<Opts>::parse_key(pos, json_end_);
+         skip_ws(pos);
 
          // Skip ':'
-         if (*pos_ == ':') {
-            ++pos_;
-            skip_ws();
+         if (*pos == ':') {
+            ++pos;
+            skip_ws(pos);
          }
       }
+      // Store key in current_view_ (will be set properly after this call)
+      current_view_ = lazy_json_view<Opts>{doc_, pos, key};
    }
 
    template <opts Opts>
@@ -725,32 +747,47 @@ namespace glz
    {
       if (at_end_) return *this;
 
-      // Skip current value using lazy scanning
-      pos_ = detail::skip_value_lazy<Opts>(pos_, json_end_);
-      skip_ws();
+      const char* pos = current_view_.data();
+
+      // Optimization: if user accessed fields via operator[], parse_pos_ tells us how far we scanned
+      // We can skip from there instead of re-scanning the entire element
+      // Note: check current_view_.is_object(), not is_object_ (which is about the container)
+      if (current_view_.is_object() && current_view_.parse_pos_ && current_view_.parse_pos_ > pos) {
+         // Skip the last accessed value, then scan to end of object
+         pos = current_view_.parse_pos_;
+         pos = detail::skip_value_lazy<Opts>(pos, json_end_);
+         // Skip remaining content until we close this object (depth 1 -> 0)
+         pos = detail::skip_to_depth_zero<Opts>(pos, json_end_, 1);
+      }
+      else {
+         // No optimization possible, skip entire value
+         pos = detail::skip_value_lazy<Opts>(pos, json_end_);
+      }
+
+      skip_ws(pos);
 
       // Check for end
       if constexpr (Opts.null_terminated) {
-         if (*pos_ == close_char_) {
+         if (*pos == close_char_) {
             at_end_ = true;
             return *this;
          }
       }
       else {
-         if (pos_ >= json_end_ || *pos_ == close_char_) {
+         if (pos >= json_end_ || *pos == close_char_) {
             at_end_ = true;
             return *this;
          }
       }
 
       // Skip comma
-      if (*pos_ == ',') {
-         ++pos_;
-         skip_ws();
+      if (*pos == ',') {
+         ++pos;
+         skip_ws(pos);
       }
 
-      // Advance to next element
-      advance_to_next_element();
+      // Advance to next element (updates current_view_)
+      advance_to_next_element(pos);
 
       return *this;
    }
