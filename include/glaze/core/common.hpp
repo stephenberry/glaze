@@ -267,6 +267,9 @@ namespace glz
    template <class T>
    concept mimics_bool_t = has_mimic<T> && bool_t<mimic_type<T>>;
 
+   // Note: custom_num_t, custom_str_t, custom_bool_t concepts are defined in core/custom_meta.hpp
+   // (requires custom_t from wrappers.hpp which is not included here)
+
    template <class T>
    concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> &&
                             map_subscriptable<std::decay_t<T>>;

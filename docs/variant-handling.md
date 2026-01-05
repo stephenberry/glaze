@@ -155,11 +155,13 @@ static_assert(glz::custom_str_t<StrongString>);
 
 1. **Choose the right approach**: Use `mimic` for simple member pointers, auto-inference for `glz::custom`.
 
-2. **Default constructible**: Types used in variants should have a non-explicit default constructor.
+2. **Do not use both**: Never define both `mimic` and `glz::custom` on the same type. They serve different purposes and combining them may cause incorrect variant type deduction.
 
-3. **One type per category**: A type can only represent one JSON type.
+3. **Default constructible**: Types used in variants should have a non-explicit default constructor.
 
-4. **Multiple custom types**: If you have multiple custom types of the same JSON category in a variant, Glaze will try them in order.
+4. **One type per category**: A type can only represent one JSON type.
+
+5. **Multiple custom types**: If you have multiple custom types of the same JSON category in a variant, Glaze will try them in order.
 
 ## Object Types
 

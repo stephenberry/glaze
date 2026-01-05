@@ -18,6 +18,7 @@
 #include "glaze/api/std/vector.hpp"
 #include "glaze/api/tuplet.hpp"
 #include "glaze/api/type_support.hpp"
+#include "glaze/core/custom_meta.hpp"
 #include "glaze/json/wrappers.hpp"
 #include "glaze/json/write.hpp"
 
@@ -324,44 +325,10 @@ struct glz::meta<glz::detail::schematic>
 
 namespace glz
 {
+   // Note: has_custom_meta_v and detail::custom_read_input_type are defined in common.hpp
+
    namespace detail
    {
-      // Helper to check if T has custom_t meta
-      template <class T, class = void>
-      struct has_custom_meta_schema : std::false_type
-      {};
-
-      template <class T>
-      struct has_custom_meta_schema<T, std::void_t<decltype(glz::meta<T>::value(std::declval<T&>()))>>
-      {
-         using result_type = decltype(glz::meta<T>::value(std::declval<T&>()));
-         static constexpr bool value = is_specialization_v<result_type, custom_t>;
-      };
-
-      // Extract input type from custom meta using struct-based SFINAE (avoids consteval return type issues)
-      template <class T, class = void>
-      struct custom_meta_input_type
-      {
-         static constexpr bool has_custom = false;
-         using type = void;
-      };
-
-      // Specialization for types with custom_t meta that have concrete invocable from_t with 2+ args
-      template <class T>
-      struct custom_meta_input_type<
-         T,
-         std::enable_if_t<has_custom_meta_schema<T>::value &&
-                          is_invocable_concrete<typename decltype(glz::meta<T>::value(std::declval<T&>()))::from_t> &&
-                          (glz::tuple_size_v<invocable_args_t<
-                              typename decltype(glz::meta<T>::value(std::declval<T&>()))::from_t>> >= 2)>>
-      {
-         static constexpr bool has_custom = true;
-         using CustomT = decltype(glz::meta<T>::value(std::declval<T&>()));
-         using From = typename CustomT::from_t;
-         using Args = invocable_args_t<From>;
-         using type = std::decay_t<glz::tuple_element_t<1, Args>>;
-      };
-
       template <class T = void>
       struct to_json_schema
       {
@@ -389,10 +356,9 @@ namespace glz
                // Type with mimic declaration: use the mimic type's schema
                to_json_schema<mimic_type<T>>::template op<Opts>(s, defs);
             }
-            else if constexpr (custom_meta_input_type<T>::has_custom &&
-                               !std::same_as<typename custom_meta_input_type<T>::type, void>) {
+            else if constexpr (detail::custom_read_input_type<T>::has_custom) {
                // Type with custom read/write: infer schema from input type
-               using InputType = typename custom_meta_input_type<T>::type;
+               using InputType = typename detail::custom_read_input_type<T>::type;
                to_json_schema<InputType>::template op<Opts>(s, defs);
             }
             else {

@@ -13,6 +13,7 @@
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/custom_meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
@@ -36,67 +37,7 @@ namespace glz
    template <class T>
    struct quoted_t;
 
-   // ============================================================================
-   // Auto-inference of JSON type from custom read/write functions
-   // ============================================================================
-   // These concepts allow automatic variant type deduction for types with
-   // glz::custom read/write functions by inspecting the input parameter type.
-
-   namespace detail
-   {
-      // Helper to check if invoking meta<T>::value with T& returns a custom_t
-      template <class T, class = void>
-      struct has_custom_meta_impl : std::false_type
-      {};
-
-      template <class T>
-      struct has_custom_meta_impl<T, std::void_t<decltype(glz::meta<T>::value(std::declval<T&>()))>>
-      {
-         using result_type = decltype(glz::meta<T>::value(std::declval<T&>()));
-         static constexpr bool value = is_specialization_v<result_type, custom_t>;
-      };
-
-      template <class T>
-      constexpr bool has_custom_meta_v = has_custom_meta_impl<T>::value;
-
-      // Extract the input type from a custom read function using struct-based approach
-      template <class T, class = void>
-      struct custom_read_input_type_impl
-      {
-         using type = void;
-      };
-
-      template <class T>
-      struct custom_read_input_type_impl<
-         T,
-         std::enable_if_t<has_custom_meta_v<T> &&
-                          is_invocable_concrete<typename decltype(glz::meta<T>::value(std::declval<T&>()))::from_t> &&
-                          (glz::tuple_size_v<invocable_args_t<
-                              typename decltype(glz::meta<T>::value(std::declval<T&>()))::from_t>> >= 2)>>
-      {
-         using CustomT = decltype(glz::meta<T>::value(std::declval<T&>()));
-         using From = typename CustomT::from_t;
-         using Args = invocable_args_t<From>;
-         using type = std::decay_t<glz::tuple_element_t<1, Args>>;
-      };
-
-      template <class T>
-      using custom_read_input_t = typename custom_read_input_type_impl<T>::type;
-   } // namespace detail
-
-   // Concept: type has custom read that takes a numeric input
-   template <class T>
-   concept custom_num_t = detail::has_custom_meta_v<T> && num_t<detail::custom_read_input_t<T>>;
-
-   // Concept: type has custom read that takes a string input
-   template <class T>
-   concept custom_str_t = detail::has_custom_meta_v<T> && str_t<detail::custom_read_input_t<T>>;
-
-   // Concept: type has custom read that takes a bool input
-   template <class T>
-   concept custom_bool_t = detail::has_custom_meta_v<T> && bool_t<detail::custom_read_input_t<T>>;
-
-   // ============================================================================
+   // Note: custom_num_t, custom_str_t, custom_bool_t concepts are defined in core/custom_meta.hpp
 
    template <>
    struct parse<JSON>
@@ -3297,7 +3238,7 @@ namespace glz
                   }
                   else {
                      Key key_value{};
-                     if constexpr (glaze_enum_t<Key> || mimics_str_t<Key> || custom_str_t<Key>) {
+                     if constexpr (glaze_enum_t<Key> || mimics_str_t<Key>) {
                         parse<JSON>::op<Opts>(key_value, ctx, it, end);
                      }
                      else if constexpr (std::is_arithmetic_v<Key>) {
@@ -3363,11 +3304,18 @@ namespace glz
       constexpr auto N = std::variant_size_v<T>;
       for_each<N>([&]<auto I>() {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
-         // ICE workaround
-         bools += bool_t<V> || mimics_bool_t<V> || custom_bool_t<V>;
-         numbers += num_t<V> || mimics_num_t<V> || custom_num_t<V>;
-         strings += str_t<V> || mimics_str_t<V> || custom_str_t<V>;
-         strings += glaze_enum_t<V>;
+         // Custom takes precedence over mimic (consistent with runtime behavior)
+         if constexpr (has_custom_meta_v<V>) {
+            bools += custom_bool_t<V>;
+            numbers += custom_num_t<V>;
+            strings += custom_str_t<V>;
+         }
+         else {
+            bools += bool_t<V> || mimics_bool_t<V>;
+            numbers += num_t<V> || mimics_num_t<V>;
+            strings += str_t<V> || mimics_str_t<V>;
+            strings += glaze_enum_t<V>;
+         }
          objects += pair_t<V>;
          objects += (writable_map_t<V> || readable_map_t<V> || is_memory_object<V>);
          objects += glaze_object_t<V>;
@@ -3435,7 +3383,7 @@ namespace glz
    constexpr size_t variant_first_index_v = []<class... Ts, size_t... Is>(
                                                std::variant<Ts...>*, std::index_sequence<Is...>) {
       size_t result = std::variant_npos;
-      // Use void cast to suppress "expression result unused" warning
+      // Short-circuit: stops at first match via || fold
       (void)((Trait<Ts>::value && result == std::variant_npos ? (result = Is, true) : false) || ...);
       return result;
    }(static_cast<Variant*>(nullptr), std::make_index_sequence<std::variant_size_v<Variant>>{});
@@ -3515,7 +3463,11 @@ namespace glz
 
             // Second pass: non-const types in this category
             if constexpr (non_const_count > 0) {
-               // Track which non-const type we're on for "is last" check
+               // Track position within matching types for "is last" check.
+               // We iterate over all variant indices but only process matching types,
+               // so we need runtime tracking (vs the old tuple-based approach where
+               // the loop index directly corresponded to position in filtered set).
+               // This has negligible cost: one increment per matching type.
                size_t non_const_idx = 0;
 
                for_each<N>([&]<size_t I>() {
