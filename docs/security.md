@@ -200,6 +200,33 @@ auto ec = glz::read<alloc_opts{}>(vec, buffer);
 for (auto* p : vec) delete p;
 ```
 
+#### Runtime Raw Pointer Allocation Control
+
+For applications that need to toggle raw pointer allocation at runtime (e.g., based on data source trustworthiness), use a custom context:
+
+```cpp
+struct secure_context : glz::context
+{
+   bool allocate_raw_pointers = false;
+};
+
+template <typename T>
+T my_deserializer(const std::vector<std::byte>& buffer, bool is_trusted_source)
+{
+   T obj{};
+   secure_context ctx;
+   ctx.allocate_raw_pointers = is_trusted_source;
+
+   auto ec = glz::read<glz::opts{.format = glz::BEVE}>(obj, buffer, ctx);
+   if (ec) {
+      // Handle error
+   }
+   return obj;
+}
+```
+
+This allows building unified deserializers that scale security based on the trust level of the source—for example, allowing raw pointer allocation for local save files while disabling it for network packets.
+
 > [!WARNING]
 > When enabling `allocate_raw_pointers`, your application is responsible for tracking and freeing all allocated memory. Consider using smart pointers (`std::unique_ptr`, `std::shared_ptr`) instead, which Glaze handles automatically and safely.
 

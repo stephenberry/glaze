@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <type_traits>
 
+#include "glaze/core/context.hpp"
+#include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
 namespace glz
@@ -495,6 +497,37 @@ namespace glz
          return Opts.allocate_raw_pointers;
       }
       else {
+         return false;
+      }
+   }
+
+   // Check if raw pointer allocation is possible (either compile-time or runtime option available)
+   template <auto Opts, class Ctx>
+   concept can_allocate_raw_pointer =
+      check_allocate_raw_pointers(Opts) || has_runtime_allocate_raw_pointers<Ctx>;
+
+   // Helper to attempt allocation of a null raw pointer during deserialization.
+   // Compile-time allocate_raw_pointers option takes precedence over runtime context.
+   // Returns true on success, false on failure (with ctx.error set to invalid_nullable_read).
+   // Only call this when can_allocate_raw_pointer<Opts, Ctx> is satisfied.
+   template <auto Opts, class Ptr, class Ctx>
+      requires(std::is_pointer_v<std::remove_cvref_t<Ptr>> &&
+               can_allocate_raw_pointer<Opts, std::decay_t<Ctx>>)
+   GLZ_ALWAYS_INLINE constexpr bool try_allocate_raw_pointer(Ptr& value, Ctx& ctx) noexcept
+   {
+      using PtrType = std::remove_cvref_t<Ptr>;
+      using PointedType = std::remove_pointer_t<PtrType>;
+
+      if constexpr (check_allocate_raw_pointers(Opts)) {
+         value = new PointedType{};
+         return true;
+      }
+      else if constexpr (has_runtime_allocate_raw_pointers<std::decay_t<Ctx>>) {
+         if (ctx.allocate_raw_pointers) {
+            value = new PointedType{};
+            return true;
+         }
+         ctx.error = error_code::invalid_nullable_read;
          return false;
       }
    }
