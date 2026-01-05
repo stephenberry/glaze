@@ -18,6 +18,7 @@
 #include "glaze/api/std/vector.hpp"
 #include "glaze/api/tuplet.hpp"
 #include "glaze/api/type_support.hpp"
+#include "glaze/core/custom_meta.hpp"
 #include "glaze/json/wrappers.hpp"
 #include "glaze/json/write.hpp"
 
@@ -324,6 +325,8 @@ struct glz::meta<glz::detail::schematic>
 
 namespace glz
 {
+   // Note: has_custom_meta_v and detail::custom_read_input_type are defined in common.hpp
+
    namespace detail
    {
       template <class T = void>
@@ -348,6 +351,15 @@ namespace glz
                   s.attributes.constant = val_v;
                }
                to_json_schema<constexpr_val_t>::template op<Opts>(s, defs);
+            }
+            else if constexpr (has_mimic<T>) {
+               // Type with mimic declaration: use the mimic type's schema
+               to_json_schema<mimic_type<T>>::template op<Opts>(s, defs);
+            }
+            else if constexpr (detail::custom_read_input_type<T>::has_custom) {
+               // Type with custom read/write: infer schema from input type
+               using InputType = typename detail::custom_read_input_type<T>::type;
+               to_json_schema<InputType>::template op<Opts>(s, defs);
             }
             else {
                s.type = {"number", "string", "boolean", "object", "array", "null"};
