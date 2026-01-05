@@ -15,6 +15,7 @@
 #include "glaze/json/json_concepts.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/json_stream.hpp"
+#include "glaze/json/lazy.hpp"
 #include "glaze/json/max_write_precision.hpp"
 #include "glaze/json/minify.hpp"
 #include "glaze/json/ndjson.hpp"

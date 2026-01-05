@@ -293,6 +293,7 @@ This works because `glz::generic` stores arrays as `std::vector<glz::generic>` a
 
 ## See Also
 
+- [Lazy JSON](./lazy-json.md) - On-demand parsing for selective field access (faster for extracting few fields)
 - [JSON Patch (RFC 6902)](./json-patch.md) - Apply structured patches to `glz::generic` documents
 - [JSON Merge Patch (RFC 7386)](./json-merge-patch.md) - Apply partial updates to `glz::generic` documents
 - [JSON Pointer Syntax](./json-pointer-syntax.md) - Path syntax for navigating JSON documents

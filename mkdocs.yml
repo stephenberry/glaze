@@ -106,6 +106,7 @@ nav:
      - Partial Read: partial-read.md
      - Partial Write: partial-write.md
    - Reading: reading.md
+   - Lazy JSON (On-Demand): lazy-json.md
    - Writing: writing.md
    - Streaming I/O: streaming.md
    - Max Float Precision: max-float-precision.md
