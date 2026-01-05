@@ -617,6 +617,7 @@ auto ec = glz::read<strict_opts>(obj, json_data);
 ## See Also
 
 - [Writing](./writing.md) - Understanding `error_ctx` and buffer handling
+- [Lazy JSON](./lazy-json.md) - On-demand parsing for selective field access
 - [Generic JSON](./generic-json.md) - Working with `glz::generic` for dynamic JSON
 - [JSON Patch (RFC 6902)](./json-patch.md) - Apply structured patches to JSON documents
 - [JSON Merge Patch (RFC 7386)](./json-merge-patch.md) - Apply partial updates to JSON documents

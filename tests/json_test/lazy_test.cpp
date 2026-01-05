@@ -9,8 +9,7 @@ using namespace ut;
 suite lazy_json_tests = [] {
    "lazy_json_read_basic"_test = [] {
       std::string buffer = R"({"name":"John","age":30,"active":true,"balance":123.45})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value()) << "Failed to parse JSON";
 
       auto& doc = *result;
@@ -33,8 +32,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_read_array"_test = [] {
       std::string buffer = R"([1, 2, 3, "hello", true, null])";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -51,8 +49,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_nested"_test = [] {
       std::string buffer = R"({"person":{"name":"Alice","friends":["Bob","Charlie"]},"count":2})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -64,8 +61,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_escaped_string"_test = [] {
       std::string buffer = R"({"message":"Hello\nWorld","path":"C:\\Users\\test"})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -75,8 +71,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_unicode_escape"_test = [] {
       std::string buffer = R"({"emoji":"\u0048\u0065\u006c\u006c\u006f"})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -85,8 +80,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_write"_test = [] {
       std::string buffer = R"({"x":1,"y":2})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       std::string output;
@@ -97,8 +91,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_contains"_test = [] {
       std::string buffer = R"({"a":1,"b":2})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -109,8 +102,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_empty_object"_test = [] {
       std::string buffer = R"({})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -121,8 +113,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_empty_array"_test = [] {
       std::string buffer = R"([])";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -133,8 +124,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_null"_test = [] {
       std::string buffer = R"(null)";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -144,8 +134,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_number_types"_test = [] {
       std::string buffer = R"({"int":42,"float":3.14,"negative":-100,"big":9007199254740993})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -163,8 +152,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_raw_string_view"_test = [] {
       std::string buffer = R"({"simple":"hello","escaped":"hello\\world"})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -185,8 +173,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_explicit_bool"_test = [] {
       std::string buffer = R"({"exists":true})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       // explicit bool conversion - true if not null
@@ -194,16 +181,14 @@ suite lazy_json_tests = [] {
       expect(static_cast<bool>((*result)["exists"]));
 
       std::string null_buffer = R"(null)";
-      glz::lazy_buffer null_nodes;
-      auto null_result = glz::read_lazy(null_buffer, null_nodes);
+      auto null_result = glz::lazy_json(null_buffer);
       expect(null_result.has_value());
       expect(!static_cast<bool>(*null_result)); // null is false
    };
 
    "lazy_json_wrong_type_error"_test = [] {
       std::string buffer = R"({"str":"hello","num":42})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -221,8 +206,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_float"_test = [] {
       std::string buffer = R"({"value":2.5})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -233,8 +217,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_large_array"_test = [] {
       std::string buffer = R"([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19])";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -247,50 +230,21 @@ suite lazy_json_tests = [] {
    "lazy_json_struct_size"_test = [] {
       // Sizes differ between 32-bit and 64-bit systems
       if constexpr (sizeof(void*) == 8) {
-         // 64-bit: lazy_json is 24 bytes (data* 8 + key* 8 + key_length 4 + type 1 + padding 3)
-         expect(sizeof(glz::lazy_json) == 24u) << "lazy_json should be 24 bytes on 64-bit, got " << sizeof(glz::lazy_json);
          // lazy_json_view is 48 bytes: doc* (8) + data* (8) + parse_pos* (8) + key_ (16) + error (4) + padding (4)
          expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 48u) << "lazy_json_view should be 48 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
          expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 48u) << "lazy_json_view should be 48 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
       }
       else {
-         // 32-bit: lazy_json is 16 bytes (data* 4 + key* 4 + key_length 4 + type 1 + padding 3)
-         expect(sizeof(glz::lazy_json) == 16u) << "lazy_json should be 16 bytes on 32-bit, got " << sizeof(glz::lazy_json);
          // lazy_json_view is 24 bytes: doc* (4) + data* (4) + parse_pos* (4) + key_ (8) + error (4)
          expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 24u) << "lazy_json_view should be 24 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
          expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 24u) << "lazy_json_view should be 24 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
       }
    };
 
-   "lazy_json_buffer_reuse"_test = [] {
-      glz::lazy_buffer nodes;
-      nodes.reserve(10);
-
-      // First parse
-      {
-         std::string buffer1 = R"({"x":1})";
-         auto result1 = glz::read_lazy(buffer1, nodes);
-         expect(result1.has_value());
-         expect((*result1)["x"].get<int64_t>().value() == 1);
-      }
-
-      // Clear and reuse
-      nodes.clear();
-
-      // Second parse
-      {
-         std::string buffer2 = R"({"y":2})";
-         auto result2 = glz::read_lazy(buffer2, nodes);
-         expect(result2.has_value());
-         expect((*result2)["y"].get<int64_t>().value() == 2);
-      }
-   };
-
    "lazy_json_progressive_scanning"_test = [] {
       // Test that progressive scanning works for sequential key access
       std::string buffer = R"({"a":1,"b":2,"c":3,"d":4,"e":5})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;
@@ -313,8 +267,7 @@ suite lazy_json_tests = [] {
 
    "lazy_json_reset_parse_pos"_test = [] {
       std::string buffer = R"({"x":10,"y":20,"z":30})";
-      glz::lazy_buffer nodes;
-      auto result = glz::read_lazy(buffer, nodes);
+      auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
       auto& doc = *result;

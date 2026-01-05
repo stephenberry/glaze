@@ -152,39 +152,6 @@ namespace glz
    } // namespace detail
 
    // ============================================================================
-   // lazy_json - Legacy node storage (kept for API compatibility)
-   // ============================================================================
-
-   struct lazy_json
-   {
-      const char* data_{};
-      const char* key_{};
-      uint32_t key_length_{};
-      uint8_t type_{};  // 0=null, 1=bool, 2=number, 3=string, 4=array, 5=object
-
-      lazy_json() = default;
-
-      [[nodiscard]] bool is_null() const noexcept { return type_ == 0; }
-      [[nodiscard]] bool is_boolean() const noexcept { return type_ == 1; }
-      [[nodiscard]] bool is_number() const noexcept { return type_ == 2; }
-      [[nodiscard]] bool is_string() const noexcept { return type_ == 3; }
-      [[nodiscard]] bool is_array() const noexcept { return type_ == 4; }
-      [[nodiscard]] bool is_object() const noexcept { return type_ == 5; }
-
-      [[nodiscard]] std::string_view key() const noexcept
-      {
-         return key_ ? std::string_view{key_, key_length_} : std::string_view{};
-      }
-
-      explicit operator bool() const noexcept { return !is_null(); }
-   };
-
-   static_assert(sizeof(lazy_json) == 24, "lazy_json should be 24 bytes");
-
-   // Legacy buffer type - not used by truly lazy parser but kept for API compatibility
-   using lazy_buffer = std::vector<lazy_json>;
-
-   // ============================================================================
    // lazy_json_view - Truly lazy view with on-demand scanning
    // ============================================================================
 
@@ -302,9 +269,9 @@ namespace glz
       friend struct lazy_json_view<Opts>;
       friend class lazy_iterator<Opts>;
 
-      // Factory method for read_lazy
+      // Factory method for lazy_json
       template <opts O, class Buffer>
-      friend expected<lazy_document<O>, error_ctx> read_lazy(Buffer&&, lazy_buffer&);
+      friend expected<lazy_document<O>, error_ctx> lazy_json(Buffer&&);
 
       // Helper to initialize root_view_ with correct doc_ pointer
       void init_root_view() noexcept
@@ -991,25 +958,21 @@ namespace glz
    };
 
    // ============================================================================
-   // read_lazy - Main entry point (truly lazy - minimal upfront work)
+   // lazy_json - Main entry point (truly lazy - minimal upfront work)
    // ============================================================================
 
    /**
-    * @brief Parse JSON lazily - no upfront processing.
+    * @brief Create a lazy JSON document - no upfront processing.
     *
-    * This is a truly lazy parser like simdjson on-demand:
-    * - No structural index built upfront
-    * - Just validates first byte and stores buffer reference
+    * - Just validates first byte and stores buffer reference - O(1)
     * - All work happens on-demand when accessing fields
     *
     * @tparam Opts Options for parsing
     * @param buffer The JSON text buffer (must remain valid for document lifetime)
-    * @return lazy_document on success, error_ctx on parse failure
-    *
-    * NOTE: The lazy_buffer parameter is kept for API compatibility but not used.
+    * @return lazy_document on success, error_ctx on failure
     */
    template <opts Opts = opts{}, class Buffer>
-   [[nodiscard]] inline expected<lazy_document<Opts>, error_ctx> read_lazy(Buffer&& buffer, lazy_buffer&)
+   [[nodiscard]] inline expected<lazy_document<Opts>, error_ctx> lazy_json(Buffer&& buffer)
    {
       lazy_document<Opts> doc;
       doc.json_ = buffer.data();
