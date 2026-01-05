@@ -24,7 +24,6 @@ namespace glz
    };
 
    // Forward declarations
-   struct lazy_json;
    template <opts Opts>
    struct lazy_json_view;
    template <opts Opts>
@@ -850,22 +849,9 @@ namespace glz
    }
 
    // ============================================================================
-   // Meta and JSON reader/writer specializations
+   // JSON writer for lazy_json_view
    // ============================================================================
 
-   template <>
-   struct meta<lazy_json>
-   {
-      static constexpr std::string_view name = "glz::lazy_json";
-   };
-
-   template <opts Opts>
-   struct meta<lazy_json_view<Opts>>
-   {
-      static constexpr std::string_view name = "glz::lazy_json_view";
-   };
-
-   // JSON writer for lazy_json_view
    template <opts Opts>
    struct to<JSON, lazy_json_view<Opts>>
    {
