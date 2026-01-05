@@ -3703,9 +3703,24 @@ namespace glz
                                              else if constexpr (constructible<V>) {
                                                 v = meta_construct_v<V>();
                                              }
-                                             else if constexpr (check_allocate_raw_pointers(Opts) &&
-                                                                std::is_pointer_v<V>) {
-                                                v = new std::remove_pointer_t<V>{};
+                                             else if constexpr (std::is_pointer_v<V>) {
+                                                if constexpr (check_allocate_raw_pointers(Opts)) {
+                                                   v = new std::remove_pointer_t<V>{};
+                                                }
+                                                else if constexpr (has_runtime_allocate_raw_pointers<
+                                                                      std::decay_t<decltype(ctx)>>) {
+                                                   if (ctx.allocate_raw_pointers) {
+                                                      v = new std::remove_pointer_t<V>{};
+                                                   }
+                                                   else {
+                                                      ctx.error = error_code::invalid_nullable_read;
+                                                      return;
+                                                   }
+                                                }
+                                                else {
+                                                   ctx.error = error_code::invalid_nullable_read;
+                                                   return;
+                                                }
                                              }
                                              else {
                                                 ctx.error = error_code::invalid_nullable_read;
@@ -3762,9 +3777,24 @@ namespace glz
                                                 else if constexpr (constructible<V>) {
                                                    v = meta_construct_v<V>();
                                                 }
-                                                else if constexpr (check_allocate_raw_pointers(Opts) &&
-                                                                   std::is_pointer_v<V>) {
-                                                   v = new std::remove_pointer_t<V>{};
+                                                else if constexpr (std::is_pointer_v<V>) {
+                                                   if constexpr (check_allocate_raw_pointers(Opts)) {
+                                                      v = new std::remove_pointer_t<V>{};
+                                                   }
+                                                   else if constexpr (has_runtime_allocate_raw_pointers<
+                                                                         std::decay_t<decltype(ctx)>>) {
+                                                      if (ctx.allocate_raw_pointers) {
+                                                         v = new std::remove_pointer_t<V>{};
+                                                      }
+                                                      else {
+                                                         ctx.error = error_code::invalid_nullable_read;
+                                                         return;
+                                                      }
+                                                   }
+                                                   else {
+                                                      ctx.error = error_code::invalid_nullable_read;
+                                                      return;
+                                                   }
                                                 }
                                                 else {
                                                    ctx.error = error_code::invalid_nullable_read;
@@ -3915,8 +3945,24 @@ namespace glz
                                        else if constexpr (constructible<V>) {
                                           v = meta_construct_v<V>();
                                        }
-                                       else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<V>) {
-                                          v = new std::remove_pointer_t<V>{};
+                                       else if constexpr (std::is_pointer_v<V>) {
+                                          if constexpr (check_allocate_raw_pointers(Opts)) {
+                                             v = new std::remove_pointer_t<V>{};
+                                          }
+                                          else if constexpr (has_runtime_allocate_raw_pointers<
+                                                                std::decay_t<decltype(ctx)>>) {
+                                             if (ctx.allocate_raw_pointers) {
+                                                v = new std::remove_pointer_t<V>{};
+                                             }
+                                             else {
+                                                ctx.error = error_code::invalid_nullable_read;
+                                                return;
+                                             }
+                                          }
+                                          else {
+                                             ctx.error = error_code::invalid_nullable_read;
+                                             return;
+                                          }
                                        }
                                        else {
                                           ctx.error = error_code::invalid_nullable_read;
@@ -3997,8 +4043,24 @@ namespace glz
                                     else if constexpr (constructible<V>) {
                                        v = meta_construct_v<V>();
                                     }
-                                    else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<V>) {
-                                       v = new std::remove_pointer_t<V>{};
+                                    else if constexpr (std::is_pointer_v<V>) {
+                                       if constexpr (check_allocate_raw_pointers(Opts)) {
+                                          v = new std::remove_pointer_t<V>{};
+                                       }
+                                       else if constexpr (has_runtime_allocate_raw_pointers<
+                                                             std::decay_t<decltype(ctx)>>) {
+                                          if (ctx.allocate_raw_pointers) {
+                                             v = new std::remove_pointer_t<V>{};
+                                          }
+                                          else {
+                                             ctx.error = error_code::invalid_nullable_read;
+                                             return;
+                                          }
+                                       }
+                                       else {
+                                          ctx.error = error_code::invalid_nullable_read;
+                                          return;
+                                       }
                                     }
                                     else {
                                        ctx.error = error_code::invalid_nullable_read;
@@ -4086,8 +4148,24 @@ namespace glz
                                        else if constexpr (constructible<V>) {
                                           v = meta_construct_v<V>();
                                        }
-                                       else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<V>) {
-                                          v = new std::remove_pointer_t<V>{};
+                                       else if constexpr (std::is_pointer_v<V>) {
+                                          if constexpr (check_allocate_raw_pointers(Opts)) {
+                                             v = new std::remove_pointer_t<V>{};
+                                          }
+                                          else if constexpr (has_runtime_allocate_raw_pointers<
+                                                                std::decay_t<decltype(ctx)>>) {
+                                             if (ctx.allocate_raw_pointers) {
+                                                v = new std::remove_pointer_t<V>{};
+                                             }
+                                             else {
+                                                ctx.error = error_code::invalid_nullable_read;
+                                                return;
+                                             }
+                                          }
+                                          else {
+                                             ctx.error = error_code::invalid_nullable_read;
+                                             return;
+                                          }
                                        }
                                        else {
                                           ctx.error = error_code::invalid_nullable_read;
@@ -4453,6 +4531,16 @@ namespace glz
                   }
                   else if constexpr (check_allocate_raw_pointers(Opts) && std::is_pointer_v<T>) {
                      value = new std::remove_pointer_t<T>{};
+                  }
+                  else if constexpr (has_runtime_allocate_raw_pointers<std::decay_t<decltype(ctx)>> &&
+                                     std::is_pointer_v<T>) {
+                     if (ctx.allocate_raw_pointers) {
+                        value = new std::remove_pointer_t<T>{};
+                     }
+                     else {
+                        ctx.error = error_code::invalid_nullable_read;
+                        return;
+                     }
                   }
                   else {
                      // Cannot read into a null raw pointer

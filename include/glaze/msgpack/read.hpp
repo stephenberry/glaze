@@ -277,6 +277,15 @@ namespace glz
             if constexpr (check_allocate_raw_pointers(Opts)) {
                value = new std::remove_pointer_t<std::remove_cvref_t<Value>>{};
             }
+            else if constexpr (has_runtime_allocate_raw_pointers<std::decay_t<decltype(ctx)>>) {
+               if (ctx.allocate_raw_pointers) {
+                  value = new std::remove_pointer_t<std::remove_cvref_t<Value>>{};
+               }
+               else {
+                  ctx.error = error_code::invalid_nullable_read;
+                  return;
+               }
+            }
             else {
                ctx.error = error_code::invalid_nullable_read;
                return;
