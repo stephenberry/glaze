@@ -249,16 +249,16 @@ suite lazy_json_tests = [] {
       if constexpr (sizeof(void*) == 8) {
          // 64-bit: lazy_json is 24 bytes (data* 8 + key* 8 + key_length 4 + type 1 + padding 3)
          expect(sizeof(glz::lazy_json) == 24u) << "lazy_json should be 24 bytes on 64-bit, got " << sizeof(glz::lazy_json);
-         // lazy_json_view is 40 bytes: doc* (8) + data* (8) + key_ (16) + error (4) + padding (4)
-         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 40u) << "lazy_json_view should be 40 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
-         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 40u) << "lazy_json_view should be 40 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
+         // lazy_json_view is 48 bytes: doc* (8) + data* (8) + parse_pos* (8) + key_ (16) + error (4) + padding (4)
+         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 48u) << "lazy_json_view should be 48 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
+         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 48u) << "lazy_json_view should be 48 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
       }
       else {
          // 32-bit: lazy_json is 16 bytes (data* 4 + key* 4 + key_length 4 + type 1 + padding 3)
          expect(sizeof(glz::lazy_json) == 16u) << "lazy_json should be 16 bytes on 32-bit, got " << sizeof(glz::lazy_json);
-         // lazy_json_view is 20 bytes: doc* (4) + data* (4) + key_ (8) + error (4)
-         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 20u) << "lazy_json_view should be 20 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
-         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 20u) << "lazy_json_view should be 20 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
+         // lazy_json_view is 24 bytes: doc* (4) + data* (4) + parse_pos* (4) + key_ (8) + error (4)
+         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 24u) << "lazy_json_view should be 24 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
+         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 24u) << "lazy_json_view should be 24 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
       }
    };
 
@@ -284,6 +284,50 @@ suite lazy_json_tests = [] {
          expect(result2.has_value());
          expect((*result2)["y"].get<int64_t>().value() == 2);
       }
+   };
+
+   "lazy_json_progressive_scanning"_test = [] {
+      // Test that progressive scanning works for sequential key access
+      std::string buffer = R"({"a":1,"b":2,"c":3,"d":4,"e":5})";
+      glz::lazy_buffer nodes;
+      auto result = glz::read_lazy(buffer, nodes);
+      expect(result.has_value());
+
+      auto& doc = *result;
+
+      // Sequential access should use progressive scanning
+      expect(doc["a"].get<int64_t>().value() == 1);
+      expect(doc["b"].get<int64_t>().value() == 2);
+      expect(doc["c"].get<int64_t>().value() == 3);
+      expect(doc["d"].get<int64_t>().value() == 4);
+      expect(doc["e"].get<int64_t>().value() == 5);
+
+      // Accessing earlier key should still work (wrap-around)
+      expect(doc["a"].get<int64_t>().value() == 1);
+      expect(doc["c"].get<int64_t>().value() == 3);
+
+      // Non-existent key should return error
+      auto missing = doc["z"];
+      expect(missing.has_error());
+   };
+
+   "lazy_json_reset_parse_pos"_test = [] {
+      std::string buffer = R"({"x":10,"y":20,"z":30})";
+      glz::lazy_buffer nodes;
+      auto result = glz::read_lazy(buffer, nodes);
+      expect(result.has_value());
+
+      auto& doc = *result;
+
+      // Access z first (advances parse_pos to end)
+      expect(doc["z"].get<int64_t>().value() == 30);
+
+      // Access x (should wrap around)
+      expect(doc["x"].get<int64_t>().value() == 10);
+
+      // Reset and access again
+      doc.reset_parse_pos();
+      expect(doc["y"].get<int64_t>().value() == 20);
    };
 };
 

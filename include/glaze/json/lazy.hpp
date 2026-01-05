@@ -194,12 +194,16 @@ namespace glz
     * No upfront processing - all navigation uses SWAR-accelerated scanning.
     * This matches simdjson's on-demand approach.
     *
-    * Memory layout (40 bytes on 64-bit):
-    * - doc_: pointer to document (8 bytes)
-    * - data_: pointer to value start in JSON (8 bytes)
-    * - key_: stored key for iteration (16 bytes - string_view)
+    * For objects, parse_pos_ tracks the current scan position to enable
+    * efficient sequential key access (O(n) total instead of O(n²)).
+    *
+    * Memory layout (48 bytes on 64-bit, 24 bytes on 32-bit):
+    * - doc_: pointer to document (8/4 bytes)
+    * - data_: pointer to value start in JSON (8/4 bytes)
+    * - parse_pos_: current scan position for progressive parsing (8/4 bytes)
+    * - key_: stored key for iteration (16/8 bytes - string_view)
     * - error_: error code (4 bytes)
-    * - padding: 4 bytes
+    * - padding: 4/0 bytes
     */
    template <opts Opts = opts{}>
    struct lazy_json_view
@@ -207,6 +211,7 @@ namespace glz
      private:
       const lazy_document<Opts>* doc_{};
       const char* data_{};
+      mutable const char* parse_pos_{};  // Current scan position (advances on key access)
       std::string_view key_{};
       error_code error_{error_code::none};
 
@@ -258,6 +263,7 @@ namespace glz
       [[nodiscard]] lazy_iterator<Opts> end() const;
 
      private:
+      friend struct lazy_document<Opts>;
       friend class lazy_iterator<Opts>;
 
       // Constructor with key for iteration
@@ -291,6 +297,7 @@ namespace glz
       const char* json_{};
       size_t len_{};
       const char* root_data_{};
+      mutable lazy_json_view<Opts> root_view_{};  // Cached root view with parse_pos_
 
       friend struct lazy_json_view<Opts>;
       friend class lazy_iterator<Opts>;
@@ -299,22 +306,68 @@ namespace glz
       template <opts O, class Buffer>
       friend expected<lazy_document<O>, error_ctx> read_lazy(Buffer&&, lazy_buffer&);
 
+      // Helper to initialize root_view_ with correct doc_ pointer
+      void init_root_view() noexcept
+      {
+         root_view_ = lazy_json_view<Opts>{this, root_data_};
+      }
+
      public:
       lazy_document() = default;
 
-      // Copyable - just pointers
-      lazy_document(const lazy_document&) = default;
-      lazy_document& operator=(const lazy_document&) = default;
-      lazy_document(lazy_document&&) = default;
-      lazy_document& operator=(lazy_document&&) = default;
-
-      [[nodiscard]] lazy_json_view<Opts> root() const noexcept
+      // Copy constructor - fix doc_ pointer and preserve parse_pos_
+      lazy_document(const lazy_document& other)
+         : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
       {
-         return {this, root_data_};
+         init_root_view();
+         root_view_.parse_pos_ = other.root_view_.parse_pos_;
       }
 
-      [[nodiscard]] lazy_json_view<Opts> operator[](std::string_view key) const { return root()[key]; }
-      [[nodiscard]] lazy_json_view<Opts> operator[](size_t index) const { return root()[index]; }
+      lazy_document& operator=(const lazy_document& other)
+      {
+         if (this != &other) {
+            json_ = other.json_;
+            len_ = other.len_;
+            root_data_ = other.root_data_;
+            init_root_view();
+            root_view_.parse_pos_ = other.root_view_.parse_pos_;
+         }
+         return *this;
+      }
+
+      // Move constructor - fix doc_ pointer and transfer parse_pos_
+      lazy_document(lazy_document&& other) noexcept
+         : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
+      {
+         init_root_view();
+         root_view_.parse_pos_ = other.root_view_.parse_pos_;
+      }
+
+      lazy_document& operator=(lazy_document&& other) noexcept
+      {
+         if (this != &other) {
+            json_ = other.json_;
+            len_ = other.len_;
+            root_data_ = other.root_data_;
+            init_root_view();
+            root_view_.parse_pos_ = other.root_view_.parse_pos_;
+         }
+         return *this;
+      }
+
+      /// @brief Get the root view (cached, enables progressive key scanning)
+      [[nodiscard]] lazy_json_view<Opts>& root() noexcept
+      {
+         return root_view_;
+      }
+
+      [[nodiscard]] const lazy_json_view<Opts>& root() const noexcept
+      {
+         return root_view_;
+      }
+
+      [[nodiscard]] lazy_json_view<Opts> operator[](std::string_view key) const { return root_view_[key]; }
+      [[nodiscard]] lazy_json_view<Opts> operator[](size_t index) const { return root_view_[index]; }
 
       [[nodiscard]] bool is_null() const noexcept { return !root_data_ || *root_data_ == 'n'; }
       [[nodiscard]] bool is_array() const noexcept { return root_data_ && *root_data_ == '['; }
@@ -324,6 +377,9 @@ namespace glz
 
       [[nodiscard]] const char* json_data() const noexcept { return json_; }
       [[nodiscard]] size_t json_size() const noexcept { return len_; }
+
+      /// @brief Reset parse position to beginning (for re-scanning from start)
+      void reset_parse_pos() noexcept { root_view_.parse_pos_ = nullptr; }
    };
 
    // ============================================================================
@@ -502,18 +558,37 @@ namespace glz
       if (!is_object()) return make_error(error_code::get_wrong_type);
 
       const char* end = json_end();
-      const char* p = data_ + 1; // skip '{'
+      const char* obj_start = data_ + 1; // skip '{'
+
+      // Determine search start position
+      // parse_pos_ points to the VALUE of the last found key (lazy skip)
+      // We need to skip past it before continuing the search
+      const char* search_start = obj_start;
+      if (parse_pos_ && parse_pos_ > data_) {
+         // Lazily skip past the last found value now
+         const char* p = parse_pos_;
+         p = detail::skip_value_lazy<Opts>(p, end);
+         skip_ws(p, end);
+         if (*p == ',') {
+            ++p;
+            skip_ws(p, end);
+         }
+         search_start = p;
+      }
+
+      const char* p = search_start;
       skip_ws(p, end);
 
-      // Check for empty object
-      if constexpr (Opts.null_terminated) {
-         if (*p == '}') return make_error(error_code::key_not_found);
-      }
-      else {
-         if (p >= end || *p == '}') return make_error(error_code::key_not_found);
-      }
-
+      // Forward pass: search from current position to end of object
       while (true) {
+         // Check for end of object
+         if constexpr (Opts.null_terminated) {
+            if (*p == '}') break;
+         }
+         else {
+            if (p >= end || *p == '}') break;
+         }
+
          // Parse key
          auto k = parse_key(p, end);
          skip_ws(p, end);
@@ -526,6 +601,7 @@ namespace glz
 
          // Check if key matches
          if (k == key) {
+            parse_pos_ = p;  // Store value position (lazy - don't skip yet)
             return {doc_, p};
          }
 
@@ -533,20 +609,56 @@ namespace glz
          p = detail::skip_value_lazy<Opts>(p, end);
          skip_ws(p, end);
 
-         // Check for end of object
-         if constexpr (Opts.null_terminated) {
-            if (*p == '}') return make_error(error_code::key_not_found);
-         }
-         else {
-            if (p >= end || *p == '}') return make_error(error_code::key_not_found);
-         }
-
          // Skip comma
          if (*p == ',') {
             ++p;
             skip_ws(p, end);
          }
       }
+
+      // Wrap-around pass: search from beginning to where we started
+      if (search_start != obj_start) {
+         p = obj_start;
+         skip_ws(p, end);
+
+         while (p < search_start) {
+            // Check for end of object
+            if constexpr (Opts.null_terminated) {
+               if (*p == '}') break;
+            }
+            else {
+               if (p >= end || *p == '}') break;
+            }
+
+            // Parse key
+            auto k = parse_key(p, end);
+            skip_ws(p, end);
+
+            // Skip ':'
+            if (*p == ':') {
+               ++p;
+               skip_ws(p, end);
+            }
+
+            // Check if key matches
+            if (k == key) {
+               parse_pos_ = p;  // Store value position (lazy - don't skip yet)
+               return {doc_, p};
+            }
+
+            // Skip value using lazy scanning
+            p = detail::skip_value_lazy<Opts>(p, end);
+            skip_ws(p, end);
+
+            // Skip comma
+            if (*p == ',') {
+               ++p;
+               skip_ws(p, end);
+            }
+         }
+      }
+
+      return make_error(error_code::key_not_found);
    }
 
    template <opts Opts>
@@ -926,6 +1038,7 @@ namespace glz
       }
 
       doc.root_data_ = p;
+      doc.init_root_view();  // Initialize cached root view
       return doc;
    }
 
