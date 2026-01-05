@@ -245,11 +245,21 @@ suite lazy_json_tests = [] {
    };
 
    "lazy_json_struct_size"_test = [] {
-      // lazy_json is 32 bytes on 64-bit
-      expect(sizeof(glz::lazy_json) == 32u) << "lazy_json should be 32 bytes, got " << sizeof(glz::lazy_json);
-      // lazy_json_view is 16 bytes: doc* (8) + index (4) + error_code (4)
-      expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 16u) << "lazy_json_view should be 16 bytes, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
-      expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 16u) << "lazy_json_view should be 16 bytes, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
+      // Sizes differ between 32-bit and 64-bit systems
+      if constexpr (sizeof(void*) == 8) {
+         // 64-bit: lazy_json is 24 bytes (data* 8 + key* 8 + key_length 4 + type 1 + padding 3)
+         expect(sizeof(glz::lazy_json) == 24u) << "lazy_json should be 24 bytes on 64-bit, got " << sizeof(glz::lazy_json);
+         // lazy_json_view is 40 bytes: doc* (8) + data* (8) + key_ (16) + error (4) + padding (4)
+         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 40u) << "lazy_json_view should be 40 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
+         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 40u) << "lazy_json_view should be 40 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
+      }
+      else {
+         // 32-bit: lazy_json is 16 bytes (data* 4 + key* 4 + key_length 4 + type 1 + padding 3)
+         expect(sizeof(glz::lazy_json) == 16u) << "lazy_json should be 16 bytes on 32-bit, got " << sizeof(glz::lazy_json);
+         // lazy_json_view is 20 bytes: doc* (4) + data* (4) + key_ (8) + error (4)
+         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 20u) << "lazy_json_view should be 20 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
+         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 20u) << "lazy_json_view should be 20 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
+      }
    };
 
    "lazy_json_buffer_reuse"_test = [] {

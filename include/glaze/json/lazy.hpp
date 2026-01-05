@@ -4,7 +4,6 @@
 #pragma once
 
 #include <string_view>
-#include <vector>
 
 #include "glaze/json/read.hpp"
 #include "glaze/json/skip.hpp"
@@ -13,720 +12,716 @@
 
 namespace glz
 {
-   // JSON value type for lazy parsing
-   enum class lazy_type : uint8_t {
-      null_t,
-      boolean_t,
-      number_t,
-      string_t,
-      array_t,
-      object_t
-   };
-
    // Forward declarations
    template <opts Opts>
    struct lazy_json_view;
    template <opts Opts>
    struct lazy_document;
+   template <opts Opts>
+   class lazy_iterator;
 
-   // Sentinel value indicating children not yet parsed
-   inline constexpr uint32_t lazy_unparsed = UINT32_MAX;
+   // ============================================================================
+   // Truly Lazy JSON Parser - No upfront processing
+   // ============================================================================
 
-   /**
-    * @brief Internal lazy JSON node that stores value data and key (for object members).
-    *
-    * This is an internal type - use lazy_json_view for access.
-    * Nodes are stored contiguously in a lazy_buffer vector.
-    * Children are referenced by index into the buffer.
-    *
-    * Memory layout (32 bytes on 64-bit):
-    * - data_: pointer to start of JSON value (8 bytes)
-    * - key_: pointer to key string content, null if not an object member (8 bytes)
-    * - children_start_: index of first child in buffer (4 bytes) [mutable]
-    * - children_count_: number of children (4 bytes) [mutable]
-    * - key_length_: length of key string (4 bytes)
-    * - type: lazy_type (1 byte)
-    * - padding: 3 bytes
-    */
+   namespace detail
+   {
+      // SWAR helper to check for bracket chars
+      GLZ_ALWAYS_INLINE uint64_t has_brackets(uint64_t chunk) noexcept
+      {
+         return has_char<'['>(chunk) | has_char<']'>(chunk) | has_char<'{'>(chunk) | has_char<'}'>(chunk);
+      }
+
+      // Skip string using memchr (SIMD-optimized in libc) - returns position after closing quote
+      template <opts Opts>
+      GLZ_ALWAYS_INLINE const char* skip_string_fast(const char* p, const char* end) noexcept
+      {
+         const char* const start = p;
+         ++p; // skip opening quote
+
+         // Use memchr to find closing quote - typically SIMD-optimized
+         while (p < end) {
+            const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
+            if (!quote) [[unlikely]] {
+               return end; // unclosed string
+            }
+
+            // Count preceding backslashes to check if escaped
+            size_t backslashes = 0;
+            const char* check = quote - 1;
+            while (check > start && *check == '\\') {
+               ++backslashes;
+               --check;
+            }
+
+            p = quote + 1;
+            if ((backslashes & 1) == 0) {
+               return p; // even backslashes = real quote
+            }
+            // odd backslashes = escaped quote, continue searching
+         }
+         return p;
+      }
+
+      // Skip any JSON value - optimized container skip
+      // Returns pointer after the value
+      template <opts Opts>
+      GLZ_ALWAYS_INLINE const char* skip_value_lazy(const char* p, const char* end) noexcept
+      {
+         switch (*p) {
+         case '"':
+            return skip_string_fast<Opts>(p, end);
+         case 't':
+            return p + 4;
+         case 'f':
+            return p + 5;
+         case 'n':
+            return p + 4;
+         case '[':
+         case '{': {
+            int depth = 1;
+            ++p;
+
+            while (p < end && depth > 0) {
+               // Direct character checks for common cases (avoid SWAR overhead for short spans)
+               const char c = *p;
+
+               if (c == '"') {
+                  p = skip_string_fast<Opts>(p, end);
+                  continue;
+               }
+               if (c == '{' || c == '[') {
+                  ++depth;
+                  ++p;
+                  continue;
+               }
+               if (c == '}' || c == ']') {
+                  --depth;
+                  ++p;
+                  continue;
+               }
+
+               // For whitespace, comma, colon - just advance
+               if (whitespace_table[uint8_t(c)] || c == ',' || c == ':') {
+                  ++p;
+                  continue;
+               }
+
+               // Number - skip it
+               if (c == '-' || is_digit(uint8_t(c))) {
+                  ++p;
+                  if constexpr (Opts.null_terminated) {
+                     while (numeric_table[uint8_t(*p)]) ++p;
+                  }
+                  else {
+                     while (p < end && numeric_table[uint8_t(*p)]) ++p;
+                  }
+                  continue;
+               }
+
+               // Unknown char - use SWAR to find next interesting position
+               while (p + 8 <= end) {
+                  uint64_t chunk;
+                  std::memcpy(&chunk, p, 8);
+                  if constexpr (std::endian::native == std::endian::big) {
+                     chunk = std::byteswap(chunk);
+                  }
+                  const uint64_t interesting = has_brackets(chunk) | has_quote(chunk);
+                  if (interesting == 0) {
+                     p += 8;
+                     continue;
+                  }
+                  p += (countr_zero(interesting) >> 3);
+                  break;
+               }
+               if (p < end && p + 8 > end) ++p; // Handle remainder
+            }
+            return p;
+         }
+         default:
+            // Number
+            if constexpr (Opts.null_terminated) {
+               while (numeric_table[uint8_t(*p)]) ++p;
+            }
+            else {
+               while (p < end && numeric_table[uint8_t(*p)]) ++p;
+            }
+            return p;
+         }
+      }
+   } // namespace detail
+
+   // ============================================================================
+   // lazy_json - Legacy node storage (kept for API compatibility)
+   // ============================================================================
+
    struct lazy_json
    {
-      const char* data_{};                             // 8 bytes - pointer to start of value
-      const char* key_{};                              // 8 bytes - pointer to key content (inside quotes)
-      mutable uint32_t children_start_{lazy_unparsed}; // 4 bytes - index into buffer
-      mutable uint32_t children_count_{};              // 4 bytes
-      uint32_t key_length_{};                          // 4 bytes - length of key
-      lazy_type type{lazy_type::null_t};               // 1 byte
-      // 3 bytes padding
-      // Total: 32 bytes
+      const char* data_{};
+      const char* key_{};
+      uint32_t key_length_{};
+      uint8_t type_{};  // 0=null, 1=bool, 2=number, 3=string, 4=array, 5=object
 
-      // Default constructor creates null
       lazy_json() = default;
 
-      // Type checking methods
-      [[nodiscard]] bool is_null() const noexcept { return type == lazy_type::null_t; }
-      [[nodiscard]] bool is_boolean() const noexcept { return type == lazy_type::boolean_t; }
-      [[nodiscard]] bool is_number() const noexcept { return type == lazy_type::number_t; }
-      [[nodiscard]] bool is_string() const noexcept { return type == lazy_type::string_t; }
-      [[nodiscard]] bool is_array() const noexcept { return type == lazy_type::array_t; }
-      [[nodiscard]] bool is_object() const noexcept { return type == lazy_type::object_t; }
+      [[nodiscard]] bool is_null() const noexcept { return type_ == 0; }
+      [[nodiscard]] bool is_boolean() const noexcept { return type_ == 1; }
+      [[nodiscard]] bool is_number() const noexcept { return type_ == 2; }
+      [[nodiscard]] bool is_string() const noexcept { return type_ == 3; }
+      [[nodiscard]] bool is_array() const noexcept { return type_ == 4; }
+      [[nodiscard]] bool is_object() const noexcept { return type_ == 5; }
 
-      // Get the key as string_view (empty if not an object member)
       [[nodiscard]] std::string_view key() const noexcept
       {
          return key_ ? std::string_view{key_, key_length_} : std::string_view{};
       }
 
-      // Explicit bool conversion - true if not null
       explicit operator bool() const noexcept { return !is_null(); }
    };
 
-   static_assert(sizeof(lazy_json) == 32, "lazy_json should be 32 bytes");
+   static_assert(sizeof(lazy_json) == 24, "lazy_json should be 24 bytes");
 
-   /**
-    * @brief User-managed buffer for lazy JSON nodes.
-    *
-    * All nodes from a lazy parse are stored contiguously in this buffer.
-    * The buffer can be reused across multiple parse operations by calling clear().
-    */
+   // Legacy buffer type - not used by truly lazy parser but kept for API compatibility
    using lazy_buffer = std::vector<lazy_json>;
 
    // ============================================================================
-   // lazy_json_view - The public API for accessing lazy JSON values
+   // lazy_json_view - Truly lazy view with on-demand scanning
    // ============================================================================
 
    /**
-    * @brief A view into a lazy JSON value that provides access through indices.
+    * @brief A truly lazy view into JSON data.
     *
-    * This is the primary interface for accessing lazy JSON data.
-    * All accessor methods return new views, maintaining document context.
-    * Errors are propagated through chained access - if any step fails, subsequent
-    * operations will also return error views.
+    * No upfront processing - all navigation uses SWAR-accelerated scanning.
+    * This matches simdjson's on-demand approach.
     *
-    * IMPORTANT: The underlying buffer and JSON text must remain valid for the
-    * lifetime of the view.
-    *
-    * NOTE: Lazy parsing is NOT thread-safe. Concurrent access to the same
-    * lazy_json nodes from multiple threads may cause data races.
-    *
-    * @tparam Opts Parsing options (primarily null_terminated).
-    *
-    * Memory layout (16 bytes on 64-bit):
+    * Memory layout (40 bytes on 64-bit):
     * - doc_: pointer to document (8 bytes)
-    * - index_: node index in buffer (4 bytes)
+    * - data_: pointer to value start in JSON (8 bytes)
+    * - key_: stored key for iteration (16 bytes - string_view)
     * - error_: error code (4 bytes)
+    * - padding: 4 bytes
     */
    template <opts Opts = opts{}>
    struct lazy_json_view
    {
      private:
       const lazy_document<Opts>* doc_{};
-      uint32_t index_{};
+      const char* data_{};
+      std::string_view key_{};
       error_code error_{error_code::none};
 
-      // Private constructor for creating error views
       lazy_json_view(error_code ec) noexcept : error_(ec) {}
-
-      // Get the node pointer (null if error or invalid)
-      [[nodiscard]] const lazy_json* node() const noexcept;
-
-      // Ensure children are parsed, returns error code
-      [[nodiscard]] error_code ensure_children_parsed() const;
 
      public:
       lazy_json_view() = default;
-      lazy_json_view(const lazy_document<Opts>* doc, uint32_t index) noexcept : doc_(doc), index_(index) {}
+      lazy_json_view(const lazy_document<Opts>* doc, const char* data) noexcept
+         : doc_(doc), data_(data)
+      {}
 
-      // Create an error view
       [[nodiscard]] static lazy_json_view make_error(error_code ec) noexcept { return lazy_json_view{ec}; }
 
-      // Error checking
       [[nodiscard]] bool has_error() const noexcept { return error_ != error_code::none; }
       [[nodiscard]] error_code error() const noexcept { return error_; }
 
-      // Type checking methods
-      [[nodiscard]] bool is_null() const noexcept
-      {
-         auto* n = node();
-         return has_error() || !n || n->is_null();
-      }
+      // Type checking - direct from JSON byte
+      [[nodiscard]] bool is_null() const noexcept { return has_error() || !data_ || *data_ == 'n'; }
       [[nodiscard]] bool is_boolean() const noexcept
       {
-         auto* n = node();
-         return !has_error() && n && n->is_boolean();
+         return !has_error() && data_ && (*data_ == 't' || *data_ == 'f');
       }
       [[nodiscard]] bool is_number() const noexcept
       {
-         auto* n = node();
-         return !has_error() && n && n->is_number();
+         return !has_error() && data_ && (is_digit(uint8_t(*data_)) || *data_ == '-');
       }
-      [[nodiscard]] bool is_string() const noexcept
-      {
-         auto* n = node();
-         return !has_error() && n && n->is_string();
-      }
-      [[nodiscard]] bool is_array() const noexcept
-      {
-         auto* n = node();
-         return !has_error() && n && n->is_array();
-      }
-      [[nodiscard]] bool is_object() const noexcept
-      {
-         auto* n = node();
-         return !has_error() && n && n->is_object();
-      }
+      [[nodiscard]] bool is_string() const noexcept { return !has_error() && data_ && *data_ == '"'; }
+      [[nodiscard]] bool is_array() const noexcept { return !has_error() && data_ && *data_ == '['; }
+      [[nodiscard]] bool is_object() const noexcept { return !has_error() && data_ && *data_ == '{'; }
 
-      // Explicit bool conversion - true if valid, not null, and no error
-      explicit operator bool() const noexcept
-      {
-         auto* n = node();
-         return !has_error() && n && !n->is_null();
-      }
+      explicit operator bool() const noexcept { return !has_error() && data_ && *data_ != 'n'; }
 
-      // Get the start pointer
-      [[nodiscard]] const char* data() const noexcept
-      {
-         auto* n = node();
-         return n ? n->data_ : nullptr;
-      }
+      [[nodiscard]] const char* data() const noexcept { return data_; }
+      [[nodiscard]] const char* json_end() const noexcept;
 
-      // Get the end pointer (shared buffer end)
-      [[nodiscard]] const char* end() const noexcept;
-
-      /**
-       * @brief Get the value as the specified type.
-       * Returns error if view has error, type mismatch, or parse failure.
-       */
       template <class T>
       [[nodiscard]] expected<T, error_ctx> get() const;
 
-      /**
-       * @brief Array index access. Returns error view on type mismatch, out of bounds, or parse error.
-       */
       [[nodiscard]] lazy_json_view operator[](size_t index) const;
-
-      /**
-       * @brief Object key access. Returns error view on type mismatch, key not found, or parse error.
-       */
       [[nodiscard]] lazy_json_view operator[](std::string_view key) const;
-
-      /**
-       * @brief Check if object contains a key. Returns false on error.
-       */
       [[nodiscard]] bool contains(std::string_view key) const;
-
-      /**
-       * @brief Get the size (number of elements in array/object). Returns 0 on error.
-       */
       [[nodiscard]] size_t size() const;
-
-      /**
-       * @brief Check if empty. Returns true on error.
-       */
       [[nodiscard]] bool empty() const noexcept;
+
+      // Key access for object iteration
+      [[nodiscard]] std::string_view key() const noexcept { return key_; }
+
+      [[nodiscard]] lazy_iterator<Opts> begin() const;
+      [[nodiscard]] lazy_iterator<Opts> end() const;
+
+     private:
+      friend class lazy_iterator<Opts>;
+
+      // Constructor with key for iteration
+      lazy_json_view(const lazy_document<Opts>* doc, const char* data, std::string_view key) noexcept
+         : doc_(doc), data_(data), key_(key)
+      {}
+
+      // Skip whitespace helper
+      static void skip_ws(const char*& p, const char* end) noexcept
+      {
+         if constexpr (Opts.null_terminated) {
+            while (whitespace_table[uint8_t(*p)]) ++p;
+         }
+         else {
+            while (p < end && whitespace_table[uint8_t(*p)]) ++p;
+         }
+      }
+
+      // Parse a key from current position using memchr/strchr, return key and advance p
+      static std::string_view parse_key(const char*& p, [[maybe_unused]] const char* end) noexcept;
    };
 
-   static_assert(sizeof(lazy_json_view<opts{}>) == 16, "lazy_json_view should be 16 bytes");
-   static_assert(sizeof(lazy_json_view<opts{.null_terminated = false}>) == 16, "lazy_json_view should be 16 bytes");
-
    // ============================================================================
-   // lazy_document - Container returned by read_lazy()
+   // lazy_document - Minimal container, no upfront processing
    // ============================================================================
 
-   /**
-    * @brief A lazy JSON document that references nodes in a user-managed buffer.
-    *
-    * Returned by read_lazy(). Provides view access to the parsed JSON.
-    *
-    * IMPORTANT: Both the underlying JSON text buffer AND the lazy_buffer
-    * must remain valid for the lifetime of the document and any views
-    * derived from it.
-    *
-    * @tparam Opts Parsing options (primarily null_terminated).
-    */
    template <opts Opts = opts{}>
    struct lazy_document
    {
      private:
-      lazy_buffer* buffer_{};
-      uint32_t root_index_{};
-      const char* end_{};
+      const char* json_{};
+      size_t len_{};
+      const char* root_data_{};
 
       friend struct lazy_json_view<Opts>;
+      friend class lazy_iterator<Opts>;
+
+      // Factory method for read_lazy
+      template <opts O, class Buffer>
+      friend expected<lazy_document<O>, error_ctx> read_lazy(Buffer&&, lazy_buffer&);
 
      public:
       lazy_document() = default;
-      lazy_document(lazy_buffer* buffer, uint32_t root_index, const char* end) noexcept
-         : buffer_(buffer), root_index_(root_index), end_(end)
-      {}
 
-      // Move-only
+      // Copyable - just pointers
+      lazy_document(const lazy_document&) = default;
+      lazy_document& operator=(const lazy_document&) = default;
       lazy_document(lazy_document&&) = default;
       lazy_document& operator=(lazy_document&&) = default;
-      lazy_document(const lazy_document&) = delete;
-      lazy_document& operator=(const lazy_document&) = delete;
 
-      // Get a view to the root
-      [[nodiscard]] lazy_json_view<Opts> root() const noexcept { return {this, root_index_}; }
+      [[nodiscard]] lazy_json_view<Opts> root() const noexcept
+      {
+         return {this, root_data_};
+      }
 
-      // Convenience: forward to root view
       [[nodiscard]] lazy_json_view<Opts> operator[](std::string_view key) const { return root()[key]; }
       [[nodiscard]] lazy_json_view<Opts> operator[](size_t index) const { return root()[index]; }
 
-      // Type checking on root
-      [[nodiscard]] bool is_null() const noexcept
-      {
-         return !buffer_ || root_index_ >= (*buffer_).size() || (*buffer_)[root_index_].is_null();
-      }
-      [[nodiscard]] bool is_array() const noexcept
-      {
-         return buffer_ && root_index_ < (*buffer_).size() && (*buffer_)[root_index_].is_array();
-      }
-      [[nodiscard]] bool is_object() const noexcept
-      {
-         return buffer_ && root_index_ < (*buffer_).size() && (*buffer_)[root_index_].is_object();
-      }
+      [[nodiscard]] bool is_null() const noexcept { return !root_data_ || *root_data_ == 'n'; }
+      [[nodiscard]] bool is_array() const noexcept { return root_data_ && *root_data_ == '['; }
+      [[nodiscard]] bool is_object() const noexcept { return root_data_ && *root_data_ == '{'; }
 
       explicit operator bool() const noexcept { return !is_null(); }
+
+      [[nodiscard]] const char* json_data() const noexcept { return json_; }
+      [[nodiscard]] size_t json_size() const noexcept { return len_; }
    };
 
    // ============================================================================
-   // lazy_json_view method implementations
+   // lazy_iterator - Forward iterator with lazy scanning
    // ============================================================================
 
    template <opts Opts>
-   inline const lazy_json* lazy_json_view<Opts>::node() const noexcept
+   class lazy_iterator
    {
-      if (!doc_ || !doc_->buffer_ || index_ >= (*doc_->buffer_).size()) {
-         return nullptr;
+     private:
+      const lazy_document<Opts>* doc_{};
+      const char* pos_{};
+      const char* json_end_{};
+      char close_char_{};
+      bool is_object_{};
+      bool at_end_{true};
+      std::string_view current_key_{};
+
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = lazy_json_view<Opts>;
+      using difference_type = std::ptrdiff_t;
+      using pointer = void;
+      using reference = lazy_json_view<Opts>;
+
+      lazy_iterator() = default;
+
+      lazy_iterator(const lazy_document<Opts>* doc, const char* container_start, const char* end, bool is_object);
+
+      reference operator*() const { return {doc_, pos_, current_key_}; }
+
+      lazy_iterator& operator++();
+
+      lazy_iterator operator++(int)
+      {
+         auto tmp = *this;
+         ++*this;
+         return tmp;
       }
-      return &(*doc_->buffer_)[index_];
+
+      bool operator==(const lazy_iterator& other) const { return at_end_ == other.at_end_; }
+      bool operator!=(const lazy_iterator& other) const { return !(*this == other); }
+
+     private:
+      void advance_to_next_element();
+      void skip_ws() noexcept
+      {
+         if constexpr (Opts.null_terminated) {
+            while (whitespace_table[uint8_t(*pos_)]) ++pos_;
+         }
+         else {
+            while (pos_ < json_end_ && whitespace_table[uint8_t(*pos_)]) ++pos_;
+         }
+      }
+   };
+
+   // ============================================================================
+   // Implementation: lazy_json_view methods (truly lazy - no structural index)
+   // ============================================================================
+
+   template <opts Opts>
+   inline const char* lazy_json_view<Opts>::json_end() const noexcept
+   {
+      return doc_ ? doc_->json_ + doc_->len_ : nullptr;
    }
 
    template <opts Opts>
-   inline const char* lazy_json_view<Opts>::end() const noexcept
+   inline std::string_view lazy_json_view<Opts>::parse_key(const char*& p, [[maybe_unused]] const char* end) noexcept
    {
-      return doc_ ? doc_->end_ : nullptr;
-   }
+      if (*p != '"') return {};
+      const char* const start = p;
+      ++p; // skip opening quote
+      const char* key_start = p;
 
-   template <opts Opts>
-   inline error_code lazy_json_view<Opts>::ensure_children_parsed() const
-   {
-      auto* n = node();
-      if (!n) return error_code::syntax_error;
-      if (n->children_start_ != lazy_unparsed) return error_code::none; // Already parsed
-
-      const char* json_end = end();
-      if (!json_end) return error_code::syntax_error;
-
-      auto& buffer = *doc_->buffer_;
-      const uint32_t parent_index = index_; // Save index since node pointer may be invalidated
-      context ctx{};
-
-      if (n->is_object()) {
-         auto it = n->data_ + 1; // skip '{'
-
-         // Track whitespace patterns for skip_matching_ws optimization
-         auto ws_start = it;
-         uint64_t ws_size{};
-
-         auto skip_expected_ws = [&] {
-            auto new_ws_start = it;
-            if constexpr (Opts.null_terminated) {
-               if (ws_size) [[likely]] {
-                  skip_matching_ws(ws_start, it, ws_size);
-               }
-               while (whitespace_table[uint8_t(*it)]) {
-                  ++it;
-               }
-            }
-            else {
-               if (ws_size && ws_size < size_t(json_end - it)) [[likely]] {
-                  skip_matching_ws(ws_start, it, ws_size);
-               }
-               while (it < json_end && whitespace_table[uint8_t(*it)]) {
-                  ++it;
-               }
-            }
-            ws_start = new_ws_start;
-            ws_size = size_t(it - new_ws_start);
-         };
-
-         // Initial whitespace skip
-         if constexpr (Opts.null_terminated) {
-            while (whitespace_table[uint8_t(*it)]) ++it;
-         }
-         else {
-            while (it < json_end && whitespace_table[uint8_t(*it)]) ++it;
-         }
-
-         // Mark children_start now, before we add any children
-         // Note: Access via index since pointer may be invalidated by push_back
-         buffer[parent_index].children_start_ = static_cast<uint32_t>(buffer.size());
-         buffer[parent_index].children_count_ = 0;
-
-         if constexpr (Opts.null_terminated) {
-            if (*it == '}') {
-               return error_code::none;
-            }
-         }
-         else {
-            if (it >= json_end || *it == '}') {
-               return error_code::none;
-            }
-         }
-
+      // Use memchr/strchr to find closing quote (SIMD-optimized in libc)
+      if constexpr (Opts.null_terminated) {
          while (true) {
-            if (*it != '"') [[unlikely]] {
-               return error_code::expected_quote;
+            const char* quote = std::strchr(p, '"');
+            if (!quote) [[unlikely]] {
+               // Unclosed string - return what we have
+               std::string_view key{key_start, static_cast<size_t>(p - key_start)};
+               return key;
             }
 
-            ++it;
-            auto key_start = it;
-            skip_string_view(ctx, it, json_end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return ctx.error;
-            }
-            size_t key_len = static_cast<size_t>(it - key_start);
-            if (key_len > (std::numeric_limits<uint32_t>::max)()) [[unlikely]] {
-               return error_code::parse_error;
-            }
-            ++it;
-
-            // Skip whitespace after key
-            if constexpr (Opts.null_terminated) {
-               while (whitespace_table[uint8_t(*it)]) ++it;
-               if (*it != ':') [[unlikely]] {
-                  return error_code::expected_colon;
-               }
-            }
-            else {
-               while (it < json_end && whitespace_table[uint8_t(*it)]) ++it;
-               if (it >= json_end || *it != ':') [[unlikely]] {
-                  return error_code::expected_colon;
-               }
-            }
-            ++it;
-
-            // Skip whitespace after colon
-            if constexpr (Opts.null_terminated) {
-               while (whitespace_table[uint8_t(*it)]) ++it;
-            }
-            else {
-               while (it < json_end && whitespace_table[uint8_t(*it)]) ++it;
+            // Count preceding backslashes to check if escaped
+            size_t backslashes = 0;
+            const char* check = quote - 1;
+            while (check > start && *check == '\\') {
+               ++backslashes;
+               --check;
             }
 
-            // Create child node
-            lazy_json child;
-            child.key_ = key_start;
-            child.key_length_ = static_cast<uint32_t>(key_len);
-            child.data_ = it;
-
-            // Determine child type and skip value
-            switch (*it) {
-            case '{':
-               child.type = lazy_type::object_t;
-               skip_value<JSON>::op<ws_handled_off<Opts>()>(ctx, it, json_end);
-               break;
-            case '[':
-               child.type = lazy_type::array_t;
-               skip_value<JSON>::op<ws_handled_off<Opts>()>(ctx, it, json_end);
-               break;
-            case '"':
-               child.type = lazy_type::string_t;
-               ++it;
-               skip_string_view(ctx, it, json_end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return ctx.error;
-               ++it;
-               break;
-            case 't':
-               child.type = lazy_type::boolean_t;
-               ++it;
-               match<"rue", Opts>(ctx, it, json_end);
-               break;
-            case 'f':
-               child.type = lazy_type::boolean_t;
-               ++it;
-               match<"alse", Opts>(ctx, it, json_end);
-               break;
-            case 'n':
-               child.type = lazy_type::null_t;
-               ++it;
-               match<"ull", Opts>(ctx, it, json_end);
-               break;
-            default:
-               if (is_digit(uint8_t(*it)) || *it == '-') {
-                  child.type = lazy_type::number_t;
-                  skip_number<Opts>(ctx, it, json_end);
-               }
-               else {
-                  return error_code::syntax_error;
-               }
-               break;
+            if ((backslashes & 1) == 0) {
+               // Even backslashes = real quote
+               std::string_view key{key_start, static_cast<size_t>(quote - key_start)};
+               p = quote + 1; // skip closing quote
+               return key;
             }
-
-            if (bool(ctx.error)) [[unlikely]] {
-               return ctx.error;
-            }
-
-            buffer.push_back(child);
-            ++buffer[parent_index].children_count_;
-
-            // Skip whitespace after value
-            if constexpr (Opts.null_terminated) {
-               while (whitespace_table[uint8_t(*it)]) ++it;
-               if (*it == '}') break;
-            }
-            else {
-               while (it < json_end && whitespace_table[uint8_t(*it)]) ++it;
-               if (it >= json_end || *it == '}') break;
-            }
-            if (*it != ',') [[unlikely]] {
-               return error_code::expected_comma;
-            }
-            ++it;
-            skip_expected_ws();
+            // Odd backslashes = escaped quote, continue searching
+            p = quote + 1;
          }
-
-         return error_code::none;
       }
-      else if (n->is_array()) {
-         auto it = n->data_ + 1; // skip '['
-
-         auto ws_start = it;
-         uint64_t ws_size{};
-
-         auto skip_expected_ws = [&] {
-            auto new_ws_start = it;
-            if constexpr (Opts.null_terminated) {
-               if (ws_size) [[likely]] {
-                  skip_matching_ws(ws_start, it, ws_size);
-               }
-               while (whitespace_table[uint8_t(*it)]) {
-                  ++it;
-               }
+      else {
+         while (p < end) {
+            const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
+            if (!quote) [[unlikely]] {
+               // Unclosed string - return what we have
+               p = end;
+               return std::string_view{key_start, static_cast<size_t>(end - key_start)};
             }
-            else {
-               if (ws_size && ws_size < size_t(json_end - it)) [[likely]] {
-                  skip_matching_ws(ws_start, it, ws_size);
-               }
-               while (it < json_end && whitespace_table[uint8_t(*it)]) {
-                  ++it;
-               }
-            }
-            ws_start = new_ws_start;
-            ws_size = size_t(it - new_ws_start);
-         };
 
-         // Initial whitespace skip
-         if constexpr (Opts.null_terminated) {
-            while (whitespace_table[uint8_t(*it)]) ++it;
+            // Count preceding backslashes to check if escaped
+            size_t backslashes = 0;
+            const char* check = quote - 1;
+            while (check > start && *check == '\\') {
+               ++backslashes;
+               --check;
+            }
+
+            if ((backslashes & 1) == 0) {
+               // Even backslashes = real quote
+               std::string_view key{key_start, static_cast<size_t>(quote - key_start)};
+               p = quote + 1; // skip closing quote
+               return key;
+            }
+            // Odd backslashes = escaped quote, continue searching
+            p = quote + 1;
          }
-         else {
-            while (it < json_end && whitespace_table[uint8_t(*it)]) ++it;
-         }
-
-         // Mark children_start now
-         buffer[parent_index].children_start_ = static_cast<uint32_t>(buffer.size());
-         buffer[parent_index].children_count_ = 0;
-
-         if constexpr (Opts.null_terminated) {
-            if (*it == ']') {
-               return error_code::none;
-            }
-         }
-         else {
-            if (it >= json_end || *it == ']') {
-               return error_code::none;
-            }
-         }
-
-         while (true) {
-            // Create child node (no key for array elements)
-            lazy_json child;
-            child.data_ = it;
-
-            // Determine child type and skip value
-            switch (*it) {
-            case '{':
-               child.type = lazy_type::object_t;
-               skip_value<JSON>::op<ws_handled_off<Opts>()>(ctx, it, json_end);
-               break;
-            case '[':
-               child.type = lazy_type::array_t;
-               skip_value<JSON>::op<ws_handled_off<Opts>()>(ctx, it, json_end);
-               break;
-            case '"':
-               child.type = lazy_type::string_t;
-               ++it;
-               skip_string_view(ctx, it, json_end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return ctx.error;
-               ++it;
-               break;
-            case 't':
-               child.type = lazy_type::boolean_t;
-               ++it;
-               match<"rue", Opts>(ctx, it, json_end);
-               break;
-            case 'f':
-               child.type = lazy_type::boolean_t;
-               ++it;
-               match<"alse", Opts>(ctx, it, json_end);
-               break;
-            case 'n':
-               child.type = lazy_type::null_t;
-               ++it;
-               match<"ull", Opts>(ctx, it, json_end);
-               break;
-            default:
-               if (is_digit(uint8_t(*it)) || *it == '-') {
-                  child.type = lazy_type::number_t;
-                  skip_number<Opts>(ctx, it, json_end);
-               }
-               else {
-                  return error_code::syntax_error;
-               }
-               break;
-            }
-
-            if (bool(ctx.error)) [[unlikely]] {
-               return ctx.error;
-            }
-
-            buffer.push_back(child);
-            ++buffer[parent_index].children_count_;
-
-            // Skip whitespace after value
-            if constexpr (Opts.null_terminated) {
-               while (whitespace_table[uint8_t(*it)]) ++it;
-               if (*it == ']') break;
-            }
-            else {
-               while (it < json_end && whitespace_table[uint8_t(*it)]) ++it;
-               if (it >= json_end || *it == ']') break;
-            }
-            if (*it != ',') [[unlikely]] {
-               return error_code::expected_comma;
-            }
-            ++it;
-            skip_expected_ws();
-         }
-
-         return error_code::none;
+         return std::string_view{key_start, static_cast<size_t>(p - key_start)};
       }
-
-      return error_code::syntax_error;
    }
 
    template <opts Opts>
    inline lazy_json_view<Opts> lazy_json_view<Opts>::operator[](size_t index) const
    {
-      if (has_error()) {
-         return *this; // Propagate existing error
+      if (has_error()) return *this;
+      if (!is_array()) return make_error(error_code::get_wrong_type);
+
+      const char* end = json_end();
+      const char* p = data_ + 1; // skip '['
+      skip_ws(p, end);
+
+      // Check for empty array
+      if constexpr (Opts.null_terminated) {
+         if (*p == ']') return make_error(error_code::exceeded_static_array_size);
       }
-      if (!is_array()) {
-         return make_error(error_code::get_wrong_type);
+      else {
+         if (p >= end || *p == ']') return make_error(error_code::exceeded_static_array_size);
       }
-      auto ec = ensure_children_parsed();
-      if (ec != error_code::none) {
-         return make_error(ec);
+
+      // Skip 'index' elements using lazy scanning
+      for (size_t i = 0; i < index; ++i) {
+         p = detail::skip_value_lazy<Opts>(p, end);
+         skip_ws(p, end);
+
+         if constexpr (Opts.null_terminated) {
+            if (*p == ']') return make_error(error_code::exceeded_static_array_size);
+         }
+         else {
+            if (p >= end || *p == ']') return make_error(error_code::exceeded_static_array_size);
+         }
+
+         if (*p == ',') {
+            ++p;
+            skip_ws(p, end);
+         }
       }
-      auto* n = node();
-      if (index >= n->children_count_) {
-         return make_error(error_code::exceeded_static_array_size);
-      }
-      return {doc_, n->children_start_ + static_cast<uint32_t>(index)};
+
+      return {doc_, p};
    }
 
    template <opts Opts>
    inline lazy_json_view<Opts> lazy_json_view<Opts>::operator[](std::string_view key) const
    {
-      if (has_error()) {
-         return *this; // Propagate existing error
+      if (has_error()) return *this;
+      if (!is_object()) return make_error(error_code::get_wrong_type);
+
+      const char* end = json_end();
+      const char* p = data_ + 1; // skip '{'
+      skip_ws(p, end);
+
+      // Check for empty object
+      if constexpr (Opts.null_terminated) {
+         if (*p == '}') return make_error(error_code::key_not_found);
       }
-      if (!is_object()) {
-         return make_error(error_code::get_wrong_type);
+      else {
+         if (p >= end || *p == '}') return make_error(error_code::key_not_found);
       }
-      auto ec = ensure_children_parsed();
-      if (ec != error_code::none) {
-         return make_error(ec);
-      }
-      auto* n = node();
-      const auto& nodes = (*doc_->buffer_);
-      for (uint32_t i = 0; i < n->children_count_; ++i) {
-         const auto& child = nodes[n->children_start_ + i];
-         if (child.key() == key) {
-            return {doc_, n->children_start_ + i};
+
+      while (true) {
+         // Parse key
+         auto k = parse_key(p, end);
+         skip_ws(p, end);
+
+         // Skip ':'
+         if (*p == ':') {
+            ++p;
+            skip_ws(p, end);
+         }
+
+         // Check if key matches
+         if (k == key) {
+            return {doc_, p};
+         }
+
+         // Skip value using lazy scanning
+         p = detail::skip_value_lazy<Opts>(p, end);
+         skip_ws(p, end);
+
+         // Check for end of object
+         if constexpr (Opts.null_terminated) {
+            if (*p == '}') return make_error(error_code::key_not_found);
+         }
+         else {
+            if (p >= end || *p == '}') return make_error(error_code::key_not_found);
+         }
+
+         // Skip comma
+         if (*p == ',') {
+            ++p;
+            skip_ws(p, end);
          }
       }
-      return make_error(error_code::key_not_found);
    }
 
    template <opts Opts>
    inline bool lazy_json_view<Opts>::contains(std::string_view key) const
    {
-      if (has_error() || !is_object()) return false;
-      auto ec = ensure_children_parsed();
-      if (ec != error_code::none) return false;
-      auto* n = node();
-      const auto& nodes = (*doc_->buffer_);
-      for (uint32_t i = 0; i < n->children_count_; ++i) {
-         if (nodes[n->children_start_ + i].key() == key) {
-            return true;
-         }
-      }
-      return false;
+      auto result = (*this)[key];
+      return !result.has_error();
    }
 
    template <opts Opts>
    inline size_t lazy_json_view<Opts>::size() const
    {
-      auto* n = node();
-      if (has_error() || !n || n->is_null()) return 0;
-      if (n->is_object() || n->is_array()) {
-         auto ec = ensure_children_parsed();
-         if (ec != error_code::none) return 0;
-         // Re-fetch node since ensure_children_parsed may have invalidated pointer
-         return (*doc_->buffer_)[index_].children_count_;
+      if (has_error() || !data_) return 0;
+      if (!is_array() && !is_object()) return 0;
+
+      const char* end = json_end();
+      const char* p = data_ + 1;
+      skip_ws(p, end);
+
+      const char close_char = is_array() ? ']' : '}';
+
+      if constexpr (Opts.null_terminated) {
+         if (*p == close_char) return 0;
       }
-      return 0;
+      else {
+         if (p >= end || *p == close_char) return 0;
+      }
+
+      size_t count = 0;
+      const bool is_obj = is_object();
+
+      while (true) {
+         if (is_obj) {
+            // Skip key
+            p = detail::skip_string_fast<Opts>(p, end);
+            skip_ws(p, end);
+            if (*p == ':') {
+               ++p;
+               skip_ws(p, end);
+            }
+         }
+
+         // Skip value
+         p = detail::skip_value_lazy<Opts>(p, end);
+         ++count;
+         skip_ws(p, end);
+
+         if constexpr (Opts.null_terminated) {
+            if (*p == close_char) return count;
+         }
+         else {
+            if (p >= end || *p == close_char) return count;
+         }
+
+         if (*p == ',') {
+            ++p;
+            skip_ws(p, end);
+         }
+      }
    }
 
    template <opts Opts>
    inline bool lazy_json_view<Opts>::empty() const noexcept
    {
-      auto* n = node();
-      if (has_error() || !n || n->is_null()) return true;
-      if (n->is_array()) {
-         if (n->children_start_ != lazy_unparsed) return n->children_count_ == 0;
-         // Not yet parsed - check for empty array "[]"
-         auto it = n->data_ + 1;
-         const char* json_end = end();
-         if constexpr (Opts.null_terminated) {
-            while (whitespace_table[uint8_t(*it)]) ++it;
-            return *it == ']';
-         }
-         else {
-            while (it < json_end && whitespace_table[uint8_t(*it)]) ++it;
-            return it < json_end && *it == ']';
+      if (has_error() || !data_) return true;
+      if (is_null()) return true;
+      if (!is_array() && !is_object()) return false;
+
+      const char* end = json_end();
+      const char* p = data_ + 1;
+      skip_ws(p, end);
+
+      const char close_char = is_array() ? ']' : '}';
+      if constexpr (Opts.null_terminated) {
+         return *p == close_char;
+      }
+      else {
+         return p >= end || *p == close_char;
+      }
+   }
+
+   // ============================================================================
+   // lazy_iterator implementation (truly lazy)
+   // ============================================================================
+
+   template <opts Opts>
+   inline lazy_iterator<Opts>::lazy_iterator(const lazy_document<Opts>* doc, const char* container_start,
+                                              const char* end, bool is_object)
+      : doc_(doc), json_end_(end), is_object_(is_object), at_end_(false)
+   {
+      close_char_ = is_object ? '}' : ']';
+      pos_ = container_start + 1; // skip '[' or '{'
+      skip_ws();
+
+      // Check for empty container
+      if constexpr (Opts.null_terminated) {
+         if (*pos_ == close_char_) {
+            at_end_ = true;
+            return;
          }
       }
-      if (n->is_object()) {
-         if (n->children_start_ != lazy_unparsed) return n->children_count_ == 0;
-         // Not yet parsed - check for empty object "{}"
-         auto it = n->data_ + 1;
-         const char* json_end = end();
-         if constexpr (Opts.null_terminated) {
-            while (whitespace_table[uint8_t(*it)]) ++it;
-            return *it == '}';
-         }
-         else {
-            while (it < json_end && whitespace_table[uint8_t(*it)]) ++it;
-            return it < json_end && *it == '}';
+      else {
+         if (pos_ >= json_end_ || *pos_ == close_char_) {
+            at_end_ = true;
+            return;
          }
       }
-      return false;
+
+      // Position at first element
+      advance_to_next_element();
+   }
+
+   template <opts Opts>
+   inline void lazy_iterator<Opts>::advance_to_next_element()
+   {
+      if (is_object_) {
+         // Parse key
+         current_key_ = lazy_json_view<Opts>::parse_key(pos_, json_end_);
+         skip_ws();
+
+         // Skip ':'
+         if (*pos_ == ':') {
+            ++pos_;
+            skip_ws();
+         }
+      }
+   }
+
+   template <opts Opts>
+   inline lazy_iterator<Opts>& lazy_iterator<Opts>::operator++()
+   {
+      if (at_end_) return *this;
+
+      // Skip current value using lazy scanning
+      pos_ = detail::skip_value_lazy<Opts>(pos_, json_end_);
+      skip_ws();
+
+      // Check for end
+      if constexpr (Opts.null_terminated) {
+         if (*pos_ == close_char_) {
+            at_end_ = true;
+            return *this;
+         }
+      }
+      else {
+         if (pos_ >= json_end_ || *pos_ == close_char_) {
+            at_end_ = true;
+            return *this;
+         }
+      }
+
+      // Skip comma
+      if (*pos_ == ',') {
+         ++pos_;
+         skip_ws();
+      }
+
+      // Advance to next element
+      advance_to_next_element();
+
+      return *this;
+   }
+
+   template <opts Opts>
+   inline lazy_iterator<Opts> lazy_json_view<Opts>::begin() const
+   {
+      if (has_error() || !data_) return end();
+      if (!is_array() && !is_object()) return end();
+      return lazy_iterator<Opts>{doc_, data_, json_end(), is_object()};
+   }
+
+   template <opts Opts>
+   inline lazy_iterator<Opts> lazy_json_view<Opts>::end() const
+   {
+      return lazy_iterator<Opts>{};
    }
 
    // ============================================================================
@@ -741,11 +736,13 @@ namespace glz
          return unexpected(error_ctx{0, error_});
       }
 
+      const char* end = json_end();
+
       if constexpr (std::is_same_v<T, bool>) {
          if (!is_boolean()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         return *node()->data_ == 't';
+         return *data_ == 't';
       }
       else if constexpr (std::is_same_v<T, std::nullptr_t>) {
          if (!is_null()) {
@@ -757,41 +754,33 @@ namespace glz
          if (!is_string()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         // Parse the string to find its end and unescape
-         auto* n = node();
-         auto it = n->data_;
-         const char* json_end = end();
+         auto it = data_;
          context ctx{};
-         skip_value<JSON>::op<opts{}>(ctx, it, json_end);
+         skip_value<JSON>::op<opts{}>(ctx, it, end);
          if (bool(ctx.error)) {
             return unexpected(error_ctx{0, ctx.error});
          }
-         std::string_view raw{n->data_, static_cast<size_t>(it - n->data_)};
+         std::string_view raw{data_, static_cast<size_t>(it - data_)};
          return glz::read_json<std::string>(raw);
       }
       else if constexpr (std::is_same_v<T, std::string_view>) {
          if (!is_string()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         // Find the end of the string (skip opening quote, find closing quote)
-         auto* n = node();
-         auto it = n->data_ + 1; // skip opening quote
-         const char* json_end = end();
+         auto it = data_ + 1;
          context ctx{};
-         skip_string_view(ctx, it, json_end);
+         skip_string_view(ctx, it, end);
          if (bool(ctx.error)) {
             return unexpected(error_ctx{0, ctx.error});
          }
-         // Return content without quotes (escapes not processed)
-         return std::string_view{n->data_ + 1, static_cast<size_t>(it - n->data_ - 1)};
+         return std::string_view{data_ + 1, static_cast<size_t>(it - data_ - 1)};
       }
       else if constexpr (std::is_same_v<T, double>) {
          if (!is_number()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         auto* n = node();
          double value{};
-         auto [ptr, ec] = glz::from_chars<false>(n->data_, end(), value);
+         auto [ptr, ec] = glz::from_chars<false>(data_, end, value);
          if (ec != std::errc()) {
             return unexpected(error_ctx{0, error_code::parse_number_failure});
          }
@@ -801,9 +790,8 @@ namespace glz
          if (!is_number()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         auto* n = node();
          float value{};
-         auto [ptr, ec] = glz::from_chars<false>(n->data_, end(), value);
+         auto [ptr, ec] = glz::from_chars<false>(data_, end, value);
          if (ec != std::errc()) {
             return unexpected(error_ctx{0, error_code::parse_number_failure});
          }
@@ -813,10 +801,9 @@ namespace glz
          if (!is_number()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         auto* n = node();
          int64_t value{};
-         auto it = n->data_;
-         if (!glz::atoi(value, it, end())) {
+         auto it = data_;
+         if (!glz::atoi(value, it, end)) {
             return unexpected(error_ctx{0, error_code::parse_number_failure});
          }
          return value;
@@ -825,10 +812,9 @@ namespace glz
          if (!is_number()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         auto* n = node();
          uint64_t value{};
-         auto it = n->data_;
-         if (!glz::atoi(value, it, end())) {
+         auto it = data_;
+         if (!glz::atoi(value, it, end)) {
             return unexpected(error_ctx{0, error_code::parse_number_failure});
          }
          return value;
@@ -867,10 +853,9 @@ namespace glz
             return;
          }
 
-         // Find the end of this value by parsing
          auto it = view.data();
          context parse_ctx{};
-         skip_value<JSON>::op<opts{}>(parse_ctx, it, view.end());
+         skip_value<JSON>::op<opts{}>(parse_ctx, it, view.json_end());
          if (bool(parse_ctx.error)) [[unlikely]] {
             ctx.error = parse_ctx.error;
             return;
@@ -894,115 +879,54 @@ namespace glz
    };
 
    // ============================================================================
-   // Helper function to read lazy JSON
+   // read_lazy - Main entry point (truly lazy - minimal upfront work)
    // ============================================================================
 
-   namespace detail
-   {
-      // Parse the root node and add it to the buffer
-      template <opts Opts>
-      GLZ_ALWAYS_INLINE error_code parse_lazy_root(lazy_json& root, is_context auto&& ctx, auto&& it, auto end)
-      {
-         if (skip_ws<Opts>(ctx, it, end)) {
-            return ctx.error;
-         }
-
-         root.data_ = it;
-
-         switch (*it) {
-         case '{': {
-            root.type = lazy_type::object_t;
-            skip_value<JSON>::op<ws_handled_off<Opts>()>(ctx, it, end);
-            break;
-         }
-         case '[': {
-            root.type = lazy_type::array_t;
-            skip_value<JSON>::op<ws_handled_off<Opts>()>(ctx, it, end);
-            break;
-         }
-         case '"': {
-            root.type = lazy_type::string_t;
-            ++it;
-            skip_string_view(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return ctx.error;
-            ++it;
-            break;
-         }
-         case 't': {
-            root.type = lazy_type::boolean_t;
-            ++it;
-            match<"rue", Opts>(ctx, it, end);
-            break;
-         }
-         case 'f': {
-            root.type = lazy_type::boolean_t;
-            ++it;
-            match<"alse", Opts>(ctx, it, end);
-            break;
-         }
-         case 'n': {
-            root.type = lazy_type::null_t;
-            ++it;
-            match<"ull", Opts>(ctx, it, end);
-            break;
-         }
-         default: {
-            if (is_digit(uint8_t(*it)) || *it == '-') {
-               root.type = lazy_type::number_t;
-               skip_number<Opts>(ctx, it, end);
-            }
-            else {
-               ctx.error = error_code::syntax_error;
-            }
-            break;
-         }
-         }
-
-         return ctx.error;
-      }
-   } // namespace detail
-
    /**
-    * @brief Parse JSON lazily into a user-managed buffer.
+    * @brief Parse JSON lazily - no upfront processing.
     *
-    * @tparam Opts Options for parsing (default: opts{}). Set null_terminated = false
-    *              for non-null-terminated buffers like string_view slices.
+    * This is a truly lazy parser like simdjson on-demand:
+    * - No structural index built upfront
+    * - Just validates first byte and stores buffer reference
+    * - All work happens on-demand when accessing fields
+    *
+    * @tparam Opts Options for parsing
     * @param buffer The JSON text buffer (must remain valid for document lifetime)
-    * @param node_buffer User-managed buffer for storing parsed nodes
     * @return lazy_document on success, error_ctx on parse failure
     *
-    * Usage:
-    * @code
-    * glz::lazy_buffer nodes;
-    * std::string json = R"({"name": "Alice", "age": 30})";
-    * auto result = glz::read_lazy(json, nodes);
-    * if (result) {
-    *    auto name = (*result)["name"].get<std::string>();
-    * }
-    * @endcode
+    * NOTE: The lazy_buffer parameter is kept for API compatibility but not used.
     */
    template <opts Opts = opts{}, class Buffer>
-   [[nodiscard]] inline expected<lazy_document<Opts>, error_ctx> read_lazy(Buffer&& buffer, lazy_buffer& node_buffer)
+   [[nodiscard]] inline expected<lazy_document<Opts>, error_ctx> read_lazy(Buffer&& buffer, lazy_buffer&)
    {
-      // Record where root will be placed
-      uint32_t root_index = static_cast<uint32_t>(node_buffer.size());
+      lazy_document<Opts> doc;
+      doc.json_ = buffer.data();
+      doc.len_ = buffer.size();
 
-      // Add root node placeholder
-      lazy_json& root = node_buffer.emplace_back();
+      // Find root value (skip leading whitespace)
+      const char* p = buffer.data();
+      const char* end = buffer.data() + buffer.size();
 
-      context ctx{};
-      const char* it = buffer.data();
-      const char* buffer_end = buffer.data() + buffer.size();
-
-      auto ec = detail::parse_lazy_root<Opts>(root, ctx, it, buffer_end);
-      if (ec != error_code::none) {
-         // Remove the placeholder on error
-         node_buffer.pop_back();
-         return unexpected(error_ctx{0, ec});
+      if constexpr (Opts.null_terminated) {
+         while (whitespace_table[uint8_t(*p)]) ++p;
+      }
+      else {
+         while (p < end && whitespace_table[uint8_t(*p)]) ++p;
       }
 
-      return lazy_document<Opts>{&node_buffer, root_index, buffer_end};
+      if (p >= end) {
+         return unexpected(error_ctx{0, error_code::unexpected_end});
+      }
+
+      // Validate first character is valid JSON start
+      const char c = *p;
+      if (c != '{' && c != '[' && c != '"' && c != 't' && c != 'f' && c != 'n' &&
+          !is_digit(uint8_t(c)) && c != '-') {
+         return unexpected(error_ctx{0, error_code::syntax_error});
+      }
+
+      doc.root_data_ = p;
+      return doc;
    }
 
 } // namespace glz
