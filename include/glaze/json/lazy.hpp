@@ -17,6 +17,10 @@ namespace glz
    struct lazy_document;
    template <opts Opts>
    class lazy_iterator;
+   template <opts Opts>
+   struct indexed_lazy_view;
+   template <opts Opts>
+   class indexed_lazy_iterator;
 
    // ============================================================================
    // Truly Lazy JSON Parser - No upfront processing
@@ -227,6 +231,43 @@ namespace glz
       [[nodiscard]] const char* data() const noexcept { return data_; }
       [[nodiscard]] const char* json_end() const noexcept;
 
+      /// @brief Get the raw JSON bytes for this value
+      /// @return string_view of the raw JSON, or empty if error
+      /// @note Useful for passing to glz::read_json to deserialize into a struct
+      /// @note Consider using read_into<T>() instead for better performance
+      [[nodiscard]] std::string_view raw_json() const noexcept
+      {
+         if (has_error() || !data_) return {};
+         const char* end = detail::skip_value_lazy<Opts>(data_, json_end());
+         return {data_, static_cast<size_t>(end - data_)};
+      }
+
+      /// @brief Parse this value directly into a C++ type (single-pass, no double scanning)
+      /// @tparam T The type to parse into
+      /// @param value The object to populate
+      /// @return Error context (check error_ctx.error for success/failure)
+      /// @note This is more efficient than raw_json() + read_json() as it avoids scanning twice
+      template <class T>
+      [[nodiscard]] error_ctx read_into(T& value) const
+      {
+         if (has_error()) {
+            return error_ctx{0, error_};
+         }
+         if (!data_) {
+            return error_ctx{0, error_code::unexpected_end};
+         }
+         // Use parse<JSON>::op which naturally stops at value end
+         // This avoids the need to pre-scan to find the value's extent
+         context ctx{};
+         auto it = data_;
+         auto end = json_end();
+         parse<JSON>::op<opts{}>(value, ctx, it, end);
+         if (bool(ctx.error)) {
+            return error_ctx{static_cast<size_t>(it - data_), ctx.error};
+         }
+         return {};
+      }
+
       template <class T>
       [[nodiscard]] expected<T, error_ctx> get() const;
 
@@ -242,9 +283,15 @@ namespace glz
       [[nodiscard]] lazy_iterator<Opts> begin() const;
       [[nodiscard]] lazy_iterator<Opts> end() const;
 
+      /// @brief Build an index for O(1) iteration and random access
+      /// @return indexed_lazy_view with pre-computed element positions
+      [[nodiscard]] indexed_lazy_view<Opts> index() const;
+
      private:
       friend struct lazy_document<Opts>;
       friend class lazy_iterator<Opts>;
+      friend struct indexed_lazy_view<Opts>;
+      friend class indexed_lazy_iterator<Opts>;
 
       // Constructor with key for iteration
       lazy_json_view(const lazy_document<Opts>* doc, const char* data, std::string_view key) noexcept
@@ -252,7 +299,10 @@ namespace glz
       {}
 
       // Skip whitespace helper
-      static void skip_ws(const char*& p, const char* end) noexcept
+      // Note: The minified option is not used here because branch prediction
+      // makes the whitespace loop essentially free when there's no whitespace.
+      // Benchmarks show no benefit from skipping this check.
+      static void skip_ws(const char*& p, [[maybe_unused]] const char* end) noexcept
       {
          if constexpr (Opts.null_terminated) {
             while (whitespace_table[uint8_t(*p)]) ++p;
@@ -414,6 +464,224 @@ namespace glz
          else {
             while (p < json_end_ && whitespace_table[uint8_t(*p)]) ++p;
          }
+      }
+   };
+
+   // ============================================================================
+   // indexed_lazy_view - Lazy view with pre-built element index for O(1) access
+   // ============================================================================
+
+   /**
+    * @brief A lazy view with a pre-built index for O(1) iteration and random access.
+    *
+    * Created by calling `index()` on a lazy_json_view. Scans the container once
+    * to build an index of element positions, then provides:
+    * - O(1) iteration advancement (vs O(element_size) for lazy_json_view)
+    * - O(1) random access by index
+    * - O(1) size query
+    *
+    * Elements returned are still lazy_json_view objects, so nested access remains lazy.
+    *
+    * Memory: Base view + 8 bytes per element (+ 16 bytes per element for objects with keys)
+    */
+   template <opts Opts>
+   struct indexed_lazy_view
+   {
+     private:
+      const lazy_document<Opts>* doc_{};
+      const char* json_end_{};
+      std::vector<const char*> value_starts_;
+      std::vector<std::string_view> keys_; // Only populated for objects
+      bool is_object_{};
+
+      friend class indexed_lazy_iterator<Opts>;
+
+     public:
+      indexed_lazy_view() = default;
+
+      /// @brief Number of elements - O(1)
+      [[nodiscard]] size_t size() const noexcept { return value_starts_.size(); }
+
+      /// @brief Check if empty - O(1)
+      [[nodiscard]] bool empty() const noexcept { return value_starts_.empty(); }
+
+      /// @brief Check if this is an indexed object
+      [[nodiscard]] bool is_object() const noexcept { return is_object_; }
+
+      /// @brief Check if this is an indexed array
+      [[nodiscard]] bool is_array() const noexcept { return !is_object_; }
+
+      /// @brief O(1) random access by index
+      [[nodiscard]] lazy_json_view<Opts> operator[](size_t index) const
+      {
+         if (index >= value_starts_.size()) {
+            return lazy_json_view<Opts>::make_error(error_code::exceeded_static_array_size);
+         }
+         std::string_view key = is_object_ ? keys_[index] : std::string_view{};
+         return lazy_json_view<Opts>{doc_, value_starts_[index], key};
+      }
+
+      /// @brief O(n) key lookup for objects (linear search in index)
+      [[nodiscard]] lazy_json_view<Opts> operator[](std::string_view key) const
+      {
+         if (!is_object_) {
+            return lazy_json_view<Opts>::make_error(error_code::get_wrong_type);
+         }
+         for (size_t i = 0; i < keys_.size(); ++i) {
+            if (keys_[i] == key) {
+               return lazy_json_view<Opts>{doc_, value_starts_[i], keys_[i]};
+            }
+         }
+         return lazy_json_view<Opts>::make_error(error_code::key_not_found);
+      }
+
+      /// @brief Check if object contains key - O(n) linear search
+      [[nodiscard]] bool contains(std::string_view key) const
+      {
+         if (!is_object_) return false;
+         for (const auto& k : keys_) {
+            if (k == key) return true;
+         }
+         return false;
+      }
+
+      [[nodiscard]] indexed_lazy_iterator<Opts> begin() const;
+      [[nodiscard]] indexed_lazy_iterator<Opts> end() const;
+
+     private:
+      friend struct lazy_json_view<Opts>;
+
+      // Private constructor used by lazy_json_view::index()
+      indexed_lazy_view(const lazy_document<Opts>* doc, const char* json_end, bool is_object)
+         : doc_(doc), json_end_(json_end), is_object_(is_object)
+      {}
+
+      void reserve(size_t n)
+      {
+         value_starts_.reserve(n);
+         if (is_object_) {
+            keys_.reserve(n);
+         }
+      }
+
+      void add_element(const char* value_start, std::string_view key = {})
+      {
+         value_starts_.push_back(value_start);
+         if (is_object_) {
+            keys_.push_back(key);
+         }
+      }
+   };
+
+   // ============================================================================
+   // indexed_lazy_iterator - O(1) advancement using pre-built index
+   // ============================================================================
+
+   template <opts Opts>
+   class indexed_lazy_iterator
+   {
+     private:
+      const indexed_lazy_view<Opts>* parent_{};
+      size_t index_{};
+      mutable lazy_json_view<Opts> current_view_{}; // Cached for reference return
+
+     public:
+      using iterator_category = std::random_access_iterator_tag;
+      using value_type = lazy_json_view<Opts>;
+      using difference_type = std::ptrdiff_t;
+      using pointer = void;
+      using reference = lazy_json_view<Opts>&;
+
+      indexed_lazy_iterator() = default;
+      indexed_lazy_iterator(const indexed_lazy_view<Opts>* parent, size_t index)
+         : parent_(parent), index_(index)
+      {}
+
+      reference operator*() const
+      {
+         std::string_view key = parent_->is_object_ ? parent_->keys_[index_] : std::string_view{};
+         current_view_ = lazy_json_view<Opts>{parent_->doc_, parent_->value_starts_[index_], key};
+         return current_view_;
+      }
+
+      lazy_json_view<Opts>* operator->() const
+      {
+         operator*(); // Update current_view_
+         return &current_view_;
+      }
+
+      indexed_lazy_iterator& operator++()
+      {
+         ++index_;
+         return *this;
+      }
+
+      indexed_lazy_iterator operator++(int)
+      {
+         auto tmp = *this;
+         ++index_;
+         return tmp;
+      }
+
+      indexed_lazy_iterator& operator--()
+      {
+         --index_;
+         return *this;
+      }
+
+      indexed_lazy_iterator operator--(int)
+      {
+         auto tmp = *this;
+         --index_;
+         return tmp;
+      }
+
+      indexed_lazy_iterator& operator+=(difference_type n)
+      {
+         index_ = static_cast<size_t>(static_cast<difference_type>(index_) + n);
+         return *this;
+      }
+
+      indexed_lazy_iterator& operator-=(difference_type n)
+      {
+         index_ = static_cast<size_t>(static_cast<difference_type>(index_) - n);
+         return *this;
+      }
+
+      indexed_lazy_iterator operator+(difference_type n) const
+      {
+         return {parent_, static_cast<size_t>(static_cast<difference_type>(index_) + n)};
+      }
+
+      indexed_lazy_iterator operator-(difference_type n) const
+      {
+         return {parent_, static_cast<size_t>(static_cast<difference_type>(index_) - n)};
+      }
+
+      difference_type operator-(const indexed_lazy_iterator& other) const
+      {
+         return static_cast<difference_type>(index_) - static_cast<difference_type>(other.index_);
+      }
+
+      reference operator[](difference_type n) const
+      {
+         std::string_view key =
+            parent_->is_object_ ? parent_->keys_[index_ + static_cast<size_t>(n)] : std::string_view{};
+         current_view_ =
+            lazy_json_view<Opts>{parent_->doc_, parent_->value_starts_[index_ + static_cast<size_t>(n)], key};
+         return current_view_;
+      }
+
+      bool operator==(const indexed_lazy_iterator& other) const { return index_ == other.index_; }
+      bool operator!=(const indexed_lazy_iterator& other) const { return index_ != other.index_; }
+      bool operator<(const indexed_lazy_iterator& other) const { return index_ < other.index_; }
+      bool operator<=(const indexed_lazy_iterator& other) const { return index_ <= other.index_; }
+      bool operator>(const indexed_lazy_iterator& other) const { return index_ > other.index_; }
+      bool operator>=(const indexed_lazy_iterator& other) const { return index_ >= other.index_; }
+
+      friend indexed_lazy_iterator operator+(difference_type n, const indexed_lazy_iterator& it)
+      {
+         return it + n;
       }
    };
 
@@ -805,6 +1073,91 @@ namespace glz
    }
 
    // ============================================================================
+   // indexed_lazy_view implementation
+   // ============================================================================
+
+   template <opts Opts>
+   inline indexed_lazy_iterator<Opts> indexed_lazy_view<Opts>::begin() const
+   {
+      return indexed_lazy_iterator<Opts>{this, 0};
+   }
+
+   template <opts Opts>
+   inline indexed_lazy_iterator<Opts> indexed_lazy_view<Opts>::end() const
+   {
+      return indexed_lazy_iterator<Opts>{this, value_starts_.size()};
+   }
+
+   // ============================================================================
+   // lazy_json_view::index() implementation
+   // ============================================================================
+
+   template <opts Opts>
+   inline indexed_lazy_view<Opts> lazy_json_view<Opts>::index() const
+   {
+      // Return empty indexed view for non-containers or errors
+      if (has_error() || !data_ || (!is_array() && !is_object())) {
+         return indexed_lazy_view<Opts>{};
+      }
+
+      const char* end = json_end();
+      indexed_lazy_view<Opts> result{doc_, end, is_object()};
+
+      const char* p = data_ + 1; // skip '[' or '{'
+      skip_ws(p, end);
+
+      const char close_char = is_array() ? ']' : '}';
+      const bool is_obj = is_object();
+
+      // Check for empty container
+      if constexpr (Opts.null_terminated) {
+         if (*p == close_char) return result;
+      }
+      else {
+         if (p >= end || *p == close_char) return result;
+      }
+
+      // Scan and record all element positions
+      while (true) {
+         std::string_view key{};
+         if (is_obj) {
+            // Parse and record key
+            key = parse_key(p, end);
+            skip_ws(p, end);
+
+            // Skip ':'
+            if (*p == ':') {
+               ++p;
+               skip_ws(p, end);
+            }
+         }
+
+         // Record element start position
+         result.add_element(p, key);
+
+         // Skip value
+         p = detail::skip_value_lazy<Opts>(p, end);
+         skip_ws(p, end);
+
+         // Check for end of container
+         if constexpr (Opts.null_terminated) {
+            if (*p == close_char) break;
+         }
+         else {
+            if (p >= end || *p == close_char) break;
+         }
+
+         // Skip comma
+         if (*p == ',') {
+            ++p;
+            skip_ws(p, end);
+         }
+      }
+
+      return result;
+   }
+
+   // ============================================================================
    // lazy_json_view::get<T>() implementation
    // ============================================================================
 
@@ -1004,6 +1357,31 @@ namespace glz
       doc.root_data_ = p;
       doc.init_root_view();  // Initialize cached root view
       return doc;
+   }
+
+   // ============================================================================
+   // read_json overload for lazy_json_view (single-pass deserialization)
+   // ============================================================================
+
+   /// @brief Read JSON from a lazy_json_view into a C++ type
+   /// @tparam T The type to parse into
+   /// @tparam Opts The lazy view options
+   /// @param value The object to populate
+   /// @param view The lazy view to read from
+   /// @return Error context if parsing failed
+   /// @note This provides the familiar glz::read_json API while using the efficient single-pass read_into internally
+   template <class T, opts Opts>
+   [[nodiscard]] inline error_ctx read_json(T& value, const lazy_json_view<Opts>& view)
+   {
+      return view.template read_into<T>(value);
+   }
+
+   /// @brief Read JSON from a lazy_json_view rvalue into a C++ type
+   /// @note Handles temporaries like glz::read_json(value, doc["field"])
+   template <class T, opts Opts>
+   [[nodiscard]] inline error_ctx read_json(T& value, lazy_json_view<Opts>&& view)
+   {
+      return view.template read_into<T>(value);
    }
 
 } // namespace glz

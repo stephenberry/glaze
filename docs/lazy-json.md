@@ -1,16 +1,17 @@
 # Lazy JSON Parsing
 
-Glaze provides a truly lazy JSON parser (`glz::lazy_json`) that offers **on-demand** parsing without any upfront processing. This approach is ideal when you need to extract a few fields from large JSON documents or when parse time is critical.
+Glaze provides a truly lazy JSON parser (`glz::lazy_json`) that offers **on-demand** parsing without any upfront processing. This approach is ideal when you need to extract a few separate fields from large JSON documents.
 
 ## When to Use Lazy JSON
 
 | Use Case | Recommended Approach |
 |----------|---------------------|
 | Extract 1-3 fields from large JSON | `glz::lazy_json` |
-| Access fields near the beginning | `glz::lazy_json` |
+| Access fields near the beginning | `glz::lazy_json` or partial_read |
 | Full deserialization into structs | `glz::read_json` |
-| Iterate all elements | `glz::read_json` or `glz::generic` |
-| Unknown/dynamic JSON structure | `glz::generic` |
+| Iterate all elements (single pass) | `glz::lazy_json` |
+| Multiple random accesses to array | `glz::lazy_json` with `.index()` |
+| Unknown/dynamic JSON structure with persistent memory | `glz::generic` |
 
 ## Basic Usage
 
@@ -48,7 +49,9 @@ To maximize performance, `lazy_json` does not validate UTF-8 encoding during ini
 - **`get<std::string>()`**: Processes escape sequences (`\n`, `\uXXXX`, etc.) and validates UTF-8 encoding
 - **`get<std::string_view>()`**: Returns a raw view into the JSON buffer with no validation or processing
 
-If you need validated UTF-8 strings, use `get<std::string>()`. If you're passing strings through unchanged or know the source is trusted, `get<std::string_view>()` is faster.
+If you need validated UTF-8 strings and unescaping, use `get<std::string>()`.  Otherwise, `get<std::string_view>()` is faster.
+
+> glz::lazy_json will ensure that any instantiated C++ values are valid JSON (except for std::string_view), but it doesn't validate the entire document, because this is often not a requirement for lazy parsing. If you want high performance full validation it is best to use C++ structs. Or, use glz::validate_json for pure validation passes.
 
 ## Nested Object Access
 
@@ -143,6 +146,104 @@ if (result) {
     }
 }
 ```
+
+## Indexed Views for O(1) Access
+
+For scenarios requiring multiple random accesses or repeated iteration, you can build an index for O(1) element access:
+
+```cpp
+std::string json = R"({"users": [{"id": 0}, {"id": 1}, ..., {"id": 999}]})";
+auto result = glz::lazy_json(json);
+
+if (result) {
+    // Build index once - O(n) scan
+    auto users = (*result)["users"].index();
+
+    // Now enjoy O(1) operations:
+    size_t count = users.size();        // O(1) - no scanning
+    auto user500 = users[500];          // O(1) - direct access
+    auto user999 = users[999];          // O(1) - no matter the position
+
+    // O(1) iteration advancement
+    for (auto& user : users) {
+        auto id = user["id"].get<int64_t>();  // Nested access still lazy
+    }
+}
+```
+
+### When to Use `.index()`
+
+| Scenario | Without Index | With Index | Recommendation |
+|----------|---------------|------------|----------------|
+| Single random access | O(k) | O(n) build + O(1) | Don't index |
+| 5+ random accesses | O(5k) | O(n) build + O(5) | **Use index** |
+| Multiple iterations | O(n) each | O(n) build + O(n) each | **Use index** |
+| Need size before iterating | O(n) | O(1) after build | **Use index** |
+| Single sequential iteration | O(n) | O(n) build + O(n) | Don't index |
+
+### Indexed View API
+
+```cpp
+auto indexed = doc["items"].index();
+
+// O(1) size query
+size_t count = indexed.size();
+
+// O(1) empty check
+if (!indexed.empty()) { /* ... */ }
+
+// O(1) random access by position
+auto third = indexed[2];
+
+// For indexed objects: O(n) key lookup (linear search)
+auto value = indexed["key"];
+
+// Check if object contains key
+if (indexed.contains("key")) { /* ... */ }
+
+// Full random-access iterator support
+auto it = indexed.begin();
+it += 50;                    // Jump forward 50 elements
+auto elem = it[10];          // Access 10 elements ahead
+auto dist = indexed.end() - it;  // Distance to end
+```
+
+### Nested Access Remains Lazy
+
+Elements returned from an indexed view are still `lazy_json_view` objects. Nested field access remains lazy:
+
+```cpp
+auto users = doc["users"].index();
+
+// O(1) to get to user 500
+auto user = users[500];
+
+// Nested access is still lazy - scans only "email" field
+auto email = user["profile"]["email"].get<std::string_view>();
+```
+
+### Memory Overhead
+
+The index stores one pointer (8 bytes) per element, plus one `string_view` (16 bytes) per key for objects:
+
+| Container | Elements | Index Memory |
+|-----------|----------|--------------|
+| Array | 1,000 | ~8 KB |
+| Array | 10,000 | ~80 KB |
+| Object | 1,000 | ~24 KB |
+| Object | 10,000 | ~240 KB |
+
+### Performance Example
+
+For 10 random accesses to a 1000-element array:
+
+| Approach | Throughput | Notes |
+|----------|------------|-------|
+| `lazy_json` (no index) | 232 MB/s | Each access scans from start |
+| `lazy_json` (indexed) | 993 MB/s | Index built once, O(1) accesses |
+| simdjson | 914 MB/s | Full structural index upfront |
+
+The indexed approach is **327% faster** than non-indexed for this use case, and **9% faster than simdjson**.
 
 ## Optimizing Performance: Sequential Access
 
@@ -325,6 +426,104 @@ size_t count = arr.size();
 if (doc.root().contains("name")) { /* ... */ }
 ```
 
+## Deserializing into Structs
+
+Use `read_into<T>()` to efficiently deserialize a lazy view directly into a typed struct:
+
+```cpp
+struct User {
+   std::string name;
+   int age;
+   bool active;
+};
+
+std::string json = R"({
+   "user": {"name": "Alice", "age": 30, "active": true},
+   "metadata": {"version": 1, "large_data": "..."}
+})";
+
+auto result = glz::lazy_json(json);
+if (result) {
+    // Navigate lazily to "user" - skips "metadata" entirely
+    auto user_view = (*result)["user"];
+
+    // Deserialize directly into struct (single-pass, most efficient)
+    User user{};
+    auto ec = user_view.read_into(user);
+
+    // user.name == "Alice", user.age == 30, user.active == true
+}
+```
+
+### Why Use This Pattern?
+
+This hybrid approach gives you the best of both worlds:
+
+1. **Lazy navigation**: Skip large sections of JSON you don't need
+2. **Fast deserialization**: Use Glaze's optimized struct parsing for the parts you do need
+3. **Type safety**: Get compile-time checked structs instead of runtime field access
+
+### Deserializing Array Elements
+
+Combine with indexed views for efficient random access deserialization:
+
+```cpp
+struct Person {
+   std::string name;
+   Address address;
+};
+
+std::string json = R"({"people": [{"name": "Alice", ...}, {"name": "Bob", ...}, ...]})";
+
+auto result = glz::lazy_json(json);
+if (result) {
+    // Build index for O(1) random access
+    auto people = (*result)["people"].index();
+
+    // Deserialize only the 500th person directly
+    Person person{};
+    people[500].read_into(person);
+}
+```
+
+### Deserialization Methods
+
+There are three ways to deserialize a lazy view:
+
+```cpp
+// Method 1: glz::read_json with lazy view - recommended, familiar API
+User user1{};
+glz::read_json(user1, doc["user"]);  // Single-pass, ~49% faster
+
+// Method 2: read_into() member function - equivalent to Method 1
+User user2{};
+doc["user"].read_into(user2);  // Single-pass, ~49% faster
+
+// Method 3: raw_json() + read_json() - double-pass, slower
+User user3{};
+glz::read_json(user3, doc["user"].raw_json());  // Scans value twice
+```
+
+**Performance**: Methods 1 and 2 are approximately **49% faster** than Method 3 because they avoid a double-scan of the data. The `raw_json()` method must first scan the value to find its end, then `read_json()` parses the same bytes again.
+
+**Use `glz::read_json(value, view)`** for the familiar Glaze API. Use `raw_json()` only when you need the raw JSON string itself (e.g., for logging, forwarding, or storage).
+
+### The `raw_json()` Method
+
+Returns a `std::string_view` of the raw JSON bytes for any lazy view:
+
+```cpp
+auto result = glz::lazy_json(R"({"user": {"name": "Alice"}, "count": 5})");
+
+// Get raw JSON for different value types
+(*result).raw_json();                  // {"user": {"name": "Alice"}, "count": 5}
+(*result)["user"].raw_json();          // {"name": "Alice"}
+(*result)["user"]["name"].raw_json();  // "Alice"
+(*result)["count"].raw_json();         // 5
+```
+
+> **Note**: For deserialization, prefer `read_into()` over `raw_json()` + `read_json()` for better performance.
+
 ## Writing Lazy Views
 
 Lazy views can be written back to JSON:
@@ -380,11 +579,20 @@ The lazy parser is designed for minimal memory overhead. A `lazy_json_view` is 4
    }
    ```
 
-4. **Keep JSON buffer alive**: The lazy parser stores pointers into the original buffer - it must remain valid for the lifetime of the document.
+4. **Use `.index()` for multiple random accesses**: If you need to access many elements by index or iterate multiple times:
+   ```cpp
+   auto items = doc["items"].index();  // Build index once
+   auto first = items[0];              // O(1) access
+   auto last = items[items.size()-1];  // O(1) access
+   ```
 
-5. **Prefer `std::string_view` for strings**: When you don't need escape processing, `get<std::string_view>()` is faster than `get<std::string>()`.
+5. **Keep JSON buffer alive**: The lazy parser stores pointers into the original buffer - it must remain valid for the lifetime of the document.
 
-6. **Access few fields for best speedup**: Lazy JSON shines when you access 1-5 fields from a large document. For full deserialization, use `glz::read_json`.
+6. **Prefer `std::string_view` for strings**: When you don't need escape processing, `get<std::string_view>()` is faster than `get<std::string>()`.
+
+7. **Access few fields for best speedup**: Lazy JSON shines when you access 1-5 fields from a large document. For full deserialization, use `glz::read_json`.
+
+8. **Use `glz::read_json(value, view)` for struct deserialization**: When deserializing lazy views into structs, use `glz::read_json(obj, view)` or `view.read_into(obj)` instead of `glz::read_json(obj, view.raw_json())` - it's ~49% faster because it avoids a double scan.
 
 ## Partial Read vs Lazy JSON
 
@@ -444,14 +652,15 @@ See [Partial Read](./partial-read.md) for detailed documentation.
 
 ## Comparison with All Approaches
 
-| Feature | `glz::read_json` | `partial_read` | `glz::lazy_json` | `glz::generic` |
-|---------|------------------|----------------|------------------|----------------|
-| Parse time | O(n) | O(n) worst | O(1) | O(n) |
-| Field access | O(1) | Hash-based | O(k)* | O(1) |
-| Memory usage | Struct size | Struct size | ~48 bytes | Dynamic |
-| Type safety | Compile-time | Compile-time | Runtime | Runtime |
-| Short-circuit | No | Yes | Yes | No |
-| Best for | Full deserialization | Known subset | Dynamic access | Unknown structure |
+| Feature | `glz::read_json` | `partial_read` | `glz::lazy_json` | `lazy_json` + `.index()` | `glz::generic` |
+|---------|------------------|----------------|------------------|--------------------------|----------------|
+| Parse time | O(n) | O(n) worst | O(1) | O(1) + O(n) on index | O(n) |
+| Field access | O(1) | Hash-based | O(k)* | O(1) after index | O(1) |
+| Random array access | O(1) | N/A | O(k)* | O(1) after index | O(1) |
+| Memory usage | Struct size | Struct size | ~48 bytes | ~48 + 8n bytes | Dynamic |
+| Type safety | Compile-time | Compile-time | Runtime | Runtime | Runtime |
+| Short-circuit | No | Yes | Yes | Yes | No |
+| Best for | Full deser. | Known subset | Few accesses | Many accesses | Unknown structure |
 
 *k = bytes to skip to reach field
 

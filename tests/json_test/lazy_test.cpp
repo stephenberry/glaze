@@ -6,6 +6,31 @@
 
 using namespace ut;
 
+// Structs for deserialization tests (must be at namespace scope for reflection)
+namespace lazy_test
+{
+   struct User {
+      std::string name{};
+      int age{};
+      bool active{};
+   };
+
+   struct Address {
+      std::string city{};
+      std::string country{};
+   };
+
+   struct Person {
+      std::string name{};
+      Address address{};
+   };
+
+   struct Item {
+      int id{};
+      std::string value{};
+   };
+}
+
 suite lazy_json_tests = [] {
    "lazy_json_read_basic"_test = [] {
       std::string buffer = R"({"name":"John","age":30,"active":true,"balance":123.45})";
@@ -415,6 +440,641 @@ suite lazy_json_tests = [] {
       expect(doc["tags"][0].get<std::string>().value() == "日本");
       expect(doc["tags"][1].get<std::string>().value() == "🇯🇵");
       expect(doc["tags"][2].get<std::string>().value() == "test");
+   };
+
+   // ============================================================================
+   // indexed_lazy_view tests
+   // ============================================================================
+
+   "indexed_lazy_view_array_basic"_test = [] {
+      std::string buffer = R"([1, 2, 3, 4, 5])";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      expect(indexed.is_array());
+      expect(!indexed.is_object());
+      expect(indexed.size() == 5u);
+      expect(!indexed.empty());
+
+      // O(1) random access
+      expect(indexed[0].get<int64_t>().value() == 1);
+      expect(indexed[2].get<int64_t>().value() == 3);
+      expect(indexed[4].get<int64_t>().value() == 5);
+
+      // Out of bounds
+      expect(indexed[10].has_error());
+   };
+
+   "indexed_lazy_view_array_iteration"_test = [] {
+      std::string buffer = R"([10, 20, 30, 40, 50])";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      int64_t sum = 0;
+      size_t count = 0;
+      for (auto& item : indexed) {
+         auto val = item.get<int64_t>();
+         if (val) sum += *val;
+         ++count;
+      }
+      expect(sum == 150);
+      expect(count == 5u);
+   };
+
+   "indexed_lazy_view_object_basic"_test = [] {
+      std::string buffer = R"({"a":1,"b":2,"c":3})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      expect(indexed.is_object());
+      expect(!indexed.is_array());
+      expect(indexed.size() == 3u);
+      expect(!indexed.empty());
+
+      // Random access by index
+      expect(indexed[0].get<int64_t>().value() == 1);
+      expect(indexed[0].key() == "a");
+      expect(indexed[1].get<int64_t>().value() == 2);
+      expect(indexed[1].key() == "b");
+      expect(indexed[2].get<int64_t>().value() == 3);
+      expect(indexed[2].key() == "c");
+
+      // Key lookup (O(n) linear search)
+      expect(indexed["a"].get<int64_t>().value() == 1);
+      expect(indexed["b"].get<int64_t>().value() == 2);
+      expect(indexed["c"].get<int64_t>().value() == 3);
+      expect(indexed["missing"].has_error());
+
+      // Contains
+      expect(indexed.contains("a"));
+      expect(indexed.contains("b"));
+      expect(!indexed.contains("missing"));
+   };
+
+   "indexed_lazy_view_object_iteration"_test = [] {
+      std::string buffer = R"({"x":10,"y":20,"z":30})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      std::vector<std::pair<std::string_view, int64_t>> items;
+      for (auto& item : indexed) {
+         auto val = item.get<int64_t>();
+         if (val) {
+            items.emplace_back(item.key(), *val);
+         }
+      }
+
+      expect(items.size() == 3u);
+      expect(items[0].first == "x");
+      expect(items[0].second == 10);
+      expect(items[1].first == "y");
+      expect(items[1].second == 20);
+      expect(items[2].first == "z");
+      expect(items[2].second == 30);
+   };
+
+   "indexed_lazy_view_nested_lazy"_test = [] {
+      // Elements in indexed view should still be lazy for nested access
+      std::string buffer = R"([{"id":1,"data":{"value":100}},{"id":2,"data":{"value":200}}])";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      expect(indexed.size() == 2u);
+
+      // Nested access is still lazy
+      expect(indexed[0]["id"].get<int64_t>().value() == 1);
+      expect(indexed[0]["data"]["value"].get<int64_t>().value() == 100);
+      expect(indexed[1]["id"].get<int64_t>().value() == 2);
+      expect(indexed[1]["data"]["value"].get<int64_t>().value() == 200);
+   };
+
+   "indexed_lazy_view_empty"_test = [] {
+      std::string buffer1 = R"([])";
+      auto result1 = glz::lazy_json(buffer1);
+      expect(result1.has_value());
+      auto indexed1 = result1->root().index();
+      expect(indexed1.empty());
+      expect(indexed1.size() == 0u);
+
+      std::string buffer2 = R"({})";
+      auto result2 = glz::lazy_json(buffer2);
+      expect(result2.has_value());
+      auto indexed2 = result2->root().index();
+      expect(indexed2.empty());
+      expect(indexed2.size() == 0u);
+   };
+
+   "indexed_lazy_view_random_access_iterator"_test = [] {
+      std::string buffer = R"([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      auto it = indexed.begin();
+
+      // Test iterator arithmetic
+      expect((*it).get<int64_t>().value() == 0);
+      expect((*(it + 3)).get<int64_t>().value() == 3);
+      expect((*(it + 9)).get<int64_t>().value() == 9);
+
+      // Test operator[]
+      expect(it[5].get<int64_t>().value() == 5);
+
+      // Test distance
+      auto end = indexed.end();
+      expect(end - it == 10);
+
+      // Test increment/decrement
+      ++it;
+      expect((*it).get<int64_t>().value() == 1);
+      --it;
+      expect((*it).get<int64_t>().value() == 0);
+
+      // Test +=/-=
+      it += 5;
+      expect((*it).get<int64_t>().value() == 5);
+      it -= 2;
+      expect((*it).get<int64_t>().value() == 3);
+   };
+
+   "indexed_lazy_view_large_array"_test = [] {
+      // Build a large array
+      std::string buffer = "[";
+      for (int i = 0; i < 1000; ++i) {
+         if (i > 0) buffer += ",";
+         buffer += std::to_string(i);
+      }
+      buffer += "]";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      expect(indexed.size() == 1000u);
+
+      // O(1) random access to any element
+      expect(indexed[0].get<int64_t>().value() == 0);
+      expect(indexed[500].get<int64_t>().value() == 500);
+      expect(indexed[999].get<int64_t>().value() == 999);
+
+      // Iteration and sum
+      int64_t sum = 0;
+      for (auto& item : indexed) {
+         auto val = item.get<int64_t>();
+         if (val) sum += *val;
+      }
+      expect(sum == 499500); // Sum of 0..999
+   };
+
+   // ============================================================================
+   // minified option tests
+   // ============================================================================
+
+   "lazy_json_minified_basic"_test = [] {
+      // Minified JSON (no whitespace)
+      std::string buffer = R"({"name":"John","age":30,"active":true})";
+      constexpr auto opts = glz::opts{.minified = true};
+      auto result = glz::lazy_json<opts>(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc["name"].get<std::string>().value() == "John");
+      expect(doc["age"].get<int64_t>().value() == 30);
+      expect(doc["active"].get<bool>().value() == true);
+   };
+
+   "lazy_json_minified_nested"_test = [] {
+      std::string buffer = R"({"user":{"profile":{"email":"test@example.com"}}})";
+      constexpr auto opts = glz::opts{.minified = true};
+      auto result = glz::lazy_json<opts>(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc["user"]["profile"]["email"].get<std::string>().value() == "test@example.com");
+   };
+
+   "lazy_json_minified_array_iteration"_test = [] {
+      std::string buffer = R"({"items":[{"id":1},{"id":2},{"id":3}]})";
+      constexpr auto opts = glz::opts{.minified = true};
+      auto result = glz::lazy_json<opts>(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      int64_t sum = 0;
+      for (auto& item : doc["items"]) {
+         auto id = item["id"].get<int64_t>();
+         if (id) sum += *id;
+      }
+      expect(sum == 6);
+   };
+
+   "lazy_json_minified_indexed"_test = [] {
+      std::string buffer = R"([0,1,2,3,4,5,6,7,8,9])";
+      constexpr auto opts = glz::opts{.minified = true};
+      auto result = glz::lazy_json<opts>(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      expect(indexed.size() == 10u);
+      expect(indexed[0].get<int64_t>().value() == 0);
+      expect(indexed[5].get<int64_t>().value() == 5);
+      expect(indexed[9].get<int64_t>().value() == 9);
+   };
+
+   // ============================================================================
+   // raw_json() and struct deserialization tests
+   // ============================================================================
+
+   "lazy_json_raw_json_basic"_test = [] {
+      std::string buffer = R"({"name":"Alice","age":30})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // raw_json() returns the entire JSON for a value
+      auto raw = result->root().raw_json();
+      expect(raw == R"({"name":"Alice","age":30})");
+
+      // Can also get raw JSON for nested values
+      auto name_raw = (*result)["name"].raw_json();
+      expect(name_raw == R"("Alice")");
+
+      auto age_raw = (*result)["age"].raw_json();
+      expect(age_raw == "30");
+   };
+
+   "lazy_json_raw_json_nested"_test = [] {
+      std::string buffer = R"({"user":{"profile":{"name":"Bob","email":"bob@test.com"}},"count":5})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // Get raw JSON for nested object
+      auto user_raw = (*result)["user"].raw_json();
+      expect(user_raw == R"({"profile":{"name":"Bob","email":"bob@test.com"}})");
+
+      auto profile_raw = (*result)["user"]["profile"].raw_json();
+      expect(profile_raw == R"({"name":"Bob","email":"bob@test.com"})");
+   };
+
+   "lazy_json_raw_json_array"_test = [] {
+      std::string buffer = R"({"items":[1,2,3],"name":"test"})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto items_raw = (*result)["items"].raw_json();
+      expect(items_raw == "[1,2,3]");
+
+      auto first_raw = (*result)["items"][0].raw_json();
+      expect(first_raw == "1");
+   };
+
+   "lazy_json_deserialize_struct"_test = [] {
+      std::string buffer = R"({
+         "user": {"name": "Alice", "age": 30, "active": true},
+         "metadata": {"version": 1}
+      })";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // Navigate lazily to "user", then deserialize into struct
+      auto user_view = (*result)["user"];
+      expect(!user_view.has_error());
+
+      // Get raw JSON and deserialize
+      auto user_json = user_view.raw_json();
+      lazy_test::User user{};
+      auto ec = glz::read_json(user, user_json);
+
+      expect(ec == glz::error_code::none) << glz::format_error(ec, user_json);
+      expect(user.name == "Alice");
+      expect(user.age == 30);
+      expect(user.active == true);
+   };
+
+   "lazy_json_deserialize_nested_struct"_test = [] {
+      std::string buffer = R"({
+         "people": [
+            {"name": "Alice", "address": {"city": "New York", "country": "USA"}},
+            {"name": "Bob", "address": {"city": "London", "country": "UK"}}
+         ],
+         "count": 2
+      })";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // Deserialize first person
+      auto first_person_json = (*result)["people"][0].raw_json();
+      lazy_test::Person alice{};
+      auto ec1 = glz::read_json(alice, first_person_json);
+      expect(ec1 == glz::error_code::none);
+      expect(alice.name == "Alice");
+      expect(alice.address.city == "New York");
+      expect(alice.address.country == "USA");
+
+      // Deserialize second person
+      auto second_person_json = (*result)["people"][1].raw_json();
+      lazy_test::Person bob{};
+      auto ec2 = glz::read_json(bob, second_person_json);
+      expect(ec2 == glz::error_code::none);
+      expect(bob.name == "Bob");
+      expect(bob.address.city == "London");
+      expect(bob.address.country == "UK");
+   };
+
+   "lazy_json_deserialize_array_element"_test = [] {
+      std::string buffer = R"({"items":[{"id":1,"value":"one"},{"id":2,"value":"two"},{"id":3,"value":"three"}]})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // Use indexed view for efficient random access, then deserialize specific elements
+      auto items = (*result)["items"].index();
+      expect(items.size() == 3u);
+
+      // Deserialize middle element
+      lazy_test::Item middle{};
+      auto ec = glz::read_json(middle, items[1].raw_json());
+      expect(ec == glz::error_code::none);
+      expect(middle.id == 2);
+      expect(middle.value == "two");
+   };
+
+   // ============================================================================
+   // read_into<T>() tests - efficient single-pass deserialization
+   // ============================================================================
+
+   "lazy_json_read_into_basic"_test = [] {
+      std::string buffer = R"({
+         "user": {"name": "Alice", "age": 30, "active": true},
+         "metadata": {"version": 1}
+      })";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // Navigate lazily to "user", then deserialize directly (single-pass)
+      lazy_test::User user{};
+      auto ec = (*result)["user"].read_into(user);
+
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(user.name == "Alice");
+      expect(user.age == 30);
+      expect(user.active == true);
+   };
+
+   "lazy_json_read_into_nested"_test = [] {
+      std::string buffer = R"({
+         "people": [
+            {"name": "Alice", "address": {"city": "New York", "country": "USA"}},
+            {"name": "Bob", "address": {"city": "London", "country": "UK"}}
+         ]
+      })";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // Deserialize directly using read_into (more efficient than raw_json + read_json)
+      lazy_test::Person alice{};
+      auto ec1 = (*result)["people"][0].read_into(alice);
+      expect(!ec1);
+      expect(alice.name == "Alice");
+      expect(alice.address.city == "New York");
+      expect(alice.address.country == "USA");
+
+      lazy_test::Person bob{};
+      auto ec2 = (*result)["people"][1].read_into(bob);
+      expect(!ec2);
+      expect(bob.name == "Bob");
+      expect(bob.address.city == "London");
+      expect(bob.address.country == "UK");
+   };
+
+   "lazy_json_read_into_indexed"_test = [] {
+      std::string buffer = R"({"items":[{"id":1,"value":"one"},{"id":2,"value":"two"},{"id":3,"value":"three"}]})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // Use indexed view for O(1) random access, then read_into for single-pass deserialize
+      auto items = (*result)["items"].index();
+      expect(items.size() == 3u);
+
+      // Deserialize last element directly
+      lazy_test::Item last{};
+      auto ec = items[2].read_into(last);
+      expect(!ec);
+      expect(last.id == 3);
+      expect(last.value == "three");
+   };
+
+   "lazy_json_read_into_primitive"_test = [] {
+      std::string buffer = R"({"count":42,"ratio":3.14,"name":"test","active":true})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // read_into works with primitive types too
+      int count{};
+      auto ec1 = (*result)["count"].read_into(count);
+      expect(!ec1);
+      expect(count == 42);
+
+      double ratio{};
+      auto ec2 = (*result)["ratio"].read_into(ratio);
+      expect(!ec2);
+      expect(std::abs(ratio - 3.14) < 0.001);
+
+      std::string name{};
+      auto ec3 = (*result)["name"].read_into(name);
+      expect(!ec3);
+      expect(name == "test");
+
+      bool active{};
+      auto ec4 = (*result)["active"].read_into(active);
+      expect(!ec4);
+      expect(active == true);
+   };
+
+   "lazy_json_read_into_array"_test = [] {
+      std::string buffer = R"({"data":[1,2,3,4,5]})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // read_into can deserialize arrays
+      std::vector<int> data{};
+      auto ec = (*result)["data"].read_into(data);
+      expect(!ec);
+      expect(data.size() == 5u);
+      expect(data[0] == 1);
+      expect(data[4] == 5);
+   };
+
+   "lazy_json_read_into_error_handling"_test = [] {
+      std::string buffer = R"({"name":"test","age":30})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // read_into on missing key should return error
+      lazy_test::User user{};
+      auto missing_view = (*result)["missing"];
+      expect(missing_view.has_error());
+
+      auto ec = missing_view.read_into(user);
+      expect(bool(ec)); // Should have error
+   };
+
+   "lazy_json_read_into_vs_raw_json"_test = [] {
+      // Demonstrates that read_into produces same results as raw_json + read_json
+      std::string buffer = R"({"user":{"name":"Test","age":25,"active":false}})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // Method 1: raw_json() + read_json() - two passes over data
+      lazy_test::User user1{};
+      auto raw = (*result)["user"].raw_json();
+      auto ec1 = glz::read_json(user1, raw);
+      expect(!ec1);
+
+      // Method 2: read_into() - single pass (more efficient)
+      lazy_test::User user2{};
+      auto ec2 = (*result)["user"].read_into(user2);
+      expect(!ec2);
+
+      // Both methods produce identical results
+      expect(user1.name == user2.name);
+      expect(user1.age == user2.age);
+      expect(user1.active == user2.active);
+   };
+
+   // ============================================================================
+   // glz::read_json(value, lazy_json_view) overload tests
+   // ============================================================================
+
+   "lazy_json_read_json_overload_basic"_test = [] {
+      std::string buffer = R"({
+         "user": {"name": "Alice", "age": 30, "active": true},
+         "metadata": {"version": 1}
+      })";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // Use glz::read_json directly with lazy_json_view
+      lazy_test::User user{};
+      auto ec = glz::read_json(user, (*result)["user"]);
+
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(user.name == "Alice");
+      expect(user.age == 30);
+      expect(user.active == true);
+   };
+
+   "lazy_json_read_json_overload_nested"_test = [] {
+      std::string buffer = R"({
+         "people": [
+            {"name": "Alice", "address": {"city": "New York", "country": "USA"}},
+            {"name": "Bob", "address": {"city": "London", "country": "UK"}}
+         ]
+      })";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // glz::read_json works with nested lazy views
+      lazy_test::Person alice{};
+      auto ec1 = glz::read_json(alice, (*result)["people"][0]);
+      expect(!ec1);
+      expect(alice.name == "Alice");
+      expect(alice.address.city == "New York");
+
+      lazy_test::Person bob{};
+      auto ec2 = glz::read_json(bob, (*result)["people"][1]);
+      expect(!ec2);
+      expect(bob.name == "Bob");
+      expect(bob.address.city == "London");
+   };
+
+   "lazy_json_read_json_overload_indexed"_test = [] {
+      std::string buffer = R"({"items":[{"id":1,"value":"one"},{"id":2,"value":"two"},{"id":3,"value":"three"}]})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto items = (*result)["items"].index();
+
+      // glz::read_json works with indexed views
+      lazy_test::Item item{};
+      auto ec = glz::read_json(item, items[1]);
+      expect(!ec);
+      expect(item.id == 2);
+      expect(item.value == "two");
+   };
+
+   "lazy_json_read_json_overload_primitives"_test = [] {
+      std::string buffer = R"({"count":42,"ratio":3.14,"name":"test","active":true})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // glz::read_json works with primitive types
+      int count{};
+      auto ec1 = glz::read_json(count, (*result)["count"]);
+      expect(!ec1);
+      expect(count == 42);
+
+      double ratio{};
+      auto ec2 = glz::read_json(ratio, (*result)["ratio"]);
+      expect(!ec2);
+      expect(std::abs(ratio - 3.14) < 0.001);
+
+      std::string name{};
+      auto ec3 = glz::read_json(name, (*result)["name"]);
+      expect(!ec3);
+      expect(name == "test");
+
+      bool active{};
+      auto ec4 = glz::read_json(active, (*result)["active"]);
+      expect(!ec4);
+      expect(active == true);
+   };
+
+   "lazy_json_read_json_overload_vector"_test = [] {
+      std::string buffer = R"({"data":[1,2,3,4,5]})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // glz::read_json works with containers
+      std::vector<int> data{};
+      auto ec = glz::read_json(data, (*result)["data"]);
+      expect(!ec);
+      expect(data.size() == 5u);
+      expect(data[0] == 1);
+      expect(data[4] == 5);
+   };
+
+   "lazy_json_read_json_overload_error"_test = [] {
+      std::string buffer = R"({"name":"test"})";
+
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      // glz::read_json on error view returns error
+      lazy_test::User user{};
+      auto missing_view = (*result)["missing"];
+      expect(missing_view.has_error());
+
+      auto ec = glz::read_json(user, missing_view);
+      expect(bool(ec)); // Should have error
    };
 };
 
