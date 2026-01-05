@@ -348,10 +348,16 @@ suite lazy_json_tests = [] {
       expect(result.has_value());
 
       auto& doc = *result;
-      // lazy_json uses raw key matching - use escape_unicode to get escaped form
+      // lazy_json uses raw key matching - must provide the escaped form as it appears in JSON
+#if GLZ_HAS_CONSTEXPR_STRING
       expect(doc[glz::escape_unicode<"key\nwith\nnewlines">].get<std::string>().value() == "value1");
       expect(doc[glz::escape_unicode<"key\twith\ttabs">].get<std::string>().value() == "value2");
       expect(doc[glz::escape_unicode<"key\"with\"quotes">].get<std::string>().value() == "value3");
+#else
+      expect(doc["key\\nwith\\nnewlines"].get<std::string>().value() == "value1");
+      expect(doc["key\\twith\\ttabs"].get<std::string>().value() == "value2");
+      expect(doc["key\\\"with\\\"quotes"].get<std::string>().value() == "value3");
+#endif
    };
 
    "lazy_json_unicode_keys"_test = [] {
@@ -375,10 +381,14 @@ suite lazy_json_tests = [] {
       expect(result.has_value());
 
       auto& doc = *result;
-      // lazy_json uses raw key matching - must match the literal escape sequences
-      // escape_unicode converts UTF-8 to escapes, so escape_unicode<"€"> gives \u20AC
+      // lazy_json uses raw key matching - must match the literal escape sequences as they appear in JSON
+      // Note: escape_unicode only escapes non-ASCII, so "Hello" stays as-is but "€" becomes \u20AC
       expect(doc["\\u0048\\u0065\\u006C\\u006C\\u006F"].get<std::string>().value() == "world");
+#if GLZ_HAS_CONSTEXPR_STRING
       expect(doc[glz::escape_unicode<"€">].get<std::string>().value() == "euro_sign");
+#else
+      expect(doc["\\u20AC"].get<std::string>().value() == "euro_sign");
+#endif
    };
 
    "lazy_json_complex_escapes"_test = [] {
