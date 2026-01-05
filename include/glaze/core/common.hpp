@@ -307,8 +307,15 @@ namespace glz
    concept boolean_like = std::same_as<std::remove_cvref_t<T>, bool> || std::same_as<T, std::vector<bool>::reference> ||
                           std::same_as<T, std::vector<bool>::const_reference>;
 
+   // Check if type opts out of automatic reflection
+   // Users can set glaze_reflect = false either:
+   // 1. On the type itself: static constexpr bool glaze_reflect = false;
+   // 2. Via glz::meta specialization: template<> struct glz::meta<T> { static constexpr bool glaze_reflect = false; };
+   // This allows users to define custom glz::to/from specializations without editing the library
    template <class T>
-   concept is_no_reflect = requires(T t) { requires std::remove_cvref_t<T>::glaze_reflect == false; };
+   concept is_no_reflect =
+      requires { requires std::remove_cvref_t<T>::glaze_reflect == false; } ||
+      requires { requires meta<std::decay_t<T>>::glaze_reflect == false; };
 
    // Check for types with internal glaze marker (e.g., invoke_update)
    template <class T>

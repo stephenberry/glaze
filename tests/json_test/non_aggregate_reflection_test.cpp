@@ -438,6 +438,92 @@ suite non_aggregate_reflection_tests = [] {
    };
 };
 
+// ============================================================================
+// Test: Opting out of automatic reflection
+// ============================================================================
+
+// Scenario 1: Type you control - use T::glaze_reflect = false
+class OwnedTypeWithCustomConcept
+{
+  public:
+   static constexpr bool glaze_reflect = false; // Opt out of P2996 reflection
+   using custom_marker = void;                  // Satisfies a user concept
+
+   int value = 0;
+   OwnedTypeWithCustomConcept() = default;
+   explicit OwnedTypeWithCustomConcept(int v) : value(v) {}
+};
+
+// Scenario 2: Third-party type - use glz::meta<T>::glaze_reflect = false
+// Simulating a third-party library type we can't modify
+namespace third_party
+{
+   class ExternalType
+   {
+     public:
+      using custom_marker = void;
+      int data = 0;
+      ExternalType() = default;
+      explicit ExternalType(int d) : data(d) {}
+   };
+}
+
+// Opt out via meta for the third-party type
+template <>
+struct glz::meta<third_party::ExternalType>
+{
+   static constexpr bool glaze_reflect = false;
+};
+
+// A user-defined concept for custom serialization
+template <class T>
+concept has_custom_marker = requires { typename T::custom_marker; };
+
+// User's concept-constrained partial specialization
+// Without opt-out, this would conflict with reflectable
+template <has_custom_marker T>
+struct glz::to<glz::JSON, T>
+{
+   template <auto Opts, class B>
+   GLZ_ALWAYS_INLINE static void op(const T& obj, glz::is_context auto&& ctx, B&& b, auto& ix) noexcept
+   {
+      // Custom format: just the numeric value as a string
+      glz::dump('"', b, ix);
+      glz::dump<"custom:">(b, ix);
+      if constexpr (requires { obj.value; }) {
+         glz::write_chars::op<Opts>(obj.value, ctx, b, ix);
+      }
+      else if constexpr (requires { obj.data; }) {
+         glz::write_chars::op<Opts>(obj.data, ctx, b, ix);
+      }
+      glz::dump('"', b, ix);
+   }
+};
+
+// Verify concepts work correctly
+static_assert(!glz::reflectable<OwnedTypeWithCustomConcept>, "Should not be reflectable (has glaze_reflect=false)");
+static_assert(!glz::reflectable<third_party::ExternalType>, "Should not be reflectable (meta has glaze_reflect=false)");
+static_assert(glz::is_no_reflect<OwnedTypeWithCustomConcept>, "Should satisfy is_no_reflect");
+static_assert(glz::is_no_reflect<third_party::ExternalType>, "Should satisfy is_no_reflect via meta");
+
+suite custom_serialization_tests = [] {
+   "owned type with concept-constrained serialization"_test = [] {
+      OwnedTypeWithCustomConcept obj(42);
+
+      std::string json;
+      expect(not glz::write_json(obj, json));
+      expect(json == "\"custom:42\"") << json;
+   };
+
+   "third-party type with concept-constrained serialization"_test = [] {
+      third_party::ExternalType obj(99);
+
+      std::string json;
+      expect(not glz::write_json(obj, json));
+      expect(json == "\"custom:99\"") << json;
+   };
+};
+
 #else // !GLZ_REFLECTION26
 
 suite non_aggregate_reflection_tests = [] {
