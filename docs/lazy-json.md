@@ -222,17 +222,6 @@ auto user = users[500];
 auto email = user["profile"]["email"].get<std::string_view>();
 ```
 
-### Memory Overhead
-
-The index stores one pointer (8 bytes) per element, plus one `string_view` (16 bytes) per key for objects:
-
-| Container | Elements | Index Memory |
-|-----------|----------|--------------|
-| Array | 1,000 | ~8 KB |
-| Array | 10,000 | ~80 KB |
-| Object | 1,000 | ~24 KB |
-| Object | 10,000 | ~240 KB |
-
 ### Performance Example
 
 For 10 random accesses to a 1000-element array:
@@ -241,9 +230,8 @@ For 10 random accesses to a 1000-element array:
 |----------|------------|-------|
 | `lazy_json` (no index) | 232 MB/s | Each access scans from start |
 | `lazy_json` (indexed) | 993 MB/s | Index built once, O(1) accesses |
-| simdjson | 914 MB/s | Full structural index upfront |
 
-The indexed approach is **327% faster** than non-indexed for this use case, and **9% faster than simdjson**.
+The indexed approach is **327% faster** than non-indexed for this use case.
 
 ## Optimizing Performance: Sequential Access
 
@@ -428,7 +416,7 @@ if (doc.root().contains("name")) { /* ... */ }
 
 ## Deserializing into Structs
 
-Use `read_into<T>()` to efficiently deserialize a lazy view directly into a typed struct:
+Use `glz::read_json()` to deserialize a lazy view directly into a typed struct:
 
 ```cpp
 struct User {
@@ -444,16 +432,15 @@ std::string json = R"({
 
 auto result = glz::lazy_json(json);
 if (result) {
-    // Navigate lazily to "user" - skips "metadata" entirely
-    auto user_view = (*result)["user"];
-
-    // Deserialize directly into struct (single-pass, most efficient)
+    // Navigate lazily to "user", then deserialize into struct
     User user{};
-    auto ec = user_view.read_into(user);
+    auto ec = glz::read_json(user, (*result)["user"]);
 
     // user.name == "Alice", user.age == 30, user.active == true
 }
 ```
+
+This works because Glaze provides a `read_json` overload that accepts `lazy_json_view` directly. The lazy navigation skips "metadata" entirely, and deserialization is single-pass (no double scanning).
 
 ### Why Use This Pattern?
 
@@ -480,37 +467,28 @@ if (result) {
     // Build index for O(1) random access
     auto people = (*result)["people"].index();
 
-    // Deserialize only the 500th person directly
+    // Deserialize only the 500th person
     Person person{};
-    people[500].read_into(person);
+    glz::read_json(person, people[500]);
 }
 ```
 
-### Deserialization Methods
+### Alternative: `read_into()` Member Function
 
-There are three ways to deserialize a lazy view:
+If you prefer member function syntax, use `read_into()`:
 
 ```cpp
-// Method 1: glz::read_json with lazy view - recommended, familiar API
-User user1{};
-glz::read_json(user1, doc["user"]);  // Single-pass, ~49% faster
-
-// Method 2: read_into() member function - equivalent to Method 1
-User user2{};
-doc["user"].read_into(user2);  // Single-pass, ~49% faster
-
-// Method 3: raw_json() + read_json() - double-pass, slower
-User user3{};
-glz::read_json(user3, doc["user"].raw_json());  // Scans value twice
+User user{};
+(*result)["user"].read_into(user);  // Equivalent to glz::read_json(user, view)
 ```
 
-**Performance**: Methods 1 and 2 are approximately **49% faster** than Method 3 because they avoid a double-scan of the data. The `raw_json()` method must first scan the value to find its end, then `read_json()` parses the same bytes again.
+### Performance Note
 
-**Use `glz::read_json(value, view)`** for the familiar Glaze API. Use `raw_json()` only when you need the raw JSON string itself (e.g., for logging, forwarding, or storage).
+Both `glz::read_json(value, view)` and `view.read_into(value)` are **~49% faster** than the older pattern of `glz::read_json(value, view.raw_json())`. The `raw_json()` approach requires scanning the value twice: once to find its extent, and once to parse it.
 
 ### The `raw_json()` Method
 
-Returns a `std::string_view` of the raw JSON bytes for any lazy view:
+Returns a `std::string_view` of the raw JSON bytes for any lazy view. Use this when you need the JSON text itself (for logging, forwarding, or storage):
 
 ```cpp
 auto result = glz::lazy_json(R"({"user": {"name": "Alice"}, "count": 5})");
@@ -522,7 +500,7 @@ auto result = glz::lazy_json(R"({"user": {"name": "Alice"}, "count": 5})");
 (*result)["count"].raw_json();         // 5
 ```
 
-> **Note**: For deserialization, prefer `read_into()` over `raw_json()` + `read_json()` for better performance.
+> **Note**: For deserialization, use `glz::read_json(value, view)` instead of `glz::read_json(value, view.raw_json())` for better performance.
 
 ## Writing Lazy Views
 
@@ -592,7 +570,7 @@ The lazy parser is designed for minimal memory overhead. A `lazy_json_view` is 4
 
 7. **Access few fields for best speedup**: Lazy JSON shines when you access 1-5 fields from a large document. For full deserialization, use `glz::read_json`.
 
-8. **Use `glz::read_json(value, view)` for struct deserialization**: When deserializing lazy views into structs, use `glz::read_json(obj, view)` or `view.read_into(obj)` instead of `glz::read_json(obj, view.raw_json())` - it's ~49% faster because it avoids a double scan.
+8. **Use `glz::read_json(value, view)` for struct deserialization**: Glaze provides an overload of `read_json` that accepts `lazy_json_view` directly. Use `glz::read_json(obj, view)` instead of `glz::read_json(obj, view.raw_json())` - it's ~49% faster because it avoids scanning the value twice.
 
 ## Partial Read vs Lazy JSON
 
