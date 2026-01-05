@@ -1585,8 +1585,7 @@ namespace glz
                else if constexpr (constructible<T>) {
                   value = meta_construct_v<T>();
                }
-               else if constexpr (std::is_pointer_v<T> &&
-                                  can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
+               else if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
                   if (!try_allocate_raw_pointer<Opts>(value, ctx)) {
                      return;
                   }

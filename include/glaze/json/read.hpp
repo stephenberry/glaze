@@ -3705,7 +3705,7 @@ namespace glz
                                              }
                                              else if constexpr (std::is_pointer_v<V> &&
                                                                 can_allocate_raw_pointer<Opts,
-                                                                                           std::decay_t<decltype(ctx)>>) {
+                                                                                         std::decay_t<decltype(ctx)>>) {
                                                 if (!try_allocate_raw_pointer<Opts>(v, ctx)) {
                                                    return;
                                                 }
@@ -3766,8 +3766,8 @@ namespace glz
                                                    v = meta_construct_v<V>();
                                                 }
                                                 else if constexpr (std::is_pointer_v<V> &&
-                                                                   can_allocate_raw_pointer<Opts,
-                                                                                              std::decay_t<decltype(ctx)>>) {
+                                                                   can_allocate_raw_pointer<
+                                                                      Opts, std::decay_t<decltype(ctx)>>) {
                                                    if (!try_allocate_raw_pointer<Opts>(v, ctx)) {
                                                       return;
                                                    }
@@ -3922,8 +3922,7 @@ namespace glz
                                           v = meta_construct_v<V>();
                                        }
                                        else if constexpr (std::is_pointer_v<V> &&
-                                                          can_allocate_raw_pointer<Opts,
-                                                                                     std::decay_t<decltype(ctx)>>) {
+                                                          can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
                                           if (!try_allocate_raw_pointer<Opts>(v, ctx)) {
                                              return;
                                           }
@@ -4100,8 +4099,7 @@ namespace glz
                                           v = meta_construct_v<V>();
                                        }
                                        else if constexpr (std::is_pointer_v<V> &&
-                                                          can_allocate_raw_pointer<Opts,
-                                                                                     std::decay_t<decltype(ctx)>>) {
+                                                          can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
                                           if (!try_allocate_raw_pointer<Opts>(v, ctx)) {
                                              return;
                                           }
