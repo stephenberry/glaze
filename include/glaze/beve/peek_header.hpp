@@ -12,22 +12,22 @@ namespace glz
    // Extension subtypes for beve_header
    namespace extension
    {
-      constexpr uint8_t delimiter = 0;    // Data delimiter (tag = 0x06)
-      constexpr uint8_t variant = 1;      // Variant type (tag = 0x0E), count = variant index
-      constexpr uint8_t complex = 3;      // Complex number/array (tag = 0x1E)
+      constexpr uint8_t delimiter = 0; // Data delimiter (tag = 0x06)
+      constexpr uint8_t variant = 1; // Variant type (tag = 0x0E), count = variant index
+      constexpr uint8_t complex = 3; // Complex number/array (tag = 0x1E)
       constexpr uint8_t complex_number = 0; // Single complex (count = 2)
-      constexpr uint8_t complex_array = 1;  // Array of complex (count = element count)
+      constexpr uint8_t complex_array = 1; // Array of complex (count = element count)
    }
 
    // Information extracted from a BEVE header without full deserialization
    struct beve_header
    {
-      uint8_t tag{};        // The raw tag byte
-      uint8_t type{};       // Base type: null(0), number(1), string(2), object(3), typed_array(4), generic_array(5),
-                            // extensions(6)
-      uint8_t ext_type{};   // For extensions: subtype (extension::variant, extension::complex, etc.)
-      size_t count{};       // Element/member count for containers, string length for strings, 1 for scalars
-                            // For variants: the variant index; for complex_number: 2; for complex_array: element count
+      uint8_t tag{}; // The raw tag byte
+      uint8_t type{}; // Base type: null(0), number(1), string(2), object(3), typed_array(4), generic_array(5),
+                      // extensions(6)
+      uint8_t ext_type{}; // For extensions: subtype (extension::variant, extension::complex, etc.)
+      size_t count{}; // Element/member count for containers, string length for strings, 1 for scalars
+                      // For variants: the variant index; for complex_number: 2; for complex_array: element count
       size_t header_size{}; // Total bytes consumed by tag + count encoding (for seeking past header)
    };
 
@@ -35,7 +35,7 @@ namespace glz
    namespace detail
    {
       [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t peek_compressed_int_size(const uint8_t* data,
-                                                                                 size_t available) noexcept
+                                                                                size_t available) noexcept
       {
          if (available == 0) return 0;
          const uint8_t config = data[0] & 0b000000'11;
@@ -43,7 +43,7 @@ namespace glz
       }
 
       [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t peek_compressed_int_value(const uint8_t* data,
-                                                                                  size_t available) noexcept
+                                                                                 size_t available) noexcept
       {
          if (available == 0) return 0;
 
