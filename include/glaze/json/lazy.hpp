@@ -195,7 +195,7 @@ namespace glz
      private:
       const lazy_document<Opts>* doc_{};
       const char* data_{};
-      mutable const char* parse_pos_{};  // Current scan position (advances on key access)
+      mutable const char* parse_pos_{}; // Current scan position (advances on key access)
       std::string_view key_{};
       error_code error_{error_code::none};
 
@@ -203,9 +203,7 @@ namespace glz
 
      public:
       lazy_json_view() = default;
-      lazy_json_view(const lazy_document<Opts>* doc, const char* data) noexcept
-         : doc_(doc), data_(data)
-      {}
+      lazy_json_view(const lazy_document<Opts>* doc, const char* data) noexcept : doc_(doc), data_(data) {}
 
       [[nodiscard]] static lazy_json_view make_error(error_code ec) noexcept { return lazy_json_view{ec}; }
 
@@ -327,7 +325,7 @@ namespace glz
       const char* json_{};
       size_t len_{};
       const char* root_data_{};
-      mutable lazy_json_view<Opts> root_view_{};  // Cached root view with parse_pos_
+      mutable lazy_json_view<Opts> root_view_{}; // Cached root view with parse_pos_
 
       friend struct lazy_json_view<Opts>;
       friend class lazy_iterator<Opts>;
@@ -337,17 +335,13 @@ namespace glz
       friend expected<lazy_document<O>, error_ctx> lazy_json(Buffer&&);
 
       // Helper to initialize root_view_ with correct doc_ pointer
-      void init_root_view() noexcept
-      {
-         root_view_ = lazy_json_view<Opts>{this, root_data_};
-      }
+      void init_root_view() noexcept { root_view_ = lazy_json_view<Opts>{this, root_data_}; }
 
      public:
       lazy_document() = default;
 
       // Copy constructor - fix doc_ pointer and preserve parse_pos_
-      lazy_document(const lazy_document& other)
-         : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
+      lazy_document(const lazy_document& other) : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
       {
          init_root_view();
          root_view_.parse_pos_ = other.root_view_.parse_pos_;
@@ -366,8 +360,7 @@ namespace glz
       }
 
       // Move constructor - fix doc_ pointer and transfer parse_pos_
-      lazy_document(lazy_document&& other) noexcept
-         : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
+      lazy_document(lazy_document&& other) noexcept : json_(other.json_), len_(other.len_), root_data_(other.root_data_)
       {
          init_root_view();
          root_view_.parse_pos_ = other.root_view_.parse_pos_;
@@ -386,15 +379,9 @@ namespace glz
       }
 
       /// @brief Get the root view (cached, enables progressive key scanning)
-      [[nodiscard]] lazy_json_view<Opts>& root() noexcept
-      {
-         return root_view_;
-      }
+      [[nodiscard]] lazy_json_view<Opts>& root() noexcept { return root_view_; }
 
-      [[nodiscard]] const lazy_json_view<Opts>& root() const noexcept
-      {
-         return root_view_;
-      }
+      [[nodiscard]] const lazy_json_view<Opts>& root() const noexcept { return root_view_; }
 
       [[nodiscard]] lazy_json_view<Opts> operator[](std::string_view key) const { return root_view_[key]; }
       [[nodiscard]] lazy_json_view<Opts> operator[](size_t index) const { return root_view_[index]; }
@@ -425,7 +412,7 @@ namespace glz
       char close_char_{};
       bool is_object_{};
       bool at_end_{true};
-      lazy_json_view<Opts> current_view_{};  // Stored view for parse_pos_ optimization
+      lazy_json_view<Opts> current_view_{}; // Stored view for parse_pos_ optimization
 
      public:
       using iterator_category = std::forward_iterator_tag;
@@ -593,9 +580,7 @@ namespace glz
       using reference = lazy_json_view<Opts>&;
 
       indexed_lazy_iterator() = default;
-      indexed_lazy_iterator(const indexed_lazy_view<Opts>* parent, size_t index)
-         : parent_(parent), index_(index)
-      {}
+      indexed_lazy_iterator(const indexed_lazy_view<Opts>* parent, size_t index) : parent_(parent), index_(index) {}
 
       reference operator*() const
       {
@@ -679,10 +664,7 @@ namespace glz
       bool operator>(const indexed_lazy_iterator& other) const { return index_ > other.index_; }
       bool operator>=(const indexed_lazy_iterator& other) const { return index_ >= other.index_; }
 
-      friend indexed_lazy_iterator operator+(difference_type n, const indexed_lazy_iterator& it)
-      {
-         return it + n;
-      }
+      friend indexed_lazy_iterator operator+(difference_type n, const indexed_lazy_iterator& it) { return it + n; }
    };
 
    // ============================================================================
@@ -819,7 +801,7 @@ namespace glz
 
          // Check if key matches
          if (k == key) {
-            parse_pos_ = p;  // Store value position (lazy - don't skip yet)
+            parse_pos_ = p; // Store value position (lazy - don't skip yet)
             return {doc_, p};
          }
 
@@ -860,7 +842,7 @@ namespace glz
 
             // Check if key matches
             if (k == key) {
-               parse_pos_ = p;  // Store value position (lazy - don't skip yet)
+               parse_pos_ = p; // Store value position (lazy - don't skip yet)
                return {doc_, p};
             }
 
@@ -964,7 +946,7 @@ namespace glz
 
    template <opts Opts>
    inline lazy_iterator<Opts>::lazy_iterator(const lazy_document<Opts>* doc, const char* container_start,
-                                              const char* end, bool is_object)
+                                             const char* end, bool is_object)
       : doc_(doc), json_end_(end), is_object_(is_object), at_end_(false)
    {
       close_char_ = is_object ? '}' : ']';
@@ -1349,13 +1331,12 @@ namespace glz
 
       // Validate first character is valid JSON start
       const char c = *p;
-      if (c != '{' && c != '[' && c != '"' && c != 't' && c != 'f' && c != 'n' &&
-          !is_digit(uint8_t(c)) && c != '-') {
+      if (c != '{' && c != '[' && c != '"' && c != 't' && c != 'f' && c != 'n' && !is_digit(uint8_t(c)) && c != '-') {
          return unexpected(error_ctx{0, error_code::syntax_error});
       }
 
       doc.root_data_ = p;
-      doc.init_root_view();  // Initialize cached root view
+      doc.init_root_view(); // Initialize cached root view
       return doc;
    }
 

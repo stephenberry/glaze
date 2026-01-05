@@ -9,23 +9,27 @@ using namespace ut;
 // Structs for deserialization tests (must be at namespace scope for reflection)
 namespace lazy_test
 {
-   struct User {
+   struct User
+   {
       std::string name{};
       int age{};
       bool active{};
    };
 
-   struct Address {
+   struct Address
+   {
       std::string city{};
       std::string country{};
    };
 
-   struct Person {
+   struct Person
+   {
       std::string name{};
       Address address{};
    };
 
-   struct Item {
+   struct Item
+   {
       int id{};
       std::string value{};
    };
@@ -256,13 +260,19 @@ suite lazy_json_tests = [] {
       // Sizes differ between 32-bit and 64-bit systems
       if constexpr (sizeof(void*) == 8) {
          // lazy_json_view is 48 bytes: doc* (8) + data* (8) + parse_pos* (8) + key_ (16) + error (4) + padding (4)
-         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 48u) << "lazy_json_view should be 48 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
-         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 48u) << "lazy_json_view should be 48 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
+         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 48u)
+            << "lazy_json_view should be 48 bytes on 64-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
+         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 48u)
+            << "lazy_json_view should be 48 bytes on 64-bit, got "
+            << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
       }
       else {
          // lazy_json_view is 24 bytes: doc* (4) + data* (4) + parse_pos* (4) + key_ (8) + error (4)
-         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 24u) << "lazy_json_view should be 24 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
-         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 24u) << "lazy_json_view should be 24 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
+         expect(sizeof(glz::lazy_json_view<glz::opts{}>) == 24u)
+            << "lazy_json_view should be 24 bytes on 32-bit, got " << sizeof(glz::lazy_json_view<glz::opts{}>);
+         expect(sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>) == 24u)
+            << "lazy_json_view should be 24 bytes on 32-bit, got "
+            << sizeof(glz::lazy_json_view<glz::opts{.null_terminated = false}>);
       }
    };
 
@@ -351,7 +361,8 @@ suite lazy_json_tests = [] {
 
    "lazy_json_all_escape_sequences"_test = [] {
       // All JSON escape sequences: \" \\ \/ \b \f \n \r \t
-      std::string buffer = R"({"quote":"\"","backslash":"\\","slash":"\/","backspace":"\b","formfeed":"\f","newline":"\n","return":"\r","tab":"\t"})";
+      std::string buffer =
+         R"({"quote":"\"","backslash":"\\","slash":"\/","backspace":"\b","formfeed":"\f","newline":"\n","return":"\r","tab":"\t"})";
       auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
@@ -368,7 +379,8 @@ suite lazy_json_tests = [] {
 
    "lazy_json_escaped_keys"_test = [] {
       // Keys with escape sequences - lazy_json matches raw JSON keys
-      std::string buffer = R"({"key\nwith\nnewlines":"value1","key\twith\ttabs":"value2","key\"with\"quotes":"value3"})";
+      std::string buffer =
+         R"({"key\nwith\nnewlines":"value1","key\twith\ttabs":"value2","key\"with\"quotes":"value3"})";
       auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 
@@ -418,7 +430,8 @@ suite lazy_json_tests = [] {
 
    "lazy_json_complex_escapes"_test = [] {
       // Complex combinations of escapes
-      std::string buffer = R"({"path":"C:\\Users\\test\\file.txt","json":"{\"nested\":\"value\"}","multi":"line1\nline2\ttabbed"})";
+      std::string buffer =
+         R"({"path":"C:\\Users\\test\\file.txt","json":"{\"nested\":\"value\"}","multi":"line1\nline2\ttabbed"})";
       auto result = glz::lazy_json(buffer);
       expect(result.has_value());
 

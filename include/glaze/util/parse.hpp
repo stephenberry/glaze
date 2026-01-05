@@ -92,11 +92,11 @@ namespace glz
 
    // Character classification for lazy JSON value skipping
    enum class lazy_char_type : uint8_t {
-      other = 0,   // whitespace, separators, literals - just advance
-      quote = 1,   // " - skip string
-      open = 2,    // { or [ - increase depth
-      close = 3,   // } or ] - decrease depth
-      number = 4   // - or 0-9 - skip number
+      other = 0, // whitespace, separators, literals - just advance
+      quote = 1, // " - skip string
+      open = 2, // { or [ - increase depth
+      close = 3, // } or ] - decrease depth
+      number = 4 // - or 0-9 - skip number
    };
 
    inline constexpr std::array<lazy_char_type, 256> lazy_char_class = [] {
