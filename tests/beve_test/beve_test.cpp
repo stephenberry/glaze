@@ -21,6 +21,7 @@
 #include "glaze/beve/key_traits.hpp"
 #include "glaze/beve/read.hpp"
 #include "glaze/beve/size.hpp"
+#include "glaze/beve/peek_header.hpp"
 #include "glaze/beve/write.hpp"
 #include "glaze/hardware/volatile_array.hpp"
 #include "glaze/json/json_ptr.hpp"
@@ -5128,6 +5129,485 @@ suite beve_size_tests = [] {
       auto buffer2 = glz::write_beve(obj).value();
       expect(predicted2 == buffer2.size())
          << "With values - Predicted: " << predicted2 << ", Actual " << buffer2.size();
+   };
+};
+
+// ============ beve_peek_header tests ============
+
+suite beve_peek_header_tests = [] {
+   "beve_peek_header empty buffer"_test = [] {
+      std::string buffer{};
+      auto result = glz::beve_peek_header(buffer);
+      expect(!result.has_value());
+      expect(result.error().ec == glz::error_code::unexpected_end);
+   };
+
+   "beve_peek_header null value"_test = [] {
+      std::nullptr_t null_val{};
+      auto buffer = glz::write_beve(null_val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::null);
+      expect(result->count == 0u);
+      expect(result->header_size == 1u);
+   };
+
+   "beve_peek_header boolean"_test = [] {
+      bool val = true;
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::null); // boolean shares null base type
+      expect(result->count == 1u);
+      expect(result->header_size == 1u);
+   };
+
+   "beve_peek_header number"_test = [] {
+      int32_t val = 42;
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::number);
+      expect(result->count == 1u);
+      expect(result->header_size == 1u);
+   };
+
+   "beve_peek_header string"_test = [] {
+      std::string val = "hello";
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::string);
+      expect(result->count == 5u); // string length
+      expect(result->header_size == 2u); // tag + 1-byte compressed int for length 5
+   };
+
+   "beve_peek_header long string"_test = [] {
+      std::string val(100, 'x'); // 100 character string
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::string);
+      expect(result->count == 100u);
+      expect(result->header_size == 3u); // tag + 2-byte compressed int for length 100
+   };
+
+   "beve_peek_header vector"_test = [] {
+      std::vector<int> val{1, 2, 3, 4, 5};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::typed_array);
+      expect(result->count == 5u);
+      expect(result->header_size == 2u); // tag + 1-byte compressed int
+   };
+
+   "beve_peek_header large vector"_test = [] {
+      std::vector<int> val(1000);
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::typed_array);
+      expect(result->count == 1000u);
+      expect(result->header_size == 3u); // tag + 2-byte compressed int
+   };
+
+   "beve_peek_header object"_test = [] {
+      my_struct val{};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::object);
+      // my_struct has 5 members in its glz::meta: i, d, hello, arr, include
+      expect(result->count == 5u);
+   };
+
+   "beve_peek_header map"_test = [] {
+      std::map<std::string, int> val{{"a", 1}, {"b", 2}, {"c", 3}};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::object);
+      expect(result->count == 3u);
+   };
+
+   "beve_peek_header generic array"_test = [] {
+      std::tuple<int, std::string, double> val{42, "hello", 3.14};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::generic_array);
+      expect(result->count == 3u);
+   };
+
+   "beve_peek_header variant"_test = [] {
+      std::variant<int, std::string> val = std::string("test");
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::extensions);
+      expect(result->ext_type == glz::extension::variant);
+      expect(result->count == 1u); // variant index (std::string is index 1)
+      expect(result->header_size == 2u); // tag + 1-byte compressed int for index 1
+   };
+
+   "beve_peek_header variant index 0"_test = [] {
+      std::variant<int, std::string> val = 42;
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::extensions);
+      expect(result->ext_type == glz::extension::variant);
+      expect(result->count == 0u); // variant index (int is index 0)
+   };
+
+   "beve_peek_header complex number"_test = [] {
+      std::complex<double> val{3.14, 2.71};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::extensions);
+      expect(result->ext_type == glz::extension::complex);
+      expect(result->count == 2u); // real + imag parts
+      expect(result->header_size == 2u); // tag + complex_header
+   };
+
+   "beve_peek_header complex array"_test = [] {
+      std::vector<std::complex<float>> val{{1.0f, 2.0f}, {3.0f, 4.0f}, {5.0f, 6.0f}};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::extensions);
+      expect(result->ext_type == glz::extension::complex);
+      expect(result->count == 3u); // 3 complex elements
+      expect(result->header_size == 3u); // tag + complex_header + 1-byte count
+   };
+
+   "beve_peek_header roundtrip with preallocation"_test = [] {
+      // Demonstrate the use case: peek to get size, preallocate, then read
+      std::vector<double> original{1.1, 2.2, 3.3, 4.4, 5.5};
+      auto buffer = glz::write_beve(original).value();
+
+      // Peek to get element count
+      auto header = glz::beve_peek_header(buffer);
+      expect(header.has_value());
+      expect(header->count == 5u);
+
+      // Now we know we need to allocate for 5 elements
+      std::vector<double> result;
+      result.reserve(header->count); // pre-allocate based on peeked size
+
+      expect(!glz::read_beve(result, buffer));
+      expect(result == original);
+   };
+
+   "beve_peek_header with raw pointer"_test = [] {
+      std::vector<int> val{1, 2, 3};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer.data(), buffer.size());
+      expect(result.has_value());
+      expect(result->type == glz::tag::typed_array);
+      expect(result->count == 3u);
+   };
+
+   "beve_peek_header truncated buffer"_test = [] {
+      std::vector<int> val(100);
+      auto buffer = glz::write_beve(val).value();
+
+      // Truncate to just the tag byte - should fail since we need the compressed int
+      std::string truncated(buffer.begin(), buffer.begin() + 1);
+      auto result = glz::beve_peek_header(truncated);
+      expect(!result.has_value());
+      expect(result.error().ec == glz::error_code::unexpected_end);
+   };
+
+   // ---- Additional coverage tests ----
+
+   "beve_peek_header different numeric types"_test = [] {
+      // Test various numeric types to verify tag parsing
+      {
+         double val = 3.14159;
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->type == glz::tag::number);
+         expect(result->count == 1u);
+         expect(result->header_size == 1u);
+      }
+      {
+         float val = 2.5f;
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->type == glz::tag::number);
+      }
+      {
+         uint64_t val = 12345678901234ULL;
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->type == glz::tag::number);
+      }
+      {
+         int8_t val = -42;
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->type == glz::tag::number);
+      }
+   };
+
+   "beve_peek_header empty containers"_test = [] {
+      {
+         std::vector<int> val{};
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->type == glz::tag::typed_array);
+         expect(result->count == 0u);
+      }
+      {
+         std::string val{};
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->type == glz::tag::string);
+         expect(result->count == 0u);
+      }
+      {
+         std::map<std::string, int> val{};
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->type == glz::tag::object);
+         expect(result->count == 0u);
+      }
+   };
+
+   "beve_peek_header compressed int boundaries"_test = [] {
+      // Test compressed int encoding boundaries
+      // 1-byte max: 63 elements
+      {
+         std::vector<uint8_t> val(63);
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->count == 63u);
+         expect(result->header_size == 2u); // tag + 1-byte compressed int
+      }
+      // 2-byte min: 64 elements
+      {
+         std::vector<uint8_t> val(64);
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->count == 64u);
+         expect(result->header_size == 3u); // tag + 2-byte compressed int
+      }
+      // 2-byte max: 16383 elements
+      {
+         std::vector<uint8_t> val(16383);
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->count == 16383u);
+         expect(result->header_size == 3u); // tag + 2-byte compressed int
+      }
+      // 4-byte min: 16384 elements
+      {
+         std::vector<uint8_t> val(16384);
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->count == 16384u);
+         expect(result->header_size == 5u); // tag + 4-byte compressed int
+      }
+   };
+
+   "beve_peek_header boolean values"_test = [] {
+      {
+         bool val = true;
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->type == glz::tag::null); // booleans share null base type
+         expect(result->count == 1u);
+      }
+      {
+         bool val = false;
+         auto buffer = glz::write_beve(val).value();
+         auto result = glz::beve_peek_header(buffer);
+         expect(result.has_value());
+         expect(result->type == glz::tag::null);
+         expect(result->count == 1u);
+      }
+   };
+
+   "beve_peek_header bool vector"_test = [] {
+      std::vector<bool> val{true, false, true, true, false};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::typed_array);
+      expect(result->count == 5u);
+   };
+
+   "beve_peek_header string vector"_test = [] {
+      std::vector<std::string> val{"hello", "world", "test"};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::typed_array);
+      expect(result->count == 3u);
+   };
+
+   "beve_peek_header complex float"_test = [] {
+      std::complex<float> val{1.5f, 2.5f};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::extensions);
+      expect(result->ext_type == glz::extension::complex);
+      expect(result->count == 2u);
+      expect(result->header_size == 2u);
+   };
+
+   "beve_peek_header large complex array"_test = [] {
+      std::vector<std::complex<double>> val(100);
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::extensions);
+      expect(result->ext_type == glz::extension::complex);
+      expect(result->count == 100u);
+      expect(result->header_size == 4u); // tag + complex_header + 2-byte count
+   };
+
+   "beve_peek_header variant with many alternatives"_test = [] {
+      std::variant<int, double, std::string, bool, float> val = 3.14; // index 1
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::extensions);
+      expect(result->ext_type == glz::extension::variant);
+      expect(result->count == 1u); // double is at index 1
+   };
+
+   "beve_peek_header nested tuple"_test = [] {
+      std::tuple<int, std::tuple<double, std::string>, bool> val{42, {3.14, "test"}, true};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::generic_array);
+      expect(result->count == 3u); // outer tuple has 3 elements
+   };
+
+   "beve_peek_header pair"_test = [] {
+      std::pair<std::string, int> val{"key", 42};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      // pairs serialize as objects with 1 key-value pair
+      expect(result->type == glz::tag::object);
+      expect(result->count == 1u);
+   };
+
+   "beve_peek_header optional with value"_test = [] {
+      std::optional<int> val = 42;
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      // optional with value serializes as the contained type
+      expect(result->type == glz::tag::number);
+   };
+
+   "beve_peek_header optional null"_test = [] {
+      std::optional<int> val = std::nullopt;
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::null);
+      expect(result->count == 0u);
+   };
+
+   "beve_peek_header array fixed size"_test = [] {
+      std::array<int, 5> val{1, 2, 3, 4, 5};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+      expect(result->type == glz::tag::typed_array);
+      expect(result->count == 5u);
+   };
+
+   "beve_peek_header header_size consistency"_test = [] {
+      // Verify header_size allows correct seeking past header
+      std::vector<double> val{1.1, 2.2, 3.3};
+      auto buffer = glz::write_beve(val).value();
+
+      auto result = glz::beve_peek_header(buffer);
+      expect(result.has_value());
+
+      // After header comes the data: 3 doubles = 24 bytes
+      size_t expected_data_size = 3 * sizeof(double);
+      expect(buffer.size() == result->header_size + expected_data_size);
+   };
+
+   "beve_peek_header error on truncated string header"_test = [] {
+      std::string val = "hello";
+      auto buffer = glz::write_beve(val).value();
+
+      // Truncate to just the tag byte
+      std::string truncated(buffer.begin(), buffer.begin() + 1);
+      auto result = glz::beve_peek_header(truncated);
+      expect(!result.has_value());
+      expect(result.error().ec == glz::error_code::unexpected_end);
+   };
+
+   "beve_peek_header error on truncated complex header"_test = [] {
+      std::complex<double> val{1.0, 2.0};
+      auto buffer = glz::write_beve(val).value();
+
+      // Truncate to just the extension tag byte
+      std::string truncated(buffer.begin(), buffer.begin() + 1);
+      auto result = glz::beve_peek_header(truncated);
+      expect(!result.has_value());
+      expect(result.error().ec == glz::error_code::unexpected_end);
+   };
+
+   "beve_peek_header error on truncated variant header"_test = [] {
+      std::variant<int, std::string> val = std::string("test");
+      auto buffer = glz::write_beve(val).value();
+
+      // Truncate to just the extension tag byte
+      std::string truncated(buffer.begin(), buffer.begin() + 1);
+      auto result = glz::beve_peek_header(truncated);
+      expect(!result.has_value());
+      expect(result.error().ec == glz::error_code::unexpected_end);
    };
 };
 
