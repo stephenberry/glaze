@@ -24,31 +24,53 @@ namespace glz
 
    namespace detail
    {
+      // Skip string - returns position after closing quote
+      template <opts Opts>
+      GLZ_ALWAYS_INLINE const char* skip_string_fast(const char* p, const char* end) noexcept
+      {
+         const char* const start = p;
+         ++p; // skip opening quote
+
+         // Find closing quote using memchr (SIMD-optimized in libc)
+         while (p < end) {
+            const char* q = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
+            if (!q) [[unlikely]] {
+               return end; // unclosed string
+            }
+
+            // Count preceding backslashes to check if escaped
+            size_t backslashes = 0;
+            const char* check = q - 1;
+            while (check > start && *check == '\\') {
+               ++backslashes;
+               --check;
+            }
+
+            p = q + 1;
+            if ((backslashes & 1) == 0) {
+               return p; // even backslashes = real quote
+            }
+            // odd backslashes = escaped quote, continue searching
+         }
+         return p;
+      }
+
       // Skip from current position to depth zero (end of enclosing container)
       // Used after partial scanning to find container end efficiently
       template <opts Opts>
       GLZ_ALWAYS_INLINE const char* skip_to_depth_zero(const char* p, const char* end, int depth) noexcept
       {
          using enum lazy_char_type;
-         while (p < end && depth > 0) {
+         while (depth > 0) {
+            if constexpr (Opts.null_terminated) {
+               if (*p == '\0') break;
+            }
+            else {
+               if (p >= end) break;
+            }
             switch (lazy_char_class[uint8_t(*p)]) {
             case quote:
-               ++p; // skip opening quote
-               while (p < end) {
-                  const char* q = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
-                  if (!q) {
-                     return end;
-                  }
-                  // Check for escape
-                  size_t backslashes = 0;
-                  const char* check = q - 1;
-                  while (check >= p && *check == '\\') {
-                     ++backslashes;
-                     --check;
-                  }
-                  p = q + 1;
-                  if ((backslashes & 1) == 0) break;
-               }
+               p = skip_string_fast<Opts>(p, end);
                break;
             case open:
                ++depth;
@@ -75,37 +97,6 @@ namespace glz
          return p;
       }
 
-      // Skip string - returns position after closing quote
-      template <opts Opts>
-      GLZ_ALWAYS_INLINE const char* skip_string_fast(const char* p, const char* end) noexcept
-      {
-         const char* const start = p;
-         ++p; // skip opening quote
-
-         // Find closing quote
-         while (p < end) {
-            const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
-            if (!quote) [[unlikely]] {
-               return end; // unclosed string
-            }
-
-            // Count preceding backslashes to check if escaped
-            size_t backslashes = 0;
-            const char* check = quote - 1;
-            while (check > start && *check == '\\') {
-               ++backslashes;
-               --check;
-            }
-
-            p = quote + 1;
-            if ((backslashes & 1) == 0) {
-               return p; // even backslashes = real quote
-            }
-            // odd backslashes = escaped quote, continue searching
-         }
-         return p;
-      }
-
       // Skip any JSON value - optimized container skip
       // Returns pointer after the value
       template <opts Opts>
@@ -126,7 +117,13 @@ namespace glz
             int depth = 1;
             ++p;
 
-            while (p < end && depth > 0) {
+            while (depth > 0) {
+               if constexpr (Opts.null_terminated) {
+                  if (*p == '\0') break;
+               }
+               else {
+                  if (p >= end) break;
+               }
                switch (lazy_char_class[uint8_t(*p)]) {
                case quote:
                   p = skip_string_fast<Opts>(p, end);
