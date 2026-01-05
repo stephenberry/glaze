@@ -12,9 +12,7 @@
 
 namespace glz
 {
-   // Forward declarations
-   template <opts Opts>
-   struct lazy_json_view;
+   // Forward declarations (needed for circular references)
    template <opts Opts>
    struct lazy_document;
    template <opts Opts>
@@ -32,14 +30,14 @@ namespace glz
          return has_char<'['>(chunk) | has_char<']'>(chunk) | has_char<'{'>(chunk) | has_char<'}'>(chunk);
       }
 
-      // Skip string using memchr (SIMD-optimized in libc) - returns position after closing quote
+      // Skip string - returns position after closing quote
       template <opts Opts>
       GLZ_ALWAYS_INLINE const char* skip_string_fast(const char* p, const char* end) noexcept
       {
          const char* const start = p;
          ++p; // skip opening quote
 
-         // Use memchr to find closing quote - typically SIMD-optimized
+         // Find closing quote
          while (p < end) {
             const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
             if (!quote) [[unlikely]] {
@@ -102,7 +100,7 @@ namespace glz
                }
 
                // For whitespace, comma, colon - just advance
-               if (whitespace_table[uint8_t(c)] || c == ',' || c == ':') {
+               if (whitespace_separator_table[uint8_t(c)]) {
                   ++p;
                   continue;
                }
@@ -159,7 +157,6 @@ namespace glz
     * @brief A truly lazy view into JSON data.
     *
     * No upfront processing - all navigation uses SWAR-accelerated scanning.
-    * This matches simdjson's on-demand approach.
     *
     * For objects, parse_pos_ tracks the current scan position to enable
     * efficient sequential key access (O(n) total instead of O(n²)).
@@ -249,8 +246,8 @@ namespace glz
          }
       }
 
-      // Parse a key from current position using memchr/strchr, return key and advance p
-      static std::string_view parse_key(const char*& p, [[maybe_unused]] const char* end) noexcept;
+      // Parse a key from current position, return key and advance p
+      static std::string_view parse_key(const char*& p, const char* end) noexcept;
    };
 
    // ============================================================================
@@ -414,69 +411,38 @@ namespace glz
    }
 
    template <opts Opts>
-   inline std::string_view lazy_json_view<Opts>::parse_key(const char*& p, [[maybe_unused]] const char* end) noexcept
+   inline std::string_view lazy_json_view<Opts>::parse_key(const char*& p, const char* end) noexcept
    {
       if (*p != '"') return {};
       const char* const start = p;
       ++p; // skip opening quote
       const char* key_start = p;
 
-      // Use memchr/strchr to find closing quote (SIMD-optimized in libc)
-      if constexpr (Opts.null_terminated) {
-         while (true) {
-            const char* quote = std::strchr(p, '"');
-            if (!quote) [[unlikely]] {
-               // Unclosed string - return what we have
-               std::string_view key{key_start, static_cast<size_t>(p - key_start)};
-               return key;
-            }
-
-            // Count preceding backslashes to check if escaped
-            size_t backslashes = 0;
-            const char* check = quote - 1;
-            while (check > start && *check == '\\') {
-               ++backslashes;
-               --check;
-            }
-
-            if ((backslashes & 1) == 0) {
-               // Even backslashes = real quote
-               std::string_view key{key_start, static_cast<size_t>(quote - key_start)};
-               p = quote + 1; // skip closing quote
-               return key;
-            }
-            // Odd backslashes = escaped quote, continue searching
-            p = quote + 1;
+      while (p < end) {
+         const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
+         if (!quote) [[unlikely]] {
+            p = end;
+            return std::string_view{key_start, static_cast<size_t>(end - key_start)};
          }
-      }
-      else {
-         while (p < end) {
-            const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
-            if (!quote) [[unlikely]] {
-               // Unclosed string - return what we have
-               p = end;
-               return std::string_view{key_start, static_cast<size_t>(end - key_start)};
-            }
 
-            // Count preceding backslashes to check if escaped
-            size_t backslashes = 0;
-            const char* check = quote - 1;
-            while (check > start && *check == '\\') {
-               ++backslashes;
-               --check;
-            }
-
-            if ((backslashes & 1) == 0) {
-               // Even backslashes = real quote
-               std::string_view key{key_start, static_cast<size_t>(quote - key_start)};
-               p = quote + 1; // skip closing quote
-               return key;
-            }
-            // Odd backslashes = escaped quote, continue searching
-            p = quote + 1;
+         // Count preceding backslashes to check if escaped
+         size_t backslashes = 0;
+         const char* check = quote - 1;
+         while (check > start && *check == '\\') {
+            ++backslashes;
+            --check;
          }
-         return std::string_view{key_start, static_cast<size_t>(p - key_start)};
+
+         if ((backslashes & 1) == 0) {
+            // Even backslashes = real quote
+            std::string_view key{key_start, static_cast<size_t>(quote - key_start)};
+            p = quote + 1; // skip closing quote
+            return key;
+         }
+         // Odd backslashes = escaped quote, continue searching
+         p = quote + 1;
       }
+      return std::string_view{key_start, static_cast<size_t>(p - key_start)};
    }
 
    template <opts Opts>

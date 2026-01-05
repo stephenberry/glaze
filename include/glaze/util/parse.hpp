@@ -78,6 +78,18 @@ namespace glz
       return t;
    }();
 
+   // Whitespace plus JSON separators (comma, colon)
+   inline constexpr std::array<bool, 256> whitespace_separator_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\t'] = true;
+      t['\r'] = true;
+      t[' '] = true;
+      t[','] = true;
+      t[':'] = true;
+      return t;
+   }();
+
    inline constexpr std::array<bool, 256> whitespace_comment_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;

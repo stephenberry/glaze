@@ -282,6 +282,130 @@ suite lazy_json_tests = [] {
       doc.reset_parse_pos();
       expect(doc["y"].get<int64_t>().value() == 20);
    };
+
+   "lazy_json_unicode_direct_utf8"_test = [] {
+      // Direct UTF-8 encoded characters in JSON
+      std::string buffer = R"({"greeting":"こんにちは","emoji":"🎉","mixed":"Hello 世界!"})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc["greeting"].get<std::string>().value() == "こんにちは");
+      expect(doc["emoji"].get<std::string>().value() == "🎉");
+      expect(doc["mixed"].get<std::string>().value() == "Hello 世界!");
+
+      // string_view returns raw UTF-8 bytes
+      expect(doc["greeting"].get<std::string_view>().value() == "こんにちは");
+   };
+
+   "lazy_json_unicode_escape_sequences"_test = [] {
+      // Unicode escape sequences
+      std::string buffer = R"({"jp":"\u3053\u3093\u306B\u3061\u306F","euro":"\u20AC100"})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc["jp"].get<std::string>().value() == "こんにちは");
+      expect(doc["euro"].get<std::string>().value() == "€100");
+   };
+
+   "lazy_json_surrogate_pairs"_test = [] {
+      // Surrogate pairs for characters outside BMP (emoji, etc.)
+      // 😀 = U+1F600 = \uD83D\uDE00 (surrogate pair)
+      // 🎉 = U+1F389 = \uD83C\uDF89
+      // 𝄞 = U+1D11E = \uD834\uDD1E (musical G clef)
+      std::string buffer = R"({"smile":"\uD83D\uDE00","party":"\uD83C\uDF89","clef":"\uD834\uDD1E"})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc["smile"].get<std::string>().value() == "😀");
+      expect(doc["party"].get<std::string>().value() == "🎉");
+      expect(doc["clef"].get<std::string>().value() == "𝄞");
+   };
+
+   "lazy_json_all_escape_sequences"_test = [] {
+      // All JSON escape sequences: \" \\ \/ \b \f \n \r \t
+      std::string buffer = R"({"quote":"\"","backslash":"\\","slash":"\/","backspace":"\b","formfeed":"\f","newline":"\n","return":"\r","tab":"\t"})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc["quote"].get<std::string>().value() == "\"");
+      expect(doc["backslash"].get<std::string>().value() == "\\");
+      expect(doc["slash"].get<std::string>().value() == "/");
+      expect(doc["backspace"].get<std::string>().value() == "\b");
+      expect(doc["formfeed"].get<std::string>().value() == "\f");
+      expect(doc["newline"].get<std::string>().value() == "\n");
+      expect(doc["return"].get<std::string>().value() == "\r");
+      expect(doc["tab"].get<std::string>().value() == "\t");
+   };
+
+   "lazy_json_escaped_keys"_test = [] {
+      // Keys with escape sequences - lazy_json matches raw JSON keys
+      std::string buffer = R"({"key\nwith\nnewlines":"value1","key\twith\ttabs":"value2","key\"with\"quotes":"value3"})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      // lazy_json uses raw key matching - use escape_unicode to get escaped form
+      expect(doc[glz::escape_unicode<"key\nwith\nnewlines">].get<std::string>().value() == "value1");
+      expect(doc[glz::escape_unicode<"key\twith\ttabs">].get<std::string>().value() == "value2");
+      expect(doc[glz::escape_unicode<"key\"with\"quotes">].get<std::string>().value() == "value3");
+   };
+
+   "lazy_json_unicode_keys"_test = [] {
+      // Unicode in keys (direct UTF-8)
+      std::string buffer = R"({"日本語キー":"japanese","émoji🎉":"with_emoji","Ключ":"russian"})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc["日本語キー"].get<std::string>().value() == "japanese");
+      expect(doc["émoji🎉"].get<std::string>().value() == "with_emoji");
+      expect(doc["Ключ"].get<std::string>().value() == "russian");
+   };
+
+   "lazy_json_unicode_escape_keys"_test = [] {
+      // Unicode escape sequences in keys - lazy_json matches raw JSON keys
+      // Note: \u0048\u0065\u006C\u006C\u006F spells "Hello" in unicode escapes
+      // Note: \u20AC is the Euro sign €
+      std::string buffer = R"({"\u0048\u0065\u006C\u006C\u006F":"world","\u20AC":"euro_sign"})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      // lazy_json uses raw key matching - must match the literal escape sequences
+      // escape_unicode converts UTF-8 to escapes, so escape_unicode<"€"> gives \u20AC
+      expect(doc["\\u0048\\u0065\\u006C\\u006C\\u006F"].get<std::string>().value() == "world");
+      expect(doc[glz::escape_unicode<"€">].get<std::string>().value() == "euro_sign");
+   };
+
+   "lazy_json_complex_escapes"_test = [] {
+      // Complex combinations of escapes
+      std::string buffer = R"({"path":"C:\\Users\\test\\file.txt","json":"{\"nested\":\"value\"}","multi":"line1\nline2\ttabbed"})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc["path"].get<std::string>().value() == "C:\\Users\\test\\file.txt");
+      expect(doc["json"].get<std::string>().value() == "{\"nested\":\"value\"}");
+      expect(doc["multi"].get<std::string>().value() == "line1\nline2\ttabbed");
+   };
+
+   "lazy_json_nested_unicode"_test = [] {
+      // Unicode in nested structures
+      std::string buffer = R"({"user":{"名前":"田中","city":"東京"},"tags":["日本","🇯🇵","test"]})";
+      auto result = glz::lazy_json(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc["user"]["名前"].get<std::string>().value() == "田中");
+      expect(doc["user"]["city"].get<std::string>().value() == "東京");
+      expect(doc["tags"][0].get<std::string>().value() == "日本");
+      expect(doc["tags"][1].get<std::string>().value() == "🇯🇵");
+      expect(doc["tags"][2].get<std::string>().value() == "test");
+   };
 };
 
 int main() { return 0; }
