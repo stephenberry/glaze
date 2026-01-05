@@ -938,6 +938,6 @@ namespace glz
    // Preset options for size-optimized builds (embedded systems)
    struct opts_size : opts
    {
-      optimization_level optimization_level = optimization_level::size;
+      glz::optimization_level optimization_level = glz::optimization_level::size;
    };
 }
