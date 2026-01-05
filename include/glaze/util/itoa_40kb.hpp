@@ -349,4 +349,5 @@ namespace glz
       *buf = '-';
       return to_chars_40kb(buf + (val < 0), static_cast<uint64_t>((static_cast<uint64_t>(val) ^ (val >> 63)) - (val >> 63)));
    }
+
 } // namespace glz

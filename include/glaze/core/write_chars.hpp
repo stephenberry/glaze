@@ -339,6 +339,13 @@ namespace glz
                static_assert(false_v<V>, "type is not supported");
             }
          }
+         else if constexpr (is_any_of<V, int8_t, uint8_t, int16_t, uint16_t>) {
+            // Small integers: always use to_chars (400B tables)
+            // The 40KB digit_quads table doesn't help for these small ranges
+            const auto start = reinterpret_cast<char*>(&b[ix]);
+            const auto end = glz::to_chars(start, value);
+            ix += size_t(end - start);
+         }
          else if constexpr (is_any_of<V, int32_t, uint32_t, int64_t, uint64_t>) {
             const auto start = reinterpret_cast<char*>(&b[ix]);
             if constexpr (is_size_optimized(Opts)) {
@@ -353,6 +360,7 @@ namespace glz
             }
          }
          else if constexpr (std::integral<V>) {
+            // Handle other integral types (char, wchar_t, etc.) by casting to sized types
             using X = std::decay_t<decltype(sized_integer_conversion<V>())>;
             const auto start = reinterpret_cast<char*>(&b[ix]);
             if constexpr (is_size_optimized(Opts)) {
@@ -361,7 +369,7 @@ namespace glz
                ix += size_t(end - start);
             }
             else {
-               // Normal mode: use to_chars_40kb (40KB digit_quads table)
+               // Normal mode: use to_chars_40kb
                const auto end = glz::to_chars_40kb(start, static_cast<X>(value));
                ix += size_t(end - start);
             }

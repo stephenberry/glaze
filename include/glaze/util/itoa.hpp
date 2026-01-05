@@ -240,6 +240,66 @@ namespace glz
       return to_chars(buf + (val < 0), uint64_t(val ^ (val >> 63)) - (val >> 63));
    }
 
+   // ==================== Small integer types ====================
+   // Optimized for 8-bit and 16-bit integers with compact code paths
+   // The 40KB digit_quads table doesn't help for these small ranges
+
+   // uint8_t: 0-255 (1-3 digits)
+   template <class T>
+      requires std::same_as<std::remove_cvref_t<T>, uint8_t>
+   inline char* to_chars(char* buf, T val) noexcept
+   {
+      using namespace itoa_impl;
+      if (val < 100) {
+         return u32_2(buf, val);
+      }
+      else {
+         // 100-255: 3 digits
+         const uint32_t q = val / 100;
+         *buf = char('0' + q);
+         std::memcpy(buf + 1, &digit_pairs[val - q * 100], 2);
+         return buf + 3;
+      }
+   }
+
+   // int8_t: -128 to 127 (1-4 chars)
+   template <class T>
+      requires std::same_as<std::remove_cvref_t<T>, int8_t>
+   inline char* to_chars(char* buf, T val) noexcept
+   {
+      *buf = '-';
+      return to_chars(buf + (val < 0), uint8_t(val ^ (val >> 7)) - (val >> 7));
+   }
+
+   // uint16_t: 0-65535 (1-5 digits)
+   template <class T>
+      requires std::same_as<std::remove_cvref_t<T>, uint16_t>
+   inline char* to_chars(char* buf, T val) noexcept
+   {
+      using namespace itoa_impl;
+      if (val < 100) {
+         return u32_2(buf, val);
+      }
+      else if (val < 10000) {
+         return u32_4(buf, val);
+      }
+      else {
+         // 10000-65535: 5 digits
+         const uint32_t q = val / 10000;
+         *buf = char('0' + q);
+         return u64_len_4(buf + 1, val - q * 10000);
+      }
+   }
+
+   // int16_t: -32768 to 32767 (1-6 chars)
+   template <class T>
+      requires std::same_as<std::remove_cvref_t<T>, int16_t>
+   inline char* to_chars(char* buf, T val) noexcept
+   {
+      *buf = '-';
+      return to_chars(buf + (val < 0), uint16_t(val ^ (val >> 15)) - (val >> 15));
+   }
+
    // Keep char_table in glz namespace for dtoa.hpp compatibility
    inline constexpr auto& char_table = itoa_impl::char_table;
 } // namespace glz
