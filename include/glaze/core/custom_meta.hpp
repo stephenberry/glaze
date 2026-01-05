@@ -51,8 +51,8 @@ namespace glz
          T,
          std::enable_if_t<has_custom_meta_v<T> &&
                           is_invocable_concrete<typename decltype(glz::meta<T>::value(std::declval<T&>()))::from_t> &&
-                          (glz::tuple_size_v<invocable_args_t<
-                              typename decltype(glz::meta<T>::value(std::declval<T&>()))::from_t>> >= 2)>>
+                          (glz::tuple_size_v<invocable_args_t<typename decltype(glz::meta<T>::value(
+                              std::declval<T&>()))::from_t>> >= 2)>>
       {
          static constexpr bool has_custom = true;
          using CustomT = decltype(glz::meta<T>::value(std::declval<T&>()));

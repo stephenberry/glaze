@@ -3339,16 +3339,14 @@ namespace glz
    concept variant_num_type = num_t<remove_meta_wrapper_t<T>> || mimics_num_t<T> || custom_num_t<T>;
 
    template <class T>
-   concept variant_str_type =
-      str_t<remove_meta_wrapper_t<T>> || glaze_enum_t<remove_meta_wrapper_t<T>> || glaze_enum_t<T> || mimics_str_t<T> ||
-      custom_str_t<T>;
+   concept variant_str_type = str_t<remove_meta_wrapper_t<T>> || glaze_enum_t<remove_meta_wrapper_t<T>> ||
+                              glaze_enum_t<T> || mimics_str_t<T> || custom_str_t<T>;
 
    template <class T>
    concept variant_object_type = json_object<T>;
 
    template <class T>
-   concept variant_array_type =
-      array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>;
+   concept variant_array_type = array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>;
 
    template <class T>
    concept variant_null_type = null_t<T>;
@@ -3358,19 +3356,26 @@ namespace glz
 
    // Type traits wrapping concepts for template template parameter use
    template <class T>
-   struct is_variant_bool : std::bool_constant<variant_bool_type<T>> {};
+   struct is_variant_bool : std::bool_constant<variant_bool_type<T>>
+   {};
    template <class T>
-   struct is_variant_num : std::bool_constant<variant_num_type<T>> {};
+   struct is_variant_num : std::bool_constant<variant_num_type<T>>
+   {};
    template <class T>
-   struct is_variant_str : std::bool_constant<variant_str_type<T>> {};
+   struct is_variant_str : std::bool_constant<variant_str_type<T>>
+   {};
    template <class T>
-   struct is_variant_object : std::bool_constant<variant_object_type<T>> {};
+   struct is_variant_object : std::bool_constant<variant_object_type<T>>
+   {};
    template <class T>
-   struct is_variant_array : std::bool_constant<variant_array_type<T>> {};
+   struct is_variant_array : std::bool_constant<variant_array_type<T>>
+   {};
    template <class T>
-   struct is_variant_null : std::bool_constant<variant_null_type<T>> {};
+   struct is_variant_null : std::bool_constant<variant_null_type<T>>
+   {};
    template <class T>
-   struct is_variant_nullable_object : std::bool_constant<variant_nullable_object_type<T>> {};
+   struct is_variant_nullable_object : std::bool_constant<variant_nullable_object_type<T>>
+   {};
 
    // Count types in variant matching a trait (fold expression, very fast to compile)
    template <class Variant, template <class> class Trait>
@@ -3380,13 +3385,13 @@ namespace glz
 
    // Get first index matching trait (or variant_npos if none)
    template <class Variant, template <class> class Trait>
-   constexpr size_t variant_first_index_v = []<class... Ts, size_t... Is>(
-                                               std::variant<Ts...>*, std::index_sequence<Is...>) {
-      size_t result = std::variant_npos;
-      // Short-circuit: stops at first match via || fold
-      (void)((Trait<Ts>::value && result == std::variant_npos ? (result = Is, true) : false) || ...);
-      return result;
-   }(static_cast<Variant*>(nullptr), std::make_index_sequence<std::variant_size_v<Variant>>{});
+   constexpr size_t variant_first_index_v =
+      []<class... Ts, size_t... Is>(std::variant<Ts...>*, std::index_sequence<Is...>) {
+         size_t result = std::variant_npos;
+         // Short-circuit: stops at first match via || fold
+         (void)((Trait<Ts>::value && result == std::variant_npos ? (result = Is, true) : false) || ...);
+         return result;
+      }(static_cast<Variant*>(nullptr), std::make_index_sequence<std::variant_size_v<Variant>>{});
 
    // Count types matching both category trait AND const/non-const filter
    template <class Variant, template <class> class Trait, bool IsConst>
