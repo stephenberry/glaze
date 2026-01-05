@@ -54,13 +54,14 @@ void test()
          std::abort();
       }
 
-      auto restored_size = glz::read<glz::opts_size{}, S>(outbuf_size);
-      if (!restored_size) [[unlikely]] {
+      S restored_size{};
+      const auto readec_size = glz::read<glz::opts_size{}>(restored_size, outbuf_size);
+      if (readec_size) [[unlikely]] {
          std::cerr << "failed parsing " << outbuf_size << " (size mode)\n";
          std::abort();
       }
 
-      if (const auto r = restored_size.value().value; r != s.value) [[unlikely]] {
+      if (const auto r = restored_size.value; r != s.value) [[unlikely]] {
          std::cerr << "failed roundtrip (size mode), got " << r << " instead of " << s.value << //
             " (diff is " << r - s.value << ") when parsing " << outbuf_size << '\n';
          std::abort();

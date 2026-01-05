@@ -36,9 +36,10 @@ void test(const uint8_t* Data, size_t Size)
    // Test size mode (to_chars - 400B tables)
    {
       auto str = glz::write<glz::opts_size{}>(s).value_or(std::string{});
-      [[maybe_unused]] auto restored = glz::read<glz::opts_size{}, S>(str);
-      assert(restored);
-      assert(restored.value().value == s.value);
+      S restored{};
+      [[maybe_unused]] auto ec = glz::read<glz::opts_size{}>(restored, str);
+      assert(!ec);
+      assert(restored.value == s.value);
    }
 }
 
