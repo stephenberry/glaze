@@ -29,35 +29,36 @@ namespace glz
       template <opts Opts>
       GLZ_ALWAYS_INLINE const char* skip_to_depth_zero(const char* p, const char* end, int depth) noexcept
       {
+         using enum lazy_char_type;
          while (p < end && depth > 0) {
             switch (lazy_char_class[uint8_t(*p)]) {
-            case 1: // quote - skip string
+            case quote:
                ++p; // skip opening quote
                while (p < end) {
-                  const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
-                  if (!quote) {
+                  const char* q = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
+                  if (!q) {
                      return end;
                   }
                   // Check for escape
                   size_t backslashes = 0;
-                  const char* check = quote - 1;
+                  const char* check = q - 1;
                   while (check >= p && *check == '\\') {
                      ++backslashes;
                      --check;
                   }
-                  p = quote + 1;
+                  p = q + 1;
                   if ((backslashes & 1) == 0) break;
                }
                break;
-            case 2: // open bracket
+            case open:
                ++depth;
                ++p;
                break;
-            case 3: // close bracket
+            case close:
                --depth;
                ++p;
                break;
-            case 4: // number
+            case number:
                ++p;
                if constexpr (Opts.null_terminated) {
                   while (numeric_table[uint8_t(*p)]) ++p;
@@ -110,6 +111,7 @@ namespace glz
       template <opts Opts>
       GLZ_ALWAYS_INLINE const char* skip_value_lazy(const char* p, const char* end) noexcept
       {
+         using enum lazy_char_type;
          switch (*p) {
          case '"':
             return skip_string_fast<Opts>(p, end);
@@ -125,20 +127,19 @@ namespace glz
             ++p;
 
             while (p < end && depth > 0) {
-               // Use character classification table for better branch prediction
                switch (lazy_char_class[uint8_t(*p)]) {
-               case 1: // quote - skip string
+               case quote:
                   p = skip_string_fast<Opts>(p, end);
                   break;
-               case 2: // open bracket
+               case open:
                   ++depth;
                   ++p;
                   break;
-               case 3: // close bracket
+               case close:
                   --depth;
                   ++p;
                   break;
-               case 4: // number
+               case number:
                   ++p;
                   if constexpr (Opts.null_terminated) {
                      while (numeric_table[uint8_t(*p)]) ++p;
@@ -147,7 +148,7 @@ namespace glz
                      while (p < end && numeric_table[uint8_t(*p)]) ++p;
                   }
                   break;
-               default: // whitespace, separators, literals (t/f/n)
+               default:
                   ++p;
                   break;
                }

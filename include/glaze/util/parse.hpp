@@ -91,25 +91,33 @@ namespace glz
    }();
 
    // Character classification for lazy JSON value skipping
-   // 0: other (advance), 1: quote, 2: open bracket, 3: close bracket, 4: number start
-   inline constexpr std::array<uint8_t, 256> lazy_char_class = [] {
-      std::array<uint8_t, 256> t{};
-      t['"'] = 1;  // quote - skip string
-      t['{'] = 2;  // open - depth++
-      t['['] = 2;
-      t['}'] = 3;  // close - depth--
-      t[']'] = 3;
-      t['-'] = 4;  // number start
-      t['0'] = 4;
-      t['1'] = 4;
-      t['2'] = 4;
-      t['3'] = 4;
-      t['4'] = 4;
-      t['5'] = 4;
-      t['6'] = 4;
-      t['7'] = 4;
-      t['8'] = 4;
-      t['9'] = 4;
+   enum class lazy_char_type : uint8_t {
+      other = 0,   // whitespace, separators, literals - just advance
+      quote = 1,   // " - skip string
+      open = 2,    // { or [ - increase depth
+      close = 3,   // } or ] - decrease depth
+      number = 4   // - or 0-9 - skip number
+   };
+
+   inline constexpr std::array<lazy_char_type, 256> lazy_char_class = [] {
+      using enum lazy_char_type;
+      std::array<lazy_char_type, 256> t{};
+      t['"'] = quote;
+      t['{'] = open;
+      t['['] = open;
+      t['}'] = close;
+      t[']'] = close;
+      t['-'] = number;
+      t['0'] = number;
+      t['1'] = number;
+      t['2'] = number;
+      t['3'] = number;
+      t['4'] = number;
+      t['5'] = number;
+      t['6'] = number;
+      t['7'] = number;
+      t['8'] = number;
+      t['9'] = number;
       return t;
    }();
 
