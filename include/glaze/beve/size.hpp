@@ -7,6 +7,7 @@
 #include "glaze/beve/key_traits.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
+#include "glaze/util/expected.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/variant.hpp"
 

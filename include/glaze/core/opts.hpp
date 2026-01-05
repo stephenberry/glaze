@@ -6,6 +6,9 @@
 #include <cstdint>
 #include <type_traits>
 
+#include "glaze/core/context.hpp"
+#include "glaze/core/optimization_level.hpp"
+#include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
 namespace glz
@@ -207,6 +210,12 @@ namespace glz
    // This eliminates 256-byte hash tables per struct type, significantly reducing binary size.
    // Trades O(1) hash lookup for O(N) linear search - faster for small structs (< ~8 fields)
    // due to cache effects, and much smaller binaries for embedded systems.
+
+   // ---
+   // optimization_level optimization_level = optimization_level::normal;
+   // Controls speed vs binary size tradeoff. See glaze/core/optimization_level.hpp for details.
+   // Levels: size, normal (default)
+   // Use preset struct: glz::opts_size
 
    // ---
    // size_t max_string_length = 0;
@@ -455,6 +464,10 @@ namespace glz
          return Opts.linear_search;
       }
       else {
+         // In size mode, default to linear search (no hash tables)
+         if constexpr (requires { Opts.optimization_level; }) {
+            return Opts.optimization_level == optimization_level::size;
+         }
          return false;
       }
    }
@@ -495,6 +508,47 @@ namespace glz
          return Opts.allocate_raw_pointers;
       }
       else {
+         return false;
+      }
+   }
+
+   consteval optimization_level check_optimization_level(auto&& Opts)
+   {
+      if constexpr (requires { Opts.optimization_level; }) {
+         return Opts.optimization_level;
+      }
+      else {
+         return optimization_level::normal;
+      }
+   }
+
+   consteval bool is_size_optimized(auto&& Opts) { return check_optimization_level(Opts) == optimization_level::size; }
+
+   // Check if raw pointer allocation is possible (either compile-time or runtime option available)
+   template <auto Opts, class Ctx>
+   concept can_allocate_raw_pointer = check_allocate_raw_pointers(Opts) || has_runtime_allocate_raw_pointers<Ctx>;
+
+   // Helper to attempt allocation of a null raw pointer during deserialization.
+   // Compile-time allocate_raw_pointers option takes precedence over runtime context.
+   // Returns true on success, false on failure (with ctx.error set to invalid_nullable_read).
+   // Only call this when can_allocate_raw_pointer<Opts, Ctx> is satisfied.
+   template <auto Opts, class Ptr, class Ctx>
+      requires(std::is_pointer_v<std::remove_cvref_t<Ptr>> && can_allocate_raw_pointer<Opts, std::decay_t<Ctx>>)
+   GLZ_ALWAYS_INLINE constexpr bool try_allocate_raw_pointer(Ptr& value, Ctx& ctx) noexcept
+   {
+      using PtrType = std::remove_cvref_t<Ptr>;
+      using PointedType = std::remove_pointer_t<PtrType>;
+
+      if constexpr (check_allocate_raw_pointers(Opts)) {
+         value = new PointedType{};
+         return true;
+      }
+      else if constexpr (has_runtime_allocate_raw_pointers<std::decay_t<Ctx>>) {
+         if (ctx.allocate_raw_pointers) {
+            value = new PointedType{};
+            return true;
+         }
+         ctx.error = error_code::invalid_nullable_read;
          return false;
       }
    }
@@ -877,4 +931,10 @@ namespace glz
    template <uint32_t Format>
    struct serialize_partial
    {};
+
+   // Preset options for size-optimized builds (embedded systems)
+   struct opts_size : opts
+   {
+      glz::optimization_level optimization_level = glz::optimization_level::size;
+   };
 }
