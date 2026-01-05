@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/context.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/wrappers.hpp"
 #include "glaze/core/write.hpp"
@@ -36,8 +37,14 @@ namespace glz
                   else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                      parse<Format>::template op<Opts>(input, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                     if constexpr (Opts.null_terminated) {
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else {
+                        if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]]
+                           return;
+                     }
                      (value.val.*(value.from))(std::move(input));
                   }
                   else {
@@ -65,8 +72,14 @@ namespace glz
                      else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                         std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                         parse<Format>::template op<Opts>(input, ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
+                        if constexpr (Opts.null_terminated) {
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                        }
+                        else {
+                           if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]]
+                              return;
+                        }
                         from(std::move(input));
                      }
                      else {
@@ -103,8 +116,14 @@ namespace glz
                   else if constexpr (N > 1) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
                      parse<Format>::template op<Opts>(input, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                     if constexpr (Opts.null_terminated) {
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else {
+                        if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]]
+                           return;
+                     }
                      if constexpr (N == 2) {
                         value.from(value.val, std::move(input));
                      }
