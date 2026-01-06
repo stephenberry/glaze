@@ -1646,7 +1646,7 @@ namespace glz
                            auto& new_element = member_obj.emplace_back();
                            using element_type = std::decay_t<decltype(new_element)>;
                            from<TOML, element_type>::template op<toml::is_internal_on<Opts>()>(new_element, ctx, it,
-                                                                                              end);
+                                                                                               end);
                            success = !bool(ctx.error);
                         }
                         else {
@@ -1663,8 +1663,7 @@ namespace glz
                               // Need to add an element first
                               member_obj.emplace_back();
                            }
-                           success =
-                              resolve_array_of_tables<Opts>(member_obj.back(), path.subspan(1), ctx, it, end);
+                           success = resolve_array_of_tables<Opts>(member_obj.back(), path.subspan(1), ctx, it, end);
                         }
                         else if constexpr (glz::reflectable<member_type> || glz::glaze_object_t<member_type>) {
                            success = resolve_array_of_tables<Opts>(member_obj, path.subspan(1), ctx, it, end);

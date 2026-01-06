@@ -628,8 +628,7 @@ namespace glz
    template <auto MemPtr>
    inline constexpr decltype(auto) inline_table_impl() noexcept
    {
-      return
-         [](auto&& val) { return inline_table_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      return [](auto&& val) { return inline_table_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
 
    // Usage: glz::inline_table<&T::member>
@@ -638,10 +637,12 @@ namespace glz
 
    // Detect inline_table wrapper
    template <class T>
-   struct is_inline_table : std::false_type {};
+   struct is_inline_table : std::false_type
+   {};
 
    template <class T>
-   struct is_inline_table<inline_table_t<T>> : std::true_type {};
+   struct is_inline_table<inline_table_t<T>> : std::true_type
+   {};
 
    template <class T>
    inline constexpr bool is_inline_table_v = is_inline_table<std::remove_cvref_t<T>>::value;
@@ -1090,8 +1091,8 @@ namespace glz
 
          // Only process scalar fields in this pass (not objects or arrays of objects)
          // Exception: in inline_mode, arrays of objects are written as inline arrays
-         constexpr bool is_scalar = !(glaze_object_t<val_t> || reflectable<val_t>) &&
-                                    (!is_array_of_objects_v<val_t> || inline_mode);
+         constexpr bool is_scalar =
+            !(glaze_object_t<val_t> || reflectable<val_t>) && (!is_array_of_objects_v<val_t> || inline_mode);
          if constexpr (is_scalar) {
             write_scalar_field.template operator()<I>();
          }

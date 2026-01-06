@@ -2651,7 +2651,7 @@ sku = 284758393
       // Verify nested arrays use TOML-spec-compliant [[parent.child]] syntax
       expect(buffer.find("[[fruits]]") != std::string::npos);
       expect(buffer.find("name = \"apple\"") != std::string::npos);
-      expect(buffer.find("[[fruits.varieties]]") != std::string::npos);  // Full dotted path
+      expect(buffer.find("[[fruits.varieties]]") != std::string::npos); // Full dotted path
       expect(buffer.find("name = \"red delicious\"") != std::string::npos);
       expect(buffer.find("name = \"granny smith\"") != std::string::npos);
    };
@@ -2831,7 +2831,7 @@ name = "NotArray"
       original.fruits = {
          {"apple", {{"red delicious"}, {"granny smith"}, {"fuji"}}},
          {"banana", {{"cavendish"}}},
-         {"orange", {}}  // Empty varieties
+         {"orange", {}} // Empty varieties
       };
 
       std::string buffer{};
@@ -2908,8 +2908,8 @@ sku = 200
       expect(c.products[0].name == "Full");
       expect(c.products[0].sku == 100);
       expect(c.products[1].name == "NameOnly");
-      expect(c.products[1].sku == 0);  // Default
-      expect(c.products[2].name == "");  // Default
+      expect(c.products[1].sku == 0); // Default
+      expect(c.products[2].name == ""); // Default
       expect(c.products[2].sku == 200);
    };
 
@@ -2969,18 +2969,16 @@ struct glz::meta<inline_catalog>
 struct mixed_inline_and_aot_container
 {
    std::string title{};
-   std::vector<inline_product> inline_items{};  // Will use inline_table
-   std::vector<product> aot_items{};  // Will use array-of-tables
+   std::vector<inline_product> inline_items{}; // Will use inline_table
+   std::vector<product> aot_items{}; // Will use array-of-tables
 };
 
 template <>
 struct glz::meta<mixed_inline_and_aot_container>
 {
    using T = mixed_inline_and_aot_container;
-   static constexpr auto value = object(
-      &T::title,
-      "inline_items", glz::inline_table<&T::inline_items>,  // Inline syntax
-      &T::aot_items  // Array-of-tables syntax
+   static constexpr auto value = object(&T::title, "inline_items", glz::inline_table<&T::inline_items>, // Inline syntax
+                                        &T::aot_items // Array-of-tables syntax
    );
 };
 
