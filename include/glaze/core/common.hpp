@@ -16,6 +16,7 @@
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/array_apply.hpp"
 #include "glaze/core/cast.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/error_category.hpp"
 #include "glaze/core/feature_test.hpp"
@@ -441,7 +442,7 @@ namespace glz
       !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> ||
         range<T> || pair_t<T> || null_t<T> || str_t<T> || bool_t<T> ||
         tuple_t<T> || is_std_tuple<T> || is_variant<T> || is_reference_wrapper<T> || complex_t<T> ||
-        func_t<T> || is_bitset<T> || has_glaze_marker<T>);
+        func_t<T> || is_bitset<T> || has_glaze_marker<T> || is_duration<T> || is_time_point<T>);
 #else
    template <class T>
    concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
