@@ -1049,6 +1049,137 @@ suite lazy_beve_tests = [] {
       expect(doc.is_array());
       expect(doc.root().size() == 3u);
    };
+
+   // ============================================================================
+   // Size accessor tests
+   // ============================================================================
+
+   "lazy_beve_size_accessor_string"_test = [] {
+      std::map<std::string, std::string> data{{"username", "alice_wonderland"}, {"email", "alice@example.com"}};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(data, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // Test the size accessor syntax: doc.size["key"]
+      expect(result->size["username"] == 16u); // "alice_wonderland" is 16 chars
+      expect(result->size["email"] == 17u);    // "alice@example.com" is 17 chars
+   };
+
+   "lazy_beve_size_accessor_array"_test = [] {
+      std::map<std::string, std::vector<int>> data{{"items", {1, 2, 3, 4, 5}}};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(data, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // Size of array field returns element count
+      expect(result->size["items"] == 5u);
+   };
+
+   "lazy_beve_size_accessor_number"_test = [] {
+      std::map<std::string, int> data{{"count", 42}};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(data, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // Numbers return 0 for value_size
+      expect(result->size["count"] == 0u);
+   };
+
+   "lazy_beve_size_method_string"_test = [] {
+      lazy_beve_test::User user{"Bob", 25, true};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(user, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // Test size() method directly on string field
+      expect(result->root()["name"].size() == 3u); // "Bob"
+   };
+
+   "lazy_beve_size_accessor_index"_test = [] {
+      std::vector<std::string> strings{"hello", "world", "test"};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(strings, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // Test size accessor with index: result->size[i]
+      expect(result->size[0] == 5u); // "hello"
+      expect(result->size[1] == 5u); // "world"
+      expect(result->size[2] == 4u); // "test"
+   };
+
+   "lazy_beve_size_object_keys"_test = [] {
+      std::map<std::string, int> data{{"a", 1}, {"b", 2}, {"c", 3}};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(data, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // size() on object returns key count
+      expect(result->root().size() == 3u);
+   };
+
+   "lazy_beve_size_nested"_test = [] {
+      std::map<std::string, std::map<std::string, std::string>> data{
+         {"outer", {{"inner", "value123"}}}};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(data, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // Nested access
+      expect(result->root()["outer"]["inner"].size() == 8u); // "value123"
+      expect(result->root()["outer"].size() == 1u);          // 1 key in inner object
+   };
+
+   "lazy_beve_size_typed_string_array"_test = [] {
+      std::vector<std::string> strings{"alpha", "beta", "gamma"};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(strings, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+      expect(result->root().is_typed_array());
+
+      // Test size via indexed view (uses synthetic tags)
+      auto indexed = result->root().index();
+      expect(indexed[0].size() == 5u); // "alpha"
+      expect(indexed[1].size() == 4u); // "beta"
+      expect(indexed[2].size() == 5u); // "gamma"
+   };
+
+   "lazy_beve_size_boolean_null"_test = [] {
+      std::map<std::string, std::optional<bool>> data{{"flag", true}, {"empty", std::nullopt}};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(data, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // Booleans and nulls return 0 for size
+      expect(result->size["flag"] == 0u);
+      expect(result->size["empty"] == 0u);
+   };
 };
 
 int main() { return 0; }

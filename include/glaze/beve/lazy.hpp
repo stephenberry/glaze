@@ -304,7 +304,8 @@ namespace glz
      public:
       lazy_beve_document() = default;
 
-      lazy_beve_document(const lazy_beve_document& other) : beve_(other.beve_), len_(other.len_), root_data_(other.root_data_)
+      lazy_beve_document(const lazy_beve_document& other)
+         : beve_(other.beve_), len_(other.len_), root_data_(other.root_data_), size{this}
       {
          init_root_view();
          root_view_.parse_pos_ = other.root_view_.parse_pos_;
@@ -318,12 +319,13 @@ namespace glz
             root_data_ = other.root_data_;
             init_root_view();
             root_view_.parse_pos_ = other.root_view_.parse_pos_;
+            size = {this};
          }
          return *this;
       }
 
       lazy_beve_document(lazy_beve_document&& other) noexcept
-         : beve_(other.beve_), len_(other.len_), root_data_(other.root_data_)
+         : beve_(other.beve_), len_(other.len_), root_data_(other.root_data_), size{this}
       {
          init_root_view();
          root_view_.parse_pos_ = other.root_view_.parse_pos_;
@@ -337,6 +339,7 @@ namespace glz
             root_data_ = other.root_data_;
             init_root_view();
             root_view_.parse_pos_ = other.root_view_.parse_pos_;
+            size = {this};
          }
          return *this;
       }
@@ -369,6 +372,19 @@ namespace glz
       [[nodiscard]] size_t beve_size() const noexcept { return len_; }
 
       void reset_parse_pos() noexcept { root_view_.parse_pos_ = nullptr; }
+
+      /// @brief Size accessor proxy for getting value sizes without parsing
+      /// Usage: doc.size["key"] returns the string length or element count
+      struct size_accessor
+      {
+         const lazy_beve_document* doc;
+
+         [[nodiscard]] size_t operator[](std::string_view key) const { return doc->root_view_[key].size(); }
+
+         [[nodiscard]] size_t operator[](size_t index) const { return doc->root_view_[index].size(); }
+      };
+
+      size_accessor size{this};
    };
 
    // ============================================================================
@@ -667,8 +683,8 @@ namespace glz
                   const auto len = detail::read_compressed_int(p, end);
                   p += len;
                }
-               // Return view to the length-prefixed string
-               return {doc_, p};
+               // Return view with synthetic string tag
+               return {doc_, p, {}, tag::string};
             }
             else {
                // Boolean array - packed bits, can't easily index
@@ -680,7 +696,9 @@ namespace glz
             // Numeric typed array - fixed size elements
             const size_t elem_size = byte_count_lookup[t >> 5];
             p += index * elem_size;
-            return {doc_, p};
+            // Return view with synthetic numeric tag
+            const uint8_t synthetic_tag = tag::number | (t & 0b11111000);
+            return {doc_, p, {}, synthetic_tag};
          }
       }
    }
@@ -772,13 +790,26 @@ namespace glz
    {
       if (has_error() || !data_) return 0;
 
+      // Handle synthetic tags (typed array elements)
+      if (synthetic_tag_ != 0) {
+         const uint8_t base_type = synthetic_tag_ & 0b00000'111;
+         if (base_type == tag::string) {
+            // String element in typed string array - length prefixed
+            auto [len, bytes] = detail::peek_compressed_int(data_, beve_end());
+            return len;
+         }
+         return 0;
+      }
+
       const uint8_t t = uint8_t(*data_) & 0b00000'111;
 
-      if (t == tag::object) {
-         const char* p = data_ + 1;
-         return detail::read_compressed_int(p, beve_end());
+      if (t == tag::string) {
+         const char* p = data_ + 1; // Skip tag
+         auto [len, bytes] = detail::peek_compressed_int(p, beve_end());
+         return len;
       }
-      else if (t == tag::typed_array || t == tag::generic_array) {
+
+      if (t == tag::object || t == tag::typed_array || t == tag::generic_array) {
          const char* p = data_ + 1;
          return detail::read_compressed_int(p, beve_end());
       }
