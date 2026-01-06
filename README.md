@@ -1044,6 +1044,8 @@ if (result) {
 
 > `glz::lazy_json` provides on-demand parsing without any upfront processing, ideal for extracting a few fields from large JSON documents.
 
+`glz::lazy_beve` provides the same lazy parsing capability for BEVE binary format. See [Lazy BEVE](https://stephenberry.github.io/glaze/lazy-beve/).
+
 ## Raw Buffer Performance
 
 Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below, but it is not recommended.

@@ -58,7 +58,13 @@ namespace glz
          return;
       }
 
-      if ((tag & 0b00000'111) == tag::string) {
+      // Check key type from bits 3-4:
+      // - For string keys: key_type bits are 0 (header = tag::object | 0 = 3)
+      // - For number keys: key_type bits are non-zero (header = tag::object | 8 or 16)
+      const uint8_t key_type_bits = tag & 0b000'11'000;
+
+      if (key_type_bits == 0) {
+         // String keys
          for (size_t i = 0; i < n_keys; ++i) {
             const auto string_length = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -76,28 +82,21 @@ namespace glz
                return;
          }
       }
-      else if ((tag & 0b00000'111) == tag::number) {
+      else {
+         // Number keys: each key is just byte_count bytes (no length prefix)
          const uint8_t byte_count = byte_count_lookup[tag >> 5];
          for (size_t i = 0; i < n_keys; ++i) {
-            const auto n = int_from_compressed(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-            if (uint64_t(end - it) < byte_count * n) [[unlikely]] {
+            if (uint64_t(end - it) < byte_count) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
 
-            it += byte_count * n;
+            it += byte_count;
 
             skip_value<BEVE>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
          }
-      }
-      else {
-         ctx.error = error_code::syntax_error;
-         return;
       }
    }
 
