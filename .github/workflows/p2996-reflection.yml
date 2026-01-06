@@ -61,7 +61,8 @@ jobs:
               -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,${{ env.P2996_LIB_PATH }}' \
               -DCMAKE_BUILD_TYPE=Release \
               -Dglaze_DEVELOPER_MODE=ON \
-              -Dglaze_ENABLE_REFLECTION26=ON &&
+              -Dglaze_ENABLE_REFLECTION26=ON \
+              -Dglaze_BUILD_NETWORKING_TESTS=OFF &&
             cmake --build build --target json_test -j &&
             ./build/tests/json_test/json_test
           "
