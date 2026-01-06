@@ -642,7 +642,7 @@ namespace glz
             return;
          }
          if constexpr (not Opts.null_terminated) {
-            ++ctx.indentation_level;
+            ++ctx.depth;
          }
 
          auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
@@ -668,7 +668,7 @@ namespace glz
          }
          match<']'>(ctx, it);
          if constexpr (not Opts.null_terminated) {
-            --ctx.indentation_level;
+            --ctx.depth;
          }
       }
    };
@@ -2083,7 +2083,7 @@ namespace glz
             return;
          }
          if constexpr (not Opts.null_terminated) {
-            ++ctx.indentation_level;
+            ++ctx.depth;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -2092,7 +2092,7 @@ namespace glz
          value.clear();
          if (*it == ']') [[unlikely]] {
             if constexpr (not Opts.null_terminated) {
-               --ctx.indentation_level;
+               --ctx.depth;
             }
             ++it;
             return;
@@ -2110,7 +2110,7 @@ namespace glz
             }
             if (*it == ']') {
                if constexpr (not Opts.null_terminated) {
-                  --ctx.indentation_level;
+                  --ctx.depth;
                }
                ++it;
                return;
@@ -2144,7 +2144,7 @@ namespace glz
             return;
          }
          if constexpr (not Opts.null_terminated) {
-            ++ctx.indentation_level;
+            ++ctx.depth;
          }
 
          const auto ws_start = it;
@@ -2154,7 +2154,7 @@ namespace glz
 
          if (*it == ']') {
             if constexpr (not Opts.null_terminated) {
-               --ctx.indentation_level;
+               --ctx.depth;
             }
             ++it;
             if constexpr ((resizable<T> || is_inplace_vector<T>) && not check_append_arrays(Opts)) {
@@ -2197,7 +2197,7 @@ namespace glz
                }
                else if (*it == ']') {
                   if constexpr (not Opts.null_terminated) {
-                     --ctx.indentation_level;
+                     --ctx.depth;
                   }
                   ++it;
                   if constexpr (erasable<T>) {
@@ -2293,7 +2293,7 @@ namespace glz
                   }
                   else if (*it == ']') {
                      if constexpr (not Opts.null_terminated) {
-                        --ctx.indentation_level;
+                        --ctx.depth;
                      }
                      ++it;
                      return;
@@ -2333,7 +2333,7 @@ namespace glz
                }
             }
             if constexpr (not Opts.null_terminated) {
-               ++ctx.indentation_level;
+               ++ctx.depth;
             }
          }
 
@@ -2348,7 +2348,7 @@ namespace glz
             if (*it == '}') {
                ++it;
                if constexpr (not Opts.null_terminated) {
-                  --ctx.indentation_level;
+                  --ctx.depth;
                }
                if constexpr (not Opts.null_terminated) {
                   if (it == end) {
@@ -2505,7 +2505,7 @@ namespace glz
             return;
          }
          if constexpr (not Opts.null_terminated) {
-            ++ctx.indentation_level;
+            ++ctx.depth;
          }
          const auto n = number_of_array_elements<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
@@ -2529,7 +2529,7 @@ namespace glz
          }
          match<']'>(ctx, it);
          if constexpr (not Opts.null_terminated) {
-            --ctx.indentation_level;
+            --ctx.depth;
          }
       }
    };
@@ -2560,7 +2560,7 @@ namespace glz
             return;
          }
          if constexpr (not Opts.null_terminated) {
-            ++ctx.indentation_level;
+            ++ctx.depth;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -2572,7 +2572,7 @@ namespace glz
 
             if (*it == ']') {
                if constexpr (not Opts.null_terminated) {
-                  --ctx.indentation_level;
+                  --ctx.depth;
                }
                return;
             }
@@ -2612,7 +2612,7 @@ namespace glz
                return;
             match<']'>(ctx, it);
             if constexpr (not Opts.null_terminated) {
-               --ctx.indentation_level;
+               --ctx.depth;
             }
             if constexpr (not Opts.null_terminated) {
                if (it == end) {
@@ -2640,7 +2640,7 @@ namespace glz
             return;
          }
          if constexpr (not Opts.null_terminated) {
-            ++ctx.indentation_level;
+            ++ctx.depth;
          }
 
          std::string& s = string_buffer();
@@ -2670,7 +2670,7 @@ namespace glz
             }
             if (*it == ']') {
                if constexpr (not Opts.null_terminated) {
-                  --ctx.indentation_level;
+                  --ctx.depth;
                }
                ++it;
                if constexpr (not Opts.null_terminated) {
@@ -2750,7 +2750,7 @@ namespace glz
                return;
             }
             if constexpr (not Opts.null_terminated) {
-               ++ctx.indentation_level;
+               ++ctx.depth;
             }
          }
          if (skip_ws<Opts>(ctx, it, end)) {
@@ -2759,7 +2759,7 @@ namespace glz
 
          if (*it == '}') {
             if constexpr (not Opts.null_terminated) {
-               --ctx.indentation_level;
+               --ctx.depth;
             }
             if constexpr (Opts.error_on_missing_keys) {
                ctx.error = error_code::missing_key;
@@ -2808,7 +2808,7 @@ namespace glz
 
          match<'}'>(ctx, it);
          if constexpr (not Opts.null_terminated) {
-            --ctx.indentation_level;
+            --ctx.depth;
          }
          if constexpr (not Opts.null_terminated) {
             if (it == end) {
@@ -2857,7 +2857,7 @@ namespace glz
                }
             }
             if constexpr (not Opts.null_terminated) {
-               ++ctx.indentation_level;
+               ++ctx.depth;
             }
          }
          const auto ws_start = it;
@@ -2912,7 +2912,7 @@ namespace glz
 
             if (*it == '}') [[likely]] {
                if constexpr (not Opts.null_terminated) {
-                  --ctx.indentation_level;
+                  --ctx.depth;
                }
                if constexpr (glaze_object_t<T> || reflectable<T>) {
                   if constexpr (has_self_constraint_v<T> && !check_skip_self_constraint(Opts)) {
@@ -2990,7 +2990,7 @@ namespace glz
 
                if (*it == '}') {
                   if constexpr (not Opts.null_terminated) {
-                     --ctx.indentation_level;
+                     --ctx.depth;
                   }
                   if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
                      constexpr auto req_fields = required_fields<T, Opts>();
@@ -3557,13 +3557,13 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return;
             case '{':
-               if (ctx.indentation_level >= max_recursive_depth_limit) {
+               if (ctx.depth >= max_recursive_depth_limit) {
                   ctx.error = error_code::exceeded_max_recursive_depth;
                   return;
                }
                // In the null terminated case this guards for stack overflow
                // Depth counting is done at the object level when not null terminated
-               ++ctx.indentation_level;
+               ++ctx.depth;
 
                ++it;
                if constexpr (not Opts.null_terminated) {
@@ -3586,7 +3586,7 @@ namespace glz
                   if constexpr (Opts.null_terminated) {
                      // In the null terminated case this guards for stack overflow
                      // Depth counting is done at the object level when not null terminated
-                     --ctx.indentation_level;
+                     --ctx.depth;
                   }
                   return;
                }
@@ -3726,7 +3726,7 @@ namespace glz
                                  if constexpr (Opts.null_terminated) {
                                     // In the null terminated case this guards for stack overflow
                                     // Depth counting is done at the object level when not null terminated
-                                    --ctx.indentation_level;
+                                    --ctx.depth;
                                  }
                                  return; // we've decoded our target type
                               }
@@ -3784,7 +3784,7 @@ namespace glz
                                        value);
 
                                     if constexpr (Opts.null_terminated) {
-                                       --ctx.indentation_level;
+                                       --ctx.depth;
                                     }
                                     return;
                                  }
@@ -3857,7 +3857,7 @@ namespace glz
                               },
                               value);
                            if constexpr (Opts.null_terminated) {
-                              --ctx.indentation_level;
+                              --ctx.depth;
                            }
                            return;
                         }
@@ -3943,7 +3943,7 @@ namespace glz
                            if constexpr (Opts.null_terminated) {
                               // In the null terminated case this guards for stack overflow
                               // Depth counting is done at the object level when not null terminated
-                              --ctx.indentation_level;
+                              --ctx.depth;
                            }
                            return; // we've decoded our target type
                         }
@@ -4024,7 +4024,7 @@ namespace glz
                            value);
 
                         if constexpr (Opts.null_terminated) {
-                           --ctx.indentation_level;
+                           --ctx.depth;
                         }
                      }
                      else if (final_matching > 1) {
@@ -4116,7 +4116,7 @@ namespace glz
                               value);
 
                            if constexpr (Opts.null_terminated) {
-                              --ctx.indentation_level;
+                              --ctx.depth;
                            }
                         }
                         else {
@@ -4131,18 +4131,18 @@ namespace glz
                }
                break;
             case '[':
-               if (ctx.indentation_level >= max_recursive_depth_limit) {
+               if (ctx.depth >= max_recursive_depth_limit) {
                   ctx.error = error_code::exceeded_max_recursive_depth;
                   return;
                }
                if constexpr (Opts.null_terminated) {
                   // In the null terminated case this guards for stack overflow
                   // Depth counting is done at the object level when not null terminated
-                  ++ctx.indentation_level;
+                  ++ctx.depth;
                }
                process_variant_alternatives<T, is_variant_array>::template op<Opts>(value, ctx, it, end);
                if constexpr (Opts.null_terminated) {
-                  --ctx.indentation_level;
+                  --ctx.depth;
                }
                break;
             case '"': {
@@ -4238,7 +4238,7 @@ namespace glz
             return;
          }
          if constexpr (not Opts.null_terminated) {
-            ++ctx.indentation_level;
+            ++ctx.depth;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -4287,7 +4287,7 @@ namespace glz
          }
          match<']'>(ctx, it);
          if constexpr (not Opts.null_terminated) {
-            --ctx.indentation_level;
+            --ctx.depth;
          }
       }
    };
@@ -4306,7 +4306,7 @@ namespace glz
 
          if (*it == '{') {
             if constexpr (not Opts.null_terminated) {
-               ++ctx.indentation_level;
+               ++ctx.depth;
             }
             auto start = it;
             ++it;
@@ -4363,7 +4363,7 @@ namespace glz
                   }
                   match<'}'>(ctx, it);
                   if constexpr (not Opts.null_terminated) {
-                     --ctx.indentation_level;
+                     --ctx.depth;
                   }
                }
                else {

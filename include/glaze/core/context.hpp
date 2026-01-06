@@ -117,9 +117,8 @@ namespace glz
       error_code error{};
       std::string_view custom_error_message;
       // INTERNAL USE:
-      uint32_t indentation_level{}; // When writing this is the number of indent character to serialize
-      // When reading indentation_level is used to track the depth of structures to prevent stack overflows
-      // From massive depths due to untrusted inputs or attacks
+      uint32_t depth{}; // Nesting depth of structures (objects/arrays)
+      // Used for indentation when writing and for stack overflow protection when reading
       std::string current_file; // top level file path
       // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
       // because debuggers like jumping to std::string_view initialization calls
@@ -129,7 +128,7 @@ namespace glz
    template <class T>
    concept is_context = requires(T& ctx) {
       { ctx.error } -> std::same_as<error_code&>;
-      { ctx.indentation_level } -> std::same_as<uint32_t&>;
+      { ctx.depth } -> std::same_as<uint32_t&>;
    };
 
    // Runtime constraint concepts
