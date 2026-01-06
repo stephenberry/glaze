@@ -71,9 +71,28 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="$CMAKE_EXE_LINKER_FLAGS"
 
       - name: Build
-        run: cmake --build build -j $(nproc)
+        # Only build networking tests that actually use Asio
+        run: |
+          cmake --build build -j $(nproc) --target \
+            asio_repe \
+            http_examples \
+            http_router_test \
+            http_client_test \
+            http_server_api_tests \
+            https_test \
+            jsonrpc_registry_test \
+            openapi_test \
+            repe_buffer_test \
+            repe_plugin_test \
+            repe_test \
+            registry_view_test \
+            repe_to_jsonrpc_test \
+            websocket_close_test \
+            websocket_client_test \
+            utf8_test \
+            shared_context_bug_test \
+            wss_test
 
       - name: Test
         working-directory: build
-        # Only run networking tests that actually use Asio
-        run: ctest -j $(nproc) --output-on-failure -R "^(asio_repe|http_examples|http_router_test|http_client_test|http_server_api_tests|https_test|jsonrpc_registry_test|openapi_test|repe_buffer_test|repe_plugin_test|repe_test|registry_view_test|repe_to_jsonrpc_test|websocket_close_test|websocket_client_test|utf8_test|shared_context_bug_test|wss_test)$"
+        run: ctest -j $(nproc) --output-on-failure
