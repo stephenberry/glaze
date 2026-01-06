@@ -1065,7 +1065,7 @@ suite lazy_beve_tests = [] {
 
       // Test the size accessor syntax: doc.size["key"]
       expect(result->size["username"] == 16u); // "alice_wonderland" is 16 chars
-      expect(result->size["email"] == 17u);    // "alice@example.com" is 17 chars
+      expect(result->size["email"] == 17u); // "alice@example.com" is 17 chars
    };
 
    "lazy_beve_size_accessor_array"_test = [] {
@@ -1136,8 +1136,7 @@ suite lazy_beve_tests = [] {
    };
 
    "lazy_beve_size_nested"_test = [] {
-      std::map<std::string, std::map<std::string, std::string>> data{
-         {"outer", {{"inner", "value123"}}}};
+      std::map<std::string, std::map<std::string, std::string>> data{{"outer", {{"inner", "value123"}}}};
       std::vector<std::byte> buffer;
       auto ec = glz::write_beve(data, buffer);
       expect(ec == glz::error_code::none);
@@ -1147,7 +1146,7 @@ suite lazy_beve_tests = [] {
 
       // Nested access
       expect(result->root()["outer"]["inner"].size() == 8u); // "value123"
-      expect(result->root()["outer"].size() == 1u);          // 1 key in inner object
+      expect(result->root()["outer"].size() == 1u); // 1 key in inner object
    };
 
    "lazy_beve_size_typed_string_array"_test = [] {

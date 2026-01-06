@@ -277,7 +277,7 @@ namespace glz
       // Helper to read numeric value directly given tag info (for typed array elements)
       template <class T>
       [[nodiscard]] expected<T, error_ctx> read_numeric_from_tag(uint8_t tag, const char* value_ptr,
-                                                                  const char* end) const;
+                                                                 const char* end) const;
    };
 
    // ============================================================================
@@ -398,12 +398,12 @@ namespace glz
       const lazy_beve_document<Opts>* doc_{};
       const char* beve_end_{};
       const char* current_pos_{}; // Current position in iteration
-      size_t remaining_count_{};  // Elements remaining
+      size_t remaining_count_{}; // Elements remaining
       bool is_object_{};
       bool is_typed_array_{};
       bool has_string_keys_{true}; // For objects: string keys (default) vs number keys
-      uint8_t key_byte_count_{};   // For number-keyed objects: bytes per key
-      uint8_t element_size_{};     // For typed arrays
+      uint8_t key_byte_count_{}; // For number-keyed objects: bytes per key
+      uint8_t element_size_{}; // For typed arrays
       bool at_end_{true};
       lazy_beve_view<Opts> current_view_{};
 
@@ -451,8 +451,8 @@ namespace glz
       std::vector<const char*> value_starts_;
       std::vector<std::string_view> keys_;
       bool is_object_{};
-      bool is_typed_array_{};       // True if indexing a typed array
-      uint8_t element_tag_{};       // Synthetic element tag for typed arrays
+      bool is_typed_array_{}; // True if indexing a typed array
+      uint8_t element_tag_{}; // Synthetic element tag for typed arrays
 
       friend class indexed_lazy_beve_iterator<Opts>;
 
