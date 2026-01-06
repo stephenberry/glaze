@@ -47,21 +47,34 @@ jobs:
             /tmp/p2996_test
           "
 
-    - name: Clone ut test library
-      run: git clone --depth 1 https://github.com/openalgz/ut.git tests/ut
-
-    - name: Build and run non_aggregate_reflection_test
+    - name: CMake configure with P2996 reflection
       run: |
         docker run --rm \
           -v ${{ github.workspace }}:/glaze \
           -w /glaze \
           ${{ env.P2996_IMAGE }} \
           /bin/sh -c "
-            clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
-              -I/glaze/include -I/glaze/tests -I/glaze/tests/ut/include \
-              -DGLZ_REFLECTION26=1 \
-              -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
-              -o /tmp/non_aggregate_test \
-              /glaze/tests/json_test/non_aggregate_reflection_test.cpp && \
-            /tmp/non_aggregate_test
+            cmake -B build \
+              -DCMAKE_CXX_COMPILER=clang++ \
+              -DCMAKE_CXX_FLAGS='-std=c++26 -freflection -fexpansion-statements -stdlib=libc++' \
+              -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,${{ env.P2996_LIB_PATH }}' \
+              -DCMAKE_BUILD_TYPE=Release \
+              -Dglaze_DEVELOPER_MODE=ON \
+              -Dglaze_ENABLE_REFLECTION26=ON
           "
+
+    - name: Build json_test
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/glaze \
+          -w /glaze \
+          ${{ env.P2996_IMAGE }} \
+          cmake --build build --target json_test -j
+
+    - name: Run json_test
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/glaze \
+          -w /glaze \
+          ${{ env.P2996_IMAGE }} \
+          ./build/tests/json_test/json_test
