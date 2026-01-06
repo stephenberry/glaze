@@ -95,4 +95,4 @@ jobs:
 
       - name: Test
         working-directory: build
-        run: ctest -j $(nproc) --output-on-failure
+        run: ctest -j $(nproc) --output-on-failure -R "^(asio_repe|http_examples|http_router_test|http_client_test|http_server_api_tests|https_test|jsonrpc_registry_test|openapi_test|repe_buffer_test|repe_plugin_test|repe_test|registry_view_test|repe_to_jsonrpc_test|websocket_close_test|websocket_client_test|utf8_test|shared_context_bug_test|wss_test)$"
