@@ -3053,6 +3053,55 @@ suite inline_table_tests = [] {
       // aot_items should use array-of-tables syntax
       expect(buffer.find("[[aot_items]]") != std::string::npos) << "AOT items should use [[]] syntax";
    };
+
+   "write_with_toml_opts_inline"_test = [] {
+      // Test using toml_opts with inline_arrays to force inline arrays globally
+      catalog c{};
+      c.store_name = "Hardware Store";
+      c.products = {{"Hammer", 100}, {"Nail", 200}};
+
+      std::string buffer{};
+      expect(not glz::write<glz::toml_opts{true}>(c, buffer));
+
+      // Should use inline syntax, not array-of-tables
+      expect(buffer.find("[[products]]") == std::string::npos) << "Should not use [[]] syntax";
+      expect(buffer.find("products = [{") != std::string::npos) << "Should use inline array syntax";
+   };
+
+   "write_toml_vs_toml_opts_inline_comparison"_test = [] {
+      // Compare default write_toml (array-of-tables) vs toml_opts{true}
+      catalog c{};
+      c.store_name = "Test";
+      c.products = {{"A", 1}};
+
+      std::string aot_buffer{};
+      std::string inline_buffer{};
+
+      expect(not glz::write_toml(c, aot_buffer));
+      expect(not glz::write<glz::toml_opts{true}>(c, inline_buffer));
+
+      // Default uses array-of-tables
+      expect(aot_buffer.find("[[products]]") != std::string::npos);
+      expect(aot_buffer.find("products = [") == std::string::npos);
+
+      // Inline uses inline arrays
+      expect(inline_buffer.find("[[products]]") == std::string::npos);
+      expect(inline_buffer.find("products = [{") != std::string::npos);
+   };
+
+   "toml_opts_as_constexpr"_test = [] {
+      // Users can create their own named constants
+      catalog c{};
+      c.store_name = "Named";
+      c.products = {{"Y", 99}};
+
+      std::string buffer{};
+      constexpr glz::toml_opts inline_opts{true};
+      expect(not glz::write<inline_opts>(c, buffer));
+
+      expect(buffer.find("[[products]]") == std::string::npos);
+      expect(buffer.find("products = [{") != std::string::npos);
+   };
 };
 
 int main() { return 0; }

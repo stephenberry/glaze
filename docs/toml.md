@@ -211,7 +211,11 @@ Glaze writes TOML in spec-compliant order: scalar key-value pairs appear before 
 
 ### Inline Tables
 
-By default, `std::vector` of objects uses array-of-tables (`[[name]]`) syntax. To force inline table syntax (`[{...}, {...}]`) instead, use the `glz::inline_table` wrapper in your `glz::meta` definition:
+By default, `std::vector` of objects uses array-of-tables (`[[name]]`) syntax. There are two ways to use inline table syntax (`[{...}, {...}]`) instead:
+
+#### Global Option: `glz::toml_opts`
+
+Use `glz::toml_opts` with the standard `write<>` interface to write all arrays of objects using inline syntax:
 
 ```cpp
 struct product
@@ -226,17 +230,9 @@ struct catalog
    std::vector<product> products;
 };
 
-template <>
-struct glz::meta<catalog>
-{
-   using T = catalog;
-   // Use inline_table wrapper for compact inline syntax
-   static constexpr auto value = object(&T::store_name, "products", glz::inline_table<&T::products>);
-};
-
 catalog c{"My Store", {{"Widget", 100}, {"Gadget", 200}}};
 std::string toml{};
-glz::write_toml(c, toml);
+glz::write<glz::toml_opts{true}>(c, toml);  // inline_arrays = true
 ```
 
 Output:
@@ -244,6 +240,31 @@ Output:
 ```toml
 store_name = "My Store"
 products = [{name = "Widget", sku = 100}, {name = "Gadget", sku = 200}]
+```
+
+The `glz::toml_opts` struct inherits from `glz::opts`, following the recommended pattern for format-specific options. For repeated use, create a named constant:
+
+```cpp
+constexpr glz::toml_opts inline_toml{true};
+glz::write<inline_toml>(c, toml);
+```
+
+#### Per-Field Option: `glz::inline_table` Wrapper
+
+For fine-grained control, use the `glz::inline_table` wrapper in your `glz::meta` definition to specify which fields use inline syntax:
+
+```cpp
+template <>
+struct glz::meta<catalog>
+{
+   using T = catalog;
+   // Use inline_table wrapper for this specific field
+   static constexpr auto value = object(&T::store_name, "products", glz::inline_table<&T::products>);
+};
+
+catalog c{"My Store", {{"Widget", 100}, {"Gadget", 200}}};
+std::string toml{};
+glz::write_toml(c, toml);  // Regular write_toml, but products uses inline syntax
 ```
 
 This is useful when you want a more compact representation or when the array contains simple objects with few fields.

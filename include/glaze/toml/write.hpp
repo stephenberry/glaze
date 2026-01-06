@@ -18,6 +18,16 @@
 
 namespace glz
 {
+   // TOML-specific options - inherits from opts to allow TOML-specific configuration
+   // without modifying the base opts struct
+   struct toml_opts : opts
+   {
+      bool inline_arrays = false; // Use inline [{...}, {...}] instead of [[array]] syntax
+
+      constexpr toml_opts() : opts{.format = TOML} {}
+      constexpr explicit toml_opts(bool inline_arr) : opts{.format = TOML}, inline_arrays(inline_arr) {}
+   };
+
    template <>
    struct serialize<TOML>
    {
@@ -797,6 +807,16 @@ namespace glz
       return false;
    }();
 
+   // Helper to check if inline_arrays option is set (works with both opts and toml_opts)
+   template <auto Opts>
+   constexpr bool use_inline_arrays()
+   {
+      if constexpr (requires { Opts.inline_arrays; }) {
+         return Opts.inline_arrays;
+      }
+      return false;
+   }
+
    // Forward declaration for recursive calls with path
    template <auto Options, class T, class V, class B>
    void write_toml_object_with_path(V&& value, is_context auto&& ctx, B&& b, auto& ix, std::string_view path_prefix);
@@ -1048,7 +1068,11 @@ namespace glz
          }
       };
 
+      // Check if inline_arrays mode is enabled
+      constexpr bool inline_mode = use_inline_arrays<Options>();
+
       // PASS 1: Write all scalar fields first (TOML spec conformance)
+      // In inline_mode, arrays of objects are treated as scalars (written inline)
       for_each<N>([&]<size_t I>() {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -1065,12 +1089,16 @@ namespace glz
          }
 
          // Only process scalar fields in this pass (not objects or arrays of objects)
-         if constexpr (!(glaze_object_t<val_t> || reflectable<val_t>) && !is_array_of_objects_v<val_t>) {
+         // Exception: in inline_mode, arrays of objects are written as inline arrays
+         constexpr bool is_scalar = !(glaze_object_t<val_t> || reflectable<val_t>) &&
+                                    (!is_array_of_objects_v<val_t> || inline_mode);
+         if constexpr (is_scalar) {
             write_scalar_field.template operator()<I>();
          }
       });
 
       // PASS 2: Write nested tables [table] and arrays of tables [[array]]
+      // In inline_mode, arrays of objects are skipped here (already written in pass 1)
       for_each<N>([&]<size_t I>() {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -1090,7 +1118,7 @@ namespace glz
          if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
             write_table_field.template operator()<I>();
          }
-         else if constexpr (is_array_of_objects_v<val_t>) {
+         else if constexpr (is_array_of_objects_v<val_t> && !inline_mode) {
             write_array_of_tables_field.template operator()<I>();
          }
       });
@@ -1101,6 +1129,23 @@ namespace glz
    struct to<TOML, T>
    {
       static constexpr bool map_like_array = writable_array_t<T> && pair_t<range_value_t<T>>;
+
+      // Helper to write an array element - uses inline table format for objects when in inline mode
+      template <auto Opts, class V, class B>
+      GLZ_ALWAYS_INLINE static void write_element(V&& element, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         using val_t = std::remove_cvref_t<V>;
+         constexpr bool is_object_type = glaze_object_t<val_t> || reflectable<val_t>;
+         constexpr bool inline_mode = use_inline_arrays<Opts>();
+
+         if constexpr (is_object_type && inline_mode) {
+            // Write object as inline table {key = value, ...}
+            write_inline_object<Opts, val_t>(std::forward<V>(element), ctx, b, ix);
+         }
+         else {
+            to<TOML, val_t>::template op<Opts>(std::forward<V>(element), ctx, b, ix);
+         }
+      }
 
       // --- Array-like container writer ---
       template <auto Opts, class B>
@@ -1124,8 +1169,7 @@ namespace glz
                std::memcpy(&b[ix], "[", 1);
                ++ix;
                auto it = std::begin(value);
-               using val_t = std::remove_cvref_t<decltype(*it)>;
-               to<TOML, val_t>::template op<Opts>(*it, ctx, b, ix);
+               write_element<Opts>(*it, ctx, b, ix);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1135,7 +1179,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  to<TOML, val_t>::template op<Opts>(*it, ctx, b, ix);
+                  write_element<Opts>(*it, ctx, b, ix);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
@@ -1153,8 +1197,7 @@ namespace glz
                std::memcpy(&b[ix], "[", 1);
                ++ix;
                auto it = std::begin(value);
-               using val_t = std::remove_cvref_t<decltype(*it)>;
-               to<TOML, val_t>::template op<Opts>(*it, ctx, b, ix);
+               write_element<Opts>(*it, ctx, b, ix);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1164,7 +1207,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  to<TOML, val_t>::template op<Opts>(*it, ctx, b, ix);
+                  write_element<Opts>(*it, ctx, b, ix);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
