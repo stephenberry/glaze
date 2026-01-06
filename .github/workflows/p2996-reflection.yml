@@ -31,89 +31,36 @@ jobs:
       run: docker pull ${{ env.P2996_IMAGE }}
 
     - name: Verify P2996 compiler
-      run: |
-        docker run --rm ${{ env.P2996_IMAGE }} \
-          clang++ --version
+      run: docker run --rm ${{ env.P2996_IMAGE }} clang++ --version
 
-    - name: Test P2996 reflection support
+    - name: Test P2996 reflection smoke test
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/glaze \
+          -w /glaze \
+          ${{ env.P2996_IMAGE }} \
+          clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
+            -I/glaze/include -DGLZ_REFLECTION26=1 \
+            -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
+            -o /tmp/p2996_test /glaze/tests/p2996_test/p2996_smoke_test.cpp
+
+        docker run --rm \
+          -v ${{ github.workspace }}:/glaze \
+          ${{ env.P2996_IMAGE }} \
+          /tmp/p2996_test
+
+    - name: Build and run non_aggregate_reflection_test
       run: |
         docker run --rm \
           -v ${{ github.workspace }}:/glaze \
           -w /glaze \
           ${{ env.P2996_IMAGE }} \
           /bin/sh -c "
-            echo 'Testing P2996 reflection integration...'
-
-            # Create a simple test to verify P2996 works
-            cat > /tmp/p2996_smoke_test.cpp << 'CPPEOF'
-#include \"glaze/glaze.hpp\"
-#include <iostream>
-
-struct TestStruct {
-    std::string name;
-    int value;
-    double data;
-};
-
-int main() {
-    std::cout << \"GLZ_REFLECTION26 = \" << GLZ_REFLECTION26 << std::endl;
-
-    // Test member_names
-    constexpr auto names = glz::member_names<TestStruct>;
-    if (names.size() != 3) return 1;
-    if (names[0] != \"name\") return 1;
-    if (names[1] != \"value\") return 1;
-    if (names[2] != \"data\") return 1;
-
-    // Test JSON round-trip
-    TestStruct obj{\"test\", 42, 3.14};
-    auto json = glz::write_json(obj).value_or(\"error\");
-
-    TestStruct obj2;
-    if (glz::read_json(obj2, json)) return 1;
-    if (obj2.name != \"test\" || obj2.value != 42) return 1;
-
-    std::cout << \"P2996 smoke test passed!\" << std::endl;
-    std::cout << \"JSON: \" << json << std::endl;
-    return 0;
-}
-CPPEOF
-
             clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
-              -I/glaze/include -DGLZ_REFLECTION26=1 \
+              -I/glaze/include -I/glaze/tests -I/glaze/tests/ut \
+              -DGLZ_REFLECTION26=1 \
               -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
-              -o /tmp/p2996_smoke_test /tmp/p2996_smoke_test.cpp
-
-            /tmp/p2996_smoke_test
+              -o /tmp/non_aggregate_test \
+              /glaze/tests/json_test/non_aggregate_reflection_test.cpp && \
+            /tmp/non_aggregate_test
           "
-
-    - name: Build Glaze tests with P2996
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/glaze \
-          -w /glaze \
-          ${{ env.P2996_IMAGE }} \
-          /bin/sh -c "
-            mkdir -p build
-            cd build
-
-            cmake .. \
-              -DCMAKE_CXX_COMPILER=clang++ \
-              -DCMAKE_CXX_FLAGS='-std=c++26 -freflection -fexpansion-statements -stdlib=libc++ -DGLZ_REFLECTION26=1' \
-              -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,${{ env.P2996_LIB_PATH }}' \
-              -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-              -Dglaze_ENABLE_SANITIZERS=OFF \
-              -Dglaze_BUILD_NETWORKING_TESTS=OFF \
-              -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
-              -Dglaze_ENABLE_FUZZING=OFF
-
-            cmake --build . -j\$(nproc)
-          "
-
-    - name: Run tests
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/glaze \
-          -w /glaze/build \
-          ${{ env.P2996_IMAGE }} \
-          ctest --output-on-failure -j$(nproc)
