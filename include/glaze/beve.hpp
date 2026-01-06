@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/beve/header.hpp"
+#include "glaze/beve/lazy.hpp"
 #include "glaze/beve/ptr.hpp"
 #include "glaze/beve/read.hpp"
 #include "glaze/beve/size.hpp"

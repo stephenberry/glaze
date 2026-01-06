@@ -473,3 +473,24 @@ auto ec = glz::read_beve_delimited(messages, buffer);
 ### Delimiter Format
 
 The BEVE delimiter is a single byte: `0x06` (extensions type 6 with subtype 0). When converting delimited BEVE to JSON via `glz::beve_to_json`, each delimiter is converted to a newline character (`\n`), producing NDJSON-compatible output.
+
+## Lazy BEVE Parsing
+
+For scenarios where you need to extract a few fields from large BEVE documents without full deserialization, Glaze provides `glz::lazy_beve`. This offers on-demand parsing with zero upfront processing.
+
+```cpp
+std::vector<std::byte> buffer;
+glz::write_beve(large_struct, buffer);
+
+auto result = glz::lazy_beve(buffer);
+if (result) {
+    // Access fields lazily - only parses what you access
+    auto name = (*result)["user"]["name"].get<std::string_view>();
+    auto age = (*result)["user"]["age"].get<int64_t>();
+
+    // Check container size without parsing elements
+    size_t count = (*result)["items"].size();
+}
+```
+
+See [Lazy BEVE](./lazy-beve.md) for full documentation.
