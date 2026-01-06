@@ -131,6 +131,7 @@ namespace glz
       mutable const char* parse_pos_{}; // Current scan position (advances on key access)
       std::string_view key_{};
       error_code error_{error_code::none};
+      uint8_t synthetic_tag_{}; // Non-zero for typed array elements (tag info without tag byte in data)
 
       lazy_beve_view(error_code ec) noexcept : error_(ec) {}
 
@@ -264,6 +265,19 @@ namespace glz
       lazy_beve_view(const lazy_beve_document<Opts>* doc, const char* data, std::string_view key) noexcept
          : doc_(doc), data_(data), key_(key)
       {}
+
+      // Constructor with synthetic tag for typed array elements
+      lazy_beve_view(const lazy_beve_document<Opts>* doc, const char* data, std::string_view key,
+                     uint8_t synthetic_tag) noexcept
+         : doc_(doc), data_(data), key_(key), synthetic_tag_(synthetic_tag)
+      {}
+
+      void set_synthetic_tag(uint8_t tag) noexcept { synthetic_tag_ = tag; }
+
+      // Helper to read numeric value directly given tag info (for typed array elements)
+      template <class T>
+      [[nodiscard]] expected<T, error_ctx> read_numeric_from_tag(uint8_t tag, const char* value_ptr,
+                                                                  const char* end) const;
    };
 
    // ============================================================================
@@ -421,6 +435,8 @@ namespace glz
       std::vector<const char*> value_starts_;
       std::vector<std::string_view> keys_;
       bool is_object_{};
+      bool is_typed_array_{};       // True if indexing a typed array
+      uint8_t element_tag_{};       // Synthetic element tag for typed arrays
 
       friend class indexed_lazy_beve_iterator<Opts>;
 
@@ -431,6 +447,7 @@ namespace glz
       [[nodiscard]] bool empty() const noexcept { return value_starts_.empty(); }
       [[nodiscard]] bool is_object() const noexcept { return is_object_; }
       [[nodiscard]] bool is_array() const noexcept { return !is_object_; }
+      [[nodiscard]] bool is_typed_array() const noexcept { return is_typed_array_; }
 
       [[nodiscard]] lazy_beve_view<Opts> operator[](size_t index) const
       {
@@ -438,7 +455,7 @@ namespace glz
             return lazy_beve_view<Opts>::make_error(error_code::exceeded_static_array_size);
          }
          std::string_view key = is_object_ ? keys_[index] : std::string_view{};
-         return lazy_beve_view<Opts>{doc_, value_starts_[index], key};
+         return lazy_beve_view<Opts>{doc_, value_starts_[index], key, element_tag_};
       }
 
       [[nodiscard]] lazy_beve_view<Opts> operator[](std::string_view key) const
@@ -517,7 +534,8 @@ namespace glz
       reference operator*() const
       {
          std::string_view key = parent_->is_object_ ? parent_->keys_[index_] : std::string_view{};
-         current_view_ = lazy_beve_view<Opts>{parent_->doc_, parent_->value_starts_[index_], key};
+         current_view_ =
+            lazy_beve_view<Opts>{parent_->doc_, parent_->value_starts_[index_], key, parent_->element_tag_};
          return current_view_;
       }
 
@@ -958,9 +976,12 @@ namespace glz
       else if (type_bits == tag::typed_array) {
          // Typed array
          const uint8_t element_type = (t & 0b000'11'000) >> 3;
+         result.is_typed_array_ = true;
 
          if (element_type < 3) {
             // Numeric typed array - fixed size elements
+            // Synthesize element tag: number base type + same type/width bits from array tag
+            result.element_tag_ = tag::number | (t & 0b11111000);
             const size_t elem_size = byte_count_lookup[t >> 5];
             for (size_t i = 0; i < count; ++i) {
                result.add_element(p);
@@ -969,8 +990,10 @@ namespace glz
          }
          else {
             // Bool or string array
-            const bool is_string = (t & 0b00'1'00'000) >> 5;
-            if (is_string) {
+            const bool is_string_arr = (t & 0b00'1'00'000) >> 5;
+            if (is_string_arr) {
+               // String array - elements are length-prefixed strings without tag
+               result.element_tag_ = tag::string;
                for (size_t i = 0; i < count; ++i) {
                   result.add_element(p);
                   const auto len = detail::read_compressed_int(p, end);
@@ -1002,7 +1025,16 @@ namespace glz
 
       const char* end = beve_end();
 
+      // For typed array elements, synthetic_tag_ is non-zero and data_ points directly to value
+      // For normal values, tag is read from data_ and value starts at data_+1
+      const bool has_synthetic_tag = (synthetic_tag_ != 0);
+      const uint8_t tag = has_synthetic_tag ? synthetic_tag_ : uint8_t(*data_);
+      const char* value_ptr = has_synthetic_tag ? data_ : data_ + 1;
+
       if constexpr (std::is_same_v<T, bool>) {
+         if (has_synthetic_tag) {
+            return unexpected(error_ctx{0, error_code::get_wrong_type}); // Bool arrays not supported this way
+         }
          if (!is_boolean()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
@@ -1010,16 +1042,19 @@ namespace glz
          return (uint8_t(*data_) >> 4) & 1;
       }
       else if constexpr (std::is_same_v<T, std::nullptr_t>) {
-         if (!is_null()) {
+         if (has_synthetic_tag || !is_null()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
          return nullptr;
       }
       else if constexpr (std::is_same_v<T, std::string>) {
-         if (!is_string()) {
+         const uint8_t base_type = tag & 0b00000'111;
+         if (base_type != tag::string) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         const char* p = data_ + 1; // skip tag
+         // For typed string arrays, value_ptr points to length-prefixed string (no tag)
+         // For normal strings, we already skipped the tag
+         const char* p = value_ptr;
          const auto len = detail::read_compressed_int(p, end);
          if (static_cast<size_t>(end - p) < len) {
             return unexpected(error_ctx{0, error_code::unexpected_end});
@@ -1027,81 +1062,131 @@ namespace glz
          return std::string{p, len};
       }
       else if constexpr (std::is_same_v<T, std::string_view>) {
-         if (!is_string()) {
+         const uint8_t base_type = tag & 0b00000'111;
+         if (base_type != tag::string) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         const char* p = data_ + 1; // skip tag
+         const char* p = value_ptr;
          const auto len = detail::read_compressed_int(p, end);
          if (static_cast<size_t>(end - p) < len) {
             return unexpected(error_ctx{0, error_code::unexpected_end});
          }
          return std::string_view{p, len};
       }
-      else if constexpr (std::is_same_v<T, double>) {
-         if (!is_number()) {
+      else if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
+         const uint8_t base_type = tag & 0b00000'111;
+         if (base_type != tag::number) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         double value{};
-         auto it = data_;
-         context ctx{};
-         parse<BEVE>::op<Opts>(value, ctx, it, end);
-         if (bool(ctx.error)) {
-            return unexpected(error_ctx{0, ctx.error});
+
+         if (has_synthetic_tag) {
+            // Typed array element - read directly from value_ptr
+            return read_numeric_from_tag<T>(tag, value_ptr, end);
          }
-         return value;
-      }
-      else if constexpr (std::is_same_v<T, float>) {
-         if (!is_number()) {
-            return unexpected(error_ctx{0, error_code::get_wrong_type});
+         else {
+            // Normal value - use standard BEVE parsing
+            T value{};
+            auto it = data_;
+            context ctx{};
+            parse<BEVE>::op<Opts>(value, ctx, it, end);
+            if (bool(ctx.error)) {
+               return unexpected(error_ctx{0, ctx.error});
+            }
+            return value;
          }
-         float value{};
-         auto it = data_;
-         context ctx{};
-         parse<BEVE>::op<Opts>(value, ctx, it, end);
-         if (bool(ctx.error)) {
-            return unexpected(error_ctx{0, ctx.error});
-         }
-         return value;
-      }
-      else if constexpr (std::is_same_v<T, int64_t>) {
-         if (!is_number()) {
-            return unexpected(error_ctx{0, error_code::get_wrong_type});
-         }
-         int64_t value{};
-         auto it = data_;
-         context ctx{};
-         parse<BEVE>::op<Opts>(value, ctx, it, end);
-         if (bool(ctx.error)) {
-            return unexpected(error_ctx{0, ctx.error});
-         }
-         return value;
-      }
-      else if constexpr (std::is_same_v<T, uint64_t>) {
-         if (!is_number()) {
-            return unexpected(error_ctx{0, error_code::get_wrong_type});
-         }
-         uint64_t value{};
-         auto it = data_;
-         context ctx{};
-         parse<BEVE>::op<Opts>(value, ctx, it, end);
-         if (bool(ctx.error)) {
-            return unexpected(error_ctx{0, ctx.error});
-         }
-         return value;
-      }
-      else if constexpr (std::is_same_v<T, int32_t>) {
-         auto result = get<int64_t>();
-         if (!result) return unexpected(result.error());
-         return static_cast<int32_t>(*result);
-      }
-      else if constexpr (std::is_same_v<T, uint32_t>) {
-         auto result = get<uint64_t>();
-         if (!result) return unexpected(result.error());
-         return static_cast<uint32_t>(*result);
       }
       else {
          static_assert(false_v<T>, "Unsupported type for lazy_beve_view::get<T>()");
       }
+   }
+
+   // Helper to read numeric value directly given tag info (for typed array elements)
+   template <opts Opts>
+   template <class T>
+   [[nodiscard]] inline expected<T, error_ctx> lazy_beve_view<Opts>::read_numeric_from_tag(uint8_t tag,
+                                                                                           const char* value_ptr,
+                                                                                           const char* end) const
+   {
+      const uint8_t type = (tag & 0b000'11'000) >> 3; // 0=float, 1=signed, 2=unsigned
+      const size_t byte_count = byte_count_lookup[tag >> 5];
+
+      if (value_ptr + byte_count > end) {
+         return unexpected(error_ctx{0, error_code::unexpected_end});
+      }
+
+      if (type == 0) {
+         // Floating point
+         if (byte_count == 4) {
+            float f;
+            std::memcpy(&f, value_ptr, 4);
+            return static_cast<T>(f);
+         }
+         else if (byte_count == 8) {
+            double d;
+            std::memcpy(&d, value_ptr, 8);
+            return static_cast<T>(d);
+         }
+      }
+      else if (type == 1) {
+         // Signed integer
+         int64_t val = 0;
+         switch (byte_count) {
+         case 1: {
+            int8_t v;
+            std::memcpy(&v, value_ptr, 1);
+            val = v;
+            break;
+         }
+         case 2: {
+            int16_t v;
+            std::memcpy(&v, value_ptr, 2);
+            val = v;
+            break;
+         }
+         case 4: {
+            int32_t v;
+            std::memcpy(&v, value_ptr, 4);
+            val = v;
+            break;
+         }
+         case 8: {
+            std::memcpy(&val, value_ptr, 8);
+            break;
+         }
+         }
+         return static_cast<T>(val);
+      }
+      else if (type == 2) {
+         // Unsigned integer
+         uint64_t val = 0;
+         switch (byte_count) {
+         case 1: {
+            uint8_t v;
+            std::memcpy(&v, value_ptr, 1);
+            val = v;
+            break;
+         }
+         case 2: {
+            uint16_t v;
+            std::memcpy(&v, value_ptr, 2);
+            val = v;
+            break;
+         }
+         case 4: {
+            uint32_t v;
+            std::memcpy(&v, value_ptr, 4);
+            val = v;
+            break;
+         }
+         case 8: {
+            std::memcpy(&val, value_ptr, 8);
+            break;
+         }
+         }
+         return static_cast<T>(val);
+      }
+
+      return unexpected(error_ctx{0, error_code::get_wrong_type});
    }
 
    // ============================================================================

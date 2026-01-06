@@ -88,6 +88,12 @@ namespace lazy_beve_test
       std::string name{"test"};
       int age{30};
    };
+
+   struct NumMapContainer
+   {
+      std::map<int, std::string> num_map{{1, "hello"}, {2, "world"}};
+      std::string after{"after_map"};
+   };
 }
 
 suite lazy_beve_tests = [] {
@@ -801,6 +807,247 @@ suite lazy_beve_tests = [] {
       auto doc_moved = std::move(*result);
       expect(doc_moved["name"].get<std::string>().value() == "Bob");
       expect(doc_moved["age"].get<int64_t>().value() == 25);
+   };
+
+   // ============================================================================
+   // Number-keyed map tests (critical - verifies skip.hpp fixes)
+   // ============================================================================
+
+   "lazy_beve_number_keyed_map_iteration"_test = [] {
+      std::map<int, std::string> num_map{{1, "one"}, {2, "two"}, {3, "three"}};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(num_map, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // Iterate over number-keyed map
+      size_t count = 0;
+      for (auto& item : result->root()) {
+         auto val = item.get<std::string_view>();
+         expect(val.has_value());
+         ++count;
+      }
+      expect(count == 3u);
+   };
+
+   "lazy_beve_number_keyed_map_skip"_test = [] {
+      // Test that skipping over a number-keyed map works correctly
+      lazy_beve_test::NumMapContainer data;
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(data, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      // Access "after" field - this should skip over num_map correctly
+      auto after = (*result)["after"].get<std::string_view>();
+      expect(after.has_value());
+      expect(after.value() == "after_map");
+   };
+
+   "lazy_beve_number_keyed_map_indexed"_test = [] {
+      std::map<int, std::string> num_map{{10, "ten"}, {20, "twenty"}, {30, "thirty"}};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(num_map, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      expect(indexed.size() == 3u);
+
+      // Access by position (number keys don't support string lookup)
+      expect(indexed[0].get<std::string_view>().value() == "ten");
+      expect(indexed[1].get<std::string_view>().value() == "twenty");
+      expect(indexed[2].get<std::string_view>().value() == "thirty");
+   };
+
+   // ============================================================================
+   // Boolean array tests
+   // ============================================================================
+
+   "lazy_beve_bool_array"_test = [] {
+      std::vector<bool> bools{true, false, true, true, false};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(bools, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc.is_array());
+      expect(doc.root().size() == 5u);
+   };
+
+   // ============================================================================
+   // Floating point array tests
+   // ============================================================================
+
+   "lazy_beve_float_array"_test = [] {
+      std::vector<float> floats{1.5f, 2.5f, 3.5f};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(floats, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc.is_array());
+      expect(doc.root().size() == 3u);
+   };
+
+   "lazy_beve_double_array"_test = [] {
+      std::vector<double> doubles{1.1, 2.2, 3.3, 4.4};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(doubles, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc.is_array());
+      expect(doc.root().size() == 4u);
+   };
+
+   // ============================================================================
+   // Indexed view random access tests
+   // ============================================================================
+
+   "indexed_lazy_beve_view_random_access"_test = [] {
+      // Use a generic array (tuple) for indexed access - typed arrays don't have per-element tags
+      std::tuple<int, int, int, int, int> arr{10, 20, 30, 40, 50};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(arr, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+
+      // Random access by position
+      expect(indexed[0].get<int64_t>().value() == 10);
+      expect(indexed[2].get<int64_t>().value() == 30);
+      expect(indexed[4].get<int64_t>().value() == 50);
+
+      // Out of order access
+      expect(indexed[4].get<int64_t>().value() == 50);
+      expect(indexed[1].get<int64_t>().value() == 20);
+      expect(indexed[3].get<int64_t>().value() == 40);
+   };
+
+   "indexed_lazy_beve_iterator_arithmetic"_test = [] {
+      // Use object for iterator arithmetic test - more practical use case
+      std::map<std::string, int> data;
+      for (int i = 1; i <= 10; ++i) {
+         data["k" + std::to_string(i)] = i;
+      }
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(data, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      auto indexed = result->root().index();
+      expect(indexed.size() == 10u);
+
+      auto it = indexed.begin();
+
+      // Test iterator arithmetic
+      it += 3;
+      // Values depend on map ordering, just verify no crash
+      expect((*it).get<int64_t>().has_value());
+
+      it -= 2;
+      expect((*it).get<int64_t>().has_value());
+
+      auto it2 = it + 5;
+      expect((*it2).get<int64_t>().has_value());
+
+      auto dist = indexed.end() - indexed.begin();
+      expect(dist == 10);
+   };
+
+   // ============================================================================
+   // Error handling tests
+   // ============================================================================
+
+   "lazy_beve_empty_buffer"_test = [] {
+      std::vector<std::byte> empty_buffer;
+      auto result = glz::lazy_beve(empty_buffer);
+      expect(!result.has_value());
+   };
+
+   "lazy_beve_truncated_buffer"_test = [] {
+      lazy_beve_test::User user{"Alice", 30, true};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(user, buffer);
+      expect(ec == glz::error_code::none);
+
+      // Truncate the buffer
+      buffer.resize(buffer.size() / 2);
+
+      auto result = glz::lazy_beve(buffer);
+      // May or may not parse initially, but accessing fields should fail gracefully
+      if (result.has_value()) {
+         // Try to access - should handle gracefully
+         [[maybe_unused]] auto name = (*result)["name"];
+         // Don't crash - that's the important part
+      }
+   };
+
+   "lazy_beve_missing_key"_test = [] {
+      std::map<std::string, int> data{{"a", 1}};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(data, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      auto missing = (*result)["nonexistent"];
+      expect(missing.has_error());
+      expect(missing.error() == glz::error_code::key_not_found);
+   };
+
+   // ============================================================================
+   // Unsigned integer array tests
+   // ============================================================================
+
+   "lazy_beve_uint_array"_test = [] {
+      std::vector<uint32_t> uints{100u, 200u, 300u};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(uints, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc.is_array());
+      expect(doc.root().size() == 3u);
+   };
+
+   "lazy_beve_uint64_array"_test = [] {
+      std::vector<uint64_t> uints{1ULL << 40, 1ULL << 50, 1ULL << 60};
+      std::vector<std::byte> buffer;
+      auto ec = glz::write_beve(uints, buffer);
+      expect(ec == glz::error_code::none);
+
+      auto result = glz::lazy_beve(buffer);
+      expect(result.has_value());
+
+      auto& doc = *result;
+      expect(doc.is_array());
+      expect(doc.root().size() == 3u);
    };
 };
 
