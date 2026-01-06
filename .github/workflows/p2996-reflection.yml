@@ -39,15 +39,13 @@ jobs:
           -v ${{ github.workspace }}:/glaze \
           -w /glaze \
           ${{ env.P2996_IMAGE }} \
-          clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
-            -I/glaze/include -DGLZ_REFLECTION26=1 \
-            -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
-            -o /tmp/p2996_test /glaze/tests/p2996_test/p2996_smoke_test.cpp
-
-        docker run --rm \
-          -v ${{ github.workspace }}:/glaze \
-          ${{ env.P2996_IMAGE }} \
-          /tmp/p2996_test
+          /bin/sh -c "
+            clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
+              -I/glaze/include -DGLZ_REFLECTION26=1 \
+              -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
+              -o /tmp/p2996_test /glaze/tests/p2996_test/p2996_smoke_test.cpp && \
+            /tmp/p2996_test
+          "
 
     - name: Build and run non_aggregate_reflection_test
       run: |
