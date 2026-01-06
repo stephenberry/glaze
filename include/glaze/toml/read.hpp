@@ -1605,6 +1605,92 @@ namespace glz
       }
    }
 
+   // Helper to resolve an array-of-tables path and emplace a new element
+   // Returns true if successful, false if error
+   template <auto Opts, class T>
+   GLZ_ALWAYS_INLINE bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   {
+      if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
+         ctx.error = error_code::syntax_error;
+         return false;
+      }
+      else {
+         using U = std::remove_cvref_t<T>;
+         static constexpr auto N = reflect<U>::size;
+         static constexpr auto HashInfo = hash_info<U>;
+         const auto index = decode_hash_with_size<TOML, U, HashInfo, HashInfo.type>::op(
+            path.front().data(), path.front().data() + path.front().size(), path.front().size());
+
+         const bool key_matches = index < N && path.front() == reflect<U>::keys[index];
+
+         if (key_matches) [[likely]] {
+            bool success = false;
+            visit<N>(
+               [&]<size_t I>() {
+                  if (I == index) {
+                     decltype(auto) member_obj = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<U>) {
+                           return get<I>(to_tie(root));
+                        }
+                        else {
+                           return get_member(root, get<I>(reflect<U>::values));
+                        }
+                     }();
+
+                     using member_type = std::decay_t<decltype(member_obj)>;
+
+                     if (path.size() == 1) {
+                        // This is the final element in the path - it should be an array
+                        if constexpr (emplace_backable<member_type>) {
+                           // Emplace a new element and parse into it
+                           auto& new_element = member_obj.emplace_back();
+                           using element_type = std::decay_t<decltype(new_element)>;
+                           from<TOML, element_type>::template op<toml::is_internal_on<Opts>()>(new_element, ctx, it,
+                                                                                               end);
+                           success = !bool(ctx.error);
+                        }
+                        else {
+                           // Not an array type that supports emplace_back
+                           ctx.error = error_code::syntax_error;
+                           success = false;
+                        }
+                     }
+                     else {
+                        // More path segments remaining - recurse
+                        if constexpr (emplace_backable<member_type>) {
+                           // If this is an array, navigate to the last element
+                           if (member_obj.empty()) {
+                              // Need to add an element first
+                              member_obj.emplace_back();
+                           }
+                           success = resolve_array_of_tables<Opts>(member_obj.back(), path.subspan(1), ctx, it, end);
+                        }
+                        else if constexpr (glz::reflectable<member_type> || glz::glaze_object_t<member_type>) {
+                           success = resolve_array_of_tables<Opts>(member_obj, path.subspan(1), ctx, it, end);
+                        }
+                        else {
+                           ctx.error = error_code::syntax_error;
+                           success = false;
+                        }
+                     }
+                  }
+               },
+               index);
+            return success;
+         }
+         else {
+            if constexpr (Opts.error_on_unknown_keys) {
+               ctx.error = error_code::unknown_key;
+               return false;
+            }
+
+            // Skip unknown key's content
+            skip_value<TOML>::template op<Opts>(ctx, it, end);
+            return !bool(ctx.error);
+         }
+      }
+   }
+
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<TOML, T>
@@ -1635,35 +1721,55 @@ namespace glz
                detail::parse_toml_object_members<Opts>(value, it, end, ctx, true); // true for is_inline_table
                // The parse_toml_object_members should consume the final '}' if successful
             }
-            else if (*it == '[') { // Normal table
+            else if (*it == '[') { // Normal table or array of tables
                std::vector<std::string> path;
 
                if constexpr (toml::check_is_internal(Opts)) {
-                  return; // is it's internal we return to root.
+                  return; // if it's internal we return to root.
                }
                else {
                   ++it;
-                  if (*it == '[') { // Array of tables
-
+                  if (it != end && *it == '[') { // Array of tables [[name]]
                      ++it; // skip the second bracket
-                     ctx.error = error_code::feature_not_supported;
-                     return;
-                     // TODO: the logic should ideally branch here, because arrays should ignore multiple defenition
-                     // errors And should also use push back version but for now we just error out, will support
-                     // later
-                  }
-                  skip_ws_and_comments(it, end);
+                     skip_ws_and_comments(it, end);
 
-                  if (!parse_toml_key(path, ctx, it, end)) {
-                     return;
+                     if (!parse_toml_key(path, ctx, it, end)) {
+                        return;
+                     }
+
+                     // Expect closing ]]
+                     skip_ws_and_comments(it, end);
+                     if (it == end || *it != ']') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     ++it; // skip first ']'
+                     if (it == end || *it != ']') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     ++it; // skip second ']'
+
+                     // Navigate to the array and emplace a new element
+                     if (!resolve_array_of_tables<Opts>(value, std::span{path}, ctx, it, end)) {
+                        return;
+                     }
                   }
-                  if (it == end || *it != ']') {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-                  it++; // skip ']'
-                  if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
-                     return;
+                  else {
+                     // Normal table [name]
+                     skip_ws_and_comments(it, end);
+
+                     if (!parse_toml_key(path, ctx, it, end)) {
+                        return;
+                     }
+                     if (it == end || *it != ']') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     ++it; // skip ']'
+                     if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
+                        return;
+                     }
                   }
                }
             }
