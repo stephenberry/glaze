@@ -209,6 +209,45 @@ glz::read_toml(c, input);
 
 Glaze writes TOML in spec-compliant order: scalar key-value pairs appear before tables and array-of-tables sections. This ensures the output is valid TOML that can be parsed by any compliant reader.
 
+### Inline Tables
+
+By default, `std::vector` of objects uses array-of-tables (`[[name]]`) syntax. To force inline table syntax (`[{...}, {...}]`) instead, use the `glz::inline_table` wrapper in your `glz::meta` definition:
+
+```cpp
+struct product
+{
+   std::string name;
+   int sku;
+};
+
+struct catalog
+{
+   std::string store_name;
+   std::vector<product> products;
+};
+
+template <>
+struct glz::meta<catalog>
+{
+   using T = catalog;
+   // Use inline_table wrapper for compact inline syntax
+   static constexpr auto value = object(&T::store_name, "products", glz::inline_table<&T::products>);
+};
+
+catalog c{"My Store", {{"Widget", 100}, {"Gadget", 200}}};
+std::string toml{};
+glz::write_toml(c, toml);
+```
+
+Output:
+
+```toml
+store_name = "My Store"
+products = [{name = "Widget", sku = 100}, {name = "Gadget", sku = 200}]
+```
+
+This is useful when you want a more compact representation or when the array contains simple objects with few fields.
+
 ## Using the Generic API
 
 The convenience wrappers call into the generic `glz::read`/`glz::write` pipeline. You can reuse the same options struct you already use for JSON while switching the format to TOML:

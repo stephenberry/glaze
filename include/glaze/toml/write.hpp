@@ -596,6 +596,197 @@ namespace glz
       }
    }
 
+   // ============================================
+   // inline_table wrapper for TOML
+   // Forces array-of-objects to serialize using inline table syntax {key = value}
+   // instead of array-of-tables [[name]] syntax
+   // ============================================
+
+   template <class T>
+   struct inline_table_t
+   {
+      static constexpr bool glaze_wrapper = true;
+      static constexpr auto glaze_reflect = false;
+      using value_type = T;
+      T& val;
+   };
+
+   template <class T>
+   inline_table_t(T&) -> inline_table_t<T>;
+
+   // Helper to create wrapper from member pointer
+   template <auto MemPtr>
+   inline constexpr decltype(auto) inline_table_impl() noexcept
+   {
+      return
+         [](auto&& val) { return inline_table_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+   }
+
+   // Usage: glz::inline_table<&T::member>
+   template <auto MemPtr>
+   constexpr auto inline_table = inline_table_impl<MemPtr>();
+
+   // Detect inline_table wrapper
+   template <class T>
+   struct is_inline_table : std::false_type {};
+
+   template <class T>
+   struct is_inline_table<inline_table_t<T>> : std::true_type {};
+
+   template <class T>
+   inline constexpr bool is_inline_table_v = is_inline_table<std::remove_cvref_t<T>>::value;
+
+   // Forward declaration for inline object writer
+   template <auto Opts, class T, class V, class B>
+   void write_inline_object(V&& value, is_context auto&& ctx, B&& b, auto& ix);
+
+   // Specialization for inline_table_t wrapper - writes array of objects as inline tables
+   // Example output: [{name = "foo", id = 1}, {name = "bar", id = 2}]
+   template <class T>
+   struct to<TOML, inline_table_t<T>>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& wrapper, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         auto& value = wrapper.val;
+
+         if (empty_range(value)) {
+            if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
+               return;
+            }
+            dump("[]", b, ix);
+            return;
+         }
+
+         if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump('[', b, ix);
+
+         bool first = true;
+         for (auto&& element : value) {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            if (!first) {
+               if (!ensure_space(ctx, b, ix + 2)) [[unlikely]] {
+                  return;
+               }
+               dump(", ", b, ix);
+            }
+            else {
+               first = false;
+            }
+
+            // Write inline object {key = value, ...}
+            using element_t = std::remove_cvref_t<decltype(element)>;
+            write_inline_object<Opts, element_t>(element, ctx, b, ix);
+         }
+
+         if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+            return;
+         }
+         dump(']', b, ix);
+      }
+   };
+
+   // Write an object in inline table format: {key1 = value1, key2 = value2}
+   template <auto Options, class T, class V, class B>
+   void write_inline_object(V&& value, is_context auto&& ctx, B&& b, auto& ix)
+   {
+      static constexpr auto N = reflect<T>::size;
+      using Type = T;
+
+      decltype(auto) t = [&]() -> decltype(auto) {
+         if constexpr (reflectable<Type>) {
+            return to_tie(value);
+         }
+         else {
+            return nullptr;
+         }
+      }();
+
+      if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
+         return;
+      }
+      dump('{', b, ix);
+
+      bool first = true;
+      for_each<N>([&]<size_t I>() {
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         using val_t = field_t<Type, I>;
+
+         // Skip member function pointers unless explicitly enabled
+         constexpr bool write_member_functions = check_write_member_functions(Options);
+         if constexpr (always_skipped<val_t> || (!write_member_functions && is_member_function_pointer<val_t>)) {
+            return;
+         }
+
+         // Check if nullable and null
+         if constexpr (null_t<val_t>) {
+            if constexpr (always_null_t<val_t>) {
+               return;
+            }
+            else {
+               decltype(auto) element = [&]() -> decltype(auto) {
+                  if constexpr (reflectable<Type>) {
+                     return get<I>(t);
+                  }
+                  else {
+                     return get<I>(reflect<Type>::values);
+                  }
+               };
+
+               bool is_null = false;
+               if constexpr (nullable_wrapper<val_t>)
+                  is_null = !bool(element()(value).val);
+               else if constexpr (nullable_value_t<val_t>)
+                  is_null = !get_member(value, element()).has_value();
+               else
+                  is_null = !bool(get_member(value, element()));
+
+               if (is_null) {
+                  return;
+               }
+            }
+         }
+
+         static constexpr auto key = glz::get<I>(reflect<Type>::keys);
+         static constexpr auto padding = key.size() + 16;
+         if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
+            return;
+         }
+
+         if (!first) {
+            dump(", ", b, ix);
+         }
+         else {
+            first = false;
+         }
+
+         std::memcpy(&b[ix], key.data(), key.size());
+         ix += key.size();
+         dump(" = ", b, ix);
+
+         // Write the value
+         if constexpr (reflectable<Type>) {
+            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+         }
+         else {
+            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<Type>::values)), ctx, b, ix);
+         }
+      });
+
+      if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+         return;
+      }
+      dump('}', b, ix);
+   }
+
    // Type trait to detect if a type is an array of objects (for array-of-tables)
    template <class T>
    constexpr bool is_array_of_objects_v = []() constexpr {

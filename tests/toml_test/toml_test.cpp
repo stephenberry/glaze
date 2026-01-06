@@ -2936,4 +2936,123 @@ sku = 200
    };
 };
 
+// Struct for inline_table wrapper tests
+struct inline_product
+{
+   std::string name{};
+   int sku{};
+
+   bool operator==(const inline_product&) const = default;
+};
+
+template <>
+struct glz::meta<inline_product>
+{
+   using T = inline_product;
+   static constexpr auto value = object(&T::name, &T::sku);
+};
+
+struct inline_catalog
+{
+   std::string store_name{};
+   std::vector<inline_product> products{};
+};
+
+template <>
+struct glz::meta<inline_catalog>
+{
+   using T = inline_catalog;
+   // Use inline_table wrapper to force inline syntax instead of [[products]]
+   static constexpr auto value = object(&T::store_name, "products", glz::inline_table<&T::products>);
+};
+
+struct mixed_inline_and_aot_container
+{
+   std::string title{};
+   std::vector<inline_product> inline_items{};  // Will use inline_table
+   std::vector<product> aot_items{};  // Will use array-of-tables
+};
+
+template <>
+struct glz::meta<mixed_inline_and_aot_container>
+{
+   using T = mixed_inline_and_aot_container;
+   static constexpr auto value = object(
+      &T::title,
+      "inline_items", glz::inline_table<&T::inline_items>,  // Inline syntax
+      &T::aot_items  // Array-of-tables syntax
+   );
+};
+
+suite inline_table_tests = [] {
+   "write_inline_table_basic"_test = [] {
+      inline_catalog c{};
+      c.store_name = "Hardware Store";
+      c.products = {{"Hammer", 100}, {"Nail", 200}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      // Should use inline table syntax, not [[products]]
+      expect(buffer.find("[[products]]") == std::string::npos) << "Should not use array-of-tables syntax";
+      expect(buffer.find("products = [{") != std::string::npos) << "Should use inline table syntax";
+      expect(buffer.find("name = \"Hammer\"") != std::string::npos);
+      expect(buffer.find("sku = 100") != std::string::npos);
+   };
+
+   "write_inline_table_empty"_test = [] {
+      inline_catalog c{};
+      c.store_name = "Empty Store";
+      c.products = {};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      expect(buffer.find("products = []") != std::string::npos) << "Empty inline array";
+   };
+
+   "write_inline_table_single_element"_test = [] {
+      inline_catalog c{};
+      c.store_name = "Single Item Store";
+      c.products = {{"Widget", 42}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      expect(buffer.find("[[products]]") == std::string::npos);
+      expect(buffer.find("products = [{name = \"Widget\", sku = 42}]") != std::string::npos);
+   };
+
+   "write_inline_table_multiple_elements"_test = [] {
+      inline_catalog c{};
+      c.store_name = "Multi Store";
+      c.products = {{"A", 1}, {"B", 2}, {"C", 3}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      // All elements should be on the same line with inline table format
+      expect(buffer.find("}, {") != std::string::npos) << "Elements separated by comma-brace";
+      expect(buffer.find("[[products]]") == std::string::npos);
+   };
+
+   "mixed_inline_and_array_of_tables"_test = [] {
+      // Test that inline_table and regular array-of-tables can coexist
+      mixed_inline_and_aot_container c{};
+      c.title = "Mixed Container";
+      c.inline_items = {{"Inline1", 10}, {"Inline2", 20}};
+      c.aot_items = {{"AOT1", 100}, {"AOT2", 200}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      // inline_items should use inline syntax
+      expect(buffer.find("inline_items = [{") != std::string::npos) << "Inline items should use inline syntax";
+      expect(buffer.find("[[inline_items]]") == std::string::npos) << "Inline items should NOT use [[]] syntax";
+
+      // aot_items should use array-of-tables syntax
+      expect(buffer.find("[[aot_items]]") != std::string::npos) << "AOT items should use [[]] syntax";
+   };
+};
+
 int main() { return 0; }
