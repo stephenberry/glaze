@@ -47,34 +47,21 @@ jobs:
             /tmp/p2996_test
           "
 
-    - name: CMake configure with P2996 reflection
+    - name: Build and run json_test with CMake
       run: |
         docker run --rm \
           -v ${{ github.workspace }}:/glaze \
           -w /glaze \
           ${{ env.P2996_IMAGE }} \
           /bin/sh -c "
+            apt-get update && apt-get install -y cmake &&
             cmake -B build \
               -DCMAKE_CXX_COMPILER=clang++ \
               -DCMAKE_CXX_FLAGS='-std=c++26 -freflection -fexpansion-statements -stdlib=libc++' \
               -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,${{ env.P2996_LIB_PATH }}' \
               -DCMAKE_BUILD_TYPE=Release \
               -Dglaze_DEVELOPER_MODE=ON \
-              -Dglaze_ENABLE_REFLECTION26=ON
+              -Dglaze_ENABLE_REFLECTION26=ON &&
+            cmake --build build --target json_test -j &&
+            ./build/tests/json_test/json_test
           "
-
-    - name: Build json_test
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/glaze \
-          -w /glaze \
-          ${{ env.P2996_IMAGE }} \
-          cmake --build build --target json_test -j
-
-    - name: Run json_test
-      run: |
-        docker run --rm \
-          -v ${{ github.workspace }}:/glaze \
-          -w /glaze \
-          ${{ env.P2996_IMAGE }} \
-          ./build/tests/json_test/json_test
