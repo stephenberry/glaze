@@ -370,6 +370,44 @@ size_t count = arr.size();
 if (doc.root().contains("name")) { /* ... */ }
 ```
 
+## Size Accessor
+
+Get string lengths or element counts without extracting values - useful for validation:
+
+```cpp
+auto result = glz::lazy_beve(buffer);
+if (result) {
+    // Validate string length before extracting
+    if (result->size["username"] > 50) {
+        // Username too long - reject without parsing
+        return error;
+    }
+
+    // Check array size
+    if (result->size["items"] == 0) {
+        // Empty items array
+    }
+
+    // Also works with index access
+    size_t first_name_len = result->size[0];  // For arrays
+}
+```
+
+The `size()` method returns:
+- **Strings**: character length
+- **Arrays**: element count
+- **Objects**: number of keys
+- **Primitives**: 0
+
+You can also call `size()` directly on any view:
+
+```cpp
+auto username = (*result)["username"];
+if (username.size() > 50) {
+    // Too long
+}
+```
+
 ## Deserializing into Structs
 
 Use `glz::read_beve()` to deserialize a lazy view directly into a typed struct:
