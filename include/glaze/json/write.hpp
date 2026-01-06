@@ -1205,8 +1205,7 @@ namespace glz
 
                   // add space for '\n' and ',' characters for each element, hence `+ 2`
                   // use n + 1 because we put the end array character after the last element with whitespace
-                  if (!ensure_space(ctx, b,
-                                    ix + (n + 1) * (value_padding + ctx.depth + 2) + write_padding_bytes))
+                  if (!ensure_space(ctx, b, ix + (n + 1) * (value_padding + ctx.depth + 2) + write_padding_bytes))
                      [[unlikely]] {
                      return;
                   }
