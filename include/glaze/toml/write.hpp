@@ -732,8 +732,8 @@ namespace glz
          using val_t = field_t<Type, I>;
 
          // Skip member function pointers unless explicitly enabled
-         constexpr bool write_member_functions = check_write_member_functions(Options);
-         if constexpr (always_skipped<val_t> || (!write_member_functions && is_member_function_pointer<val_t>)) {
+         constexpr bool write_function_pointers = check_write_function_pointers(Options);
+         if constexpr (always_skipped<val_t> || (!write_function_pointers && is_member_function_pointer<val_t>)) {
             return;
          }
 
@@ -855,8 +855,8 @@ namespace glz
       // Helper lambda to check if a field should be skipped
       auto should_skip_field = [&]<size_t I>() constexpr {
          using val_t = field_t<T, I>;
-         constexpr bool write_member_functions = check_write_member_functions(Options);
-         return always_skipped<val_t> || (!write_member_functions && is_member_function_pointer<val_t>);
+         constexpr bool write_function_pointers = check_write_function_pointers(Options);
+         return always_skipped<val_t> || (!write_function_pointers && is_member_function_pointer<val_t>);
       };
 
       // Helper lambda to check if nullable field is null

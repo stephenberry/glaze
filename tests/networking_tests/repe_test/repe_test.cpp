@@ -297,12 +297,12 @@ suite structs_of_functions = [] {
    };
 
    "volatile_member_functions_test"_test = [] {
-      struct opts_with_write_member_functions : glz::opts
+      struct opts_with_write_function_pointers : glz::opts
       {
-         bool write_member_functions = true;
+         bool write_function_pointers = true;
       };
 
-      glz::registry<opts_with_write_member_functions{}> server{};
+      glz::registry<opts_with_write_function_pointers{}> server{};
       VolatileData obj{};
 
       server.on(obj);
@@ -323,7 +323,7 @@ suite structs_of_functions = [] {
       response = call_json(server, {"/i"});
       expect(response.body == "11");
 
-      // Test empty query with write_member_functions=true
+      // Test empty query with write_function_pointers=true
       response = call_json(server, {""});
       expect(
          response.body ==
@@ -869,13 +869,13 @@ suite deeply_nested_tests = [] {
       expect(response.body == R"({"middle":{"inner":{"val":99},"name":"modified_mid"},"score":1.23})") << response.body;
    };
 
-   "nested_mix_write_member_functions_test"_test = [] {
-      struct opts_with_write_member_functions : glz::opts
+   "nested_mix_write_function_pointers_test"_test = [] {
+      struct opts_with_write_function_pointers : glz::opts
       {
-         bool write_member_functions = true;
+         bool write_function_pointers = true;
       };
 
-      glz::registry<opts_with_write_member_functions{}> server{};
+      glz::registry<opts_with_write_function_pointers{}> server{};
       outer_t obj{};
       server.on(obj);
 
@@ -893,12 +893,12 @@ suite deeply_nested_tests = [] {
    };
 
    "museum_member_functions_test"_test = [] {
-      struct opts_with_write_member_functions : glz::opts
+      struct opts_with_write_function_pointers : glz::opts
       {
-         bool write_member_functions = true;
+         bool write_function_pointers = true;
       };
 
-      glz::registry<opts_with_write_member_functions{}> server{};
+      glz::registry<opts_with_write_function_pointers{}> server{};
       Museum museum{};
       museum.name = "The Louvre";
       museum.main_exhibit = {"Mona Lisa", 1503};

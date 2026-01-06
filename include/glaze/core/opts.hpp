@@ -145,8 +145,8 @@ namespace glz
    // If full validation should be performed on skipped values
 
    // ---
-   // bool write_member_functions = false;
-   // If member function pointers should be serialized when provided in glz::meta
+   // bool write_function_pointers = false;
+   // If function pointers (member and non-member) should be serialized when provided in glz::meta
 
    // ---
    // bool validate_trailing_whitespace = false;
@@ -288,10 +288,10 @@ namespace glz
       }
    }
 
-   consteval bool check_write_member_functions(auto&& Opts)
+   consteval bool check_write_function_pointers(auto&& Opts)
    {
-      if constexpr (requires { Opts.write_member_functions; }) {
-         return Opts.write_member_functions;
+      if constexpr (requires { Opts.write_function_pointers; }) {
+         return Opts.write_function_pointers;
       }
       else {
          return false;

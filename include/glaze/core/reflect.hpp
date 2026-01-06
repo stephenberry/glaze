@@ -376,20 +376,20 @@ namespace glz
          }
          else if constexpr (Opts.skip_null_members) {
             // if any type could be null then we might skip
-            constexpr bool write_member_functions = check_write_member_functions(Opts);
+            constexpr bool write_function_pointers = check_write_function_pointers(Opts);
             return [&]<size_t... I>(std::index_sequence<I...>) {
                return ((always_skipped<field_t<T, I>> ||
-                        (!write_member_functions && is_member_function_pointer<field_t<T, I>>) ||
+                        (!write_function_pointers && is_member_function_pointer<field_t<T, I>>) ||
                         null_t<field_t<T, I>>) ||
                        ...);
             }(std::make_index_sequence<N>{});
          }
          else {
             // if we have an always_skipped type then we return true
-            constexpr bool write_member_functions = check_write_member_functions(Opts);
+            constexpr bool write_function_pointers = check_write_function_pointers(Opts);
             return [&]<size_t... I>(std::index_sequence<I...>) {
                return ((always_skipped<field_t<T, I>> ||
-                        (!write_member_functions && is_member_function_pointer<field_t<T, I>>)) ||
+                        (!write_function_pointers && is_member_function_pointer<field_t<T, I>>)) ||
                        ...);
             }(std::make_index_sequence<N>{});
          }

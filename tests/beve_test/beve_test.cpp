@@ -3148,13 +3148,13 @@ suite member_function_pointer_beve_serialization = [] {
       expect(not glz::write_beve(input, buffer_default));
       expect(buffer_default.find("description") == std::string::npos);
 
-      struct opts_with_member_functions : glz::opts
+      struct opts_with_function_pointers : glz::opts
       {
-         bool write_member_functions = true;
+         bool write_function_pointers = true;
       };
 
       std::string buffer_opt_in{};
-      expect(not glz::write<glz::set_beve<opts_with_member_functions{}>()>(input, buffer_opt_in));
+      expect(not glz::write<glz::set_beve<opts_with_function_pointers{}>()>(input, buffer_opt_in));
       expect(buffer_opt_in.find("description") != std::string::npos);
    };
 };

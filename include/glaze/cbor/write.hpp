@@ -613,7 +613,7 @@ namespace glz
             return true;
          }
          else if constexpr (is_member_function_pointer<V>) {
-            return !check_write_member_functions(Opts);
+            return !check_write_function_pointers(Opts);
          }
          else {
             return false;
