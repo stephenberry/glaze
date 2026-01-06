@@ -166,12 +166,12 @@ namespace glz
 
             dump('{', out, ix);
             if constexpr (Opts.prettify) {
-               ctx.indentation_level += Opts.indentation_width;
+               ctx.depth += Opts.indentation_width;
                dump('\n', out, ix);
-               dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
+               dumpn(Opts.indentation_char, ctx.depth, out, ix);
             }
             else {
-               ++ctx.indentation_level;
+               ++ctx.depth;
             }
 
             const auto key_type = (tag & 0b000'11'000) >> 3;
@@ -209,7 +209,7 @@ namespace glz
                      dump(',', out, ix);
                      if constexpr (Opts.prettify) {
                         dump('\n', out, ix);
-                        dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
+                        dumpn(Opts.indentation_char, ctx.depth, out, ix);
                      }
                   }
                }
@@ -245,7 +245,7 @@ namespace glz
                      dump(',', out, ix);
                      if constexpr (Opts.prettify) {
                         dump('\n', out, ix);
-                        dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
+                        dumpn(Opts.indentation_char, ctx.depth, out, ix);
                      }
                   }
                }
@@ -258,12 +258,12 @@ namespace glz
             }
 
             if constexpr (Opts.prettify) {
-               ctx.indentation_level -= Opts.indentation_width;
+               ctx.depth -= Opts.indentation_width;
                dump('\n', out, ix);
-               dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
+               dumpn(Opts.indentation_char, ctx.depth, out, ix);
             }
             else {
-               --ctx.indentation_level;
+               --ctx.depth;
             }
             dump('}', out, ix);
             break;
@@ -472,12 +472,12 @@ namespace glz
 
                dump('{', out, ix);
                if constexpr (Opts.prettify) {
-                  ctx.indentation_level += Opts.indentation_width;
+                  ctx.depth += Opts.indentation_width;
                   dump('\n', out, ix);
-                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
+                  dumpn(Opts.indentation_char, ctx.depth, out, ix);
                }
                else {
-                  ++ctx.indentation_level;
+                  ++ctx.depth;
                }
 
                if constexpr (Opts.prettify) {
@@ -493,7 +493,7 @@ namespace glz
                dump(',', out, ix);
                if constexpr (Opts.prettify) {
                   dump('\n', out, ix);
-                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
+                  dumpn(Opts.indentation_char, ctx.depth, out, ix);
                }
 
                if constexpr (Opts.prettify) {
@@ -511,7 +511,7 @@ namespace glz
                dump(',', out, ix);
                if constexpr (Opts.prettify) {
                   dump('\n', out, ix);
-                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
+                  dumpn(Opts.indentation_char, ctx.depth, out, ix);
                }
 
                if constexpr (Opts.prettify) {
@@ -527,12 +527,12 @@ namespace glz
                }
 
                if constexpr (Opts.prettify) {
-                  ctx.indentation_level -= Opts.indentation_width;
+                  ctx.depth -= Opts.indentation_width;
                   dump('\n', out, ix);
-                  dumpn(Opts.indentation_char, ctx.indentation_level, out, ix);
+                  dumpn(Opts.indentation_char, ctx.depth, out, ix);
                }
                else {
-                  --ctx.indentation_level;
+                  --ctx.depth;
                }
                dump('}', out, ix);
                break;

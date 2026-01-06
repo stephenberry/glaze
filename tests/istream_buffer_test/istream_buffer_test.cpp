@@ -3573,7 +3573,7 @@ suite streaming_state_unit_tests = [] {
 
       // Should have all context members
       ctx.error = glz::error_code::none;
-      ctx.indentation_level = 0;
+      ctx.depth = 0;
 
       // Plus streaming state
       expect(!ctx.stream.enabled()); // Not initialized

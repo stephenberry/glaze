@@ -92,12 +92,12 @@ namespace glz
          if (ctx.error == error_code::partial_read_complete) [[likely]] {
             ctx.error = error_code::none;
          }
-         else if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
+         else if (ctx.error == error_code::end_reached && ctx.depth == 0) {
             ctx.error = error_code::none;
          }
       }
       else {
-         if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
+         if (ctx.error == error_code::end_reached && ctx.depth == 0) {
             ctx.error = error_code::none;
          }
       }
@@ -151,7 +151,7 @@ namespace glz
       requires read_supported<T, Opts.format> && is_input_streaming<std::remove_reference_t<Buffer>>
    [[nodiscard]] error_ctx read_streaming(T& value, Buffer&& buffer, Ctx&& ctx)
    {
-      // For streaming, we need null_terminated = false to track indentation_level
+      // For streaming, we need null_terminated = false to track depth
       static constexpr auto StreamingOpts = [] {
          auto o = is_padded_off<Opts>();
          o.null_terminated = false;
@@ -185,7 +185,7 @@ namespace glz
 
       // Handle end_reached as success when parsing completed at depth 0
       // (same logic as non-streaming read)
-      if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
+      if (ctx.error == error_code::end_reached && ctx.depth == 0) {
          ctx.error = error_code::none;
       }
 
