@@ -56,7 +56,27 @@ jobs:
           -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
-      run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
+      # Only build networking tests that actually use Asio
+      run: |
+        cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc) --target \
+          asio_repe \
+          http_examples \
+          http_router_test \
+          http_client_test \
+          http_server_api_tests \
+          https_test \
+          jsonrpc_registry_test \
+          openapi_test \
+          repe_buffer_test \
+          repe_plugin_test \
+          repe_test \
+          registry_view_test \
+          repe_to_jsonrpc_test \
+          websocket_close_test \
+          websocket_client_test \
+          utf8_test \
+          shared_context_bug_test \
+          wss_test
 
     - name: Test
-      run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
+      run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build" -R "^(asio_repe|http_examples|http_router_test|http_client_test|http_server_api_tests|https_test|jsonrpc_registry_test|openapi_test|repe_buffer_test|repe_plugin_test|repe_test|registry_view_test|repe_to_jsonrpc_test|websocket_close_test|websocket_client_test|utf8_test|shared_context_bug_test|wss_test)$"
