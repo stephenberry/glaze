@@ -1,20 +1,23 @@
 name: p2996-reflection
 
 # C++26 P2996 Reflection Testing
-# This workflow tests Glaze with the P2996 reflection backend
-# Requires Bloomberg clang-p2996 or a C++26 compiler with reflection support
+# This workflow tests Glaze with the Bloomberg clang-p2996 compiler
+# Uses public Docker image: https://hub.docker.com/r/vsavkov/clang-p2996
 
 on:
-  # Manual trigger only - requires special compiler
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      docker_image:
-        description: 'Docker image with Bloomberg clang-p2996'
-        required: false
-        default: 'ghcr.io/stephenberry/glaze-p2996:latest'
 
 env:
   BUILD_TYPE: Release
+  # Public Docker image with Bloomberg clang-p2996
+  # See: https://hub.docker.com/r/vsavkov/clang-p2996
+  P2996_IMAGE: vsavkov/clang-p2996:amd64
+  # Library path for runtime linking
+  P2996_LIB_PATH: /opt/p2996/clang/lib/x86_64-unknown-linux-gnu
 
 jobs:
   test-p2996:
@@ -24,41 +27,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Pull P2996 Docker image
-      run: |
-        docker pull ${{ inputs.docker_image }} || {
-          echo "::error::Docker image not found: ${{ inputs.docker_image }}"
-          echo ""
-          echo "To use this workflow, you need a Docker image with Bloomberg clang-p2996."
-          echo ""
-          echo "Option 1: Build and push locally"
-          echo "  docker build -t ghcr.io/stephenberry/glaze-p2996:latest -f - . << 'EOF'"
-          echo "  FROM ubuntu:22.04"
-          echo "  RUN apt-get update && apt-get install -y git cmake ninja-build python3"
-          echo "  RUN git clone https://github.com/bloomberg/clang-p2996.git /opt/llvm-project"
-          echo "  WORKDIR /opt/llvm-project"
-          echo "  RUN cmake -S llvm -B build -G Ninja \\"
-          echo "      -DCMAKE_BUILD_TYPE=Release \\"
-          echo "      -DLLVM_ENABLE_PROJECTS=\"clang\" \\"
-          echo "      -DLLVM_ENABLE_RUNTIMES=\"libcxx;libcxxabi\""
-          echo "  RUN cmake --build build"
-          echo "  ENV PATH=/opt/llvm-project/build/bin:\$PATH"
-          echo "  EOF"
-          echo ""
-          echo "  docker push ghcr.io/stephenberry/glaze-p2996:latest"
-          exit 1
-        }
+      run: docker pull ${{ env.P2996_IMAGE }}
 
     - name: Verify P2996 compiler
       run: |
-        docker run --rm ${{ inputs.docker_image }} \
+        docker run --rm ${{ env.P2996_IMAGE }} \
           clang++ --version
 
     - name: Test P2996 reflection support
@@ -66,50 +40,48 @@ jobs:
         docker run --rm \
           -v ${{ github.workspace }}:/glaze \
           -w /glaze \
-          ${{ inputs.docker_image }} \
+          ${{ env.P2996_IMAGE }} \
           /bin/sh -c "
             echo 'Testing P2996 reflection integration...'
 
             # Create a simple test to verify P2996 works
             cat > /tmp/p2996_smoke_test.cpp << 'CPPEOF'
-            #include \"glaze/glaze.hpp\"
-            #include <iostream>
+#include \"glaze/glaze.hpp\"
+#include <iostream>
 
-            struct TestStruct {
-                std::string name;
-                int value;
-                double data;
-            };
+struct TestStruct {
+    std::string name;
+    int value;
+    double data;
+};
 
-            int main() {
-                std::cout << \"GLZ_REFLECTION26 = \" << GLZ_REFLECTION26 << std::endl;
+int main() {
+    std::cout << \"GLZ_REFLECTION26 = \" << GLZ_REFLECTION26 << std::endl;
 
-                // Test member_names
-                constexpr auto names = glz::member_names<TestStruct>;
-                if (names.size() != 3) return 1;
-                if (names[0] != \"name\") return 1;
-                if (names[1] != \"value\") return 1;
-                if (names[2] != \"data\") return 1;
+    // Test member_names
+    constexpr auto names = glz::member_names<TestStruct>;
+    if (names.size() != 3) return 1;
+    if (names[0] != \"name\") return 1;
+    if (names[1] != \"value\") return 1;
+    if (names[2] != \"data\") return 1;
 
-                // Test JSON round-trip
-                TestStruct obj{\"test\", 42, 3.14};
-                auto json = glz::write_json(obj).value_or(\"error\");
+    // Test JSON round-trip
+    TestStruct obj{\"test\", 42, 3.14};
+    auto json = glz::write_json(obj).value_or(\"error\");
 
-                TestStruct obj2;
-                if (glz::read_json(obj2, json)) return 1;
-                if (obj2.name != \"test\" || obj2.value != 42) return 1;
+    TestStruct obj2;
+    if (glz::read_json(obj2, json)) return 1;
+    if (obj2.name != \"test\" || obj2.value != 42) return 1;
 
-                std::cout << \"P2996 smoke test passed!\" << std::endl;
-                std::cout << \"JSON: \" << json << std::endl;
-                return 0;
-            }
-            CPPEOF
+    std::cout << \"P2996 smoke test passed!\" << std::endl;
+    std::cout << \"JSON: \" << json << std::endl;
+    return 0;
+}
+CPPEOF
 
             clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
               -I/glaze/include -DGLZ_REFLECTION26=1 \
-              -Wl,-rpath,/opt/llvm-project/build/lib/aarch64-unknown-linux-gnu \
-              -Wl,-rpath,/opt/llvm-project/build/lib/x86_64-unknown-linux-gnu \
-              -Wl,-rpath,/opt/llvm-project/build/lib \
+              -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
               -o /tmp/p2996_smoke_test /tmp/p2996_smoke_test.cpp
 
             /tmp/p2996_smoke_test
@@ -120,17 +92,16 @@ jobs:
         docker run --rm \
           -v ${{ github.workspace }}:/glaze \
           -w /glaze \
-          ${{ inputs.docker_image }} \
+          ${{ env.P2996_IMAGE }} \
           /bin/sh -c "
             mkdir -p build
             cd build
 
             cmake .. \
               -DCMAKE_CXX_COMPILER=clang++ \
-              -DCMAKE_CXX_FLAGS='-std=c++26 -freflection -fexpansion-statements -stdlib=libc++' \
-              -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,/opt/llvm-project/build/lib/aarch64-unknown-linux-gnu -Wl,-rpath,/opt/llvm-project/build/lib/x86_64-unknown-linux-gnu -Wl,-rpath,/opt/llvm-project/build/lib' \
+              -DCMAKE_CXX_FLAGS='-std=c++26 -freflection -fexpansion-statements -stdlib=libc++ -DGLZ_REFLECTION26=1' \
+              -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,${{ env.P2996_LIB_PATH }}' \
               -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-              -Dglaze_ENABLE_REFLECTION26=ON \
               -Dglaze_ENABLE_SANITIZERS=OFF \
               -Dglaze_BUILD_NETWORKING_TESTS=OFF \
               -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
@@ -144,5 +115,5 @@ jobs:
         docker run --rm \
           -v ${{ github.workspace }}:/glaze \
           -w /glaze/build \
-          ${{ inputs.docker_image }} \
+          ${{ env.P2996_IMAGE }} \
           ctest --output-on-failure -j$(nproc)
