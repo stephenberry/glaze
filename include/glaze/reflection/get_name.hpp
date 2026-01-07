@@ -193,6 +193,30 @@ namespace glz
       { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::same_as<std::string>;
    };
 
+   // Helper to compute renamed key size at compile time
+   // Using consteval forces evaluation before template instantiation
+   // This unified approach works for both GCC and Clang (including Clang 19+)
+   template <class T, size_t I>
+   consteval size_t renamed_key_size()
+   {
+      return meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>).size();
+   }
+
+   // Storage for renamed key with exact size determined at compile time
+   template <class T, size_t I, size_t N = renamed_key_size<T, I>()>
+   struct renamed_key_storage
+   {
+      static constexpr auto value = [] {
+         std::array<char, N + 1> arr{};
+         auto str = meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
+         for (size_t i = 0; i < N; ++i) {
+            arr[i] = str[i];
+         }
+         arr[N] = '\0';
+         return arr;
+      }();
+   };
+
    template <meta_has_rename_key_string T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
@@ -200,38 +224,8 @@ namespace glz
          return std::array<sv, 0>{};
       }
       else {
-         return std::array{[]() -> sv {
-         // Need to move allocation into a new static buffer
-#ifdef __clang__
-            static constexpr auto arr = [] {
-               constexpr auto str = glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
-               constexpr size_t len = str.size();
-               std::array<char, len + 1> arr;
-               for (size_t i = 0; i < len; ++i) {
-                  arr[i] = str[i];
-               }
-               arr[len] = '\0';
-               return arr;
-            }();
-            return {arr.data(), arr.size() - 1};
-#else
-            // GCC does not support constexpr designation on std::string
-            // We therefore limit to a maximum of 64 characters on GCC for key transformations
-            constexpr auto arr_temp = [] {
-               const auto str = glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
-               const size_t len = str.size();
-               std::array<char, 65> arr{};
-               for (size_t i = 0; i < len; ++i) {
-                  arr[i] = str[i];
-               }
-               arr[len] = '\0';
-               return std::pair{arr, len};
-            }();
-            // GCC 12 requires this make_static
-            auto& arr = make_static<arr_temp>::value;
-            return {arr.first.data(), arr.second};
-#endif
-         }()...};
+         return std::array<sv, sizeof...(I)>{
+            sv{renamed_key_storage<T, I>::value.data(), renamed_key_storage<T, I>::value.size() - 1}...};
       }
    }
 #else
