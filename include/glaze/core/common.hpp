@@ -4,6 +4,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <complex>
 #include <cstddef>
 #include <functional>
@@ -457,6 +458,9 @@ namespace glz
 
    template <size_t N>
    struct specified<std::bitset<N>> : std::true_type {};
+
+   template <class T>
+   struct specified<std::atomic<T>> : std::true_type {};
 
    // P2996 can reflect any class, but we must exclude types with their own Glaze specializations.
    // Types with custom serialization should specialize glz::specified<T> to std::true_type.
