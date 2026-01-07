@@ -7,7 +7,8 @@
 
 namespace glz
 {
-   // is_value_proxy concept is defined in common.hpp
+   template <class T>
+   concept is_value_proxy = requires { T::glaze_value_proxy; };
 
    template <uint32_t Format, is_value_proxy T>
    struct from<Format, T>

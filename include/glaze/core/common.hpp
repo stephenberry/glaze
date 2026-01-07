@@ -419,10 +419,6 @@ namespace glz
       std::function(t);
    } && !glaze_t<T>;
 
-   // Value proxy types wrap values with thread-safe access
-   template <class T>
-   concept is_value_proxy = requires { T::glaze_value_proxy; };
-
    template <class T>
    concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Array>;
 
@@ -469,7 +465,7 @@ namespace glz
       std::is_class_v<std::remove_cvref_t<T>> &&
       !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> ||
         range<T> || pair_t<T> || null_t<T> || str_t<T> || bool_t<T> ||
-        tuple_t<T> || func_t<T> || is_value_proxy<T> || is_specified<T>);
+        tuple_t<T> || func_t<T> || is_specified<T>);
 #else
    template <class T>
    concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
