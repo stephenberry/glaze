@@ -600,7 +600,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&&, is_context auto&&, auto&& b, auto& ix) noexcept
       {
-         if constexpr (check_write_member_functions(Opts)) {
+         if constexpr (check_write_function_pointers(Opts)) {
             constexpr sv type_name = name_v<T>;
             dump('"', b, ix);
             dump(type_name, b, ix);
@@ -1078,6 +1078,23 @@ namespace glz
       }
    };
 
+   // Handle function pointers and function references (serialize as their type name)
+   template <class T>
+      requires is_function_ptr_or_ref<T>
+   struct to<JSON, T>
+   {
+      template <auto Opts>
+      static void op(auto&&, is_context auto&&, auto&& b, auto& ix) noexcept
+      {
+         if constexpr (check_write_function_pointers(Opts)) {
+            constexpr sv type_name = name_v<T>;
+            dump('"', b, ix);
+            dump(type_name, b, ix);
+            dump('"', b, ix);
+         }
+      }
+   };
+
    template <class T>
    struct to<JSON, basic_raw_json<T>>
    {
@@ -1390,8 +1407,8 @@ namespace glz
             }
 
             using val_t = detail::iterator_second_type<T>; // the type of value in each [key, value] pair
-            constexpr bool write_member_functions = check_write_member_functions(Opts);
-            if constexpr (!always_skipped<val_t> && (write_member_functions || !is_member_function_pointer<val_t>)) {
+            constexpr bool write_function_pointers = check_write_function_pointers(Opts);
+            if constexpr (!always_skipped<val_t> && (write_function_pointers || !is_any_function_ptr<val_t>)) {
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
                   auto write_first_entry = [&](auto&& it) {
                      auto&& [key, entry_val] = *it;
@@ -1881,8 +1898,8 @@ namespace glz
             }
 
             // skip
-            constexpr bool write_member_functions = check_write_member_functions(Opts);
-            if constexpr (always_skipped<val_t> || (!write_member_functions && is_member_function_pointer<val_t>)) {
+            constexpr bool write_function_pointers = check_write_function_pointers(Opts);
+            if constexpr (always_skipped<val_t> || (!write_function_pointers && is_any_function_ptr<val_t>)) {
                return;
             }
             else {
@@ -2098,9 +2115,8 @@ namespace glz
                      if (meta<T>::skip_if(field_value, key, mctx)) return;
                   }
 
-                  constexpr bool write_member_functions = check_write_member_functions(Opts);
-                  if constexpr (always_skipped<val_t> ||
-                                (!write_member_functions && is_member_function_pointer<val_t>)) {
+                  constexpr bool write_function_pointers = check_write_function_pointers(Opts);
+                  if constexpr (always_skipped<val_t> || (!write_function_pointers && is_any_function_ptr<val_t>)) {
                      return;
                   }
                   else {

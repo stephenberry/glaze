@@ -253,11 +253,11 @@ By default Glaze will handle structs as tagged objects, meaning that keys will b
 
 `glaze/binary/beve_to_json.hpp` provides `glz::beve_to_json`, which directly converts a buffer of BEVE data to a buffer of JSON data.
 
-### Member Function Pointers
+### Function Pointers
 
-Objects that expose member function pointers through `glz::meta` are skipped by the BEVE writer by default. This mirrors JSON/TOML behaviour and avoids emitting unusable callable placeholders in binary payloads.
+Objects that expose function pointers (both member and non-member) through `glz::meta` are skipped by the BEVE writer by default. This mirrors JSON/TOML behaviour and avoids emitting unusable callable placeholders in binary payloads.
 
-If you want the key present, use `write_member_functions = true`.
+If you want the key present, use `write_function_pointers = true`.
 
 ## Custom Map Keys
 

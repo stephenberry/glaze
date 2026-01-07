@@ -41,7 +41,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool validate_skipped` | `false` | Perform full validation on skipped values |
 | `bool validate_trailing_whitespace` | `false` | Validate whitespace after parsing completes |
 | `bool bools_as_numbers` | `false` | Read/write booleans as `1` and `0` |
-| `bool write_member_functions` | `false` | Serialize member function pointers in `glz::meta` (off by default for safety) |
+| `bool write_function_pointers` | `false` | Serialize function pointers (both member and non-member) in `glz::meta` as their type name (off by default) |
 | `bool concatenate` | `true` | Concatenate ranges of `std::pair` into single objects |
 | `bool allow_conversions` | `true` | Allow type conversions in BEVE (e.g., `double` → `float`) |
 | `bool write_type_info` | `true` | Write type info for meta objects in variants |

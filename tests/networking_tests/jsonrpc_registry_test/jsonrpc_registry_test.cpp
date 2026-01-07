@@ -446,4 +446,55 @@ suite jsonrpc_error_json_validity_tests = [] {
    };
 };
 
+// Test for issue #2221: function pointers with arguments causing stack overflow
+struct static_method_api_t
+{
+   struct Greet
+   {
+      constexpr static std::string_view name = "greet";
+      static std::string method() { return "Hello, World!"; }
+   };
+
+   struct GetNumber
+   {
+      constexpr static std::string_view name = "getNumber";
+      static void method(int) {}
+   };
+
+   struct Add
+   {
+      constexpr static std::string_view name = "add";
+      static int method(int a) { return a + 10; }
+   };
+
+   struct glaze
+   {
+      static constexpr auto value =
+         glz::object(Greet::name, &Greet::method, GetNumber::name, &GetNumber::method, Add::name, &Add::method);
+   };
+};
+
+suite jsonrpc_function_pointer_tests = [] {
+   "static_method_function_pointers"_test = [] {
+      // Issue #2221: This was causing a stack overflow due to infinite recursion
+      // when serializing function pointers that matched the nullable_like concept
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      static_method_api_t api{};
+      server.on(api);
+
+      // Test no-arg function returning string
+      auto response = server.call(R"({"jsonrpc":"2.0","method":"greet","id":1})");
+      expect(response.find(R"("result":"Hello, World!")") != std::string::npos) << response;
+
+      // Test function with int param returning void
+      response = server.call(R"({"jsonrpc":"2.0","method":"getNumber","params":42,"id":2})");
+      expect(response.find(R"("result":null)") != std::string::npos) << response;
+
+      // Test function with int param returning int
+      response = server.call(R"({"jsonrpc":"2.0","method":"add","params":5,"id":3})");
+      expect(response.find(R"("result":15)") != std::string::npos) << response;
+   };
+};
+
 int main() { return 0; }
