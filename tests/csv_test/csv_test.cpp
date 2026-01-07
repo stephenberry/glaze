@@ -1,3 +1,10 @@
+// GCC 15's static analysis generates false positive -Warray-bounds warnings for tests that
+// deliberately use undersized buffers to verify buffer_overflow error handling.
+// The actual code calls ensure_space() before dump(), but GCC doesn't track this control flow.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
+
 #include <array>
 #include <cstdint>
 #include <deque>

@@ -42,7 +42,6 @@ jobs:
           ca-certificates \
           cmake \
           git \
-          libssl-dev \
           python3
         update-ca-certificates
 
