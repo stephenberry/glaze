@@ -21,9 +21,6 @@ The tables below list **all** compile time options, organized by category:
 | `bool skip_null_members` | `true` | Skip writing out members if their value is null |
 | `bool prettify` | `false` | Write out prettified JSON |
 | `bool minified` | `false` | Require minified input for faster read performance |
-| `char indentation_char` | `' '` | Prettified JSON indentation character |
-| `uint8_t indentation_width` | `3` | Prettified JSON indentation size |
-| `bool new_lines_in_arrays` | `true` | Whether prettified arrays have new lines per element |
 | `bool error_on_missing_keys` | `false` | Require all non-nullable keys to be present |
 | `bool quoted_num` | `false` | Treat numbers as quoted or arrays as having quoted numbers |
 | `bool number` | `false` | Treat string-like types as numbers |
@@ -50,6 +47,9 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool error_on_const_read` | `false` | Error when attempting to read into a const value |
 | `bool hide_non_invocable` | `true` | Hide non-invocable members from `cli_menu` |
 | `bool escape_control_characters` | `false` | Escape control characters as unicode sequences |
+| `char indentation_char` | `' '` | Prettified JSON indentation character |
+| `uint8_t indentation_width` | `3` | Prettified JSON indentation size |
+| `bool new_lines_in_arrays` | `true` | Whether prettified arrays have new lines per element |
 | `float_precision float_max_write_precision` | `full` | Maximum precision for writing floats |
 | `static constexpr std::string_view float_format` | (none) | Format string for float output using `std::format` (C++23) |
 | `bool skip_null_members_on_read` | `false` | Skip null values when reading (preserve existing value) |
@@ -197,11 +197,24 @@ When `true` (default), null values are omitted from JSON output. This applies to
 #### `prettify`
 When `true`, outputs formatted JSON with indentation and newlines.
 
-#### `indentation_char` / `indentation_width`
-Control prettified output formatting. Default is 3 spaces per level.
+#### `indentation_char` / `indentation_width` (Inheritable)
+Control prettified output formatting. Default is 3 spaces per level. These are inheritable options—define them in a custom opts struct:
+```cpp
+struct my_opts : glz::opts {
+   char indentation_char = '\t';  // use tabs
+   uint8_t indentation_width = 1; // one tab per level
+};
+glz::write<my_opts{.prettify = true}>(obj, json);
+```
 
-#### `new_lines_in_arrays`
-When `true` (default), prettified arrays have each element on its own line.
+#### `new_lines_in_arrays` (Inheritable)
+When `true` (default), prettified arrays have each element on its own line. Set to `false` for compact array output:
+```cpp
+struct compact_arrays : glz::opts {
+   bool new_lines_in_arrays = false;
+};
+glz::write<compact_arrays{.prettify = true}>(obj, json);
+```
 
 #### `raw` / `raw_string`
 Control string quoting and escape sequence handling. Useful for embedding pre-formatted content.

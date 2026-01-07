@@ -315,7 +315,7 @@ namespace glz
          case major::map: {
             dump('{', out, ix);
             if constexpr (Opts.prettify) {
-               ctx.depth += Opts.indentation_width;
+               ctx.depth += check_indentation_width(Opts);
             }
 
             if (additional_info == info::indefinite) {
@@ -339,7 +339,7 @@ namespace glz
                   }
                   if constexpr (Opts.prettify) {
                      dump('\n', out, ix);
-                     dumpn(Opts.indentation_char, ctx.depth, out, ix);
+                     dumpn(check_indentation_char(Opts), ctx.depth, out, ix);
                   }
                   first = false;
 
@@ -372,7 +372,7 @@ namespace glz
                   }
                   if constexpr (Opts.prettify) {
                      dump('\n', out, ix);
-                     dumpn(Opts.indentation_char, ctx.depth, out, ix);
+                     dumpn(check_indentation_char(Opts), ctx.depth, out, ix);
                   }
 
                   // Key
@@ -395,10 +395,10 @@ namespace glz
             }
 
             if constexpr (Opts.prettify) {
-               ctx.depth -= Opts.indentation_width;
+               ctx.depth -= check_indentation_width(Opts);
                if (additional_info != 0 || additional_info == info::indefinite) {
                   dump('\n', out, ix);
-                  dumpn(Opts.indentation_char, ctx.depth, out, ix);
+                  dumpn(check_indentation_char(Opts), ctx.depth, out, ix);
                }
             }
             dump('}', out, ix);

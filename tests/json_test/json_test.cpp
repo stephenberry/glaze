@@ -41,6 +41,18 @@
 
 using namespace ut;
 
+// Custom opts for prettify without newlines in arrays
+struct opts_no_array_newlines : glz::opts
+{
+   bool new_lines_in_arrays = false;
+};
+
+struct opts_prettify_no_array_newlines : glz::opts
+{
+   bool prettify = true;
+   bool new_lines_in_arrays = false;
+};
+
 glz::trace trace{};
 
 struct jsonc_comment_config
@@ -226,7 +238,7 @@ suite starter = [] {
    ]
 })") << pretty;
 
-      pretty = glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer);
+      pretty = glz::prettify_json<opts_no_array_newlines{}>(buffer);
       expect(pretty == R"({
    "i": 287,
    "d": 3.14,
@@ -1503,7 +1515,7 @@ suite user_types = [] {
    "complex user obect opts prettify, new_lines_in_arrays = false"_test = [] {
       Thing obj{};
       std::string buffer{};
-      expect(not glz::write<glz::opts{.prettify = true, .new_lines_in_arrays = false}>(obj, buffer));
+      expect(not glz::write<opts_prettify_no_array_newlines{}>(obj, buffer));
       std::string_view thing_pretty = R"({
    "thing": {
       "a": 3.14,
