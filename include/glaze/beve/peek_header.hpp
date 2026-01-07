@@ -253,4 +253,45 @@ namespace glz
    {
       return beve_peek_header(std::string_view{reinterpret_cast<const char*>(data), size});
    }
+
+   // Peek at a BEVE buffer's header at a specific byte offset.
+   //
+   // This avoids creating substrings or slicing the buffer when you need to
+   // inspect headers at arbitrary positions. Useful for:
+   // - Buffers with custom headers/prefixes before the BEVE data
+   // - Memory-mapped files where you seek to specific positions
+   // - Resuming parsing after partial reads
+   // - Concatenated/delimited BEVE streams
+   // - BEVE data embedded within larger binary structures
+   //
+   // Parameters:
+   //   buffer - The buffer containing BEVE data
+   //   offset - The byte offset at which to start peeking
+   //
+   // Returns the header information on success, or an error_ctx on failure.
+   // The header_size in the result is relative to the offset position.
+   template <class Buffer>
+   [[nodiscard]] expected<beve_header, error_ctx> beve_peek_header_at(const Buffer& buffer, size_t offset) noexcept
+   {
+      const size_t size = buffer.size();
+      if (offset >= size) [[unlikely]] {
+         return unexpected(error_ctx{offset, error_code::unexpected_end});
+      }
+
+      const auto* data = reinterpret_cast<const uint8_t*>(buffer.data()) + offset;
+      const size_t remaining = size - offset;
+
+      return beve_peek_header(std::string_view{reinterpret_cast<const char*>(data), remaining});
+   }
+
+   // Convenience overload for raw pointers with size and offset
+   [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header_at(const void* data,
+                                                                              size_t size,
+                                                                              size_t offset) noexcept
+   {
+      if (offset >= size) [[unlikely]] {
+         return unexpected(error_ctx{offset, error_code::unexpected_end});
+      }
+      return beve_peek_header(std::string_view{reinterpret_cast<const char*>(data) + offset, size - offset});
+   }
 }
