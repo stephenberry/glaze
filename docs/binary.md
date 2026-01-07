@@ -238,6 +238,66 @@ size_t size = /* ... */;
 auto result = glz::beve_peek_header(data, size);
 ```
 
+**Peek Header at Offset**
+
+Use `glz::beve_peek_header_at` to peek at headers at arbitrary byte offsets without slicing or copying the buffer:
+
+```c++
+std::string buffer = /* BEVE data */;
+size_t offset = /* position to inspect */;
+
+auto header = glz::beve_peek_header_at(buffer, offset);
+if (header) {
+   std::cout << "Type: " << (int)header->type
+             << ", Count: " << header->count
+             << ", Header size: " << header->header_size << "\n";
+}
+```
+
+This is useful for:
+
+- **Buffers with custom prefixes**: Skip past application headers to the BEVE payload
+- **Memory-mapped files**: Seek to specific positions without copying data
+- **Resuming partial reads**: Continue parsing from where you left off
+- **Concatenated/delimited streams**: Inspect each object before deserializing
+- **Embedded BEVE**: Parse BEVE data within larger binary structures
+- **Validation**: Check element counts at specific offsets against limits
+
+```c++
+// Example: Buffer with 8-byte custom header followed by BEVE data
+std::string buffer = /* custom_header (8 bytes) + BEVE payload */;
+
+auto header = glz::beve_peek_header_at(buffer, 8);  // Skip custom header
+if (header) {
+   // header->type, header->count, header->header_size
+}
+```
+
+```c++
+// Example: Multiple values in one buffer
+int32_t val1 = 42;
+std::string val2 = "hello";
+
+auto buffer1 = glz::write_beve(val1).value();
+auto buffer2 = glz::write_beve(val2).value();
+std::string combined = buffer1 + buffer2;
+
+// Peek at first value (offset 0)
+auto header1 = glz::beve_peek_header_at(combined, 0);
+// header1->type == glz::tag::number
+
+// Peek at second value
+auto header2 = glz::beve_peek_header_at(combined, buffer1.size());
+// header2->type == glz::tag::string
+// header2->count == 5 ("hello" has 5 characters)
+```
+
+Raw pointer overload with offset:
+
+```c++
+auto result = glz::beve_peek_header_at(data, size, offset);
+```
+
 **Error Handling**
 
 Returns `glz::expected<beve_header, error_ctx>`. Possible errors:
@@ -253,11 +313,11 @@ By default Glaze will handle structs as tagged objects, meaning that keys will b
 
 `glaze/binary/beve_to_json.hpp` provides `glz::beve_to_json`, which directly converts a buffer of BEVE data to a buffer of JSON data.
 
-### Member Function Pointers
+### Function Pointers
 
-Objects that expose member function pointers through `glz::meta` are skipped by the BEVE writer by default. This mirrors JSON/TOML behaviour and avoids emitting unusable callable placeholders in binary payloads.
+Objects that expose function pointers (both member and non-member) through `glz::meta` are skipped by the BEVE writer by default. This mirrors JSON/TOML behaviour and avoids emitting unusable callable placeholders in binary payloads.
 
-If you want the key present, use `write_member_functions = true`.
+If you want the key present, use `write_function_pointers = true`.
 
 ## Custom Map Keys
 
@@ -473,3 +533,24 @@ auto ec = glz::read_beve_delimited(messages, buffer);
 ### Delimiter Format
 
 The BEVE delimiter is a single byte: `0x06` (extensions type 6 with subtype 0). When converting delimited BEVE to JSON via `glz::beve_to_json`, each delimiter is converted to a newline character (`\n`), producing NDJSON-compatible output.
+
+## Lazy BEVE Parsing
+
+For scenarios where you need to extract a few fields from large BEVE documents without full deserialization, Glaze provides `glz::lazy_beve`. This offers on-demand parsing with zero upfront processing.
+
+```cpp
+std::vector<std::byte> buffer;
+glz::write_beve(large_struct, buffer);
+
+auto result = glz::lazy_beve(buffer);
+if (result) {
+    // Access fields lazily - only parses what you access
+    auto name = (*result)["user"]["name"].get<std::string_view>();
+    auto age = (*result)["user"]["age"].get<int64_t>();
+
+    // Check container size without parsing elements
+    size_t count = (*result)["items"].size();
+}
+```
+
+See [Lazy BEVE](./lazy-beve.md) for full documentation.

@@ -38,7 +38,12 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
-// v6.6.0 renames context::indentation_level to context::depth
+// v7.0.0 renames write_member_functions to write_function_pointers
+//
+// Options:
+// - 'write_member_functions' renamed to 'write_function_pointers'
+// - This option now controls serialization of both member and non-member function pointers
+// - check_write_member_functions() renamed to check_write_function_pointers()
 //
 // context struct:
 // - 'indentation_level' renamed to 'depth'
@@ -47,7 +52,8 @@ namespace glz
 //
 // is_context concept:
 // - Now checks for 'depth' member instead of 'indentation_level'
-#define glaze_v6_6_0_depth
+#define glaze_v7_0_0_write_function_pointers
+#define glaze_v7_0_0_depth
 
 // v6.5.0 unified error_ctx and streaming I/O support
 //

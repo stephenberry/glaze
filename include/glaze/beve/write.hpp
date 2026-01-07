@@ -428,6 +428,16 @@ namespace glz
       {}
    };
 
+   // Handle function pointers and function references (no-op like member function pointers)
+   template <class T>
+      requires is_function_ptr_or_ref<T>
+   struct to<BEVE, T>
+   {
+      template <auto Opts, class... Args>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
+      {}
+   };
+
    // write includers as empty strings
    template <is_includer T>
    struct to<BEVE, T>
@@ -1097,8 +1107,8 @@ namespace glz
          if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
             return true;
          }
-         else if constexpr (is_member_function_pointer<V>) {
-            return !check_write_member_functions(Opts);
+         else if constexpr (is_any_function_ptr<V>) {
+            return !check_write_function_pointers(Opts);
          }
          else {
             return false;
@@ -1170,8 +1180,8 @@ namespace glz
          if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
             return true;
          }
-         else if constexpr (is_member_function_pointer<V>) {
-            return !check_write_member_functions(Opts);
+         else if constexpr (is_any_function_ptr<V>) {
+            return !check_write_function_pointers(Opts);
          }
          else {
             return false;

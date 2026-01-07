@@ -267,6 +267,53 @@ server.call(R"({"jsonrpc":"2.0","method":"add","params":50,"id":3})");
 
 > **Note:** Without glaze metadata, only data members are automatically detected via C++ reflection. Member functions are not discoverable through reflection alone.
 
+## Static Function Pointers
+
+You can also expose static member functions (or regular function pointers) as RPC endpoints. This is useful for creating API-style interfaces:
+
+```cpp
+struct my_api_t
+{
+   struct Greet
+   {
+      static constexpr std::string_view name = "greet";
+      static std::string method() { return "Hello, World!"; }
+   };
+
+   struct Add
+   {
+      static constexpr std::string_view name = "add";
+      static int method(int value) { return value + 10; }
+   };
+
+   struct glaze
+   {
+      static constexpr auto value = glz::object(
+         Greet::name, &Greet::method,
+         Add::name, &Add::method
+      );
+   };
+};
+
+my_api_t api{};
+server.on(api);
+
+// Call static function with no parameters
+server.call(R"({"jsonrpc":"2.0","method":"greet","id":1})");
+// Returns: {"jsonrpc":"2.0","result":"Hello, World!","id":1}
+
+// Call static function with parameter
+server.call(R"({"jsonrpc":"2.0","method":"add","params":5,"id":2})");
+// Returns: {"jsonrpc":"2.0","result":15,"id":2}
+```
+
+Function pointers support:
+- **No parameters**: `static std::string method()` - called directly
+- **Single parameter**: `static int method(int x)` - parameter passed via `params`
+- **Void return**: `static void method(int x)` - returns `null` in response
+
+> **Note:** Function pointers with more than one parameter are not supported. Use a struct parameter for multiple values.
+
 ## Using with `glz::merge`
 
 Multiple objects can be merged into a single registry:

@@ -162,6 +162,16 @@ namespace glz
 
                impl::template register_param_function_endpoint<Func, Params>(full_key, func, *this);
             }
+            else if constexpr (is_function_ptr_invocable<std::remove_cvref_t<Func>>) {
+               // Handle function pointers with arguments (e.g., void(*)(int))
+               using Tuple = function_ptr_args_t<std::remove_cvref_t<Func>>;
+               constexpr auto N = glz::tuple_size_v<Tuple>;
+               static_assert(N == 1, "Only one input is allowed for your function pointer");
+
+               using Params = glz::tuple_element_t<0, Tuple>;
+
+               impl::template register_param_function_endpoint<Func, Params>(full_key, func, *this);
+            }
             else if constexpr (std::is_pointer_v<std::remove_cvref_t<Func>> &&
                                (glaze_object_t<std::remove_pointer_t<std::remove_cvref_t<Func>>> ||
                                 reflectable<std::remove_pointer_t<std::remove_cvref_t<Func>>>)) {

@@ -12906,17 +12906,17 @@ suite member_function_pointer_serialization = [] {
       expect(buffer == R"({"name":"test_item"})") << buffer;
    };
 
-   "member function pointer explicitly skipped when write_member_functions = false"_test = [] {
+   "member function pointer explicitly skipped when write_function_pointers = false"_test = [] {
       MemberFunctionThing thing{};
       thing.name = "test_item";
 
-      struct opts_without_member_functions : glz::opts
+      struct opts_without_function_pointers : glz::opts
       {
-         bool write_member_functions = false;
+         bool write_function_pointers = false;
       };
 
       std::string buffer{};
-      expect(not glz::write<opts_without_member_functions{}>(thing, buffer));
+      expect(not glz::write<opts_without_function_pointers{}>(thing, buffer));
       expect(buffer == R"({"name":"test_item"})") << buffer;
    };
 
@@ -12924,13 +12924,13 @@ suite member_function_pointer_serialization = [] {
       MemberFunctionThing thing{};
       thing.name = "test_item";
 
-      struct opts_with_member_functions : glz::opts
+      struct opts_with_function_pointers : glz::opts
       {
-         bool write_member_functions = true;
+         bool write_function_pointers = true;
       };
 
       std::string buffer{};
-      expect(not glz::write<opts_with_member_functions{}>(thing, buffer));
+      expect(not glz::write<opts_with_function_pointers{}>(thing, buffer));
 #if GLZ_REFLECTION26
       // P2996 display_string_of returns a simplified representation for member function pointers
       expect(buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") << buffer;
@@ -12960,13 +12960,13 @@ suite member_function_pointer_serialization = [] {
       expect(not glz::write_json(s, buffer1));
       expect(buffer1 == R"({})") << buffer1;
 
-      struct opts_with_member_functions : glz::opts
+      struct opts_with_function_pointers : glz::opts
       {
-         bool write_member_functions = true;
+         bool write_function_pointers = true;
       };
 
       std::string buffer2{};
-      expect(not glz::write<opts_with_member_functions{}>(s, buffer2));
+      expect(not glz::write<opts_with_function_pointers{}>(s, buffer2));
 #if GLZ_REFLECTION26
       // P2996 display_string_of returns a simplified representation for member function pointers
       expect(buffer2 == R"json({"f1":"(member-function-pointer-type)"})json") << buffer2;
