@@ -201,8 +201,11 @@ auto error = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, json);
 // Require all keys to be present
 auto error = glz::read<glz::opts{.error_on_missing_keys = true}>(obj, json);
 
-// Write with custom indentation
-auto error = glz::write<glz::opts{.prettify = true, .indentation_width = 2}>(obj, json);
+// Write with custom indentation (use a custom opts struct for indentation settings)
+struct indent2 : glz::opts {
+   uint8_t indentation_width = 2;
+};
+auto error = glz::write<indent2{.prettify = true}>(obj, json);
 ```
 
 ## Performance Tips

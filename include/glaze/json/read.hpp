@@ -3378,26 +3378,54 @@ namespace glz
    {};
 
    // Count types in variant matching a trait (fold expression, very fast to compile)
+   // Using helper struct instead of IIFE for MSVC compatibility
    template <class Variant, template <class> class Trait>
-   constexpr size_t variant_count_v = []<class... Ts>(std::variant<Ts...>*) {
-      return (size_t(Trait<Ts>::value) + ... + 0);
-   }(static_cast<Variant*>(nullptr));
+   struct variant_count_impl;
+
+   template <template <class> class Trait, class... Ts>
+   struct variant_count_impl<std::variant<Ts...>, Trait>
+   {
+      static constexpr size_t value = (size_t(Trait<Ts>::value) + ... + 0);
+   };
+
+   template <class Variant, template <class> class Trait>
+   constexpr size_t variant_count_v = variant_count_impl<Variant, Trait>::value;
 
    // Get first index matching trait (or variant_npos if none)
+   // Using helper struct instead of IIFE for MSVC compatibility
    template <class Variant, template <class> class Trait>
-   constexpr size_t variant_first_index_v =
-      []<class... Ts, size_t... Is>(std::variant<Ts...>*, std::index_sequence<Is...>) {
+   struct variant_first_index_impl;
+
+   template <template <class> class Trait, class... Ts>
+   struct variant_first_index_impl<std::variant<Ts...>, Trait>
+   {
+      static constexpr size_t find()
+      {
          size_t result = std::variant_npos;
-         // Short-circuit: stops at first match via || fold
-         (void)((Trait<Ts>::value && result == std::variant_npos ? (result = Is, true) : false) || ...);
+         size_t idx = 0;
+         // Short-circuit: find first match
+         ((Trait<Ts>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx), ...);
          return result;
-      }(static_cast<Variant*>(nullptr), std::make_index_sequence<std::variant_size_v<Variant>>{});
+      }
+      static constexpr size_t value = find();
+   };
+
+   template <class Variant, template <class> class Trait>
+   constexpr size_t variant_first_index_v = variant_first_index_impl<Variant, Trait>::value;
 
    // Count types matching both category trait AND const/non-const filter
+   // Using helper struct instead of IIFE for MSVC compatibility
    template <class Variant, template <class> class Trait, bool IsConst>
-   constexpr size_t variant_filtered_count_v = []<class... Ts>(std::variant<Ts...>*) {
-      return (size_t(Trait<Ts>::value && (glaze_const_value_t<Ts> == IsConst)) + ... + 0);
-   }(static_cast<Variant*>(nullptr));
+   struct variant_filtered_count_impl;
+
+   template <template <class> class Trait, bool IsConst, class... Ts>
+   struct variant_filtered_count_impl<std::variant<Ts...>, Trait, IsConst>
+   {
+      static constexpr size_t value = (size_t(Trait<Ts>::value && (glaze_const_value_t<Ts> == IsConst)) + ... + 0);
+   };
+
+   template <class Variant, template <class> class Trait, bool IsConst>
+   constexpr size_t variant_filtered_count_v = variant_filtered_count_impl<Variant, Trait, IsConst>::value;
 
    // Variant type counts using fold expressions (replaces tuple-based variant_type_count)
    template <class T>

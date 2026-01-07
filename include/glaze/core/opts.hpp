@@ -91,9 +91,6 @@ namespace glz
       bool skip_null_members = true; // Skip writing out params in an object if the value is null
       bool prettify = false; // Write out prettified JSON
       bool minified = false; // Require minified input for JSON, which results in faster read performance
-      char indentation_char = ' '; // Prettified JSON indentation char
-      uint8_t indentation_width = 3; // Prettified JSON indentation size
-      bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
 
@@ -238,6 +235,19 @@ namespace glz
    // without any known way to delete the memory, making memory leaks easy.
    // Enable this option only when you are prepared to manually manage the allocated memory.
    // Works with JSON, BEVE, CBOR, and MSGPACK formats.
+
+   // ---
+   // char indentation_char = ' ';
+   // Prettified JSON indentation character. Use '\t' for tabs.
+
+   // ---
+   // uint8_t indentation_width = 3;
+   // Prettified JSON indentation size (number of indentation_char per level).
+
+   // ---
+   // bool new_lines_in_arrays = true;
+   // Whether prettified arrays should have new lines for each element.
+   // Set to false for more compact array output.
 
    struct append_arrays_opt_tag
    {};
@@ -425,6 +435,36 @@ namespace glz
       }
       else {
          return rowwise;
+      }
+   }
+
+   consteval char check_indentation_char(auto&& Opts)
+   {
+      if constexpr (requires { Opts.indentation_char; }) {
+         return Opts.indentation_char;
+      }
+      else {
+         return ' ';
+      }
+   }
+
+   consteval uint8_t check_indentation_width(auto&& Opts)
+   {
+      if constexpr (requires { Opts.indentation_width; }) {
+         return Opts.indentation_width;
+      }
+      else {
+         return 3;
+      }
+   }
+
+   consteval bool check_new_lines_in_arrays(auto&& Opts)
+   {
+      if constexpr (requires { Opts.new_lines_in_arrays; }) {
+         return Opts.new_lines_in_arrays;
+      }
+      else {
+         return true;
       }
    }
 
