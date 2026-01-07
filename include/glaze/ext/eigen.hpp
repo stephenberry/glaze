@@ -375,3 +375,6 @@ struct glz::specified<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCol
 
 template <typename Scalar, int Dim, int Mode>
 struct glz::specified<Eigen::Transform<Scalar, Dim, Mode>> : std::true_type {};
+
+template <typename PlainObjectType, int Options, typename StrideType>
+struct glz::specified<Eigen::Ref<PlainObjectType, Options, StrideType>> : std::true_type {};

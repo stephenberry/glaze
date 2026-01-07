@@ -1112,11 +1112,20 @@ suite has_reflect_concept_tests = [] {
    static_assert(!glz::reflectable<TestEnumMeta>);
    static_assert(glz::has_reflect<TestEnumMeta>);
 
-   // Test non-reflectable types
+   // Test non-reflectable types (without P2996)
+   // P2996 reflection can reflect any class regardless of aggregate status or private members
+#if !GLZ_REFLECTION26
    static_assert(!glz::reflectable<NonAggregate>);
    static_assert(!glz::has_reflect<NonAggregate>);
    static_assert(!glz::reflectable<PrivateMember>);
    static_assert(!glz::has_reflect<PrivateMember>);
+#else
+   // With P2996, these types ARE reflectable
+   static_assert(glz::reflectable<NonAggregate>);
+   static_assert(glz::has_reflect<NonAggregate>);
+   static_assert(glz::reflectable<PrivateMember>);
+   static_assert(glz::has_reflect<PrivateMember>);
+#endif
 
    // Test map types (have reflect specialization with size = 0)
    using TestMap = std::map<std::string, int>;
