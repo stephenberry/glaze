@@ -121,7 +121,12 @@ int main()
    std::string json1 = glz::write_json(obj1).value_or("error");
    std::cout << json1 << '\n';
 
+   // P2996 reflection returns type names without namespace prefixes
+#if GLZ_REFLECTION26
+   bool test1_pass = (json1 == R"({"num":42,"MyEnum":"Second","MyFlag":"Yes"})");
+#else
    bool test1_pass = (json1 == R"({"num":42,"mylib::MyEnum":"Second","mylib::MyFlag":"Yes"})");
+#endif
    std::cout << (test1_pass ? "✓ PASS" : "✗ FAIL") << "\n\n";
 
    std::cout << "=== Test 2: Enum type names (short) ===\n";
