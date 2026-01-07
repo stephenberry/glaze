@@ -42,7 +42,6 @@ jobs:
           ca-certificates \
           cmake \
           git \
-          libssl-dev \
           python3
         update-ca-certificates
 
@@ -53,7 +52,9 @@ jobs:
         cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
-          -Dglaze_DISABLE_ALWAYS_INLINE=ON
+          -Dglaze_DISABLE_ALWAYS_INLINE=ON \
+          -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+          -Dglaze_BUILD_NETWORKING_TESTS=OFF
 
     - name: Build
       run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
@@ -101,7 +102,9 @@ jobs:
           -DCMAKE_CXX_COMPILER=${{env.CXX}} \
           -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
           -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
-          -Dglaze_DISABLE_ALWAYS_INLINE=ON
+          -Dglaze_DISABLE_ALWAYS_INLINE=ON \
+          -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+          -Dglaze_BUILD_NETWORKING_TESTS=OFF
 
     - name: Build
       run: cmake --build build -j $(nproc)
