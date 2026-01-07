@@ -74,9 +74,9 @@ namespace glz
          dump('{', std::forward<Args>(args)...);
 
          if constexpr (Opts.prettify) {
-            ctx.depth += Opts.indentation_width;
+            ctx.depth += check_indentation_width(Opts);
             dump('\n', args...);
-            dumpn(Opts.indentation_char, ctx.depth, args...);
+            dumpn(check_indentation_char(Opts), ctx.depth, args...);
          }
 
          const size_t n = value.data.size();
@@ -96,14 +96,14 @@ namespace glz
 
             if constexpr (Opts.prettify) {
                dump('\n', args...);
-               dumpn(Opts.indentation_char, ctx.depth, args...);
+               dumpn(check_indentation_char(Opts), ctx.depth, args...);
             }
          }
 
          if constexpr (Opts.prettify) {
-            ctx.depth -= Opts.indentation_width;
+            ctx.depth -= check_indentation_width(Opts);
             dump('\n', args...);
-            dumpn(Opts.indentation_char, ctx.depth, args...);
+            dumpn(check_indentation_char(Opts), ctx.depth, args...);
          }
          dump('}', args...);
       }

@@ -93,7 +93,7 @@ namespace glz
          }
          std::memcpy(&b[ix], ",\n", 2);
          ix += 2;
-         std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+         std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
          ix += ctx.depth;
       }
       else {
@@ -121,9 +121,9 @@ namespace glz
          if constexpr (!check_opening_handled(Opts)) {
             dump('{', b, ix);
             if constexpr (Opts.prettify) {
-               ctx.depth += Opts.indentation_width;
+               ctx.depth += check_indentation_width(Opts);
                dump('\n', b, ix);
-               dumpn(Opts.indentation_char, ctx.depth, b, ix);
+               dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
 
@@ -223,9 +223,9 @@ namespace glz
          if constexpr (!check_opening_handled(Opts)) {
             dump('{', b, ix);
             if constexpr (Opts.prettify) {
-               ctx.depth += Opts.indentation_width;
+               ctx.depth += check_indentation_width(Opts);
                dump('\n', b, ix);
-               dumpn(Opts.indentation_char, ctx.depth, b, ix);
+               dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
 
@@ -314,9 +314,9 @@ namespace glz
          }
 
          if constexpr (Opts.prettify) {
-            ctx.depth -= Opts.indentation_width;
+            ctx.depth -= check_indentation_width(Opts);
             dump('\n', b, ix);
-            dumpn(Opts.indentation_char, ctx.depth, b, ix);
+            dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
          }
 
          if (not bool(ctx.error)) [[likely]] {
@@ -337,9 +337,9 @@ namespace glz
          if constexpr (!check_opening_handled(Opts)) {
             dump('{', b, ix);
             if constexpr (Opts.prettify) {
-               ctx.depth += Opts.indentation_width;
+               ctx.depth += check_indentation_width(Opts);
                dump('\n', b, ix);
-               dumpn(Opts.indentation_char, ctx.depth, b, ix);
+               dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
             }
          }
 
@@ -436,9 +436,9 @@ namespace glz
          }
 
          if constexpr (Opts.prettify) {
-            ctx.depth -= Opts.indentation_width;
+            ctx.depth -= check_indentation_width(Opts);
             dump('\n', b, ix);
-            dumpn(Opts.indentation_char, ctx.depth, b, ix);
+            dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
          }
 
          if (not bool(ctx.error)) [[likely]] {
@@ -1138,10 +1138,10 @@ namespace glz
          if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         if constexpr (Opts.new_lines_in_arrays) {
+         if constexpr (check_new_lines_in_arrays(Opts)) {
             std::memcpy(&b[ix], ",\n", 2);
             ix += 2;
-            std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+            std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
             ix += ctx.depth;
          }
          else {
@@ -1216,8 +1216,8 @@ namespace glz
                static constexpr auto value_padding = required_padding<typename T::value_type>();
 
                if constexpr (Opts.prettify) {
-                  if constexpr (Opts.new_lines_in_arrays) {
-                     ctx.depth += Opts.indentation_width;
+                  if constexpr (check_new_lines_in_arrays(Opts)) {
+                     ctx.depth += check_indentation_width(Opts);
                   }
 
                   // add space for '\n' and ',' characters for each element, hence `+ 2`
@@ -1227,10 +1227,10 @@ namespace glz
                      return;
                   }
 
-                  if constexpr (Opts.new_lines_in_arrays) {
+                  if constexpr (check_new_lines_in_arrays(Opts)) {
                      std::memcpy(&b[ix], "[\n", 2);
                      ix += 2;
-                     std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                   }
                   else {
@@ -1255,10 +1255,10 @@ namespace glz
                ++it;
                for (const auto fin = std::end(value); it != fin; ++it) {
                   if constexpr (Opts.prettify) {
-                     if constexpr (Opts.new_lines_in_arrays) {
+                     if constexpr (check_new_lines_in_arrays(Opts)) {
                         std::memcpy(&b[ix], ",\n", 2);
                         ix += 2;
-                        std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                        std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                         ix += ctx.depth;
                      }
                      else {
@@ -1276,11 +1276,11 @@ namespace glz
 
                   to<JSON, val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
                }
-               if constexpr (Opts.prettify && Opts.new_lines_in_arrays) {
-                  ctx.depth -= Opts.indentation_width;
+               if constexpr (Opts.prettify && check_new_lines_in_arrays(Opts)) {
+                  ctx.depth -= check_indentation_width(Opts);
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
-                  std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                }
 
@@ -1291,18 +1291,18 @@ namespace glz
                // we either can't get the size (std::forward_list) or we cannot compute the allocation size
 
                if constexpr (Opts.prettify) {
-                  if constexpr (Opts.new_lines_in_arrays) {
-                     ctx.depth += Opts.indentation_width;
+                  if constexpr (check_new_lines_in_arrays(Opts)) {
+                     ctx.depth += check_indentation_width(Opts);
                   }
 
                   if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
 
-                  if constexpr (Opts.new_lines_in_arrays) {
+                  if constexpr (check_new_lines_in_arrays(Opts)) {
                      std::memcpy(&b[ix], "[\n", 2);
                      ix += 2;
-                     std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                   }
                   else {
@@ -1345,10 +1345,10 @@ namespace glz
                      }
 
                      if constexpr (Opts.prettify) {
-                        if constexpr (Opts.new_lines_in_arrays) {
+                        if constexpr (check_new_lines_in_arrays(Opts)) {
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
-                           std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                           std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                            ix += ctx.depth;
                         }
                         else {
@@ -1374,9 +1374,9 @@ namespace glz
                      }
                   }
                }
-               if constexpr (Opts.prettify && Opts.new_lines_in_arrays) {
-                  ctx.depth -= Opts.indentation_width;
-                  dump_newline_indent(Opts.indentation_char, ctx.depth, b, ix);
+               if constexpr (Opts.prettify && check_new_lines_in_arrays(Opts)) {
+                  ctx.depth -= check_indentation_width(Opts);
+                  dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
                }
 
                dump(']', b, ix);
@@ -1395,13 +1395,13 @@ namespace glz
          if (!empty_range(value)) {
             if constexpr (!check_opening_handled(Opts)) {
                if constexpr (Opts.prettify) {
-                  ctx.depth += Opts.indentation_width;
+                  ctx.depth += check_indentation_width(Opts);
                   if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
-                  std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                }
             }
@@ -1471,13 +1471,13 @@ namespace glz
 
             if constexpr (!check_closing_handled(Opts)) {
                if constexpr (Opts.prettify) {
-                  ctx.depth -= Opts.indentation_width;
+                  ctx.depth -= check_indentation_width(Opts);
                   if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
-                  std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                }
             }
@@ -1501,12 +1501,12 @@ namespace glz
          }
 
          if constexpr (Opts.prettify) {
-            ctx.depth += Opts.indentation_width;
+            ctx.depth += check_indentation_width(Opts);
             if (!ensure_space(ctx, b, ix + ctx.depth + 2)) [[unlikely]] {
                return;
             }
             dump<false>("{\n", b, ix);
-            std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+            std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
             ix += ctx.depth;
          }
          else {
@@ -1519,8 +1519,8 @@ namespace glz
          }
 
          if constexpr (Opts.prettify) {
-            ctx.depth -= Opts.indentation_width;
-            dump_newline_indent(Opts.indentation_char, ctx.depth, b, ix);
+            ctx.depth -= check_indentation_width(Opts);
+            dump_newline_indent(check_indentation_char(Opts), ctx.depth, b, ix);
             dump<false>('}', b, ix);
          }
          else {
@@ -1640,8 +1640,8 @@ namespace glz
                   // must first write out type
                   if constexpr (Opts.prettify) {
                      dump("{\n", b, ix);
-                     ctx.depth += Opts.indentation_width;
-                     dumpn(Opts.indentation_char, ctx.depth, b, ix);
+                     ctx.depth += check_indentation_width(Opts);
+                     dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
                      dump('"', b, ix);
                      dump_maybe_empty(tag_v<T>, b, ix);
 
@@ -1652,7 +1652,7 @@ namespace glz
                         serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
                         if constexpr (N > 0) {
                            dump(",\n", b, ix);
-                           dumpn(Opts.indentation_char, ctx.depth, b, ix);
+                           dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
                         }
                      }
                      else {
@@ -1663,7 +1663,7 @@ namespace glz
                         }
                         else {
                            dump("\",\n", b, ix);
-                           dumpn(Opts.indentation_char, ctx.depth, b, ix);
+                           dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
                         }
                      }
                   }
@@ -1709,13 +1709,13 @@ namespace glz
                   }
 
                   if constexpr (Opts.prettify) {
-                     ctx.depth -= Opts.indentation_width;
+                     ctx.depth -= check_indentation_width(Opts);
                      if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
                         return;
                      }
                      std::memcpy(&b[ix], "\n", 1);
                      ++ix;
-                     std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                      std::memcpy(&b[ix], "}", 1);
                      ++ix;
@@ -1741,19 +1741,19 @@ namespace glz
          auto& value = wrapper.value;
          dump('[', args...);
          if constexpr (Opts.prettify) {
-            ctx.depth += Opts.indentation_width;
-            dump_newline_indent(Opts.indentation_char, ctx.depth, args...);
+            ctx.depth += check_indentation_width(Opts);
+            dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
          }
          dump('"', args...);
          dump_maybe_empty(ids_v<T>[value.index()], args...);
          dump("\",", args...);
          if constexpr (Opts.prettify) {
-            dump_newline_indent(Opts.indentation_char, ctx.depth, args...);
+            dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
          }
          std::visit([&](auto&& v) { serialize<JSON>::op<Opts>(v, ctx, args...); }, value);
          if constexpr (Opts.prettify) {
-            ctx.depth -= Opts.indentation_width;
-            dump_newline_indent(Opts.indentation_char, ctx.depth, args...);
+            ctx.depth -= check_indentation_width(Opts);
+            dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
          }
          dump(']', args...);
       }
@@ -1771,9 +1771,9 @@ namespace glz
 
          dump('[', args...);
          if constexpr (N > 0 && Opts.prettify) {
-            if constexpr (Opts.new_lines_in_arrays) {
-               ctx.depth += Opts.indentation_width;
-               dump_newline_indent(Opts.indentation_char, ctx.depth, args...);
+            if constexpr (check_new_lines_in_arrays(Opts)) {
+               ctx.depth += check_indentation_width(Opts);
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
             }
          }
          for_each<N>([&]<size_t I>() {
@@ -1789,9 +1789,9 @@ namespace glz
             }
          });
          if constexpr (N > 0 && Opts.prettify) {
-            if constexpr (Opts.new_lines_in_arrays) {
-               ctx.depth -= Opts.indentation_width;
-               dump_newline_indent(Opts.indentation_char, ctx.depth, args...);
+            if constexpr (check_new_lines_in_arrays(Opts)) {
+               ctx.depth -= check_indentation_width(Opts);
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
             }
          }
          dump(']', args...);
@@ -1816,9 +1816,9 @@ namespace glz
 
          dump('[', args...);
          if constexpr (N > 0 && Opts.prettify) {
-            if constexpr (Opts.new_lines_in_arrays) {
-               ctx.depth += Opts.indentation_width;
-               dump_newline_indent(Opts.indentation_char, ctx.depth, args...);
+            if constexpr (check_new_lines_in_arrays(Opts)) {
+               ctx.depth += check_indentation_width(Opts);
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
             }
          }
          using V = std::decay_t<T>;
@@ -1840,9 +1840,9 @@ namespace glz
             }
          });
          if constexpr (N > 0 && Opts.prettify) {
-            if constexpr (Opts.new_lines_in_arrays) {
-               ctx.depth -= Opts.indentation_width;
-               dump_newline_indent(Opts.indentation_char, ctx.depth, args...);
+            if constexpr (check_new_lines_in_arrays(Opts)) {
+               ctx.depth -= check_indentation_width(Opts);
+               dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
             }
          }
          dump(']', args...);
@@ -1878,9 +1878,9 @@ namespace glz
          if constexpr (!check_opening_handled(Options)) {
             dump('{', b, ix);
             if constexpr (Options.prettify) {
-               ctx.depth += Options.indentation_width;
+               ctx.depth += check_indentation_width(Options);
                dump('\n', b, ix);
-               dumpn(Options.indentation_char, ctx.depth, b, ix);
+               dumpn(check_indentation_char(Options), ctx.depth, b, ix);
             }
          }
 
@@ -1934,9 +1934,9 @@ namespace glz
 
          if constexpr (!check_closing_handled(Options)) {
             if constexpr (Options.prettify) {
-               ctx.depth -= Options.indentation_width;
+               ctx.depth -= check_indentation_width(Options);
                dump('\n', b, ix);
-               dumpn(Options.indentation_char, ctx.depth, b, ix);
+               dumpn(check_indentation_char(Options), ctx.depth, b, ix);
             }
             dump('}', b, ix);
          }
@@ -1953,9 +1953,9 @@ namespace glz
          if constexpr (!check_opening_handled(Options)) {
             dump('{', b, ix);
             if constexpr (Options.prettify) {
-               ctx.depth += Options.indentation_width;
+               ctx.depth += check_indentation_width(Options);
                dump('\n', b, ix);
-               dumpn(Options.indentation_char, ctx.depth, b, ix);
+               dumpn(check_indentation_char(Options), ctx.depth, b, ix);
             }
          }
 
@@ -1984,9 +1984,9 @@ namespace glz
          }
 
          if constexpr (Options.prettify) {
-            ctx.depth -= Options.indentation_width;
+            ctx.depth -= check_indentation_width(Options);
             dump('\n', b, ix);
-            dumpn(Options.indentation_char, ctx.depth, b, ix);
+            dumpn(check_indentation_char(Options), ctx.depth, b, ix);
          }
          dump('}', b, ix);
       }
@@ -2063,13 +2063,13 @@ namespace glz
 
             if constexpr (not check_opening_handled(Options)) {
                if constexpr (Options.prettify) {
-                  ctx.depth += Options.indentation_width;
+                  ctx.depth += check_indentation_width(Options);
                   if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
                   std::memcpy(&b[ix], "{\n", 2);
                   ix += 2;
-                  std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                }
                else {
@@ -2167,7 +2167,7 @@ namespace glz
                         if constexpr (Opts.prettify) {
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
-                           std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                           std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                            ix += ctx.depth;
                         }
                         else {
@@ -2225,7 +2225,7 @@ namespace glz
                   if constexpr (I != 0 && Opts.prettify) {
                      std::memcpy(&b[ix], ",\n", 2);
                      ix += 2;
-                     std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                      ix += ctx.depth;
                   }
 
@@ -2276,13 +2276,13 @@ namespace glz
             // Options is required here, because it must be the top level
             if constexpr (not check_closing_handled(Options)) {
                if constexpr (Options.prettify) {
-                  ctx.depth -= Options.indentation_width;
+                  ctx.depth -= check_indentation_width(Options);
                   if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
                      return;
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
-                  std::memset(&b[ix], Opts.indentation_char, ctx.depth);
+                  std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
                   ix += ctx.depth;
                   std::memcpy(&b[ix], "}", 1);
                   ++ix;
