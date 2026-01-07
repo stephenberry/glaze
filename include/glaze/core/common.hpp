@@ -318,10 +318,6 @@ namespace glz
       requires { requires std::remove_cvref_t<T>::glaze_reflect == false; } ||
       requires { requires meta<std::decay_t<T>>::glaze_reflect == false; };
 
-   // Check for types with internal glaze marker (e.g., invoke_update)
-   template <class T>
-   concept has_glaze_marker = requires { requires std::remove_cvref_t<T>::glaze == true; };
-
    /// \brief check if container has fixed size and its subsequent T::value_type
    template <class T>
    concept has_static_size =
@@ -435,14 +431,30 @@ namespace glz
    // With C++26 P2996 reflection, we can reflect non-aggregate types (classes with custom constructors)
    // Without P2996, we require aggregate types for reflection
 #if GLZ_REFLECTION26
-   // P2996 can reflect any class, but we must exclude types with their own Glaze specializations
+   // Register std library types as having specified Glaze serialization
+   template <class... Ts>
+   struct specified<std::tuple<Ts...>> : std::true_type {};
+
+   template <class... Ts>
+   struct specified<std::variant<Ts...>> : std::true_type {};
+
+   template <class T>
+   struct specified<std::reference_wrapper<T>> : std::true_type {};
+
+   template <class T>
+   struct specified<std::complex<T>> : std::true_type {};
+
+   template <size_t N>
+   struct specified<std::bitset<N>> : std::true_type {};
+
+   // P2996 can reflect any class, but we must exclude types with their own Glaze specializations.
+   // Types with custom serialization should specialize glz::specified<T> to std::true_type.
    template <class T>
    concept reflectable =
       std::is_class_v<std::remove_cvref_t<T>> &&
       !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> ||
         range<T> || pair_t<T> || null_t<T> || str_t<T> || bool_t<T> ||
-        tuple_t<T> || is_std_tuple<T> || is_variant<T> || is_reference_wrapper<T> || complex_t<T> ||
-        func_t<T> || is_bitset<T> || has_glaze_marker<T> || is_duration<T> || is_time_point<T>);
+        tuple_t<T> || func_t<T> || is_specified<T>);
 #else
    template <class T>
    concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&

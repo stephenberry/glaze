@@ -367,3 +367,11 @@ struct glz::meta<Eigen::Matrix<Scalar, Rows, Cols>>
                                                    chars<num_to_string<Cols>::value>, chars<",">, //
                                                    chars<">">>;
 };
+
+// Register Eigen types as having specified Glaze serialization
+// This prevents P2996 automatic reflection from creating ambiguous specializations
+template <typename Scalar, int Rows, int Cols, int Options, int MaxRows, int MaxCols>
+struct glz::specified<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> : std::true_type {};
+
+template <typename Scalar, int Dim, int Mode>
+struct glz::specified<Eigen::Transform<Scalar, Dim, Mode>> : std::true_type {};
