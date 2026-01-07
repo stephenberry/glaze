@@ -279,6 +279,7 @@ namespace glz
          }
 
          static constexpr bool glaze_value_proxy = true;
+         static constexpr bool glaze_reflect = false;
 
          // Disable Copy and Move
          value_proxy(const value_proxy&) = delete;
@@ -330,6 +331,8 @@ namespace glz
             // Ensure that a lock is provided
             assert(shared_lock_ptr);
          }
+
+         static constexpr bool glaze_reflect = false;
 
          // Disable Copy and Move
          const_value_proxy(const const_value_proxy&) = delete;
