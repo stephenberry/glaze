@@ -388,8 +388,7 @@ namespace glz
    concept is_any_function_ptr = is_member_function_pointer<T> || is_function_ptr_or_ref<T>;
 
    template <class T>
-   concept nullable_like =
-      nullable_t<T> && !is_expected<T> && !std::is_array_v<T> && !is_function_ptr_or_ref<T>;
+   concept nullable_like = nullable_t<T> && !is_expected<T> && !std::is_array_v<T> && !is_function_ptr_or_ref<T>;
 
    // For optional like types that cannot overload `operator bool()`
    template <class T>
