@@ -285,9 +285,8 @@ namespace glz
    }
 
    // Convenience overload for raw pointers with size and offset
-   [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header_at(const void* data,
-                                                                              size_t size,
-                                                                              size_t offset) noexcept
+   [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header_at(const void* data, size_t size,
+                                                                             size_t offset) noexcept
    {
       if (offset >= size) [[unlikely]] {
          return unexpected(error_ctx{offset, error_code::unexpected_end});
