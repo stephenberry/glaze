@@ -778,6 +778,11 @@ namespace glz
          serialize<Format>::template op<Opts>(*proxy, ctx, args...);
       }
    };
+
+   // Register async_string as having specified Glaze serialization
+   // This prevents P2996 automatic reflection from trying to reflect the mutex member
+   template <>
+   struct specified<async_string> : std::true_type {};
 }
 
 // Allow formatting via std::format

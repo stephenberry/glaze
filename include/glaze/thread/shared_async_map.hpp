@@ -609,4 +609,9 @@ namespace glz
          return state->items.size() == 0;
       }
    };
+
+   // Register shared_async_map as having specified Glaze serialization
+   // This prevents P2996 automatic reflection from trying to reflect the mutex member
+   template <class K, class V>
+   struct specified<shared_async_map<K, V>> : std::true_type {};
 }
