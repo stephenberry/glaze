@@ -196,6 +196,39 @@ server.get("/files/*path", [](const glz::request& req, glz::response& res) {
 });
 ```
 
+### Query Parameters
+
+Query parameters are automatically parsed and available in `req.query`:
+
+```cpp
+// Handle: GET /search?q=hello&page=1&limit=20
+server.get("/search", [](const glz::request& req, glz::response& res) {
+    // Access parsed query parameters
+    std::string query;
+    int page = 1;
+    int limit = 10;
+
+    if (auto it = req.query.find("q"); it != req.query.end()) {
+        query = it->second;  // URL-decoded automatically
+    }
+    if (auto it = req.query.find("page"); it != req.query.end()) {
+        page = std::stoi(it->second);
+    }
+    if (auto it = req.query.find("limit"); it != req.query.end()) {
+        limit = std::stoi(it->second);
+    }
+
+    res.json(search(query, page, limit));
+});
+```
+
+The request object provides:
+- `req.target` - Full URL with query string (`/search?q=hello&page=1`)
+- `req.path` - Path without query string (`/search`)
+- `req.query` - Parsed query parameters map
+
+See [URL Utilities](url.md) for standalone query string parsing and form data handling.
+
 ### Parameter Constraints
 
 ```cpp

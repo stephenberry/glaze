@@ -67,6 +67,50 @@ router.get("/users/:user_id/posts/:post_id",
 router.get("/api/v1/users/:id/profile", profile_handler);
 ```
 
+### Query Parameters
+
+Routes automatically match regardless of query string. Query parameters are parsed and available in `req.query`:
+
+```cpp
+// Route matches both /api/users and /api/users?limit=10&offset=20
+router.get("/api/users", [](const glz::request& req, glz::response& res) {
+    // Access query parameters
+    int limit = 10;   // default
+    int offset = 0;   // default
+
+    if (auto it = req.query.find("limit"); it != req.query.end()) {
+        limit = std::stoi(it->second);
+    }
+    if (auto it = req.query.find("offset"); it != req.query.end()) {
+        offset = std::stoi(it->second);
+    }
+
+    res.json(get_users(limit, offset));
+});
+
+// Combine path and query parameters
+router.get("/users/:id/posts", [](const glz::request& req, glz::response& res) {
+    // Path parameter
+    std::string user_id = req.params.at("id");
+
+    // Query parameters
+    std::string sort = "date";
+    if (auto it = req.query.find("sort"); it != req.query.end()) {
+        sort = it->second;
+    }
+
+    res.json(get_user_posts(user_id, sort));
+});
+```
+
+The request object provides:
+- `req.target` - Full URL including query string (e.g., `/api/users?limit=10`)
+- `req.path` - Path only, without query string (e.g., `/api/users`)
+- `req.params` - Path parameters from route (e.g., `:id`) - **URL-decoded**
+- `req.query` - Parsed query parameters - **URL-decoded**
+
+See [URL Utilities](url.md) for more details on query string parsing and URL decoding.
+
 ### Parameter Constraints
 
 Glaze provides a `validation` function, which allows users to implement high performance validation logic using regex libraries or custom parsing.

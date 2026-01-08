@@ -115,6 +115,7 @@ nav:
    - networking/http-rest-support.md
    - networking/http-server.md
    - networking/http-router.md
+   - networking/url.md
    - networking/rest-registry.md
    - networking/tls-support.md
    - networking/http-client.md

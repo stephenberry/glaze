@@ -1698,13 +1698,18 @@ namespace glz
          request request;
          request.method = method;
          request.target = target;
-         request.headers = headers;
-         request.body = std::move(body);
          request.remote_ip = conn->remote_endpoint.address().to_string();
          request.remote_port = conn->remote_endpoint.port();
 
+         // Parse path and query string from target
+         const auto [path_view, query_string] = split_target(target);
+         request.path = std::string(path_view);
+         request.query = parse_urlencoded(query_string);
+         request.headers = headers;
+         request.body = std::move(body);
+
          // Find a matching route
-         auto [handle, params] = root_router.match(method, target);
+         auto [handle, params] = root_router.match(method, request.path);
 
          // Create the response object
          response response;
@@ -2080,13 +2085,18 @@ namespace glz
          request request;
          request.method = method;
          request.target = target;
-         request.headers = headers;
-         request.body = std::move(body);
          request.remote_ip = remote_endpoint.address().to_string();
          request.remote_port = remote_endpoint.port();
 
+         // Parse path and query string from target
+         const auto [path_view, query_string] = split_target(target);
+         request.path = std::string(path_view);
+         request.query = parse_urlencoded(query_string);
+         request.headers = headers;
+         request.body = std::move(body);
+
          // Find a matching route using http_router::match which handles both exact and parameterized routes
-         auto [handle, params] = root_router.match(method, target);
+         auto [handle, params] = root_router.match(method, request.path);
 
          // Create the response object up front so we can reuse it in fallback flows
          response response;
