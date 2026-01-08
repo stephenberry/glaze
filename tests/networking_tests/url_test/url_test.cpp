@@ -41,6 +41,44 @@ suite url_decode_tests = [] {
    };
 };
 
+suite url_encode_tests = [] {
+   "basic"_test = [] {
+      expect(glz::url_encode("") == "");
+      expect(glz::url_encode("hello") == "hello");
+      expect(glz::url_encode("hello world") == "hello+world");
+   };
+
+   "unreserved_chars"_test = [] {
+      // Unreserved characters should pass through unchanged
+      expect(glz::url_encode("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~") ==
+             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~");
+   };
+
+   "special_chars"_test = [] {
+      expect(glz::url_encode("/") == "%2F");
+      expect(glz::url_encode("=") == "%3D");
+      expect(glz::url_encode("&") == "%26");
+      expect(glz::url_encode("?") == "%3F");
+      expect(glz::url_encode("#") == "%23");
+      expect(glz::url_encode("a=b&c=d") == "a%3Db%26c%3Dd");
+   };
+
+   "roundtrip"_test = [] {
+      // Encode then decode should return original
+      std::string original = "Hello World! Special chars: /=&?#";
+      expect(glz::url_decode(glz::url_encode(original)) == original);
+   };
+
+   "buffer_overload"_test = [] {
+      std::string buffer;
+      glz::url_encode("hello world", buffer);
+      expect(buffer == "hello+world");
+
+      glz::url_encode("a/b", buffer);
+      expect(buffer == "a%2Fb");
+   };
+};
+
 suite parse_urlencoded_tests = [] {
    "basic"_test = [] {
       expect(glz::parse_urlencoded("").empty());

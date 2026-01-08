@@ -51,6 +51,59 @@ glz::url_decode("foo%2Fbar", buffer);
 std::cout << buffer << std::endl;  // "foo/bar"
 ```
 
+## URL Encoding
+
+### Basic Usage
+
+```cpp
+// Encode strings for safe use in URLs
+std::string encoded = glz::url_encode("hello world");     // "hello+world"
+std::string path = glz::url_encode("path/to/file");       // "path%2Fto%2Ffile"
+std::string special = glz::url_encode("a=b&c=d");         // "a%3Db%26c%3Dd"
+```
+
+### Encoding Rules
+
+- **Unreserved characters** pass through unchanged: `A-Z`, `a-z`, `0-9`, `-`, `.`, `_`, `~`
+- **Space** is encoded as `+` (per `application/x-www-form-urlencoded`)
+- **All other characters** are percent-encoded (`%XX`)
+
+### Building Query Strings
+
+```cpp
+// Build a safe query string
+std::string query = "q=" + glz::url_encode(user_search) +
+                    "&category=" + glz::url_encode(category);
+
+// Example: user_search = "C++ templates", category = "programming/advanced"
+// Result: "q=C%2B%2B+templates&category=programming%2Fadvanced"
+```
+
+### Roundtrip Encoding
+
+Encode and decode are symmetric:
+
+```cpp
+std::string original = "Hello World! Special: /=&?#";
+std::string encoded = glz::url_encode(original);
+std::string decoded = glz::url_decode(encoded);
+
+// decoded == original
+```
+
+### Buffer Reuse (Zero-Allocation)
+
+```cpp
+std::string buffer;
+buffer.reserve(1024);
+
+glz::url_encode("hello world", buffer);
+std::cout << buffer << std::endl;  // "hello+world"
+
+glz::url_encode("a/b", buffer);
+std::cout << buffer << std::endl;  // "a%2Fb"
+```
+
 ## Parsing URL-Encoded Data
 
 The `parse_urlencoded` function parses `key=value&key2=value2` format used in:
@@ -221,6 +274,16 @@ server.post("/login", [](const glz::request& req, glz::response& res) {
 
 // Writes to buffer (can avoid allocation if buffer has capacity)
 void url_decode(std::string_view input, std::string& output);
+```
+
+### `url_encode`
+
+```cpp
+// Returns encoded string (allocates)
+[[nodiscard]] std::string url_encode(std::string_view input);
+
+// Writes to buffer (can avoid allocation if buffer has capacity)
+void url_encode(std::string_view input, std::string& output);
 ```
 
 ### `parse_urlencoded`

@@ -74,6 +74,58 @@ namespace glz
    }
 
    /**
+    * @brief URL-encode (percent-encode) a string into a provided buffer
+    *
+    * Encodes characters for safe use in URLs:
+    * - Unreserved characters (A-Z, a-z, 0-9, -, ., _, ~) pass through unchanged
+    * - Space is encoded as + (per application/x-www-form-urlencoded)
+    * - All other characters are percent-encoded (%XX)
+    *
+    * @param input The string to encode
+    * @param output The buffer to write the encoded string to (cleared before writing)
+    */
+   inline void url_encode(std::string_view input, std::string& output)
+   {
+      output.clear();
+      output.reserve(input.size() * 3); // worst case: every char encoded
+
+      constexpr char hex_chars[] = "0123456789ABCDEF";
+
+      for (unsigned char c : input) {
+         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+             c == '-' || c == '.' || c == '_' || c == '~') {
+            // Unreserved characters pass through
+            output += static_cast<char>(c);
+         }
+         else if (c == ' ') {
+            // Space encoded as + for form encoding
+            output += '+';
+         }
+         else {
+            // Everything else percent-encoded
+            output += '%';
+            output += hex_chars[c >> 4];
+            output += hex_chars[c & 0x0F];
+         }
+      }
+   }
+
+   /**
+    * @brief URL-encode (percent-encode) a string
+    *
+    * Convenience overload that allocates and returns a new string.
+    *
+    * @param input The string to encode
+    * @return The encoded string
+    */
+   [[nodiscard]] inline std::string url_encode(std::string_view input)
+   {
+      std::string result;
+      url_encode(input, result);
+      return result;
+   }
+
+   /**
     * @brief Parse a URL-encoded query string or form body into a provided map
     *
     * Parses key=value pairs separated by '&'.
