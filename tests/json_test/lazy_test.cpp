@@ -1091,4 +1091,161 @@ suite lazy_json_tests = [] {
    };
 };
 
+// ============================================================================
+// Dynamic key serialization using glz::custom with string_view and lazy_json
+// Issue #2230: Using member value as JSON key name
+// ============================================================================
+
+namespace dynamic_key_test
+{
+   struct TaskA
+   {
+      std::string name = "task_a";
+      int val{};
+   };
+
+   struct TaskB
+   {
+      std::string name = "task_b";
+      int val{};
+   };
+
+   struct TaskC
+   {
+      std::string name = "task_c";
+      int val{};
+   };
+
+   struct TopLevel
+   {
+      TaskA a;
+      TaskB b;
+      TaskC c;
+   };
+}
+
+template <>
+struct glz::meta<dynamic_key_test::TopLevel>
+{
+   using T = dynamic_key_test::TopLevel;
+
+   // Helper struct for the value portion (excludes name since it becomes the key)
+   struct TaskVal
+   {
+      int val;
+   };
+
+   // Write using string_view keys to avoid intermediate string allocations
+   // The string_views point to the struct's own name members, which outlive serialization
+   static constexpr auto write_custom = [](const T& self) {
+      return std::vector<std::pair<std::string_view, TaskVal>>{
+         {self.a.name, {self.a.val}}, {self.b.name, {self.b.val}}, {self.c.name, {self.c.val}}};
+   };
+
+   // Read using raw_json_view (no allocation) + lazy_json for efficient iteration
+   static constexpr auto read_custom = [](T& self, const glz::raw_json_view& raw) {
+      auto result = glz::lazy_json(raw.str);
+      if (result) {
+         for (auto item : result->root()) {
+            auto key = item.key(); // std::string_view - no allocation
+            auto val = item["val"].get<int>();
+            if (val) {
+               if (key == self.a.name)
+                  self.a.val = *val;
+               else if (key == self.b.name)
+                  self.b.val = *val;
+               else if (key == self.c.name)
+                  self.c.val = *val;
+            }
+         }
+      }
+   };
+
+   static constexpr auto value = glz::custom<read_custom, write_custom>;
+};
+
+suite dynamic_key_custom_tests = [] {
+   using namespace dynamic_key_test;
+
+   "dynamic_key_write"_test = [] {
+      TopLevel top;
+      top.a.val = 10;
+      top.b.val = 20;
+      top.c.val = 30;
+
+      std::string json{};
+      auto ec = glz::write_json(top, json);
+      expect(not ec) << glz::format_error(ec, json);
+
+      // Verify the output uses the name field values as keys
+      expect(json == R"({"task_a":{"val":10},"task_b":{"val":20},"task_c":{"val":30}})") << json;
+   };
+
+   "dynamic_key_read"_test = [] {
+      TopLevel top;
+      std::string json = R"({"task_a":{"val":100},"task_b":{"val":200},"task_c":{"val":300}})";
+
+      auto ec = glz::read_json(top, json);
+      expect(not ec) << glz::format_error(ec, json);
+
+      expect(top.a.val == 100);
+      expect(top.b.val == 200);
+      expect(top.c.val == 300);
+   };
+
+   "dynamic_key_roundtrip"_test = [] {
+      TopLevel original;
+      original.a.val = 42;
+      original.b.val = 84;
+      original.c.val = 126;
+
+      // Write
+      std::string json{};
+      auto write_ec = glz::write_json(original, json);
+      expect(not write_ec) << glz::format_error(write_ec, json);
+
+      // Read into new object
+      TopLevel parsed;
+      auto read_ec = glz::read_json(parsed, json);
+      expect(not read_ec) << glz::format_error(read_ec, json);
+
+      // Verify values match
+      expect(parsed.a.val == original.a.val);
+      expect(parsed.b.val == original.b.val);
+      expect(parsed.c.val == original.c.val);
+   };
+
+   "dynamic_key_partial_read"_test = [] {
+      TopLevel top;
+      top.a.val = 1;
+      top.b.val = 2;
+      top.c.val = 3;
+
+      // JSON with only some keys present
+      std::string json = R"({"task_b":{"val":999}})";
+
+      auto ec = glz::read_json(top, json);
+      expect(not ec) << glz::format_error(ec, json);
+
+      // Only task_b should be updated
+      expect(top.a.val == 1); // unchanged
+      expect(top.b.val == 999); // updated
+      expect(top.c.val == 3); // unchanged
+   };
+
+   "dynamic_key_different_order"_test = [] {
+      TopLevel top;
+
+      // JSON with keys in different order than struct definition
+      std::string json = R"({"task_c":{"val":3},"task_a":{"val":1},"task_b":{"val":2}})";
+
+      auto ec = glz::read_json(top, json);
+      expect(not ec) << glz::format_error(ec, json);
+
+      expect(top.a.val == 1);
+      expect(top.b.val == 2);
+      expect(top.c.val == 3);
+   };
+};
+
 int main() { return 0; }
