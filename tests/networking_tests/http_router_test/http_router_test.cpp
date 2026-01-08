@@ -382,4 +382,54 @@ suite templated_router_tests = [] {
    };
 };
 
+// Query string handling tests - verifies router strips query strings before matching
+suite query_string_routing_tests = [] {
+   "static_route_with_query"_test = [] {
+      glz::http_router router;
+      router.get("/api/test", [](const glz::request&, glz::response& res) { res.body("ok"); });
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/api/test?limit=10");
+      expect(handler != nullptr);
+   };
+
+   "param_route_with_query"_test = [] {
+      glz::http_router router;
+      router.get("/users/:id", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/users/123?include=profile");
+      expect(handler != nullptr);
+      expect(params["id"] == "123");
+   };
+
+   "wildcard_route_with_query"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/docs/readme.md?download=true");
+      expect(handler != nullptr);
+      expect(params["path"] == "docs/readme.md");
+   };
+};
+
+// Path parameter URL decoding tests
+suite path_param_decoding_tests = [] {
+   "param_url_decoded"_test = [] {
+      glz::http_router router;
+      router.get("/users/:name", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/users/John%20Doe");
+      expect(handler != nullptr);
+      expect(params["name"] == "John Doe");
+   };
+
+   "wildcard_url_decoded"_test = [] {
+      glz::http_router router;
+      router.get("/files/*path", [](const glz::request&, glz::response&) {});
+
+      auto [handler, params] = router.match(glz::http_method::GET, "/files/my%20docs/file%20name.txt");
+      expect(handler != nullptr);
+      expect(params["path"] == "my docs/file name.txt");
+   };
+};
+
 int main() {}
