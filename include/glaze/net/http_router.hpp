@@ -27,9 +27,9 @@ namespace glz
    {
       http_method method{};
       std::string target{}; // Full request target (path + query string)
-      std::string path{};   // Path component only (without query string)
+      std::string path{}; // Path component only (without query string)
       std::unordered_map<std::string, std::string> params{}; // Path parameters (e.g., :id)
-      std::unordered_map<std::string, std::string> query{};  // Query parameters (e.g., ?limit=10)
+      std::unordered_map<std::string, std::string> query{}; // Query parameters (e.g., ?limit=10)
       std::unordered_map<std::string, std::string> headers{};
       std::string body{};
       std::string remote_ip{};

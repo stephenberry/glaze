@@ -19,7 +19,7 @@ suite url_decode_tests = [] {
 
    "percent_encoding"_test = [] {
       expect(glz::url_decode("%2F") == "/");
-      expect(glz::url_decode("%2f") == "/");  // lowercase
+      expect(glz::url_decode("%2f") == "/"); // lowercase
       expect(glz::url_decode("path%2Fto%2Ffile") == "path/to/file");
       expect(glz::url_decode("a%3Db%26c%3Dd") == "a=b&c=d");
    };
@@ -111,13 +111,13 @@ suite parse_urlencoded_tests = [] {
       expect(no_val["flag"] == "");
 
       auto dup = glz::parse_urlencoded("a=1&a=2");
-      expect(dup["a"] == "2");  // last wins
+      expect(dup["a"] == "2"); // last wins
 
       auto trail = glz::parse_urlencoded("a=1&");
       expect(trail.size() == 1u);
 
       auto empty_key = glz::parse_urlencoded("=value&a=1");
-      expect(empty_key.size() == 1u);  // empty key is skipped
+      expect(empty_key.size() == 1u); // empty key is skipped
       expect(empty_key["a"] == "1");
    };
 

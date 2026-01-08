@@ -92,8 +92,8 @@ namespace glz
       constexpr char hex_chars[] = "0123456789ABCDEF";
 
       for (unsigned char c : input) {
-         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-             c == '-' || c == '.' || c == '_' || c == '~') {
+         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.' ||
+             c == '_' || c == '~') {
             // Unreserved characters pass through
             output += static_cast<char>(c);
          }
@@ -136,10 +136,8 @@ namespace glz
     * @param key_buffer Optional reusable buffer for key decoding (avoids allocations)
     * @param value_buffer Optional reusable buffer for value decoding (avoids allocations)
     */
-   inline void parse_urlencoded(std::string_view query_string,
-                                std::unordered_map<std::string, std::string>& output,
-                                std::string& key_buffer,
-                                std::string& value_buffer)
+   inline void parse_urlencoded(std::string_view query_string, std::unordered_map<std::string, std::string>& output,
+                                std::string& key_buffer, std::string& value_buffer)
    {
       output.clear();
 
@@ -188,8 +186,7 @@ namespace glz
     * @param query_string The query string (without leading '?')
     * @param output The map to write key-value pairs to (cleared before writing)
     */
-   inline void parse_urlencoded(std::string_view query_string,
-                                std::unordered_map<std::string, std::string>& output)
+   inline void parse_urlencoded(std::string_view query_string, std::unordered_map<std::string, std::string>& output)
    {
       std::string key_buffer;
       std::string value_buffer;
