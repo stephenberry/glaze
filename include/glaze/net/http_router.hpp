@@ -25,8 +25,10 @@ namespace glz
    struct request
    {
       http_method method{};
-      std::string target{};
-      std::unordered_map<std::string, std::string> params{};
+      std::string target{}; // Full request target (path + query string)
+      std::string path{};   // Path component only (without query string)
+      std::unordered_map<std::string, std::string> params{}; // Path parameters (e.g., :id)
+      std::unordered_map<std::string, std::string> query{};  // Query parameters (e.g., ?limit=10)
       std::unordered_map<std::string, std::string> headers{};
       std::string body{};
       std::string remote_ip{};
@@ -659,7 +661,7 @@ namespace glz
        * @brief Match a request against registered routes
        *
        * @param method The HTTP method of the request
-       * @param target The target path of the request
+       * @param target The target path of the request (may include query string)
        * @return A pair containing the matched handler and extracted parameters
        */
       inline std::pair<handler, std::unordered_map<std::string, std::string>> match(http_method method,
@@ -668,8 +670,11 @@ namespace glz
          std::unordered_map<std::string, std::string> params;
          handler result = nullptr;
 
+         // Strip query string from target for matching
+         const auto [path, query_string] = split_target(target);
+
          // First try direct lookup for non-parameterized routes (optimization)
-         auto direct_it = direct_routes.find(target);
+         auto direct_it = direct_routes.find(std::string(path));
          if (direct_it != direct_routes.end()) {
             auto method_it = direct_it->second.find(method);
             if (method_it != direct_it->second.end()) {
@@ -678,7 +683,7 @@ namespace glz
          }
 
          // Split the target path into segments
-         std::vector<std::string> segments = split_path(target);
+         std::vector<std::string> segments = split_path(path);
 
          // Use recursive matching function
          match_node(&root, segments, 0, method, params, result);

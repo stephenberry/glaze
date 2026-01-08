@@ -319,3 +319,6 @@ namespace glz
       return HttpStatusLine{.version = version, .status_code = status_code, .status_message = status_message};
    }
 }
+
+// Include URL utilities for convenience (can also be included directly via glaze/net/url.hpp)
+#include "glaze/net/url.hpp"
