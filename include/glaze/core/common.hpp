@@ -430,8 +430,23 @@ namespace glz
    template <class T>
    concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Enum>;
 
+   // Marker type for P2996 automatic enum reflection
+   // Usage: template<> struct glz::meta<MyEnum> : glz::reflect_enum {};
+   // Can combine with name transformers: struct glz::meta<MyEnum> : glz::reflect_enum, glz::snake_case {};
+   struct reflect_enum {};
+
+   // Concept to detect enums using P2996 reflection (only available with GLZ_REFLECTION26)
+#if GLZ_REFLECTION26
    template <class T>
-   concept is_named_enum = ((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_read<T>);
+   concept is_reflect_enum = std::is_enum_v<std::remove_cvref_t<T>> &&
+                             std::is_base_of_v<reflect_enum, meta<std::remove_cvref_t<T>>>;
+#else
+   template <class T>
+   concept is_reflect_enum = false;
+#endif
+
+   template <class T>
+   concept is_named_enum = ((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>) || is_reflect_enum<T>) && !custom_read<T>);
 
    template <class T>
    concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Flags>;

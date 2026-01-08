@@ -215,6 +215,12 @@ namespace glz
    // Use preset struct: glz::opts_size
 
    // ---
+   // bool reflect_enums = false;
+   // When true and GLZ_REFLECTION26 is enabled, automatically reflects all enum types
+   // using C++26 P2996 reflection, serializing them as strings instead of integers.
+   // This allows enum string serialization without explicit glz::meta specializations.
+
+   // ---
    // size_t max_string_length = 0;
    // Maximum length for string allocations when reading. 0 means no limit (default).
    // When set, strings exceeding this length will fail with error_code::invalid_length.
@@ -563,6 +569,16 @@ namespace glz
    }
 
    consteval bool is_size_optimized(auto&& Opts) { return check_optimization_level(Opts) == optimization_level::size; }
+
+   consteval bool check_reflect_enums(auto&& Opts)
+   {
+      if constexpr (requires { Opts.reflect_enums; }) {
+         return Opts.reflect_enums;
+      }
+      else {
+         return false;
+      }
+   }
 
    // Check if raw pointer allocation is possible (either compile-time or runtime option available)
    template <auto Opts, class Ctx>

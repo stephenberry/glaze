@@ -7,7 +7,12 @@
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"
+#include "glaze/reflection/get_name.hpp"
 #include "glaze/util/primes_64.hpp"
+
+#if GLZ_REFLECTION26
+#include <meta>
+#endif
 
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
@@ -308,6 +313,54 @@ namespace glz
       template <size_t I>
       using type = member_t<V, decltype(get<I>(values))>;
    };
+
+#if GLZ_REFLECTION26
+   // P2996 automatic enum reflection
+   // Activated when meta<T> inherits from reflect_enum
+   template <class T>
+      requires is_reflect_enum<T>
+   struct reflect<T>
+   {
+      using V = std::remove_cvref_t<T>;
+
+      static constexpr auto size = enum_count<V>;
+
+      // Build tuple of enum values using P2996
+      static constexpr auto values = []() consteval {
+         constexpr auto enums = std::meta::enumerators_of(^^V);
+         return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return tuple{[:enums[Is]:]...};
+         }(std::make_index_sequence<size>{});
+      }();
+
+      // Build array of enum key names with optional transformation
+      static constexpr auto keys = []() consteval {
+         if constexpr (meta_has_rename_key_string<V>) {
+            // Use renamed_enum_key_storage for string-returning transformers
+            return []<std::size_t... Is>(std::index_sequence<Is...>) {
+               return std::array<sv, size>{
+                  sv{renamed_enum_key_storage<V, Is>::value.data(),
+                     renamed_enum_key_storage<V, Is>::value.size() - 1}...};
+            }(std::make_index_sequence<size>{});
+         }
+         else if constexpr (meta_has_rename_key_convertible<V>) {
+            // Use non-allocating transformer directly
+            return []<std::size_t... Is>(std::index_sequence<Is...>) {
+               return std::array<sv, size>{meta<V>::rename_key(enum_nameof<V, Is>)...};
+            }(std::make_index_sequence<size>{});
+         }
+         else {
+            // No transformation - use P2996 identifiers directly
+            return []<std::size_t... Is>(std::index_sequence<Is...>) {
+               return std::array<sv, size>{enum_nameof<V, Is>...};
+            }(std::make_index_sequence<size>{});
+         }
+      }();
+
+      template <size_t I>
+      using type = V;
+   };
+#endif
 
    template <class T>
       requires(is_memory_object<T>)

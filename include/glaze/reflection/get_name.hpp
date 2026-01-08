@@ -61,6 +61,38 @@ namespace glz
    }
 }
 
+// P2996 enum reflection helpers
+namespace glz::detail
+{
+   // Get enum name at index using P2996 reflection
+   template <class T, size_t I>
+   consteval std::string_view get_enum_name_p2996()
+   {
+      constexpr auto enums = std::meta::enumerators_of(^^T);
+      return std::meta::identifier_of(enums[I]);
+   }
+
+   // Get number of enumerators
+   template <class T>
+   consteval size_t enum_count_p2996()
+   {
+      return std::meta::enumerators_of(^^T).size();
+   }
+}
+
+namespace glz
+{
+   // P2996 enum name at index
+   template <class T, size_t I>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   inline constexpr std::string_view enum_nameof = detail::get_enum_name_p2996<std::remove_cvref_t<T>, I>();
+
+   // P2996 enum count
+   template <class T>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   inline constexpr size_t enum_count = detail::enum_count_p2996<std::remove_cvref_t<T>>();
+}
+
 #else
 // ============================================================================
 // Traditional __PRETTY_FUNCTION__ implementation (pre-C++26)
@@ -216,6 +248,32 @@ namespace glz
          return arr;
       }();
    };
+
+#if GLZ_REFLECTION26
+   // Helper to compute renamed enum key size at compile time
+   template <class T, size_t I>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   consteval size_t renamed_enum_key_size()
+   {
+      return meta<std::remove_cvref_t<T>>::rename_key(enum_nameof<T, I>).size();
+   }
+
+   // Storage for renamed enum key with exact size determined at compile time
+   template <class T, size_t I, size_t N = renamed_enum_key_size<T, I>()>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   struct renamed_enum_key_storage
+   {
+      static constexpr auto value = [] {
+         std::array<char, N + 1> arr{};
+         auto str = meta<std::remove_cvref_t<T>>::rename_key(enum_nameof<T, I>);
+         for (size_t i = 0; i < N; ++i) {
+            arr[i] = str[i];
+         }
+         arr[N] = '\0';
+         return arr;
+      }();
+   };
+#endif
 
    template <meta_has_rename_key_string T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
