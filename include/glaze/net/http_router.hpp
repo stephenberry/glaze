@@ -17,6 +17,7 @@
 
 #include "glaze/json/generic.hpp"
 #include "glaze/net/http.hpp"
+#include "glaze/net/url.hpp"
 #include "glaze/util/key_transformers.hpp"
 
 namespace glz
@@ -903,9 +904,9 @@ namespace glz
 
          // Try parameter match (less specific than static)
          if (node->parameter_child) {
-            // Save parameter value
+            // Save parameter value (URL-decoded)
             std::string param_name = node->parameter_child->parameter_name;
-            params[param_name] = segment;
+            params[param_name] = url_decode(segment);
 
             if (match_node(node->parameter_child.get(), segments, index + 1, method, params, result)) {
                return true;
@@ -917,11 +918,11 @@ namespace glz
 
          // Try wildcard match (least specific)
          if (node->wildcard_child) {
-            // For wildcards, capture all remaining segments
+            // For wildcards, capture all remaining segments (URL-decoded)
             std::string full_capture;
             for (size_t i = index; i < segments.size(); i++) {
                if (i > index) full_capture += "/";
-               full_capture += segments[i];
+               full_capture += url_decode(segments[i]);
             }
 
             params[node->wildcard_child->parameter_name] = full_capture;

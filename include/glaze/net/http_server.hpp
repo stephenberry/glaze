@@ -1708,8 +1708,8 @@ namespace glz
          request.headers = headers;
          request.body = std::move(body);
 
-         // Find a matching route (uses path, not full target)
-         auto [handle, params] = root_router.match(method, target);
+         // Find a matching route
+         auto [handle, params] = root_router.match(method, request.path);
 
          // Create the response object
          response response;
@@ -2096,7 +2096,7 @@ namespace glz
          request.body = std::move(body);
 
          // Find a matching route using http_router::match which handles both exact and parameterized routes
-         auto [handle, params] = root_router.match(method, target);
+         auto [handle, params] = root_router.match(method, request.path);
 
          // Create the response object up front so we can reuse it in fallback flows
          response response;

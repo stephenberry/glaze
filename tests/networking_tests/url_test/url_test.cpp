@@ -59,6 +59,10 @@ suite parse_urlencoded_tests = [] {
       auto result = glz::parse_urlencoded("name=John%20Doe&city=New+York");
       expect(result["name"] == "John Doe");
       expect(result["city"] == "New York");
+
+      // Encoded keys
+      auto encoded_key = glz::parse_urlencoded("encoded%20key=value");
+      expect(encoded_key["encoded key"] == "value");
    };
 
    "edge_cases"_test = [] {
@@ -73,6 +77,10 @@ suite parse_urlencoded_tests = [] {
 
       auto trail = glz::parse_urlencoded("a=1&");
       expect(trail.size() == 1u);
+
+      auto empty_key = glz::parse_urlencoded("=value&a=1");
+      expect(empty_key.size() == 1u);  // empty key is skipped
+      expect(empty_key["a"] == "1");
    };
 
    "buffer_overload"_test = [] {

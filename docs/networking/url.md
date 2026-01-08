@@ -97,6 +97,10 @@ auto p3 = glz::parse_urlencoded("a=1&a=2&a=3");
 // Empty string
 auto p4 = glz::parse_urlencoded("");
 // p4 is empty
+
+// Empty keys are skipped
+auto p5 = glz::parse_urlencoded("=value&a=1");
+// p5.size() == 1, p5["a"] == "1"
 ```
 
 ### Buffer Reuse (Zero-Allocation)

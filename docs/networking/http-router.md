@@ -106,10 +106,10 @@ router.get("/users/:id/posts", [](const glz::request& req, glz::response& res) {
 The request object provides:
 - `req.target` - Full URL including query string (e.g., `/api/users?limit=10`)
 - `req.path` - Path only, without query string (e.g., `/api/users`)
-- `req.params` - Path parameters from route (e.g., `:id`)
-- `req.query` - Parsed query parameters (e.g., `?limit=10`)
+- `req.params` - Path parameters from route (e.g., `:id`) - **URL-decoded**
+- `req.query` - Parsed query parameters - **URL-decoded**
 
-See [URL Utilities](url.md) for more details on query string parsing.
+See [URL Utilities](url.md) for more details on query string parsing and URL decoding.
 
 ### Parameter Constraints
 
