@@ -1988,62 +1988,10 @@ namespace glz
       }
    };
 
-#if GLZ_REFLECTION26
-   // Handler for enums with glz::meta<T> : glz::reflect_enum
-   // Uses reflect_enum_key_storage and reflect_enum_value_storage for P2996 reflection
+   // Fallback handler for enums without explicit glz::meta
+   // Reads as underlying integer unless reflect_enums option is enabled (P2996)
    template <class T>
-      requires(is_reflect_enum<T> && !custom_read<T>)
-   struct from<JSON, T>
-   {
-      template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end) noexcept
-      {
-         if constexpr (!check_ws_handled(Opts)) {
-            if (skip_ws<Opts>(ctx, it, end)) {
-               return;
-            }
-         }
-
-         if (*it != '"') [[unlikely]] {
-            ctx.error = error_code::expected_quote;
-            return;
-         }
-         ++it;
-         if constexpr (not Opts.null_terminated) {
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-         }
-
-         using V = std::decay_t<T>;
-         constexpr auto N = enum_count<V>;
-
-         // Linear search through reflected enum names
-         const auto start = it;
-         while (*it != '"' && it != end) {
-            ++it;
-         }
-         const sv key{start, static_cast<size_t>(it - start)};
-         ++it; // skip closing quote
-
-         bool found = false;
-         [&]<size_t... Is>(std::index_sequence<Is...>) {
-            ((key == reflect_enum_key_storage<V, Is>::key
-                 ? (value = reflect_enum_value_storage<V, Is>::value, found = true, false)
-                 : true) &&
-             ...);
-         }(std::make_index_sequence<N>{});
-
-         if (!found) [[unlikely]] {
-            ctx.error = error_code::unexpected_enum;
-         }
-      }
-   };
-#endif
-
-   template <class T>
-      requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T> && !is_reflect_enum<T>)
+      requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
    struct from<JSON, T>
    {
       template <auto Opts>

@@ -1041,47 +1041,10 @@ namespace glz
       }
    };
 
-#if GLZ_REFLECTION26
-   // Handler for enums with glz::meta<T> : glz::reflect_enum
-   // Uses reflect_enum_key_storage and reflect_enum_value_storage for P2996 reflection
+   // Fallback handler for enums without explicit glz::meta
+   // Serializes as underlying integer unless reflect_enums option is enabled (P2996)
    template <class T>
-      requires(is_reflect_enum<T> && !custom_write<T>)
-   struct to<JSON, T>
-   {
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
-      {
-         using V = std::decay_t<T>;
-         constexpr auto N = enum_count<V>;
-
-         // Get the key for this value using storage structs
-         sv name;
-         [&]<size_t... Is>(std::index_sequence<Is...>) {
-            ((value == reflect_enum_value_storage<V, Is>::value
-                 ? (name = reflect_enum_key_storage<V, Is>::key, false)
-                 : true) &&
-             ...);
-         }(std::make_index_sequence<N>{});
-
-         if (!name.empty()) {
-            if constexpr (not Opts.raw) {
-               dump('"', args...);
-            }
-            dump_maybe_empty(name, args...);
-            if constexpr (not Opts.raw) {
-               dump('"', args...);
-            }
-         }
-         else [[unlikely]] {
-            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<V>>(value), ctx, std::forward<Args>(args)...);
-         }
-      }
-   };
-#endif
-
-   template <class T>
-      requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T> &&
-               !is_reflect_enum<T>)
+      requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
    struct to<JSON, T>
    {
       template <auto Opts, class... Args>
