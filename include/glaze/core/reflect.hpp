@@ -361,34 +361,6 @@ namespace glz
       using type = V;
    };
 
-   // P2996 automatic enum reflection for plain enums (no glz::meta specialization)
-   // Used when reflect_enums option is enabled
-   template <class T>
-      requires(std::is_enum_v<std::remove_cvref_t<T>> && !is_reflect_enum<T> && !glaze_enum_t<T> && !meta_keys<T>)
-   struct reflect<T>
-   {
-      using V = std::remove_cvref_t<T>;
-
-      static constexpr auto size = enum_count<V>;
-
-      // Build tuple of enum values using P2996
-      static constexpr auto values = []() consteval {
-         constexpr auto enums = std::meta::enumerators_of(^^V);
-         return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return tuple{[:enums[Is]:]...};
-         }(std::make_index_sequence<size>{});
-      }();
-
-      // Build array of enum key names (no transformation for plain enums)
-      static constexpr auto keys = []() consteval {
-         return []<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::array<sv, size>{enum_nameof<V, Is>...};
-         }(std::make_index_sequence<size>{});
-      }();
-
-      template <size_t I>
-      using type = V;
-   };
 #endif
 
    template <class T>
@@ -956,7 +928,7 @@ namespace glz
 
    // get a std::string_view from an enum value
    template <class T>
-      requires(glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
+      requires((glaze_t<T> || is_reflect_enum<T>) && std::is_enum_v<std::decay_t<T>>)
    constexpr auto get_enum_name(T&& enum_value)
    {
       using V = std::decay_t<T>;

@@ -333,7 +333,7 @@ namespace glz
    }
 
    template <auto Opts, class T, size_t I, class Value>
-      requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>))
+      requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>) || is_reflect_enum<T>)
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
@@ -1997,7 +1997,7 @@ namespace glz
       {
 #if GLZ_REFLECTION26
          if constexpr (check_reflect_enums(Opts)) {
-            // Use reflect<T> which provides P2996-based enum reflection
+            // P2996 reflection for plain enums - done inline to ensure proper consteval context
             if constexpr (!check_ws_handled(Opts)) {
                if (skip_ws<Opts>(ctx, it, end)) {
                   return;
@@ -2016,8 +2016,21 @@ namespace glz
                }
             }
 
+            using V = std::decay_t<T>;
+            constexpr auto N = enum_count<V>;
+            constexpr auto enum_values = []() consteval {
+               constexpr auto enums = std::meta::enumerators_of(^^V);
+               return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+                  return glz::tuple{[:enums[Is]:]...};
+               }(std::make_index_sequence<N>{});
+            }();
+            constexpr auto enum_keys = []() consteval {
+               return []<std::size_t... Is>(std::index_sequence<Is...>) {
+                  return std::array<sv, N>{enum_nameof<V, Is>...};
+               }(std::make_index_sequence<N>{});
+            }();
+
             // Linear search through reflected enum names
-            constexpr auto N = reflect<T>::size;
             const auto start = it;
             while (*it != '"' && it != end) {
                ++it;
@@ -2027,8 +2040,7 @@ namespace glz
 
             bool found = false;
             [&]<size_t... Is>(std::index_sequence<Is...>) {
-               ((key == reflect<T>::keys[Is] ? (value = get<Is>(reflect<T>::values), found = true, false) : true) &&
-                ...);
+               ((key == enum_keys[Is] ? (value = get<Is>(enum_values), found = true, false) : true) && ...);
             }(std::make_index_sequence<N>{});
 
             if (!found) [[unlikely]] {

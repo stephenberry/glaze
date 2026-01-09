@@ -1016,7 +1016,8 @@ namespace glz
    };
 
    template <class T>
-      requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
+      requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>) || is_reflect_enum<T>) &&
+               not custom_write<T>)
    struct to<JSON, T>
    {
       template <auto Opts, class... Args>
@@ -1051,11 +1052,24 @@ namespace glz
       {
 #if GLZ_REFLECTION26
          if constexpr (check_reflect_enums(Opts)) {
-            // Use reflect<T> which provides P2996-based enum reflection
-            constexpr auto N = reflect<T>::size;
+            // P2996 reflection for plain enums - done inline to ensure proper consteval context
+            using V = std::decay_t<T>;
+            constexpr auto N = enum_count<V>;
+            constexpr auto enum_values = []() consteval {
+               constexpr auto enums = std::meta::enumerators_of(^^V);
+               return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+                  return glz::tuple{[:enums[Is]:]...};
+               }(std::make_index_sequence<N>{});
+            }();
+            constexpr auto enum_keys = []() consteval {
+               return []<std::size_t... Is>(std::index_sequence<Is...>) {
+                  return std::array<sv, N>{enum_nameof<V, Is>...};
+               }(std::make_index_sequence<N>{});
+            }();
+
             sv name;
             [&]<size_t... Is>(std::index_sequence<Is...>) {
-               ((value == get<Is>(reflect<T>::values) ? (name = reflect<T>::keys[Is], false) : true) && ...);
+               ((value == get<Is>(enum_values) ? (name = enum_keys[Is], false) : true) && ...);
             }(std::make_index_sequence<N>{});
 
             serialize<JSON>::op<Opts>(name, ctx, std::forward<Args>(args)...);

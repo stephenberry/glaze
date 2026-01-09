@@ -435,14 +435,14 @@ namespace glz
    // Can combine with name transformers: struct glz::meta<MyEnum> : glz::reflect_enum, glz::snake_case {};
    struct reflect_enum
    {
-      using glaze_reflect_enum_tag = void; // Tag for detection
+      static constexpr bool glaze_reflect_enum = true;
    };
 
    // Concept to detect enums using P2996 reflection (only available with GLZ_REFLECTION26)
 #if GLZ_REFLECTION26
    template <class T>
-   concept is_reflect_enum =
-      std::is_enum_v<std::remove_cvref_t<T>> && requires { typename meta<std::remove_cvref_t<T>>::glaze_reflect_enum_tag; };
+   concept is_reflect_enum = std::is_enum_v<std::remove_cvref_t<T>> &&
+                             requires { requires meta<std::remove_cvref_t<T>>::glaze_reflect_enum; };
 #else
    template <class T>
    concept is_reflect_enum = false;
