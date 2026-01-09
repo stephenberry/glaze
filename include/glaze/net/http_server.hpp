@@ -1344,6 +1344,7 @@ namespace glz
       {
          std::shared_ptr<socket_type> socket;
          std::shared_ptr<asio::streambuf> buffer;
+         std::string body;
          asio::ip::tcp::endpoint remote_endpoint;
          std::shared_ptr<asio::steady_timer> idle_timer;
          uint32_t request_count = 0;
@@ -1612,34 +1613,30 @@ namespace glz
          }
 
          if (content_length > 0) {
-            std::string body;
-            body.reserve(content_length);
+            conn->body.resize(content_length);
             // Append what's already in the buffer
             const size_t initial_body_size = std::min(content_length, conn->buffer->size());
-            body.append(static_cast<const char*>(conn->buffer->data().data()), initial_body_size);
+            auto missing_bytes = content_length - initial_body_size;
+            conn->body.replace(0, initial_body_size, static_cast<const char*>(conn->buffer->data().data()));
             conn->buffer->consume(initial_body_size);
-
-            if (body.length() < content_length) {
-               asio::async_read(*conn->socket, *conn->buffer, asio::transfer_exactly(content_length - body.length()),
-                                [this, conn, method_opt, target, headers, body = std::move(body)](std::error_code ec,
-                                                                                                  size_t) mutable {
+            if (initial_body_size < content_length) {
+               asio::async_read(*conn->socket, asio::buffer(&conn->body[initial_body_size], missing_bytes),
+                                asio::transfer_exactly(missing_bytes),
+                                [this, conn, method_opt, target, headers](std::error_code ec, size_t) {
                                    if (ec) {
                                       error_handler(ec, std::source_location::current());
                                       return;
                                    }
                                    // Append newly read data
-                                   body.append(static_cast<const char*>(conn->buffer->data().data()),
-                                               conn->buffer->size());
-                                   conn->buffer->consume(conn->buffer->size());
-                                   process_full_request_with_conn(conn, *method_opt, target, headers, std::move(body));
+                                   process_full_request_with_conn(conn, *method_opt, target, headers);
                                 });
             }
             else {
-               process_full_request_with_conn(conn, *method_opt, target, headers, std::move(body));
+               process_full_request_with_conn(conn, *method_opt, target, headers);
             }
          }
          else {
-            process_full_request_with_conn(conn, *method_opt, target, headers, "");
+            process_full_request_with_conn(conn, *method_opt, target, headers);
          }
       }
 
@@ -1679,9 +1676,9 @@ namespace glz
       // Process a full request using connection state (new keep-alive aware version)
       inline void process_full_request_with_conn(std::shared_ptr<connection_state> conn, http_method method,
                                                  const std::string& target,
-                                                 const std::unordered_map<std::string, std::string>& headers,
-                                                 std::string body)
+                                                 const std::unordered_map<std::string, std::string>& headers)
       {
+         std::string body = std::move(conn->body);
          // Check for a streaming handler first
          auto handler_it = streaming_handlers_.find(target);
          if (handler_it != streaming_handlers_.end()) {
