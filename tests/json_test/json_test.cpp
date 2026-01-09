@@ -12283,8 +12283,6 @@ suite ndjson_options = [] {
    };
 };
 
-// Note: atomics test is disabled for P2996 due to libc++ compatibility issues
-#if !GLZ_REFLECTION26
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};
@@ -12304,7 +12302,6 @@ suite atomics = [] {
       expect(buffer == R"(true)");
    };
 };
-#endif
 
 namespace trr
 {
