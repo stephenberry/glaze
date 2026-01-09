@@ -67,8 +67,6 @@ namespace glz
          return obj.[:member:];
       }
 
-      constexpr size_t max_pure_reflection_count = 1024; // P2996 has no practical limit
-
 #else
       // Traditional structured-bindings implementation (pre-C++26)
 
@@ -125,7 +123,6 @@ namespace glz
    }
 
    template <class T, size_t N = detail::count_members<T>>
-      requires(N <= detail::max_pure_reflection_count)
    GLZ_ALWAYS_INLINE constexpr decltype(auto) to_tie(T&& t)
    {
       if constexpr (N == 0) {
