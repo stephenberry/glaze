@@ -1989,7 +1989,8 @@ namespace glz
    };
 
    // Fallback handler for enums without explicit glz::meta
-   // Reads as underlying integer unless reflect_enums option is enabled (P2996)
+   // Reads as underlying integer
+   // Note: P2996 enum reflection is not yet supported due to consteval context limitations
    template <class T>
       requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
    struct from<JSON, T>
@@ -1997,66 +1998,10 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
-#if GLZ_REFLECTION26
-         if constexpr (check_reflect_enums(Opts)) {
-            // P2996 reflection for plain enums - done inline to ensure proper consteval context
-            if constexpr (!check_ws_handled(Opts)) {
-               if (skip_ws<Opts>(ctx, it, end)) {
-                  return;
-               }
-            }
-
-            if (*it != '"') [[unlikely]] {
-               ctx.error = error_code::expected_quote;
-               return;
-            }
-            ++it;
-            if constexpr (not Opts.null_terminated) {
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-            }
-
-            using V = std::decay_t<T>;
-            constexpr auto N = enum_count<V>;
-            constexpr auto enum_values = []() consteval {
-               constexpr auto enums = std::meta::enumerators_of(^^V);
-               return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-                  return glz::tuple{[:enums[Is]:]...};
-               }(std::make_index_sequence<N>{});
-            }();
-            constexpr auto enum_keys = []() consteval {
-               return []<std::size_t... Is>(std::index_sequence<Is...>) {
-                  return std::array<sv, N>{enum_nameof<V, Is>...};
-               }(std::make_index_sequence<N>{});
-            }();
-
-            // Linear search through reflected enum names
-            const auto start = it;
-            while (*it != '"' && it != end) {
-               ++it;
-            }
-            const sv key{start, static_cast<size_t>(it - start)};
-            ++it; // skip closing quote
-
-            bool found = false;
-            [&]<size_t... Is>(std::index_sequence<Is...>) {
-               ((key == enum_keys[Is] ? (value = get<Is>(enum_values), found = true, false) : true) && ...);
-            }(std::make_index_sequence<N>{});
-
-            if (!found) [[unlikely]] {
-               ctx.error = error_code::unexpected_enum;
-            }
-         }
-         else
-#endif
-         {
-            // Fallback: read as underlying integer
-            std::underlying_type_t<std::decay_t<T>> x{};
-            parse<JSON>::op<Opts>(x, ctx, it, end);
-            value = static_cast<std::decay_t<T>>(x);
-         }
+         // Enums without explicit glz::meta are read as underlying numbers
+         std::underlying_type_t<std::decay_t<T>> x{};
+         parse<JSON>::op<Opts>(x, ctx, it, end);
+         value = static_cast<std::decay_t<T>>(x);
       }
    };
 

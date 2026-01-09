@@ -11,15 +11,6 @@ struct TestStruct {
    double data;
 };
 
-// Test enum WITHOUT any glz::meta - used for reflect_enums option test
-enum class Direction { North, South, East, West };
-
-// Custom opts with reflect_enums enabled
-struct reflect_enums_opts : glz::opts
-{
-   bool reflect_enums = true;
-};
-
 int main()
 {
    std::cout << "GLZ_REFLECTION26 = " << GLZ_REFLECTION26 << std::endl;
@@ -43,7 +34,7 @@ int main()
       return 1;
    }
 
-   // Test JSON round-trip
+   // Test JSON round-trip with struct
    TestStruct obj{"test", 42, 3.14};
    auto json = glz::write_json(obj).value_or("error");
 
@@ -55,36 +46,6 @@ int main()
    if (obj2.name != "test" || obj2.value != 42) {
       std::cerr << "Round-trip failed" << std::endl;
       return 1;
-   }
-
-   // Test reflect_enums option with Direction enum (no glz::meta)
-   {
-      Direction d = Direction::East;
-
-      // Write using reflect_enums option
-      std::string dir_json;
-      auto ec = glz::write<reflect_enums_opts{}>(d, dir_json);
-      if (ec) {
-         std::cerr << "Failed to write Direction with reflect_enums" << std::endl;
-         return 1;
-      }
-      if (dir_json != "\"East\"") {
-         std::cerr << "Expected Direction::East to serialize as \"East\", got " << dir_json << std::endl;
-         return 1;
-      }
-
-      // Read using reflect_enums option
-      Direction d2;
-      ec = glz::read<reflect_enums_opts{}>(d2, dir_json);
-      if (ec) {
-         std::cerr << "Failed to parse Direction JSON: " << dir_json << std::endl;
-         return 1;
-      }
-      if (d2 != Direction::East) {
-         std::cerr << "Direction round-trip failed" << std::endl;
-         return 1;
-      }
-      std::cout << "reflect_enums option test passed: " << dir_json << std::endl;
    }
 
    std::cout << "P2996 test passed!" << std::endl;

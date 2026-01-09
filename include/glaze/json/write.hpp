@@ -1050,37 +1050,10 @@ namespace glz
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
-#if GLZ_REFLECTION26
-         if constexpr (check_reflect_enums(Opts)) {
-            // P2996 reflection for plain enums - done inline to ensure proper consteval context
-            using V = std::decay_t<T>;
-            constexpr auto N = enum_count<V>;
-            constexpr auto enum_values = []() consteval {
-               constexpr auto enums = std::meta::enumerators_of(^^V);
-               return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-                  return glz::tuple{[:enums[Is]:]...};
-               }(std::make_index_sequence<N>{});
-            }();
-            constexpr auto enum_keys = []() consteval {
-               return []<std::size_t... Is>(std::index_sequence<Is...>) {
-                  return std::array<sv, N>{enum_nameof<V, Is>...};
-               }(std::make_index_sequence<N>{});
-            }();
-
-            sv name;
-            [&]<size_t... Is>(std::index_sequence<Is...>) {
-               ((value == get<Is>(enum_values) ? (name = enum_keys[Is], false) : true) && ...);
-            }(std::make_index_sequence<N>{});
-
-            serialize<JSON>::op<Opts>(name, ctx, std::forward<Args>(args)...);
-         }
-         else
-#endif
-         {
-            // Fallback: serialize as underlying number
-            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
-                                      std::forward<Args>(args)...);
-         }
+         // Enums without explicit glz::meta are serialized as underlying numbers
+         // Note: P2996 enum reflection is not yet supported due to consteval context limitations
+         serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+                                   std::forward<Args>(args)...);
       }
    };
 
