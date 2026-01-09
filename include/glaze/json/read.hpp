@@ -1997,7 +1997,7 @@ namespace glz
       {
 #if GLZ_REFLECTION26
          if constexpr (check_reflect_enums(Opts)) {
-            // Use P2996 reflection to parse enum as string
+            // Use reflect<T> which provides P2996-based enum reflection
             if constexpr (!check_ws_handled(Opts)) {
                if (skip_ws<Opts>(ctx, it, end)) {
                   return;
@@ -2016,20 +2016,18 @@ namespace glz
                }
             }
 
-            constexpr auto enums = std::meta::enumerators_of(^^T);
-            constexpr auto N = enums.size();
-
-            // Linear search through P2996-reflected enum names
+            // Linear search through reflected enum names
+            constexpr auto N = reflect<T>::size;
             const auto start = it;
             while (*it != '"' && it != end) {
                ++it;
             }
-            const std::string_view key{start, static_cast<size_t>(it - start)};
+            const sv key{start, static_cast<size_t>(it - start)};
             ++it; // skip closing quote
 
             bool found = false;
             [&]<size_t... Is>(std::index_sequence<Is...>) {
-               ((key == std::meta::identifier_of(enums[Is]) ? (value = [:enums[Is]:], found = true, false) : true) &&
+               ((key == reflect<T>::keys[Is] ? (value = get<Is>(reflect<T>::values), found = true, false) : true) &&
                 ...);
             }(std::make_index_sequence<N>{});
 

@@ -435,11 +435,19 @@ namespace glz
    // Can combine with name transformers: struct glz::meta<MyEnum> : glz::reflect_enum, glz::snake_case {};
    struct reflect_enum {};
 
+   // Helper to check if meta<T> inherits from reflect_enum (SFINAE-safe)
+   template <class T, class = void>
+   struct meta_inherits_reflect_enum : std::false_type {};
+
+   template <class T>
+   struct meta_inherits_reflect_enum<T, std::void_t<decltype(sizeof(meta<T>))>>
+      : std::bool_constant<std::is_base_of_v<reflect_enum, meta<T>>> {};
+
    // Concept to detect enums using P2996 reflection (only available with GLZ_REFLECTION26)
 #if GLZ_REFLECTION26
    template <class T>
-   concept is_reflect_enum = std::is_enum_v<std::remove_cvref_t<T>> &&
-                             std::is_base_of_v<reflect_enum, meta<std::remove_cvref_t<T>>>;
+   concept is_reflect_enum =
+      std::is_enum_v<std::remove_cvref_t<T>> && meta_inherits_reflect_enum<std::remove_cvref_t<T>>::value;
 #else
    template <class T>
    concept is_reflect_enum = false;

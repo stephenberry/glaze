@@ -360,6 +360,36 @@ namespace glz
       template <size_t I>
       using type = V;
    };
+
+   // P2996 automatic enum reflection for plain enums (no glz::meta specialization)
+   // Used when reflect_enums option is enabled
+   template <class T>
+      requires(std::is_enum_v<std::remove_cvref_t<T>> && !is_reflect_enum<T> && !glaze_enum_t<T> && !meta_keys<T>)
+   struct reflect<T>
+   {
+      using V = std::remove_cvref_t<T>;
+
+      static constexpr auto size = []() consteval { return std::meta::enumerators_of(^^V).size(); }();
+
+      // Build tuple of enum values using P2996
+      static constexpr auto values = []() consteval {
+         constexpr auto enums = std::meta::enumerators_of(^^V);
+         return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return tuple{[:enums[Is]:]...};
+         }(std::make_index_sequence<size>{});
+      }();
+
+      // Build array of enum key names (no transformation for plain enums)
+      static constexpr auto keys = []() consteval {
+         constexpr auto enums = std::meta::enumerators_of(^^V);
+         return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return std::array<sv, size>{std::meta::identifier_of(enums[Is])...};
+         }(std::make_index_sequence<size>{});
+      }();
+
+      template <size_t I>
+      using type = V;
+   };
 #endif
 
    template <class T>

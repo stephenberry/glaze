@@ -1051,14 +1051,11 @@ namespace glz
       {
 #if GLZ_REFLECTION26
          if constexpr (check_reflect_enums(Opts)) {
-            // Use P2996 reflection to write enum as string
-            using V = std::decay_t<T>;
-            constexpr auto enums = std::meta::enumerators_of(^^V);
-            constexpr auto N = enums.size();
-
-            std::string_view name;
+            // Use reflect<T> which provides P2996-based enum reflection
+            constexpr auto N = reflect<T>::size;
+            sv name;
             [&]<size_t... Is>(std::index_sequence<Is...>) {
-               ((value == [:enums[Is]:] ? (name = std::meta::identifier_of(enums[Is]), false) : true) && ...);
+               ((value == get<Is>(reflect<T>::values) ? (name = reflect<T>::keys[Is], false) : true) && ...);
             }(std::make_index_sequence<N>{});
 
             serialize<JSON>::op<Opts>(name, ctx, std::forward<Args>(args)...);
