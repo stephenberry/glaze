@@ -448,8 +448,9 @@ namespace glz
    concept is_reflect_enum = false;
 #endif
 
+   // Note: is_reflect_enum is handled separately because P2996 requires inline consteval context
    template <class T>
-   concept is_named_enum = ((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>) || is_reflect_enum<T>) && !custom_read<T>);
+   concept is_named_enum = ((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_read<T>);
 
    template <class T>
    concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Flags>;

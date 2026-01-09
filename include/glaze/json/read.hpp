@@ -333,7 +333,7 @@ namespace glz
    }
 
    template <auto Opts, class T, size_t I, class Value>
-      requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>) || is_reflect_enum<T>)
+      requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>))
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
@@ -1987,6 +1987,65 @@ namespace glz
          }
       }
    };
+
+#if GLZ_REFLECTION26
+   // Handler for enums with glz::meta<T> : glz::reflect_enum
+   // P2996 reflection is done inline to ensure proper consteval context
+   template <class T>
+      requires(is_reflect_enum<T> && !custom_read<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts>
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      {
+         if constexpr (!check_ws_handled(Opts)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
+         }
+
+         if (*it != '"') [[unlikely]] {
+            ctx.error = error_code::expected_quote;
+            return;
+         }
+         ++it;
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
+
+         using V = std::decay_t<T>;
+         constexpr auto N = enum_count<V>;
+         constexpr auto enum_values = []() consteval {
+            constexpr auto enums = std::meta::enumerators_of(^^V);
+            return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+               return glz::tuple{[:enums[Is]:]...};
+            }(std::make_index_sequence<N>{});
+         }();
+
+         // Linear search through reflected enum names
+         const auto start = it;
+         while (*it != '"' && it != end) {
+            ++it;
+         }
+         const sv key{start, static_cast<size_t>(it - start)};
+         ++it; // skip closing quote
+
+         bool found = false;
+         [&]<size_t... Is>(std::index_sequence<Is...>) {
+            ((key == reflect_enum_key_storage<V, Is>::key ? (value = get<Is>(enum_values), found = true, false)
+                                                          : true) &&
+             ...);
+         }(std::make_index_sequence<N>{});
+
+         if (!found) [[unlikely]] {
+            ctx.error = error_code::unexpected_enum;
+         }
+      }
+   };
+#endif
 
    template <class T>
       requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T> && !is_reflect_enum<T>)
