@@ -33,7 +33,7 @@ jobs:
     - name: Verify P2996 compiler
       run: docker run --rm ${{ env.P2996_IMAGE }} clang++ --version
 
-    - name: Test P2996 reflection smoke test
+    - name: Test P2996 reflection
       run: |
         docker run --rm \
           -v ${{ github.workspace }}:/glaze \
@@ -43,7 +43,7 @@ jobs:
             clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
               -I/glaze/include -DGLZ_REFLECTION26=1 \
               -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
-              -o /tmp/p2996_test /glaze/tests/p2996_test/p2996_smoke_test.cpp && \
+              -o /tmp/p2996_test /glaze/tests/p2996_test/p2996_test.cpp && \
             /tmp/p2996_test
           "
 
