@@ -1043,7 +1043,7 @@ namespace glz
 
 #if GLZ_REFLECTION26
    // Handler for enums with glz::meta<T> : glz::reflect_enum
-   // P2996 reflection is done inline to ensure proper consteval context
+   // Uses reflect_enum_key_storage and reflect_enum_value_storage for P2996 reflection
    template <class T>
       requires(is_reflect_enum<T> && !custom_write<T>)
    struct to<JSON, T>
@@ -1053,17 +1053,11 @@ namespace glz
       {
          using V = std::decay_t<T>;
          constexpr auto N = enum_count<V>;
-         constexpr auto enum_values = []() consteval {
-            constexpr auto enums = std::meta::enumerators_of(^^V);
-            return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-               return glz::tuple{[:enums[Is]:]...};
-            }(std::make_index_sequence<N>{});
-         }();
 
-         // Get the key for this value
+         // Get the key for this value using storage structs
          sv name;
          [&]<size_t... Is>(std::index_sequence<Is...>) {
-            ((value == get<Is>(enum_values)
+            ((value == reflect_enum_value_storage<V, Is>::value
                  ? (name = reflect_enum_key_storage<V, Is>::key, false)
                  : true) &&
              ...);

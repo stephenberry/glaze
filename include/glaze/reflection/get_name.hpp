@@ -274,52 +274,6 @@ namespace glz
       }();
    };
 
-   // Helper to get enum key name with optional transformation at compile time
-   // All P2996 operations are done within consteval to ensure proper context
-   // Used by is_reflect_enum handlers
-   template <class V, size_t I>
-      requires(std::is_enum_v<V> && is_reflect_enum<V>)
-   consteval auto get_reflect_enum_key()
-   {
-      constexpr auto enums = std::meta::enumerators_of(^^V);
-      constexpr sv raw_name = std::meta::identifier_of(enums[I]);
-
-      if constexpr (meta_has_rename_key_convertible<V>) {
-         // Non-allocating transformer - return sv directly
-         return meta<V>::rename_key(raw_name);
-      }
-      else if constexpr (meta_has_rename_key_string<V>) {
-         // String-returning transformer - need to store in array
-         constexpr auto transformed = meta<V>::rename_key(raw_name);
-         constexpr auto len = transformed.size();
-         std::array<char, len + 1> arr{};
-         for (size_t i = 0; i < len; ++i) {
-            arr[i] = transformed[i];
-         }
-         arr[len] = '\0';
-         return arr;
-      }
-      else {
-         // No transformation
-         return raw_name;
-      }
-   }
-
-   // Storage for is_reflect_enum key with optional transformation
-   template <class V, size_t I>
-      requires(std::is_enum_v<V> && is_reflect_enum<V>)
-   struct reflect_enum_key_storage
-   {
-      static constexpr auto value = get_reflect_enum_key<V, I>();
-      static constexpr sv key = []() consteval {
-         if constexpr (std::is_same_v<std::remove_cvref_t<decltype(value)>, sv>) {
-            return value;
-         }
-         else {
-            return sv{value.data(), value.size() - 1};
-         }
-      }();
-   };
 #endif
 
    template <meta_has_rename_key_string T, size_t... I>
