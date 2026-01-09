@@ -222,6 +222,14 @@ namespace glz
    // This allows enum string serialization without explicit glz::meta specializations.
 
    // ---
+   // bool qualified_type_names = false;
+   // When true and GLZ_REFLECTION26 is enabled, type_name_for_opts and name_for_opts return
+   // fully-qualified type names with namespace prefixes (e.g., "mylib::MyType" instead of "MyType").
+   // This uses P2996's std::meta::qualified_name_of instead of display_string_of.
+   // Useful for avoiding name collisions when types in different namespaces share the same name.
+   // Note: Only affects P2996 reflection. Traditional reflection always returns qualified names.
+
+   // ---
    // size_t max_string_length = 0;
    // Maximum length for string allocations when reading. 0 means no limit (default).
    // When set, strings exceeding this length will fail with error_code::invalid_length.
@@ -575,6 +583,16 @@ namespace glz
    {
       if constexpr (requires { Opts.reflect_enums; }) {
          return Opts.reflect_enums;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_qualified_type_names(auto&& Opts)
+   {
+      if constexpr (requires { Opts.qualified_type_names; }) {
+         return Opts.qualified_type_names;
       }
       else {
          return false;

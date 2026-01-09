@@ -44,9 +44,13 @@ namespace glz
    template <auto N, class T>
    inline constexpr std::string_view member_nameof = detail::get_member_name_p2996<std::remove_cvref_t<T>, N>();
 
-   // P2996 type_name using display_string_of
+   // P2996 type_name using display_string_of (returns unqualified name)
    template <class T>
    constexpr auto type_name = std::meta::display_string_of(^^T);
+
+   // P2996 qualified_type_name using qualified_name_of (returns fully-qualified name with namespace)
+   template <class T>
+   constexpr auto qualified_type_name = std::meta::qualified_name_of(^^T);
 
    // P2996 implementation of member_names_impl (base version)
    template <class T, size_t... I>

@@ -1264,4 +1264,173 @@ suite enum_name_test = [] {
    };
 };
 
+// ============================================================================
+// qualified_type_names option tests
+// ============================================================================
+
+namespace test_ns {
+   struct NamespacedType
+   {
+      int x;
+      std::string y;
+   };
+
+   namespace nested {
+      struct DeepType
+      {
+         double value;
+      };
+   }
+}
+
+// Type with explicit meta name
+struct TypeWithMetaName
+{
+   int data;
+};
+
+template <>
+struct glz::meta<TypeWithMetaName>
+{
+   static constexpr std::string_view name = "CustomName";
+};
+
+// Type with local glaze name
+struct TypeWithLocalName
+{
+   int data;
+
+   struct glaze
+   {
+      static constexpr std::string_view name = "LocalCustomName";
+   };
+};
+
+// Custom opts with qualified_type_names enabled
+struct opts_qualified : glz::opts
+{
+   bool qualified_type_names = true;
+};
+
+// Custom opts with qualified_type_names disabled (explicit)
+struct opts_unqualified : glz::opts
+{
+   bool qualified_type_names = false;
+};
+
+suite qualified_type_names_tests = [] {
+   // =========================================================================
+   // check_qualified_type_names tests
+   // =========================================================================
+
+   "check_qualified_type_names default opts returns false"_test = [] {
+      static_assert(glz::check_qualified_type_names(glz::opts{}) == false);
+   };
+
+   "check_qualified_type_names detects true"_test = [] {
+      static_assert(glz::check_qualified_type_names(opts_qualified{}) == true);
+   };
+
+   "check_qualified_type_names detects explicit false"_test = [] {
+      static_assert(glz::check_qualified_type_names(opts_unqualified{}) == false);
+   };
+
+   // =========================================================================
+   // type_name tests - traditional reflection always includes namespace
+   // =========================================================================
+
+   "type_name returns qualified name"_test = [] {
+      constexpr std::string_view name = glz::type_name<test_ns::NamespacedType>;
+      expect(name == "test_ns::NamespacedType") << name;
+   };
+
+   "type_name returns nested qualified name"_test = [] {
+      constexpr std::string_view name = glz::type_name<test_ns::nested::DeepType>;
+      expect(name == "test_ns::nested::DeepType") << name;
+   };
+
+   // =========================================================================
+   // type_name_for_opts tests
+   // =========================================================================
+
+   "type_name_for_opts matches type_name for traditional reflection"_test = [] {
+      // Traditional reflection always returns qualified names regardless of option
+      constexpr auto base = glz::type_name<test_ns::NamespacedType>;
+      expect(glz::type_name_for_opts<test_ns::NamespacedType, glz::opts{}>() == base);
+      expect(glz::type_name_for_opts<test_ns::NamespacedType, opts_qualified{}>() == base);
+      expect(glz::type_name_for_opts<test_ns::NamespacedType, opts_unqualified{}>() == base);
+   };
+
+   "type_name_for_opts returns qualified name"_test = [] {
+      constexpr auto name = glz::type_name_for_opts<test_ns::NamespacedType, opts_qualified{}>();
+      expect(std::string_view{name} == "test_ns::NamespacedType") << name;
+   };
+
+   "type_name_for_opts returns nested qualified name"_test = [] {
+      constexpr auto name = glz::type_name_for_opts<test_ns::nested::DeepType, opts_qualified{}>();
+      expect(std::string_view{name} == "test_ns::nested::DeepType") << name;
+   };
+
+   // =========================================================================
+   // name_for_opts tests - priority: meta<T>::name > T::glaze::name > type_name_for_opts
+   // =========================================================================
+
+   "name_for_opts falls back to type_name_for_opts"_test = [] {
+      constexpr auto name = glz::name_for_opts<test_ns::NamespacedType, glz::opts{}>();
+      expect(name == glz::type_name_for_opts<test_ns::NamespacedType, glz::opts{}>());
+   };
+
+   "name_for_opts returns qualified name when falling back"_test = [] {
+      constexpr auto name = glz::name_for_opts<test_ns::NamespacedType, opts_qualified{}>();
+      expect(std::string_view{name} == "test_ns::NamespacedType") << name;
+   };
+
+   "name_for_opts uses meta name over type_name"_test = [] {
+      expect(glz::name_for_opts<TypeWithMetaName, glz::opts{}>() == "CustomName");
+      expect(glz::name_for_opts<TypeWithMetaName, opts_qualified{}>() == "CustomName");
+   };
+
+   "name_for_opts uses local glaze name over type_name"_test = [] {
+      expect(glz::name_for_opts<TypeWithLocalName, glz::opts{}>() == "LocalCustomName");
+      expect(glz::name_for_opts<TypeWithLocalName, opts_qualified{}>() == "LocalCustomName");
+   };
+
+   "name_for_opts returns void for void type"_test = [] {
+      expect(glz::name_for_opts<void, glz::opts{}>() == "void");
+   };
+
+   // =========================================================================
+   // name_v backward compatibility tests
+   // =========================================================================
+
+   "name_v returns qualified name"_test = [] {
+      constexpr std::string_view name = glz::name_v<test_ns::NamespacedType>;
+      expect(name == "test_ns::NamespacedType") << name;
+   };
+
+   "name_v uses meta name when available"_test = [] {
+      expect(glz::name_v<TypeWithMetaName> == "CustomName");
+   };
+
+   "name_v uses local glaze name when available"_test = [] {
+      expect(glz::name_v<TypeWithLocalName> == "LocalCustomName");
+   };
+
+   // =========================================================================
+   // Integration test
+   // =========================================================================
+
+   "json serialization unaffected by qualified_type_names"_test = [] {
+      test_ns::NamespacedType obj{42, "hello"};
+      auto json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"x":42,"y":"hello"})");
+
+      test_ns::NamespacedType obj2{};
+      auto ec = glz::read_json(obj2, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj2.x == 42);
+      expect(obj2.y == "hello");
+   };
+};
+
 int main() { return 0; }

@@ -223,6 +223,39 @@ P2996 provides cleaner type names via `std::meta::display_string_of`:
 constexpr auto name = glz::type_name<Person>;
 ```
 
+> **Breaking Change:** P2996 `type_name` returns unqualified names without namespace prefixes, while traditional reflection includes them:
+> - Traditional: `"mylib::MyEnum"`
+> - P2996: `"MyEnum"`
+>
+> Code that depends on the exact format of type names (e.g., for key generation in `rename_key`) may produce different output.
+
+### Qualified Type Names Option
+
+If you need namespace-qualified type names with P2996 (e.g., for disambiguation when types in different namespaces share the same name), you can:
+
+1. **Use `qualified_type_name<T>`** directly:
+   ```cpp
+   // Always returns fully-qualified name with P2996
+   constexpr auto qname = glz::qualified_type_name<mylib::MyType>;
+   // qname == "mylib::MyType"
+   ```
+
+2. **Use the `qualified_type_names` option** with opts-aware functions:
+   ```cpp
+   struct my_opts : glz::opts {
+       bool qualified_type_names = true;
+   };
+
+   // Returns qualified name when option is enabled
+   constexpr auto name = glz::type_name_for_opts<mylib::MyType, my_opts{}>();
+   // name == "mylib::MyType"
+
+   // Also works with name_for_opts (respects meta<T>::name if specified)
+   constexpr auto name2 = glz::name_for_opts<mylib::MyType, my_opts{}>();
+   ```
+
+These opts-aware functions check the `qualified_type_names` option and return the appropriate name format. The default (`false`) returns unqualified names for cleaner output.
+
 ## Docker Development Environment
 
 A Docker container with Bloomberg clang-p2996 can be used for development and testing:
