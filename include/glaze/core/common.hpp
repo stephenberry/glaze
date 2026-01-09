@@ -433,21 +433,16 @@ namespace glz
    // Marker type for P2996 automatic enum reflection
    // Usage: template<> struct glz::meta<MyEnum> : glz::reflect_enum {};
    // Can combine with name transformers: struct glz::meta<MyEnum> : glz::reflect_enum, glz::snake_case {};
-   struct reflect_enum {};
-
-   // Helper to check if meta<T> inherits from reflect_enum (SFINAE-safe)
-   template <class T, class = void>
-   struct meta_inherits_reflect_enum : std::false_type {};
-
-   template <class T>
-   struct meta_inherits_reflect_enum<T, std::void_t<decltype(sizeof(meta<T>))>>
-      : std::bool_constant<std::is_base_of_v<reflect_enum, meta<T>>> {};
+   struct reflect_enum
+   {
+      using glaze_reflect_enum_tag = void; // Tag for detection
+   };
 
    // Concept to detect enums using P2996 reflection (only available with GLZ_REFLECTION26)
 #if GLZ_REFLECTION26
    template <class T>
    concept is_reflect_enum =
-      std::is_enum_v<std::remove_cvref_t<T>> && meta_inherits_reflect_enum<std::remove_cvref_t<T>>::value;
+      std::is_enum_v<std::remove_cvref_t<T>> && requires { typename meta<std::remove_cvref_t<T>>::glaze_reflect_enum_tag; };
 #else
    template <class T>
    concept is_reflect_enum = false;

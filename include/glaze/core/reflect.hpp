@@ -369,7 +369,7 @@ namespace glz
    {
       using V = std::remove_cvref_t<T>;
 
-      static constexpr auto size = []() consteval { return std::meta::enumerators_of(^^V).size(); }();
+      static constexpr auto size = enum_count<V>;
 
       // Build tuple of enum values using P2996
       static constexpr auto values = []() consteval {
@@ -381,9 +381,8 @@ namespace glz
 
       // Build array of enum key names (no transformation for plain enums)
       static constexpr auto keys = []() consteval {
-         constexpr auto enums = std::meta::enumerators_of(^^V);
-         return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::array<sv, size>{std::meta::identifier_of(enums[Is])...};
+         return []<std::size_t... Is>(std::index_sequence<Is...>) {
+            return std::array<sv, size>{enum_nameof<V, Is>...};
          }(std::make_index_sequence<size>{});
       }();
 
