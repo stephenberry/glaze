@@ -281,7 +281,9 @@ p.[:members[0]:] = "Alice";  // Sets p.name
 
 ### Access Context
 
-Glaze uses `access_context::unchecked()` to reflect on all members regardless of access specifiers. This matches the behavior of traditional reflection which can access private members through pointer-to-member.
+Glaze uses `access_context::unchecked()` to reflect on all members regardless of access specifiers. This allows P2996 automatic reflection to access private members without requiring friend declarations.
+
+> **Note:** If you use explicit `glz::meta` specializations with pointer-to-member syntax (e.g., `&T::private_member`), friend declarations are still required because C++ pointer-to-member respects access control. The `access_context::unchecked()` bypass only applies to P2996 automatic reflection.
 
 ## Compatibility Notes
 
