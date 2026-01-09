@@ -231,30 +231,21 @@ constexpr auto name = glz::type_name<Person>;
 
 ### Qualified Type Names Option
 
-If you need namespace-qualified type names with P2996 (e.g., for disambiguation when types in different namespaces share the same name), you can:
+> **Note:** The `qualified_type_names` option is prepared for future P2996 implementations. Bloomberg clang-p2996 does not yet support `std::meta::qualified_name_of`, so this option currently has no effect with P2996. Traditional reflection always returns qualified names regardless of this option.
 
-1. **Use `qualified_type_name<T>`** directly:
-   ```cpp
-   // Always returns fully-qualified name with P2996
-   constexpr auto qname = glz::qualified_type_name<mylib::MyType>;
-   // qname == "mylib::MyType"
-   ```
+The `qualified_type_names` option and associated functions (`type_name_for_opts`, `name_for_opts`) are available for forward compatibility:
 
-2. **Use the `qualified_type_names` option** with opts-aware functions:
-   ```cpp
-   struct my_opts : glz::opts {
-       bool qualified_type_names = true;
-   };
+```cpp
+struct my_opts : glz::opts {
+    bool qualified_type_names = true;
+};
 
-   // Returns qualified name when option is enabled
-   constexpr auto name = glz::type_name_for_opts<mylib::MyType, my_opts{}>();
-   // name == "mylib::MyType"
+// These functions are ready for when qualified_name_of becomes available
+constexpr auto name = glz::type_name_for_opts<mylib::MyType, my_opts{}>();
+constexpr auto name2 = glz::name_for_opts<mylib::MyType, my_opts{}>();
+```
 
-   // Also works with name_for_opts (respects meta<T>::name if specified)
-   constexpr auto name2 = glz::name_for_opts<mylib::MyType, my_opts{}>();
-   ```
-
-These opts-aware functions check the `qualified_type_names` option and return the appropriate name format. The default (`false`) returns unqualified names for cleaner output.
+When `std::meta::qualified_name_of` is added to the P2996 implementation, these functions will automatically support returning fully-qualified type names with namespace prefixes.
 
 ## Docker Development Environment
 

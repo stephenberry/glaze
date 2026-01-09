@@ -48,9 +48,12 @@ namespace glz
    template <class T>
    constexpr auto type_name = std::meta::display_string_of(^^T);
 
-   // P2996 qualified_type_name using qualified_name_of (returns fully-qualified name with namespace)
-   template <class T>
-   constexpr auto qualified_type_name = std::meta::qualified_name_of(^^T);
+   // Note: P2996 qualified_name_of is not yet available in Bloomberg clang-p2996.
+   // When it becomes available, add:
+   // template <class T>
+   // constexpr auto qualified_type_name = std::meta::qualified_name_of(^^T);
+   //
+   // For now, qualified_type_names option has no effect with P2996.
 
    // P2996 implementation of member_names_impl (base version)
    template <class T, size_t... I>

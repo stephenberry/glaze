@@ -585,20 +585,21 @@ namespace glz
    }();
 
    // Opts-aware type name: returns qualified or unqualified based on qualified_type_names option.
-   // For P2996: uses qualified_name_of or display_string_of based on option.
    // For traditional: always returns qualified names (existing behavior).
+   // For P2996: currently always returns unqualified names (display_string_of).
+   //            qualified_name_of is not yet available in Bloomberg clang-p2996.
    template <class T, auto Opts>
    consteval auto type_name_for_opts()
    {
 #if GLZ_REFLECTION26
-      if constexpr (check_qualified_type_names(Opts)) {
-         return qualified_type_name<T>;
-      }
-      else {
-         return type_name<T>;
-      }
+      // TODO: When Bloomberg clang-p2996 adds qualified_name_of, enable this:
+      // if constexpr (check_qualified_type_names(Opts)) {
+      //    return qualified_type_name<T>;
+      // }
+      return type_name<T>;
 #else
       // Traditional reflection always returns qualified names
+      // (qualified_type_names option has no effect)
       return type_name<T>;
 #endif
    }
