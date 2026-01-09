@@ -6,7 +6,7 @@
 #include <chrono>
 #include <type_traits>
 
-#include "glaze/core/opts.hpp"
+#include "glaze/core/traits.hpp"
 
 namespace glz
 {

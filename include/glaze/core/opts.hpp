@@ -8,6 +8,7 @@
 
 #include "glaze/core/context.hpp"
 #include "glaze/core/optimization_level.hpp"
+#include "glaze/core/traits.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
@@ -961,15 +962,7 @@ namespace glz
    template <uint32_t Format = INVALID, class T = void>
    struct from;
 
-   // Trait to mark types with specified Glaze read/write implementations.
-   // When P2996 reflection is enabled, specialize this to std::true_type
-   // for types that have explicit to/from implementations to prevent
-   // automatic reflection from creating ambiguous specializations.
-   template <class T>
-   struct specified : std::false_type {};
-
-   template <class T>
-   concept is_specified = specified<std::remove_cvref_t<T>>::value;
+   // Note: specified and is_specified are defined in glaze/core/traits.hpp
 
    template <uint32_t Format = INVALID, class T = void>
    struct to_partial;

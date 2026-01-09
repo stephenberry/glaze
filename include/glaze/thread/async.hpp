@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "glaze/core/opts.hpp"
+#include "glaze/core/traits.hpp"
 #include "glaze/util/type_traits.hpp"
 
 // The purpose of glz::async is to create a thread-safe wrapper around a type
