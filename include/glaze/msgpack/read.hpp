@@ -559,7 +559,7 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class It, class End>
       GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         if constexpr (Opts.structs_as_arrays) {
+         if constexpr (check_structs_as_arrays(Opts)) {
             size_t len{};
             if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
                return;

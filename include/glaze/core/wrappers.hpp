@@ -89,15 +89,25 @@ namespace glz
 
    // Read and write numbers as strings
    template <auto MemPtr>
-   constexpr auto quoted_num = opts_wrapper<MemPtr, &opts::quoted_num>();
+   constexpr auto quoted_num = opts_wrapper<MemPtr, quoted_num_opt_tag{}>();
 
-   // Treat types like std::string as numbers: read and write them quoted
+   // Treat types like std::string as numbers: read and write them without quotes
    template <auto MemPtr>
-   constexpr auto number = opts_wrapper<MemPtr, &opts::number>();
+   constexpr auto string_as_number = opts_wrapper<MemPtr, string_as_number_opt_tag{}>();
+
+   // Deprecated: use string_as_number instead
+   template <auto MemPtr>
+   [[deprecated("Use glz::string_as_number instead of glz::number")]]
+   constexpr auto number = opts_wrapper<MemPtr, string_as_number_opt_tag{}>();
 
    // Write out string like types without quotes
    template <auto MemPtr>
-   constexpr auto raw = opts_wrapper<MemPtr, &opts::raw>();
+   constexpr auto unquoted = opts_wrapper<MemPtr, unquoted_opt_tag{}>();
+
+   // Deprecated: use unquoted instead
+   template <auto MemPtr>
+   [[deprecated("Use glz::unquoted instead of glz::raw")]]
+   constexpr auto raw = opts_wrapper<MemPtr, unquoted_opt_tag{}>();
 
    // Reads into only existing fields and elements and then exits without parsing the rest of the input
    template <auto MemPtr>

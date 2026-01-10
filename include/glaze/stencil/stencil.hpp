@@ -306,7 +306,7 @@ namespace glz
                      // Serialize the value
                      std::string temp_buffer;
                      static constexpr auto RawOpts =
-                        set_json<opt_true<Opts, &opts::raw>>(); // write out string like values without quotes
+                        set_json<opt_true<Opts, unquoted_opt_tag{}>>(); // write out string like values without quotes
 
                      visit<N>(
                         [&]<size_t I>() {

@@ -947,7 +947,7 @@ suite basic_types = [] {
 
          auto write_raw = [](const auto& input) {
             std::string result{};
-            expect(not glz::write<glz::opts{.raw = true}>(input, result));
+            expect(not glz::write<glz::opt_true<glz::opts{}, glz::unquoted_opt_tag{}>>(input, result));
             return result;
          };
          expect(write_raw(std::string_view{}) == expected_nothing);
@@ -956,7 +956,7 @@ suite basic_types = [] {
 
          auto write_raw_str = [](const auto& input) {
             std::string result{};
-            expect(not glz::write<glz::opts{.raw_string = true}>(input, result));
+            expect(not glz::write<glz::opt_true<glz::opts{}, glz::raw_string_opt_tag{}>>(input, result));
             return result;
          };
          expect(write_raw_str(std::string_view{}) == expected_empty);
@@ -965,7 +965,7 @@ suite basic_types = [] {
 
          auto write_num = [](const auto& input) {
             std::string result{};
-            expect(not glz::write<glz::opts{.number = true}>(input, result));
+            expect(not glz::write<glz::opt_true<glz::opts{}, glz::string_as_number_opt_tag{}>>(input, result));
             return result;
          };
          expect(write_num(std::string_view{}) == expected_nothing);
@@ -6832,7 +6832,7 @@ template <>
 struct glz::meta<numbers_as_strings>
 {
    using T = numbers_as_strings;
-   static constexpr auto value = object("x", glz::number<&T::x>, "y", glz::number<&T::y>);
+   static constexpr auto value = object("x", glz::string_as_number<&T::x>, "y", glz::string_as_number<&T::y>);
 };
 
 struct numbers_as_strings2
@@ -6846,7 +6846,7 @@ template <>
 struct glz::meta<numbers_as_strings2>
 {
    using T = numbers_as_strings2;
-   static constexpr auto value = object("i", number<&T::i>, "d", number<&T::d>, &T::hello);
+   static constexpr auto value = object("i", string_as_number<&T::i>, "d", string_as_number<&T::d>, &T::hello);
 };
 
 suite numbers_as_strings_suite = [] {
@@ -8531,13 +8531,13 @@ suite raw_string_test = [] {
       raw_stuff obj{};
       std::string buffer = R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})";
 
-      expect(!glz::read<glz::opts{.raw_string = true}>(obj, buffer));
+      expect(!glz::read<glz::opt_true<glz::opts{}, glz::raw_string_opt_tag{}>>(obj, buffer));
       expect(obj.a == R"(Hello\nWorld)");
       expect(obj.b == R"(Hello World)");
       expect(obj.c == R"(\tHello\bWorld)");
 
       buffer.clear();
-      expect(not glz::write<glz::opts{.raw_string = true}>(obj, buffer));
+      expect(not glz::write<glz::opt_true<glz::opts{}, glz::raw_string_opt_tag{}>>(obj, buffer));
       expect(buffer == R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})");
    };
 
@@ -8574,11 +8574,11 @@ World)");
       std::string value = R"(Hello\nWorld)";
 
       // With raw_string only: should have quotes
-      auto json_raw_string = glz::write<glz::opts{.raw_string = true}>(value);
+      auto json_raw_string = glz::write<glz::opt_true<glz::opts{}, glz::raw_string_opt_tag{}>>(value);
       expect(json_raw_string.value() == R"("Hello\nWorld")") << json_raw_string.value();
 
       // With raw and raw_string: should not have quotes
-      auto json_raw_and_raw_string = glz::write<glz::opts{.raw = true, .raw_string = true}>(value);
+      auto json_raw_and_raw_string = glz::write<glz::opt_true<glz::opt_true<glz::opts{}, glz::unquoted_opt_tag{}>, glz::raw_string_opt_tag{}>>(value);
       expect(json_raw_and_raw_string.value() == R"(Hello\nWorld)") << json_raw_and_raw_string.value();
    };
 };
@@ -9532,7 +9532,7 @@ struct AccountUpdate
 
 inline void AccountUpdate::fromJson(AccountUpdate& accountUpdate, const std::string& jSon)
 {
-   auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .raw_string = true}>(accountUpdate, jSon);
+   auto ec = glz::read<glz::opt_true<glz::opts{.error_on_unknown_keys = false}, glz::raw_string_opt_tag{}>>(accountUpdate, jSon);
    expect(not ec) << glz::format_error(ec, jSon);
 }
 
@@ -11447,7 +11447,7 @@ template <>
 struct glz::meta<raw_struct>
 {
    using T = raw_struct;
-   static constexpr auto value = object("str", glz::raw<&T::str>, "color", glz::raw<&T::color>);
+   static constexpr auto value = object("str", glz::unquoted<&T::str>, "color", glz::unquoted<&T::color>);
 };
 
 suite raw_test = [] {
@@ -11634,7 +11634,6 @@ suite error_on_missing_keys_symbols_tests = [] {
       auto ec = glz::read<glz::opts{
                              .error_on_unknown_keys = false,
                              .error_on_missing_keys = true,
-                             .quoted_num = false,
                           },
                           single_symbol_info_js>(result, payload);
       expect(not ec);
@@ -12823,7 +12822,7 @@ suite explicit_string_view_support = [] {
       expect(buffer == R"("explicit")");
 
       buffer.clear();
-      expect(not glz::write<glz::opts{.raw_string = true}>(value, buffer));
+      expect(not glz::write<glz::opt_true<glz::opts{}, glz::raw_string_opt_tag{}>>(value, buffer));
       expect(buffer == R"("explicit")");
    };
 };
@@ -12860,7 +12859,7 @@ suite span_char_serialization = [] {
       std::span<const char> span{data, 8};
 
       std::string buffer{};
-      expect(not glz::write<glz::opts{.raw_string = true}>(span, buffer));
+      expect(not glz::write<glz::opt_true<glz::opts{}, glz::raw_string_opt_tag{}>>(span, buffer));
       expect(buffer == R"("raw span")");
    };
 

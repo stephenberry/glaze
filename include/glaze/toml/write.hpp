@@ -109,7 +109,7 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 32 + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         if constexpr (Opts.quoted_num) {
+         if constexpr (check_quoted_num(Opts)) {
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
             write_chars::op<Opts>(value, ctx, b, ix);
@@ -136,11 +136,11 @@ namespace glz
             if (!ensure_space(ctx, b, ix + str.size() + 3 + write_padding_bytes)) [[unlikely]] {
                return;
             }
-            if constexpr (not Opts.raw) {
+            if constexpr (not check_unquoted(Opts)) {
                dump('"', b, ix);
             }
             dump_maybe_empty(str, b, ix);
-            if constexpr (not Opts.raw) {
+            if constexpr (not check_unquoted(Opts)) {
                dump('"', b, ix);
             }
          }
@@ -418,7 +418,7 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         if constexpr (Opts.number) {
+         if constexpr (check_string_as_number(Opts)) {
             const sv str = [&]() -> const sv {
                if constexpr (char_t<T>) {
                   return sv{&value, 1};
@@ -436,7 +436,7 @@ namespace glz
             dump_maybe_empty(value, b, ix);
          }
          else if constexpr (char_t<T>) {
-            if constexpr (Opts.raw) {
+            if constexpr (check_unquoted(Opts)) {
                if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                   return;
                }
@@ -465,7 +465,7 @@ namespace glz
             }
          }
          else {
-            if constexpr (Opts.raw_string) {
+            if constexpr (check_raw_string(Opts)) {
                const sv str = [&]() -> const sv {
                   if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                      return value ? value : "";
@@ -507,7 +507,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (Opts.raw) {
+               if constexpr (check_unquoted(Opts)) {
                   const auto n = str.size();
                   if (n) {
                      std::memcpy(&b[ix], str.data(), n);

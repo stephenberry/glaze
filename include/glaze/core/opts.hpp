@@ -94,12 +94,6 @@ namespace glz
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
 
-      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
-      bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
-      bool raw = false; // write out string like values without quotes
-      bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
-      bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
-
       bool partial_read =
          false; // Reads into the deepest structural object and then exits without parsing the rest of the input
 
@@ -249,6 +243,35 @@ namespace glz
    // Whether prettified arrays should have new lines for each element.
    // Set to false for more compact array output.
 
+   // ---
+   // bool quoted_num = false;
+   // Treat numbers as quoted strings. When writing, numbers are wrapped in quotes: 123 -> "123"
+   // When reading, quoted numbers are parsed: "123" -> 123
+   // Useful for APIs that require numeric values as strings.
+
+   // ---
+   // bool string_as_number = false;
+   // Treat string types (like std::string) as numbers during serialization.
+   // When writing, strings are output without quotes. When reading, unquoted values are read into strings.
+   // Useful for reading/writing numeric strings without quote overhead.
+
+   // ---
+   // bool unquoted = false;
+   // Write string-like values without surrounding quotes.
+   // The string content is still escape-processed unless raw_string is also true.
+
+   // ---
+   // bool raw_string = false;
+   // Skip escape sequence encoding/decoding for strings.
+   // Improves read/write performance when strings are known to not contain escape characters.
+   // Can be combined with 'raw' to write completely unprocessed string content.
+
+   // ---
+   // bool structs_as_arrays = false;
+   // Serialize/deserialize structs as arrays without field keys.
+   // Useful for binary formats or when field names add unnecessary overhead.
+   // Order of fields is determined by the glz::meta definition.
+
    struct append_arrays_opt_tag
    {};
 
@@ -257,6 +280,27 @@ namespace glz
 
    struct escape_control_characters_opt_tag
    {};
+
+   struct quoted_num_opt_tag
+   {};
+
+   struct string_as_number_opt_tag
+   {};
+
+   struct unquoted_opt_tag
+   {};
+
+   struct raw_string_opt_tag
+   {};
+
+   struct structs_as_arrays_opt_tag
+   {};
+
+   // Helper for deprecated option static_asserts (dependent false pattern)
+   template <class>
+   inline constexpr bool deprecated_opts_raw = false;
+   template <class>
+   inline constexpr bool deprecated_opts_number = false;
 
    template <auto member_ptr>
    concept is_append_arrays_tag = std::same_as<std::decay_t<decltype(member_ptr)>, append_arrays_opt_tag>;
@@ -267,6 +311,21 @@ namespace glz
    template <auto member_ptr>
    concept is_escape_control_characters_tag =
       std::same_as<std::decay_t<decltype(member_ptr)>, escape_control_characters_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_quoted_num_tag = std::same_as<std::decay_t<decltype(member_ptr)>, quoted_num_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_string_as_number_tag = std::same_as<std::decay_t<decltype(member_ptr)>, string_as_number_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_unquoted_tag = std::same_as<std::decay_t<decltype(member_ptr)>, unquoted_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_raw_string_tag = std::same_as<std::decay_t<decltype(member_ptr)>, raw_string_opt_tag>;
+
+   template <auto member_ptr>
+   concept is_structs_as_arrays_tag = std::same_as<std::decay_t<decltype(member_ptr)>, structs_as_arrays_opt_tag>;
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -422,6 +481,84 @@ namespace glz
    {
       if constexpr (requires { Opts.raw_string; }) {
          return Opts.raw_string;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_quoted_num(auto&& Opts)
+   {
+      if constexpr (requires { Opts.quoted_num; }) {
+         return Opts.quoted_num;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_string_as_number(auto&& Opts)
+   {
+      if constexpr (requires { Opts.string_as_number; }) {
+         return Opts.string_as_number;
+      }
+      else if constexpr (requires { Opts.number; }) {
+         static_assert(deprecated_opts_number<std::decay_t<decltype(Opts)>>,
+                       "\n\n"
+                       "  [glaze] Deprecated: 'number' option has been renamed to 'string_as_number'\n"
+                       "  \n"
+                       "  Please update your custom opts struct:\n"
+                       "  \n"
+                       "    // OLD (deprecated):\n"
+                       "    struct my_opts : glz::opts {\n"
+                       "       bool number = true;\n"
+                       "    };\n"
+                       "  \n"
+                       "    // NEW:\n"
+                       "    struct my_opts : glz::opts {\n"
+                       "       bool string_as_number = true;\n"
+                       "    };\n"
+                       "\n");
+         return Opts.number;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_unquoted(auto&& Opts)
+   {
+      if constexpr (requires { Opts.unquoted; }) {
+         return Opts.unquoted;
+      }
+      else if constexpr (requires { Opts.raw; }) {
+         static_assert(deprecated_opts_raw<std::decay_t<decltype(Opts)>>,
+                       "\n\n"
+                       "  [glaze] Deprecated: 'raw' option has been renamed to 'unquoted'\n"
+                       "  \n"
+                       "  Please update your custom opts struct:\n"
+                       "  \n"
+                       "    // OLD (deprecated):\n"
+                       "    struct my_opts : glz::opts {\n"
+                       "       bool raw = true;\n"
+                       "    };\n"
+                       "  \n"
+                       "    // NEW:\n"
+                       "    struct my_opts : glz::opts {\n"
+                       "       bool unquoted = true;\n"
+                       "    };\n"
+                       "\n");
+         return Opts.raw;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_structs_as_arrays(auto&& Opts)
+   {
+      if constexpr (requires { Opts.structs_as_arrays; }) {
+         return Opts.structs_as_arrays;
       }
       else {
          return false;
@@ -775,6 +912,96 @@ namespace glz
             return opts_escape_control_characters{{Opts}, static_cast<bool>(value)};
          }
       }
+      else if constexpr (is_quoted_num_tag<member_ptr>) {
+         if constexpr (requires { Opts.quoted_num; }) {
+            auto ret = Opts;
+            ret.quoted_num = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_quoted_num : std::decay_t<decltype(Opts)>
+            {
+               bool quoted_num{};
+            };
+            return opts_quoted_num{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_string_as_number_tag<member_ptr>) {
+         if constexpr (requires { Opts.string_as_number; }) {
+            auto ret = Opts;
+            ret.string_as_number = static_cast<bool>(value);
+            return ret;
+         }
+         else if constexpr (requires { Opts.number; }) {
+            static_assert(deprecated_opts_number<std::decay_t<decltype(Opts)>>,
+                          "\n\n"
+                          "  [glaze] Deprecated: 'number' option has been renamed to 'string_as_number'\n"
+                          "  Please rename 'bool number' to 'bool string_as_number' in your custom opts struct.\n"
+                          "\n");
+            auto ret = Opts;
+            ret.number = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_string_as_number : std::decay_t<decltype(Opts)>
+            {
+               bool string_as_number{};
+            };
+            return opts_string_as_number{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_unquoted_tag<member_ptr>) {
+         if constexpr (requires { Opts.unquoted; }) {
+            auto ret = Opts;
+            ret.unquoted = static_cast<bool>(value);
+            return ret;
+         }
+         else if constexpr (requires { Opts.raw; }) {
+            static_assert(deprecated_opts_raw<std::decay_t<decltype(Opts)>>,
+                          "\n\n"
+                          "  [glaze] Deprecated: 'raw' option has been renamed to 'unquoted'\n"
+                          "  Please rename 'bool raw' to 'bool unquoted' in your custom opts struct.\n"
+                          "\n");
+            auto ret = Opts;
+            ret.raw = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_unquoted : std::decay_t<decltype(Opts)>
+            {
+               bool unquoted{};
+            };
+            return opts_unquoted{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_raw_string_tag<member_ptr>) {
+         if constexpr (requires { Opts.raw_string; }) {
+            auto ret = Opts;
+            ret.raw_string = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_raw_string : std::decay_t<decltype(Opts)>
+            {
+               bool raw_string{};
+            };
+            return opts_raw_string{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_structs_as_arrays_tag<member_ptr>) {
+         if constexpr (requires { Opts.structs_as_arrays; }) {
+            auto ret = Opts;
+            ret.structs_as_arrays = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_structs_as_arrays : std::decay_t<decltype(Opts)>
+            {
+               bool structs_as_arrays{};
+            };
+            return opts_structs_as_arrays{{Opts}, static_cast<bool>(value)};
+         }
+      }
       else {
          auto ret = Opts;
          ret.*member_ptr = value;
@@ -827,6 +1054,96 @@ namespace glz
             return opts_escape_control_characters{{Opts}};
          }
       }
+      else if constexpr (is_quoted_num_tag<member_ptr>) {
+         if constexpr (requires { Opts.quoted_num; }) {
+            auto ret = Opts;
+            ret.quoted_num = true;
+            return ret;
+         }
+         else {
+            struct opts_quoted_num : std::decay_t<decltype(Opts)>
+            {
+               bool quoted_num = true;
+            };
+            return opts_quoted_num{{Opts}};
+         }
+      }
+      else if constexpr (is_string_as_number_tag<member_ptr>) {
+         if constexpr (requires { Opts.string_as_number; }) {
+            auto ret = Opts;
+            ret.string_as_number = true;
+            return ret;
+         }
+         else if constexpr (requires { Opts.number; }) {
+            static_assert(deprecated_opts_number<std::decay_t<decltype(Opts)>>,
+                          "\n\n"
+                          "  [glaze] Deprecated: 'number' option has been renamed to 'string_as_number'\n"
+                          "  Please rename 'bool number' to 'bool string_as_number' in your custom opts struct.\n"
+                          "\n");
+            auto ret = Opts;
+            ret.number = true;
+            return ret;
+         }
+         else {
+            struct opts_string_as_number : std::decay_t<decltype(Opts)>
+            {
+               bool string_as_number = true;
+            };
+            return opts_string_as_number{{Opts}};
+         }
+      }
+      else if constexpr (is_unquoted_tag<member_ptr>) {
+         if constexpr (requires { Opts.unquoted; }) {
+            auto ret = Opts;
+            ret.unquoted = true;
+            return ret;
+         }
+         else if constexpr (requires { Opts.raw; }) {
+            static_assert(deprecated_opts_raw<std::decay_t<decltype(Opts)>>,
+                          "\n\n"
+                          "  [glaze] Deprecated: 'raw' option has been renamed to 'unquoted'\n"
+                          "  Please rename 'bool raw' to 'bool unquoted' in your custom opts struct.\n"
+                          "\n");
+            auto ret = Opts;
+            ret.raw = true;
+            return ret;
+         }
+         else {
+            struct opts_unquoted : std::decay_t<decltype(Opts)>
+            {
+               bool unquoted = true;
+            };
+            return opts_unquoted{{Opts}};
+         }
+      }
+      else if constexpr (is_raw_string_tag<member_ptr>) {
+         if constexpr (requires { Opts.raw_string; }) {
+            auto ret = Opts;
+            ret.raw_string = true;
+            return ret;
+         }
+         else {
+            struct opts_raw_string : std::decay_t<decltype(Opts)>
+            {
+               bool raw_string = true;
+            };
+            return opts_raw_string{{Opts}};
+         }
+      }
+      else if constexpr (is_structs_as_arrays_tag<member_ptr>) {
+         if constexpr (requires { Opts.structs_as_arrays; }) {
+            auto ret = Opts;
+            ret.structs_as_arrays = true;
+            return ret;
+         }
+         else {
+            struct opts_structs_as_arrays : std::decay_t<decltype(Opts)>
+            {
+               bool structs_as_arrays = true;
+            };
+            return opts_structs_as_arrays{{Opts}};
+         }
+      }
       else {
          auto ret = Opts;
          ret.*member_ptr = true;
@@ -864,6 +1181,76 @@ namespace glz
          if constexpr (requires { Opts.escape_control_characters; }) {
             auto ret = Opts;
             ret.escape_control_characters = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_quoted_num_tag<member_ptr>) {
+         if constexpr (requires { Opts.quoted_num; }) {
+            auto ret = Opts;
+            ret.quoted_num = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_string_as_number_tag<member_ptr>) {
+         if constexpr (requires { Opts.string_as_number; }) {
+            auto ret = Opts;
+            ret.string_as_number = false;
+            return ret;
+         }
+         else if constexpr (requires { Opts.number; }) {
+            static_assert(deprecated_opts_number<std::decay_t<decltype(Opts)>>,
+                          "\n\n"
+                          "  [glaze] Deprecated: 'number' option has been renamed to 'string_as_number'\n"
+                          "  Please rename 'bool number' to 'bool string_as_number' in your custom opts struct.\n"
+                          "\n");
+            auto ret = Opts;
+            ret.number = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_unquoted_tag<member_ptr>) {
+         if constexpr (requires { Opts.unquoted; }) {
+            auto ret = Opts;
+            ret.unquoted = false;
+            return ret;
+         }
+         else if constexpr (requires { Opts.raw; }) {
+            static_assert(deprecated_opts_raw<std::decay_t<decltype(Opts)>>,
+                          "\n\n"
+                          "  [glaze] Deprecated: 'raw' option has been renamed to 'unquoted'\n"
+                          "  Please rename 'bool raw' to 'bool unquoted' in your custom opts struct.\n"
+                          "\n");
+            auto ret = Opts;
+            ret.raw = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_raw_string_tag<member_ptr>) {
+         if constexpr (requires { Opts.raw_string; }) {
+            auto ret = Opts;
+            ret.raw_string = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_structs_as_arrays_tag<member_ptr>) {
+         if constexpr (requires { Opts.structs_as_arrays; }) {
+            auto ret = Opts;
+            ret.structs_as_arrays = false;
             return ret;
          }
          else {
