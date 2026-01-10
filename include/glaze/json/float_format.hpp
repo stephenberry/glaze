@@ -62,7 +62,7 @@ namespace glz
             }
          }
 
-         if constexpr (Opts.quoted_num) {
+         if constexpr (check_quoted_num(Opts)) {
             dump('"', b, ix);
          }
 
@@ -124,7 +124,7 @@ namespace glz
          ix += static_cast<size_t>(len);
 #endif
 
-         if constexpr (Opts.quoted_num) {
+         if constexpr (check_quoted_num(Opts)) {
             dump('"', b, ix);
          }
       }

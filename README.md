@@ -20,6 +20,15 @@ Glaze also supports:
 >
 > **New: Streaming I/O Support** - Glaze now supports streaming serialization and deserialization for processing large files with bounded memory usage. Write JSON/BEVE directly to output streams with automatic flushing, or read from input streams with automatic refilling. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for details.
 
+> [!IMPORTANT]
+>
+> **Breaking Changes in v7.0.0:**
+> - Options `quoted_num`, `raw_string`, and `structs_as_arrays` moved out of `glz::opts` to [inheritable options](https://stephenberry.github.io/glaze/options/)
+> - `glz::raw` renamed to `glz::unquoted` (wrapper and option)
+> - `glz::number` renamed to `glz::string_as_number` (wrapper and option)
+>
+> Deprecated names remain available with compiler warnings. Custom opts structs using old names will produce static_assert errors with migration instructions.
+
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!

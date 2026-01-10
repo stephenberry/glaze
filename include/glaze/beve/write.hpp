@@ -1197,7 +1197,7 @@ namespace glz
       }
 
       template <auto Opts, class B>
-         requires(Opts.structs_as_arrays == true)
+         requires(check_structs_as_arrays(Opts) == true)
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
@@ -1237,7 +1237,7 @@ namespace glz
       }
 
       template <auto Options, class B>
-         requires(Options.structs_as_arrays == false)
+         requires(check_structs_as_arrays(Options) == false)
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr auto Opts = opening_handled_off<Options>();
@@ -1527,20 +1527,20 @@ namespace glz
    template <write_supported<BEVE> T, class Buffer>
    [[nodiscard]] error_ctx write_beve_untagged(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
-                                                                    std::forward<Buffer>(buffer));
+      return write<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(std::forward<T>(value),
+                                                                                std::forward<Buffer>(buffer));
    }
 
    template <write_supported<BEVE> T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_beve_untagged(T&& value)
    {
-      return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value));
+      return write<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(std::forward<T>(value));
    }
 
    template <auto Opts = opts{}, write_supported<BEVE> T>
    [[nodiscard]] error_ctx write_file_beve_untagged(T&& value, const std::string& file_name, auto&& buffer)
    {
-      return write_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
+      return write_file_beve<opt_true<Opts, structs_as_arrays_opt_tag{}>>(std::forward<T>(value), file_name, buffer);
    }
 
    // ===== Delimited BEVE support for multiple objects in one buffer =====
