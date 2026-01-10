@@ -40,42 +40,29 @@ namespace
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(port));
             std::error_code ec;
             sock.connect(endpoint, ec);
-            bool connection_refused = (ec == asio::error::connection_refused);
-            if (!connection_refused) {
+            if (ec != asio::error::connection_refused) {
                return;
             }
          }
          catch (...) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(40));
          }
+         std::this_thread::sleep_for(std::chrono::milliseconds(40));
       }
       throw std::runtime_error("Server did not start in time");
    }
 
-   // Minimal HTTP/1.1 POST using ASIO, all headers as requested
-   std::string asio_post()
+   // Build HTTP headers with many custom headers to simulate the original bug scenario
+   std::string build_headers(size_t content_length)
    {
-      wait_for_server_ready(test_port);
-      asio::io_context io_ctx;
-      asio::ip::tcp::socket socket(io_ctx);
-      asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(test_port));
-      std::error_code ec;
-      socket.connect(endpoint, ec);
-      bool connection_refused = (ec == asio::error::connection_refused);
-      if (connection_refused) {
-         return "";
-      }
-
       std::ostringstream req;
-      req << "POST " << test_route
-          << " HTTP/1.1\r\n"
-          // << "Accept: application/json\r\n"
-          << "Content-Type: application/json\r\n"
-          << "User-Agent: axios/1.11.0\r\n"
-          << "Content-Length: " << strlen(post_body) << "\r\n"
+      req << "POST " << test_route << " HTTP/1.1\r\n"
+          << "Content-Type: application/octet-stream\r\n"
+          << "User-Agent: glaze-test/1.0\r\n"
+          << "Content-Length: " << content_length << "\r\n"
           << "Accept-Encoding: gzip, compress, deflate, br\r\n"
           << "Host: " << test_host << ":" << test_port << "\r\n"
-          << "Connection: keep-alive\r\n"
+          << "Connection: close\r\n"
+          // Many additional headers to fill the initial buffer read
           << "X-Testheader-1: zie3ethahf4oomouHohPhi5HuhahvuL8jeilohqua0Ohdaivahqueido\r\n"
           << "X-Testheader-2: maihai7feeS5epachotahxei5ietaepieheeWahyuaLeequeish5dee1\r\n"
           << "X-Testheader-3: Chiecohghaer9xieJ4elaejee8iPheiMoo5umiuShah2ooyia2nee4fi\r\n"
@@ -85,23 +72,69 @@ namespace
           << "X-Testheader-7: ovewahgh5ab6jahsahd9Aim6Ookooto2aex9AidohsheeGo1de2veeng\r\n"
           << "X-Testheader-8: toreeweiwohghahlae0queew6ahso3taiNgei5echaiqueewax1Eig1u\r\n"
           << "X-Testheader-9: efuid3xoo4Vei3ooghaH3aiY0eeraiyooPe8rie8oothav1eimoochei\r\n"
-          << "\r\n"
-          << post_body;
+          << "\r\n";
+      return req.str();
+   }
 
-      auto req_str = req.str();
-      asio::write(socket, asio::buffer(req_str.data(), req_str.size()));
-
+   std::string read_response(asio::ip::tcp::socket& socket)
+   {
       std::string resp;
       std::array<char, 4096> buf{};
-      // asio::error_code ec;
+      std::error_code ec;
       for (;;) {
          std::size_t n = socket.read_some(asio::buffer(buf), ec);
          if (n == 0 || ec) break;
          resp.append(buf.data(), n);
-         // server will not close socket due Connection: keep-alive
-         if (resp.find("Okay") != std::string::npos) break;
       }
       return resp;
+   }
+
+   // Send headers and body in a single write (tests the case where body is already buffered)
+   std::string post_single_write(const std::string& body)
+   {
+      wait_for_server_ready(test_port);
+      asio::io_context io_ctx;
+      asio::ip::tcp::socket socket(io_ctx);
+      asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(test_port));
+      std::error_code ec;
+      socket.connect(endpoint, ec);
+      if (ec) {
+         return "";
+      }
+
+      std::string headers = build_headers(body.size());
+      std::string request = headers + body;
+      asio::write(socket, asio::buffer(request.data(), request.size()));
+
+      return read_response(socket);
+   }
+
+   // Send headers first, then body separately to exercise the async_read path
+   // This simulates the scenario where the body hasn't arrived when headers are parsed
+   std::string post_chunked_write(const std::string& body)
+   {
+      wait_for_server_ready(test_port);
+      asio::io_context io_ctx;
+      asio::ip::tcp::socket socket(io_ctx);
+      asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(test_port));
+      std::error_code ec;
+      socket.connect(endpoint, ec);
+      if (ec) {
+         return "";
+      }
+
+      std::string headers = build_headers(body.size());
+
+      // Send headers first
+      asio::write(socket, asio::buffer(headers.data(), headers.size()));
+
+      // Small delay to ensure headers are processed before body arrives
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+      // Send body separately - this exercises the async_read code path
+      asio::write(socket, asio::buffer(body.data(), body.size()));
+
+      return read_response(socket);
    }
 
 } // namespace
@@ -109,37 +142,99 @@ namespace
 static void error_handler(std::error_code ec, std::source_location loc)
 {
    std::fprintf(stderr, "Server error at %s:%d: %s\n", loc.file_name(), loc.line(), ec.message().c_str());
-};
+}
 
 suite http_server_post_suite = [] {
    auto io_ctx = std::make_shared<asio::io_context>();
    glz::http_server<false> server(io_ctx, error_handler);
 
-   std::thread server_thr([&] {
-      // Start server
-      server.post(test_route, [](const glz::request& req, glz::response& res) {
-         std::cerr << "--------- server.post ----------" << req.body << std::endl;
-         res.status(200);
-         res.content_type("application/json");
+   // Track received body for verification
+   std::mutex body_mutex;
+   std::string received_body;
 
-         res.json("Okay");
+   std::thread server_thr([&] {
+      server.post(test_route, [&](const glz::request& req, glz::response& res) {
+         {
+            std::lock_guard<std::mutex> lock(body_mutex);
+            received_body = req.body;
+         }
+         res.status(200);
+         res.content_type("text/plain");
+         res.body("OK:" + std::to_string(req.body.size()));
       });
+
       server.bind("0.0.0.0", test_port);
       server.start(0);
       io_ctx->run();
    });
 
-   // Call client, check result
-   std::future<std::string> f = std::async(std::launch::async, asio_post);
-   std::chrono::system_clock::time_point future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(3);
-   std::string response = "";
-   if (std::future_status::ready == f.wait_until(future_timeout)) {
-      response = f.get();
-   }
-   std::cout << "-> resp: " << response << std::endl;
-   expect(response.find("200 OK") != std::string::npos);
-   // expect(response.find("Content-Type: application/json") != std::string::npos);
-   expect(response.find("Okay") != std::string::npos);
+   "POST with body sent in single write"_test = [&] {
+      std::string body(post_body);
+      std::future<std::string> f = std::async(std::launch::async, [&] { return post_single_write(body); });
+
+      auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
+      std::string response;
+      if (std::future_status::ready == f.wait_until(future_timeout)) {
+         response = f.get();
+      }
+
+      expect(response.find("200 OK") != std::string::npos) << "Expected 200 OK response";
+      expect(response.find("OK:" + std::to_string(body.size())) != std::string::npos) << "Expected correct body size";
+
+      {
+         std::lock_guard<std::mutex> lock(body_mutex);
+         expect(received_body == body) << "Body content mismatch";
+      }
+   };
+
+   "POST with headers and body sent separately (exercises async_read)"_test = [&] {
+      std::string body(post_body);
+      std::future<std::string> f = std::async(std::launch::async, [&] { return post_chunked_write(body); });
+
+      auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
+      std::string response;
+      if (std::future_status::ready == f.wait_until(future_timeout)) {
+         response = f.get();
+      }
+
+      expect(response.find("200 OK") != std::string::npos) << "Expected 200 OK response";
+      expect(response.find("OK:" + std::to_string(body.size())) != std::string::npos) << "Expected correct body size";
+
+      {
+         std::lock_guard<std::mutex> lock(body_mutex);
+         expect(received_body == body) << "Body content mismatch";
+      }
+   };
+
+   "POST with binary data containing null bytes"_test = [&] {
+      // Create binary data with embedded null bytes
+      std::string binary_body;
+      binary_body.reserve(256);
+      for (int i = 0; i < 256; ++i) {
+         binary_body.push_back(static_cast<char>(i)); // includes \0 at i=0
+      }
+      // Add more data after the null bytes
+      binary_body += "data after nulls";
+      binary_body.push_back('\0');
+      binary_body += "more data";
+
+      std::future<std::string> f = std::async(std::launch::async, [&] { return post_chunked_write(binary_body); });
+
+      auto future_timeout = std::chrono::system_clock::now() + std::chrono::seconds(5);
+      std::string response;
+      if (std::future_status::ready == f.wait_until(future_timeout)) {
+         response = f.get();
+      }
+
+      expect(response.find("200 OK") != std::string::npos) << "Expected 200 OK response";
+      expect(response.find("OK:" + std::to_string(binary_body.size())) != std::string::npos)
+         << "Expected correct body size for binary data";
+
+      {
+         std::lock_guard<std::mutex> lock(body_mutex);
+         expect(received_body == binary_body) << "Binary body content mismatch";
+      }
+   };
 
    server.stop();
    io_ctx->stop();

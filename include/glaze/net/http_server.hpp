@@ -9,6 +9,7 @@
 #include <charconv>
 #include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <expected>
 #include <functional>
 #include <future>
@@ -1614,10 +1615,10 @@ namespace glz
 
          if (content_length > 0) {
             conn->body.resize(content_length);
-            // Append what's already in the buffer
+            // Copy what's already in the buffer to the body
             const size_t initial_body_size = std::min(content_length, conn->buffer->size());
-            auto missing_bytes = content_length - initial_body_size;
-            conn->body.replace(0, initial_body_size, static_cast<const char*>(conn->buffer->data().data()));
+            const auto missing_bytes = content_length - initial_body_size;
+            std::memcpy(conn->body.data(), conn->buffer->data().data(), initial_body_size);
             conn->buffer->consume(initial_body_size);
             if (initial_body_size < content_length) {
                asio::async_read(*conn->socket, asio::buffer(&conn->body[initial_body_size], missing_bytes),
