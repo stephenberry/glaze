@@ -1929,8 +1929,8 @@ namespace variants
       "variants"_test = [] {
          std::vector<uint8_t> out;
          D d{};
-         expect(
-            not glz::write<glz::opt_true<glz::opts{.format = glz::BEVE}, glz::structs_as_arrays_opt_tag{}>>(d, out)); // testing compilation
+         expect(not glz::write<glz::opt_true<glz::opts{.format = glz::BEVE}, glz::structs_as_arrays_opt_tag{}>>(
+            d, out)); // testing compilation
       };
    };
 }

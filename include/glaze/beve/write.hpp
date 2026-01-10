@@ -1528,7 +1528,7 @@ namespace glz
    [[nodiscard]] error_ctx write_beve_untagged(T&& value, Buffer&& buffer)
    {
       return write<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(std::forward<T>(value),
-                                                                                  std::forward<Buffer>(buffer));
+                                                                                std::forward<Buffer>(buffer));
    }
 
    template <write_supported<BEVE> T>

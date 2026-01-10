@@ -1881,7 +1881,7 @@ namespace glz
                                                                                                         Buffer&& buffer)
    {
       return read<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(std::forward<T>(value),
-                                                                   std::forward<Buffer>(buffer));
+                                                                               std::forward<Buffer>(buffer));
    }
 
    template <read_supported<BEVE> T, class Buffer>
@@ -1889,7 +1889,8 @@ namespace glz
       Buffer&& buffer)
    {
       T value{};
-      const auto pe = read<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(value, std::forward<Buffer>(buffer));
+      const auto pe =
+         read<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(value, std::forward<Buffer>(buffer));
       if (pe) [[unlikely]] {
          return unexpected(pe);
       }
@@ -1901,14 +1902,15 @@ namespace glz
    [[nodiscard]] inline error_ctx read_beve_untagged(T&& value, Buffer&& buffer)
    {
       return read<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(std::forward<T>(value),
-                                                                   std::forward<Buffer>(buffer));
+                                                                               std::forward<Buffer>(buffer));
    }
 
    template <read_supported<BEVE> T, class Buffer>
    [[nodiscard]] inline expected<T, error_ctx> read_beve_untagged(Buffer&& buffer)
    {
       T value{};
-      const auto pe = read<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(value, std::forward<Buffer>(buffer));
+      const auto pe =
+         read<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(value, std::forward<Buffer>(buffer));
       if (pe) [[unlikely]] {
          return unexpected(pe);
       }

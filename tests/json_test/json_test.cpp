@@ -8578,7 +8578,9 @@ World)");
       expect(json_raw_string.value() == R"("Hello\nWorld")") << json_raw_string.value();
 
       // With raw and raw_string: should not have quotes
-      auto json_raw_and_raw_string = glz::write<glz::opt_true<glz::opt_true<glz::opts{}, glz::unquoted_opt_tag{}>, glz::raw_string_opt_tag{}>>(value);
+      auto json_raw_and_raw_string =
+         glz::write<glz::opt_true<glz::opt_true<glz::opts{}, glz::unquoted_opt_tag{}>, glz::raw_string_opt_tag{}>>(
+            value);
       expect(json_raw_and_raw_string.value() == R"(Hello\nWorld)") << json_raw_and_raw_string.value();
    };
 };
@@ -9532,7 +9534,8 @@ struct AccountUpdate
 
 inline void AccountUpdate::fromJson(AccountUpdate& accountUpdate, const std::string& jSon)
 {
-   auto ec = glz::read<glz::opt_true<glz::opts{.error_on_unknown_keys = false}, glz::raw_string_opt_tag{}>>(accountUpdate, jSon);
+   auto ec = glz::read<glz::opt_true<glz::opts{.error_on_unknown_keys = false}, glz::raw_string_opt_tag{}>>(
+      accountUpdate, jSon);
    expect(not ec) << glz::format_error(ec, jSon);
 }
 
