@@ -113,7 +113,7 @@ suite chrono_system_clock_tests = [] {
       expect(!glz::read_json(tp, "\"2024-12-13T15:30:45Z\""));
 
       // With raw = true, should not have quotes
-      auto raw_json = glz::write<glz::opts{.raw = true}>(tp);
+      auto raw_json = glz::write<glz::opt_true<glz::opts{}, glz::unquoted_opt_tag{}>>(tp);
       expect(raw_json.value() == "2024-12-13T15:30:45Z") << raw_json.value();
 
       // Without raw (default), should have quotes

@@ -948,7 +948,7 @@ arr = [4, 5, 6])";
       expect(buffer == R"("explicit")");
 
       buffer.clear();
-      expect(not glz::write<glz::opts{.format = glz::TOML, .raw_string = true}>(value, buffer));
+      expect(not glz::write<glz::opt_true<glz::opts{.format = glz::TOML}, glz::raw_string_opt_tag{}>>(value, buffer));
       expect(buffer == R"("explicit")");
    };
 

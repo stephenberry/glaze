@@ -393,7 +393,7 @@ int main()
    };
 
    "msgpack structs_as_arrays roundtrip"_test = [] {
-      constexpr auto struct_array_opts = glz::opts{.format = glz::MSGPACK, .structs_as_arrays = true};
+      constexpr auto struct_array_opts = glz::opt_true<glz::opts{.format = glz::MSGPACK}, glz::structs_as_arrays_opt_tag{}>;
 
       telemetry_batch original{
          .active = false,
