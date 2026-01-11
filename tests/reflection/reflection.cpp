@@ -1112,11 +1112,20 @@ suite has_reflect_concept_tests = [] {
    static_assert(!glz::reflectable<TestEnumMeta>);
    static_assert(glz::has_reflect<TestEnumMeta>);
 
-   // Test non-reflectable types
+   // Test non-reflectable types (without P2996)
+   // P2996 reflection can reflect any class regardless of aggregate status or private members
+#if !GLZ_REFLECTION26
    static_assert(!glz::reflectable<NonAggregate>);
    static_assert(!glz::has_reflect<NonAggregate>);
    static_assert(!glz::reflectable<PrivateMember>);
    static_assert(!glz::has_reflect<PrivateMember>);
+#else
+   // With P2996, these types ARE reflectable
+   static_assert(glz::reflectable<NonAggregate>);
+   static_assert(glz::has_reflect<NonAggregate>);
+   static_assert(glz::reflectable<PrivateMember>);
+   static_assert(glz::has_reflect<PrivateMember>);
+#endif
 
    // Test map types (have reflect specialization with size = 0)
    using TestMap = std::map<std::string, int>;
@@ -1252,6 +1261,189 @@ suite enum_name_test = [] {
    "unknown_enum_value"_test = [] {
       // If we cast an invalid integer to enum, it should return empty string
       expect(glz::get_enum_name(static_cast<Monotonic>(42)).empty());
+   };
+};
+
+// ============================================================================
+// qualified_type_names option tests
+// ============================================================================
+
+namespace test_ns {
+   struct NamespacedType
+   {
+      int x;
+      std::string y;
+   };
+
+   namespace nested {
+      struct DeepType
+      {
+         double value;
+      };
+   }
+}
+
+// Type with explicit meta name
+struct TypeWithMetaName
+{
+   int data;
+};
+
+template <>
+struct glz::meta<TypeWithMetaName>
+{
+   static constexpr std::string_view name = "CustomName";
+};
+
+// Type with local glaze name
+struct TypeWithLocalName
+{
+   int data;
+
+   struct glaze
+   {
+      static constexpr std::string_view name = "LocalCustomName";
+   };
+};
+
+// Custom opts with qualified_type_names enabled
+struct opts_qualified : glz::opts
+{
+   bool qualified_type_names = true;
+};
+
+// Custom opts with qualified_type_names disabled (explicit)
+struct opts_unqualified : glz::opts
+{
+   bool qualified_type_names = false;
+};
+
+suite qualified_type_names_tests = [] {
+   // =========================================================================
+   // check_qualified_type_names tests
+   // =========================================================================
+
+   "check_qualified_type_names default opts returns false"_test = [] {
+      static_assert(glz::check_qualified_type_names(glz::opts{}) == false);
+   };
+
+   "check_qualified_type_names detects true"_test = [] {
+      static_assert(glz::check_qualified_type_names(opts_qualified{}) == true);
+   };
+
+   "check_qualified_type_names detects explicit false"_test = [] {
+      static_assert(glz::check_qualified_type_names(opts_unqualified{}) == false);
+   };
+
+   // =========================================================================
+   // type_name tests
+   // P2996: returns unqualified names (e.g., "NamespacedType")
+   // Traditional: returns qualified names (e.g., "test_ns::NamespacedType")
+   // =========================================================================
+
+   "type_name contains type name"_test = [] {
+      constexpr std::string_view name = glz::type_name<test_ns::NamespacedType>;
+      // Both P2996 and traditional should at least contain the type name
+      expect(name.find("NamespacedType") != std::string_view::npos) << name;
+#if !GLZ_REFLECTION26
+      // Traditional reflection includes namespace
+      expect(name == "test_ns::NamespacedType") << name;
+#endif
+   };
+
+   "type_name contains nested type name"_test = [] {
+      constexpr std::string_view name = glz::type_name<test_ns::nested::DeepType>;
+      expect(name.find("DeepType") != std::string_view::npos) << name;
+#if !GLZ_REFLECTION26
+      // Traditional reflection includes full namespace path
+      expect(name == "test_ns::nested::DeepType") << name;
+#endif
+   };
+
+   // =========================================================================
+   // type_name_for_opts tests
+   // =========================================================================
+
+   "type_name_for_opts matches type_name"_test = [] {
+      // type_name_for_opts should return same as type_name (option currently has no effect)
+      constexpr auto base = glz::type_name<test_ns::NamespacedType>;
+      expect(glz::type_name_for_opts<test_ns::NamespacedType, glz::opts{}>() == base);
+      expect(glz::type_name_for_opts<test_ns::NamespacedType, opts_qualified{}>() == base);
+      expect(glz::type_name_for_opts<test_ns::NamespacedType, opts_unqualified{}>() == base);
+   };
+
+   "type_name_for_opts contains type name"_test = [] {
+      constexpr auto name = glz::type_name_for_opts<test_ns::NamespacedType, opts_qualified{}>();
+      expect(std::string_view{name}.find("NamespacedType") != std::string_view::npos) << name;
+   };
+
+   "type_name_for_opts contains nested type name"_test = [] {
+      constexpr auto name = glz::type_name_for_opts<test_ns::nested::DeepType, opts_qualified{}>();
+      expect(std::string_view{name}.find("DeepType") != std::string_view::npos) << name;
+   };
+
+   // =========================================================================
+   // name_for_opts tests - priority: meta<T>::name > T::glaze::name > type_name_for_opts
+   // =========================================================================
+
+   "name_for_opts falls back to type_name_for_opts"_test = [] {
+      constexpr auto name = glz::name_for_opts<test_ns::NamespacedType, glz::opts{}>();
+      expect(name == glz::type_name_for_opts<test_ns::NamespacedType, glz::opts{}>());
+   };
+
+   "name_for_opts contains type name when falling back"_test = [] {
+      constexpr auto name = glz::name_for_opts<test_ns::NamespacedType, opts_qualified{}>();
+      expect(std::string_view{name}.find("NamespacedType") != std::string_view::npos) << name;
+   };
+
+   "name_for_opts uses meta name over type_name"_test = [] {
+      expect(glz::name_for_opts<TypeWithMetaName, glz::opts{}>() == "CustomName");
+      expect(glz::name_for_opts<TypeWithMetaName, opts_qualified{}>() == "CustomName");
+   };
+
+   "name_for_opts uses local glaze name over type_name"_test = [] {
+      expect(glz::name_for_opts<TypeWithLocalName, glz::opts{}>() == "LocalCustomName");
+      expect(glz::name_for_opts<TypeWithLocalName, opts_qualified{}>() == "LocalCustomName");
+   };
+
+   "name_for_opts returns void for void type"_test = [] {
+      expect(glz::name_for_opts<void, glz::opts{}>() == "void");
+   };
+
+   // =========================================================================
+   // name_v backward compatibility tests
+   // =========================================================================
+
+   "name_v contains type name"_test = [] {
+      constexpr std::string_view name = glz::name_v<test_ns::NamespacedType>;
+      expect(name.find("NamespacedType") != std::string_view::npos) << name;
+#if !GLZ_REFLECTION26
+      expect(name == "test_ns::NamespacedType") << name;
+#endif
+   };
+
+   "name_v uses meta name when available"_test = [] {
+      expect(glz::name_v<TypeWithMetaName> == "CustomName");
+   };
+
+   "name_v uses local glaze name when available"_test = [] {
+      expect(glz::name_v<TypeWithLocalName> == "LocalCustomName");
+   };
+
+   // =========================================================================
+   // Integration test
+   // =========================================================================
+
+   "json serialization unaffected by qualified_type_names"_test = [] {
+      test_ns::NamespacedType obj{42, "hello"};
+      auto json = glz::write_json(obj).value_or("error");
+      expect(json == R"({"x":42,"y":"hello"})");
+
+      test_ns::NamespacedType obj2{};
+      auto ec = glz::read_json(obj2, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj2.x == 42);
+      expect(obj2.y == "hello");
    };
 };
 

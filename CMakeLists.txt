@@ -101,3 +101,9 @@ if(glaze_ENABLE_SSL)
   target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_SSL)
 endif(glaze_ENABLE_SSL)
 
+option(glaze_ENABLE_REFLECTION26 "Enable C++26 P2996 reflection (requires Bloomberg clang-p2996 or compatible compiler)" OFF)
+
+if(glaze_ENABLE_REFLECTION26)
+  target_compile_definitions(glaze_glaze INTERFACE GLZ_REFLECTION26=1)
+endif(glaze_ENABLE_REFLECTION26)
+
