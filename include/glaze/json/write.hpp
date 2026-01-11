@@ -1055,11 +1055,11 @@ namespace glz
             // P2996 reflection using reflect_constant_array and expansion statements
             const sv name = enum_to_string(value);
             if (!name.empty()) {
-               if constexpr (not Opts.raw) {
+               if constexpr (not check_unquoted(Opts)) {
                   dump('"', args...);
                }
                dump_maybe_empty(name, args...);
-               if constexpr (not Opts.raw) {
+               if constexpr (not check_unquoted(Opts)) {
                   dump('"', args...);
                }
             }
