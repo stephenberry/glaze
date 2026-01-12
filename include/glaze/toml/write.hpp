@@ -15,6 +15,7 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
 #include "glaze/util/parse.hpp"
+#include "glaze/util/variant.hpp"
 
 namespace glz
 {
@@ -61,6 +62,24 @@ namespace glz
          if (value) {
             serialize<TOML>::op<Opts>(*value, ctx, b, ix);
          }
+      }
+   };
+
+   // std::nullptr_t support for variants containing null types
+   // TOML doesn't have a native null type, so we write an empty string
+   // This is primarily used when serializing variants like glz::generic_json
+   template <>
+   struct to<TOML, std::nullptr_t>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(std::nullptr_t, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         // Write empty string as placeholder for null
+         // Note: TOML doesn't support null natively
+         if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump("\"\"", b, ix);
       }
    };
 
@@ -1326,6 +1345,23 @@ namespace glz
             return;
          }
          dump<R"("")">(b, ix); // dump an empty string
+      }
+   };
+
+   // Variant support for TOML
+   // Serializes the active variant alternative using the appropriate TOML type
+   template <is_variant T>
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         std::visit(
+            [&](auto&& val) {
+               using V = std::decay_t<decltype(val)>;
+               to<TOML, V>::template op<Opts>(val, ctx, b, ix);
+            },
+            value);
       }
    };
 

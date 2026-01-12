@@ -19,6 +19,7 @@
 #include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/variant.hpp"
 
 namespace glz
 {
@@ -1796,6 +1797,342 @@ namespace glz
                if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
                   return;
                }
+            }
+         }
+      }
+   };
+
+   // ============================================
+   // Variant support for TOML
+   // ============================================
+
+   namespace detail
+   {
+      // Type traits for TOML variant type classification
+      template <class T>
+      concept toml_variant_bool_type = glz::bool_t<T>;
+
+      template <class T>
+      concept toml_variant_string_type = glz::str_t<T>;
+
+      template <class T>
+      concept toml_variant_int_type = glz::int_t<T> && !glz::bool_t<T>;
+
+      template <class T>
+      concept toml_variant_signed_int_type = std::signed_integral<T> && !glz::bool_t<T>;
+
+      template <class T>
+      concept toml_variant_unsigned_int_type = std::unsigned_integral<T> && !glz::bool_t<T>;
+
+      template <class T>
+      concept toml_variant_float_type = std::floating_point<T>;
+
+      template <class T>
+      concept toml_variant_array_type = glz::readable_array_t<T> && !glz::str_t<T>;
+
+      template <class T>
+      concept toml_variant_object_type = (glz::glaze_object_t<T> || glz::reflectable<T>);
+      // Note: readable_map_t is not included because TOML doesn't have a generic map reader
+
+      template <class T>
+      concept toml_variant_null_type = glz::null_t<T>;
+
+      // Type trait wrappers for template use
+      template <class T>
+      struct is_toml_variant_bool : std::bool_constant<toml_variant_bool_type<T>>
+      {};
+      template <class T>
+      struct is_toml_variant_string : std::bool_constant<toml_variant_string_type<T>>
+      {};
+      template <class T>
+      struct is_toml_variant_int : std::bool_constant<toml_variant_int_type<T>>
+      {};
+      template <class T>
+      struct is_toml_variant_signed_int : std::bool_constant<toml_variant_signed_int_type<T>>
+      {};
+      template <class T>
+      struct is_toml_variant_unsigned_int : std::bool_constant<toml_variant_unsigned_int_type<T>>
+      {};
+      template <class T>
+      struct is_toml_variant_float : std::bool_constant<toml_variant_float_type<T>>
+      {};
+      template <class T>
+      struct is_toml_variant_array : std::bool_constant<toml_variant_array_type<T>>
+      {};
+      template <class T>
+      struct is_toml_variant_object : std::bool_constant<toml_variant_object_type<T>>
+      {};
+      template <class T>
+      struct is_toml_variant_null : std::bool_constant<toml_variant_null_type<T>>
+      {};
+
+      // Count types in variant matching a trait
+      template <class Variant, template <class> class Trait>
+      struct toml_variant_count_impl;
+
+      template <template <class> class Trait, class... Ts>
+      struct toml_variant_count_impl<std::variant<Ts...>, Trait>
+      {
+         static constexpr size_t value = (size_t(Trait<Ts>::value) + ... + 0);
+      };
+
+      template <class Variant, template <class> class Trait>
+      constexpr size_t toml_variant_count_v = toml_variant_count_impl<Variant, Trait>::value;
+
+      // Get first index matching trait (or variant_npos if none)
+      template <class Variant, template <class> class Trait>
+      struct toml_variant_first_index_impl;
+
+      template <template <class> class Trait, class... Ts>
+      struct toml_variant_first_index_impl<std::variant<Ts...>, Trait>
+      {
+         static constexpr size_t find()
+         {
+            size_t result = std::variant_npos;
+            size_t idx = 0;
+            ((Trait<Ts>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx), ...);
+            return result;
+         }
+         static constexpr size_t value = find();
+      };
+
+      template <class Variant, template <class> class Trait>
+      constexpr size_t toml_variant_first_index_v = toml_variant_first_index_impl<Variant, Trait>::value;
+
+      // Detect if a TOML number is a float by scanning ahead
+      // Returns true if the number contains float indicators (., e, E, inf, nan)
+      template <class It, class End>
+      inline bool is_toml_float(It it, End end) noexcept
+      {
+         // Skip leading sign
+         if (it != end && (*it == '+' || *it == '-')) {
+            ++it;
+         }
+
+         // Check for special float values
+         if (it != end) {
+            // Check for inf/nan (with optional sign already consumed)
+            if (*it == 'i' || *it == 'n') {
+               return true; // inf or nan
+            }
+         }
+
+         // Scan the number looking for float indicators
+         while (it != end) {
+            const char c = *it;
+            if (c == '.' || c == 'e' || c == 'E') {
+               return true;
+            }
+            // Stop at value terminators
+            if (c == ',' || c == ']' || c == '}' || c == '\n' || c == '\r' || c == '#' || c == ' ' || c == '\t') {
+               break;
+            }
+            ++it;
+         }
+         return false;
+      }
+   } // namespace detail
+
+   template <class T>
+      requires is_variant<std::remove_cvref_t<T>>
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         using Variant = std::remove_cvref_t<T>;
+
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         const char c = *it;
+
+         // Detect type based on first character
+         if (c == '"' || c == '\'') {
+            // String
+            constexpr auto str_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_string>;
+            if constexpr (str_count == 0) {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
+            else {
+               constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_string>;
+               using V = std::variant_alternative_t<idx, Variant>;
+               if (!std::holds_alternative<V>(value)) {
+                  value.template emplace<idx>();
+               }
+               from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+            }
+         }
+         else if (c == '[') {
+            // Array
+            constexpr auto arr_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_array>;
+            if constexpr (arr_count == 0) {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
+            else {
+               constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_array>;
+               using V = std::variant_alternative_t<idx, Variant>;
+               if (!std::holds_alternative<V>(value)) {
+                  value.template emplace<idx>();
+               }
+               from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+            }
+         }
+         else if (c == '{') {
+            // Inline table (object)
+            constexpr auto obj_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_object>;
+            if constexpr (obj_count == 0) {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
+            else {
+               constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_object>;
+               using V = std::variant_alternative_t<idx, Variant>;
+               if (!std::holds_alternative<V>(value)) {
+                  value.template emplace<idx>();
+               }
+               from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+            }
+         }
+         else if (c == 't' || c == 'f') {
+            // Boolean
+            constexpr auto bool_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_bool>;
+            if constexpr (bool_count == 0) {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
+            else {
+               constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_bool>;
+               using V = std::variant_alternative_t<idx, Variant>;
+               if (!std::holds_alternative<V>(value)) {
+                  value.template emplace<idx>();
+               }
+               from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+            }
+         }
+         else if ((c >= '0' && c <= '9') || c == '+' || c == '-' || c == 'i' || c == 'n') {
+            // Number - need to determine if integer or float
+            constexpr auto int_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_int>;
+            constexpr auto float_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_float>;
+            constexpr auto signed_int_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_signed_int>;
+            constexpr auto unsigned_int_count =
+               detail::toml_variant_count_v<Variant, detail::is_toml_variant_unsigned_int>;
+
+            if constexpr (int_count == 0 && float_count == 0) {
+               ctx.error = error_code::no_matching_variant_type;
+               return;
+            }
+            else if constexpr (int_count == 0) {
+               // Only float types available
+               constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_float>;
+               using V = std::variant_alternative_t<idx, Variant>;
+               if (!std::holds_alternative<V>(value)) {
+                  value.template emplace<idx>();
+               }
+               from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+            }
+            else if constexpr (float_count == 0) {
+               // Only integer types available - choose signed vs unsigned based on sign
+               const bool is_negative = (c == '-');
+               if constexpr (signed_int_count > 0 && unsigned_int_count > 0) {
+                  // Both signed and unsigned available - pick based on sign
+                  if (is_negative) {
+                     constexpr auto idx =
+                        detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_signed_int>;
+                     using V = std::variant_alternative_t<idx, Variant>;
+                     if (!std::holds_alternative<V>(value)) {
+                        value.template emplace<idx>();
+                     }
+                     from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+                  }
+                  else {
+                     constexpr auto idx =
+                        detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_unsigned_int>;
+                     using V = std::variant_alternative_t<idx, Variant>;
+                     if (!std::holds_alternative<V>(value)) {
+                        value.template emplace<idx>();
+                     }
+                     from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+                  }
+               }
+               else {
+                  // Only one integer signedness available
+                  constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_int>;
+                  using V = std::variant_alternative_t<idx, Variant>;
+                  if (!std::holds_alternative<V>(value)) {
+                     value.template emplace<idx>();
+                  }
+                  from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+               }
+            }
+            else {
+               // Both int and float types available - need to detect which
+               if (detail::is_toml_float(it, end)) {
+                  constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_float>;
+                  using V = std::variant_alternative_t<idx, Variant>;
+                  if (!std::holds_alternative<V>(value)) {
+                     value.template emplace<idx>();
+                  }
+                  from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+               }
+               else {
+                  // Integer - choose signed vs unsigned based on sign
+                  const bool is_negative = (c == '-');
+                  if constexpr (signed_int_count > 0 && unsigned_int_count > 0) {
+                     // Both signed and unsigned available - pick based on sign
+                     if (is_negative) {
+                        constexpr auto idx =
+                           detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_signed_int>;
+                        using V = std::variant_alternative_t<idx, Variant>;
+                        if (!std::holds_alternative<V>(value)) {
+                           value.template emplace<idx>();
+                        }
+                        from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+                     }
+                     else {
+                        constexpr auto idx =
+                           detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_unsigned_int>;
+                        using V = std::variant_alternative_t<idx, Variant>;
+                        if (!std::holds_alternative<V>(value)) {
+                           value.template emplace<idx>();
+                        }
+                        from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+                     }
+                  }
+                  else {
+                     // Only one integer signedness available
+                     constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_int>;
+                     using V = std::variant_alternative_t<idx, Variant>;
+                     if (!std::holds_alternative<V>(value)) {
+                        value.template emplace<idx>();
+                     }
+                     from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+                  }
+               }
+            }
+         }
+         else {
+            // Unknown type - could be null or invalid
+            constexpr auto null_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_null>;
+            if constexpr (null_count > 0) {
+               // Try to parse as null (for std::nullptr_t or similar)
+               constexpr auto idx = detail::toml_variant_first_index_v<Variant, detail::is_toml_variant_null>;
+               value.template emplace<idx>();
+               // Note: TOML doesn't have a native null, so this may fail unless
+               // custom handling is provided
+            }
+            else {
+               ctx.error = error_code::syntax_error;
             }
          }
       }
