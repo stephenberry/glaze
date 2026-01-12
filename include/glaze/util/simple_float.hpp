@@ -1,0 +1,1258 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
+#pragma once
+
+// Simple computational float parsing and serialization for size-optimized builds.
+// Uses minimal lookup tables (~660 bytes) instead of fast_float/Dragonbox (~20KB+).
+// Trades some performance for dramatically smaller binary size.
+// Suitable for embedded systems and bare-metal environments.
+
+#include <charconv>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <limits>
+#include <type_traits>
+
+#include "glaze/util/inline.hpp"
+
+namespace glz::simple_float
+{
+   // ============================================================================
+   // FLOAT PARSING - Computational approach with tiny power-of-5 tables
+   // Uses 128-bit arithmetic for correct rounding on all platforms
+   // ============================================================================
+
+   namespace detail
+   {
+      struct decimal_number
+      {
+         bool negative{};
+         uint64_t mantissa{};
+         int32_t exp10{};
+      };
+
+      static constexpr int32_t max_exp10 = 400;
+      static constexpr int32_t min_exp10 = -400;
+
+      template <bool null_terminated>
+      GLZ_ALWAYS_INLINE constexpr bool parse_decimal(const char* buf, const char* end, decimal_number& out) noexcept
+      {
+         const char* p = buf;
+
+         // Handle sign
+         bool negative = false;
+         if constexpr (null_terminated) {
+            if (*p == '-') {
+               negative = true;
+               ++p;
+            }
+         }
+         else {
+            if (p < end && *p == '-') {
+               negative = true;
+               ++p;
+            }
+         }
+
+         constexpr int max_sig_digits = 17;
+         uint64_t mantissa = 0;
+         int32_t exp10 = 0;
+         int sig_digits = 0;
+         bool any_digit = false;
+         bool in_fraction = false;
+
+         // Parse digits
+         auto is_digit = [](char c) { return c >= '0' && c <= '9'; };
+
+         auto at_end = [&]() {
+            if constexpr (null_terminated) {
+               return *p == '\0';
+            }
+            else {
+               return p >= end;
+            }
+         };
+
+         while (!at_end()) {
+            char c = *p;
+            if (is_digit(c)) {
+               any_digit = true;
+               unsigned digit = static_cast<unsigned>(c - '0');
+
+               // Skip leading zeros before decimal point
+               if (!in_fraction && sig_digits == 0 && digit == 0) {
+                  char next = (null_terminated || p + 1 < end) ? *(p + 1) : '\0';
+                  if (next == '.') {
+                     ++p;
+                     continue;
+                  }
+               }
+
+               // Skip leading zeros in fraction (don't count as significant)
+               if (in_fraction && mantissa == 0 && digit == 0) {
+                  // Leading fractional zero: just adjust exponent
+                  if (exp10 > min_exp10) --exp10;
+               }
+               else if (sig_digits < max_sig_digits) {
+                  mantissa = mantissa * 10u + digit;
+                  ++sig_digits;
+                  if (in_fraction) {
+                     if (exp10 > min_exp10) --exp10;
+                  }
+               }
+               else {
+                  // Mantissa full - adjust exponent for integer digits
+                  if (!in_fraction) {
+                     if (exp10 < max_exp10) ++exp10;
+                  }
+               }
+               ++p;
+            }
+            else if (c == '.' && !in_fraction) {
+               in_fraction = true;
+               ++p;
+            }
+            else {
+               break;
+            }
+         }
+
+         if (!any_digit) return false;
+
+         // Parse exponent part
+         if (!at_end() && (*p == 'e' || *p == 'E')) {
+            ++p;
+            if (at_end()) return false;
+
+            bool exp_negative = false;
+            if (*p == '+' || *p == '-') {
+               exp_negative = (*p == '-');
+               ++p;
+            }
+
+            if (at_end() || !is_digit(*p)) return false;
+
+            int32_t exp_part = 0;
+            while (!at_end() && is_digit(*p)) {
+               unsigned digit = static_cast<unsigned>(*p - '0');
+               if (exp_part < max_exp10) {
+                  exp_part = exp_part * 10 + static_cast<int32_t>(digit);
+                  if (exp_part > max_exp10) exp_part = max_exp10;
+               }
+               ++p;
+            }
+
+            if (exp_negative) {
+               exp10 -= exp_part;
+               if (exp10 < min_exp10) exp10 = min_exp10;
+            }
+            else {
+               exp10 += exp_part;
+               if (exp10 > max_exp10) exp10 = max_exp10;
+            }
+         }
+
+         out.negative = negative;
+         out.mantissa = mantissa;
+         out.exp10 = exp10;
+         return true;
+      }
+
+      // ============================================================================
+      // 128-bit power-of-5 tables for exact decimal-to-binary conversion
+      // Uses binary exponentiation: 9 entries cover 5^1 to 5^256
+      // Total table size: 9 entries × 2 tables × 20 bytes = 360 bytes
+      // ============================================================================
+
+      // Normalized 128-bit representation of 5^(2^k)
+      // mantissa has MSB at bit 127, value = mantissa × 2^exp
+      struct pow5_128
+      {
+         uint64_t hi;
+         uint64_t lo;
+         int32_t exp;
+      };
+
+      // Positive powers: 5^(2^k) for k = 0..8
+      // Used for decimal exponents >= 0
+      inline constexpr pow5_128 pow5_pos_table[] = {
+         {0xA000000000000000ULL, 0x0000000000000000ULL, -125}, // 5^1
+         {0xC800000000000000ULL, 0x0000000000000000ULL, -123}, // 5^2
+         {0x9C40000000000000ULL, 0x0000000000000000ULL, -118}, // 5^4
+         {0xBEBC200000000000ULL, 0x0000000000000000ULL, -109}, // 5^8
+         {0x8E1BC9BF04000000ULL, 0x0000000000000000ULL, -90},  // 5^16
+         {0x9DC5ADA82B70B59DULL, 0xF020000000000000ULL, -53},  // 5^32
+         {0xC2781F49FFCFA6D5ULL, 0x3CBF6B71C76B25FBULL, 21},   // 5^64
+         {0x93BA47C980E98CDFULL, 0xC66F336C36B10137ULL, 170},  // 5^128
+         {0xAA7EEBFB9DF9DE8DULL, 0xDDBB901B98FEEAB8ULL, 467},  // 5^256
+      };
+
+      // Negative powers: 5^(-(2^k)) normalized to 128 bits
+      // Used for decimal exponents < 0
+      inline constexpr pow5_128 pow5_neg_table[] = {
+         {0xCCCCCCCCCCCCCCCCULL, 0xCCCCCCCCCCCCCCCDULL, -130}, // 5^-1
+         {0xA3D70A3D70A3D70AULL, 0x3D70A3D70A3D70A4ULL, -132}, // 5^-2
+         {0xD1B71758E219652BULL, 0xD3C36113404EA4A9ULL, -137}, // 5^-4
+         {0xABCC77118461CEFCULL, 0xFDC20D2B36BA7C3DULL, -146}, // 5^-8
+         {0xE69594BEC44DE15BULL, 0x4C2EBE687989A9B4ULL, -165}, // 5^-16
+         {0xCFB11EAD453994BAULL, 0x67DE18EDA5814AF2ULL, -202}, // 5^-32
+         {0xA87FEA27A539E9A5ULL, 0x3F2398D747B36224ULL, -276}, // 5^-64
+         {0xDDD0467C64BCE4A0ULL, 0xAC7CB3F6D05DDBDFULL, -425}, // 5^-128
+         {0xC0314325637A1939ULL, 0xFA911155FEFB5309ULL, -722}, // 5^-256
+      };
+
+      // ============================================================================
+      // 128-bit multiplication primitives
+      // ============================================================================
+
+#ifdef __SIZEOF_INT128__
+      using uint128_native = __uint128_t;
+#else
+      // Fallback: software 128-bit multiplication
+      struct uint128_native
+      {
+         uint64_t lo, hi;
+      };
+#endif
+
+      // Multiply two 64-bit numbers, return full 128-bit result
+      GLZ_ALWAYS_INLINE constexpr void mul64(uint64_t a, uint64_t b, uint64_t& hi, uint64_t& lo) noexcept
+      {
+#ifdef __SIZEOF_INT128__
+         uint128_native prod = static_cast<uint128_native>(a) * b;
+         hi = static_cast<uint64_t>(prod >> 64);
+         lo = static_cast<uint64_t>(prod);
+#else
+         // Software implementation
+         uint64_t a_lo = a & 0xFFFFFFFF;
+         uint64_t a_hi = a >> 32;
+         uint64_t b_lo = b & 0xFFFFFFFF;
+         uint64_t b_hi = b >> 32;
+
+         uint64_t p0 = a_lo * b_lo;
+         uint64_t p1 = a_lo * b_hi;
+         uint64_t p2 = a_hi * b_lo;
+         uint64_t p3 = a_hi * b_hi;
+
+         uint64_t mid = (p0 >> 32) + (p1 & 0xFFFFFFFF) + (p2 & 0xFFFFFFFF);
+         hi = p3 + (p1 >> 32) + (p2 >> 32) + (mid >> 32);
+         lo = (mid << 32) | (p0 & 0xFFFFFFFF);
+#endif
+      }
+
+      // Multiply 64-bit mantissa by 128-bit pow5 entry
+      // Returns high 128 bits of the 192-bit product
+      // exp is updated: exp_out = exp_in + p.exp + 64
+      GLZ_ALWAYS_INLINE constexpr void mul64_pow5(uint64_t m, const pow5_128& p, uint64_t& rh, uint64_t& rl,
+                                                  int32_t& exp, bool& round_bit, bool& sticky_bit) noexcept
+      {
+         // m × (p.hi : p.lo) = m×p.hi × 2^64 + m×p.lo
+         // This is 64 × 128 = 192 bits, we keep high 128
+
+         uint64_t ph_hi, ph_lo, pl_hi, pl_lo;
+         mul64(m, p.hi, ph_hi, ph_lo);
+         mul64(m, p.lo, pl_hi, pl_lo);
+
+         // Add pl_hi to ph_lo with carry
+         uint64_t sum_lo = ph_lo + pl_hi;
+         uint64_t carry = (sum_lo < ph_lo) ? 1 : 0;
+         uint64_t sum_hi = ph_hi + carry;
+
+         rh = sum_hi;
+         rl = sum_lo;
+         exp += p.exp + 64; // ADD to existing exponent (not overwrite!)
+
+         // Rounding info from discarded pl_lo
+         round_bit = (pl_lo >> 63) != 0;
+         sticky_bit = (pl_lo & 0x7FFFFFFFFFFFFFFFULL) != 0;
+      }
+
+      // Multiply two 128-bit numbers, return high 128 bits of 256-bit product
+      GLZ_ALWAYS_INLINE constexpr void mul128(uint64_t ah, uint64_t al, uint64_t bh, uint64_t bl, uint64_t& rh,
+                                              uint64_t& rl, bool& round_bit, bool& sticky_bit) noexcept
+      {
+         // (ah:al) × (bh:bl) = ah×bh × 2^128 + (ah×bl + al×bh) × 2^64 + al×bl
+         // We need bits 255..128 (high 128 bits)
+
+         uint64_t hh_hi, hh_lo; // ah × bh (bits 128-255)
+         uint64_t hl_hi, hl_lo; // ah × bl (bits 64-191)
+         uint64_t lh_hi, lh_lo; // al × bh (bits 64-191)
+         uint64_t ll_hi, ll_lo; // al × bl (bits 0-127)
+
+         mul64(ah, bh, hh_hi, hh_lo);
+         mul64(ah, bl, hl_hi, hl_lo);
+         mul64(al, bh, lh_hi, lh_lo);
+         mul64(al, bl, ll_hi, ll_lo);
+
+         // Sum the middle terms with ll_hi to get carry into high 128 bits
+         // mid = hl_lo + lh_lo + ll_hi (with carries tracked)
+         uint64_t mid = hl_lo;
+         uint64_t mid_carry = 0;
+
+         uint64_t tmp = mid + lh_lo;
+         mid_carry += (tmp < mid) ? 1 : 0;
+         mid = tmp;
+
+         tmp = mid + ll_hi;
+         mid_carry += (tmp < mid) ? 1 : 0;
+         mid = tmp;
+
+         // Compute bits 128-191: hh_lo + hl_hi + lh_hi + mid_carry
+         uint64_t high_lo = hh_lo;
+         uint64_t high_carry = 0;
+
+         tmp = high_lo + hl_hi;
+         high_carry += (tmp < high_lo) ? 1 : 0;
+         high_lo = tmp;
+
+         tmp = high_lo + lh_hi;
+         high_carry += (tmp < high_lo) ? 1 : 0;
+         high_lo = tmp;
+
+         tmp = high_lo + mid_carry;
+         high_carry += (tmp < high_lo) ? 1 : 0;
+         high_lo = tmp;
+
+         // Compute bits 192-255: hh_hi + high_carry
+         uint64_t high_hi = hh_hi + high_carry;
+
+         rh = high_hi;
+         rl = high_lo;
+
+         // Rounding info from discarded bits
+         round_bit = (mid >> 63) != 0;
+         sticky_bit = ((mid & 0x7FFFFFFFFFFFFFFFULL) | ll_lo) != 0;
+      }
+
+      // Count leading zeros
+      GLZ_ALWAYS_INLINE constexpr int clz64(uint64_t x) noexcept
+      {
+         if (x == 0) return 64;
+#if defined(__GNUC__) || defined(__clang__)
+         return __builtin_clzll(x);
+#else
+         int n = 0;
+         if ((x & 0xFFFFFFFF00000000ULL) == 0) {
+            n += 32;
+            x <<= 32;
+         }
+         if ((x & 0xFFFF000000000000ULL) == 0) {
+            n += 16;
+            x <<= 16;
+         }
+         if ((x & 0xFF00000000000000ULL) == 0) {
+            n += 8;
+            x <<= 8;
+         }
+         if ((x & 0xF000000000000000ULL) == 0) {
+            n += 4;
+            x <<= 4;
+         }
+         if ((x & 0xC000000000000000ULL) == 0) {
+            n += 2;
+            x <<= 2;
+         }
+         if ((x & 0x8000000000000000ULL) == 0) {
+            n += 1;
+         }
+         return n;
+#endif
+      }
+
+      // Convert 128-bit mantissa + binary exponent to double with correct IEEE 754 rounding
+      GLZ_ALWAYS_INLINE constexpr double assemble_double(uint64_t hi, uint64_t lo, int32_t exp2, bool negative,
+                                                         bool round_bit, bool sticky_bit) noexcept
+      {
+         // Normalize: ensure MSB of hi is set
+         if (hi == 0) {
+            if (lo == 0) return negative ? -0.0 : 0.0;
+            hi = lo;
+            lo = 0;
+            exp2 -= 64;
+         }
+
+         int lz = clz64(hi);
+         if (lz > 0) {
+            hi = (hi << lz) | (lo >> (64 - lz));
+            lo = lo << lz;
+            exp2 -= lz;
+         }
+
+         // Now hi has MSB at bit 63 (of hi), which is bit 127 of the full 128-bit value
+         // We need 53 bits for double mantissa (52 explicit + 1 implicit)
+         // Extract bits 127..75 (53 bits) = bits 63..11 of hi
+
+         uint64_t mantissa53 = hi >> 11;
+
+         // Rounding bits: bit 74 (bit 10 of hi) is round, bits 73..0 + lo + previous round/sticky are sticky
+         bool new_round = (hi >> 10) & 1;
+         bool new_sticky = ((hi & 0x3FF) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+
+         // IEEE 754 round-to-nearest-even
+         if (new_round && (new_sticky || (mantissa53 & 1))) {
+            ++mantissa53;
+            if (mantissa53 >= (1ULL << 53)) {
+               // Overflow from rounding, adjust
+               mantissa53 >>= 1;
+               ++exp2;
+            }
+         }
+
+         // Compute biased exponent
+         // After normalization: (hi:lo) × 2^exp2 = value, where (hi:lo) ∈ [2^127, 2^128)
+         // We extracted: mantissa53 = hi >> 11 ≈ (hi:lo) / 2^75, so mantissa53 ∈ [2^52, 2^53)
+         // For normalized double: value = mantissa53 × 2^(-52) × 2^e
+         // So: mantissa53 × 2^75 × 2^exp2 = mantissa53 × 2^(-52) × 2^e
+         // => e = exp2 + 127
+         int32_t biased_exp = exp2 + 127 + 1023;
+
+         // Handle overflow/underflow
+         if (biased_exp >= 2047) {
+            // Overflow to infinity
+            uint64_t bits = 0x7FF0000000000000ULL;
+            if (negative) bits |= 0x8000000000000000ULL;
+            double result;
+            std::memcpy(&result, &bits, sizeof(result));
+            return result;
+         }
+
+         if (biased_exp <= 0) {
+            // Subnormal or underflow
+            if (biased_exp < -52) {
+               // Complete underflow to zero
+               return negative ? -0.0 : 0.0;
+            }
+            // Subnormal: shift mantissa right
+            int shift = 1 - biased_exp;
+            mantissa53 >>= shift;
+            biased_exp = 0;
+         }
+
+         // Remove implicit bit for normal numbers
+         if (biased_exp > 0) {
+            mantissa53 &= ~(1ULL << 52);
+         }
+
+         // Assemble IEEE 754 double
+         uint64_t bits = (static_cast<uint64_t>(biased_exp) << 52) | mantissa53;
+         if (negative) bits |= 0x8000000000000000ULL;
+
+         double result;
+         std::memcpy(&result, &bits, sizeof(result));
+         return result;
+      }
+
+      // Convert 128-bit mantissa + binary exponent to float
+      GLZ_ALWAYS_INLINE constexpr float assemble_float(uint64_t hi, uint64_t lo, int32_t exp2, bool negative,
+                                                       bool round_bit, bool sticky_bit) noexcept
+      {
+         // Similar to assemble_double but for 24-bit mantissa
+
+         // Normalize
+         if (hi == 0) {
+            if (lo == 0) return negative ? -0.0f : 0.0f;
+            hi = lo;
+            lo = 0;
+            exp2 -= 64;
+         }
+
+         int lz = clz64(hi);
+         if (lz > 0) {
+            hi = (hi << lz) | (lo >> (64 - lz));
+            lo = lo << lz;
+            exp2 -= lz;
+         }
+
+         // Extract 24 bits (23 explicit + 1 implicit) = bits 63..40 of hi
+         uint32_t mantissa24 = static_cast<uint32_t>(hi >> 40);
+
+         // Rounding bits
+         bool new_round = (hi >> 39) & 1;
+         bool new_sticky = ((hi & 0x7FFFFFFFFFULL) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+
+         // Round to nearest even
+         if (new_round && (new_sticky || (mantissa24 & 1))) {
+            ++mantissa24;
+            if (mantissa24 >= (1U << 24)) {
+               mantissa24 >>= 1;
+               ++exp2;
+            }
+         }
+
+         // Biased exponent
+         // mantissa24 = hi >> 40 ≈ (hi:lo) / 2^104, so mantissa24 ∈ [2^23, 2^24)
+         // For normalized float: value = mantissa24 × 2^(-23) × 2^e
+         // So: mantissa24 × 2^104 × 2^exp2 = mantissa24 × 2^(-23) × 2^e
+         // => e = exp2 + 127
+         int32_t biased_exp = exp2 + 127 + 127;
+
+         // Handle overflow/underflow
+         if (biased_exp >= 255) {
+            uint32_t bits = 0x7F800000U;
+            if (negative) bits |= 0x80000000U;
+            float result;
+            std::memcpy(&result, &bits, sizeof(result));
+            return result;
+         }
+
+         if (biased_exp <= 0) {
+            if (biased_exp < -23) {
+               return negative ? -0.0f : 0.0f;
+            }
+            int shift = 1 - biased_exp;
+            mantissa24 >>= shift;
+            biased_exp = 0;
+         }
+
+         if (biased_exp > 0) {
+            mantissa24 &= ~(1U << 23);
+         }
+
+         uint32_t bits = (static_cast<uint32_t>(biased_exp) << 23) | mantissa24;
+         if (negative) bits |= 0x80000000U;
+
+         float result;
+         std::memcpy(&result, &bits, sizeof(result));
+         return result;
+      }
+
+      // Compute mantissa × 5^|q| using binary exponentiation
+      // Returns 128-bit result (rh:rl) and binary exponent exp2
+      // Value = (rh × 2^64 + rl) × 2^exp2
+      template <bool positive_exp>
+      GLZ_ALWAYS_INLINE constexpr void apply_pow5(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl,
+                                                  int32_t& exp2, bool& round_bit, bool& sticky_bit) noexcept
+      {
+         const auto& table = positive_exp ? pow5_pos_table : pow5_neg_table;
+
+         // Normalize mantissa to have MSB at bit 63 of rh
+         // (rh:rl) = rh × 2^64 + rl, so with rl=0 and rh = mantissa << lz:
+         // (rh:0) = (mantissa << lz) × 2^64 = mantissa × 2^(lz + 64)
+         // To make value = mantissa, we need exp2 = -(lz + 64)
+         int lz = clz64(mantissa);
+         rh = mantissa << lz;
+         rl = 0;
+         exp2 = -lz - 64; // Value = (rh:0) × 2^exp2 = mantissa
+         round_bit = false;
+         sticky_bit = false;
+
+         uint32_t e = static_cast<uint32_t>(q);
+
+         for (int k = 0; k < 9 && e != 0; ++k) {
+            if (e & 1) {
+               // Multiply current 128-bit result by table[k]
+               uint64_t th, tl;
+               bool tr, ts;
+
+               if (rl == 0 && rh < (1ULL << 63)) {
+                  // rh is less than 64 bits and rl is 0, use simpler multiply
+                  mul64_pow5(rh, table[k], th, tl, exp2, tr, ts);
+                  // exp2 already updated by mul64_pow5
+               }
+               else {
+                  // Full 128×128 multiply
+                  mul128(rh, rl, table[k].hi, table[k].lo, th, tl, tr, ts);
+                  exp2 += table[k].exp + 128;
+               }
+
+               rh = th;
+               rl = tl;
+               sticky_bit = sticky_bit || round_bit || ts;
+               round_bit = tr;
+
+               // Normalize after multiply
+               if (rh != 0) {
+                  int nlz = clz64(rh);
+                  if (nlz > 0 && nlz < 64) {
+                     rh = (rh << nlz) | (rl >> (64 - nlz));
+                     rl = rl << nlz;
+                     exp2 -= nlz;
+                  }
+               }
+            }
+            e >>= 1;
+         }
+      }
+
+      // ============================================================================
+      // Legacy long double tables for float (still accurate enough)
+      // ============================================================================
+
+      inline constexpr long double pow10_pos[] = {1e1L, 1e2L, 1e4L, 1e8L, 1e16L, 1e32L, 1e64L, 1e128L, 1e256L};
+
+      inline constexpr long double pow10_neg[] = {1e-1L, 1e-2L, 1e-4L, 1e-8L, 1e-16L, 1e-32L, 1e-64L, 1e-128L, 1e-256L};
+
+      GLZ_ALWAYS_INLINE constexpr long double scale_by_pow10(long double value, int32_t exp10) noexcept
+      {
+         if (exp10 == 0 || value == 0.0L) return value;
+
+         bool negative_exp = exp10 < 0;
+         uint32_t e = static_cast<uint32_t>(negative_exp ? -exp10 : exp10);
+
+         long double result = value;
+         unsigned idx = 0;
+
+         while (e != 0 && idx < 9) {
+            if (e & 1u) {
+               result *= (negative_exp ? pow10_neg[idx] : pow10_pos[idx]);
+            }
+            e >>= 1;
+            ++idx;
+         }
+
+         return result;
+      }
+
+      // Write a single decimal digit
+      GLZ_ALWAYS_INLINE constexpr void write_digit(char*& p, int d) noexcept { *p++ = static_cast<char>('0' + d); }
+
+      // Write an unsigned integer (for exponent)
+      GLZ_ALWAYS_INLINE char* write_uint(char* buf, uint32_t val) noexcept
+      {
+         if (val == 0) {
+            *buf++ = '0';
+            return buf;
+         }
+
+         char temp[10];
+         int len = 0;
+         while (val > 0) {
+            temp[len++] = static_cast<char>('0' + (val % 10));
+            val /= 10;
+         }
+
+         // Reverse
+         for (int i = len - 1; i >= 0; --i) {
+            *buf++ = temp[i];
+         }
+         return buf;
+      }
+
+      // ============================================================================
+      // 128-bit double serialization
+      // ============================================================================
+
+      // Decompose IEEE 754 double into mantissa and binary exponent
+      // Returns: mantissa × 2^exp2 = value (for positive values)
+      GLZ_ALWAYS_INLINE void decompose_double(double value, uint64_t& mantissa, int32_t& exp2) noexcept
+      {
+         uint64_t bits;
+         std::memcpy(&bits, &value, sizeof(bits));
+
+         uint64_t raw_mantissa = bits & 0x000FFFFFFFFFFFFFULL;
+         int32_t raw_exp = static_cast<int32_t>((bits >> 52) & 0x7FF);
+
+         if (raw_exp == 0) {
+            // Subnormal: value = raw_mantissa × 2^(-1022 - 52)
+            mantissa = raw_mantissa;
+            exp2 = -1022 - 52;
+         }
+         else {
+            // Normal: value = (1 + raw_mantissa/2^52) × 2^(raw_exp - 1023)
+            //               = (2^52 + raw_mantissa) × 2^(raw_exp - 1023 - 52)
+            mantissa = (1ULL << 52) | raw_mantissa;
+            exp2 = raw_exp - 1023 - 52;
+         }
+      }
+
+      // Compute the number of decimal digits for a double value
+      // Returns floor(log10(value)) + 1
+      GLZ_ALWAYS_INLINE constexpr int32_t estimate_decimal_exponent(uint64_t mantissa, int32_t exp2) noexcept
+      {
+         // value = mantissa × 2^exp2
+         // log10(value) = log10(mantissa) + exp2 × log10(2)
+         // log10(2) ≈ 0.30103
+
+         if (mantissa == 0) return 0;
+
+         int mantissa_bits = 64 - clz64(mantissa);
+         // log10(mantissa) ≈ (mantissa_bits - 1) × 0.30103
+         // But for mantissa in [2^52, 2^53), log10 ∈ [15.65, 15.95]
+
+         // Use fixed-point arithmetic: multiply by 78913 and divide by 262144 (≈ 0.30103)
+         int64_t log2_total = static_cast<int64_t>(mantissa_bits - 1) + exp2;
+         int64_t log10_approx = (log2_total * 78913) >> 18; // Divide by 262144
+
+         return static_cast<int32_t>(log10_approx);
+      }
+
+      // 128-bit to_chars for double
+      // Computes exact decimal representation using 128-bit integer arithmetic
+      GLZ_ALWAYS_INLINE char* to_chars_double_128(char* buf, double value) noexcept
+      {
+         // Handle special cases
+         if (value != value) { // NaN
+            std::memcpy(buf, "null", 4);
+            return buf + 4;
+         }
+
+         if (value == std::numeric_limits<double>::infinity()) {
+            std::memcpy(buf, "null", 4);
+            return buf + 4;
+         }
+
+         if (value == -std::numeric_limits<double>::infinity()) {
+            std::memcpy(buf, "null", 4);
+            return buf + 4;
+         }
+
+         if (value == 0.0) {
+            *buf++ = '0';
+            return buf;
+         }
+
+         // Handle sign
+         bool negative = std::signbit(value);
+         if (negative) {
+            *buf++ = '-';
+            value = -value;
+         }
+
+         // Decompose: value = mantissa × 2^exp2
+         uint64_t mantissa;
+         int32_t exp2;
+         decompose_double(value, mantissa, exp2);
+
+         // Estimate decimal exponent: exp10 ≈ floor(log10(value))
+         int32_t exp10 = estimate_decimal_exponent(mantissa, exp2);
+
+         // We want to compute a 17-digit integer representation:
+         // digits_int = round(mantissa × 2^exp2 × 10^(16 - exp10))
+         //            = round(mantissa × 5^(16-exp10) × 2^(exp2 + 16 - exp10))
+         //
+         // Define: pow5_exp = 16 - exp10 (can be positive or negative)
+         //         pow2_exp = exp2 + 16 - exp10 = exp2 + pow5_exp
+
+         int32_t pow5_exp = 16 - exp10;
+         int32_t pow2_exp = exp2 + pow5_exp;
+
+         // Setup 128-bit representation for mantissa
+         uint64_t rh = mantissa;
+         uint64_t rl = 0;
+         int32_t bin_exp = 0; // Current binary shift to apply
+
+         // Multiply by 5^|pow5_exp|
+         if (pow5_exp > 0) {
+            // Multiply by 5^pow5_exp using positive table
+            uint32_t e = static_cast<uint32_t>(pow5_exp);
+            for (int k = 0; k < 9 && e != 0; ++k) {
+               if (e & 1) {
+                  // Normalize before multiply to prevent overflow
+                  if (rh != 0) {
+                     int nlz = clz64(rh);
+                     if (nlz > 0 && nlz < 64) {
+                        rh = (rh << nlz) | (rl >> (64 - nlz));
+                        rl = rl << nlz;
+                        bin_exp -= nlz;
+                     }
+                  }
+
+                  uint64_t th, tl;
+                  bool tr, ts;
+                  mul128(rh, rl, pow5_pos_table[k].hi, pow5_pos_table[k].lo, th, tl, tr, ts);
+                  bin_exp += pow5_pos_table[k].exp + 128;
+                  rh = th;
+                  rl = tl;
+               }
+               e >>= 1;
+            }
+         }
+         else if (pow5_exp < 0) {
+            // Multiply by 5^(-|pow5_exp|) = divide by 5^|pow5_exp|
+            uint32_t e = static_cast<uint32_t>(-pow5_exp);
+            for (int k = 0; k < 9 && e != 0; ++k) {
+               if (e & 1) {
+                  // Normalize before multiply
+                  if (rh != 0) {
+                     int nlz = clz64(rh);
+                     if (nlz > 0 && nlz < 64) {
+                        rh = (rh << nlz) | (rl >> (64 - nlz));
+                        rl = rl << nlz;
+                        bin_exp -= nlz;
+                     }
+                  }
+
+                  uint64_t th, tl;
+                  bool tr, ts;
+                  mul128(rh, rl, pow5_neg_table[k].hi, pow5_neg_table[k].lo, th, tl, tr, ts);
+                  bin_exp += pow5_neg_table[k].exp + 128;
+                  rh = th;
+                  rl = tl;
+               }
+               e >>= 1;
+            }
+         }
+
+         // Apply the 2^pow2_exp factor
+         // Total shift = bin_exp + pow2_exp
+         int32_t total_shift = bin_exp + pow2_exp;
+
+         // Normalize (rh:rl)
+         if (rh == 0 && rl != 0) {
+            rh = rl;
+            rl = 0;
+            total_shift -= 64;
+         }
+         if (rh != 0) {
+            int nlz = clz64(rh);
+            if (nlz > 0 && nlz < 64) {
+               rh = (rh << nlz) | (rl >> (64 - nlz));
+               rl = rl << nlz;
+               total_shift -= nlz;
+            }
+         }
+
+         // Now (rh:rl) × 2^total_shift = digits_int (approximately)
+         // We need to extract the integer part
+
+         // The result should be around 10^16 to 10^17, which is about 54-57 bits
+         // So total_shift should bring us to that range
+
+         // Extract the high bits as our digit integer
+         // If total_shift >= 0, shift left; if < 0, shift right
+         uint64_t digits_int;
+         uint64_t remainder = 0;
+
+         if (total_shift >= 64) {
+            // Overflow - result is too large, adjust exp10
+            ++exp10;
+            total_shift -= 3; // Approximately log2(10)
+         }
+
+         if (total_shift >= 0 && total_shift < 64) {
+            digits_int = (rh << total_shift) | (rl >> (64 - total_shift));
+            remainder = rl << total_shift;
+         }
+         else if (total_shift >= 64) {
+            // Very large shift, use approximation
+            digits_int = rh;
+         }
+         else if (total_shift < 0 && total_shift > -64) {
+            int rshift = -total_shift;
+            digits_int = rh >> rshift;
+            remainder = (rh << (64 - rshift)) | (rl >> rshift);
+         }
+         else {
+            // total_shift <= -64
+            int rshift = -total_shift - 64;
+            if (rshift < 64) {
+               digits_int = rl >> rshift;
+               remainder = rl << (64 - rshift);
+            }
+            else {
+               digits_int = 0;
+               remainder = 0;
+            }
+         }
+
+         // Round based on remainder (128-bit arithmetic is sufficient with proper rounding)
+         if (remainder >= 0x8000000000000000ULL) {
+            ++digits_int;
+         }
+
+         // Adjust if digits_int is out of expected range
+         // Should be in [10^16, 10^17) for 17-digit representation
+         constexpr uint64_t pow10_16 = 10000000000000000ULL;
+         constexpr uint64_t pow10_17 = 100000000000000000ULL;
+
+         // When dividing by 10, use proper rounding (round half up)
+         while (digits_int >= pow10_17) {
+            uint64_t rem = digits_int % 10;
+            digits_int /= 10;
+            if (rem >= 5) {
+               ++digits_int;
+               // Handle overflow from rounding (rare but possible)
+               if (digits_int >= pow10_17) {
+                  digits_int /= 10;
+                  ++exp10;
+               }
+            }
+            ++exp10;
+         }
+         while (digits_int > 0 && digits_int < pow10_16) {
+            digits_int *= 10;
+            --exp10;
+         }
+
+         // Extract individual digits
+         constexpr int prec = 17;
+         int digits[20];
+
+         uint64_t temp = digits_int;
+         for (int i = prec - 1; i >= 0; --i) {
+            digits[i] = static_cast<int>(temp % 10);
+            temp /= 10;
+         }
+
+         // Find last non-zero digit
+         int last_nonzero = prec - 1;
+         while (last_nonzero > 0 && digits[last_nonzero] == 0) {
+            --last_nonzero;
+         }
+         int num_digits = last_nonzero + 1;
+
+         // Format output
+         const bool use_exp = (exp10 < -4 || exp10 >= num_digits);
+
+         char* out = buf;
+
+         if (!use_exp) {
+            if (exp10 >= 0) {
+               int int_digits_count = exp10 + 1;
+               int i = 0;
+               for (; i < int_digits_count && i < num_digits; ++i) {
+                  write_digit(out, digits[i]);
+               }
+               for (; i < int_digits_count; ++i) {
+                  *out++ = '0';
+               }
+               if (i < num_digits) {
+                  *out++ = '.';
+                  for (; i < num_digits; ++i) {
+                     write_digit(out, digits[i]);
+                  }
+               }
+            }
+            else {
+               *out++ = '0';
+               *out++ = '.';
+               for (int i = 0; i < -exp10 - 1; ++i) {
+                  *out++ = '0';
+               }
+               for (int i = 0; i < num_digits; ++i) {
+                  write_digit(out, digits[i]);
+               }
+            }
+         }
+         else {
+            write_digit(out, digits[0]);
+            if (num_digits > 1) {
+               *out++ = '.';
+               for (int i = 1; i < num_digits; ++i) {
+                  write_digit(out, digits[i]);
+               }
+            }
+            *out++ = 'e';
+            if (exp10 >= 0) {
+               *out++ = '+';
+            }
+            else {
+               *out++ = '-';
+               exp10 = -exp10;
+            }
+            out = write_uint(out, static_cast<uint32_t>(exp10));
+         }
+
+         return out;
+      }
+   } // namespace detail
+
+   // ============================================================================
+   // PARSING API
+   // ============================================================================
+
+   // Parse a floating-point number from a character buffer
+   // Returns: {pointer past last parsed char, error code}
+   template <bool null_terminated, class T>
+   GLZ_ALWAYS_INLINE constexpr std::from_chars_result from_chars(const char* first, const char* last, T& value) noexcept
+   {
+      static_assert(std::is_floating_point_v<T>, "T must be a floating-point type");
+
+      detail::decimal_number dec{};
+      if (!detail::parse_decimal<null_terminated>(first, last, dec)) {
+         return {first, std::errc::invalid_argument};
+      }
+
+      // Find end position (needed for return value)
+      const char* p = first;
+      auto skip_number = [&]() {
+         if constexpr (null_terminated) {
+            while (*p == '-' || *p == '+' || (*p >= '0' && *p <= '9') || *p == '.' || *p == 'e' || *p == 'E') ++p;
+         }
+         else {
+            while (p < last &&
+                   (*p == '-' || *p == '+' || (*p >= '0' && *p <= '9') || *p == '.' || *p == 'e' || *p == 'E'))
+               ++p;
+         }
+      };
+
+      if (dec.mantissa == 0) {
+         value = dec.negative ? T(-0.0) : T(0.0);
+         skip_number();
+         return {p, std::errc{}};
+      }
+
+      // Use 128-bit arithmetic for correct rounding
+      uint64_t rh, rl;
+      int32_t exp2;
+      bool round_bit, sticky_bit;
+
+      if (dec.exp10 >= 0) {
+         detail::apply_pow5<true>(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
+         exp2 += dec.exp10; // Add 2^exp10 factor
+      }
+      else {
+         detail::apply_pow5<false>(dec.mantissa, -dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
+         exp2 += dec.exp10; // Subtract (exp10 is negative)
+      }
+
+      if constexpr (std::is_same_v<T, float>) {
+         value = detail::assemble_float(rh, rl, exp2, dec.negative, round_bit, sticky_bit);
+      }
+      else {
+         value = detail::assemble_double(rh, rl, exp2, dec.negative, round_bit, sticky_bit);
+      }
+
+      skip_number();
+      return {p, std::errc{}};
+   }
+
+   // ============================================================================
+   // FLOAT SERIALIZATION - Simple digit-by-digit conversion
+   // ============================================================================
+
+   // Format a floating-point number to a character buffer
+   // Returns: pointer past the last written character
+   // Buffer must have at least 32 bytes available
+   template <class T>
+   GLZ_ALWAYS_INLINE char* to_chars(char* buf, T value) noexcept
+   {
+      static_assert(std::is_floating_point_v<T>, "T must be a floating-point type");
+
+      // Use 128-bit arithmetic for doubles to ensure correct roundtrip
+      if constexpr (std::is_same_v<T, double>) {
+         return detail::to_chars_double_128(buf, value);
+      }
+
+      // Handle special cases
+      if (value != value) { // NaN
+         std::memcpy(buf, "null", 4);
+         return buf + 4;
+      }
+
+      if (value == std::numeric_limits<T>::infinity()) {
+         std::memcpy(buf, "null", 4);
+         return buf + 4;
+      }
+
+      if (value == -std::numeric_limits<T>::infinity()) {
+         std::memcpy(buf, "null", 4);
+         return buf + 4;
+      }
+
+      // Handle zero first (including negative zero)
+      if (value == T(0)) {
+         *buf++ = '0';
+         return buf;
+      }
+
+      // Handle sign (must check after zero since -0.0 < 0.0 is false)
+      bool negative = std::signbit(value);
+      if (negative) {
+         *buf++ = '-';
+         value = -value;
+      }
+
+      // Use long double for better precision during conversion (floats only)
+      long double v = static_cast<long double>(value);
+
+      // Normalize to [1, 10) and compute decimal exponent
+      int32_t exp10 = 0;
+
+      // Scale down large numbers
+      if (v >= 10.0L) {
+         if (v >= 1e256L) {
+            v /= 1e256L;
+            exp10 += 256;
+         }
+         if (v >= 1e128L) {
+            v /= 1e128L;
+            exp10 += 128;
+         }
+         if (v >= 1e64L) {
+            v /= 1e64L;
+            exp10 += 64;
+         }
+         if (v >= 1e32L) {
+            v /= 1e32L;
+            exp10 += 32;
+         }
+         if (v >= 1e16L) {
+            v /= 1e16L;
+            exp10 += 16;
+         }
+         if (v >= 1e8L) {
+            v /= 1e8L;
+            exp10 += 8;
+         }
+         if (v >= 1e4L) {
+            v /= 1e4L;
+            exp10 += 4;
+         }
+         if (v >= 1e2L) {
+            v /= 1e2L;
+            exp10 += 2;
+         }
+         if (v >= 10.0L) {
+            v /= 10.0L;
+            exp10 += 1;
+         }
+      }
+      // Scale up small numbers
+      else if (v < 1.0L && v > 0.0L) {
+         if (v < 1e-255L) {
+            v *= 1e256L;
+            exp10 -= 256;
+         }
+         if (v < 1e-127L) {
+            v *= 1e128L;
+            exp10 -= 128;
+         }
+         if (v < 1e-63L) {
+            v *= 1e64L;
+            exp10 -= 64;
+         }
+         if (v < 1e-31L) {
+            v *= 1e32L;
+            exp10 -= 32;
+         }
+         if (v < 1e-15L) {
+            v *= 1e16L;
+            exp10 -= 16;
+         }
+         if (v < 1e-7L) {
+            v *= 1e8L;
+            exp10 -= 8;
+         }
+         if (v < 1e-3L) {
+            v *= 1e4L;
+            exp10 -= 4;
+         }
+         if (v < 1e-1L) {
+            v *= 1e2L;
+            exp10 -= 2;
+         }
+         if (v < 1.0L) {
+            v *= 10.0L;
+            exp10 -= 1;
+         }
+      }
+
+      // Determine precision based on type
+      // Use full precision to guarantee roundtrip correctness
+      constexpr int prec = std::is_same_v<T, float> ? 9 : 17;
+
+      // Generate digits with extra guard digits for better rounding
+      int digits[20];
+      for (int i = 0; i < prec + 2; ++i) {
+         int d = static_cast<int>(v);
+         if (d > 9) d = 9;
+         if (d < 0) d = 0;
+         digits[i] = d;
+         v = (v - static_cast<long double>(d)) * 10.0L;
+      }
+
+      // Round using guard digits - round half to even (banker's rounding)
+      bool do_round = false;
+      if (digits[prec] > 5) {
+         do_round = true;
+      }
+      else if (digits[prec] == 5) {
+         // Check if there are non-zero digits after
+         if (digits[prec + 1] > 0) {
+            do_round = true;
+         }
+         else {
+            // Exact 0.5 case - round to even
+            do_round = (digits[prec - 1] & 1) != 0;
+         }
+      }
+
+      if (do_round) {
+         int i = prec - 1;
+         for (;;) {
+            if (digits[i] < 9) {
+               ++digits[i];
+               break;
+            }
+            digits[i] = 0;
+            if (i == 0) {
+               digits[0] = 1;
+               ++exp10;
+               break;
+            }
+            --i;
+         }
+      }
+
+      // Find last non-zero digit for trimming trailing zeros
+      int last_nonzero = prec - 1;
+      while (last_nonzero > 0 && digits[last_nonzero] == 0) {
+         --last_nonzero;
+      }
+      int num_digits = last_nonzero + 1;
+
+      // Decide between fixed and exponential notation (like %g)
+      // Use fixed if -4 <= exp10 < precision, otherwise exponential
+      const bool use_exp = (exp10 < -4 || exp10 >= num_digits);
+      const int32_t saved_exp10 = exp10; // Save for regeneration
+
+      // Lambda to generate output from digits array
+      auto generate_output = [&]() {
+         char* out = buf;
+         int32_t e = saved_exp10;
+         if (!use_exp) {
+            if (e >= 0) {
+               int int_digits_count = e + 1;
+               int i = 0;
+               for (; i < int_digits_count && i < num_digits; ++i) {
+                  detail::write_digit(out, digits[i]);
+               }
+               for (; i < int_digits_count; ++i) {
+                  *out++ = '0';
+               }
+               if (i < num_digits) {
+                  *out++ = '.';
+                  for (; i < num_digits; ++i) {
+                     detail::write_digit(out, digits[i]);
+                  }
+               }
+            }
+            else {
+               *out++ = '0';
+               *out++ = '.';
+               for (int i = 0; i < -e - 1; ++i) {
+                  *out++ = '0';
+               }
+               for (int i = 0; i < num_digits; ++i) {
+                  detail::write_digit(out, digits[i]);
+               }
+            }
+         }
+         else {
+            detail::write_digit(out, digits[0]);
+            if (num_digits > 1) {
+               *out++ = '.';
+               for (int i = 1; i < num_digits; ++i) {
+                  detail::write_digit(out, digits[i]);
+               }
+            }
+            *out++ = 'e';
+            if (e >= 0) {
+               *out++ = '+';
+            }
+            else {
+               *out++ = '-';
+               e = -e;
+            }
+            out = detail::write_uint(out, static_cast<uint32_t>(e));
+         }
+         return out;
+      };
+
+      return generate_output();
+   }
+
+} // namespace glz::simple_float
