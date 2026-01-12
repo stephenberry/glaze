@@ -46,6 +46,7 @@ struct my_struct
    std::string hello = "Hello World";
    glz::eetf::atom a = "elang_atom_field"_atom;
    std::array<uint64_t, 3> arr = {1, 2, 3};
+   bool b = false;
 };
 
 struct my_struct_meta
@@ -142,7 +143,7 @@ suite etf_tests = [] {
 
    "write_term"_test = [] {
       trace.begin("write_term");
-      my_struct sw{.i = 123, .d = 2.71827, .hello = "Hello write", .a = "qwe"_atom, .arr = {45, 67, 89}};
+      my_struct sw{.i = 123, .d = 2.71827, .hello = "Hello write", .a = "qwe"_atom, .arr = {45, 67, 89}, .b = true};
       std::vector<std::uint8_t> buff;
       auto ec = glz::write_term(sw, buff);
       trace.end("write_term");
@@ -158,6 +159,7 @@ suite etf_tests = [] {
       expect(s.i == 123);
       expect(s.arr == decltype(s.arr){45, 67, 89});
       expect(s.hello == "Hello write");
+      expect(s.b == true);
    };
 
    "write_term_meta"_test = [] {
@@ -181,7 +183,7 @@ suite etf_tests = [] {
 
    "write_proplist_term"_test = [] {
       trace.begin("write_term");
-      my_struct sw{.i = 123, .d = 2.71827, .hello = "Hello write", .a = "qwe"_atom, .arr = {45, 67, 89}};
+      my_struct sw{.i = 123, .d = 2.71827, .hello = "Hello write", .a = "qwe"_atom, .arr = {45, 67, 89}, .b = true};
       std::vector<std::uint8_t> buff;
       auto ec = glz::write_term<glz::eetf::proplist_layout>(sw, buff);
       trace.end("write_term");
@@ -197,6 +199,7 @@ suite etf_tests = [] {
       expect(s.i == 123);
       expect(s.arr == decltype(s.arr){45, 67, 89});
       expect(s.hello == "Hello write");
+      expect(s.b == true);
    };
 
    "write_proplist_term_meta"_test = [] {

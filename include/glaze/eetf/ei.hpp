@@ -350,27 +350,34 @@ namespace glz
       }
    }
 
-   template <class It0, class It1>
-   GLZ_ALWAYS_INLINE void decode_token(resizable auto&& value, is_context auto&& ctx, It0&& it, It1&& end)
+   template <has_size V, class It0, class It1>
+   GLZ_ALWAYS_INLINE void decode_token(V&& value, is_context auto&& ctx, It0&& it, It1&& end)
    {
-      using namespace std::placeholders;
-
       size_t sz;
       const auto type = get_typea(sz, ctx, it, end);
       if (bool(ctx.error)) {
          return;
       }
 
+      using Dst = std::remove_cvref_t<V>;
       if (eetf::is_atom(type) || eetf::is_string(type)) {
          CHECK_OFFSET(sz);
-         value.resize(sz);
+         if (value.size() < sz) {
+            if constexpr (resizable<Dst>) {
+               value.resize(sz);
+            }
+            else {
+               ctx.error = error_code::constraint_violated;
+               return;
+            }
+         }
          std::memcpy(value.data(), it, sz);
          std::advance(it, sz);
       }
       else {
          const auto offset = sz * sizeof(uint16_t);
          CHECK_OFFSET(offset);
-         value.reserve(sz);
+
          const auto filter_small_int = [](const uint16_t& pair) -> bool {
             return static_cast<eetf_tag>(*(reinterpret_cast<const uint8_t*>(&pair) + 0)) == eetf_tag::SMALL_INTEGER;
          };
@@ -378,26 +385,47 @@ namespace glz
          const auto extract = [](const uint16_t& pair) -> char {
             return *(reinterpret_cast<const uint8_t*>(&pair) + 1);
          };
+
          auto view = std::views::counted(reinterpret_cast<const uint16_t*>(it), sz) |
                      std::views::filter(filter_small_int) | std::views::transform(extract);
-         std::copy(std::ranges::begin(view), std::ranges::end(view), std::back_inserter(value));
-         if (sz != value.size()) {
-            ctx.error = error_code::parse_error;
-            return;
-         }
 
-         std::advance(it, offset);
+         if (value.size() < sz) {
+            if constexpr (has_reserve<Dst>) {
+               value.reserve(sz);
+               std::copy(std::ranges::begin(view), std::ranges::end(view), std::back_inserter(value));
+               if (sz != value.size()) {
+                  ctx.error = error_code::parse_error;
+                  return;
+               }
+
+               std::advance(it, offset);
+            }
+            else {
+               ctx.error = error_code::constraint_violated;
+               return;
+            }
+         }
       }
    }
 
-   template <class... Args>
-   GLZ_ALWAYS_INLINE void decode_boolean(auto&& value, Args&&... args)
+   template <class It0, class It1>
+   GLZ_ALWAYS_INLINE void decode_boolean(auto&& value, is_context auto&& ctx, It0&& it, It1&& end)
    {
-      using namespace std::placeholders;
+      std::array<char, 6> tmp{0, 0, 0, 0, 0, 0};
+      decode_token(tmp, ctx, it, end);
+      if (bool(ctx.error)) {
+         return;
+      }
 
-      int v{};
-      detail::decode_impl(std::bind(ei_decode_boolean, _1, _2, &v), std::forward<Args>(args)...);
-      value = v != 0;
+      if (std::memcmp(tmp.data(), "true", 5) == 0) {
+         value = true;
+      }
+      else if (std::memcmp(tmp.data(), "false", 6) == 0) {
+         value = false;
+      }
+      else {
+         ctx.error = error_code::expected_true_or_false;
+      }
    }
 
    template <is_context Ctx, class It>
