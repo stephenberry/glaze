@@ -645,28 +645,57 @@ count = 42
 enabled = true
 ```
 
-### Nested Structures
+### Nested Arrays
 
-Arrays and nested objects are fully supported:
+Nested arrays are supported for reading:
 
 ```cpp
 glz::generic data;
-std::string input = R"(
-database.host = "localhost"
-database.port = 5432
-servers = ["alpha", "beta", "gamma"]
+glz::read_toml(data, "[[1, 2], [3, 4], [5, 6]]");
+
+auto& arr = std::get<glz::arr>(data);
+auto& inner = std::get<glz::arr>(arr[0]);
+auto& val = std::get<double>(inner[0]);  // 1.0
+```
+
+### Map Types (std::map, std::unordered_map)
+
+TOML documents can also be read directly into map types like `std::map<std::string, T>` or `std::unordered_map<std::string, T>`:
+
+```cpp
+std::map<std::string, int64_t> config;
+std::string toml = R"(
+port = 8080
+timeout = 30
+retries = 3
 )";
 
-glz::read_toml(data, input);
+auto ec = glz::read_toml(config, toml);
+// config["port"] == 8080
+// config["timeout"] == 30
+// config["retries"] == 3
+```
 
-auto& obj = std::get<glz::obj>(data);
-auto& db = std::get<glz::obj>(obj["database"]);
-auto& host = std::get<std::string>(db["host"]);  // "localhost"
-auto& servers = std::get<glz::arr>(obj["servers"]);
+This also works with table sections:
+
+```cpp
+std::map<std::string, std::map<std::string, std::string>> config;
+std::string toml = R"(
+[database]
+host = "localhost"
+user = "admin"
+
+[cache]
+driver = "redis"
+)";
+
+auto ec = glz::read_toml(config, toml);
+// config["database"]["host"] == "localhost"
+// config["cache"]["driver"] == "redis"
 ```
 
 ### Limitations
 
-- **Inline tables**: When reading into generic types, inline tables (`{ key = value }`) are not supported. Use dotted keys or standard table syntax instead.
 - **Null values**: TOML has no native null type. When writing `std::nullptr_t` or a variant holding null, an empty string `""` is written.
 - **Type coercion**: The parser does not coerce types. If the variant has no matching alternative for the detected type, an error is returned.
+- **Array of tables in maps**: The `[[array_of_tables]]` syntax is not fully supported when reading into map types. Use struct-based types for this pattern.

@@ -1692,6 +1692,350 @@ namespace glz
       }
    }
 
+   // ============================================
+   // Map support for TOML
+   // ============================================
+
+   namespace detail
+   {
+      // Concept to detect types with a variant 'data' member (like generic_json)
+      template <class T>
+      concept has_variant_data_member = requires {
+         requires is_variant<std::remove_cvref_t<decltype(std::declval<T>().data)>>;
+      };
+
+      // Find the index of the first map alternative in a variant
+      template <class Variant, size_t I = 0>
+      constexpr size_t find_map_alternative_index()
+      {
+         if constexpr (I >= std::variant_size_v<Variant>) {
+            return std::variant_npos;
+         }
+         else {
+            using Alt = std::variant_alternative_t<I, Variant>;
+            if constexpr (writable_map_t<Alt>) {
+               return I;
+            }
+            else {
+               return find_map_alternative_index<Variant, I + 1>();
+            }
+         }
+      }
+
+      // Helper to resolve a dotted key path into a nested map, creating entries as needed
+      // Returns a reference to the innermost value where data should be stored
+      template <auto Opts, class T>
+      GLZ_ALWAYS_INLINE bool resolve_nested_map(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+      {
+         if (path.empty()) {
+            ctx.error = error_code::syntax_error;
+            return false;
+         }
+
+         using Value = typename T::mapped_type;
+
+         if (path.size() == 1) {
+            // Last key in path - parse the value directly
+            from<TOML, Value>::template op<toml::is_internal_on<Opts>()>(root[path.front()], ctx, it, end);
+            return !bool(ctx.error);
+         }
+         else {
+            // Navigate/create nested map
+            auto& nested_value = root[path.front()];
+
+            // Handle different value types for nested navigation
+            if constexpr (is_variant<Value>) {
+               // Direct variant type - emplace the map alternative
+               constexpr auto map_idx = find_map_alternative_index<Value>();
+               if constexpr (map_idx != std::variant_npos) {
+                  using MapType = std::variant_alternative_t<map_idx, Value>;
+                  if (!std::holds_alternative<MapType>(nested_value)) {
+                     nested_value.template emplace<map_idx>();
+                  }
+                  return resolve_nested_map<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, it, end);
+               }
+               else {
+                  ctx.error = error_code::no_matching_variant_type;
+                  return false;
+               }
+            }
+            else if constexpr (has_variant_data_member<Value>) {
+               // Types like generic_json that wrap a variant in a 'data' member
+               using DataType = decltype(nested_value.data);
+               constexpr auto map_idx = find_map_alternative_index<std::remove_reference_t<DataType>>();
+               if constexpr (map_idx != std::variant_npos) {
+                  using MapType = std::variant_alternative_t<map_idx, std::remove_reference_t<DataType>>;
+                  if (!std::holds_alternative<MapType>(nested_value.data)) {
+                     nested_value.data.template emplace<map_idx>();
+                  }
+                  return resolve_nested_map<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, it, end);
+               }
+               else {
+                  ctx.error = error_code::no_matching_variant_type;
+                  return false;
+               }
+            }
+            else if constexpr (readable_map_t<Value>) {
+               return resolve_nested_map<Opts>(nested_value, path.subspan(1), ctx, it, end);
+            }
+            else {
+               // Value type doesn't support nesting
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+         }
+      }
+
+      // Helper to ensure a path of nested maps exists (for table section headers)
+      // This creates the nested map structure without parsing a value
+      template <auto Opts, class T>
+      GLZ_ALWAYS_INLINE bool ensure_map_path(T& root, std::span<std::string> path, auto& ctx)
+      {
+         if (path.empty()) {
+            return true;
+         }
+
+         using Value = typename T::mapped_type;
+         auto& nested_value = root[path.front()];
+
+         if (path.size() == 1) {
+            // Last key in path - just ensure the map exists at this location
+            if constexpr (is_variant<Value>) {
+               constexpr auto map_idx = find_map_alternative_index<Value>();
+               if constexpr (map_idx != std::variant_npos) {
+                  if (!std::holds_alternative<std::variant_alternative_t<map_idx, Value>>(nested_value)) {
+                     nested_value.template emplace<map_idx>();
+                  }
+                  return true;
+               }
+               else {
+                  ctx.error = error_code::no_matching_variant_type;
+                  return false;
+               }
+            }
+            else if constexpr (has_variant_data_member<Value>) {
+               using DataType = std::remove_reference_t<decltype(nested_value.data)>;
+               constexpr auto map_idx = find_map_alternative_index<DataType>();
+               if constexpr (map_idx != std::variant_npos) {
+                  if (!std::holds_alternative<std::variant_alternative_t<map_idx, DataType>>(nested_value.data)) {
+                     nested_value.data.template emplace<map_idx>();
+                  }
+                  return true;
+               }
+               else {
+                  ctx.error = error_code::no_matching_variant_type;
+                  return false;
+               }
+            }
+            else if constexpr (readable_map_t<Value>) {
+               return true; // Already a map type, nothing to do
+            }
+            else {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+         }
+         else {
+            // Navigate deeper
+            if constexpr (is_variant<Value>) {
+               constexpr auto map_idx = find_map_alternative_index<Value>();
+               if constexpr (map_idx != std::variant_npos) {
+                  using MapType = std::variant_alternative_t<map_idx, Value>;
+                  if (!std::holds_alternative<MapType>(nested_value)) {
+                     nested_value.template emplace<map_idx>();
+                  }
+                  return ensure_map_path<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx);
+               }
+               else {
+                  ctx.error = error_code::no_matching_variant_type;
+                  return false;
+               }
+            }
+            else if constexpr (has_variant_data_member<Value>) {
+               using DataType = std::remove_reference_t<decltype(nested_value.data)>;
+               constexpr auto map_idx = find_map_alternative_index<DataType>();
+               if constexpr (map_idx != std::variant_npos) {
+                  using MapType = std::variant_alternative_t<map_idx, DataType>;
+                  if (!std::holds_alternative<MapType>(nested_value.data)) {
+                     nested_value.data.template emplace<map_idx>();
+                  }
+                  return ensure_map_path<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx);
+               }
+               else {
+                  ctx.error = error_code::no_matching_variant_type;
+                  return false;
+               }
+            }
+            else if constexpr (readable_map_t<Value>) {
+               return ensure_map_path<Opts>(nested_value, path.subspan(1), ctx);
+            }
+            else {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+         }
+      }
+
+      // Parse inline table {...} into a map
+      template <auto Opts, class T>
+      GLZ_ALWAYS_INLINE void parse_toml_inline_table_map(T& value, auto& it, auto& end, auto& ctx)
+      {
+         // Already consumed the opening '{'
+         skip_ws_and_comments(it, end);
+
+         if (it != end && *it == '}') {
+            ++it; // Empty inline table
+            return;
+         }
+
+         while (it != end) {
+            skip_ws_and_comments(it, end);
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            std::vector<std::string> path;
+            if (!parse_toml_key(path, ctx, it, end)) {
+               return;
+            }
+
+            if (it == end || *it != '=') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it; // Skip '='
+            skip_ws_and_comments(it, end);
+
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            if (!resolve_nested_map<Opts>(value, std::span{path}, ctx, it, end)) {
+               return;
+            }
+
+            skip_ws_and_comments(it, end);
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            if (*it == '}') {
+               ++it;
+               return;
+            }
+            else if (*it == ',') {
+               ++it;
+            }
+            else {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+      }
+   } // namespace detail
+
+   template <class T>
+      requires(readable_map_t<T> && not glaze_object_t<T> && not reflectable<T> && not custom_read<T>)
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         skip_ws_and_comments(it, end);
+
+         if (it == end) {
+            return; // Empty input is valid (empty map)
+         }
+
+         // Check if starting with inline table
+         if (*it == '{') {
+            ++it;
+            detail::parse_toml_inline_table_map<Opts>(value, it, end, ctx);
+            return;
+         }
+
+         // TOML document-level parsing
+         // Track current section path instead of a pointer to avoid UB from casting
+         // between map types with different comparators (e.g., std::less<> vs std::less<std::string>)
+         std::vector<std::string> current_section_path;
+
+         while (it != end) {
+            skip_ws_and_comments(it, end);
+            if (it == end) {
+               return;
+            }
+            if (*it == '\n' || *it == '\r') {
+               skip_to_next_line(ctx, it, end);
+               continue;
+            }
+
+            if (*it == '[') {
+               if constexpr (toml::check_is_internal(Opts)) {
+                  return; // if it's internal we return to root
+               }
+
+               ++it;
+               if (it != end && *it == '[') {
+                  // Array of tables [[name]] - not fully supported for maps yet
+                  // For now, skip array of tables in map context
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               else {
+                  // Table section [name]
+                  skip_ws_and_comments(it, end);
+                  current_section_path.clear();
+                  if (!parse_toml_key(current_section_path, ctx, it, end)) {
+                     return;
+                  }
+                  if (it == end || *it != ']') {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  ++it; // skip ']'
+
+                  // Ensure the nested map structure exists for this section
+                  if (!detail::ensure_map_path<Opts>(value, std::span{current_section_path}, ctx)) {
+                     return;
+                  }
+               }
+            }
+            else {
+               // Key-value pair
+               std::vector<std::string> key_path;
+               if (!parse_toml_key(key_path, ctx, it, end)) {
+                  return;
+               }
+
+               if (it == end || *it != '=') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it; // Skip '='
+               skip_ws_and_comments(it, end);
+
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               // Combine section path with key path for full navigation from root
+               std::vector<std::string> full_path;
+               full_path.reserve(current_section_path.size() + key_path.size());
+               full_path.insert(full_path.end(), current_section_path.begin(), current_section_path.end());
+               full_path.insert(full_path.end(), key_path.begin(), key_path.end());
+
+               if (!detail::resolve_nested_map<Opts>(value, std::span{full_path}, ctx, it, end)) {
+                  return;
+               }
+            }
+         }
+      }
+   };
+
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<TOML, T>
@@ -1831,8 +2175,7 @@ namespace glz
       concept toml_variant_array_type = glz::readable_array_t<T> && !glz::str_t<T>;
 
       template <class T>
-      concept toml_variant_object_type = (glz::glaze_object_t<T> || glz::reflectable<T>);
-      // Note: readable_map_t is not included because TOML doesn't have a generic map reader
+      concept toml_variant_object_type = (glz::glaze_object_t<T> || glz::reflectable<T> || glz::writable_map_t<T>);
 
       template <class T>
       concept toml_variant_null_type = glz::null_t<T>;
@@ -1901,6 +2244,7 @@ namespace glz
 
       // Detect if a TOML number is a float by scanning ahead
       // Returns true if the number contains float indicators (., e, E, inf, nan)
+      // Returns false for hex (0x), octal (0o), and binary (0b) prefixed numbers
       template <class It, class End>
       inline bool is_toml_float(It it, End end) noexcept
       {
@@ -1915,6 +2259,18 @@ namespace glz
             if (*it == 'i' || *it == 'n') {
                return true; // inf or nan
             }
+            // Check for hex (0x), octal (0o), binary (0b) prefixes - these are always integers
+            if (*it == '0') {
+               auto next = it;
+               ++next;
+               if (next != end) {
+                  const char prefix = *next;
+                  if (prefix == 'x' || prefix == 'X' || prefix == 'o' || prefix == 'O' || prefix == 'b' ||
+                      prefix == 'B') {
+                     return false; // Always an integer
+                  }
+               }
+            }
          }
 
          // Scan the number looking for float indicators
@@ -1928,6 +2284,94 @@ namespace glz
                break;
             }
             ++it;
+         }
+         return false;
+      }
+
+      // Check if we're looking at 'true' or 'false' exactly (not an identifier starting with 't' or 'f')
+      template <class It, class End>
+      inline bool is_toml_bool(It it, End end) noexcept
+      {
+         if (it == end) return false;
+
+         const char c = *it;
+         if (c == 't') {
+            // Check for "true"
+            ++it;
+            if (it == end || *it != 'r') return false;
+            ++it;
+            if (it == end || *it != 'u') return false;
+            ++it;
+            if (it == end || *it != 'e') return false;
+            ++it;
+            // Must be followed by a terminator
+            if (it == end) return true;
+            const char next = *it;
+            return next == ',' || next == ']' || next == '}' || next == '\n' || next == '\r' || next == '#' ||
+                   next == ' ' || next == '\t';
+         }
+         else if (c == 'f') {
+            // Check for "false"
+            ++it;
+            if (it == end || *it != 'a') return false;
+            ++it;
+            if (it == end || *it != 'l') return false;
+            ++it;
+            if (it == end || *it != 's') return false;
+            ++it;
+            if (it == end || *it != 'e') return false;
+            ++it;
+            // Must be followed by a terminator
+            if (it == end) return true;
+            const char next = *it;
+            return next == ',' || next == ']' || next == '}' || next == '\n' || next == '\r' || next == '#' ||
+                   next == ' ' || next == '\t';
+         }
+         return false;
+      }
+
+      // Check if we're looking at 'inf' or 'nan' specifically (not an identifier starting with 'i' or 'n')
+      template <class It, class End>
+      inline bool is_inf_or_nan(It it, End end) noexcept
+      {
+         // Skip optional sign
+         if (it != end && (*it == '+' || *it == '-')) {
+            ++it;
+         }
+         if (it == end) return false;
+
+         const char c = *it;
+         if (c == 'i') {
+            // Check for "inf"
+            ++it;
+            if (it != end && *it == 'n') {
+               ++it;
+               if (it != end && *it == 'f') {
+                  ++it;
+                  // Must be followed by a terminator
+                  if (it == end) return true;
+                  const char next = *it;
+                  return next == ',' || next == ']' || next == '}' || next == '\n' || next == '\r' || next == '#' ||
+                         next == ' ' || next == '\t';
+               }
+            }
+            return false;
+         }
+         else if (c == 'n') {
+            // Check for "nan"
+            ++it;
+            if (it != end && *it == 'a') {
+               ++it;
+               if (it != end && *it == 'n') {
+                  ++it;
+                  // Must be followed by a terminator
+                  if (it == end) return true;
+                  const char next = *it;
+                  return next == ',' || next == ']' || next == '}' || next == '\n' || next == '\r' || next == '#' ||
+                         next == ' ' || next == '\t';
+               }
+            }
+            return false;
          }
          return false;
       }
@@ -2004,8 +2448,8 @@ namespace glz
                from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
             }
          }
-         else if (c == 't' || c == 'f') {
-            // Boolean
+         else if ((c == 't' || c == 'f') && detail::is_toml_bool(it, end)) {
+            // Boolean (must be exactly 'true' or 'false', not identifiers starting with 't' or 'f')
             constexpr auto bool_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_bool>;
             if constexpr (bool_count == 0) {
                ctx.error = error_code::no_matching_variant_type;
@@ -2020,8 +2464,9 @@ namespace glz
                from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
             }
          }
-         else if ((c >= '0' && c <= '9') || c == '+' || c == '-' || c == 'i' || c == 'n') {
-            // Number - need to determine if integer or float
+         else if ((c >= '0' && c <= '9') || c == '+' || c == '-' ||
+                  ((c == 'i' || c == 'n') && detail::is_inf_or_nan(it, end))) {
+            // Number (including inf/nan) - need to determine if integer or float
             constexpr auto int_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_int>;
             constexpr auto float_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_float>;
             constexpr auto signed_int_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_signed_int>;
@@ -2122,6 +2567,23 @@ namespace glz
             }
          }
          else {
+            // Identifiers (a-z, A-Z, _) at document root indicate key-value pairs
+            // Check if the variant has a map alternative we can use
+            const bool is_identifier = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+            constexpr auto map_idx = detail::find_map_alternative_index<Variant>();
+
+            if constexpr (map_idx != std::variant_npos) {
+               if (is_identifier) {
+                  // Parse as a TOML document with key-value pairs into the map alternative
+                  using V = std::variant_alternative_t<map_idx, Variant>;
+                  if (!std::holds_alternative<V>(value)) {
+                     value.template emplace<map_idx>();
+                  }
+                  from<TOML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+                  return;
+               }
+            }
+
             // Unknown type - could be null or invalid
             constexpr auto null_count = detail::toml_variant_count_v<Variant, detail::is_toml_variant_null>;
             if constexpr (null_count > 0) {
