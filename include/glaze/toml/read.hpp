@@ -1700,9 +1700,8 @@ namespace glz
    {
       // Concept to detect types with a variant 'data' member (like generic_json)
       template <class T>
-      concept has_variant_data_member = requires {
-         requires is_variant<std::remove_cvref_t<decltype(std::declval<T>().data)>>;
-      };
+      concept has_variant_data_member =
+         requires { requires is_variant<std::remove_cvref_t<decltype(std::declval<T>().data)>>; };
 
       // Find the index of the first map alternative in a variant
       template <class Variant, size_t I = 0>

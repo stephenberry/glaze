@@ -3106,8 +3106,8 @@ suite inline_table_tests = [] {
 // Variant and generic type tests for TOML
 // ============================================
 
-#include "glaze/json/generic.hpp"
 #include "glaze/json.hpp"
+#include "glaze/json/generic.hpp"
 
 suite variant_toml_tests = [] {
    "variant_write_toml_int"_test = [] {
@@ -3682,7 +3682,7 @@ suite generic_toml_corner_cases = [] {
    // Boundary values
    "generic_u64_read_large_positive"_test = [] {
       glz::generic_u64 g;
-      std::string toml = "18446744073709551615";  // UINT64_MAX
+      std::string toml = "18446744073709551615"; // UINT64_MAX
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.holds<uint64_t>());
@@ -3691,7 +3691,7 @@ suite generic_toml_corner_cases = [] {
 
    "generic_i64_read_large_negative"_test = [] {
       glz::generic_i64 g;
-      std::string toml = "-9223372036854775808";  // INT64_MIN
+      std::string toml = "-9223372036854775808"; // INT64_MIN
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.holds<int64_t>());
@@ -3700,7 +3700,7 @@ suite generic_toml_corner_cases = [] {
 
    "generic_i64_read_large_positive"_test = [] {
       glz::generic_i64 g;
-      std::string toml = "9223372036854775807";  // INT64_MAX
+      std::string toml = "9223372036854775807"; // INT64_MAX
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.holds<int64_t>());
