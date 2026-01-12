@@ -1724,8 +1724,9 @@ namespace glz
 
       // Helper to resolve a dotted key path into a nested map, creating entries as needed
       // Returns a reference to the innermost value where data should be stored
+      // Note: Not GLZ_ALWAYS_INLINE because this function is recursive
       template <auto Opts, class T>
-      GLZ_ALWAYS_INLINE bool resolve_nested_map(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+      bool resolve_nested_map(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
       {
          if (path.empty()) {
             ctx.error = error_code::syntax_error;
@@ -1788,8 +1789,9 @@ namespace glz
 
       // Helper to ensure a path of nested maps exists (for table section headers)
       // This creates the nested map structure without parsing a value
+      // Note: Not GLZ_ALWAYS_INLINE because this function is recursive
       template <auto Opts, class T>
-      GLZ_ALWAYS_INLINE bool ensure_map_path(T& root, std::span<std::string> path, auto& ctx)
+      bool ensure_map_path(T& root, std::span<std::string> path, auto& ctx)
       {
          if (path.empty()) {
             return true;
