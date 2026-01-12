@@ -477,7 +477,12 @@ namespace glz
          value[idx] = std::move(v);
       }
 
-      // TODO handle elang list endings
+      // handle elang list endings
+      // TODO get flag from decode header?
+      const auto t = get_type(arity, ctx, it, end);
+      if (t == eetf_tag::NIL) {
+         skip_term(ctx, it, end);
+      }
    }
 
    template <auto Opts, class T, is_context Ctx, class It0, class It1>
