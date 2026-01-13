@@ -75,7 +75,7 @@ inline bool doubles_roundtrip_equal(double a, double b)
    return a == b;
 }
 
-// On ARM64 where long double == double, allow small ULP differences in parsing for doubles
+// ULP distance calculation (useful for debugging precision issues)
 inline int64_t double_ulp_distance(double a, double b)
 {
    if (a == b) return 0;
@@ -89,14 +89,6 @@ inline int64_t double_ulp_distance(double a, double b)
    if ((a_bits < 0) != (b_bits < 0)) return INT64_MAX;
 
    return std::abs(a_bits - b_bits);
-}
-
-// Approximate comparison allowing small ULP differences (for doubles only on ARM64)
-inline bool doubles_approx_equal(double a, double b, int64_t max_ulp = 2)
-{
-   if (std::isnan(a) && std::isnan(b)) return true;
-   if (a == 0.0 && b == 0.0) return true;
-   return double_ulp_distance(a, b) <= max_ulp;
 }
 
 // Test parsing: compare simple_float::from_chars vs glz::from_chars (fast_float)
@@ -121,24 +113,19 @@ bool test_parse_equivalence(const char* input)
       return true;
    }
 
-   // Check that values match (allowing sign of zero to differ)
+   // Check that values match exactly (allowing sign of zero to differ)
+   // 128-bit integer arithmetic ensures exact results on all platforms
    if constexpr (std::is_same_v<T, float>) {
       return floats_roundtrip_equal(simple_result, fast_result);
    }
    else {
-#if defined(__aarch64__) || defined(_M_ARM64)
-      // Allow up to 4 ULP difference on ARM64 due to limited precision
-      // in power-of-10 scaling during parsing
-      return doubles_approx_equal(simple_result, fast_result, 4);
-#else
       return doubles_roundtrip_equal(simple_result, fast_result);
-#endif
    }
 }
 
 // Test roundtrip: value -> string -> value
-// For floats: requires exact match
-// For doubles on ARM64: allows small ULP differences due to precision limitations
+// Requires exact match for both floats and doubles on all platforms
+// 128-bit integer arithmetic ensures correct rounding
 template <typename T>
 bool test_roundtrip(T value)
 {
@@ -157,17 +144,11 @@ bool test_roundtrip(T value)
       return false;
    }
 
-   // Floats must match exactly
    if constexpr (std::is_same_v<T, float>) {
       return floats_roundtrip_equal(parsed, value);
    }
    else {
-      // Doubles on ARM64 may have small precision differences
-#if defined(__aarch64__) || defined(_M_ARM64)
-      return doubles_approx_equal(parsed, value, 8);
-#else
       return doubles_roundtrip_equal(parsed, value);
-#endif
    }
 }
 
@@ -459,12 +440,11 @@ suite random_double_tests = [] {
       uint64_t failures = tested - passed;
       double failure_rate = static_cast<double>(failures) / static_cast<double>(tested) * 100.0;
 
-      // Require high pass rate - ARM64 has lower precision
-#if defined(__aarch64__) || defined(_M_ARM64)
-      expect(failure_rate < 5.0) << "Random double parse failure rate should be < 5%";
-#else
+      std::cout << "Failure rate: " << failures << " failures (" << failure_rate << "%)" << std::endl;
+
+      // Require exact equivalence with fast_float
+      // 128-bit integer arithmetic ensures correct rounding on all platforms
       expect(failure_rate < 0.1) << "Random double parse failure rate should be < 0.1%";
-#endif
    };
 };
 
@@ -625,12 +605,7 @@ suite regression_tests = [] {
       }
 
       std::cout << "Sequential doubles near critical regions: " << total_passed << "/" << total_tested << " passed" << std::endl;
-#if defined(__aarch64__) || defined(_M_ARM64)
-      // ARM64 may have precision issues near extreme regions
-      expect(total_passed >= total_tested - 20);
-#else
       expect(total_passed == total_tested);
-#endif
    };
 };
 
@@ -685,12 +660,7 @@ suite subnormal_tests = [] {
       }
 
       std::cout << "Subnormal patterns: " << passed << "/" << total << " passed" << std::endl;
-#if defined(__aarch64__) || defined(_M_ARM64)
-      // ARM64 may have precision issues with subnormals
-      expect(passed >= total - 5);
-#else
       expect(passed == total);
-#endif
    };
 
    "random_subnormal_roundtrip"_test = [] {
@@ -719,11 +689,7 @@ suite subnormal_tests = [] {
       double pass_rate = static_cast<double>(passed) / num_tests * 100.0;
       std::cout << passed << "/" << num_tests << " passed (" << pass_rate << "%)" << std::endl;
 
-#if defined(__aarch64__) || defined(_M_ARM64)
-      expect(pass_rate >= 90.0) << "Should pass at least 90% of subnormals on ARM64";
-#else
       expect(passed == num_tests) << "All subnormals should roundtrip exactly";
-#endif
    };
 };
 
@@ -748,11 +714,7 @@ suite extreme_exponent_tests = [] {
       }
 
       std::cout << "Extreme positive exponents: " << passed << "/" << total << " passed" << std::endl;
-#if defined(__aarch64__) || defined(_M_ARM64)
-      expect(passed >= total - 5);
-#else
       expect(passed == total);
-#endif
    };
 
    "extreme_negative_exponents"_test = [] {
@@ -773,11 +735,7 @@ suite extreme_exponent_tests = [] {
       }
 
       std::cout << "Extreme negative exponents: " << passed << "/" << total << " passed" << std::endl;
-#if defined(__aarch64__) || defined(_M_ARM64)
-      expect(passed >= total - 5);
-#else
       expect(passed == total);
-#endif
    };
 };
 
@@ -810,12 +768,7 @@ suite edge_case_tests = [] {
          }
       }
       std::cout << "Powers of 2 (double): " << passed << "/" << total << " passed" << std::endl;
-#if defined(__aarch64__) || defined(_M_ARM64)
-      // ARM64 may have precision issues at extreme exponents
-      expect(passed >= total - 10) << "At most 10 failures expected";
-#else
       expect(passed == total);
-#endif
    };
 
    "powers_of_ten_float"_test = [] {
@@ -849,13 +802,7 @@ suite edge_case_tests = [] {
          }
       }
       std::cout << "Powers of 10 (double): " << passed << "/" << total << " passed" << std::endl;
-#if defined(__aarch64__) || defined(_M_ARM64)
-      // ARM64 has precision limitations with powers of 10 at extreme exponents
-      double pass_rate = static_cast<double>(passed) / static_cast<double>(total) * 100.0;
-      expect(pass_rate >= 90.0) << "Should pass at least 90% of powers of 10";
-#else
       expect(passed == total);
-#endif
    };
 
    "integer_values"_test = [] {

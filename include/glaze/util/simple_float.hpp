@@ -404,36 +404,16 @@ namespace glz::simple_float
          }
 
          // Now hi has MSB at bit 63 (of hi), which is bit 127 of the full 128-bit value
-         // We need 53 bits for double mantissa (52 explicit + 1 implicit)
-         // Extract bits 127..75 (53 bits) = bits 63..11 of hi
-
-         uint64_t mantissa53 = hi >> 11;
-
-         // Rounding bits: bit 74 (bit 10 of hi) is round, bits 73..0 + lo + previous round/sticky are sticky
-         bool new_round = (hi >> 10) & 1;
-         bool new_sticky = ((hi & 0x3FF) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
-
-         // IEEE 754 round-to-nearest-even
-         if (new_round && (new_sticky || (mantissa53 & 1))) {
-            ++mantissa53;
-            if (mantissa53 >= (1ULL << 53)) {
-               // Overflow from rounding, adjust
-               mantissa53 >>= 1;
-               ++exp2;
-            }
-         }
-
-         // Compute biased exponent
-         // After normalization: (hi:lo) × 2^exp2 = value, where (hi:lo) ∈ [2^127, 2^128)
-         // We extracted: mantissa53 = hi >> 11 ≈ (hi:lo) / 2^75, so mantissa53 ∈ [2^52, 2^53)
-         // For normalized double: value = mantissa53 × 2^(-52) × 2^e
-         // So: mantissa53 × 2^75 × 2^exp2 = mantissa53 × 2^(-52) × 2^e
-         // => e = exp2 + 127
+         // Compute biased exponent first to determine if we need subnormal handling
+         // For normalized double: value = mantissa × 2^(-52) × 2^e
+         // hi has implicit bit at position 63, so: value = (hi:lo) × 2^(exp2 - 127)
+         // This means biased_exp = exp2 + 127 + 1023 (before extracting mantissa)
+         // But we extract mantissa53 = hi >> 11, adding 11 to the implicit bit position
+         // So: biased_exp = exp2 + 127 + 1023 (after all adjustments)
          int32_t biased_exp = exp2 + 127 + 1023;
 
-         // Handle overflow/underflow
+         // Handle overflow
          if (biased_exp >= 2047) {
-            // Overflow to infinity
             uint64_t bits = 0x7FF0000000000000ULL;
             if (negative) bits |= 0x8000000000000000ULL;
             double result;
@@ -441,25 +421,105 @@ namespace glz::simple_float
             return result;
          }
 
-         if (biased_exp <= 0) {
-            // Subnormal or underflow
-            if (biased_exp < -52) {
-               // Complete underflow to zero
-               return negative ? -0.0 : 0.0;
+         // Handle underflow to zero
+         // For subnormals, the minimum mantissa is 1, so we need biased_exp >= -52
+         // (shift of 64 + 64 = 128 bits means we'd get 0 mantissa)
+         if (biased_exp < -63) {
+            // Even with rounding, the mantissa would be 0
+            return negative ? -0.0 : 0.0;
+         }
+
+         uint64_t mantissa;
+         bool final_round, final_sticky;
+
+         if (biased_exp > 0) {
+            // Normal number: extract 53 bits (bits 63..11 of hi)
+            mantissa = hi >> 11;
+            final_round = (hi >> 10) & 1;
+            final_sticky = ((hi & 0x3FF) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+         }
+         else {
+            // Subnormal: the IEEE mantissa is computed as:
+            // mantissa = (hi:lo) × 2^(exp2 + 1074)
+            // Since biased_exp = exp2 + 1150, we have exp2 = biased_exp - 1150
+            // So the shift is: -(exp2 + 1074) = -(biased_exp - 1150 + 1074) = 76 - biased_exp
+            //
+            // For biased_exp = 0: shift = 76 (extract ~52 bits)
+            // For biased_exp = -52: shift = 128 (mantissa ≈ 1)
+            int total_shift = 76 - biased_exp;
+
+            if (total_shift < 64) {
+               // Shift is within hi
+               mantissa = hi >> total_shift;
+               uint64_t round_bit_mask = 1ULL << (total_shift - 1);
+               uint64_t sticky_bits_mask = round_bit_mask - 1;
+               final_round = (hi & round_bit_mask) != 0;
+               final_sticky = ((hi & sticky_bits_mask) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
             }
-            // Subnormal: shift mantissa right
-            int shift = 1 - biased_exp;
-            mantissa53 >>= shift;
+            else if (total_shift < 128) {
+               // Shift spans hi and lo
+               int lo_shift = total_shift - 64;
+               if (lo_shift == 0) {
+                  // Special case: total_shift == 64
+                  // (hi:lo) >> 64 = hi, round bit from MSB of lo
+                  mantissa = hi;
+                  final_round = (lo >> 63) & 1;
+                  final_sticky = ((lo & 0x7FFFFFFFFFFFFFFFULL) | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+               }
+               else {
+                  // (hi:lo) >> total_shift = (hi >> lo_shift) | (bits shifted out)
+                  mantissa = hi >> lo_shift;
+                  // Round bit is at position (lo_shift - 1) of hi
+                  uint64_t round_bit_mask = 1ULL << (lo_shift - 1);
+                  uint64_t sticky_bits_mask = round_bit_mask - 1;
+                  final_round = (hi & round_bit_mask) != 0;
+                  // Sticky includes lower bits of hi plus all of lo
+                  final_sticky = ((hi & sticky_bits_mask) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+               }
+            }
+            else if (total_shift == 128) {
+               // Special case: shift by exactly 128 bits
+               // (hi:lo) >> 128 = 0, but we need to round based on (hi:lo)
+               mantissa = 0;
+               final_round = (hi >> 63) & 1; // MSB of (hi:lo) is at bit 127 = hi bit 63
+               final_sticky = ((hi & 0x7FFFFFFFFFFFFFFFULL) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+            }
+            else {
+               // total_shift > 128: result is 0 with rounding from hi
+               mantissa = 0;
+               final_round = false;
+               final_sticky = (hi | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+            }
+
             biased_exp = 0;
+         }
+
+         // IEEE 754 round-to-nearest-even
+         if (final_round && (final_sticky || (mantissa & 1))) {
+            ++mantissa;
+            if (biased_exp > 0 && mantissa >= (1ULL << 53)) {
+               // Overflow from rounding in normal case
+               mantissa >>= 1;
+               ++biased_exp;
+               if (biased_exp >= 2047) {
+                  uint64_t bits = 0x7FF0000000000000ULL;
+                  if (negative) bits |= 0x8000000000000000ULL;
+                  double result;
+                  std::memcpy(&result, &bits, sizeof(result));
+                  return result;
+               }
+            }
+            // For subnormals, overflow from rounding just increases the mantissa
+            // which might promote to smallest normal, but that's handled correctly
          }
 
          // Remove implicit bit for normal numbers
          if (biased_exp > 0) {
-            mantissa53 &= ~(1ULL << 52);
+            mantissa &= ~(1ULL << 52);
          }
 
          // Assemble IEEE 754 double
-         uint64_t bits = (static_cast<uint64_t>(biased_exp) << 52) | mantissa53;
+         uint64_t bits = (static_cast<uint64_t>(biased_exp) << 52) | mantissa;
          if (negative) bits |= 0x8000000000000000ULL;
 
          double result;
@@ -488,30 +548,10 @@ namespace glz::simple_float
             exp2 -= lz;
          }
 
-         // Extract 24 bits (23 explicit + 1 implicit) = bits 63..40 of hi
-         uint32_t mantissa24 = static_cast<uint32_t>(hi >> 40);
-
-         // Rounding bits
-         bool new_round = (hi >> 39) & 1;
-         bool new_sticky = ((hi & 0x7FFFFFFFFFULL) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
-
-         // Round to nearest even
-         if (new_round && (new_sticky || (mantissa24 & 1))) {
-            ++mantissa24;
-            if (mantissa24 >= (1U << 24)) {
-               mantissa24 >>= 1;
-               ++exp2;
-            }
-         }
-
-         // Biased exponent
-         // mantissa24 = hi >> 40 ≈ (hi:lo) / 2^104, so mantissa24 ∈ [2^23, 2^24)
-         // For normalized float: value = mantissa24 × 2^(-23) × 2^e
-         // So: mantissa24 × 2^104 × 2^exp2 = mantissa24 × 2^(-23) × 2^e
-         // => e = exp2 + 127
+         // Compute biased exponent first to determine if we need subnormal handling
          int32_t biased_exp = exp2 + 127 + 127;
 
-         // Handle overflow/underflow
+         // Handle overflow
          if (biased_exp >= 255) {
             uint32_t bits = 0x7F800000U;
             if (negative) bits |= 0x80000000U;
@@ -520,20 +560,88 @@ namespace glz::simple_float
             return result;
          }
 
-         if (biased_exp <= 0) {
-            if (biased_exp < -23) {
-               return negative ? -0.0f : 0.0f;
+         // Handle underflow to zero
+         if (biased_exp < -32) {
+            return negative ? -0.0f : 0.0f;
+         }
+
+         uint32_t mantissa;
+         bool final_round, final_sticky;
+
+         if (biased_exp > 0) {
+            // Normal number: extract 24 bits (bits 63..40 of hi)
+            mantissa = static_cast<uint32_t>(hi >> 40);
+            final_round = (hi >> 39) & 1;
+            final_sticky = ((hi & 0x7FFFFFFFFFULL) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+         }
+         else {
+            // Subnormal: the IEEE mantissa is computed as:
+            // mantissa = (hi:lo) × 2^(exp2 + 149)
+            // Since biased_exp = exp2 + 254, we have exp2 = biased_exp - 254
+            // So the shift is: -(exp2 + 149) = -(biased_exp - 254 + 149) = 105 - biased_exp
+            int total_shift = 105 - biased_exp;
+
+            if (total_shift < 64) {
+               // Shift is within hi
+               mantissa = static_cast<uint32_t>(hi >> total_shift);
+               uint64_t round_bit_mask = 1ULL << (total_shift - 1);
+               uint64_t sticky_bits_mask = round_bit_mask - 1;
+               final_round = (hi & round_bit_mask) != 0;
+               final_sticky = ((hi & sticky_bits_mask) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
             }
-            int shift = 1 - biased_exp;
-            mantissa24 >>= shift;
+            else if (total_shift < 128) {
+               // Shift spans hi and lo
+               int lo_shift = total_shift - 64;
+               if (lo_shift == 0) {
+                  mantissa = static_cast<uint32_t>(hi);
+                  final_round = (lo >> 63) & 1;
+                  final_sticky = ((lo & 0x7FFFFFFFFFFFFFFFULL) | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+               }
+               else {
+                  mantissa = static_cast<uint32_t>(hi >> lo_shift);
+                  uint64_t round_bit_mask = 1ULL << (lo_shift - 1);
+                  uint64_t sticky_bits_mask = round_bit_mask - 1;
+                  final_round = (hi & round_bit_mask) != 0;
+                  final_sticky = ((hi & sticky_bits_mask) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+               }
+            }
+            else if (total_shift == 128) {
+               mantissa = 0;
+               final_round = (hi >> 63) & 1;
+               final_sticky = ((hi & 0x7FFFFFFFFFFFFFFFULL) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+            }
+            else {
+               mantissa = 0;
+               final_round = false;
+               final_sticky = (hi | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+            }
+
             biased_exp = 0;
          }
 
-         if (biased_exp > 0) {
-            mantissa24 &= ~(1U << 23);
+         // IEEE 754 round-to-nearest-even
+         if (final_round && (final_sticky || (mantissa & 1))) {
+            ++mantissa;
+            if (biased_exp > 0 && mantissa >= (1U << 24)) {
+               // Overflow from rounding in normal case
+               mantissa >>= 1;
+               ++biased_exp;
+               if (biased_exp >= 255) {
+                  uint32_t bits = 0x7F800000U;
+                  if (negative) bits |= 0x80000000U;
+                  float result;
+                  std::memcpy(&result, &bits, sizeof(result));
+                  return result;
+               }
+            }
          }
 
-         uint32_t bits = (static_cast<uint32_t>(biased_exp) << 23) | mantissa24;
+         // Remove implicit bit for normal numbers
+         if (biased_exp > 0) {
+            mantissa &= ~(1U << 23);
+         }
+
+         uint32_t bits = (static_cast<uint32_t>(biased_exp) << 23) | mantissa;
          if (negative) bits |= 0x80000000U;
 
          float result;
