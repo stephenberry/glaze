@@ -888,4 +888,289 @@ suite edge_case_tests = [] {
    };
 };
 
+// Tests for invalid JSON number inputs
+// The parser should reject these according to JSON spec (RFC 8259)
+suite invalid_input_tests = [] {
+   // Helper to test that parsing fails or doesn't consume all input
+   auto should_reject = [](const char* input, const char* description) -> bool {
+      float f{};
+      double d{};
+      const char* end = input + std::strlen(input);
+
+      // Test float parsing
+      auto [f_ptr, f_ec] = glz::simple_float::from_chars<false>(input, end, f);
+      bool float_rejected = (f_ec != std::errc{}) || (f_ptr != end);
+
+      // Test double parsing
+      auto [d_ptr, d_ec] = glz::simple_float::from_chars<false>(input, end, d);
+      bool double_rejected = (d_ec != std::errc{}) || (d_ptr != end);
+
+      if (!float_rejected || !double_rejected) {
+         std::cerr << "Should reject '" << input << "' (" << description << ")"
+                   << " float_rejected=" << float_rejected << " double_rejected=" << double_rejected << std::endl;
+      }
+
+      return float_rejected && double_rejected;
+   };
+
+   // Helper to test that parsing fails completely (returns error, not partial parse)
+   auto should_fail = [](const char* input, const char* description) -> bool {
+      float f{};
+      double d{};
+      const char* end = input + std::strlen(input);
+
+      auto [f_ptr, f_ec] = glz::simple_float::from_chars<false>(input, end, f);
+      auto [d_ptr, d_ec] = glz::simple_float::from_chars<false>(input, end, d);
+
+      bool float_failed = (f_ec != std::errc{});
+      bool double_failed = (d_ec != std::errc{});
+
+      if (!float_failed || !double_failed) {
+         std::cerr << "Should fail on '" << input << "' (" << description << ")"
+                   << " float_failed=" << float_failed << " double_failed=" << double_failed << std::endl;
+      }
+
+      return float_failed && double_failed;
+   };
+
+   "empty_and_whitespace"_test = [&] {
+      std::cout << "Testing empty and whitespace inputs..." << std::endl;
+      expect(should_fail("", "empty string"));
+      expect(should_fail(" ", "single space"));
+      expect(should_fail("  ", "multiple spaces"));
+      expect(should_fail("\t", "tab"));
+      expect(should_fail("\n", "newline"));
+   };
+
+   "sign_only"_test = [&] {
+      std::cout << "Testing sign-only inputs..." << std::endl;
+      expect(should_fail("-", "minus only"));
+      expect(should_fail("+", "plus only"));
+      expect(should_fail("--", "double minus"));
+      expect(should_fail("++", "double plus"));
+   };
+
+   "leading_plus_sign"_test = [&] {
+      // JSON does not allow leading + sign
+      std::cout << "Testing leading plus sign (invalid in JSON)..." << std::endl;
+      expect(should_reject("+1", "plus one"));
+      expect(should_reject("+0", "plus zero"));
+      expect(should_reject("+1.5", "plus 1.5"));
+      expect(should_reject("+1e5", "plus with exponent"));
+      expect(should_reject("+0.5", "plus 0.5"));
+   };
+
+   "leading_zeros"_test = [&] {
+      // JSON does not allow leading zeros (except 0 itself and 0.xxx)
+      std::cout << "Testing leading zeros (invalid in JSON)..." << std::endl;
+      expect(should_reject("01", "zero-one"));
+      expect(should_reject("007", "double-oh-seven"));
+      expect(should_reject("00", "double zero"));
+      expect(should_reject("00.5", "double zero point five"));
+      expect(should_reject("-01", "negative zero-one"));
+      expect(should_reject("-007", "negative double-oh-seven"));
+   };
+
+   "decimal_point_issues"_test = [&] {
+      std::cout << "Testing decimal point issues..." << std::endl;
+      // Just decimal point
+      expect(should_fail(".", "decimal point only"));
+      expect(should_fail("-.", "minus decimal point"));
+
+      // Trailing decimal (no digits after)
+      expect(should_reject("1.", "trailing decimal"));
+      expect(should_reject("123.", "trailing decimal after digits"));
+      expect(should_reject("-1.", "negative trailing decimal"));
+
+      // Leading decimal (no digits before) - invalid in JSON
+      expect(should_reject(".1", "leading decimal"));
+      expect(should_reject(".5", "leading decimal .5"));
+      expect(should_reject("-.5", "negative leading decimal"));
+      expect(should_reject(".1e5", "leading decimal with exponent"));
+
+      // Multiple decimal points
+      expect(should_reject("1.2.3", "multiple decimals"));
+      expect(should_reject("1..2", "double decimal"));
+      expect(should_reject("..1", "double leading decimal"));
+   };
+
+   "exponent_issues"_test = [&] {
+      std::cout << "Testing exponent issues..." << std::endl;
+      // Empty exponent
+      expect(should_reject("1e", "empty exponent lowercase"));
+      expect(should_reject("1E", "empty exponent uppercase"));
+      expect(should_reject("1e+", "exponent with plus only"));
+      expect(should_reject("1e-", "exponent with minus only"));
+      expect(should_reject("1.5e", "decimal with empty exponent"));
+      expect(should_reject("1.5E+", "decimal with exponent plus only"));
+
+      // Exponent without mantissa
+      expect(should_fail("e5", "exponent without mantissa"));
+      expect(should_fail("E10", "uppercase exponent without mantissa"));
+      expect(should_fail("e+5", "exponent with sign, no mantissa"));
+
+      // Multiple exponents
+      expect(should_reject("1e2e3", "multiple exponents"));
+      expect(should_reject("1E2E3", "multiple uppercase exponents"));
+      expect(should_reject("1e2E3", "mixed case multiple exponents"));
+
+      // Exponent with decimal
+      expect(should_reject("1e2.5", "exponent with decimal"));
+      expect(should_reject("1e.5", "exponent with leading decimal"));
+   };
+
+   "multiple_signs"_test = [&] {
+      std::cout << "Testing multiple/misplaced signs..." << std::endl;
+      expect(should_reject("--1", "double minus"));
+      expect(should_reject("++1", "double plus"));
+      expect(should_reject("-+1", "minus plus"));
+      expect(should_reject("+-1", "plus minus"));
+      expect(should_reject("1-", "trailing minus"));
+      expect(should_reject("1+", "trailing plus"));
+      expect(should_reject("1.5-", "decimal with trailing minus"));
+      expect(should_reject("1.5+2", "plus in middle"));
+      expect(should_reject("1.5-2", "minus in middle (not exponent)"));
+   };
+
+   "letters_and_invalid_chars"_test = [&] {
+      std::cout << "Testing letters and invalid characters..." << std::endl;
+      expect(should_reject("1a", "digit then letter"));
+      expect(should_reject("a1", "letter then digit"));
+      expect(should_reject("abc", "letters only"));
+      expect(should_reject("1.2x3", "letter in decimal"));
+      expect(should_reject("1,5", "comma instead of decimal"));
+      expect(should_reject("1_000", "underscore separator"));
+      expect(should_reject("1'000", "quote separator"));
+      expect(should_reject("$100", "dollar sign"));
+      expect(should_reject("1.5f", "float suffix"));
+      expect(should_reject("1.5d", "double suffix"));
+      expect(should_reject("1.5L", "long suffix"));
+      expect(should_reject("0x1F", "hex literal"));
+      expect(should_reject("0b101", "binary literal"));
+      expect(should_reject("0o777", "octal literal"));
+   };
+
+   "special_values"_test = [&] {
+      // These are not valid JSON numbers
+      std::cout << "Testing special values (not valid JSON)..." << std::endl;
+      expect(should_fail("NaN", "NaN uppercase"));
+      expect(should_fail("nan", "nan lowercase"));
+      expect(should_fail("NAN", "NAN all caps"));
+      expect(should_fail("Inf", "Inf"));
+      expect(should_fail("inf", "inf lowercase"));
+      expect(should_fail("INF", "INF all caps"));
+      expect(should_fail("Infinity", "Infinity"));
+      expect(should_fail("infinity", "infinity lowercase"));
+      expect(should_fail("-Infinity", "negative Infinity"));
+      expect(should_fail("-inf", "negative inf"));
+      expect(should_fail("+Infinity", "positive Infinity"));
+      expect(should_fail("+inf", "positive inf"));
+   };
+
+   "whitespace_in_number"_test = [&] {
+      std::cout << "Testing whitespace in number..." << std::endl;
+      // Leading whitespace - should fail or not consume whitespace
+      expect(should_reject(" 1", "leading space"));
+      expect(should_reject("\t1", "leading tab"));
+
+      // Trailing whitespace - parser may accept number and stop before whitespace
+      // This is OK for from_chars style parsing, so we check it doesn't consume the space
+      {
+         const char* input = "1 ";
+         const char* end = input + std::strlen(input);
+         double d{};
+         auto [ptr, ec] = glz::simple_float::from_chars<false>(input, end, d);
+         // Should either fail or stop at the space (not consume it)
+         expect((ec != std::errc{}) || (ptr == input + 1)) << "Should not consume trailing space";
+      }
+
+      // Whitespace in the middle
+      expect(should_reject("1 .5", "space before decimal"));
+      expect(should_reject("1. 5", "space after decimal"));
+      expect(should_reject("1 e5", "space before exponent"));
+      expect(should_reject("1e 5", "space in exponent"));
+      expect(should_reject("1e+ 5", "space after exponent sign"));
+      expect(should_reject("- 1", "space after minus"));
+   };
+
+   "overflow_and_underflow"_test = [&] {
+      std::cout << "Testing overflow and underflow..." << std::endl;
+      // These should either fail or return inf/0
+      // The key is they shouldn't crash or produce garbage
+
+      // Extreme overflow
+      {
+         const char* input = "1e999999999";
+         const char* end = input + std::strlen(input);
+         double d{};
+         auto [ptr, ec] = glz::simple_float::from_chars<false>(input, end, d);
+         // Should either fail or return inf
+         expect((ec != std::errc{}) || std::isinf(d)) << "Extreme overflow should fail or return inf";
+      }
+
+      // Extreme underflow
+      {
+         const char* input = "1e-999999999";
+         const char* end = input + std::strlen(input);
+         double d{};
+         auto [ptr, ec] = glz::simple_float::from_chars<false>(input, end, d);
+         // Should either fail or return 0
+         expect((ec != std::errc{}) || d == 0.0) << "Extreme underflow should fail or return 0";
+      }
+
+      // Very long mantissa
+      {
+         std::string long_mantissa = "1";
+         for (int i = 0; i < 1000; ++i) {
+            long_mantissa += "0";
+         }
+         const char* input = long_mantissa.c_str();
+         const char* end = input + long_mantissa.size();
+         double d{};
+         [[maybe_unused]] auto result = glz::simple_float::from_chars<false>(input, end, d);
+         // Should handle gracefully (not crash)
+         expect(true) << "Long mantissa should not crash";
+      }
+   };
+
+   "valid_edge_cases"_test = [&] {
+      // These SHOULD be accepted - verify we don't reject valid input
+      std::cout << "Testing valid edge cases (should be accepted)..." << std::endl;
+
+      auto should_accept = [](const char* input, const char* description) -> bool {
+         double d{};
+         const char* end = input + std::strlen(input);
+         auto [ptr, ec] = glz::simple_float::from_chars<false>(input, end, d);
+         bool accepted = (ec == std::errc{}) && (ptr == end);
+         if (!accepted) {
+            std::cerr << "Should accept '" << input << "' (" << description << ")" << std::endl;
+         }
+         return accepted;
+      };
+
+      expect(should_accept("0", "zero"));
+      expect(should_accept("-0", "negative zero"));
+      expect(should_accept("0.0", "zero point zero"));
+      expect(should_accept("0.5", "zero point five"));
+      expect(should_accept("-0.5", "negative zero point five"));
+      expect(should_accept("1", "one"));
+      expect(should_accept("-1", "negative one"));
+      expect(should_accept("123", "integer"));
+      expect(should_accept("1.5", "simple decimal"));
+      expect(should_accept("1e5", "exponent"));
+      expect(should_accept("1E5", "uppercase exponent"));
+      expect(should_accept("1e+5", "exponent with plus"));
+      expect(should_accept("1e-5", "exponent with minus"));
+      expect(should_accept("1.5e10", "decimal with exponent"));
+      expect(should_accept("1.5E+10", "decimal with uppercase exponent and plus"));
+      expect(should_accept("1.5e-10", "decimal with negative exponent"));
+      expect(should_accept("0e0", "zero exponent"));
+      expect(should_accept("0.0e0", "zero decimal with zero exponent"));
+      expect(should_accept("123456789", "large integer"));
+      expect(should_accept("0.123456789", "many decimal digits"));
+      expect(should_accept("1.7976931348623157e308", "near max double"));
+      expect(should_accept("2.2250738585072014e-308", "near min normal double"));
+   };
+};
+
 int main() { return 0; }

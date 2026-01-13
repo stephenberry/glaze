@@ -36,34 +36,25 @@ namespace glz::simple_float
       static constexpr int32_t max_exp10 = 400;
       static constexpr int32_t min_exp10 = -400;
 
+      // Strict JSON-compliant number parser
+      // JSON number format (RFC 8259):
+      //   number = [ minus ] int [ frac ] [ exp ]
+      //   int = zero / ( digit1-9 *DIGIT )
+      //   frac = decimal-point 1*DIGIT
+      //   exp = e [ minus / plus ] 1*DIGIT
+      //
+      // Key rules:
+      // - No leading + sign
+      // - No leading zeros (except single 0 before decimal or as the number itself)
+      // - Decimal point must be followed by at least one digit
+      // - Decimal point must be preceded by at least one digit
+      // - Exponent must have at least one digit
       template <bool null_terminated>
-      GLZ_ALWAYS_INLINE constexpr bool parse_decimal(const char* buf, const char* end, decimal_number& out) noexcept
+      GLZ_ALWAYS_INLINE constexpr const char* parse_decimal_strict(const char* buf, const char* end,
+                                                                    decimal_number& out) noexcept
       {
          const char* p = buf;
 
-         // Handle sign
-         bool negative = false;
-         if constexpr (null_terminated) {
-            if (*p == '-') {
-               negative = true;
-               ++p;
-            }
-         }
-         else {
-            if (p < end && *p == '-') {
-               negative = true;
-               ++p;
-            }
-         }
-
-         constexpr int max_sig_digits = 17;
-         uint64_t mantissa = 0;
-         int32_t exp10 = 0;
-         int sig_digits = 0;
-         bool any_digit = false;
-         bool in_fraction = false;
-
-         // Parse digits
          auto is_digit = [](char c) { return c >= '0' && c <= '9'; };
 
          auto at_end = [&]() {
@@ -75,67 +66,99 @@ namespace glz::simple_float
             }
          };
 
-         while (!at_end()) {
-            char c = *p;
-            if (is_digit(c)) {
-               any_digit = true;
-               unsigned digit = static_cast<unsigned>(c - '0');
+         auto peek = [&]() -> char {
+            if (at_end()) return '\0';
+            return *p;
+         };
 
-               // Skip leading zeros before decimal point
-               if (!in_fraction && sig_digits == 0 && digit == 0) {
-                  char next = (null_terminated || p + 1 < end) ? *(p + 1) : '\0';
-                  if (next == '.') {
-                     ++p;
-                     continue;
-                  }
+         // Handle optional minus sign (JSON doesn't allow leading +)
+         bool negative = false;
+         if (peek() == '-') {
+            negative = true;
+            ++p;
+         }
+
+         // Must have at least one digit in integer part
+         if (at_end() || !is_digit(peek())) {
+            return nullptr; // Error: no digits after sign or at start
+         }
+
+         constexpr int max_sig_digits = 17;
+         uint64_t mantissa = 0;
+         int32_t exp10 = 0;
+         int sig_digits = 0;
+
+         // Parse integer part
+         char first_digit = peek();
+         if (first_digit == '0') {
+            // Leading zero - next char must NOT be a digit (JSON rule)
+            ++p;
+            if (!at_end() && is_digit(peek())) {
+               return nullptr; // Error: leading zero followed by digit (e.g., "01", "007")
+            }
+         }
+         else {
+            // Non-zero digit - parse all integer digits
+            while (!at_end() && is_digit(peek())) {
+               unsigned digit = static_cast<unsigned>(*p - '0');
+               if (sig_digits < max_sig_digits) {
+                  mantissa = mantissa * 10u + digit;
+                  ++sig_digits;
                }
+               else {
+                  // Mantissa full - adjust exponent for extra integer digits
+                  if (exp10 < max_exp10) ++exp10;
+               }
+               ++p;
+            }
+         }
+
+         // Parse optional fractional part
+         if (!at_end() && peek() == '.') {
+            ++p;
+
+            // JSON requires at least one digit after decimal point
+            if (at_end() || !is_digit(peek())) {
+               return nullptr; // Error: decimal point without following digit (e.g., "1.", "1.e5")
+            }
+
+            // Parse fractional digits
+            while (!at_end() && is_digit(peek())) {
+               unsigned digit = static_cast<unsigned>(*p - '0');
 
                // Skip leading zeros in fraction (don't count as significant)
-               if (in_fraction && mantissa == 0 && digit == 0) {
+               if (mantissa == 0 && digit == 0) {
                   // Leading fractional zero: just adjust exponent
                   if (exp10 > min_exp10) --exp10;
                }
                else if (sig_digits < max_sig_digits) {
                   mantissa = mantissa * 10u + digit;
                   ++sig_digits;
-                  if (in_fraction) {
-                     if (exp10 > min_exp10) --exp10;
-                  }
+                  if (exp10 > min_exp10) --exp10;
                }
-               else {
-                  // Mantissa full - adjust exponent for integer digits
-                  if (!in_fraction) {
-                     if (exp10 < max_exp10) ++exp10;
-                  }
-               }
+               // else: mantissa full, digit is truncated (no exponent adjustment for fractions)
                ++p;
-            }
-            else if (c == '.' && !in_fraction) {
-               in_fraction = true;
-               ++p;
-            }
-            else {
-               break;
             }
          }
 
-         if (!any_digit) return false;
-
-         // Parse exponent part
-         if (!at_end() && (*p == 'e' || *p == 'E')) {
+         // Parse optional exponent part
+         if (!at_end() && (peek() == 'e' || peek() == 'E')) {
             ++p;
-            if (at_end()) return false;
 
+            // Optional sign
             bool exp_negative = false;
-            if (*p == '+' || *p == '-') {
-               exp_negative = (*p == '-');
+            if (!at_end() && (peek() == '+' || peek() == '-')) {
+               exp_negative = (peek() == '-');
                ++p;
             }
 
-            if (at_end() || !is_digit(*p)) return false;
+            // JSON requires at least one digit in exponent
+            if (at_end() || !is_digit(peek())) {
+               return nullptr; // Error: exponent without digits (e.g., "1e", "1e+", "1e-")
+            }
 
             int32_t exp_part = 0;
-            while (!at_end() && is_digit(*p)) {
+            while (!at_end() && is_digit(peek())) {
                unsigned digit = static_cast<unsigned>(*p - '0');
                if (exp_part < max_exp10) {
                   exp_part = exp_part * 10 + static_cast<int32_t>(digit);
@@ -157,7 +180,7 @@ namespace glz::simple_float
          out.negative = negative;
          out.mantissa = mantissa;
          out.exp10 = exp10;
-         return true;
+         return p; // Return pointer to position after parsed number
       }
 
       // ============================================================================
@@ -955,33 +978,22 @@ namespace glz::simple_float
 
    // Parse a floating-point number from a character buffer
    // Returns: {pointer past last parsed char, error code}
+   // Uses strict JSON-compliant parsing (RFC 8259)
    template <bool null_terminated, class T>
    GLZ_ALWAYS_INLINE constexpr std::from_chars_result from_chars(const char* first, const char* last, T& value) noexcept
    {
       static_assert(std::is_floating_point_v<T>, "T must be a floating-point type");
 
       detail::decimal_number dec{};
-      if (!detail::parse_decimal<null_terminated>(first, last, dec)) {
+      const char* end_ptr = detail::parse_decimal_strict<null_terminated>(first, last, dec);
+
+      if (end_ptr == nullptr) {
          return {first, std::errc::invalid_argument};
       }
 
-      // Find end position (needed for return value)
-      const char* p = first;
-      auto skip_number = [&]() {
-         if constexpr (null_terminated) {
-            while (*p == '-' || *p == '+' || (*p >= '0' && *p <= '9') || *p == '.' || *p == 'e' || *p == 'E') ++p;
-         }
-         else {
-            while (p < last &&
-                   (*p == '-' || *p == '+' || (*p >= '0' && *p <= '9') || *p == '.' || *p == 'e' || *p == 'E'))
-               ++p;
-         }
-      };
-
       if (dec.mantissa == 0) {
          value = dec.negative ? T(-0.0) : T(0.0);
-         skip_number();
-         return {p, std::errc{}};
+         return {end_ptr, std::errc{}};
       }
 
       // Use 128-bit arithmetic for correct rounding
@@ -1005,8 +1017,7 @@ namespace glz::simple_float
          value = detail::assemble_double(rh, rl, exp2, dec.negative, round_bit, sticky_bit);
       }
 
-      skip_number();
-      return {p, std::errc{}};
+      return {end_ptr, std::errc{}};
    }
 
    // ============================================================================
