@@ -105,9 +105,10 @@ namespace glz
    // Computed overflow checks - used instead of lookup tables to save 4KB+ of binary size
    // Performance is equal for typical integers and only ~1% slower for max-length integers
    template <class T>
-   GLZ_ALWAYS_INLINE constexpr bool would_overflow_positive(T v, uint8_t next_digit) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool would_overflow_positive(std::remove_volatile_t<T> v, uint8_t next_digit) noexcept
    {
-      constexpr auto max_val = static_cast<uint64_t>((std::numeric_limits<T>::max)());
+      using U = std::remove_volatile_t<T>;
+      constexpr auto max_val = static_cast<uint64_t>((std::numeric_limits<U>::max)());
       constexpr auto threshold = max_val / 10;
       constexpr auto last_digit = max_val % 10;
       const auto uv = static_cast<uint64_t>(v);
@@ -116,10 +117,11 @@ namespace glz
    }
 
    template <class T>
-   GLZ_ALWAYS_INLINE constexpr bool would_overflow_negative(T v, uint8_t next_digit) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool would_overflow_negative(std::remove_volatile_t<T> v, uint8_t next_digit) noexcept
    {
       // For negative: max magnitude is max + 1 (e.g., -2147483648 for int32)
-      constexpr auto max_val = static_cast<uint64_t>((std::numeric_limits<T>::max)()) + 1;
+      using U = std::remove_volatile_t<T>;
+      constexpr auto max_val = static_cast<uint64_t>((std::numeric_limits<U>::max)()) + 1;
       constexpr auto threshold = max_val / 10;
       constexpr auto last_digit = max_val % 10;
       const auto uv = static_cast<uint64_t>(v);
