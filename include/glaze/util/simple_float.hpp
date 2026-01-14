@@ -228,6 +228,12 @@ namespace glz::simple_float
       };
 
 #ifdef __SIZEOF_INT128__
+      // Suppress -Wpedantic warnings for __int128 (compiler extension)
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+
       // ============================================================================
       // Compile-time pow5 table generation for double parsing
       // Uses native 128-bit arithmetic to generate O(1) lookup table at compile time
@@ -370,6 +376,10 @@ namespace glz::simple_float
          // Direct lookup: returns pow5 entry for exponent q
          static constexpr const pow5_128& lookup(int q) noexcept { return table[q - min_exp]; }
       };
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 #endif
 
       // ============================================================================
@@ -377,7 +387,14 @@ namespace glz::simple_float
       // ============================================================================
 
 #ifdef __SIZEOF_INT128__
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
       using uint128_native = __uint128_t;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 #else
       // Fallback: software 128-bit multiplication
       struct uint128_native
@@ -390,9 +407,16 @@ namespace glz::simple_float
       GLZ_ALWAYS_INLINE constexpr void mul64(uint64_t a, uint64_t b, uint64_t& hi, uint64_t& lo) noexcept
       {
 #ifdef __SIZEOF_INT128__
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
          uint128_native prod = static_cast<uint128_native>(a) * b;
          hi = static_cast<uint64_t>(prod >> 64);
          lo = static_cast<uint64_t>(prod);
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 #else
          // Software implementation
          uint64_t a_lo = a & 0xFFFFFFFF;
