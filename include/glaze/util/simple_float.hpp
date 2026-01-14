@@ -579,6 +579,9 @@ namespace glz::simple_float
             // mantissa = (hi:lo) × 2^(exp2 + 149)
             // Since biased_exp = exp2 + 254, we have exp2 = biased_exp - 254
             // So the shift is: -(exp2 + 149) = -(biased_exp - 254 + 149) = 105 - biased_exp
+            //
+            // For biased_exp = 0: shift = 105 (extracting ~23 bits)
+            // For biased_exp = -23: shift = 128 (extracting ~1 bit from rounding)
             int total_shift = 105 - biased_exp;
 
             if (total_shift < 64) {
@@ -593,9 +596,12 @@ namespace glz::simple_float
                // Shift spans hi and lo
                int lo_shift = total_shift - 64;
                if (lo_shift == 0) {
-                  mantissa = static_cast<uint32_t>(hi);
-                  final_round = (lo >> 63) & 1;
-                  final_sticky = ((lo & 0x7FFFFFFFFFFFFFFFULL) | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
+                  // Special case: total_shift == 64
+                  // (hi:lo) >> 64 = hi, but we need the HIGH bits of hi for the mantissa
+                  // The mantissa bits are in the top of hi, extract them
+                  mantissa = static_cast<uint32_t>(hi >> 32);
+                  final_round = (hi >> 31) & 1;
+                  final_sticky = ((hi & 0x7FFFFFFFULL) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
                }
                else {
                   mantissa = static_cast<uint32_t>(hi >> lo_shift);
@@ -606,11 +612,14 @@ namespace glz::simple_float
                }
             }
             else if (total_shift == 128) {
+               // Special case: shift by exactly 128 bits
+               // (hi:lo) >> 128 = 0, but we need to round based on (hi:lo)
                mantissa = 0;
-               final_round = (hi >> 63) & 1;
+               final_round = (hi >> 63) & 1; // MSB of (hi:lo) is at bit 127 = hi bit 63
                final_sticky = ((hi & 0x7FFFFFFFFFFFFFFFULL) | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
             }
             else {
+               // total_shift > 128: result is 0 with rounding from hi
                mantissa = 0;
                final_round = false;
                final_sticky = (hi | lo | (round_bit ? 1 : 0) | (sticky_bit ? 1 : 0)) != 0;
@@ -1124,7 +1133,6 @@ namespace glz::simple_float
       else {
          value = detail::assemble_double(rh, rl, exp2, dec.negative, round_bit, sticky_bit);
       }
-
       return {end_ptr, std::errc{}};
    }
 

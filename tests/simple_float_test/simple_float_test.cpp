@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <bit>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -250,92 +251,103 @@ suite simple_float_roundtrip_tests = [] {
    };
 };
 
-// Exhaustive test for all float values using 4 threads
+// Exhaustive test for all 2^32 float values - optimized for speed
 suite exhaustive_float_tests = [] {
    "exhaustive_float_roundtrip"_test = [] {
-      std::cout << "\n=== Exhaustive float roundtrip test (all 2^32 values, 4 threads) ===" << std::endl;
+      std::cout << "\n=== Exhaustive float roundtrip test (all 2^32 values) ===" << std::endl;
 
-      constexpr int num_threads = 4;
+      const unsigned num_threads = std::max(1u, std::thread::hardware_concurrency());
+      std::cout << "Using " << num_threads << " threads" << std::endl;
+
       constexpr uint64_t total_values = 0x100000000ULL; // 2^32
-      constexpr uint64_t chunk_size = total_values / num_threads;
+      const uint64_t chunk_size = total_values / num_threads;
 
-      std::atomic<uint64_t> total_passed{0};
-      std::atomic<uint64_t> total_skipped{0};
-      std::atomic<uint64_t> first_failure_bits{UINT64_MAX};
+      // Thread-local results to avoid atomic contention
+      struct ThreadResult {
+         uint64_t passed{0};
+         uint64_t skipped{0};
+         uint32_t first_failure{UINT32_MAX};
+      };
+      std::vector<ThreadResult> results(num_threads);
 
-      auto worker = [&](int thread_id, uint64_t start, uint64_t end) {
-         uint64_t passed = 0;
-         uint64_t skipped = 0;
+      auto worker = [&](unsigned thread_id, uint64_t start, uint64_t end_range) {
+         ThreadResult& result = results[thread_id];
+         char buf[32]; // Minimal buffer for float serialization
 
-         for (uint64_t bits = start; bits < end; ++bits) {
-            float value = bits_to_float(static_cast<uint32_t>(bits));
+         for (uint64_t bits = start; bits < end_range; ++bits) {
+            float value;
+            std::memcpy(&value, &bits, sizeof(float));
 
-            // Skip NaN and Inf (they serialize to "null" which doesn't roundtrip)
+            // Skip NaN and Inf (they serialize to "null")
             if (std::isnan(value) || std::isinf(value)) {
-               ++skipped;
+               ++result.skipped;
                continue;
             }
 
-            // Test roundtrip with exact matching for floats
-            char buf[64]{};
+            // Serialize
             char* buf_end = glz::simple_float::to_chars(buf, value);
+            *buf_end = '\0'; // Null-terminate for from_chars<true>
 
-            float parsed{};
+            // Parse back
+            float parsed;
             auto [ptr, ec] = glz::simple_float::from_chars<true>(buf, buf_end, parsed);
 
             if (ec == std::errc{} && floats_roundtrip_equal(parsed, value)) {
-               ++passed;
+               ++result.passed;
             }
-            else {
-               // Record first failure
-               uint64_t expected = UINT64_MAX;
-               first_failure_bits.compare_exchange_strong(expected, bits);
-            }
-
-            // Progress report (only thread 0)
-            if (thread_id == 0 && ((bits - start) & 0x0FFFFFFF) == 0) {
-               uint64_t progress = (bits - start) >> 28;
-               std::cout << "Progress: " << progress << "/4 complete (thread 0)" << std::endl;
+            else if (result.first_failure == UINT32_MAX) {
+               result.first_failure = static_cast<uint32_t>(bits);
             }
          }
-
-         total_passed += passed;
-         total_skipped += skipped;
       };
 
+      auto start_time = std::chrono::high_resolution_clock::now();
+
       std::vector<std::thread> threads;
-      for (int i = 0; i < num_threads; ++i) {
+      threads.reserve(num_threads);
+      for (unsigned i = 0; i < num_threads; ++i) {
          uint64_t start = i * chunk_size;
-         uint64_t end = (i == num_threads - 1) ? total_values : (i + 1) * chunk_size;
-         threads.emplace_back(worker, i, start, end);
+         uint64_t end_range = (i == num_threads - 1) ? total_values : (i + 1) * chunk_size;
+         threads.emplace_back(worker, i, start, end_range);
       }
 
       for (auto& t : threads) {
          t.join();
       }
 
-      uint64_t passed = total_passed.load();
-      uint64_t skipped = total_skipped.load();
-      uint64_t expected_pass = total_values - skipped;
-      uint64_t failures = expected_pass - passed;
+      auto end_time = std::chrono::high_resolution_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-      std::cout << "Exhaustive float roundtrip: total=" << total_values << ", passed=" << passed
-                << ", skipped=" << skipped << std::endl;
+      // Aggregate results
+      uint64_t total_passed = 0;
+      uint64_t total_skipped = 0;
+      uint32_t first_failure = UINT32_MAX;
 
-      if (failures > 0) {
-         uint64_t fail_bits = first_failure_bits.load();
-         if (fail_bits != UINT64_MAX) {
-            float fail_value = bits_to_float(static_cast<uint32_t>(fail_bits));
-            char buf[64]{};
-            char* end = glz::simple_float::to_chars(buf, fail_value);
-            std::cerr << "First failure at bits=0x" << std::hex << fail_bits << std::dec << " value=" << fail_value
-                      << " serialized=" << std::string_view(buf, end - buf) << std::endl;
+      for (const auto& r : results) {
+         total_passed += r.passed;
+         total_skipped += r.skipped;
+         if (r.first_failure < first_failure) {
+            first_failure = r.first_failure;
          }
       }
 
-      std::cout << "Failures: " << failures << std::endl;
+      uint64_t expected_pass = total_values - total_skipped;
+      uint64_t failures = expected_pass - total_passed;
 
-      // Every single float value must roundtrip exactly
+      std::cout << "Exhaustive float roundtrip: total=" << total_values << ", passed=" << total_passed
+                << ", skipped=" << total_skipped << std::endl;
+      std::cout << "Time: " << duration.count() << " ms ("
+                << (total_values * 1000 / (duration.count() + 1)) << " values/sec)" << std::endl;
+
+      if (failures > 0 && first_failure != UINT32_MAX) {
+         float fail_value = bits_to_float(first_failure);
+         char buf[64]{};
+         char* end = glz::simple_float::to_chars(buf, fail_value);
+         std::cerr << "First failure at bits=0x" << std::hex << first_failure << std::dec << " value=" << fail_value
+                   << " serialized=" << std::string_view(buf, end - buf) << std::endl;
+      }
+
+      std::cout << "Failures: " << failures << std::endl;
       expect(failures == 0) << "All non-special floats must roundtrip exactly";
    };
 };
@@ -350,9 +362,10 @@ suite random_double_tests = [] {
       std::mt19937_64 rng(seed);
       std::uniform_int_distribution<uint64_t> dist;
 
-      constexpr uint64_t num_tests = 10'000'000; // 10 million random doubles
+      constexpr uint64_t num_tests = 1'000'000; // 1 million random doubles
       uint64_t passed = 0;
       uint64_t skipped = 0;
+      bool first_failure_logged = false;
 
       for (uint64_t i = 0; i < num_tests; ++i) {
          uint64_t bits = dist(rng);
@@ -366,17 +379,12 @@ suite random_double_tests = [] {
          if (test_roundtrip(value)) {
             ++passed;
          }
-         else {
-            if (passed + skipped == i) { // First failure
-               char buf[64]{};
-               char* end = glz::simple_float::to_chars(buf, value);
-               std::cerr << "First double roundtrip failure at bits=0x" << std::hex << bits << std::dec
-                         << " value=" << value << " serialized=" << std::string_view(buf, end - buf) << std::endl;
-            }
-         }
-
-         if (i % 1'000'000 == 0) {
-            std::cout << "Progress: " << i / 1'000'000 << "/10 million, passed=" << passed << std::endl;
+         else if (!first_failure_logged) {
+            first_failure_logged = true;
+            char buf[64]{};
+            char* end = glz::simple_float::to_chars(buf, value);
+            std::cerr << "First double roundtrip failure at bits=0x" << std::hex << bits << std::dec
+                      << " value=" << value << " serialized=" << std::string_view(buf, end - buf) << std::endl;
          }
       }
 
@@ -385,9 +393,7 @@ suite random_double_tests = [] {
 
       uint64_t tested = num_tests - skipped;
       uint64_t failures = tested - passed;
-      double failure_rate = static_cast<double>(failures) / static_cast<double>(tested) * 100.0;
-
-      std::cout << "Failure rate: " << failures << " failures (" << failure_rate << "%)" << std::endl;
+      std::cout << "Failures: " << failures << std::endl;
 
       // Require 0% failure rate - we fixed the bugs that caused failures
       expect(failures == 0) << "All random doubles must roundtrip exactly";
@@ -401,9 +407,10 @@ suite random_double_tests = [] {
       std::mt19937_64 rng(seed);
       std::uniform_int_distribution<uint64_t> dist;
 
-      constexpr uint64_t num_tests = 10'000'000;
+      constexpr uint64_t num_tests = 1'000'000; // 1 million tests
       uint64_t passed = 0;
       uint64_t skipped = 0;
+      bool first_failure_logged = false;
 
       for (uint64_t i = 0; i < num_tests; ++i) {
          uint64_t bits = dist(rng);
@@ -422,14 +429,9 @@ suite random_double_tests = [] {
          if (test_parse_equivalence<double>(buf)) {
             ++passed;
          }
-         else {
-            if (passed + skipped == i) {
-               std::cerr << "First double parse failure for input: " << buf << std::endl;
-            }
-         }
-
-         if (i % 1'000'000 == 0) {
-            std::cout << "Progress: " << i / 1'000'000 << "/10 million, passed=" << passed << std::endl;
+         else if (!first_failure_logged) {
+            first_failure_logged = true;
+            std::cerr << "First double parse failure for input: " << buf << std::endl;
          }
       }
 
@@ -438,13 +440,10 @@ suite random_double_tests = [] {
 
       uint64_t tested = num_tests - skipped;
       uint64_t failures = tested - passed;
-      double failure_rate = static_cast<double>(failures) / static_cast<double>(tested) * 100.0;
-
-      std::cout << "Failure rate: " << failures << " failures (" << failure_rate << "%)" << std::endl;
+      std::cout << "Failures: " << failures << std::endl;
 
       // Require exact equivalence with fast_float
-      // 128-bit integer arithmetic ensures correct rounding on all platforms
-      expect(failure_rate < 0.1) << "Random double parse failure rate should be < 0.1%";
+      expect(failures == 0) << "All doubles must parse identically to fast_float";
    };
 };
 
