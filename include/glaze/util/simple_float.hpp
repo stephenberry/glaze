@@ -745,6 +745,84 @@ namespace glz::simple_float
          return result;
       }
 
+      // ============================================================================
+      // Fast path for float parsing using 64-bit arithmetic
+      // ============================================================================
+
+      // Exact powers of 10 that fit in a double without rounding error
+      inline constexpr double exact_pow10[] = {
+         1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,
+         1e8,  1e9,  1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
+         1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22
+      };
+
+      // Fast float parsing for common cases (small exponents, normal values)
+      // Returns true if fast path succeeded, false if 128-bit path needed
+      GLZ_ALWAYS_INLINE bool try_fast_float_parse(uint64_t mantissa, int32_t exp10, bool negative, float& result) noexcept
+      {
+         // Fast path uses double precision arithmetic which has 53-bit mantissa.
+         // For float (24-bit mantissa), this gives us ~29 bits of headroom for error.
+         // We can safely handle exponents in [-22, 22] where powers of 10 are exact in double.
+
+         if (exp10 >= -22 && exp10 <= 22 && mantissa != 0) {
+            double d = static_cast<double>(mantissa);
+            if (exp10 >= 0) {
+               d *= exact_pow10[exp10];
+            }
+            else {
+               d /= exact_pow10[-exp10];
+            }
+
+            // Check if result is a normal float (not subnormal, zero, or overflow)
+            float f = static_cast<float>(d);
+            uint32_t bits;
+            std::memcpy(&bits, &f, sizeof(bits));
+            uint32_t exp_field = (bits >> 23) & 0xFF;
+
+            // Only use fast path for normal floats (exp_field in [1, 254])
+            if (exp_field != 0 && exp_field != 0xFF) {
+               result = negative ? -f : f;
+               return true;
+            }
+         }
+
+         // Extended range using long double (80-bit or 128-bit depending on platform)
+         // Long double has at least 64-bit mantissa, giving us more headroom
+         if (exp10 >= -45 && exp10 <= 38 && mantissa != 0) {
+            long double ld = static_cast<long double>(mantissa);
+            ld = scale_by_pow10(ld, exp10);
+
+            // Check bounds before converting to float
+            constexpr long double float_max = 3.402823466e+38L;
+            constexpr long double float_min_normal = 1.175494351e-38L;
+
+            if (ld >= float_min_normal && ld <= float_max) {
+               float f = static_cast<float>(ld);
+               uint32_t bits;
+               std::memcpy(&bits, &f, sizeof(bits));
+               uint32_t exp_field = (bits >> 23) & 0xFF;
+
+               if (exp_field != 0 && exp_field != 0xFF) {
+                  result = negative ? -f : f;
+                  return true;
+               }
+            }
+            else if (ld >= -float_max && ld <= -float_min_normal) {
+               float f = static_cast<float>(ld);
+               uint32_t bits;
+               std::memcpy(&bits, &f, sizeof(bits));
+               uint32_t exp_field = (bits >> 23) & 0xFF;
+
+               if (exp_field != 0 && exp_field != 0xFF) {
+                  result = negative ? -f : f;
+                  return true;
+               }
+            }
+         }
+
+         return false; // Need slow path for subnormals and edge cases
+      }
+
       // Write a single decimal digit
       GLZ_ALWAYS_INLINE constexpr void write_digit(char*& p, int d) noexcept { *p++ = static_cast<char>('0' + d); }
 
@@ -1113,7 +1191,14 @@ namespace glz::simple_float
          return {end_ptr, std::errc{}};
       }
 
-      // Use 128-bit arithmetic for correct rounding
+      // Fast path for float: use 64-bit arithmetic for common cases
+      if constexpr (std::is_same_v<T, float>) {
+         if (detail::try_fast_float_parse(dec.mantissa, dec.exp10, dec.negative, value)) {
+            return {end_ptr, std::errc{}};
+         }
+      }
+
+      // Slow path: Use 128-bit arithmetic for correct rounding
       uint64_t rh, rl;
       int32_t exp2;
       bool round_bit, sticky_bit;

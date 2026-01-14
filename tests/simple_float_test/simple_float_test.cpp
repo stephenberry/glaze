@@ -252,6 +252,7 @@ suite simple_float_roundtrip_tests = [] {
 };
 
 // Exhaustive test for all 2^32 float values - optimized for speed
+// This test is disabled by default (glaze_SIMPLE_FLOAT_TEST=OFF) and runs in Release mode via dedicated CI
 suite exhaustive_float_tests = [] {
    "exhaustive_float_roundtrip"_test = [] {
       std::cout << "\n=== Exhaustive float roundtrip test (all 2^32 values) ===" << std::endl;
