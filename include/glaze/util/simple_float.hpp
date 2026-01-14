@@ -859,7 +859,7 @@ namespace glz::simple_float
       GLZ_ALWAYS_INLINE constexpr void apply_pow5_hybrid(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl,
                                                          int32_t& exp2, bool& round_bit, bool& sticky_bit) noexcept
       {
-         const int32_t lookup_q = positive_exp ? q : -q;
+         const int32_t lookup_q = q;
 
          // Check if we can use the compact table
          if (lookup_q >= pow5_compact_min && lookup_q <= pow5_compact_max) {
