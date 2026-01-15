@@ -1190,6 +1190,265 @@ namespace glz
       }
    };
 
+   // Tuples (std::tuple, glaze_array_t, tuple_t)
+   template <class T>
+      requires(glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         static constexpr auto N = []() constexpr {
+            if constexpr (glaze_array_t<T>) {
+               return reflect<T>::size;
+            }
+            else {
+               return glz::tuple_size_v<T>;
+            }
+         }();
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         if (*it == '[') {
+            // Flow sequence
+            ++it; // Skip '['
+            yaml::skip_inline_ws(it, end);
+
+            for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it != end && *it == ']') {
+                  return; // Early termination
+               }
+
+               if constexpr (I != 0) {
+                  if (it == end || *it != ',') {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  ++it; // Skip ','
+                  yaml::skip_inline_ws(it, end);
+               }
+
+               if constexpr (is_std_tuple<T>) {
+                  using element_t = std::tuple_element_t<I, std::remove_cvref_t<T>>;
+                  from<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(std::get<I>(value), ctx, it, end);
+               }
+               else if constexpr (glaze_array_t<T>) {
+                  using element_t = std::decay_t<decltype(get_member(value, glz::get<I>(meta_v<T>)))>;
+                  from<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(
+                     get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
+               }
+               else {
+                  using element_t = std::decay_t<decltype(glz::get<I>(value))>;
+                  from<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(glz::get<I>(value), ctx, it, end);
+               }
+
+               yaml::skip_inline_ws(it, end);
+            });
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            if (it == end || *it != ']') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it; // Skip ']'
+         }
+         else if (*it == '-') {
+            // Block sequence
+            size_t index = 0;
+
+            while (it != end && index < N) {
+               // Skip whitespace and measure indent
+               auto line_start = it;
+               yaml::skip_inline_ws(it, end);
+
+               if (it == end) break;
+
+               // Skip blank lines
+               if (*it == '\n' || *it == '\r') {
+                  yaml::skip_newline(it, end);
+                  continue;
+               }
+
+               if (*it != '-') {
+                  it = line_start;
+                  break;
+               }
+
+               ++it; // Skip '-'
+
+               // Check valid sequence indicator
+               if (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r') {
+                  it = line_start;
+                  break;
+               }
+
+               yaml::skip_inline_ws(it, end);
+
+               // Parse element at current index
+               [&]<size_t... Is>(std::index_sequence<Is...>) {
+                  (
+                     [&]<size_t I>() {
+                        if (I == index) {
+                           if constexpr (is_std_tuple<T>) {
+                              using element_t = std::tuple_element_t<I, std::remove_cvref_t<T>>;
+                              from<YAML, element_t>::template op<Opts>(std::get<I>(value), ctx, it, end);
+                           }
+                           else if constexpr (glaze_array_t<T>) {
+                              using element_t = std::decay_t<decltype(get_member(value, glz::get<I>(meta_v<T>)))>;
+                              from<YAML, element_t>::template op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx,
+                                                                       it, end);
+                           }
+                           else {
+                              using element_t = std::decay_t<decltype(glz::get<I>(value))>;
+                              from<YAML, element_t>::template op<Opts>(glz::get<I>(value), ctx, it, end);
+                           }
+                        }
+                     }.template operator()<Is>(),
+                     ...);
+               }(std::make_index_sequence<N>{});
+
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               ++index;
+
+               // Skip to next line
+               yaml::skip_ws_and_comment(it, end);
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  yaml::skip_newline(it, end);
+               }
+            }
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+         }
+      }
+   };
+
+   // Pairs (std::pair)
+   template <pair_t T>
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         using first_type = typename std::remove_cvref_t<T>::first_type;
+         using second_type = typename std::remove_cvref_t<T>::second_type;
+
+         if (*it == '{') {
+            // Flow mapping style: {key: value}
+            ++it; // Skip '{'
+            yaml::skip_inline_ws(it, end);
+
+            if (it != end && *it == '}') {
+               ++it;
+               return; // Empty pair
+            }
+
+            // Parse key
+            if constexpr (str_t<first_type>) {
+               std::string key_str;
+               const auto style = yaml::detect_scalar_style(*it);
+               if (style == yaml::scalar_style::double_quoted) {
+                  yaml::parse_double_quoted_string(key_str, ctx, it, end);
+               }
+               else if (style == yaml::scalar_style::single_quoted) {
+                  yaml::parse_single_quoted_string(key_str, ctx, it, end);
+               }
+               else {
+                  yaml::parse_plain_scalar(key_str, ctx, it, end, true);
+               }
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value.first = std::move(key_str);
+            }
+            else {
+               from<YAML, first_type>::template op<yaml::flow_context_on<Opts>()>(value.first, ctx, it, end);
+            }
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            yaml::skip_inline_ws(it, end);
+
+            // Expect colon
+            if (it == end || *it != ':') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            yaml::skip_inline_ws(it, end);
+
+            // Parse value
+            from<YAML, second_type>::template op<yaml::flow_context_on<Opts>()>(value.second, ctx, it, end);
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            yaml::skip_inline_ws(it, end);
+
+            if (it == end || *it != '}') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it; // Skip '}'
+         }
+         else {
+            // Block mapping style: key: value
+            // Parse key
+            if constexpr (str_t<first_type>) {
+               std::string key_str;
+               if (!yaml::parse_yaml_key(key_str, ctx, it, end, false)) {
+                  return;
+               }
+               value.first = std::move(key_str);
+            }
+            else {
+               from<YAML, first_type>::template op<Opts>(value.first, ctx, it, end);
+            }
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            yaml::skip_inline_ws(it, end);
+
+            // Expect colon
+            if (it == end || *it != ':') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            yaml::skip_inline_ws(it, end);
+
+            // Parse value
+            from<YAML, second_type>::template op<Opts>(value.second, ctx, it, end);
+         }
+      }
+   };
+
    // Objects (glaze_object_t and reflectable)
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)

@@ -425,6 +425,190 @@ namespace glz
       }
    };
 
+   // Tuples (std::tuple, glaze_array_t, tuple_t)
+   template <class T>
+      requires(glaze_array_t<T> || tuple_t<std::decay_t<T>> || is_std_tuple<T>)
+   struct to<YAML, T>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         static constexpr auto N = []() constexpr {
+            if constexpr (glaze_array_t<std::decay_t<T>>) {
+               return glz::tuple_size_v<meta_t<std::decay_t<T>>>;
+            }
+            else {
+               return glz::tuple_size_v<std::decay_t<T>>;
+            }
+         }();
+
+         if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
+            // Flow style: [a, b, c]
+            if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
+               return;
+            }
+            dump('[', b, ix);
+
+            using V = std::decay_t<T>;
+            for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if constexpr (I != 0) {
+                  dump(", ", b, ix);
+               }
+
+               if constexpr (glaze_array_t<V>) {
+                  serialize<YAML>::op<yaml::flow_context_on<Opts>()>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b,
+                                                                     ix);
+               }
+               else if constexpr (is_std_tuple<T>) {
+                  using element_t = core_t<decltype(std::get<I>(value))>;
+                  to<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(std::get<I>(value), ctx, b, ix);
+               }
+               else {
+                  using element_t = core_t<decltype(glz::get<I>(value))>;
+                  to<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(glz::get<I>(value), ctx, b, ix);
+               }
+            });
+
+            dump(']', b, ix);
+         }
+         else {
+            // Block style: - a\n- b\n- c
+            constexpr uint8_t indent_width = yaml::check_indent_width(yaml::yaml_opts{});
+            int32_t indent_level = 0;
+            if constexpr (requires { ctx.indent_level; }) {
+               indent_level = ctx.indent_level;
+            }
+
+            using V = std::decay_t<T>;
+            for_each<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // Write indentation and dash
+               const int32_t spaces = indent_level * indent_width;
+               if (!ensure_space(ctx, b, ix + spaces + 8)) [[unlikely]] {
+                  return;
+               }
+               for (int32_t i = 0; i < spaces; ++i) {
+                  b[ix++] = ' ';
+               }
+               dump("- ", b, ix);
+
+               if constexpr (glaze_array_t<V>) {
+                  using element_t = std::decay_t<decltype(get_member(value, glz::get<I>(meta_v<T>)))>;
+                  if constexpr (yaml::is_simple_type<element_t>()) {
+                     serialize<YAML>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
+                     dump('\n', b, ix);
+                  }
+                  else {
+                     dump('\n', b, ix);
+                     serialize<YAML>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
+                  }
+               }
+               else if constexpr (is_std_tuple<T>) {
+                  using element_t = std::decay_t<std::tuple_element_t<I, std::remove_cvref_t<T>>>;
+                  if constexpr (yaml::is_simple_type<element_t>()) {
+                     to<YAML, element_t>::template op<Opts>(std::get<I>(value), ctx, b, ix);
+                     dump('\n', b, ix);
+                  }
+                  else {
+                     dump('\n', b, ix);
+                     to<YAML, element_t>::template op<Opts>(std::get<I>(value), ctx, b, ix);
+                  }
+               }
+               else {
+                  using element_t = std::decay_t<decltype(glz::get<I>(value))>;
+                  if constexpr (yaml::is_simple_type<element_t>()) {
+                     to<YAML, element_t>::template op<Opts>(glz::get<I>(value), ctx, b, ix);
+                     dump('\n', b, ix);
+                  }
+                  else {
+                     dump('\n', b, ix);
+                     to<YAML, element_t>::template op<Opts>(glz::get<I>(value), ctx, b, ix);
+                  }
+               }
+            });
+         }
+      }
+   };
+
+   // Pairs (std::pair)
+   template <pair_t T>
+   struct to<YAML, T>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         const auto& [key, val] = value;
+
+         using first_type = typename std::remove_cvref_t<T>::first_type;
+         using second_type = typename std::remove_cvref_t<T>::second_type;
+
+         if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
+            // Flow style: {key: value}
+            if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
+               return;
+            }
+            dump('{', b, ix);
+
+            // Write key
+            if constexpr (str_t<first_type>) {
+               yaml::write_yaml_string<Opts>(sv{key}, ctx, b, ix);
+            }
+            else {
+               serialize<YAML>::op<yaml::flow_context_on<Opts>()>(key, ctx, b, ix);
+            }
+
+            dump(": ", b, ix);
+
+            // Write value
+            serialize<YAML>::op<yaml::flow_context_on<Opts>()>(val, ctx, b, ix);
+
+            dump('}', b, ix);
+         }
+         else {
+            // Block style: key: value
+            constexpr uint8_t indent_width = yaml::check_indent_width(yaml::yaml_opts{});
+            int32_t indent_level = 0;
+            if constexpr (requires { ctx.indent_level; }) {
+               indent_level = ctx.indent_level;
+            }
+
+            // Write indentation
+            const int32_t spaces = indent_level * indent_width;
+            if (!ensure_space(ctx, b, ix + spaces + 64)) [[unlikely]] {
+               return;
+            }
+            for (int32_t i = 0; i < spaces; ++i) {
+               b[ix++] = ' ';
+            }
+
+            // Write key
+            if constexpr (str_t<first_type>) {
+               yaml::write_yaml_string<Opts>(sv{key}, ctx, b, ix);
+            }
+            else {
+               serialize<YAML>::op<Opts>(key, ctx, b, ix);
+            }
+
+            dump(':', b, ix);
+
+            if constexpr (yaml::is_simple_type<second_type>()) {
+               dump(' ', b, ix);
+               serialize<YAML>::op<Opts>(val, ctx, b, ix);
+               dump('\n', b, ix);
+            }
+            else {
+               dump('\n', b, ix);
+               serialize<YAML>::op<Opts>(val, ctx, b, ix);
+            }
+         }
+      }
+   };
+
    namespace yaml
    {
       // Forward declaration for nested object helper

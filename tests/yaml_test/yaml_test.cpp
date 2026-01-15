@@ -5,6 +5,8 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include "glaze/yaml.hpp"
@@ -481,6 +483,138 @@ suite yaml_special_values_tests = [] {
       auto ec = glz::read_yaml(obj, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(std::isnan(obj.y));
+   };
+};
+
+suite yaml_tuple_tests = [] {
+   "write_tuple_flow"_test = [] {
+      std::tuple<int, double, std::string> t{42, 3.14, "hello"};
+      std::string buffer;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto ec = glz::write<opts>(t, buffer);
+      expect(!ec);
+      expect(buffer.find("[42") != std::string::npos);
+      expect(buffer.find("3.14") != std::string::npos);
+      expect(buffer.find("hello") != std::string::npos);
+   };
+
+   "write_tuple_block"_test = [] {
+      std::tuple<int, double, std::string> t{42, 3.14, "hello"};
+      std::string buffer;
+      auto ec = glz::write_yaml(t, buffer);
+      expect(!ec);
+      expect(buffer.find("- 42") != std::string::npos);
+      expect(buffer.find("- 3.14") != std::string::npos);
+      expect(buffer.find("- hello") != std::string::npos);
+   };
+
+   "read_tuple_flow"_test = [] {
+      std::string yaml = "[42, 3.14, hello]";
+      std::tuple<int, double, std::string> t{};
+      auto ec = glz::read_yaml(t, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::get<0>(t) == 42);
+      expect(std::abs(std::get<1>(t) - 3.14) < 0.001);
+      expect(std::get<2>(t) == "hello");
+   };
+
+   "read_tuple_block"_test = [] {
+      std::string yaml = R"(- 42
+- 3.14
+- hello)";
+      std::tuple<int, double, std::string> t{};
+      auto ec = glz::read_yaml(t, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::get<0>(t) == 42);
+      expect(std::abs(std::get<1>(t) - 3.14) < 0.001);
+      expect(std::get<2>(t) == "hello");
+   };
+
+   "roundtrip_tuple"_test = [] {
+      std::tuple<int, std::string, bool> original{123, "test", true};
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::tuple<int, std::string, bool> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::get<0>(parsed) == std::get<0>(original));
+      expect(std::get<1>(parsed) == std::get<1>(original));
+      expect(std::get<2>(parsed) == std::get<2>(original));
+   };
+};
+
+suite yaml_pair_tests = [] {
+   "write_pair_flow"_test = [] {
+      std::pair<std::string, int> p{"answer", 42};
+      std::string buffer;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto ec = glz::write<opts>(p, buffer);
+      expect(!ec);
+      expect(buffer.find("{answer: 42}") != std::string::npos);
+   };
+
+   "write_pair_block"_test = [] {
+      std::pair<std::string, int> p{"answer", 42};
+      std::string buffer;
+      auto ec = glz::write_yaml(p, buffer);
+      expect(!ec);
+      expect(buffer.find("answer: 42") != std::string::npos);
+   };
+
+   "read_pair_flow"_test = [] {
+      std::string yaml = "{answer: 42}";
+      std::pair<std::string, int> p{};
+      auto ec = glz::read_yaml(p, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(p.first == "answer");
+      expect(p.second == 42);
+   };
+
+   "read_pair_block"_test = [] {
+      std::string yaml = "answer: 42";
+      std::pair<std::string, int> p{};
+      auto ec = glz::read_yaml(p, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(p.first == "answer");
+      expect(p.second == 42);
+   };
+
+   "roundtrip_pair"_test = [] {
+      std::pair<std::string, double> original{"pi", 3.14159};
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::pair<std::string, double> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(parsed.first == original.first);
+      expect(std::abs(parsed.second - original.second) < 0.0001);
+   };
+
+   "read_pair_with_nested_value"_test = [] {
+      std::string yaml = "{key: [1, 2, 3]}";
+      std::pair<std::string, std::vector<int>> p{};
+      auto ec = glz::read_yaml(p, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(p.first == "key");
+      expect(p.second.size() == 3u);
+      expect(p.second[0] == 1);
+      expect(p.second[2] == 3);
+   };
+
+   "write_vector_of_pairs"_test = [] {
+      std::vector<std::pair<std::string, int>> vec{{"one", 1}, {"two", 2}};
+      std::string buffer;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto ec = glz::write<opts>(vec, buffer);
+      expect(!ec);
+      expect(buffer.find("one: 1") != std::string::npos);
+      expect(buffer.find("two: 2") != std::string::npos);
    };
 };
 
