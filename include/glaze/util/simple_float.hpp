@@ -51,7 +51,7 @@ namespace glz::simple_float
       // - Exponent must have at least one digit
       template <bool null_terminated>
       GLZ_ALWAYS_INLINE constexpr const char* parse_decimal_strict(const char* buf, const char* end,
-                                                                    decimal_number& out) noexcept
+                                                                   decimal_number& out) noexcept
       {
          const char* p = buf;
 
@@ -205,11 +205,11 @@ namespace glz::simple_float
          {0xC800000000000000ULL, 0x0000000000000000ULL, -123}, // 5^2
          {0x9C40000000000000ULL, 0x0000000000000000ULL, -118}, // 5^4
          {0xBEBC200000000000ULL, 0x0000000000000000ULL, -109}, // 5^8
-         {0x8E1BC9BF04000000ULL, 0x0000000000000000ULL, -90},  // 5^16
-         {0x9DC5ADA82B70B59DULL, 0xF020000000000000ULL, -53},  // 5^32
-         {0xC2781F49FFCFA6D5ULL, 0x3CBF6B71C76B25FBULL, 21},   // 5^64
-         {0x93BA47C980E98CDFULL, 0xC66F336C36B10137ULL, 170},  // 5^128
-         {0xAA7EEBFB9DF9DE8DULL, 0xDDBB901B98FEEAB8ULL, 467},  // 5^256
+         {0x8E1BC9BF04000000ULL, 0x0000000000000000ULL, -90}, // 5^16
+         {0x9DC5ADA82B70B59DULL, 0xF020000000000000ULL, -53}, // 5^32
+         {0xC2781F49FFCFA6D5ULL, 0x3CBF6B71C76B25FBULL, 21}, // 5^64
+         {0x93BA47C980E98CDFULL, 0xC66F336C36B10137ULL, 170}, // 5^128
+         {0xAA7EEBFB9DF9DE8DULL, 0xDDBB901B98FEEAB8ULL, 467}, // 5^256
       };
 
       // Negative powers: 5^(-(2^k)) normalized to 128 bits
@@ -943,15 +943,13 @@ namespace glz::simple_float
       // ============================================================================
 
       // Exact powers of 10 that fit in a double without rounding error
-      inline constexpr double exact_pow10[] = {
-         1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,
-         1e8,  1e9,  1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
-         1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22
-      };
+      inline constexpr double exact_pow10[] = {1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,  1e10, 1e11,
+                                               1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
 
       // Fast float parsing for common cases (small exponents, normal values)
       // Returns true if fast path succeeded, false if 128-bit path needed
-      GLZ_ALWAYS_INLINE bool try_fast_float_parse(uint64_t mantissa, int32_t exp10, bool negative, float& result) noexcept
+      GLZ_ALWAYS_INLINE bool try_fast_float_parse(uint64_t mantissa, int32_t exp10, bool negative,
+                                                  float& result) noexcept
       {
          // Fast path uses double precision arithmetic which has 53-bit mantissa.
          // For float (24-bit mantissa), this gives us ~29 bits of headroom for error.

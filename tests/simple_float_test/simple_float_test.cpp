@@ -4,6 +4,8 @@
 // Comprehensive tests for simple_float.hpp
 // Tests roundtrip correctness of simple_float implementations
 
+#include "glaze/util/simple_float.hpp"
+
 #include <atomic>
 #include <bit>
 #include <chrono>
@@ -23,7 +25,6 @@
 #include "glaze/glaze.hpp"
 #include "glaze/util/dtoa.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
-#include "glaze/util/simple_float.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -264,7 +265,8 @@ suite exhaustive_float_tests = [] {
       const uint64_t chunk_size = total_values / num_threads;
 
       // Thread-local results to avoid atomic contention
-      struct ThreadResult {
+      struct ThreadResult
+      {
          uint64_t passed{0};
          uint64_t skipped{0};
          uint32_t first_failure{UINT32_MAX};
@@ -337,8 +339,8 @@ suite exhaustive_float_tests = [] {
 
       std::cout << "Exhaustive float roundtrip: total=" << total_values << ", passed=" << total_passed
                 << ", skipped=" << total_skipped << std::endl;
-      std::cout << "Time: " << duration.count() << " ms ("
-                << (total_values * 1000 / (duration.count() + 1)) << " values/sec)" << std::endl;
+      std::cout << "Time: " << duration.count() << " ms (" << (total_values * 1000 / (duration.count() + 1))
+                << " values/sec)" << std::endl;
 
       if (failures > 0 && first_failure != UINT32_MAX) {
          float fail_value = bits_to_float(first_failure);
@@ -490,8 +492,8 @@ suite regression_tests = [] {
                ++passed;
             }
             else {
-               std::cerr << "Leading zeros roundtrip failure: " << input
-                         << " -> " << std::string_view(buf, buf_end - buf) << std::endl;
+               std::cerr << "Leading zeros roundtrip failure: " << input << " -> "
+                         << std::string_view(buf, buf_end - buf) << std::endl;
             }
          }
          else {
@@ -536,8 +538,8 @@ suite regression_tests = [] {
          else {
             char buf[64]{};
             char* end = glz::simple_float::to_chars(buf, value);
-            std::cerr << "Hard pattern failure: bits=0x" << std::hex << bits << std::dec
-                      << " value=" << value << " serialized=" << std::string_view(buf, end - buf) << std::endl;
+            std::cerr << "Hard pattern failure: bits=0x" << std::hex << bits << std::dec << " value=" << value
+                      << " serialized=" << std::string_view(buf, end - buf) << std::endl;
          }
       }
 
@@ -549,12 +551,8 @@ suite regression_tests = [] {
       // Test values where the 17th digit is exactly 5 (rounding boundary)
       // These require correct round-half-up behavior
       std::vector<const char*> boundary_cases = {
-         "1.2345678901234565e100",
-         "1.2345678901234565e-100",
-         "9.9999999999999995e200",
-         "1.0000000000000005e0",
-         "-1.2345678901234565e100",
-         "-9.9999999999999995e200",
+         "1.2345678901234565e100", "1.2345678901234565e-100", "9.9999999999999995e200",
+         "1.0000000000000005e0",   "-1.2345678901234565e100", "-9.9999999999999995e200",
       };
 
       int passed = 0;
@@ -604,7 +602,8 @@ suite regression_tests = [] {
          }
       }
 
-      std::cout << "Sequential doubles near critical regions: " << total_passed << "/" << total_tested << " passed" << std::endl;
+      std::cout << "Sequential doubles near critical regions: " << total_passed << "/" << total_tested << " passed"
+                << std::endl;
       expect(total_passed == total_tested);
    };
 };
@@ -654,8 +653,8 @@ suite subnormal_tests = [] {
          else {
             char buf[64]{};
             char* end = glz::simple_float::to_chars(buf, value);
-            std::cerr << "Subnormal failure: bits=0x" << std::hex << bits << std::dec
-                      << " value=" << value << " serialized=" << std::string_view(buf, end - buf) << std::endl;
+            std::cerr << "Subnormal failure: bits=0x" << std::hex << bits << std::dec << " value=" << value
+                      << " serialized=" << std::string_view(buf, end - buf) << std::endl;
          }
       }
 
@@ -822,8 +821,8 @@ suite edge_case_tests = [] {
 
    "common_fractions"_test = [] {
       // Test common fractions
-      std::vector<double> fractions = {0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9,
-                                       0.125, 0.375, 0.625, 0.875, 0.0625, 0.1875};
+      std::vector<double> fractions = {0.1, 0.2, 0.25,  0.3,   0.4,   0.5,   0.6,    0.7,   0.75,
+                                       0.8, 0.9, 0.125, 0.375, 0.625, 0.875, 0.0625, 0.1875};
       int passed = 0;
       for (double f : fractions) {
          if (test_roundtrip(f) && test_roundtrip(-f)) {
