@@ -22,6 +22,7 @@
 #include "glaze/json/skip.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
+#include "glaze/util/simple_float.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
 
@@ -706,7 +707,7 @@ namespace glz
       template <auto Opts>
       static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
-         if constexpr (Opts.quoted_num) {
+         if constexpr (check_quoted_num(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
@@ -770,7 +771,7 @@ namespace glz
             }
          }
 
-         if constexpr (Opts.quoted_num) {
+         if constexpr (check_quoted_num(Opts)) {
             if constexpr (not Opts.null_terminated) {
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
@@ -804,7 +805,7 @@ namespace glz
       template <auto Opts, class It>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
       {
-         if constexpr (Opts.quoted_num) {
+         if constexpr (check_quoted_num(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
@@ -854,26 +855,46 @@ namespace glz
                   // Hardware may interact with value changes, so we parse into a temporary and assign in one
                   // place
                   V temp;
-                  auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, temp);
-                  if (ec != std::errc()) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
+                  if constexpr (is_size_optimized(Opts)) {
+                     auto [ptr, ec] = simple_float::from_chars<Opts.null_terminated>(it, end, temp);
+                     if (ec != std::errc{}) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     it = ptr;
+                  }
+                  else {
+                     auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, temp);
+                     if (ec != std::errc()) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     it = ptr;
                   }
                   value = temp;
-                  it = ptr;
                }
                else {
-                  auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, value);
-                  if (ec != std::errc()) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
+                  if constexpr (is_size_optimized(Opts)) {
+                     auto [ptr, ec] = simple_float::from_chars<Opts.null_terminated>(it, end, value);
+                     if (ec != std::errc{}) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     it = ptr;
                   }
-                  it = ptr;
+                  else {
+                     auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, value);
+                     if (ec != std::errc()) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     it = ptr;
+                  }
                }
             }
          }
 
-         if constexpr (Opts.quoted_num) {
+         if constexpr (check_quoted_num(Opts)) {
             if constexpr (not Opts.null_terminated) {
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
@@ -909,7 +930,7 @@ namespace glz
          requires(check_is_padded(Opts))
       static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
-         if constexpr (Opts.number) {
+         if constexpr (check_string_as_number(Opts)) {
             auto start = it;
             skip_number<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -930,7 +951,7 @@ namespace glz
                }
             }
 
-            if constexpr (not Opts.raw_string) {
+            if constexpr (not check_raw_string(Opts)) {
                static constexpr auto string_padding_bytes = 8;
 
                auto start = it;
@@ -1050,7 +1071,7 @@ namespace glz
          requires(not check_is_padded(Opts))
       static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
-         if constexpr (Opts.number) {
+         if constexpr (check_string_as_number(Opts)) {
             auto start = it;
             skip_number<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -1075,7 +1096,7 @@ namespace glz
                }
             }
 
-            if constexpr (not Opts.raw_string) {
+            if constexpr (not check_raw_string(Opts)) {
                static constexpr auto string_padding_bytes = 8;
 
                if (size_t(end - it) >= 8) {
@@ -1339,7 +1360,7 @@ namespace glz
          requires(check_is_padded(Opts))
       static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
-         if constexpr (Opts.number) {
+         if constexpr (check_string_as_number(Opts)) {
             auto start = it;
             skip_number<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -1360,7 +1381,7 @@ namespace glz
                }
             }
 
-            if constexpr (not Opts.raw_string) {
+            if constexpr (not check_raw_string(Opts)) {
                static constexpr auto string_padding_bytes = 8;
 
                auto start = it;
@@ -1480,7 +1501,7 @@ namespace glz
          requires(not check_is_padded(Opts))
       static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
-         if constexpr (Opts.number) {
+         if constexpr (check_string_as_number(Opts)) {
             auto start = it;
             skip_number<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -1505,7 +1526,7 @@ namespace glz
                }
             }
 
-            if constexpr (not Opts.raw_string) {
+            if constexpr (not check_raw_string(Opts)) {
                static constexpr auto string_padding_bytes = 8;
 
                if (size_t(end - it) >= 8) {
@@ -3243,10 +3264,10 @@ namespace glz
                      }
                      else if constexpr (std::is_arithmetic_v<Key>) {
                         // prefer over quoted_t below to avoid double parsing of quoted_t
-                        parse<JSON>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
+                        parse<JSON>::op<opt_true<Opts, quoted_num_opt_tag{}>>(key_value, ctx, it, end);
                      }
                      else {
-                        parse<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<Key>{key_value}, ctx, it, end);
+                        parse<JSON>::op<opt_false<Opts, raw_string_opt_tag{}>>(quoted_t<Key>{key_value}, ctx, it, end);
                      }
                      if (bool(ctx.error)) [[unlikely]]
                         return;

@@ -38,6 +38,37 @@ namespace glz
 #define glaze_v7_0_0_write_function_pointers
 #define glaze_v7_0_0_depth
 
+// v7.0.0 moves additional options out of glz::opts to inheritable options pattern
+//
+// Options moved out of glz::opts (use custom opts struct or opt tags in glz::meta):
+// - 'quoted_num' - treat numbers as quoted strings
+// - 'raw_string' - skip escape sequence processing for strings
+// - 'structs_as_arrays' - serialize structs as arrays without field keys
+//
+// Options renamed AND moved out of glz::opts:
+// - 'raw' renamed to 'unquoted' - write string values without surrounding quotes
+// - 'number' renamed to 'string_as_number' - treat string types as numbers
+//
+// Wrapper aliases glz::raw and glz::number are deprecated (use glz::unquoted and glz::string_as_number)
+//
+// Migration for custom opts structs:
+//   // OLD:
+//   struct my_opts : glz::opts { bool raw = true; bool number = true; };
+//   // NEW:
+//   struct my_opts : glz::opts { bool unquoted = true; bool string_as_number = true; };
+//
+// New opt tags for glz::meta:
+// - glz::quoted_num_opt_tag
+// - glz::string_as_number_opt_tag (replaces number semantics)
+// - glz::unquoted_opt_tag (replaces raw semantics)
+// - glz::raw_string_opt_tag
+// - glz::structs_as_arrays_opt_tag
+#define glaze_v7_0_0_opts_quoted_num
+#define glaze_v7_0_0_opts_string_as_number
+#define glaze_v7_0_0_opts_unquoted
+#define glaze_v7_0_0_opts_raw_string
+#define glaze_v7_0_0_opts_structs_as_arrays
+
 // v6.5.0 unified error_ctx and streaming I/O support
 //
 // error_ctx struct:

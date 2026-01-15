@@ -532,7 +532,7 @@ namespace glz
       }
 
       template <auto Opts>
-         requires(Opts.structs_as_arrays == true)
+         requires(check_structs_as_arrays(Opts) == true)
       [[nodiscard]] static size_t op(auto&& value)
       {
          size_t result = 1; // generic_array tag
@@ -566,7 +566,7 @@ namespace glz
       }
 
       template <auto Options>
-         requires(Options.structs_as_arrays == false)
+         requires(check_structs_as_arrays(Options) == false)
       [[nodiscard]] static size_t op(auto&& value)
       {
          constexpr auto Opts = opening_handled_off<Options>();
@@ -798,6 +798,6 @@ namespace glz
    [[nodiscard]] size_t beve_size_untagged(T&& value)
    {
       return calculate_size<BEVE, std::remove_cvref_t<T>>::template op<
-         opt_true<set_beve<Opts>(), &opts::structs_as_arrays>>(std::forward<T>(value));
+         opt_true<set_beve<Opts>(), structs_as_arrays_opt_tag{}>>(std::forward<T>(value));
    }
 }

@@ -129,7 +129,7 @@ namespace glz
                                               &T::description, //
                                               &T::defaultValue, //
                                               &T::deprecated, //
-                                              raw<&T::examples>, //
+                                              unquoted<&T::examples>, //
                                               &T::readOnly, //
                                               &T::writeOnly, //
                                               &T::constant, //
@@ -289,7 +289,7 @@ struct glz::meta<glz::detail::schematic>
       &T::additionalProperties, //
       &T::defs, //
       &T::oneOf, //
-      raw<&T::examples>, //
+      unquoted<&T::examples>, //
       &T::required, //
       [](auto&& s) -> auto& { return s.attributes.title; }, //
       [](auto&& s) -> auto& { return s.attributes.description; }, //

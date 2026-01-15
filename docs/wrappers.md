@@ -10,8 +10,8 @@ glz::bools_as_numbers<&T::x> // Read and write booleans as numbers
 glz::cast<&T::x, CastType> // Casts a value to and from the CastType, which is parsed/serialized
 glz::quoted_num<&T::x> // Read and write numbers as strings
 glz::quoted<&T::x> // Read a value as a string and unescape, to avoid the user having to parse twice
-glz::number<&T::x> // Read a string as a number and writes the string as a number
-glz::raw<&T::x> // Write out string like types without quotes
+glz::string_as_number<&T::x> // Read a string as a number and writes the string as a number
+glz::unquoted<&T::x> // Write out string like types without quotes
 glz::raw_string<&T::string> // Do not decode/encode escaped characters for strings (improves read/write performance)
 glz::escaped<&T::string> // Opposite of glz::raw_string, it turns off this behavior
 glz::escape_bytes_t<T> // A wrapper type for local use to treat char array or vector as byte sequence to be fully escaped (prevents null termination truncation)
@@ -24,7 +24,7 @@ glz::max_length<&T::x, N> // Limits string length or array size to N when readin
 glz::partial_read<&T::x> // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
 glz::invoke<&T::func> // Invoke a std::function, lambda, or member function with n-arguments as an array input
-  
+
 glz::write_float32<&T::x> // Writes out numbers with a maximum precision of float32_t
 glz::write_float64<&T::x> // Writes out numbers with a maximum precision of float64_t
 glz::write_float_full<&T::x> // Writes out numbers with full precision (turns off higher level float precision wrappers)
@@ -37,7 +37,19 @@ glz::as_array<&T::member> // Treat a reflected/member-annotated type as a positi
 
 ## Associated glz::opts
 
-`glz::opts` is the compile time options struct passed to most of Glaze functions to configure read/write behavior. Often wrappers are associated with compile time options and can also be set via `glz::opts`. For example, the `glz::quoted_num` wrapper is associated with the `quoted_num` boolean in `glz::opts`.
+`glz::opts` is the compile time options struct passed to most of Glaze functions to configure read/write behavior. Many wrappers are associated with compile time options that can be set via a custom options struct inheriting from `glz::opts`.
+
+> [!NOTE]
+> Options like `quoted_num`, `string_as_number`, `unquoted`, `raw_string`, and `structs_as_arrays` are **inheritable options** - they are not part of the default `glz::opts` struct. To use them globally, add them to a custom options struct:
+> ```c++
+> struct my_opts : glz::opts {
+>    bool quoted_num = true;      // treat numbers as quoted strings
+>    bool string_as_number = true; // treat strings as numbers
+>    bool unquoted = true;         // write without quotes
+>    bool raw_string = true;       // skip escape processing
+>    bool structs_as_arrays = true; // serialize structs as arrays
+> };
+> ```
 
 ## append_arrays
 
@@ -156,7 +168,7 @@ When a cast-backed type is used as a key in a map (for example `std::map<MyId, T
 
 Read and write numbers as strings.
 
-Associated option: `glz::opts{.quoted_num = true};`
+Associated option: add `bool quoted_num = true;` to a custom options struct (for example, `struct quoted_num_opts : glz::opts { bool quoted_num = true; };`).
 
 ```c++
 struct foo {
@@ -263,11 +275,11 @@ expect(written ==
 );
 ```
 
-## number
+## string_as_number
 
 Read JSON numbers into strings and write strings as JSON numbers.
 
-Associated option: `glz::opts{.number = true};`
+Associated option: add `bool string_as_number = true;` to a custom options struct (for example, `struct string_as_number_opts : glz::opts { bool string_as_number = true; };`).
 
 ```c++
 struct numbers_as_strings
@@ -280,7 +292,7 @@ template <>
 struct glz::meta<numbers_as_strings>
 {
    using T = numbers_as_strings;
-   static constexpr auto value = object("x", glz::number<&T::x>, "y", glz::number<&T::y>);
+   static constexpr auto value = object("x", glz::string_as_number<&T::x>, "y", glz::string_as_number<&T::y>);
 };
 ```
 
@@ -298,34 +310,34 @@ glz::write_json(obj, output);
 expect(input == output);
 ```
 
-## raw
+## unquoted
 
 Write out string like types without quotes.
 
 > Useful for when a string is already in JSON format and doesn't need to be quoted.
 
-Associated option: `glz::opts{.raw = true};`
+Associated option: add `bool unquoted = true;` to a custom options struct (for example, `struct unquoted_opts : glz::opts { bool unquoted = true; };`).
 
 ```c++
-struct raw_struct
+struct unquoted_struct
 {
    std::string str{};
 };
 
 template <>
-struct glz::meta<raw_struct>
+struct glz::meta<unquoted_struct>
 {
-   using T = raw_struct;
-   static constexpr auto value = object("str", glz::raw<&T::str>);
+   using T = unquoted_struct;
+   static constexpr auto value = object("str", glz::unquoted<&T::str>);
 };
 ```
 
 In use:
 
 ```c++
-suite raw_test = [] {
-  raw_struct obj{.str = R"("Hello")"};
-  // quotes would have been escaped if str were not wrapped with raw
+suite unquoted_test = [] {
+  unquoted_struct obj{.str = R"("Hello")"};
+  // quotes would have been escaped if str were not wrapped with unquoted
   expect(glz::write_json(obj) == R"({"str":"Hello"})");
 };
 ```
@@ -336,7 +348,7 @@ Do not decode/encode escaped characters for strings (improves read/write perform
 
 > If your code does not care about decoding escaped characters or you know your input will never have escaped characters, this wrapper makes reading/writing that string faster.
 
-Associated option: `glz::opts{.raw_string = true};`
+Associated option: add `bool raw_string = true;` to a custom options struct (for example, `struct raw_string_opts : glz::opts { bool raw_string = true; };`).
 
 ```c++
 struct raw_stuff

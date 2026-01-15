@@ -100,41 +100,37 @@ namespace glz
       return t;
    }();
 
-   template <class T>
-   inline constexpr std::array<uint64_t, 256> peak_positive = [] {
-      constexpr auto peak{(std::numeric_limits<std::decay_t<T>>::max)()};
-      std::array<uint64_t, 256> t{};
-      t['0'] = (peak - 0) / 10;
-      t['1'] = (peak - 1) / 10;
-      t['2'] = (peak - 2) / 10;
-      t['3'] = (peak - 3) / 10;
-      t['4'] = (peak - 4) / 10;
-      t['5'] = (peak - 5) / 10;
-      t['6'] = (peak - 6) / 10;
-      t['7'] = (peak - 7) / 10;
-      t['8'] = (peak - 8) / 10;
-      t['9'] = (peak - 9) / 10;
-      return t;
-   }();
-
-   template <class T>
-   inline constexpr std::array<uint64_t, 256> peak_negative = [] {
-      constexpr auto peak{uint64_t((std::numeric_limits<std::decay_t<T>>::max)()) + 1};
-      std::array<uint64_t, 256> t{};
-      t['0'] = (peak - 0) / 10;
-      t['1'] = (peak - 1) / 10;
-      t['2'] = (peak - 2) / 10;
-      t['3'] = (peak - 3) / 10;
-      t['4'] = (peak - 4) / 10;
-      t['5'] = (peak - 5) / 10;
-      t['6'] = (peak - 6) / 10;
-      t['7'] = (peak - 7) / 10;
-      t['8'] = (peak - 8) / 10;
-      t['9'] = (peak - 9) / 10;
-      return t;
-   }();
-
    GLZ_ALWAYS_INLINE constexpr bool is_digit(const uint8_t c) noexcept { return c <= '9' && c >= '0'; }
+
+   // Computed overflow checks - used instead of lookup tables to save 4KB+ of binary size
+   // Uses adjusted threshold for branch-free single comparison (7-12% faster than bitwise approach)
+   template <class T>
+   GLZ_ALWAYS_INLINE constexpr bool would_overflow_positive(std::remove_volatile_t<T> v, uint8_t next_digit) noexcept
+   {
+      using U = std::remove_volatile_t<T>;
+      constexpr auto max_val = static_cast<uint64_t>((std::numeric_limits<U>::max)());
+      constexpr auto threshold = max_val / 10;
+      constexpr auto last_digit = max_val % 10;
+      const auto uv = static_cast<uint64_t>(v);
+      const auto digit = static_cast<uint64_t>(next_digit - '0');
+      // When digit > last_digit, effective threshold is one less
+      // This is branch-free and faster than bitwise OR/AND approach
+      return uv > (threshold - uint64_t(digit > last_digit));
+   }
+
+   template <class T>
+   GLZ_ALWAYS_INLINE constexpr bool would_overflow_negative(std::remove_volatile_t<T> v, uint8_t next_digit) noexcept
+   {
+      // For negative: max magnitude is max + 1 (e.g., -2147483648 for int32)
+      using U = std::remove_volatile_t<T>;
+      constexpr auto max_val = static_cast<uint64_t>((std::numeric_limits<U>::max)()) + 1;
+      constexpr auto threshold = max_val / 10;
+      constexpr auto last_digit = max_val % 10;
+      const auto uv = static_cast<uint64_t>(v);
+      const auto digit = static_cast<uint64_t>(next_digit - '0');
+      // When digit > last_digit, effective threshold is one less
+      return uv > (threshold - uint64_t(digit > last_digit));
+   }
 
    struct value128 final
    {
@@ -662,14 +658,14 @@ namespace glz
 
       if (is_digit(*c)) {
          if (sign) {
-            if (v > T(peak_negative<T>[*c])) [[unlikely]] {
+            if (would_overflow_negative<T>(v, *c)) [[unlikely]] {
                return {};
             }
             v = -1 * v;
             v = v * 10 - (*c - '0');
          }
          else {
-            if (v > T(peak_positive<T>[*c])) [[unlikely]] {
+            if (would_overflow_positive<T>(v, *c)) [[unlikely]] {
                return {};
             }
             v = v * 10 + (*c - '0');

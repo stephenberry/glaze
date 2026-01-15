@@ -146,6 +146,13 @@ add_subdirectory(msgpack_test)
 add_subdirectory(ostream_buffer_test)
 add_subdirectory(istream_buffer_test)
 
+# simple_float_test runs exhaustive tests over all 2^32 float values
+# Disabled by default - run via dedicated CI workflow in Release mode
+option(glaze_SIMPLE_FLOAT_TEST "Build simple_float exhaustive tests (slow, Release mode recommended)" OFF)
+if(glaze_SIMPLE_FLOAT_TEST)
+    add_subdirectory(simple_float_test)
+endif()
+
 # JSON Tests
 add_subdirectory(chrono_test)
 add_subdirectory(json_conformance)

@@ -698,7 +698,7 @@ namespace glz
 
          static constexpr auto O = write_unchecked_on<Opts>();
 
-         if constexpr (Opts.quoted_num) {
+         if constexpr (check_quoted_num(Opts)) {
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
             write_chars::op<O>(value, ctx, b, ix);
@@ -718,7 +718,7 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         if constexpr (Opts.number) {
+         if constexpr (check_string_as_number(Opts)) {
             const sv str = [&]() -> const sv {
                if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                   return value ? value : "";
@@ -736,7 +736,7 @@ namespace glz
             dump_maybe_empty<false>(str, b, ix);
          }
          else if constexpr (char_t<T>) {
-            if constexpr (Opts.raw) {
+            if constexpr (check_unquoted(Opts)) {
                dump(value, b, ix);
             }
             else {
@@ -778,7 +778,7 @@ namespace glz
             }
          }
          else {
-            if constexpr (Opts.raw_string) {
+            if constexpr (check_raw_string(Opts)) {
                const sv str = [&]() -> const sv {
                   if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                      return value ? value : "";
@@ -798,7 +798,7 @@ namespace glz
                }
                // now we don't have to check writing
 
-               if constexpr (not Opts.raw) {
+               if constexpr (not check_unquoted(Opts)) {
                   std::memcpy(&b[ix], "\"", 1);
                   ++ix;
                }
@@ -807,7 +807,7 @@ namespace glz
                   std::memcpy(&b[ix], str.data(), n);
                   ix += n;
                }
-               if constexpr (not Opts.raw) {
+               if constexpr (not check_unquoted(Opts)) {
                   std::memcpy(&b[ix], "\"", 1);
                   ++ix;
                }
@@ -918,7 +918,7 @@ namespace glz
                }
                // now we don't have to check writing
 
-               if constexpr (Opts.raw) {
+               if constexpr (check_unquoted(Opts)) {
                   if (n) {
                      std::memcpy(&b[ix], str.data(), n);
                      ix += n;
@@ -1099,11 +1099,11 @@ namespace glz
          if (!str.empty()) {
             // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
             // TODO: Could create a pre quoted map for better performance
-            if constexpr (not Opts.raw) {
+            if constexpr (not check_unquoted(Opts)) {
                dump('"', args...);
             }
             dump_maybe_empty(str, args...);
-            if constexpr (not Opts.raw) {
+            if constexpr (not check_unquoted(Opts)) {
                dump('"', args...);
             }
          }
@@ -1241,14 +1241,14 @@ namespace glz
    GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, B&& b, auto& ix)
    {
       if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || mimics_str_t<Key> || custom_str_t<Key> ||
-                    Opts.quoted_num) {
+                    check_quoted_num(Opts)) {
          to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
       }
       else if constexpr (num_t<Key>) {
-         serialize<JSON>::op<opt_true<Opts, &opts::quoted_num>>(key, ctx, b, ix);
+         serialize<JSON>::op<opt_true<Opts, quoted_num_opt_tag{}>>(key, ctx, b, ix);
       }
       else {
-         serialize<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, b, ix);
+         serialize<JSON>::op<opt_false<Opts, raw_string_opt_tag{}>>(quoted_t<const Key>{key}, ctx, b, ix);
       }
       if (bool(ctx.error)) [[unlikely]] {
          return;
@@ -2443,7 +2443,7 @@ namespace glz
             ix += N;
          };
 
-         if constexpr (not Opts.raw) {
+         if constexpr (not check_unquoted(Opts)) {
             b[ix++] = '"';
          }
          write_digits.template operator()<4>(static_cast<uint64_t>(yr));
@@ -2474,7 +2474,7 @@ namespace glz
          }
 
          b[ix++] = 'Z';
-         if constexpr (not Opts.raw) {
+         if constexpr (not check_unquoted(Opts)) {
             b[ix++] = '"';
          }
       }

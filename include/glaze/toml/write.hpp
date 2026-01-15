@@ -15,6 +15,7 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
 #include "glaze/util/parse.hpp"
+#include "glaze/util/variant.hpp"
 
 namespace glz
 {
@@ -64,6 +65,24 @@ namespace glz
       }
    };
 
+   // std::nullptr_t support for variants containing null types
+   // TOML doesn't have a native null type, so we write an empty string
+   // This is primarily used when serializing variants like glz::generic_json
+   template <>
+   struct to<TOML, std::nullptr_t>
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(std::nullptr_t, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         // Write empty string as placeholder for null
+         // Note: TOML doesn't support null natively
+         if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+         dump("\"\"", b, ix);
+      }
+   };
+
    template <boolean_like T>
    struct to<TOML, T>
    {
@@ -109,7 +128,7 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 32 + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         if constexpr (Opts.quoted_num) {
+         if constexpr (check_quoted_num(Opts)) {
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
             write_chars::op<Opts>(value, ctx, b, ix);
@@ -136,11 +155,11 @@ namespace glz
             if (!ensure_space(ctx, b, ix + str.size() + 3 + write_padding_bytes)) [[unlikely]] {
                return;
             }
-            if constexpr (not Opts.raw) {
+            if constexpr (not check_unquoted(Opts)) {
                dump('"', b, ix);
             }
             dump_maybe_empty(str, b, ix);
-            if constexpr (not Opts.raw) {
+            if constexpr (not check_unquoted(Opts)) {
                dump('"', b, ix);
             }
          }
@@ -418,7 +437,7 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         if constexpr (Opts.number) {
+         if constexpr (check_string_as_number(Opts)) {
             const sv str = [&]() -> const sv {
                if constexpr (char_t<T>) {
                   return sv{&value, 1};
@@ -436,7 +455,7 @@ namespace glz
             dump_maybe_empty(value, b, ix);
          }
          else if constexpr (char_t<T>) {
-            if constexpr (Opts.raw) {
+            if constexpr (check_unquoted(Opts)) {
                if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
                   return;
                }
@@ -465,7 +484,7 @@ namespace glz
             }
          }
          else {
-            if constexpr (Opts.raw_string) {
+            if constexpr (check_raw_string(Opts)) {
                const sv str = [&]() -> const sv {
                   if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                      return value ? value : "";
@@ -507,7 +526,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (Opts.raw) {
+               if constexpr (check_unquoted(Opts)) {
                   const auto n = str.size();
                   if (n) {
                      std::memcpy(&b[ix], str.data(), n);
@@ -1326,6 +1345,23 @@ namespace glz
             return;
          }
          dump<R"("")">(b, ix); // dump an empty string
+      }
+   };
+
+   // Variant support for TOML
+   // Serializes the active variant alternative using the appropriate TOML type
+   template <is_variant T>
+   struct to<TOML, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         std::visit(
+            [&](auto&& val) {
+               using V = std::decay_t<decltype(val)>;
+               to<TOML, V>::template op<Opts>(val, ctx, b, ix);
+            },
+            value);
       }
    };
 

@@ -2,6 +2,7 @@
 
 # HTTP Examples
 add_subdirectory(http_examples)
+add_subdirectory(http_server_post_test)
 
 # Networking Tests
 add_subdirectory(asio_repe)
