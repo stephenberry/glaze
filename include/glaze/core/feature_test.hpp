@@ -21,6 +21,19 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
+// v7.0.1 moves std::error_code integration to separate optional header
+//
+// The glaze_error_category struct, error_category global, and make_error_code() function
+// are now in <glaze/core/std_error_code.hpp> instead of being included by default.
+//
+// This reduces binary size by ~34KB for users who don't need std::error_code integration.
+// The overhead comes from the global error_category variable with std::error_category vtable
+// which forces a DATA segment with page alignment overhead.
+//
+// To restore std::error_code integration, include:
+//   #include <glaze/core/std_error_code.hpp>
+#define glaze_v7_0_1_std_error_code_header
+
 // v7.0.0 renames write_member_functions to write_function_pointers
 //
 // Options:

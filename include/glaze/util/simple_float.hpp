@@ -797,12 +797,10 @@ namespace glz::simple_float
       // Compute mantissa × 5^|q| using binary exponentiation
       // Returns 128-bit result (rh:rl) and binary exponent exp2
       // Value = (rh × 2^64 + rl) × 2^exp2
-      template <bool positive_exp>
-      GLZ_ALWAYS_INLINE constexpr void apply_pow5(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl,
-                                                  int32_t& exp2, bool& round_bit, bool& sticky_bit) noexcept
+      // Note: table parameter allows sharing code between positive/negative exponents
+      inline constexpr void apply_pow5_impl(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl, int32_t& exp2,
+                                            bool& round_bit, bool& sticky_bit, const pow5_128* table) noexcept
       {
-         const auto& table = positive_exp ? pow5_pos_table : pow5_neg_table;
-
          // Normalize mantissa to have MSB at bit 63 of rh
          // (rh:rl) = rh × 2^64 + rl, so with rl=0 and rh = mantissa << lz:
          // (rh:0) = (mantissa << lz) × 2^64 = mantissa × 2^(lz + 64)
@@ -903,7 +901,8 @@ namespace glz::simple_float
          }
          else {
             // Fall back to binary exponentiation for extreme exponents
-            apply_pow5<positive_exp>(mantissa, positive_exp ? q : -q, rh, rl, exp2, round_bit, sticky_bit);
+            apply_pow5_impl(mantissa, positive_exp ? q : -q, rh, rl, exp2, round_bit, sticky_bit,
+                            positive_exp ? pow5_pos_table : pow5_neg_table);
             exp2 += q; // Add 2^q factor for 10^q = 5^q * 2^q
          }
       }
@@ -1405,11 +1404,11 @@ namespace glz::simple_float
 #else
       // Fallback: pure binary exponentiation (slower but smaller)
       if (dec.exp10 >= 0) {
-         detail::apply_pow5<true>(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
+         detail::apply_pow5_impl(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit, detail::pow5_pos_table);
          exp2 += dec.exp10; // Add 2^exp10 factor
       }
       else {
-         detail::apply_pow5<false>(dec.mantissa, -dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
+         detail::apply_pow5_impl(dec.mantissa, -dec.exp10, rh, rl, exp2, round_bit, sticky_bit, detail::pow5_neg_table);
          exp2 += dec.exp10; // Subtract (exp10 is negative)
       }
 #endif
