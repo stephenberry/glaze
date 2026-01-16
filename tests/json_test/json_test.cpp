@@ -354,10 +354,7 @@ suite enum_tests = [] {
 // because values like 0 and 400,000,000 both hash to 0 with standard modular hash.
 // The fix adds a modular_shifted hash type that removes common trailing zeros before hashing.
 
-enum class SparseEnum : int {
-   Zero = 0,
-   FourHundredMillion = 400000000
-};
+enum class SparseEnum : int { Zero = 0, FourHundredMillion = 400000000 };
 
 template <>
 struct glz::meta<SparseEnum>
@@ -367,11 +364,7 @@ struct glz::meta<SparseEnum>
 };
 
 // Another sparse enum with values that have common factors
-enum class SparseEnumMillions : int {
-   A = 0,
-   B = 1000000,
-   C = 2000000
-};
+enum class SparseEnumMillions : int { A = 0, B = 1000000, C = 2000000 };
 
 template <>
 struct glz::meta<SparseEnumMillions>
@@ -381,11 +374,7 @@ struct glz::meta<SparseEnumMillions>
 };
 
 // Sparse enum with power-of-2 gaps (tests that standard modular still works when possible)
-enum class SparseEnumPow2 : int {
-   X = 1,
-   Y = 1024,
-   Z = 65536
-};
+enum class SparseEnumPow2 : int { X = 1, Y = 1024, Z = 65536 };
 
 template <>
 struct glz::meta<SparseEnumPow2>
