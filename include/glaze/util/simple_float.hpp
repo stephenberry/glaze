@@ -892,7 +892,6 @@ namespace glz::simple_float
 #ifdef __SIZEOF_INT128__
       // Hybrid pow5 application: uses compact table for common exponents, binary exp for extreme values
       // This gives O(1) performance for typical JSON numbers (exponents -16..+16) using 594 bytes
-      template <bool positive_exp>
       GLZ_ALWAYS_INLINE constexpr void apply_pow5_hybrid(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl,
                                                          int32_t& exp2, bool& round_bit, bool& sticky_bit) noexcept
       {
@@ -943,6 +942,7 @@ namespace glz::simple_float
          }
 
          // Binary exponentiation fallback for extreme exponents (outside -16..+16)
+         const bool positive_exp = q >= 0;
          apply_pow5_impl(mantissa, positive_exp ? q : -q, rh, rl, exp2, round_bit, sticky_bit,
                          positive_exp ? pow5_pos_table : pow5_neg_table);
          exp2 += q; // Add 2^q factor for 10^q = 5^q * 2^q
@@ -1435,12 +1435,7 @@ namespace glz::simple_float
       bool round_bit, sticky_bit;
 #ifdef __SIZEOF_INT128__
       // Hybrid approach: O(1) table lookup for common exponents (-16..+16), binary exp for extreme values
-      if (dec.exp10 >= 0) {
-         detail::apply_pow5_hybrid<true>(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
-      }
-      else {
-         detail::apply_pow5_hybrid<false>(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
-      }
+      detail::apply_pow5_hybrid(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
 #else
       // Fallback: pure binary exponentiation (slower but smaller, no __int128)
       if (dec.exp10 >= 0) {
