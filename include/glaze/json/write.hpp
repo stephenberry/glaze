@@ -854,7 +854,7 @@ namespace glz
                      return;
                   }
 
-                  if constexpr (not Opts.raw) {
+                  if constexpr (not check_raw_string(Opts)) {
                      b[ix] = '"';
                      ++ix;
                   }
@@ -892,7 +892,7 @@ namespace glz
                      }
                   }
 
-                  if constexpr (not Opts.raw) {
+                  if constexpr (not check_raw_string(Opts)) {
                      if (!ensure_and_flush(1)) [[unlikely]] {
                         return;
                      }

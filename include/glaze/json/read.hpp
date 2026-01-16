@@ -922,6 +922,380 @@ namespace glz
       }
    };
 
+   // ============================================================================
+   // Streaming String Parsing Support
+   // ============================================================================
+
+   // State for tracking partial escape sequences across buffer refills
+   struct string_streaming_state
+   {
+      uint8_t escape_bytes_pending = 0; // 0-12 bytes buffered
+      char escape_buffer[12]{}; // Max: \uD800\uDC00 (12 bytes)
+      bool in_escape = false;
+   };
+
+   // Refill the streaming buffer, updating iterators
+   // Returns true if data is available after refill
+   template <class Ctx>
+   GLZ_ALWAYS_INLINE bool refill_streaming_buffer(Ctx& ctx, const char*& it, const char*& end) noexcept
+   {
+      if constexpr (has_streaming_state<std::remove_cvref_t<Ctx>>) {
+         if (ctx.stream.enabled()) {
+            const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
+            const char* new_it;
+            const char* new_end;
+            ctx.stream.consume_and_refill(consumed, new_it, new_end);
+            it = new_it;
+            end = new_end;
+            return (it < end) || !ctx.stream.at_eof();
+         }
+      }
+      return false;
+   }
+
+   // Complete a partial escape sequence after buffer refill
+   // Returns: 0 = need more data, >0 = bytes written to output, -1 = error
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE int complete_escape_sequence(auto& value, is_context auto& ctx, const char*& it, const char* end,
+                                                  string_streaming_state& state) noexcept
+   {
+      // Continue filling escape buffer until we have a complete sequence
+      while (state.escape_bytes_pending < 12 && it < end) {
+         const char c = *it;
+
+         // Check for different escape types based on what we have
+         if (state.escape_bytes_pending == 1) {
+            // We have just '\', need the escape character
+            state.escape_buffer[1] = c;
+            state.escape_bytes_pending = 2;
+            ++it;
+
+            if (c != 'u') {
+               // Simple escape - complete
+               const char unescaped = char_unescape_table[uint8_t(c)];
+               if (unescaped == 0) [[unlikely]] {
+                  ctx.error = error_code::invalid_escape;
+                  return -1;
+               }
+               value.push_back(unescaped);
+               state.escape_bytes_pending = 0;
+               state.in_escape = false;
+               return 1;
+            }
+            // Unicode escape - need 4 hex digits
+            continue;
+         }
+
+         if (state.escape_bytes_pending >= 2 && state.escape_bytes_pending < 6) {
+            // Collecting hex digits for first \uXXXX
+            state.escape_buffer[state.escape_bytes_pending++] = c;
+            ++it;
+
+            if (state.escape_bytes_pending == 6) {
+               // Have full \uXXXX - check if it's a high surrogate
+               const uint32_t code = hex_to_u32(state.escape_buffer + 2);
+               if (code == 0xFFFFFFFFu) [[unlikely]] {
+                  ctx.error = error_code::u_requires_hex_digits;
+                  return -1;
+               }
+
+               // Check for surrogate
+               constexpr uint32_t generic_surrogate_mask = 0xF800;
+               constexpr uint32_t generic_surrogate_value = 0xD800;
+               constexpr uint32_t high_surrogate_mask = 0xFC00;
+               constexpr uint32_t high_surrogate_value = 0xD800;
+
+               if ((code & generic_surrogate_mask) == generic_surrogate_value) {
+                  // It's a surrogate - check if high
+                  if ((code & high_surrogate_mask) != high_surrogate_value) [[unlikely]] {
+                     ctx.error = error_code::unicode_escape_conversion_failure;
+                     return -1;
+                  }
+                  // High surrogate - need low surrogate, continue collecting
+                  continue;
+               }
+
+               // Not a surrogate - decode and output
+               char utf8_buf[4];
+               const uint32_t len = code_point_to_utf8(code, utf8_buf);
+               if (len == 0) [[unlikely]] {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return -1;
+               }
+               value.append(utf8_buf, len);
+               state.escape_bytes_pending = 0;
+               state.in_escape = false;
+               return static_cast<int>(len);
+            }
+            continue;
+         }
+
+         if (state.escape_bytes_pending >= 6 && state.escape_bytes_pending < 12) {
+            // Collecting second \uXXXX for surrogate pair
+            state.escape_buffer[state.escape_bytes_pending++] = c;
+            ++it;
+
+            if (state.escape_bytes_pending == 12) {
+               // Have full surrogate pair \uXXXX\uXXXX
+               // Verify format: positions 6-7 should be '\u'
+               if (state.escape_buffer[6] != '\\' || state.escape_buffer[7] != 'u') [[unlikely]] {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return -1;
+               }
+
+               const uint32_t high = hex_to_u32(state.escape_buffer + 2);
+               const uint32_t low = hex_to_u32(state.escape_buffer + 8);
+
+               if (high == 0xFFFFFFFFu || low == 0xFFFFFFFFu) [[unlikely]] {
+                  ctx.error = error_code::u_requires_hex_digits;
+                  return -1;
+               }
+
+               // Verify low surrogate
+               constexpr uint32_t low_surrogate_mask = 0xFC00;
+               constexpr uint32_t low_surrogate_value = 0xDC00;
+               if ((low & low_surrogate_mask) != low_surrogate_value) [[unlikely]] {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return -1;
+               }
+
+               // Decode surrogate pair
+               constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
+               constexpr uint32_t surrogate_codepoint_bits = 10;
+               constexpr uint32_t surrogate_codepoint_offset = 0x10000;
+
+               uint32_t code_point = (high & surrogate_codepoint_mask) << surrogate_codepoint_bits;
+               code_point |= (low & surrogate_codepoint_mask);
+               code_point += surrogate_codepoint_offset;
+
+               char utf8_buf[4];
+               const uint32_t len = code_point_to_utf8(code_point, utf8_buf);
+               if (len == 0) [[unlikely]] {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return -1;
+               }
+               value.append(utf8_buf, len);
+               state.escape_bytes_pending = 0;
+               state.in_escape = false;
+               return static_cast<int>(len);
+            }
+            continue;
+         }
+      }
+
+      // Need more data
+      return 0;
+   }
+
+   // Decode string content byte-by-byte (used near buffer boundaries)
+   // Returns: true = continue parsing, false = end of string or error
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE bool decode_byte_by_byte_streaming(auto& value, is_context auto& ctx, const char*& it,
+                                                        const char* end, string_streaming_state& state) noexcept
+   {
+      while (it < end) {
+         // First check if we have a partial escape to complete
+         if (state.in_escape) {
+            const int result = complete_escape_sequence<Opts>(value, ctx, it, end, state);
+            if (result < 0) {
+               return false; // Error
+            }
+            if (result == 0) {
+               return true; // Need refill
+            }
+            continue;
+         }
+
+         const char c = *it;
+
+         if (c == '"') {
+            // End of string
+            return false;
+         }
+
+         if ((static_cast<unsigned char>(c) < 0x20)) [[unlikely]] {
+            // Control character - not allowed unescaped
+            ctx.error = error_code::syntax_error;
+            return false;
+         }
+
+         if (c != '\\') {
+            // Regular character
+            value.push_back(c);
+            ++it;
+            continue;
+         }
+
+         // Start of escape sequence
+         ++it;
+         if (it >= end) {
+            // Backslash at buffer boundary - save state
+            state.escape_buffer[0] = '\\';
+            state.escape_bytes_pending = 1;
+            state.in_escape = true;
+            return true; // Need refill
+         }
+
+         const char escape_char = *it;
+         ++it;
+
+         if (escape_char == 'u') {
+            // Unicode escape - check if we have enough bytes
+            if (static_cast<size_t>(end - it) < 4) {
+               // Not enough bytes - save state
+               state.escape_buffer[0] = '\\';
+               state.escape_buffer[1] = 'u';
+               state.escape_bytes_pending = 2;
+               // Copy available hex digits
+               while (it < end && state.escape_bytes_pending < 6) {
+                  state.escape_buffer[state.escape_bytes_pending++] = *it++;
+               }
+               state.in_escape = true;
+               return true; // Need refill
+            }
+
+            // Have 4 hex digits available
+            const uint32_t code = hex_to_u32(it);
+            if (code == 0xFFFFFFFFu) [[unlikely]] {
+               ctx.error = error_code::u_requires_hex_digits;
+               return false;
+            }
+            it += 4;
+
+            // Check for surrogate
+            constexpr uint32_t generic_surrogate_mask = 0xF800;
+            constexpr uint32_t generic_surrogate_value = 0xD800;
+            constexpr uint32_t high_surrogate_mask = 0xFC00;
+            constexpr uint32_t high_surrogate_value = 0xD800;
+            constexpr uint32_t low_surrogate_mask = 0xFC00;
+            constexpr uint32_t low_surrogate_value = 0xDC00;
+
+            if ((code & generic_surrogate_mask) == generic_surrogate_value) {
+               // Surrogate detected
+               if ((code & high_surrogate_mask) != high_surrogate_value) [[unlikely]] {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return false;
+               }
+
+               // High surrogate - need low surrogate
+               if (static_cast<size_t>(end - it) < 6) {
+                  // Not enough for \uXXXX - save state
+                  state.escape_buffer[0] = '\\';
+                  state.escape_buffer[1] = 'u';
+                  // Encode high surrogate back to hex
+                  constexpr char hex_digits[] = "0123456789ABCDEF";
+                  state.escape_buffer[2] = hex_digits[(code >> 12) & 0xF];
+                  state.escape_buffer[3] = hex_digits[(code >> 8) & 0xF];
+                  state.escape_buffer[4] = hex_digits[(code >> 4) & 0xF];
+                  state.escape_buffer[5] = hex_digits[code & 0xF];
+                  state.escape_bytes_pending = 6;
+                  // Copy available bytes of \uXXXX
+                  while (it < end && state.escape_bytes_pending < 12) {
+                     state.escape_buffer[state.escape_bytes_pending++] = *it++;
+                  }
+                  state.in_escape = true;
+                  return true; // Need refill
+               }
+
+               // Have enough bytes - check for \u
+               if (it[0] != '\\' || it[1] != 'u') [[unlikely]] {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return false;
+               }
+               it += 2;
+
+               const uint32_t low = hex_to_u32(it);
+               if (low == 0xFFFFFFFFu) [[unlikely]] {
+                  ctx.error = error_code::u_requires_hex_digits;
+                  return false;
+               }
+               it += 4;
+
+               if ((low & low_surrogate_mask) != low_surrogate_value) [[unlikely]] {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return false;
+               }
+
+               // Decode surrogate pair
+               constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
+               constexpr uint32_t surrogate_codepoint_bits = 10;
+               constexpr uint32_t surrogate_codepoint_offset = 0x10000;
+
+               uint32_t code_point = (code & surrogate_codepoint_mask) << surrogate_codepoint_bits;
+               code_point |= (low & surrogate_codepoint_mask);
+               code_point += surrogate_codepoint_offset;
+
+               char utf8_buf[4];
+               const uint32_t len = code_point_to_utf8(code_point, utf8_buf);
+               value.append(utf8_buf, len);
+            }
+            else {
+               // Not a surrogate - simple BMP character
+               char utf8_buf[4];
+               const uint32_t len = code_point_to_utf8(code, utf8_buf);
+               value.append(utf8_buf, len);
+            }
+         }
+         else {
+            // Simple escape
+            const char unescaped = char_unescape_table[uint8_t(escape_char)];
+            if (unescaped == 0) [[unlikely]] {
+               ctx.error = error_code::invalid_escape;
+               return false;
+            }
+            value.push_back(unescaped);
+         }
+      }
+
+      return true; // Buffer exhausted, need refill
+   }
+
+   // Main streaming string parser
+   // Parses strings that may span multiple buffer refills
+   template <auto Opts, class T, class Ctx>
+   void parse_string_streaming(T& value, Ctx& ctx, const char*& it, const char*& end) noexcept
+   {
+      value.clear();
+      string_streaming_state state{};
+
+      // Main parsing loop
+      while (true) {
+         const size_t remaining = static_cast<size_t>(end - it);
+
+         // Refill when buffer is getting low (less than 16 bytes)
+         if (remaining < 16) {
+            if (!refill_streaming_buffer(ctx, it, end)) {
+               // No more data available
+               if (state.in_escape) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               // Check if we're at end of string
+               if (it < end && *it == '"') {
+                  ++it;
+                  return;
+               }
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
+
+         // Use byte-by-byte parsing (simpler, handles all edge cases)
+         // Could add SWAR fast path here for large chunks, but byte-by-byte
+         // is sufficient for streaming where I/O is the bottleneck
+         if (!decode_byte_by_byte_streaming<Opts>(value, ctx, it, end, state)) {
+            if (bool(ctx.error)) {
+               return;
+            }
+            // End of string found
+            ++it; // Skip closing quote
+            return;
+         }
+
+         // decode_byte_by_byte_streaming returned true = buffer exhausted, continue loop to refill
+      }
+   }
+
    template <class T>
       requires(string_t<T> && !u8str_t<T>)
    struct from<JSON, T>
@@ -1092,6 +1466,14 @@ namespace glz
                }
 
                if (match_invalid_end<'"', Opts>(ctx, it, end)) {
+                  return;
+               }
+            }
+
+            // Streaming string path - handles strings larger than buffer
+            if constexpr (has_streaming_state<std::remove_cvref_t<decltype(ctx)>>) {
+               if (ctx.stream.enabled()) {
+                  parse_string_streaming<Opts>(value, ctx, it, end);
                   return;
                }
             }
