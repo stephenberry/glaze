@@ -3,6 +3,11 @@
 
 // Optional std::error_code integration for glz::error_code
 // Include this header to enable implicit conversion from glz::error_code to std::error_code
+//
+// NOTE: Including this header adds ~34KB to binary size due to:
+// - The global error_category variable with std::error_category vtable
+// - This forces a DATA segment which incurs page alignment overhead
+// For size-constrained embedded systems, avoid including this header.
 
 #pragma once
 
