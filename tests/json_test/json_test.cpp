@@ -29,6 +29,7 @@
 #include "glaze/api/impl.hpp"
 #include "glaze/containers/flat_map.hpp"
 #include "glaze/core/feature_test.hpp"
+#include "glaze/core/std_error_code.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
 #include "glaze/hardware/volatile_array.hpp"
