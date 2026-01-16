@@ -798,9 +798,8 @@ namespace glz::simple_float
       // Returns 128-bit result (rh:rl) and binary exponent exp2
       // Value = (rh × 2^64 + rl) × 2^exp2
       // Note: table parameter allows sharing code between positive/negative exponents
-      inline constexpr void apply_pow5_impl(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl,
-                                            int32_t& exp2, bool& round_bit, bool& sticky_bit,
-                                            const pow5_128* table) noexcept
+      inline constexpr void apply_pow5_impl(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl, int32_t& exp2,
+                                            bool& round_bit, bool& sticky_bit, const pow5_128* table) noexcept
       {
          // Normalize mantissa to have MSB at bit 63 of rh
          // (rh:rl) = rh × 2^64 + rl, so with rl=0 and rh = mantissa << lz:
@@ -1405,13 +1404,11 @@ namespace glz::simple_float
 #else
       // Fallback: pure binary exponentiation (slower but smaller)
       if (dec.exp10 >= 0) {
-         detail::apply_pow5_impl(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit,
-                                  detail::pow5_pos_table);
+         detail::apply_pow5_impl(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit, detail::pow5_pos_table);
          exp2 += dec.exp10; // Add 2^exp10 factor
       }
       else {
-         detail::apply_pow5_impl(dec.mantissa, -dec.exp10, rh, rl, exp2, round_bit, sticky_bit,
-                                  detail::pow5_neg_table);
+         detail::apply_pow5_impl(dec.mantissa, -dec.exp10, rh, rl, exp2, round_bit, sticky_bit, detail::pow5_neg_table);
          exp2 += dec.exp10; // Subtract (exp10 is negative)
       }
 #endif

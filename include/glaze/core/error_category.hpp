@@ -158,4 +158,3 @@ struct glz::meta<glz::error_code>
                                      buffer_overflow, //
                                      invalid_length};
 };
-
