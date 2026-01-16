@@ -4,7 +4,7 @@
 #pragma once
 
 // Simple computational float parsing and serialization for size-optimized builds.
-// Uses minimal lookup tables (~660 bytes) instead of fast_float/Dragonbox (~20KB+).
+// Uses minimal lookup tables (~1KB) instead of fast_float/Dragonbox (~20KB+).
 // Trades some performance for dramatically smaller binary size.
 // Suitable for embedded systems and bare-metal environments.
 
@@ -185,8 +185,9 @@ namespace glz::simple_float
 
       // ============================================================================
       // 128-bit power-of-5 tables for exact decimal-to-binary conversion
-      // Uses binary exponentiation: 9 entries cover 5^1 to 5^256
-      // Total table size: 9 entries × 2 tables × 20 bytes = 360 bytes
+      // Base tables (9 entries each): used for binary exponentiation
+      // Compact tables (33 entries): O(1) lookup for exponents -16 to +16
+      // Total: base 432 bytes + compact 594 bytes = 1,026 bytes (parsing only)
       // ============================================================================
 
       // Normalized 128-bit representation of 5^(2^k)
@@ -322,26 +323,64 @@ namespace glz::simple_float
          return {static_cast<uint64_t>(mantissa >> 64), static_cast<uint64_t>(mantissa), exp};
       }
 
-      // Compact table bounds: covers -64 to +64 (129 entries, ~2.5KB)
-      inline constexpr int pow5_compact_min = -64;
-      inline constexpr int pow5_compact_max = 64;
+      // Compact table bounds: covers -16 to +16 (33 entries, 594 bytes total)
+      // This range handles typical JSON numbers while using minimal memory.
+      // Falls back to binary exponentiation for exponents outside this range.
+      inline constexpr int pow5_compact_min = -16;
+      inline constexpr int pow5_compact_max = 16;
       inline constexpr int pow5_compact_size = pow5_compact_max - pow5_compact_min + 1;
 
-      // Generate compact table at compile time
-      inline constexpr auto make_pow5_compact_table() noexcept
+      // Generate separate arrays at compile time for better alignment:
+      // - pow5_hi: high 64 bits of 128-bit mantissa
+      // - pow5_lo: low 64 bits of 128-bit mantissa (needed for double precision)
+      // - pow5_exp: binary exponent (int16_t is sufficient for range -164 to +89)
+      // Total: 33 × 8 + 33 × 8 + 33 × 2 = 264 + 264 + 66 = 594 bytes
+
+      inline constexpr auto make_pow5_hi_table() noexcept
       {
          struct table_type
          {
-            pow5_128 entries[pow5_compact_size];
+            uint64_t entries[pow5_compact_size];
          };
          table_type result{};
          for (int i = 0; i < pow5_compact_size; ++i) {
-            result.entries[i] = compute_pow5_entry(pow5_compact_min + i);
+            auto entry = compute_pow5_entry(pow5_compact_min + i);
+            result.entries[i] = entry.hi;
          }
          return result;
       }
 
-      inline constexpr auto pow5_compact_table = make_pow5_compact_table();
+      inline constexpr auto make_pow5_lo_table() noexcept
+      {
+         struct table_type
+         {
+            uint64_t entries[pow5_compact_size];
+         };
+         table_type result{};
+         for (int i = 0; i < pow5_compact_size; ++i) {
+            auto entry = compute_pow5_entry(pow5_compact_min + i);
+            result.entries[i] = entry.lo;
+         }
+         return result;
+      }
+
+      inline constexpr auto make_pow5_exp_table() noexcept
+      {
+         struct table_type
+         {
+            int16_t entries[pow5_compact_size];
+         };
+         table_type result{};
+         for (int i = 0; i < pow5_compact_size; ++i) {
+            auto entry = compute_pow5_entry(pow5_compact_min + i);
+            result.entries[i] = static_cast<int16_t>(entry.exp);
+         }
+         return result;
+      }
+
+      inline constexpr auto pow5_hi_table = make_pow5_hi_table();
+      inline constexpr auto pow5_lo_table = make_pow5_lo_table();
+      inline constexpr auto pow5_exp_table = make_pow5_exp_table();
 
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
@@ -852,27 +891,28 @@ namespace glz::simple_float
 
 #ifdef __SIZEOF_INT128__
       // Hybrid pow5 application: uses compact table for common exponents, binary exp for extreme values
-      // This gives O(1) performance for ~85% of typical JSON numbers while using only 2.5KB
-      template <bool positive_exp>
+      // This gives O(1) performance for typical JSON numbers (exponents -16..+16) using 594 bytes
       GLZ_ALWAYS_INLINE constexpr void apply_pow5_hybrid(uint64_t mantissa, int32_t q, uint64_t& rh, uint64_t& rl,
                                                          int32_t& exp2, bool& round_bit, bool& sticky_bit) noexcept
       {
-         const int32_t lookup_q = q;
-
-         // Check if we can use the compact table
-         if (lookup_q >= pow5_compact_min && lookup_q <= pow5_compact_max) {
-            // O(1) direct lookup from compact table
-            const auto& p = pow5_compact_table.entries[lookup_q - pow5_compact_min];
+         // Check if we can use the compact table (exponents -16 to +16)
+         if (q >= pow5_compact_min && q <= pow5_compact_max) {
+            // O(1) direct lookup from separate hi/lo/exp arrays
+            const int idx = q - pow5_compact_min;
+            const uint64_t p_hi = pow5_hi_table.entries[idx];
+            const uint64_t p_lo = pow5_lo_table.entries[idx];
+            const int32_t p_exp = pow5_exp_table.entries[idx];
 
             // Normalize mantissa to have MSB at bit 63
             int lz = clz64(mantissa);
             uint64_t norm_mantissa = mantissa << lz;
             int32_t mantissa_exp = -lz;
 
-            // Multiply: norm_mantissa (64-bit) × p (128-bit) = 192-bit result
+            // Multiply: norm_mantissa (64-bit) × (p_hi:p_lo) (128-bit) = 192-bit result
+            // We keep the high 128 bits for maximum precision
             uint64_t ph_hi, ph_lo, pl_hi, pl_lo;
-            mul64(norm_mantissa, p.hi, ph_hi, ph_lo);
-            mul64(norm_mantissa, p.lo, pl_hi, pl_lo);
+            mul64(norm_mantissa, p_hi, ph_hi, ph_lo);
+            mul64(norm_mantissa, p_lo, pl_hi, pl_lo);
 
             // Add pl_hi to ph_lo with carry
             uint64_t sum_lo = ph_lo + pl_hi;
@@ -883,7 +923,7 @@ namespace glz::simple_float
             rl = sum_lo;
 
             // Compute exponent
-            exp2 = mantissa_exp + p.exp + 64 + q;
+            exp2 = mantissa_exp + p_exp + 64 + q;
 
             // Rounding info from discarded pl_lo
             round_bit = (pl_lo >> 63) != 0;
@@ -898,13 +938,14 @@ namespace glz::simple_float
                   exp2 -= nlz;
                }
             }
+            return;
          }
-         else {
-            // Fall back to binary exponentiation for extreme exponents
-            apply_pow5_impl(mantissa, positive_exp ? q : -q, rh, rl, exp2, round_bit, sticky_bit,
-                            positive_exp ? pow5_pos_table : pow5_neg_table);
-            exp2 += q; // Add 2^q factor for 10^q = 5^q * 2^q
-         }
+
+         // Binary exponentiation fallback for extreme exponents (outside -16..+16)
+         const bool positive_exp = q >= 0;
+         apply_pow5_impl(mantissa, positive_exp ? q : -q, rh, rl, exp2, round_bit, sticky_bit,
+                         positive_exp ? pow5_pos_table : pow5_neg_table);
+         exp2 += q; // Add 2^q factor for 10^q = 5^q * 2^q
       }
 #endif
 
@@ -1393,23 +1434,17 @@ namespace glz::simple_float
       int32_t exp2;
       bool round_bit, sticky_bit;
 #ifdef __SIZEOF_INT128__
-      // Hybrid approach: O(1) table lookup for common exponents, binary exp for extreme values
-      // Uses ~2.5KB compact table covering exponents -64 to +64 (~85% of typical JSON numbers)
-      if (dec.exp10 >= 0) {
-         detail::apply_pow5_hybrid<true>(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
-      }
-      else {
-         detail::apply_pow5_hybrid<false>(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
-      }
+      // Hybrid approach: O(1) table lookup for common exponents (-16..+16), binary exp for extreme values
+      detail::apply_pow5_hybrid(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit);
 #else
-      // Fallback: pure binary exponentiation (slower but smaller)
+      // Fallback: pure binary exponentiation (slower but smaller, no __int128)
       if (dec.exp10 >= 0) {
          detail::apply_pow5_impl(dec.mantissa, dec.exp10, rh, rl, exp2, round_bit, sticky_bit, detail::pow5_pos_table);
-         exp2 += dec.exp10; // Add 2^exp10 factor
+         exp2 += dec.exp10;
       }
       else {
          detail::apply_pow5_impl(dec.mantissa, -dec.exp10, rh, rl, exp2, round_bit, sticky_bit, detail::pow5_neg_table);
-         exp2 += dec.exp10; // Subtract (exp10 is negative)
+         exp2 += dec.exp10;
       }
 #endif
 
