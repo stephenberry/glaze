@@ -1538,9 +1538,9 @@ namespace glz
          if (value) {
             if constexpr (!std::is_void_v<decltype(*value)>) {
                serialize<JSON>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
-            } else {
-               dump('{',  std::forward<Args>(args)...);
-               dump('}',  std::forward<Args>(args)...);
+            }
+            else {
+               dump("{}", std::forward<Args>(args)...);
             }
          }
          else {

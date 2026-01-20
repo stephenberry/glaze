@@ -4432,7 +4432,7 @@ namespace glz
          }
          else {
             // this is not an object and therefore cannot be an unexpected value
-           parse_val();
+            parse_val();
          }
       }
    };

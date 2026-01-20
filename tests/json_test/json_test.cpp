@@ -10561,7 +10561,7 @@ suite expected_tests = [] {
       expect(not glz::write_json(obj, s));
       expect(s == R"({"unexpected":42})") << s;
 
-      obj.emplace();;
+      obj.emplace();
       expect(!glz::read_json(obj, s));
       expect(!obj);
       expect(obj.error() == 42);
