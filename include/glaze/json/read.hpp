@@ -4353,6 +4353,21 @@ namespace glz
             }
          }
 
+         auto parse_val = [&] {
+            if constexpr (!std::is_void_v<decltype(*value)>) {
+               if (value) {
+                  parse<JSON>::op<Opts>(*value, ctx, it, end);
+               }
+               else {
+                  value.emplace();
+                  parse<JSON>::op<Opts>(*value, ctx, it, end);
+               }
+            }
+            else {
+               value.emplace();
+            }
+         };
+
          if (*it == '{') {
             if constexpr (not Opts.null_terminated) {
                ++ctx.depth;
@@ -4371,13 +4386,7 @@ namespace glz
             if (*it == '}') {
                it = start;
                // empty object
-               if (value) {
-                  parse<JSON>::op<Opts>(*value, ctx, it, end);
-               }
-               else {
-                  value.emplace();
-                  parse<JSON>::op<Opts>(*value, ctx, it, end);
-               }
+               parse_val();
             }
             else {
                // either we have an unexpected value or we are decoding an object
@@ -4417,25 +4426,13 @@ namespace glz
                }
                else {
                   it = start;
-                  if (value) {
-                     parse<JSON>::op<Opts>(*value, ctx, it, end);
-                  }
-                  else {
-                     value.emplace();
-                     parse<JSON>::op<Opts>(*value, ctx, it, end);
-                  }
+                  parse_val();
                }
             }
          }
          else {
             // this is not an object and therefore cannot be an unexpected value
-            if (value) {
-               parse<JSON>::op<Opts>(*value, ctx, it, end);
-            }
-            else {
-               value.emplace();
-               parse<JSON>::op<Opts>(*value, ctx, it, end);
-            }
+           parse_val();
          }
       }
    };

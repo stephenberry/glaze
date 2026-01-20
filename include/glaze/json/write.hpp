@@ -1536,7 +1536,12 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          if (value) {
-            serialize<JSON>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+            if constexpr (!std::is_void_v<decltype(*value)>) {
+               serialize<JSON>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+            } else {
+               dump('{',  std::forward<Args>(args)...);
+               dump('}',  std::forward<Args>(args)...);
+            }
          }
          else {
             serialize<JSON>::op<Opts>(unexpected_wrapper{&value.error()}, ctx, std::forward<Args>(args)...);
