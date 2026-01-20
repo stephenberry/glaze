@@ -4354,7 +4354,7 @@ namespace glz
          }
 
          auto parse_val = [&] {
-            if constexpr (!std::is_void_v<decltype(*value)>) {
+            if constexpr (not std::is_void_v<decltype(*value)>) {
                if (value) {
                   parse<JSON>::op<Opts>(*value, ctx, it, end);
                }

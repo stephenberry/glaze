@@ -1536,7 +1536,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          if (value) {
-            if constexpr (!std::is_void_v<decltype(*value)>) {
+            if constexpr (not std::is_void_v<decltype(*value)>) {
                serialize<JSON>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
             }
             else {
