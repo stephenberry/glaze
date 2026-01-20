@@ -722,7 +722,10 @@ namespace glz
 
       auto ensure_and_flush = [&](size_t needed) -> bool {
          if (ix + needed > buffer_traits<buffer_t>::capacity(b)) {
-            buffer_traits<buffer_t>::flush(b, ix);
+            buffer_traits<buffer_t>::flush(b, ix, ctx);
+            if (bool(ctx.error)) [[unlikely]] {
+               return false;
+            }
             if (ix + needed > buffer_traits<buffer_t>::capacity(b)) {
                ctx.error = error_code::buffer_overflow;
                return false;

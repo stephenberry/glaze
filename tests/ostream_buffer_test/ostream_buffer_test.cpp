@@ -1091,6 +1091,44 @@ suite bounded_ostream_buffer_tests = [] {
       expect(!parse_ec);
       expect(parsed == nested);
    };
+
+   "bounded_ostream_buffer stream error detection"_test = [] {
+      // Create a stream that will fail after some writes
+      class failing_streambuf : public std::streambuf
+      {
+         size_t bytes_written_ = 0;
+         size_t fail_after_;
+
+        public:
+         failing_streambuf(size_t fail_after) : fail_after_(fail_after) {}
+
+        protected:
+         std::streamsize xsputn(const char*, std::streamsize n) override
+         {
+            if (bytes_written_ + static_cast<size_t>(n) > fail_after_) {
+               return 0; // Simulate write failure
+            }
+            bytes_written_ += static_cast<size_t>(n);
+            return n;
+         }
+
+         int overflow(int) override { return EOF; }
+      };
+
+      // Create stream that fails after 100 bytes
+      failing_streambuf sbuf(100);
+      std::ostream failing_stream(&sbuf);
+
+      glz::bounded_ostream_buffer<std::ostream, 512> buf{failing_stream};
+
+      // Try to write a large string that will trigger flush and fail
+      LargeStringObject obj{.large_string = std::string(2000, 'x')};
+
+      auto ec = glz::write_json(obj, buf);
+
+      // Should detect the stream write error
+      expect(ec.ec == glz::error_code::send_error) << "Expected send_error, got: " << static_cast<int>(ec.ec);
+   };
 };
 
 // ============================================================================

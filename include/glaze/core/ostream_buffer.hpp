@@ -263,26 +263,36 @@ namespace glz
       void resize(size_t new_size) noexcept { logical_size_ = new_size; }
 
       // Final flush - called by buffer_traits::finalize()
-      void finalize(size_t total_written)
+      // Returns true on success, false if stream write failed
+      bool finalize(size_t total_written)
       {
          if (total_written > flush_offset_ && stream_) {
             const size_t to_flush = total_written - flush_offset_;
             stream_->write(buffer_.data(), static_cast<std::streamsize>(to_flush));
+            if (stream_->fail()) [[unlikely]] {
+               return false;
+            }
             flush_offset_ = total_written;
          }
+         return true;
       }
 
       // Flush all pending data and reset buffer position
       // After flush, capacity increases by the amount flushed
-      void flush(size_t written_so_far)
+      // Returns true on success, false if stream write failed
+      bool flush(size_t written_so_far)
       {
          if (written_so_far > flush_offset_ && stream_) {
             const size_t to_flush = written_so_far - flush_offset_;
             stream_->write(buffer_.data(), static_cast<std::streamsize>(to_flush));
+            if (stream_->fail()) [[unlikely]] {
+               return false;
+            }
             flush_offset_ = written_so_far;
             // Update logical size to reflect new capacity from current position
             logical_size_ = flush_offset_ + Capacity;
          }
+         return true;
       }
 
       // Reset for reuse
@@ -338,19 +348,37 @@ namespace glz
       GLZ_ALWAYS_INLINE static bool ensure_capacity(bounded_ostream_buffer<Stream, N>& b, size_t needed)
       {
          if (needed > capacity(b)) {
-            // Try flushing to make room
-            // This is a fallback; ideally flush is called explicitly at safe points
+            // Cannot grow beyond capacity. Callers must flush at safe points
+            // (between array elements, object fields) to make room.
             return false;
          }
          return true;
       }
 
+      // Basic finalize without error reporting (for backward compatibility)
       GLZ_ALWAYS_INLINE static void finalize(bounded_ostream_buffer<Stream, N>& b, size_t written)
       {
          b.finalize(written);
       }
 
+      // Context-aware finalize that reports stream errors through ctx.error
+      GLZ_ALWAYS_INLINE static void finalize(bounded_ostream_buffer<Stream, N>& b, size_t written, is_context auto& ctx)
+      {
+         if (!b.finalize(written)) [[unlikely]] {
+            ctx.error = error_code::send_error;
+         }
+      }
+
+      // Basic flush without error reporting (for backward compatibility)
       GLZ_ALWAYS_INLINE static void flush(bounded_ostream_buffer<Stream, N>& b, size_t written) { b.flush(written); }
+
+      // Context-aware flush that reports stream errors through ctx.error
+      GLZ_ALWAYS_INLINE static void flush(bounded_ostream_buffer<Stream, N>& b, size_t written, is_context auto& ctx)
+      {
+         if (!b.flush(written)) [[unlikely]] {
+            ctx.error = error_code::send_error;
+         }
+      }
    };
 
 } // namespace glz

@@ -926,6 +926,11 @@ namespace glz
    // Streaming String Parsing Support
    // ============================================================================
 
+   // Minimum bytes remaining before triggering a buffer refill.
+   // Must be large enough for the longest escape sequence: surrogate pair \uXXXX\uXXXX (12 bytes)
+   // plus some margin for lookahead. 16 is a convenient power of 2.
+   inline constexpr size_t streaming_refill_threshold = 16;
+
    // State for tracking partial escape sequences across buffer refills
    struct string_streaming_state
    {
@@ -999,15 +1004,11 @@ namespace glz
                   return -1;
                }
 
-               // Check for surrogate
-               constexpr uint32_t generic_surrogate_mask = 0xF800;
-               constexpr uint32_t generic_surrogate_value = 0xD800;
-               constexpr uint32_t high_surrogate_mask = 0xFC00;
-               constexpr uint32_t high_surrogate_value = 0xD800;
-
+               // Check for surrogate (using constants from glaze/util/parse.hpp)
+               using namespace unicode;
                if ((code & generic_surrogate_mask) == generic_surrogate_value) {
                   // It's a surrogate - check if high
-                  if ((code & high_surrogate_mask) != high_surrogate_value) [[unlikely]] {
+                  if ((code & surrogate_mask) != high_surrogate_value) [[unlikely]] {
                      ctx.error = error_code::unicode_escape_conversion_failure;
                      return -1;
                   }
@@ -1051,19 +1052,14 @@ namespace glz
                   return -1;
                }
 
-               // Verify low surrogate
-               constexpr uint32_t low_surrogate_mask = 0xFC00;
-               constexpr uint32_t low_surrogate_value = 0xDC00;
-               if ((low & low_surrogate_mask) != low_surrogate_value) [[unlikely]] {
+               // Verify low surrogate (using constants from glaze/util/parse.hpp)
+               using namespace unicode;
+               if ((low & surrogate_mask) != low_surrogate_value) [[unlikely]] {
                   ctx.error = error_code::unicode_escape_conversion_failure;
                   return -1;
                }
 
                // Decode surrogate pair
-               constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
-               constexpr uint32_t surrogate_codepoint_bits = 10;
-               constexpr uint32_t surrogate_codepoint_offset = 0x10000;
-
                uint32_t code_point = (high & surrogate_codepoint_mask) << surrogate_codepoint_bits;
                code_point |= (low & surrogate_codepoint_mask);
                code_point += surrogate_codepoint_offset;
@@ -1162,17 +1158,11 @@ namespace glz
             }
             it += 4;
 
-            // Check for surrogate
-            constexpr uint32_t generic_surrogate_mask = 0xF800;
-            constexpr uint32_t generic_surrogate_value = 0xD800;
-            constexpr uint32_t high_surrogate_mask = 0xFC00;
-            constexpr uint32_t high_surrogate_value = 0xD800;
-            constexpr uint32_t low_surrogate_mask = 0xFC00;
-            constexpr uint32_t low_surrogate_value = 0xDC00;
-
+            // Check for surrogate (using constants from glaze/util/parse.hpp)
+            using namespace unicode;
             if ((code & generic_surrogate_mask) == generic_surrogate_value) {
                // Surrogate detected
-               if ((code & high_surrogate_mask) != high_surrogate_value) [[unlikely]] {
+               if ((code & surrogate_mask) != high_surrogate_value) [[unlikely]] {
                   ctx.error = error_code::unicode_escape_conversion_failure;
                   return false;
                }
@@ -1211,16 +1201,12 @@ namespace glz
                }
                it += 4;
 
-               if ((low & low_surrogate_mask) != low_surrogate_value) [[unlikely]] {
+               if ((low & surrogate_mask) != low_surrogate_value) [[unlikely]] {
                   ctx.error = error_code::unicode_escape_conversion_failure;
                   return false;
                }
 
                // Decode surrogate pair
-               constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
-               constexpr uint32_t surrogate_codepoint_bits = 10;
-               constexpr uint32_t surrogate_codepoint_offset = 0x10000;
-
                uint32_t code_point = (code & surrogate_codepoint_mask) << surrogate_codepoint_bits;
                code_point |= (low & surrogate_codepoint_mask);
                code_point += surrogate_codepoint_offset;
@@ -1262,8 +1248,8 @@ namespace glz
       while (true) {
          const size_t remaining = static_cast<size_t>(end - it);
 
-         // Refill when buffer is getting low (less than 16 bytes)
-         if (remaining < 16) {
+         // Refill when buffer is getting low
+         if (remaining < streaming_refill_threshold) {
             if (!refill_streaming_buffer(ctx, it, end)) {
                // No more data available
                if (state.in_escape) {
