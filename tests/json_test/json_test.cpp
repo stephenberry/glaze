@@ -10550,6 +10550,26 @@ suite expected_tests = [] {
       expect(bool(obj));
       expect(obj.value() == "hello");
    };
+
+   "expected<void, int>"_test = [] {
+      glz::expected<void, int> obj{};
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == "{}") << s;
+
+      obj = glz::unexpected(42);
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"unexpected":42})") << s;
+
+      obj.emplace();
+      expect(!glz::read_json(obj, s));
+      expect(!obj);
+      expect(obj.error() == 42);
+
+      s = "{}";
+      expect(!glz::read_json(obj, s));
+      expect(bool(obj));
+   };
 };
 
 struct custom_struct
