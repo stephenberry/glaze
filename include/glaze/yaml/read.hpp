@@ -1162,6 +1162,8 @@ namespace glz
       template <auto Opts, class T, class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_flow_sequence(T&& value, Ctx& ctx, It& it, End end)
       {
+         using V = std::remove_cvref_t<T>;
+
          if (it == end || *it != '[') [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -1176,42 +1178,91 @@ namespace glz
             return;
          }
 
-         while (it != end) {
-            skip_inline_ws(it, end);
+         using value_type = typename V::value_type;
 
-            using value_type = typename std::remove_cvref_t<T>::value_type;
+         if constexpr (emplace_backable<V>) {
+            // Resizable containers (vector, deque, list)
+            while (it != end) {
+               skip_inline_ws(it, end);
 
-            if constexpr (emplace_backable<std::remove_cvref_t<T>>) {
                auto& element = value.emplace_back();
                from<YAML, value_type>::template op<flow_context_on<Opts>()>(element, ctx, it, end);
-            }
-            else {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
 
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
 
-            skip_inline_ws(it, end);
-
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-
-            if (*it == ']') {
-               ++it;
-               return;
-            }
-            else if (*it == ',') {
-               ++it;
                skip_inline_ws(it, end);
+
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if (*it == ']') {
+                  ++it;
+                  return;
+               }
+               else if (*it == ',') {
+                  ++it;
+                  skip_inline_ws(it, end);
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
             }
-            else {
-               ctx.error = error_code::syntax_error;
-               return;
+         }
+         else if constexpr (!resizable<V>) {
+            // Fixed-size containers (std::array)
+            const auto n = value.size();
+            size_t i = 0;
+
+            while (it != end && i < n) {
+               skip_inline_ws(it, end);
+
+               from<YAML, value_type>::template op<flow_context_on<Opts>()>(value[i], ctx, it, end);
+
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               ++i;
+               skip_inline_ws(it, end);
+
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if (*it == ']') {
+                  ++it;
+                  return;
+               }
+               else if (*it == ',') {
+                  ++it;
+                  skip_inline_ws(it, end);
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
             }
+
+            // If we exited because i >= n but haven't seen ']', skip to the closing bracket
+            // This handles the case where YAML has more elements than the fixed-size array
+            int bracket_depth = 1;
+            while (it != end && bracket_depth > 0) {
+               if (*it == '[') {
+                  ++bracket_depth;
+               }
+               else if (*it == ']') {
+                  --bracket_depth;
+               }
+               ++it;
+            }
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+            return;
          }
       }
 
@@ -1327,7 +1378,27 @@ namespace glz
       template <auto Opts, class T, class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_block_sequence(T&& value, Ctx& ctx, It& it, End end, int32_t sequence_indent)
       {
+         using V = std::remove_cvref_t<T>;
+         using value_type = typename V::value_type;
+
+         [[maybe_unused]] size_t index = 0;
+         [[maybe_unused]] const size_t max_size = []() {
+            if constexpr (!resizable<V>) {
+               return std::tuple_size_v<V>;
+            }
+            else {
+               return size_t(0); // unused for resizable containers
+            }
+         }();
+
          while (it != end) {
+            // For fixed-size arrays, stop when we've filled all elements
+            if constexpr (!resizable<V>) {
+               if (index >= max_size) {
+                  return;
+               }
+            }
+
             // Skip blank lines and comments, track indent
             int32_t line_indent = 0;
             auto line_start = it;
@@ -1389,11 +1460,8 @@ namespace glz
 
             skip_inline_ws(it, end);
 
-            using value_type = typename std::remove_cvref_t<T>::value_type;
-
-            if constexpr (emplace_backable<std::remove_cvref_t<T>>) {
-               auto& element = value.emplace_back();
-
+            // Get reference to element to parse into
+            auto parse_element = [&](auto& element) {
                // Check what follows
                if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
                   // Content on same line as dash - set indent to column after "- "
@@ -1424,6 +1492,15 @@ namespace glz
                   }
                   // else: empty element (default constructed)
                }
+            };
+
+            if constexpr (emplace_backable<V>) {
+               auto& element = value.emplace_back();
+               parse_element(element);
+            }
+            else if constexpr (!resizable<V>) {
+               parse_element(value[index]);
+               ++index;
             }
             else {
                ctx.error = error_code::syntax_error;
@@ -1623,7 +1700,227 @@ namespace glz
          }
       }
 
+      // Parse flow sequence into set types [item, item, ...]
+      template <auto Opts, class T, class Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE void parse_flow_sequence_set(T&& value, Ctx& ctx, It& it, End end)
+      {
+         using V = std::remove_cvref_t<T>;
+         using value_type = typename V::value_type;
+
+         if (it == end || *it != '[') [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         ++it; // Skip '['
+         skip_inline_ws(it, end);
+
+         // Handle empty array
+         if (it != end && *it == ']') {
+            ++it;
+            return;
+         }
+
+         while (it != end) {
+            skip_inline_ws(it, end);
+
+            value_type element{};
+            from<YAML, value_type>::template op<flow_context_on<Opts>()>(element, ctx, it, end);
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            value.emplace(std::move(element));
+
+            skip_inline_ws(it, end);
+
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            if (*it == ']') {
+               ++it;
+               return;
+            }
+            else if (*it == ',') {
+               ++it;
+               skip_inline_ws(it, end);
+            }
+            else {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+      }
+
+      // Parse block sequence into set types
+      // - item1
+      // - item2
+      template <auto Opts, class T, class Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE void parse_block_sequence_set(T&& value, Ctx& ctx, It& it, End end, int32_t sequence_indent)
+      {
+         using V = std::remove_cvref_t<T>;
+         using value_type = typename V::value_type;
+
+         while (it != end) {
+            // Skip blank lines and comments, track indent
+            int32_t line_indent = 0;
+            auto line_start = it;
+
+            while (it != end) {
+               if (*it == '#') {
+                  skip_comment(it, end);
+                  skip_newline(it, end);
+                  line_start = it;
+                  line_indent = 0;
+               }
+               else if (*it == '\n' || *it == '\r') {
+                  skip_newline(it, end);
+                  line_start = it;
+                  line_indent = 0;
+               }
+               else if (*it == ' ') {
+                  line_start = it;
+                  line_indent = measure_indent(it, end, ctx);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  if (it == end || *it == '\n' || *it == '\r') {
+                     // Blank line - continue to next line
+                     continue;
+                  }
+                  break; // Found content
+               }
+               else {
+                  break; // At content (no leading space on this line)
+               }
+            }
+
+            if (it == end) break;
+
+            // Check for document end marker
+            if (at_document_end(it, end)) break;
+
+            // Check for dedent
+            if (line_indent < sequence_indent) {
+               it = line_start;
+               return;
+            }
+
+            // Expect dash for sequence item
+            if (*it != '-') {
+               it = line_start;
+               return;
+            }
+
+            ++it; // Skip '-'
+
+            // Check for valid sequence item indicator (- followed by space or newline)
+            if (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r') {
+               // Not a sequence item (could be a number like -5)
+               it = line_start;
+               return;
+            }
+
+            skip_inline_ws(it, end);
+
+            value_type element{};
+
+            // Check what follows
+            if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+               // Content on same line as dash
+               auto saved_indent = ctx.indent;
+               ctx.indent = line_indent + 2; // dash + space
+               from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
+               ctx.indent = saved_indent;
+            }
+            else {
+               // Value on next line - nested block
+               skip_ws_and_comment(it, end);
+               skip_newline(it, end);
+
+               // Get indent of nested content
+               auto nested_start = it;
+               int32_t nested_indent = measure_indent(it, end, ctx);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               it = nested_start;
+
+               if (nested_indent > line_indent) {
+                  auto saved_indent = ctx.indent;
+                  ctx.indent = nested_indent;
+                  from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
+                  ctx.indent = saved_indent;
+               }
+               // else: empty element (default constructed)
+            }
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            value.emplace(std::move(element));
+         }
+      }
+
    } // namespace yaml
+
+   // Set types (std::set, std::unordered_set, etc.)
+   template <class T>
+      requires(readable_array_t<T> && !emplace_backable<T> && emplaceable<T>)
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Peek ahead to check for tag (don't consume indentation for block sequences)
+         auto peek = it;
+         yaml::skip_inline_ws(peek, end);
+
+         if (peek == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Check for tag
+         const auto tag = yaml::parse_yaml_tag(peek, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+         if (!yaml::tag_valid_for_seq(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // After tag, check what follows
+         yaml::skip_inline_ws(peek, end);
+
+         if (peek == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         if (*peek == '[') {
+            // Flow sequence
+            it = peek;
+            yaml::parse_flow_sequence_set<Opts>(value, ctx, it, end);
+         }
+         else if (*peek == '-') {
+            // Block sequence
+            if (tag != yaml::yaml_tag::none) {
+               it = peek;
+            }
+            yaml::parse_block_sequence_set<Opts>(value, ctx, it, end, ctx.indent);
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+         }
+      }
+   };
 
    // Arrays
    template <class T>
