@@ -255,6 +255,48 @@ YAML support leverages the same type system as JSON. All types that work with `g
 - User-defined types with `glz::meta` or pure reflection
 - Enums (as integers or strings with `glz::meta`)
 
+## Tag Validation
+
+Glaze supports YAML Core Schema tags and validates them against the C++ types being parsed. This catches type mismatches at parse time.
+
+### Supported Tags
+
+| Tag | Verbatim Form | Valid C++ Types |
+|-----|---------------|-----------------|
+| `!!str` | `!<tag:yaml.org,2002:str>` | `std::string`, `std::string_view` |
+| `!!int` | `!<tag:yaml.org,2002:int>` | `int`, `int64_t`, `uint32_t`, etc. |
+| `!!float` | `!<tag:yaml.org,2002:float>` | `float`, `double` |
+| `!!bool` | `!<tag:yaml.org,2002:bool>` | `bool` |
+| `!!null` | `!<tag:yaml.org,2002:null>` | `std::optional`, `std::unique_ptr`, pointers |
+| `!!seq` | `!<tag:yaml.org,2002:seq>` | `std::vector`, `std::array`, etc. |
+| `!!map` | `!<tag:yaml.org,2002:map>` | `std::map`, structs, objects |
+
+### Examples
+
+```yaml
+# Valid: tag matches C++ type
+name: !!str "Alice"
+count: !!int 42
+rate: !!float 3.14
+enabled: !!bool true
+items: !!seq [1, 2, 3]
+config: !!map {key: value}
+```
+
+```cpp
+// When parsing into int, !!str tag causes an error
+std::string yaml = "!!str 42";
+int value{};
+auto ec = glz::read_yaml(value, yaml);
+// ec.ec == glz::error_code::syntax_error (tag mismatch!)
+```
+
+### Tag Compatibility
+
+- `!!int` is valid for floating-point types (widening conversion allowed)
+- `!!float` is NOT valid for integer types
+- Unknown or custom tags (e.g., `!mytag`, `!!custom`) produce `feature_not_supported` error
+
 ## Limitations
 
 The current YAML implementation has some limitations compared to the full YAML 1.2 specification:
@@ -262,7 +304,7 @@ The current YAML implementation has some limitations compared to the full YAML 1
 ### Not Supported
 
 - **Anchors and aliases** (`&anchor`, `*alias`) - These will produce a `feature_not_supported` error
-- **Tags** (`!tag`, `!!str`) - Custom type tags are not processed
+- **Custom tags** (`!mytag`) - Only YAML Core Schema tags are supported
 - **Multi-document streams** - Only single documents are supported
 - **Literal block scalars** (`|`) and folded block scalars (`>`)
 - **Complex keys** - Only simple scalar keys are supported

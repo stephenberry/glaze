@@ -485,6 +485,24 @@ namespace glz
             return;
          }
 
+         // Check for tag
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+         if (!yaml::tag_valid_for_string(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
          if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
             return;
          }
@@ -531,6 +549,24 @@ namespace glz
             return;
          }
 
+         // Check for tag
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+         if (!yaml::tag_valid_for_bool(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
          if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
             return;
          }
@@ -562,6 +598,35 @@ namespace glz
       {
          if (bool(ctx.error)) [[unlikely]]
             return;
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Check for tag
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+
+         // Validate tag for numeric types
+         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            if (!yaml::tag_valid_for_float(tag)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+         else {
+            // Integer types
+            if (!yaml::tag_valid_for_int(tag)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
 
          yaml::skip_inline_ws(it, end);
 
@@ -715,22 +780,51 @@ namespace glz
             return;
          }
 
-         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
+         // Check for tag - but don't consume it yet if it's not a null tag
+         auto tag_start = it;
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
             return;
          }
 
-         // Check for null
-         auto start = it;
-         std::string str;
-         yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
-
-         if (yaml::is_yaml_null(str)) {
+         // If it's explicitly a null tag, set to null
+         if (tag == yaml::yaml_tag::null_tag) {
+            yaml::skip_inline_ws(it, end);
+            // Skip the null value if present
+            if (it != end && *it != '\n' && *it != '\r' && *it != ',' && *it != ']' && *it != '}') {
+               std::string str;
+               yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
+            }
             value = {};
             return;
          }
 
-         // Not null - reset and parse the actual value
-         it = start;
+         // If no tag or a non-null tag, reset and check value
+         if (tag == yaml::yaml_tag::none) {
+            it = tag_start;
+         }
+
+         yaml::skip_inline_ws(it, end);
+
+         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
+            return;
+         }
+
+         // Check for null value (without tag)
+         if (tag == yaml::yaml_tag::none) {
+            auto start = it;
+            std::string str;
+            yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
+
+            if (yaml::is_yaml_null(str)) {
+               value = {};
+               return;
+            }
+
+            // Not null - reset and parse the actual value
+            it = start;
+         }
 
          if (!value) {
             if constexpr (requires { value.emplace(); }) {
@@ -757,6 +851,24 @@ namespace glz
       {
          if (bool(ctx.error)) [[unlikely]]
             return;
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Check for tag - named enums are read as strings
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+         if (!yaml::tag_valid_for_string(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
 
          yaml::skip_inline_ws(it, end);
 
@@ -1298,6 +1410,24 @@ namespace glz
             return;
          }
 
+         // Check for tag
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+         if (!yaml::tag_valid_for_seq(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
          if (*it == '[') {
             // Flow sequence
             yaml::parse_flow_sequence<Opts>(value, ctx, it, end);
@@ -1335,6 +1465,24 @@ namespace glz
                return glz::tuple_size_v<T>;
             }
          }();
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Check for tag
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+         if (!yaml::tag_valid_for_seq(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
 
          yaml::skip_inline_ws(it, end);
 
@@ -1481,6 +1629,24 @@ namespace glz
             return;
          }
 
+         // Check for tag - pairs are treated as single-entry mappings
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+         if (!yaml::tag_valid_for_map(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
          using first_type = typename std::remove_cvref_t<T>::first_type;
          using second_type = typename std::remove_cvref_t<T>::second_type;
 
@@ -1595,6 +1761,23 @@ namespace glz
             return; // Empty input - keep default values
          }
 
+         // Check for tag
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+         if (!yaml::tag_valid_for_map(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) {
+            return; // Empty input - keep default values
+         }
+
          if (*it == '{') {
             // Flow mapping
             yaml::parse_flow_mapping<Opts>(value, ctx, it, end);
@@ -1616,6 +1799,24 @@ namespace glz
       {
          if (bool(ctx.error)) [[unlikely]]
             return;
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Check for tag
+         const auto tag = yaml::parse_yaml_tag(it, end);
+         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
+         if (!yaml::tag_valid_for_map(tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
 
          yaml::skip_inline_ws(it, end);
 

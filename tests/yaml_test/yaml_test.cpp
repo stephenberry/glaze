@@ -618,4 +618,157 @@ suite yaml_pair_tests = [] {
    };
 };
 
+suite yaml_tag_tests = [] {
+   "valid_str_tag"_test = [] {
+      std::string yaml = "!!str hello";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello");
+   };
+
+   "valid_int_tag"_test = [] {
+      std::string yaml = "!!int 42";
+      int value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == 42);
+   };
+
+   "valid_float_tag"_test = [] {
+      std::string yaml = "!!float 3.14";
+      double value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::abs(value - 3.14) < 0.001);
+   };
+
+   "valid_bool_tag"_test = [] {
+      std::string yaml = "!!bool true";
+      bool value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == true);
+   };
+
+   "valid_null_tag"_test = [] {
+      std::string yaml = "!!null null";
+      std::optional<int> value{42};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(!value.has_value());
+   };
+
+   "valid_seq_tag"_test = [] {
+      std::string yaml = "!!seq [1, 2, 3]";
+      std::vector<int> value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value.size() == 3u);
+      expect(value[0] == 1);
+   };
+
+   "valid_map_tag"_test = [] {
+      std::string yaml = "!!map {a: 1, b: 2}";
+      std::map<std::string, int> value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value["a"] == 1);
+      expect(value["b"] == 2);
+   };
+
+   "invalid_str_tag_for_int"_test = [] {
+      std::string yaml = "!!str 42";
+      int value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
+   };
+
+   "invalid_int_tag_for_string"_test = [] {
+      std::string yaml = "!!int hello";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
+   };
+
+   "invalid_bool_tag_for_int"_test = [] {
+      std::string yaml = "!!bool 42";
+      int value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
+   };
+
+   "invalid_seq_tag_for_map"_test = [] {
+      std::string yaml = "!!seq {a: 1}";
+      std::map<std::string, int> value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
+   };
+
+   "invalid_map_tag_for_seq"_test = [] {
+      std::string yaml = "!!map [1, 2, 3]";
+      std::vector<int> value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
+   };
+
+   "unknown_custom_tag_error"_test = [] {
+      std::string yaml = "!mytag value";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::feature_not_supported);
+   };
+
+   "unknown_shorthand_tag_error"_test = [] {
+      std::string yaml = "!!custom value";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::feature_not_supported);
+   };
+
+   "verbatim_tag_str"_test = [] {
+      std::string yaml = "!<tag:yaml.org,2002:str> hello";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello");
+   };
+
+   "int_tag_valid_for_float"_test = [] {
+      // !!int is valid for float types (widening conversion)
+      std::string yaml = "!!int 42";
+      double value{};
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == 42.0);
+   };
+
+   "map_with_str_tagged_values"_test = [] {
+      // Map of string to string - only !!str tags are valid for values
+      std::string yaml = R"({name: !!str Alice, city: !!str Boston})";
+      std::map<std::string, std::string> obj;
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["name"] == "Alice");
+      expect(obj["city"] == "Boston");
+   };
+
+   "map_with_int_tagged_values"_test = [] {
+      // Map of string to int - !!int tags are valid for values
+      std::string yaml = R"({count: !!int 100, size: !!int 50})";
+      std::map<std::string, int> obj;
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["count"] == 100);
+      expect(obj["size"] == 50);
+   };
+};
+
 int main() { return 0; }

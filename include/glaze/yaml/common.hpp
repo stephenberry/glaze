@@ -141,6 +141,158 @@ namespace glz::yaml
       folded_block, // >
    };
 
+   // YAML core schema tags
+   enum struct yaml_tag : uint8_t {
+      none, // No tag present
+      str, // !!str
+      int_tag, // !!int
+      float_tag, // !!float
+      bool_tag, // !!bool
+      null_tag, // !!null
+      map, // !!map
+      seq, // !!seq
+      unknown // Unknown/custom tag
+   };
+
+   // Parse a YAML tag if present
+   // Tags start with ! and can be:
+   // - Verbatim: !<tag:yaml.org,2002:str>
+   // - Shorthand: !!str (equivalent to !<tag:yaml.org,2002:str>)
+   // - Named: !mytag
+   // Returns the tag type and advances iterator past the tag
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE yaml_tag parse_yaml_tag(It& it, End end) noexcept
+   {
+      if (it == end || *it != '!') {
+         return yaml_tag::none;
+      }
+
+      auto start = it;
+      ++it; // skip first !
+
+      if (it == end) {
+         it = start;
+         return yaml_tag::none;
+      }
+
+      // Check for !! (shorthand tag)
+      if (*it == '!') {
+         ++it; // skip second !
+
+         // Read tag name
+         auto tag_start = it;
+         while (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r' && *it != ':' && *it != ',' &&
+                *it != '[' && *it != ']' && *it != '{' && *it != '}') {
+            ++it;
+         }
+
+         std::string_view tag_name(tag_start, static_cast<size_t>(it - tag_start));
+
+         // Skip whitespace after tag
+         while (it != end && (*it == ' ' || *it == '\t')) {
+            ++it;
+         }
+
+         // Match known tags
+         if (tag_name == "str") return yaml_tag::str;
+         if (tag_name == "int") return yaml_tag::int_tag;
+         if (tag_name == "float") return yaml_tag::float_tag;
+         if (tag_name == "bool") return yaml_tag::bool_tag;
+         if (tag_name == "null") return yaml_tag::null_tag;
+         if (tag_name == "map") return yaml_tag::map;
+         if (tag_name == "seq") return yaml_tag::seq;
+
+         return yaml_tag::unknown;
+      }
+
+      // Check for verbatim tag !<...>
+      if (*it == '<') {
+         ++it;
+         auto tag_start = it;
+         while (it != end && *it != '>') {
+            ++it;
+         }
+         if (it == end) {
+            it = start;
+            return yaml_tag::none;
+         }
+
+         std::string_view tag_uri(tag_start, static_cast<size_t>(it - tag_start));
+         ++it; // skip >
+
+         // Skip whitespace after tag
+         while (it != end && (*it == ' ' || *it == '\t')) {
+            ++it;
+         }
+
+         // Match known YAML 1.2 URIs
+         if (tag_uri == "tag:yaml.org,2002:str") return yaml_tag::str;
+         if (tag_uri == "tag:yaml.org,2002:int") return yaml_tag::int_tag;
+         if (tag_uri == "tag:yaml.org,2002:float") return yaml_tag::float_tag;
+         if (tag_uri == "tag:yaml.org,2002:bool") return yaml_tag::bool_tag;
+         if (tag_uri == "tag:yaml.org,2002:null") return yaml_tag::null_tag;
+         if (tag_uri == "tag:yaml.org,2002:map") return yaml_tag::map;
+         if (tag_uri == "tag:yaml.org,2002:seq") return yaml_tag::seq;
+
+         return yaml_tag::unknown;
+      }
+
+      // Named tag !name - skip it and read name
+      while (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r' && *it != ':' && *it != ',' &&
+             *it != '[' && *it != ']' && *it != '{' && *it != '}') {
+         ++it;
+      }
+
+      // Skip whitespace after tag
+      while (it != end && (*it == ' ' || *it == '\t')) {
+         ++it;
+      }
+
+      return yaml_tag::unknown;
+   }
+
+   // Check if a tag is valid for string types
+   GLZ_ALWAYS_INLINE constexpr bool tag_valid_for_string(yaml_tag tag) noexcept
+   {
+      return tag == yaml_tag::none || tag == yaml_tag::str;
+   }
+
+   // Check if a tag is valid for integer types
+   GLZ_ALWAYS_INLINE constexpr bool tag_valid_for_int(yaml_tag tag) noexcept
+   {
+      return tag == yaml_tag::none || tag == yaml_tag::int_tag;
+   }
+
+   // Check if a tag is valid for floating-point types
+   GLZ_ALWAYS_INLINE constexpr bool tag_valid_for_float(yaml_tag tag) noexcept
+   {
+      return tag == yaml_tag::none || tag == yaml_tag::float_tag || tag == yaml_tag::int_tag;
+   }
+
+   // Check if a tag is valid for boolean types
+   GLZ_ALWAYS_INLINE constexpr bool tag_valid_for_bool(yaml_tag tag) noexcept
+   {
+      return tag == yaml_tag::none || tag == yaml_tag::bool_tag;
+   }
+
+   // Check if a tag is valid for null/nullable types
+   GLZ_ALWAYS_INLINE constexpr bool tag_valid_for_null(yaml_tag tag) noexcept
+   {
+      return tag == yaml_tag::none || tag == yaml_tag::null_tag;
+   }
+
+   // Check if a tag is valid for sequence types
+   GLZ_ALWAYS_INLINE constexpr bool tag_valid_for_seq(yaml_tag tag) noexcept
+   {
+      return tag == yaml_tag::none || tag == yaml_tag::seq;
+   }
+
+   // Check if a tag is valid for mapping types
+   GLZ_ALWAYS_INLINE constexpr bool tag_valid_for_map(yaml_tag tag) noexcept
+   {
+      return tag == yaml_tag::none || tag == yaml_tag::map;
+   }
+
    // Skip inline whitespace (spaces and tabs only - NOT newlines)
    template <class It, class End>
    GLZ_ALWAYS_INLINE void skip_inline_ws(It&& it, End end) noexcept
