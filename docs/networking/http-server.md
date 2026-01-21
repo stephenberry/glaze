@@ -101,9 +101,9 @@ server.on_error([](std::error_code ec, std::source_location loc) {
 });
 ```
 
-### Using an External io_context
+### Using an External io_context via it's executor
 
-You can provide your own `asio::io_context` to the server, allowing you to share the event loop with other ASIO-based components or manage the lifecycle externally.
+You can provide your own `asio::any_io_executor` to the server, allowing you to share the event loop with other ASIO-based components or manage the lifecycle externally.
 
 ```cpp
 #include "glaze/net/http_server.hpp"
@@ -114,8 +114,8 @@ You can provide your own `asio::io_context` to the server, allowing you to share
 // Create a shared io_context
 auto io_ctx = std::make_shared<asio::io_context>();
 
-// Pass it to the server constructor
-glz::http_server server(io_ctx);
+// Pass it's executor to the server constructor
+glz::http_server server(io_ctx->get_executor());
 
 // Configure routes
 server.get("/hello", [](const glz::request&, glz::response& res) {
@@ -182,7 +182,7 @@ server.get("/users/:id", [](const glz::request& req, glz::response& res) {
 });
 
 // Multiple parameters
-server.get("/users/:user_id/posts/:post_id", 
+server.get("/users/:user_id/posts/:post_id",
     [](const glz::request& req, glz::response& res) {
         int user_id = std::stoi(req.params.at("user_id"));
         int post_id = std::stoi(req.params.at("post_id"));
@@ -264,14 +264,14 @@ glz::param_constraint email_constraint{
 server.get("/api/data", [](const glz::request& req, glz::response& res) {
     // Set status code
     res.status(200);
-    
+
     // Set headers
     res.header("X-Custom-Header", "value");
     res.content_type("application/json");
-    
+
     // Set body
     res.body("{\"message\": \"Hello\"}");
-    
+
     // Method chaining
     res.status(201)
        .header("Location", "/api/data/123")
@@ -308,12 +308,12 @@ server.get("/users/:id", [](const glz::request& req, glz::response& res) {
     try {
         int id = std::stoi(req.params.at("id"));
         User user = get_user(id);
-        
+
         if (user.id == 0) {
             res.status(404).json({{"error", "User not found"}});
             return;
         }
-        
+
         res.json(user);
     } catch (const std::exception& e) {
         res.status(400).json({{"error", "Invalid user ID"}});
@@ -351,7 +351,7 @@ server.enable_cors();
 // Rate limiting middleware
 auto rate_limiter = [](const glz::request& req, glz::response& res) {
     static std::unordered_map<std::string, int> request_counts;
-    
+
     auto& count = request_counts[req.remote_ip];
     if (++count > 100) {  // 100 requests per IP
         res.status(429).json({{"error", "Rate limit exceeded"}});
@@ -511,7 +511,7 @@ glz::http_router api_v1;
 api_v1.get("/users", get_users_handler);
 api_v1.post("/users", create_user_handler);
 
-// Create sub-router for API v2  
+// Create sub-router for API v2
 glz::http_router api_v2;
 api_v2.get("/users", get_users_v2_handler);
 
@@ -521,7 +521,7 @@ server.mount("/api/v2", api_v2);
 
 // Now routes are available at:
 // GET /api/v1/users
-// POST /api/v1/users  
+// POST /api/v1/users
 // GET /api/v2/users
 ```
 
@@ -531,16 +531,16 @@ server.mount("/api/v2", api_v2);
 // Serve static files from directory
 server.get("/static/*path", [](const glz::request& req, glz::response& res) {
     std::string file_path = "public/" + req.params.at("path");
-    
+
     std::ifstream file(file_path);
     if (!file.is_open()) {
         res.status(404).body("File not found");
         return;
     }
-    
+
     std::string content((std::istreambuf_iterator<char>(file)),
                         std::istreambuf_iterator<char>());
-    
+
     // Set appropriate content type
     if (file_path.ends_with(".html")) {
         res.content_type("text/html");
@@ -549,7 +549,7 @@ server.get("/static/*path", [](const glz::request& req, glz::response& res) {
     } else if (file_path.ends_with(".js")) {
         res.content_type("application/javascript");
     }
-    
+
     res.body(content);
 });
 ```
@@ -562,22 +562,22 @@ server.get("/static/*path", [](const glz::request& req, glz::response& res) {
 // Simple server with signal handling
 int main() {
     glz::http_server server;
-    
+
     // Configure routes
     server.get("/api/hello", [](const glz::request&, glz::response& res) {
         res.json({{"message", "Hello, World!"}});
     });
-    
+
     // Bind and enable signal handling
     server.bind(8080)
           .with_signals();
-    
+
     // Start server
     server.start();
-    
+
     // Wait for shutdown signal
     server.wait_for_signal();
-    
+
     return 0;
 }
 ```
@@ -587,32 +587,32 @@ For integration into larger applications:
 ```cpp
 class APIServer {
     glz::http_server server_;
-    
+
 public:
     bool start(uint16_t port) {
         try {
             configure_routes();
             server_.bind(port)
                    .with_signals();  // Enable signal handling
-            
+
             // Start server (non-blocking)
             server_.start();
-            
+
             return true;
         } catch (const std::exception& e) {
             std::cerr << "Failed to start server: " << e.what() << std::endl;
             return false;
         }
     }
-    
+
     void wait_for_shutdown() {
         server_.wait_for_signal();
     }
-    
+
     void stop() {
         server_.stop();
     }
-    
+
 private:
     void configure_routes() {
         server_.get("/health", [](const glz::request&, glz::response& res) {
@@ -628,23 +628,23 @@ private:
 // Built-in signal handling (recommended approach)
 int main() {
     glz::http_server server;
-    
+
     // Configure routes
     setup_routes(server);
-    
+
     // Enable signal handling for graceful shutdown (handles SIGINT/SIGTERM)
     server.bind(8080)
           .with_signals();
-    
+
     std::cout << "Server running on http://localhost:8080" << std::endl;
     std::cout << "Press Ctrl+C to gracefully shut down the server" << std::endl;
-    
+
     // Start server
     server.start();
-    
+
     // Wait for shutdown signal (blocks until server stops)
     server.wait_for_signal();
-    
+
     std::cout << "Server shut down successfully" << std::endl;
     return 0;
 }
@@ -668,21 +668,21 @@ int main() {
     // Register signal handlers
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
-    
+
     // Configure server
     setup_routes(server);
     server.bind(8080);
-    
+
     // Start server
     std::future<void> server_future = std::async(std::launch::async, [&]() {
         server.start();
     });
-    
+
     // Wait for shutdown signal
     while (running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    
+
     server_future.wait();
     return 0;
 }
@@ -762,7 +762,7 @@ The server always sends the appropriate `Connection` header (`keep-alive` or `cl
 server.get("/health", [](const glz::request&, glz::response& res) {
     // Check database connection, external services, etc.
     bool healthy = check_database() && check_external_apis();
-    
+
     if (healthy) {
         res.json({
             {"status", "healthy"},
