@@ -76,7 +76,7 @@ namespace glz::yaml
       ++it;
 
       // Skip optional chomping indicator and indentation indicator
-      while (it != end && (*it == '+' || *it == '-' || (*it >= '0' && *it <= '9'))) {
+      while (it != end && (*it == '+' || *it == '-' || (*it >= '1' && *it <= '9'))) {
          ++it;
       }
 

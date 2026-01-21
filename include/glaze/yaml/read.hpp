@@ -481,13 +481,13 @@ namespace glz
             // Check for .inf, .nan, -.inf, etc.
             if (*it == '.') {
                ++it;
-               if (it + 2 <= end && (std::string_view(it, 3) == "inf" || std::string_view(it, 3) == "Inf" ||
+               if (it + 3 <= end && (std::string_view(it, 3) == "inf" || std::string_view(it, 3) == "Inf" ||
                                      std::string_view(it, 3) == "INF")) {
                   value = std::numeric_limits<std::remove_cvref_t<T>>::infinity();
                   it += 3;
                   return;
                }
-               if (it + 2 <= end && (std::string_view(it, 3) == "nan" || std::string_view(it, 3) == "NaN" ||
+               if (it + 3 <= end && (std::string_view(it, 3) == "nan" || std::string_view(it, 3) == "NaN" ||
                                      std::string_view(it, 3) == "NAN")) {
                   value = std::numeric_limits<std::remove_cvref_t<T>>::quiet_NaN();
                   it += 3;
@@ -501,7 +501,7 @@ namespace glz
                ++it;
                if (it != end && *it == '.') {
                   ++it;
-                  if (it + 2 <= end && (std::string_view(it, 3) == "inf" || std::string_view(it, 3) == "Inf" ||
+                  if (it + 3 <= end && (std::string_view(it, 3) == "inf" || std::string_view(it, 3) == "Inf" ||
                                         std::string_view(it, 3) == "INF")) {
                      if (sign == '-') {
                         value = -std::numeric_limits<std::remove_cvref_t<T>>::infinity();
@@ -611,7 +611,7 @@ namespace glz
          yaml::skip_inline_ws(it, end);
 
          if (it == end) {
-            value = std::nullopt;
+            value = {};
             return;
          }
 
@@ -621,7 +621,7 @@ namespace glz
          yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
 
          if (yaml::is_yaml_null(str)) {
-            value = std::nullopt;
+            value = {};
             return;
          }
 
