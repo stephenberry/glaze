@@ -3,8 +3,7 @@
 
 #pragma once
 
-// TODO: Use std::source_location when deprecating clang 14
-// #include <source_location>
+#include <source_location>
 #include <array>
 #include <string>
 #include <string_view>
@@ -32,15 +31,21 @@ namespace glz::detail
    template <auto Ptr>
    [[nodiscard]] consteval auto mangled_name()
    {
-      // return std::source_location::current().function_name();
+#if defined(__cpp_lib_source_location)
+      return std::source_location::current().function_name();
+#else
       return GLZ_PRETTY_FUNCTION;
+#endif
    }
 
    template <class T>
    [[nodiscard]] consteval auto mangled_name()
    {
-      // return std::source_location::current().function_name();
+#if defined(__cpp_lib_source_location)
+      return std::source_location::current().function_name();
+#else
       return GLZ_PRETTY_FUNCTION;
+#endif
    }
 
 #if defined(__clang__)
