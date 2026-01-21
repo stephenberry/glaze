@@ -2,9 +2,11 @@
 
 Glaze provides a YAML 1.2 reader and writer. The same compile-time reflection metadata used for JSON works for YAML, so you can reuse your `glz::meta` specializations without additional boilerplate.
 
+> **Note:** YAML support requires a separate include. It is not included in `glaze/glaze.hpp`.
+
 ## Getting Started
 
-The header `glaze/yaml.hpp` exposes the high-level helpers. The example below writes and reads a configuration struct:
+Include `glaze/yaml.hpp` to access the YAML API:
 
 ```cpp
 #include "glaze/yaml.hpp"

@@ -45,4 +45,3 @@
 #include "glaze/record/recorder.hpp"
 #include "glaze/stencil/stencil.hpp"
 #include "glaze/util/key_transformers.hpp"
-#include "glaze/yaml.hpp"
