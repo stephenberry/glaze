@@ -9,6 +9,7 @@ Glaze also supports:
 - [MessagePack](https://stephenberry.github.io/glaze/msgpack/)
 - [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation)
 - [TOML](https://stephenberry.github.io/glaze/toml/) (Tom's Obvious, Minimal Language)
+- [YAML](https://stephenberry.github.io/glaze/yaml/)
 - [EETF](https://stephenberry.github.io/glaze/EETF/erlang-external-term-format/) (Erlang External Term Format) [optionally included]
 - [And Many More Features](https://stephenberry.github.io/glaze/)
 
