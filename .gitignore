@@ -57,3 +57,5 @@ alabastar.beve
 # Benchmark comparison directory
 benchmarks/
 pr_description.md
+/size_tests
+/tmp_benchmark
