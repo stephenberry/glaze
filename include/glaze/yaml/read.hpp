@@ -26,6 +26,9 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
+         // Skip document start marker (---) if present
+         yaml::skip_document_start(it, end);
+
          using V = std::remove_cvref_t<T>;
          from<YAML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
@@ -959,6 +962,9 @@ namespace glz
 
             if (it == end) break;
 
+            // Check for document end marker
+            if (at_document_end(it, end)) break;
+
             // Measure current indent
             auto line_start = it;
             int32_t line_indent = measure_indent(it, end);
@@ -1071,6 +1077,9 @@ namespace glz
             }
 
             if (it == end) break;
+
+            // Check for document end marker
+            if (at_document_end(it, end)) break;
 
             // Check indentation
             auto line_start = it;

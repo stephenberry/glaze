@@ -158,6 +158,49 @@ namespace glz::yaml
       return it == end || *it == '\n' || *it == '\r';
    }
 
+   // Skip document start marker (---) if present at beginning
+   // Handles: ---, ---\n, --- comment\n, etc.
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE void skip_document_start(It&& it, End end) noexcept
+   {
+      // Skip any leading whitespace and newlines
+      while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
+         if (*it == '\n' || *it == '\r') {
+            skip_newline(it, end);
+         }
+         else {
+            ++it;
+         }
+      }
+
+      // Check for ---
+      if (end - it >= 3 && it[0] == '-' && it[1] == '-' && it[2] == '-') {
+         auto after = it + 3;
+         // Must be followed by whitespace, newline, or end
+         if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' || *after == '#') {
+            it = after;
+            // Skip rest of line (whitespace and optional comment)
+            skip_ws_and_comment(it, end);
+            skip_newline(it, end);
+         }
+      }
+   }
+
+   // Check if at document end marker (...)
+   // Returns true if at ... followed by whitespace/newline/end
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE bool at_document_end(It&& it, End end) noexcept
+   {
+      if (end - it >= 3 && it[0] == '.' && it[1] == '.' && it[2] == '.') {
+         auto after = it + 3;
+         // Must be followed by whitespace, newline, or end
+         if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' || *after == '#') {
+            return true;
+         }
+      }
+      return false;
+   }
+
    // Measure indentation at current position (assumes at start of line)
    // Returns number of spaces (tabs count as 1 for simplicity)
    template <class It, class End>

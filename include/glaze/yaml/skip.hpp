@@ -300,6 +300,12 @@ namespace glz::yaml
 
             if (it == end) break;
 
+            // Check for document end marker
+            if (at_document_end(it, end)) {
+               it = line_start;
+               break;
+            }
+
             // If dedented or not a sequence item, we're done
             if (line_indent <= current_indent) {
                it = line_start;
