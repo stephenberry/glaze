@@ -907,16 +907,27 @@ namespace glz
                }
 
                if (base != 10) {
-                  // Remove underscores for parsing
-                  std::string clean;
-                  for (size_t i = offset; i < num_str.size(); ++i) {
-                     if (num_str[i] != '_') {
-                        clean.push_back(num_str[i]);
+                  const auto digits = num_str.substr(offset);
+                  const bool has_underscores = (digits.find('_') != std::string_view::npos);
+
+                  std::string clean_storage;
+                  std::string_view clean_view;
+
+                  if (has_underscores) {
+                     clean_storage.reserve(digits.size());
+                     for (char c : digits) {
+                        if (c != '_') {
+                           clean_storage.push_back(c);
+                        }
                      }
+                     clean_view = clean_storage;
+                  }
+                  else {
+                     clean_view = digits;
                   }
 
                   auto [ptr, ec] =
-                     std::from_chars(clean.data(), clean.data() + clean.size(), value, base);
+                     std::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value, base);
                   if (ec != std::errc{}) {
                      ctx.error = error_code::parse_number_failure;
                   }
@@ -925,22 +936,34 @@ namespace glz
             }
          }
 
-         // Standard number parsing (remove underscores)
-         std::string clean;
-         for (char c : num_str) {
-            if (c != '_') {
-               clean.push_back(c);
+         // Standard number parsing - only allocate if underscores present
+         const bool has_underscores = (num_str.find('_') != std::string_view::npos);
+
+         std::string clean_storage;
+         std::string_view clean_view;
+
+         if (has_underscores) {
+            clean_storage.reserve(num_str.size());
+            for (char c : num_str) {
+               if (c != '_') {
+                  clean_storage.push_back(c);
+               }
             }
+            clean_view = clean_storage;
+         }
+         else {
+            clean_view = num_str;
          }
 
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-            auto result = glz::fast_float::from_chars(clean.data(), clean.data() + clean.size(), value);
+            auto result =
+               glz::fast_float::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value);
             if (result.ec != std::errc{}) {
                ctx.error = error_code::parse_number_failure;
             }
          }
          else {
-            auto [ptr, ec] = std::from_chars(clean.data(), clean.data() + clean.size(), value);
+            auto [ptr, ec] = std::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value);
             if (ec != std::errc{}) {
                ctx.error = error_code::parse_number_failure;
             }

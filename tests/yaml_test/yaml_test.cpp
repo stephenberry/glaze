@@ -336,6 +336,54 @@ name: neg)";
       expect(obj.x == 255);
    };
 
+   "read_underscore_int"_test = [] {
+      int value{};
+      std::string yaml = "1_000_000";
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec);
+      expect(value == 1000000);
+   };
+
+   "read_underscore_float"_test = [] {
+      double value{};
+      std::string yaml = "1_234.567_89";
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec);
+      expect(std::abs(value - 1234.56789) < 0.00001);
+   };
+
+   "read_underscore_hex"_test = [] {
+      int value{};
+      std::string yaml = "0xFF_FF";
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec);
+      expect(value == 0xFFFF);
+   };
+
+   "read_underscore_octal"_test = [] {
+      int value{};
+      std::string yaml = "0o7_7_7";
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec);
+      expect(value == 0777);
+   };
+
+   "read_underscore_binary"_test = [] {
+      int value{};
+      std::string yaml = "0b1111_0000";
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec);
+      expect(value == 0b11110000);
+   };
+
+   "read_no_underscore_int"_test = [] {
+      int value{};
+      std::string yaml = "1000000";
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec);
+      expect(value == 1000000);
+   };
+
    "read_with_comments"_test = [] {
       std::string yaml = R"(# This is a comment
 x: 42 # inline comment
