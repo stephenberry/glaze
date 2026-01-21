@@ -49,20 +49,49 @@ namespace glz
 
    namespace yaml
    {
-      // Parse a double-quoted string using buffer/pointer approach
-      // Uses Glaze's code_point_to_utf8 for Unicode handling
+      // SWAR-optimized double-quoted string parsing
+      // Uses 8-byte chunks for fast scanning and copying
       template <class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_double_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
       {
+         static constexpr size_t string_padding_bytes = 8;
+
          if (it == end || *it != '"') [[unlikely]] {
             ctx.error = error_code::expected_quote;
             return;
          }
 
          ++it; // skip opening quote
-
-         // First pass: find closing quote to determine max length
          auto start = it;
+
+         // Pass 1: Find closing quote using SWAR
+         // Process 8 bytes at a time looking for quote or backslash
+         const auto remaining = static_cast<size_t>(end - it);
+         if (remaining >= 8) {
+            const auto* end8 = &*(end - 7); // Safe to read 8 bytes up to here
+            while (it < end8) {
+               uint64_t chunk;
+               std::memcpy(&chunk, &*it, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  chunk = std::byteswap(chunk);
+               }
+
+               // Check for quote or backslash
+               const uint64_t has_quote_mask = glz::has_quote(chunk);
+               const uint64_t has_backslash_mask = glz::has_escape(chunk);
+               const uint64_t special = has_quote_mask | has_backslash_mask;
+
+               if (special) {
+                  // Found a special character - process byte by byte from here
+                  const auto offset = countr_zero(special) >> 3;
+                  it += offset;
+                  break;
+               }
+               it += 8;
+            }
+         }
+
+         // Finish finding the closing quote byte-by-byte
          while (it != end && *it != '"') {
             if (*it == '\\') {
                ++it;
@@ -79,32 +108,72 @@ namespace glz
             return;
          }
 
-         // Allocate buffer with room for potential expansion
-         // Most escapes shrink, but \L and \P expand (2 chars -> 3 UTF-8 bytes)
-         // Worst case is ~1.5x expansion, so 2x is safe
+         // Allocate buffer with room for potential expansion and SWAR padding
+         // Some YAML escapes expand: \L, \P -> 3 bytes UTF-8
          const auto input_len = static_cast<size_t>(it - start);
-         value.resize(input_len + (input_len / 2) + 4); // +4 for small strings
+         value.resize(input_len + (input_len / 2) + string_padding_bytes);
          auto* dst = value.data();
+         auto* const dst_start = dst;
 
-         // Second pass: process escapes and write to buffer
+         // Pass 2: Copy and process escapes using SWAR
          auto src = start;
-         while (src != it) {
+         const auto* const src_end = &*it;
+
+         while (src < src_end) {
+            const auto src_remaining = static_cast<size_t>(src_end - src);
+
+            // Try to copy 8 bytes at a time when no escapes
+            if (src_remaining >= 8) {
+               uint64_t chunk;
+               std::memcpy(&chunk, src, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  chunk = std::byteswap(chunk);
+               }
+
+               // Check for backslash using SWAR
+               const uint64_t has_backslash_mask = glz::has_escape(chunk);
+               if (!has_backslash_mask) {
+                  // No backslash in this chunk - copy all 8 bytes
+                  std::memcpy(dst, src, 8);
+                  src += 8;
+                  dst += 8;
+                  continue;
+               }
+
+               // Found a backslash - copy bytes up to it
+               const auto offset = countr_zero(has_backslash_mask) >> 3;
+               if (offset > 0) {
+                  std::memcpy(dst, src, offset);
+                  dst += offset;
+                  src += offset;
+               }
+            }
+
+            // Process one character (possibly an escape)
+            if (src >= src_end) break;
+
             if (*src == '\\') {
                ++src;
-               const char esc = *src;
+               if (src >= src_end) [[unlikely]] {
+                  // Shouldn't happen - we validated in pass 1
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               const unsigned char esc = static_cast<unsigned char>(*src);
 
                // Check simple escape table first
-               if (yaml_unescape_table[static_cast<unsigned char>(esc)]) {
-                  *dst++ = yaml_unescape_table[static_cast<unsigned char>(esc)];
+               if (yaml_escape_is_simple[esc]) {
+                  *dst++ = yaml_unescape_table[esc];
                   ++src;
                }
                // Handle escapes requiring special processing
-               else if (yaml_escape_needs_special[static_cast<unsigned char>(esc)]) {
+               else if (yaml_escape_needs_special[esc]) {
                   ++src; // skip escape char
                   switch (esc) {
                   case 'x': {
                      // \xXX - 2 hex digits
-                     if (static_cast<size_t>(it - src) < 2) [[unlikely]] {
+                     if (static_cast<size_t>(src_end - src) < 2) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
@@ -119,12 +188,12 @@ namespace glz
                      break;
                   }
                   case 'u': {
-                     // \uXXXX - 4 hex digits (may be surrogate pair)
-                     if (static_cast<size_t>(it - src) < 4) [[unlikely]] {
+                     // \uXXXX - 4 hex digits
+                     if (static_cast<size_t>(src_end - src) < 4) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     const uint32_t codepoint = hex_to_u32(&*src);
+                     const uint32_t codepoint = hex_to_u32(src);
                      if (codepoint == 0xFFFFFFFFu) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
@@ -135,12 +204,12 @@ namespace glz
                   }
                   case 'U': {
                      // \UXXXXXXXX - 8 hex digits
-                     if (static_cast<size_t>(it - src) < 8) [[unlikely]] {
+                     if (static_cast<size_t>(src_end - src) < 8) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     const uint32_t hi = hex_to_u32(&*src);
-                     const uint32_t lo = hex_to_u32(&*(src + 4));
+                     const uint32_t hi = hex_to_u32(src);
+                     const uint32_t lo = hex_to_u32(src + 4);
                      if ((hi | lo) == 0xFFFFFFFFu) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
@@ -173,14 +242,13 @@ namespace glz
                      break;
                   }
                   default:
-                     // Should not reach here due to table check
                      break;
                   }
                }
                else {
                   // Unknown escape - pass through literally
                   *dst++ = '\\';
-                  *dst++ = esc;
+                  *dst++ = static_cast<char>(esc);
                   ++src;
                }
             }
@@ -190,40 +258,157 @@ namespace glz
          }
 
          // Resize to actual length
-         value.resize(static_cast<size_t>(dst - value.data()));
+         value.resize(static_cast<size_t>(dst - dst_start));
          ++it; // skip closing quote
       }
 
-      // Parse a single-quoted string
+      // SWAR-optimized single-quoted string parsing
+      // Only escape is '' -> ' (doubled single quote)
       template <class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_single_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
       {
+         static constexpr size_t string_padding_bytes = 8;
+
          if (it == end || *it != '\'') [[unlikely]] {
             ctx.error = error_code::expected_quote;
             return;
          }
 
          ++it; // skip opening quote
-         value.clear();
+         auto start = it;
 
-         while (it != end) {
-            if (*it == '\'') {
-               // Check for escaped single quote ('')
-               if ((it + 1) != end && *(it + 1) == '\'') {
-                  value.push_back('\'');
-                  it += 2;
+         // Pass 1: Find closing quote using SWAR
+         const auto remaining = static_cast<size_t>(end - it);
+         if (remaining >= 8) {
+            const auto* end8 = &*(end - 7);
+            while (it < end8) {
+               uint64_t chunk;
+               std::memcpy(&chunk, &*it, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  chunk = std::byteswap(chunk);
+               }
+
+               const uint64_t has_sq = glz::has_char<'\''>(chunk);
+               if (has_sq) {
+                  const auto offset = countr_zero(has_sq) >> 3;
+                  it += offset;
+                  break;
+               }
+               it += 8;
+            }
+         }
+
+         // Finish finding quote byte-by-byte
+         while (it != end && *it != '\'') {
+            ++it;
+         }
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Now scan for '' escapes and find actual end
+         auto scan = start;
+         auto actual_end = it;
+         bool has_escapes = false;
+
+         while (scan < actual_end) {
+            if (*scan == '\'') {
+               if (scan + 1 < end && *(scan + 1) == '\'') {
+                  has_escapes = true;
+                  scan += 2;
                }
                else {
-                  ++it; // skip closing quote
-                  return;
+                  actual_end = scan;
+                  break;
                }
             }
             else {
-               value.push_back(*it);
+               ++scan;
+            }
+         }
+
+         // Continue scanning past '' escapes to find true end
+         it = scan;
+         while (it != end) {
+            if (*it == '\'') {
+               if ((it + 1) != end && *(it + 1) == '\'') {
+                  has_escapes = true;
+                  it += 2;
+               }
+               else {
+                  break; // Found closing quote
+               }
+            }
+            else {
                ++it;
             }
          }
-         ctx.error = error_code::unexpected_end;
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         actual_end = it;
+         const auto input_len = static_cast<size_t>(actual_end - start);
+
+         if (!has_escapes) {
+            // Fast path: no escapes, direct assign
+            value.assign(&*start, input_len);
+            ++it; // skip closing quote
+            return;
+         }
+
+         // Has escapes: need to process
+         value.resize(input_len + string_padding_bytes);
+         auto* dst = value.data();
+         auto* const dst_start = dst;
+         auto src = start;
+         const auto* const src_end = &*actual_end;
+
+         while (src < src_end) {
+            const auto src_remaining = static_cast<size_t>(src_end - src);
+
+            // Try to copy 8 bytes at a time
+            if (src_remaining >= 8) {
+               uint64_t chunk;
+               std::memcpy(&chunk, src, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  chunk = std::byteswap(chunk);
+               }
+
+               const uint64_t has_sq = glz::has_char<'\''>(chunk);
+               if (!has_sq) {
+                  std::memcpy(dst, src, 8);
+                  src += 8;
+                  dst += 8;
+                  continue;
+               }
+
+               const auto offset = countr_zero(has_sq) >> 3;
+               if (offset > 0) {
+                  std::memcpy(dst, src, offset);
+                  dst += offset;
+                  src += offset;
+               }
+            }
+
+            if (src >= src_end) break;
+
+            if (*src == '\'') {
+               // Must be '' (escaped quote)
+               *dst++ = '\'';
+               src += 2;
+            }
+            else {
+               *dst++ = *src++;
+            }
+         }
+
+         value.resize(static_cast<size_t>(dst - dst_start));
+         ++it; // skip closing quote
       }
 
       // Parse a plain scalar (unquoted)

@@ -104,7 +104,7 @@ namespace glz::yaml
    }();
 
    // YAML escape character table for double-quoted strings
-   // Maps escape char to its actual value (0 means invalid/special handling needed)
+   // Maps escape char to its actual value
    inline constexpr std::array<char, 256> yaml_unescape_table = [] {
       std::array<char, 256> t{};
       t['"'] = '"';
@@ -122,6 +122,26 @@ namespace glz::yaml
       t['0'] = '\0'; // null
       // Note: x, u, U require special handling (hex parsing)
       // Note: N, _, L, P require special handling (multi-byte UTF-8)
+      return t;
+   }();
+
+   // Table indicating which YAML escapes are simple (single-byte output)
+   // Separate from unescape_table because \0 maps to '\0' which is falsy
+   inline constexpr std::array<bool, 256> yaml_escape_is_simple = [] {
+      std::array<bool, 256> t{};
+      t['"'] = true;
+      t['\\'] = true;
+      t['/'] = true;
+      t['a'] = true;
+      t['b'] = true;
+      t['t'] = true;
+      t['n'] = true;
+      t['v'] = true;
+      t['f'] = true;
+      t['r'] = true;
+      t['e'] = true;
+      t[' '] = true;
+      t['0'] = true;
       return t;
    }();
 

@@ -769,6 +769,480 @@ suite yaml_tag_tests = [] {
       expect(obj["count"] == 100);
       expect(obj["size"] == 50);
    };
+
+   // ============================================================
+   // Comprehensive String Parsing Tests
+   // ============================================================
+
+   // Double-quoted string escape tests
+   "dq_escape_newline"_test = [] {
+      std::string yaml = R"("hello\nworld")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\nworld");
+   };
+
+   "dq_escape_tab"_test = [] {
+      std::string yaml = R"("hello\tworld")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\tworld");
+   };
+
+   "dq_escape_carriage_return"_test = [] {
+      std::string yaml = R"("hello\rworld")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\rworld");
+   };
+
+   "dq_escape_backslash"_test = [] {
+      std::string yaml = R"("hello\\world")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\\world");
+   };
+
+   "dq_escape_quote"_test = [] {
+      std::string yaml = R"("hello\"world")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\"world");
+   };
+
+   "dq_escape_null"_test = [] {
+      std::string yaml = R"("hello\0world")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == std::string("hello\0world", 11));
+   };
+
+   "dq_escape_bell"_test = [] {
+      std::string yaml = R"("hello\aworld")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\aworld");
+   };
+
+   "dq_escape_backspace"_test = [] {
+      std::string yaml = R"("hello\bworld")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\bworld");
+   };
+
+   "dq_escape_escape"_test = [] {
+      std::string yaml = R"("hello\eworld")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\x1Bworld"); // ESC = 0x1B
+   };
+
+   "dq_escape_formfeed"_test = [] {
+      std::string yaml = R"("hello\fworld")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\fworld");
+   };
+
+   "dq_escape_vtab"_test = [] {
+      std::string yaml = R"("hello\vworld")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\vworld");
+   };
+
+   "dq_escape_slash"_test = [] {
+      std::string yaml = R"("hello\/world")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello/world");
+   };
+
+   "dq_escape_space"_test = [] {
+      std::string yaml = R"("hello\ world")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello world");
+   };
+
+   // Hex escape \xXX
+   "dq_escape_hex_41"_test = [] {
+      std::string yaml = R"("\x41")"; // 'A'
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "A");
+   };
+
+   "dq_escape_hex_00"_test = [] {
+      std::string yaml = R"("a\x00z")"; // null in middle
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      // Build expected string carefully to avoid C++ hex escape ambiguity
+      std::string expected = "a";
+      expected.push_back('\0');
+      expected.push_back('z');
+      expect(value == expected);
+   };
+
+   "dq_escape_hex_ff"_test = [] {
+      std::string yaml = R"("\xff")"; // 0xFF
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "\xff");
+   };
+
+   "dq_escape_hex_lowercase"_test = [] {
+      std::string yaml = R"("\x4a")"; // 'J'
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "J");
+   };
+
+   // Unicode escape \uXXXX
+   "dq_escape_unicode_ascii"_test = [] {
+      std::string yaml = R"("\u0041")"; // 'A'
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "A");
+   };
+
+   "dq_escape_unicode_2byte"_test = [] {
+      std::string yaml = R"("\u00e9")"; // 'é' (U+00E9)
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "\xc3\xa9"); // UTF-8 encoding of é
+   };
+
+   "dq_escape_unicode_3byte"_test = [] {
+      std::string yaml = R"("\u4e2d")"; // '中' (U+4E2D)
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "\xe4\xb8\xad"); // UTF-8 encoding
+   };
+
+   "dq_escape_unicode_euro"_test = [] {
+      std::string yaml = R"("\u20ac")"; // '€' (U+20AC)
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "\xe2\x82\xac"); // UTF-8 encoding
+   };
+
+   // Unicode escape \UXXXXXXXX (8 hex digits)
+   "dq_escape_unicode8_ascii"_test = [] {
+      std::string yaml = R"("\U00000041")"; // 'A'
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "A");
+   };
+
+   "dq_escape_unicode8_emoji"_test = [] {
+      std::string yaml = R"("\U0001F600")"; // 😀 (U+1F600)
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "\xf0\x9f\x98\x80"); // UTF-8 encoding
+   };
+
+   "dq_escape_unicode8_musical"_test = [] {
+      std::string yaml = R"("\U0001D11E")"; // 𝄞 (U+1D11E) musical G clef
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "\xf0\x9d\x84\x9e"); // UTF-8 encoding
+   };
+
+   // YAML-specific escapes
+   "dq_escape_next_line"_test = [] {
+      std::string yaml = R"("hello\Nworld")"; // \N = U+0085 (Next Line)
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\xc2\x85world"); // UTF-8 encoding of U+0085
+   };
+
+   "dq_escape_nbsp"_test = [] {
+      std::string yaml = R"("hello\_world")"; // \_ = U+00A0 (NBSP)
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\xc2\xa0world"); // UTF-8 encoding of U+00A0
+   };
+
+   "dq_escape_line_separator"_test = [] {
+      std::string yaml = R"("hello\Lworld")"; // \L = U+2028 (Line Separator)
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\xe2\x80\xa8world"); // UTF-8 encoding of U+2028
+   };
+
+   "dq_escape_para_separator"_test = [] {
+      std::string yaml = R"("hello\Pworld")"; // \P = U+2029 (Paragraph Separator)
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\xe2\x80\xa9world"); // UTF-8 encoding of U+2029
+   };
+
+   // Multiple escapes in one string
+   "dq_multiple_escapes"_test = [] {
+      std::string yaml = R"("line1\nline2\ttabbed\\backslash")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "line1\nline2\ttabbed\\backslash");
+   };
+
+   "dq_mixed_escapes"_test = [] {
+      std::string yaml = R"("\x48\u0065llo\n\U00000057orld")"; // "Hello\nWorld"
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "Hello\nWorld");
+   };
+
+   // Edge cases
+   "dq_empty_string"_test = [] {
+      std::string yaml = R"("")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "");
+   };
+
+   "dq_only_escapes"_test = [] {
+      std::string yaml = R"("\n\t\r")";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "\n\t\r");
+   };
+
+   "dq_consecutive_backslashes"_test = [] {
+      std::string yaml = R"("\\\\")"; // four backslashes in YAML = two in result
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "\\\\");
+   };
+
+   "dq_long_string"_test = [] {
+      std::string yaml = "\"" + std::string(1000, 'a') + "\"";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == std::string(1000, 'a'));
+   };
+
+   "dq_long_string_with_escapes"_test = [] {
+      std::string input;
+      for (int i = 0; i < 100; ++i) {
+         input += "text\\n";
+      }
+      std::string yaml = "\"" + input + "\"";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      std::string expected;
+      for (int i = 0; i < 100; ++i) {
+         expected += "text\n";
+      }
+      expect(value == expected);
+   };
+
+   // Single-quoted string tests
+   "sq_basic"_test = [] {
+      std::string yaml = "'hello world'";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello world");
+   };
+
+   "sq_empty"_test = [] {
+      std::string yaml = "''";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "");
+   };
+
+   "sq_escaped_quote"_test = [] {
+      std::string yaml = "'it''s'"; // '' = single quote
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "it's");
+   };
+
+   "sq_multiple_escaped_quotes"_test = [] {
+      std::string yaml = "'a''b''c'"; // a'b'c
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "a'b'c");
+   };
+
+   "sq_no_escape_processing"_test = [] {
+      std::string yaml = R"('hello\nworld')"; // \n should NOT be escaped
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello\\nworld"); // literal backslash-n
+   };
+
+   "sq_backslash_preserved"_test = [] {
+      std::string yaml = R"('C:\path\to\file')";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "C:\\path\\to\\file");
+   };
+
+   "sq_long_string"_test = [] {
+      std::string yaml = "'" + std::string(1000, 'b') + "'";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == std::string(1000, 'b'));
+   };
+
+   // Plain scalar tests (unquoted)
+   "plain_simple"_test = [] {
+      std::string yaml = "hello";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello");
+   };
+
+   "plain_with_spaces"_test = [] {
+      std::string yaml = "hello world";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "hello world");
+   };
+
+   // Error cases
+   "dq_invalid_hex_escape"_test = [] {
+      std::string yaml = R"("\xGG")"; // invalid hex
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "dq_incomplete_hex_escape"_test = [] {
+      std::string yaml = R"("\x4")"; // only 1 hex digit
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "dq_invalid_unicode_escape"_test = [] {
+      std::string yaml = R"("\uGGGG")"; // invalid hex
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "dq_incomplete_unicode_escape"_test = [] {
+      std::string yaml = R"("\u004")"; // only 3 hex digits
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "dq_incomplete_unicode8_escape"_test = [] {
+      std::string yaml = R"("\U0001F60")"; // only 7 hex digits
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "dq_unterminated"_test = [] {
+      std::string yaml = R"("hello)"; // no closing quote
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   "sq_unterminated"_test = [] {
+      std::string yaml = "'hello"; // no closing quote
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+   };
+
+   // Strings in object context
+   "obj_dq_string_with_escapes"_test = [] {
+      std::string yaml = R"(name: "hello\nworld")";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.name == "hello\nworld");
+   };
+
+   "obj_sq_string_with_quote"_test = [] {
+      std::string yaml = "name: 'it''s working'";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.name == "it's working");
+   };
+
+   // Flow sequence with quoted strings
+   "flow_seq_dq_strings"_test = [] {
+      std::string yaml = R"(["a\nb", "c\td"])";
+      std::vector<std::string> value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value.size() == 2);
+      expect(value[0] == "a\nb");
+      expect(value[1] == "c\td");
+   };
+
+   "flow_seq_sq_strings"_test = [] {
+      std::string yaml = "['it''s', 'won''t']";
+      std::vector<std::string> value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value.size() == 2);
+      expect(value[0] == "it's");
+      expect(value[1] == "won't");
+   };
+
+   // Flow map with quoted strings
+   "flow_map_dq_strings"_test = [] {
+      std::string yaml = R"({"key\n1": "val\t1"})";
+      std::map<std::string, std::string> value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value["key\n1"] == "val\t1");
+   };
 };
 
 int main() { return 0; }
