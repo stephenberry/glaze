@@ -1245,8 +1245,9 @@ namespace glz
                return;
             }
 
-            // Parse key
-            std::string key;
+            // Parse key using thread-local buffer to avoid allocation
+            auto& key = string_buffer();
+            key.clear();
             if (!parse_yaml_key(key, ctx, it, end, true)) {
                return;
             }
@@ -1265,7 +1266,7 @@ namespace glz
             const auto index =
                decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size(), key.size());
 
-            const bool key_matches = index < N && key == reflect<U>::keys[index];
+            const bool key_matches = index < N && std::string_view{key} == reflect<U>::keys[index];
 
             if (key_matches) [[likely]] {
                visit<N>(
@@ -1514,8 +1515,9 @@ namespace glz
                return;
             }
 
-            // Parse key
-            std::string key;
+            // Parse key using thread-local buffer to avoid allocation
+            auto& key = string_buffer();
+            key.clear();
             if (!parse_yaml_key(key, ctx, it, end, false)) {
                return;
             }
@@ -1535,7 +1537,7 @@ namespace glz
             const auto index =
                decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size(), key.size());
 
-            const bool key_matches = index < N && key == reflect<U>::keys[index];
+            const bool key_matches = index < N && std::string_view{key} == reflect<U>::keys[index];
 
             if (key_matches) [[likely]] {
                visit<N>(
