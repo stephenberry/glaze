@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <deque>
 #include <forward_list>
 #include <limits>
@@ -2239,6 +2240,450 @@ suite yaml_char_tests = [] {
 
       // unsigned char is a num_t, should be readable
       unsigned char parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+};
+
+// ============================================================
+// File I/O Tests
+// ============================================================
+
+struct file_struct
+{
+   int x{};
+   double y{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<file_struct>
+{
+   using T = file_struct;
+   static constexpr auto value = object("x", &T::x, "y", &T::y, "name", &T::name);
+};
+
+suite yaml_file_io_tests = [] {
+   "write_file_yaml"_test = [] {
+      file_struct obj{42, 3.14, "test_file"};
+      std::string filename = "./test_output.yaml";
+
+      auto ec = glz::write_file_yaml(obj, filename);
+      expect(!ec);
+
+      // Read it back
+      file_struct parsed{};
+      auto rec = glz::read_file_yaml(parsed, filename);
+      expect(!rec);
+      expect(parsed.x == obj.x);
+      expect(std::abs(parsed.y - obj.y) < 0.001);
+      expect(parsed.name == obj.name);
+
+      // Clean up
+      std::remove(filename.c_str());
+   };
+
+   "read_file_yaml_not_found"_test = [] {
+      file_struct obj{};
+      auto ec = glz::read_file_yaml(obj, "./nonexistent_file.yaml");
+      expect(bool(ec)); // Should error
+   };
+};
+
+// ============================================================
+// Tuple and Pair Tests (Additional)
+// ============================================================
+
+suite yaml_tuple_pair_tests = [] {
+   "tuple_mixed_types"_test = [] {
+      auto original = std::make_tuple(42, 3.14, std::string("hello"));
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      decltype(original) parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::get<0>(parsed) == std::get<0>(original));
+      expect(std::abs(std::get<1>(parsed) - std::get<1>(original)) < 0.001);
+      expect(std::get<2>(parsed) == std::get<2>(original));
+   };
+
+   "tuple_nested"_test = [] {
+      auto original = std::make_tuple(1, std::make_tuple(2, 3), 4);
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      decltype(original) parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::get<0>(parsed) == 1);
+      expect(std::get<0>(std::get<1>(parsed)) == 2);
+      expect(std::get<1>(std::get<1>(parsed)) == 3);
+      expect(std::get<2>(parsed) == 4);
+   };
+
+   "pair_roundtrip"_test = [] {
+      auto original = std::make_pair(std::string("key"), 123);
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      decltype(original) parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.first == original.first);
+      expect(parsed.second == original.second);
+   };
+
+   "pair_int_int"_test = [] {
+      auto original = std::make_pair(1, 2);
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      decltype(original) parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "vector_of_pairs"_test = [] {
+      std::vector<std::pair<std::string, int>> original{{"a", 1}, {"b", 2}, {"c", 3}};
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      decltype(original) parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+};
+
+// ============================================================
+// Enum Tests (Additional)
+// ============================================================
+
+enum class Priority { Low, Medium, High };
+
+template <>
+struct glz::meta<Priority>
+{
+   using enum Priority;
+   static constexpr auto value = enumerate(Low, Medium, High);
+};
+
+struct priority_container
+{
+   Priority priority{Priority::Low};
+   std::vector<Priority> priorities{};
+};
+
+template <>
+struct glz::meta<priority_container>
+{
+   using T = priority_container;
+   static constexpr auto value = object("priority", &T::priority, "priorities", &T::priorities);
+};
+
+suite yaml_enum_additional_tests = [] {
+   "enum_write_read"_test = [] {
+      Priority original = Priority::Medium;
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml.find("Medium") != std::string::npos);
+
+      Priority parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "enum_all_values"_test = [] {
+      for (auto p : {Priority::Low, Priority::Medium, Priority::High}) {
+         std::string yaml;
+         auto wec = glz::write_yaml(p, yaml);
+         expect(!wec);
+
+         Priority parsed{};
+         auto rec = glz::read_yaml(parsed, yaml);
+         expect(!rec) << glz::format_error(rec, yaml);
+         expect(parsed == p);
+      }
+   };
+
+   "array_of_enums"_test = [] {
+      std::array<Priority, 3> original{Priority::Medium, Priority::Low, Priority::High};
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      std::array<Priority, 3> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "vector_of_enums"_test = [] {
+      std::vector<Priority> original{Priority::Low, Priority::Medium, Priority::High, Priority::Low};
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      std::vector<Priority> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "enum_in_struct"_test = [] {
+      priority_container original{Priority::High, {Priority::Low, Priority::Medium}};
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      priority_container parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.priority == original.priority);
+      expect(parsed.priorities == original.priorities);
+   };
+
+   "invalid_enum"_test = [] {
+      Priority parsed{Priority::Low};
+      std::string yaml = "InvalidPriority";
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(bool(ec)); // Should error
+      expect(parsed == Priority::Low); // Should remain unchanged
+   };
+};
+
+// ============================================================
+// Skip Null Members Tests
+// ============================================================
+
+struct nullable_struct
+{
+   std::optional<int> opt{};
+   std::shared_ptr<std::string> ptr{};
+   int value{42};
+};
+
+template <>
+struct glz::meta<nullable_struct>
+{
+   using T = nullable_struct;
+   static constexpr auto value = object("opt", &T::opt, "ptr", &T::ptr, "value", &T::value);
+};
+
+suite yaml_skip_null_tests = [] {
+   "skip_null_members_true"_test = [] {
+      nullable_struct obj{};
+      std::string yaml;
+      // Default is skip_null_members = true
+      auto wec = glz::write_yaml(obj, yaml);
+      expect(!wec);
+      // Null members should be omitted
+      expect(yaml.find("opt") == std::string::npos);
+      expect(yaml.find("ptr") == std::string::npos);
+      expect(yaml.find("value") != std::string::npos);
+      expect(yaml.find("42") != std::string::npos);
+   };
+
+   "skip_null_members_false"_test = [] {
+      nullable_struct obj{};
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.skip_null_members = false};
+      auto wec = glz::write<opts>(obj, yaml);
+      expect(!wec);
+      // Null members should be present
+      expect(yaml.find("opt") != std::string::npos);
+      expect(yaml.find("ptr") != std::string::npos);
+      expect(yaml.find("null") != std::string::npos);
+   };
+
+   "skip_null_with_values"_test = [] {
+      nullable_struct obj{};
+      obj.opt = 99;
+      obj.ptr = std::make_shared<std::string>("hello");
+
+      std::string yaml;
+      auto wec = glz::write_yaml(obj, yaml);
+      expect(!wec);
+      // All members should be present when they have values
+      expect(yaml.find("opt") != std::string::npos);
+      expect(yaml.find("99") != std::string::npos);
+      expect(yaml.find("ptr") != std::string::npos);
+      expect(yaml.find("hello") != std::string::npos);
+   };
+};
+
+// ============================================================
+// Reflection and glz::meta Tests
+// ============================================================
+
+struct custom_keys_struct
+{
+   int internal_x{};
+   std::string internal_name{};
+};
+
+template <>
+struct glz::meta<custom_keys_struct>
+{
+   using T = custom_keys_struct;
+   static constexpr auto value = object("x", &T::internal_x, "name", &T::internal_name);
+};
+
+struct nested_meta_struct
+{
+   custom_keys_struct inner{};
+   int outer_value{};
+};
+
+template <>
+struct glz::meta<nested_meta_struct>
+{
+   using T = nested_meta_struct;
+   static constexpr auto value = object("inner", &T::inner, "outer", &T::outer_value);
+};
+
+suite yaml_meta_tests = [] {
+   "custom_keys"_test = [] {
+      custom_keys_struct original{42, "test"};
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      // Should use "x" not "internal_x"
+      expect(yaml.find("x:") != std::string::npos);
+      expect(yaml.find("name:") != std::string::npos);
+      expect(yaml.find("internal_x") == std::string::npos);
+
+      custom_keys_struct parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.internal_x == original.internal_x);
+      expect(parsed.internal_name == original.internal_name);
+   };
+
+   "nested_meta"_test = [] {
+      nested_meta_struct original{{10, "inner"}, 20};
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      nested_meta_struct parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.inner.internal_x == original.inner.internal_x);
+      expect(parsed.inner.internal_name == original.inner.internal_name);
+      expect(parsed.outer_value == original.outer_value);
+   };
+};
+
+// ============================================================
+// Edge Cases and Special Values
+// ============================================================
+
+suite yaml_edge_cases = [] {
+   "empty_string"_test = [] {
+      std::string original = "";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::string parsed = "not_empty";
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.empty());
+   };
+
+   "string_with_special_chars"_test = [] {
+      std::string original = "line1\nline2\ttab\"quote";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "unicode_string"_test = [] {
+      std::string original = "Hello \xe4\xb8\x96\xe7\x95\x8c \xf0\x9f\x8c\x8d"; // "Hello 世界 🌍" in UTF-8
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "very_long_string"_test = [] {
+      std::string original(10000, 'x');
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "deeply_nested_struct"_test = [] {
+      nested_struct level1{};
+      level1.title = "level1";
+      level1.data.x = 1;
+      level1.numbers = {1, 2, 3};
+
+      std::string yaml;
+      auto wec = glz::write_yaml(level1, yaml);
+      expect(!wec);
+
+      nested_struct parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.title == level1.title);
+      expect(parsed.data.x == level1.data.x);
+      expect(parsed.numbers == level1.numbers);
+   };
+
+   "map_with_empty_values"_test = [] {
+      std::map<std::string, std::string> original{{"a", ""}, {"b", "value"}, {"c", ""}};
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      std::map<std::string, std::string> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "single_element_vector"_test = [] {
+      std::vector<int> original{42};
+      std::string yaml;
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      std::vector<int> parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
       expect(parsed == original);
