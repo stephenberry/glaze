@@ -956,8 +956,7 @@ namespace glz
          }
 
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-            auto result =
-               glz::fast_float::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value);
+            auto result = glz::fast_float::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value);
             if (result.ec != std::errc{}) {
                ctx.error = error_code::parse_number_failure;
             }
@@ -1119,8 +1118,8 @@ namespace glz
          }
          else {
             static constexpr auto HashInfo = hash_info<T>;
-            const auto index =
-               decode_hash_with_size<YAML, T, HashInfo, HashInfo.type>::op(str.data(), str.data() + str.size(), str.size());
+            const auto index = decode_hash_with_size<YAML, T, HashInfo, HashInfo.type>::op(
+               str.data(), str.data() + str.size(), str.size());
 
             if (index >= N) [[unlikely]] {
                ctx.error = error_code::unexpected_enum;
@@ -1314,8 +1313,8 @@ namespace glz
             skip_inline_ws(it, end);
 
             // Look up key and parse value
-            const auto index =
-               decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size(), key.size());
+            const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
+               key.data(), key.data() + key.size(), key.size());
 
             const bool key_matches = index < N && std::string_view{key} == reflect<U>::keys[index];
 
@@ -1531,7 +1530,8 @@ namespace glz
          while (it != end) {
             // Find next content line and measure its indent
             auto line_start = it;
-            int32_t line_indent = first_key ? mapping_indent : 0; // Default: mapping_indent for mid-line, 0 for new lines
+            int32_t line_indent =
+               first_key ? mapping_indent : 0; // Default: mapping_indent for mid-line, 0 for new lines
 
             // Skip blank lines and comments (only if not first key mid-line)
             while (it != end) {
@@ -1611,8 +1611,8 @@ namespace glz
             skip_inline_ws(it, end);
 
             // Look up key
-            const auto index =
-               decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size(), key.size());
+            const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
+               key.data(), key.data() + key.size(), key.size());
 
             const bool key_matches = index < N && std::string_view{key} == reflect<U>::keys[index];
 
@@ -2518,8 +2518,9 @@ namespace glz
          constexpr auto N = std::variant_size_v<std::remove_cvref_t<T>>;
 
          bool parsed = false;
-         [&]<size_t... Is>(std::index_sequence<Is...>) { ((parsed = parsed || try_parse.template operator()<Is>()), ...); }
-         (std::make_index_sequence<N>{});
+         [&]<size_t... Is>(std::index_sequence<Is...>) {
+            ((parsed = parsed || try_parse.template operator()<Is>()), ...);
+         }(std::make_index_sequence<N>{});
 
          if (!parsed) {
             ctx.error = error_code::no_matching_variant_type;

@@ -211,7 +211,7 @@ namespace glz
       // Write a literal block scalar (|)
       template <class B>
       GLZ_ALWAYS_INLINE void write_literal_block(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                                  int32_t indent_level, uint8_t indent_width)
+                                                 int32_t indent_level, uint8_t indent_width)
       {
          if (!ensure_space(ctx, b, ix + str.size() + 64 + write_padding_bytes)) [[unlikely]] {
             return;
@@ -253,7 +253,7 @@ namespace glz
       // Write string with appropriate style
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE void write_yaml_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                                int32_t indent_level = 0)
+                                               int32_t indent_level = 0)
       {
          constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
@@ -340,7 +340,7 @@ namespace glz
       // Write block-style sequence
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                   int32_t indent_level)
+                                                  int32_t indent_level)
       {
          constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
@@ -614,12 +614,12 @@ namespace glz
       // Forward declaration for nested object helper
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                         int32_t indent_level);
+                                                        int32_t indent_level);
 
       // Write block-style mapping
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                  int32_t indent_level)
+                                                 int32_t indent_level)
       {
          using V = std::remove_cvref_t<T>;
          constexpr auto N = reflect<V>::size;
@@ -686,7 +686,7 @@ namespace glz
       // Helper for nested objects
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                         int32_t indent_level)
+                                                        int32_t indent_level)
       {
          using V = std::remove_cvref_t<T>;
 

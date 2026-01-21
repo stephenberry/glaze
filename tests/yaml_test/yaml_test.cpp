@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/yaml.hpp"
+
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -20,7 +22,6 @@
 #include <variant>
 #include <vector>
 
-#include "glaze/yaml.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -1862,8 +1863,7 @@ template <>
 struct glz::meta<company>
 {
    using T = company;
-   static constexpr auto value =
-      object("name", &T::name, "employees", &T::employees, "departments", &T::departments);
+   static constexpr auto value = object("name", &T::name, "employees", &T::employees, "departments", &T::departments);
 };
 
 suite yaml_complex_struct_tests = [] {
