@@ -108,7 +108,25 @@ message: "Hello\nWorld"
 
 # Single-quoted (literal, only '' escapes to ')
 path: 'C:\Users\name'
+
+# Literal block scalar (preserves newlines)
+description: |
+  This is line 1.
+  This is line 2.
+  This is line 3.
+
+# Folded block scalar (folds newlines to spaces)
+summary: >
+  This is a long
+  paragraph that will
+  be folded into one line.
 ```
+
+**Block scalar modifiers:**
+- `|` (literal): Preserves all newlines exactly
+- `>` (folded): Converts newlines to spaces (paragraph style)
+- Chomping: `-` strips trailing newlines, `+` keeps all, default clips to one
+- Indentation indicator: `|2` or `>4` for explicit indent level
 
 Double-quoted strings support YAML escape sequences including:
 - `\\`, `\"`, `\/`, `\n`, `\r`, `\t`, `\b`, `\f`
@@ -306,7 +324,6 @@ The current YAML implementation has some limitations compared to the full YAML 1
 - **Anchors and aliases** (`&anchor`, `*alias`) - These will produce a `feature_not_supported` error
 - **Custom tags** (`!mytag`) - Only YAML Core Schema tags are supported
 - **Multi-document streams** - Only single documents are supported
-- **Literal block scalars** (`|`) and folded block scalars (`>`)
 - **Complex keys** - Only simple scalar keys are supported
 
 ### Tab Indentation
