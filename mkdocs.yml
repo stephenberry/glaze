@@ -86,6 +86,7 @@ nav:
    - MessagePack: msgpack.md
    - Stencil/Mustache: stencil-mustache.md
    - TOML: toml.md
+   - YAML: yaml.md
    - EETF: EETF/erlang-external-term-format.md
  - Serialization/Parsing:
    - Exceptions: exceptions.md

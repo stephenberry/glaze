@@ -3,13 +3,15 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 
 Glaze also supports:
 
-- [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding)
-- [CBOR](https://stephenberry.github.io/glaze/cbor/) (Concise Binary Object Representation)
-- [CSV](https://stephenberry.github.io/glaze/csv/) (Comma Separated Value)
-- [MessagePack](https://stephenberry.github.io/glaze/msgpack/)
-- [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation)
-- [TOML](https://stephenberry.github.io/glaze/toml/) (Tom's Obvious, Minimal Language)
-- [EETF](https://stephenberry.github.io/glaze/EETF/erlang-external-term-format/) (Erlang External Term Format) [optionally included]
+- [JSON](https://stephenberry.github.io/glaze/json/) | `glaze/json.hpp`
+- [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding) | `glaze/beve.hpp`
+- [CBOR](https://stephenberry.github.io/glaze/cbor/) (Concise Binary Object Representation) | `glaze/cbor.hpp`
+- [CSV](https://stephenberry.github.io/glaze/csv/) (Comma Separated Value) | `glaze/csv.hpp`
+- [MessagePack](https://stephenberry.github.io/glaze/msgpack/) | `glaze/msgpack.hpp`
+- [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation) | `glaze/stencil/stencil.hpp`
+- [TOML](https://stephenberry.github.io/glaze/toml/) (Tom's Obvious, Minimal Language) | `glaze/toml.hpp`
+- [YAML](https://stephenberry.github.io/glaze/yaml/) | `glaze/yaml.hpp`
+- [EETF](https://stephenberry.github.io/glaze/EETF/erlang-external-term-format/) (Erlang External Term Format) | `glaze/eetf.hpp`
 - [And Many More Features](https://stephenberry.github.io/glaze/)
 
 > [!NOTE]
