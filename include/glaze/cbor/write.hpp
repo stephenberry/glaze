@@ -855,9 +855,31 @@ namespace glz
       }
    };
 
+   // Expected types
+   template <is_expected T>
+   struct to<CBOR, T> final
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         if (value) {
+            if constexpr (not std::is_void_v<typename std::decay_t<T>::value_type>) {
+               serialize<CBOR>::op<Opts>(*value, ctx, b, ix);
+            }
+            else {
+               // void value type: serialize as empty map
+               cbor_detail::encode_arg_cx<0>(ctx, cbor::major::map, b, ix);
+            }
+         }
+         else {
+            serialize<CBOR>::op<Opts>(unexpected_wrapper{&value.error()}, ctx, b, ix);
+         }
+      }
+   };
+
    // Nullable types (std::optional, std::unique_ptr, std::shared_ptr)
    template <nullable_t T>
-      requires(!std::is_array_v<T>)
+      requires(!std::is_array_v<T> && not is_expected<T>)
    struct to<CBOR, T> final
    {
       template <auto Opts>

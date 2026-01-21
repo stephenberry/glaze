@@ -22,6 +22,7 @@
 #include "glaze/json/skip.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
+#include "glaze/util/simple_float.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
 
@@ -854,21 +855,41 @@ namespace glz
                   // Hardware may interact with value changes, so we parse into a temporary and assign in one
                   // place
                   V temp;
-                  auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, temp);
-                  if (ec != std::errc()) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
+                  if constexpr (is_size_optimized(Opts)) {
+                     auto [ptr, ec] = simple_float::from_chars<Opts.null_terminated>(it, end, temp);
+                     if (ec != std::errc{}) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     it = ptr;
+                  }
+                  else {
+                     auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, temp);
+                     if (ec != std::errc()) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     it = ptr;
                   }
                   value = temp;
-                  it = ptr;
                }
                else {
-                  auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, value);
-                  if (ec != std::errc()) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
+                  if constexpr (is_size_optimized(Opts)) {
+                     auto [ptr, ec] = simple_float::from_chars<Opts.null_terminated>(it, end, value);
+                     if (ec != std::errc{}) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     it = ptr;
                   }
-                  it = ptr;
+                  else {
+                     auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, value);
+                     if (ec != std::errc()) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     it = ptr;
+                  }
                }
             }
          }
@@ -4332,6 +4353,21 @@ namespace glz
             }
          }
 
+         auto parse_val = [&] {
+            if constexpr (not std::is_void_v<decltype(*value)>) {
+               if (value) {
+                  parse<JSON>::op<Opts>(*value, ctx, it, end);
+               }
+               else {
+                  value.emplace();
+                  parse<JSON>::op<Opts>(*value, ctx, it, end);
+               }
+            }
+            else {
+               value.emplace();
+            }
+         };
+
          if (*it == '{') {
             if constexpr (not Opts.null_terminated) {
                ++ctx.depth;
@@ -4350,13 +4386,7 @@ namespace glz
             if (*it == '}') {
                it = start;
                // empty object
-               if (value) {
-                  parse<JSON>::op<Opts>(*value, ctx, it, end);
-               }
-               else {
-                  value.emplace();
-                  parse<JSON>::op<Opts>(*value, ctx, it, end);
-               }
+               parse_val();
             }
             else {
                // either we have an unexpected value or we are decoding an object
@@ -4396,25 +4426,13 @@ namespace glz
                }
                else {
                   it = start;
-                  if (value) {
-                     parse<JSON>::op<Opts>(*value, ctx, it, end);
-                  }
-                  else {
-                     value.emplace();
-                     parse<JSON>::op<Opts>(*value, ctx, it, end);
-                  }
+                  parse_val();
                }
             }
          }
          else {
             // this is not an object and therefore cannot be an unexpected value
-            if (value) {
-               parse<JSON>::op<Opts>(*value, ctx, it, end);
-            }
-            else {
-               value.emplace();
-               parse<JSON>::op<Opts>(*value, ctx, it, end);
-            }
+            parse_val();
          }
       }
    };

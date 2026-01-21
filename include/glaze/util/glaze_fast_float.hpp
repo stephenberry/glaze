@@ -40,19 +40,20 @@ namespace glz
 
       uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
 
+      uint64_t digit;
       if constexpr (null_terminated) {
-         while (glz::fast_float::is_integer(*p)) {
+         while ((digit = glz::fast_float::digit_value(*p)) <= 9) {
             // a multiplication by 10 is cheaper than an arbitrary integer
             // multiplication
-            i = 10 * i + uint64_t(*p - UC('0')); // might overflow, we will handle the overflow later
+            i = 10 * i + digit; // might overflow, we will handle the overflow later
             ++p;
          }
       }
       else {
-         while ((p != pend) && glz::fast_float::is_integer(*p)) {
+         while ((p != pend) && (digit = glz::fast_float::digit_value(*p)) <= 9) {
             // a multiplication by 10 is cheaper than an arbitrary integer
             // multiplication
-            i = 10 * i + uint64_t(*p - UC('0')); // might overflow, we will handle the overflow later
+            i = 10 * i + digit; // might overflow, we will handle the overflow later
             ++p;
          }
       }
@@ -83,15 +84,13 @@ namespace glz
          loop_parse_if_eight_digits(p, pend, i);
 
          if constexpr (null_terminated) {
-            while (glz::fast_float::is_integer(*p)) {
-               uint8_t digit = uint8_t(*p - UC('0'));
+            while ((digit = glz::fast_float::digit_value(*p)) <= 9) {
                ++p;
                i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
             }
          }
          else {
-            while ((p != pend) && glz::fast_float::is_integer(*p)) {
-               uint8_t digit = uint8_t(*p - UC('0'));
+            while ((p != pend) && (digit = glz::fast_float::digit_value(*p)) <= 9) {
                ++p;
                i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
             }
@@ -119,18 +118,17 @@ namespace glz
             else if (UC('+') == *p) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
                ++p;
             }
-            if (!glz::fast_float::is_integer(*p)) {
+            if ((digit = glz::fast_float::digit_value(*p)) > 9) {
                // Otherwise, we will be ignoring the 'e'.
                p = location_of_e;
             }
             else {
-               while (glz::fast_float::is_integer(*p)) {
-                  uint8_t digit = uint8_t(*p - UC('0'));
+               do {
                   if (exp_number < 0x10000000) {
                      exp_number = 10 * exp_number + digit;
                   }
                   ++p;
-               }
+               } while ((digit = glz::fast_float::digit_value(*p)) <= 9);
                if (neg_exp) {
                   exp_number = -exp_number;
                }
@@ -150,18 +148,17 @@ namespace glz
             else if ((p != pend) && (UC('+') == *p)) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
                ++p;
             }
-            if ((p == pend) || !glz::fast_float::is_integer(*p)) {
+            if ((p == pend) || (digit = glz::fast_float::digit_value(*p)) > 9) {
                // Otherwise, we will be ignoring the 'e'.
                p = location_of_e;
             }
             else {
-               while ((p != pend) && glz::fast_float::is_integer(*p)) {
-                  uint8_t digit = uint8_t(*p - UC('0'));
+               do {
                   if (exp_number < 0x10000000) {
                      exp_number = 10 * exp_number + digit;
                   }
                   ++p;
-               }
+               } while ((p != pend) && (digit = glz::fast_float::digit_value(*p)) <= 9);
                if (neg_exp) {
                   exp_number = -exp_number;
                }

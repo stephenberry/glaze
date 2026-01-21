@@ -6,6 +6,7 @@
 #include <chrono>
 #include <complex>
 #include <deque>
+#include <expected>
 #include <list>
 #include <map>
 #include <numbers>
@@ -5795,6 +5796,45 @@ suite beve_peek_header_at_tests = [] {
       auto result = glz::beve_peek_header_at(combined, buffer1.size());
       expect(!result.has_value());
       expect(result.error().ec == glz::error_code::unexpected_end);
+   };
+};
+
+suite expected_tests = [] {
+   "expected<void, int>"_test = [] {
+      std::expected<void, int> obj{};
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      std::expected<void, int> obj2{};
+      expect(!glz::read_beve(obj2, s));
+      expect(bool(obj2));
+
+      obj = std::unexpected(42);
+      expect(not glz::write_beve(obj, s));
+
+      obj2.emplace();
+      expect(!glz::read_beve(obj2, s));
+      expect(!obj2);
+      expect(obj2.error() == 42);
+   };
+
+   "expected<std::string, int>"_test = [] {
+      std::expected<std::string, int> obj{"hello"};
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      std::expected<std::string, int> obj2{};
+      expect(!glz::read_beve(obj2, s));
+      expect(bool(obj2));
+      expect(obj2.value() == "hello");
+
+      obj = std::unexpected(42);
+      expect(not glz::write_beve(obj, s));
+
+      obj2.emplace();
+      expect(!glz::read_beve(obj2, s));
+      expect(!obj2);
+      expect(obj2.error() == 42);
    };
 };
 
