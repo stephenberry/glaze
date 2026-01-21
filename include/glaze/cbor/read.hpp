@@ -1608,7 +1608,6 @@ namespace glz
                const uint8_t key_major = get_major_type(key_initial);
 
                if (key_major == major::tstr) {
-                  auto key_start = it;
                   ++it;
 
                   const uint8_t key_info = get_additional_info(key_initial);
@@ -1638,7 +1637,7 @@ namespace glz
                         return;
                      }
                   }
-                  // not an unexpected wrapper, rewind to key start and then to map start
+                  // not an unexpected wrapper, rewind and parse as value
                   it = start;
                   parse_val();
                }
