@@ -3,7 +3,7 @@
 JSON Schema can automaticly be generated for serializable named types exposed via the meta system.
 
 ```c++
-std::string schema = glz::write_json_schema<my_struct>();
+auto schema = glz::write_json_schema<my_struct>().value();
 ```
 
 This can be used for autocomplete, linting, and validation of user input/config files in editors like VS Code that support JSON Schema.
