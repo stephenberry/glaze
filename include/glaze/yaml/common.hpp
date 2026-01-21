@@ -203,6 +203,18 @@ namespace glz::yaml
       return -1; // EOF
    }
 
+   // Check for unsupported YAML features (anchors & and aliases *)
+   // Returns true if an unsupported feature is detected and sets error
+   template <class Ctx>
+   GLZ_ALWAYS_INLINE bool check_unsupported_feature(char c, Ctx& ctx) noexcept
+   {
+      if (c == '&' || c == '*') {
+         ctx.error = error_code::feature_not_supported;
+         return true;
+      }
+      return false;
+   }
+
    // Detect scalar style from first character
    GLZ_ALWAYS_INLINE constexpr scalar_style detect_scalar_style(char c) noexcept
    {

@@ -335,6 +335,10 @@ namespace glz
             return false;
          }
 
+         if (check_unsupported_feature(*it, ctx)) [[unlikely]] {
+            return false;
+         }
+
          if (*it == '"') {
             parse_double_quoted_string(key, ctx, it, end);
             return !bool(ctx.error);
@@ -397,6 +401,10 @@ namespace glz
             return;
          }
 
+         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
+            return;
+         }
+
          std::string str;
          const auto style = yaml::detect_scalar_style(*it);
 
@@ -439,6 +447,10 @@ namespace glz
             return;
          }
 
+         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
+            return;
+         }
+
          // Parse as plain scalar first
          std::string str;
          yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
@@ -471,6 +483,10 @@ namespace glz
 
          if (it == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
             return;
          }
 
@@ -615,6 +631,10 @@ namespace glz
             return;
          }
 
+         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
+            return;
+         }
+
          // Check for null
          auto start = it;
          std::string str;
@@ -658,6 +678,10 @@ namespace glz
 
          if (it == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
             return;
          }
 
@@ -1370,6 +1394,9 @@ namespace glz
 
             // Parse key
             if constexpr (str_t<first_type>) {
+               if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
+                  return;
+               }
                std::string key_str;
                const auto style = yaml::detect_scalar_style(*it);
                if (style == yaml::scalar_style::double_quoted) {

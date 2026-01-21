@@ -248,6 +248,12 @@ namespace glz::yaml
 
       const char c = *it;
 
+      // Anchors and aliases are not supported
+      if (c == '&' || c == '*') {
+         ctx.error = error_code::feature_not_supported;
+         return;
+      }
+
       // Double-quoted string
       if (c == '"') {
          skip_double_quoted_string(it, end, ctx);
