@@ -15,6 +15,13 @@
 
 namespace glz::yaml
 {
+   // YAML-specific context extending the base context
+   // Adds indent tracking needed for block-style parsing
+   struct yaml_context : context
+   {
+      int32_t indent{}; // Current block indent level for YAML parsing
+   };
+
    // Lookup table for characters that can start a plain scalar in flow context
    // In flow context, these are NOT allowed: [ ] { } , : # ' " | > @ ` \n \r
    inline constexpr std::array<bool, 256> can_start_plain_flow_table = [] {

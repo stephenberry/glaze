@@ -249,7 +249,7 @@ name: 'hello world')";
    "read_boolean_true"_test = [] {
       std::string yaml = "flag: true";
       bool_struct obj{};
-      auto ec = glz::read<glz::opts{.format = glz::YAML}>(obj, yaml);
+      auto ec = glz::read_yaml(obj, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(obj.flag == true);
    };
@@ -257,7 +257,7 @@ name: 'hello world')";
    "read_boolean_false"_test = [] {
       std::string yaml = "flag: false";
       bool_struct obj{.flag = true};
-      auto ec = glz::read<glz::opts{.format = glz::YAML}>(obj, yaml);
+      auto ec = glz::read_yaml(obj, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(obj.flag == false);
    };

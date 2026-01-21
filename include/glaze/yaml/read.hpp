@@ -1119,39 +1119,36 @@ namespace glz
       GLZ_ALWAYS_INLINE void parse_block_sequence(T&& value, Ctx& ctx, It& it, End end, int32_t sequence_indent)
       {
          while (it != end) {
-            // Skip blank lines and comments
-            while (it != end && (*it == '\n' || *it == '\r' || *it == '#' || *it == ' ')) {
+            // Skip blank lines and comments, track indent
+            int32_t line_indent = 0;
+            auto line_start = it;
+
+            while (it != end) {
                if (*it == '#') {
                   skip_comment(it, end);
+                  skip_newline(it, end);
+                  line_start = it;
+                  line_indent = 0;
                }
                else if (*it == '\n' || *it == '\r') {
                   skip_newline(it, end);
+                  line_start = it;
+                  line_indent = 0;
                }
-               else {
-                  // Check indentation
-                  auto line_start = it;
-                  int32_t line_indent = measure_indent(it, end, ctx);
+               else if (*it == ' ') {
+                  line_start = it;
+                  line_indent = measure_indent(it, end, ctx);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
                   if (it == end || *it == '\n' || *it == '\r') {
-                     // Blank line
+                     // Blank line - continue to next line
                      continue;
                   }
-
-                  if (line_indent < sequence_indent) {
-                     // Dedented - end of sequence
-                     it = line_start;
-                     return;
-                  }
-
-                  if (*it != '-') {
-                     // Not a sequence item - end of sequence
-                     it = line_start;
-                     return;
-                  }
-
-                  break;
+                  break; // Found content
+               }
+               else {
+                  break; // At content (no leading space on this line)
                }
             }
 
@@ -1160,21 +1157,13 @@ namespace glz
             // Check for document end marker
             if (at_document_end(it, end)) break;
 
-            // Measure current indent
-            auto line_start = it;
-            int32_t line_indent = measure_indent(it, end, ctx);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            if (it == end) break;
-
             // Check for dedent
             if (line_indent < sequence_indent) {
                it = line_start;
                return;
             }
 
-            // Expect dash
+            // Expect dash for sequence item
             if (*it != '-') {
                it = line_start;
                return;
@@ -1198,7 +1187,12 @@ namespace glz
 
                // Check what follows
                if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+                  // Content on same line as dash - set indent to column after "- "
+                  // This allows nested block mappings to know their indent level
+                  auto saved_indent = ctx.indent;
+                  ctx.indent = line_indent + 2; // dash + space
                   from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
+                  ctx.indent = saved_indent;
                }
                else {
                   // Value on next line - nested block
@@ -1213,7 +1207,11 @@ namespace glz
                   it = nested_start;
 
                   if (nested_indent > line_indent) {
+                     // Save and set indent for nested parsing
+                     auto saved_indent = ctx.indent;
+                     ctx.indent = nested_indent;
                      from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
+                     ctx.indent = saved_indent;
                   }
                   // else: empty element (default constructed)
                }
@@ -1226,11 +1224,8 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            // Skip to next line
-            skip_ws_and_comment(it, end);
-            if (it != end && (*it == '\n' || *it == '\r')) {
-               skip_newline(it, end);
-            }
+            // Note: after parsing nested block content, iterator may already be
+            // at the start of the next line. The outer loop will handle it.
          }
       }
 
@@ -1244,35 +1239,52 @@ namespace glz
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
 
+         // Track if we're on the first key (might be mid-line from sequence "- key: value")
+         bool first_key = true;
+
          while (it != end) {
-            // Skip blank lines and comments
+            // Find next content line and measure its indent
+            auto line_start = it;
+            int32_t line_indent = first_key ? mapping_indent : 0; // Default: mapping_indent for mid-line, 0 for new lines
+
+            // Skip blank lines and comments (only if not first key mid-line)
             while (it != end) {
                if (*it == '#') {
                   skip_comment(it, end);
                   skip_newline(it, end);
+                  first_key = false;
+                  line_indent = 0; // Next line starts fresh
                }
                else if (*it == '\n' || *it == '\r') {
                   skip_newline(it, end);
+                  first_key = false;
+                  line_indent = 0; // Next line starts fresh
                }
                else if (*it == ' ') {
-                  auto line_start = it;
-                  int32_t line_indent = measure_indent(it, end, ctx);
+                  line_start = it;
+                  line_indent = measure_indent(it, end, ctx);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
                   if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
-                     // Blank or comment line
+                     // Blank or comment line - continue to next
+                     first_key = false;
                      continue;
                   }
 
+                  // Found content - line_indent is set, check dedent
                   if (line_indent < mapping_indent) {
                      it = line_start;
                      return; // Dedented
                   }
 
+                  first_key = false;
                   break;
                }
                else {
+                  // Content at current position (no leading whitespace)
+                  // line_indent was set at top of outer loop iteration
+                  line_start = it;
                   break;
                }
             }
@@ -1282,19 +1294,8 @@ namespace glz
             // Check for document end marker
             if (at_document_end(it, end)) break;
 
-            // Check indentation
-            auto line_start = it;
-            int32_t line_indent = 0;
-            if (*it == ' ') {
-               line_indent = measure_indent(it, end, ctx);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
-
-            if (it == end) break;
-
-            // Check for dedent
-            if (line_indent < mapping_indent) {
+            // Check for dedent (applies when line_indent was measured or defaulted to 0)
+            if (!first_key && line_indent < mapping_indent) {
                it = line_start;
                return;
             }
@@ -1310,6 +1311,7 @@ namespace glz
             if (!parse_yaml_key(key, ctx, it, end, false)) {
                return;
             }
+            first_key = false; // After first key, always check indent
 
             skip_inline_ws(it, end);
 
@@ -1358,7 +1360,11 @@ namespace glz
                            it = nested_start;
 
                            if (nested_indent > line_indent) {
+                              // Save and set indent for nested parsing
+                              auto saved_indent = ctx.indent;
+                              ctx.indent = nested_indent;
                               from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
+                              ctx.indent = saved_indent;
                            }
                            // else: keep default value
                         }
@@ -1382,10 +1388,27 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            // Skip to next line
-            skip_ws_and_comment(it, end);
-            if (it != end && (*it == '\n' || *it == '\r')) {
-               skip_newline(it, end);
+            // Skip to end of current line (trailing whitespace, comment) and newline
+            // But don't skip if we're already at the start of a new line
+            // (which happens after nested block parsing returns)
+            if (it != end) {
+               // Check if we're at leading whitespace of a new line (not trailing whitespace)
+               // Leading whitespace would have content (not newline/comment) after it
+               if (*it == ' ' || *it == '\t') {
+                  auto peek = it;
+                  skip_inline_ws(peek, end);
+                  if (peek != end && *peek != '\n' && *peek != '\r' && *peek != '#') {
+                     // There's content after whitespace - we're at leading indent of new line
+                     // Don't skip anything, let the outer loop handle it
+                     continue;
+                  }
+               }
+               // Skip trailing whitespace and comment on current line
+               skip_inline_ws(it, end);
+               skip_comment(it, end);
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  skip_newline(it, end);
+               }
             }
          }
       }
@@ -1403,15 +1426,17 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         yaml::skip_inline_ws(it, end);
+         // Peek ahead to check for tag (don't consume indentation for block sequences)
+         auto peek = it;
+         yaml::skip_inline_ws(peek, end);
 
-         if (it == end) [[unlikely]] {
+         if (peek == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
 
          // Check for tag
-         const auto tag = yaml::parse_yaml_tag(it, end);
+         const auto tag = yaml::parse_yaml_tag(peek, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
             ctx.error = error_code::feature_not_supported;
             return;
@@ -1421,24 +1446,28 @@ namespace glz
             return;
          }
 
-         yaml::skip_inline_ws(it, end);
+         // After tag, check what follows
+         yaml::skip_inline_ws(peek, end);
 
-         if (it == end) [[unlikely]] {
+         if (peek == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
 
-         if (*it == '[') {
-            // Flow sequence
+         if (*peek == '[') {
+            // Flow sequence - consume whitespace and parse
+            it = peek;
             yaml::parse_flow_sequence<Opts>(value, ctx, it, end);
          }
-         else if (*it == '-') {
-            // Block sequence
-            // Find the indent level
-            // We're already past the indentation, so sequence_indent is 0 or whatever was measured
-            int32_t sequence_indent = 0;
-
-            yaml::parse_block_sequence<Opts>(value, ctx, it, end, sequence_indent);
+         else if (*peek == '-') {
+            // Block sequence - don't consume leading whitespace, let parse_block_sequence handle it
+            // But if there was a tag, we need to advance past it
+            if (tag != yaml::yaml_tag::none) {
+               it = peek;
+               // Rewind to find the start of the line for proper indent handling
+               // Actually, tags are rare for block sequences, just use the peek position
+            }
+            yaml::parse_block_sequence<Opts>(value, ctx, it, end, ctx.indent);
          }
          else {
             ctx.error = error_code::syntax_error;
@@ -1783,9 +1812,8 @@ namespace glz
             yaml::parse_flow_mapping<Opts>(value, ctx, it, end);
          }
          else {
-            // Block mapping
-            int32_t mapping_indent = 0;
-            yaml::parse_block_mapping<Opts>(value, ctx, it, end, mapping_indent);
+            // Block mapping - use indent from context (set by parent parser)
+            yaml::parse_block_mapping<Opts>(value, ctx, it, end, ctx.indent);
          }
       }
    };
@@ -1997,7 +2025,8 @@ namespace glz
    template <auto Opts = yaml::yaml_opts{}, class T, contiguous Buffer>
    [[nodiscard]] error_ctx read_yaml(T&& value, Buffer&& buffer) noexcept
    {
-      return read<set_yaml<Opts>()>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      yaml::yaml_context ctx{};
+      return read<set_yaml<Opts>()>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
    }
 
    template <auto Opts = yaml::yaml_opts{}, class T>
@@ -2009,7 +2038,8 @@ namespace glz
          return {0, ec};
       }
 
-      return read<set_yaml<Opts>()>(std::forward<T>(value), buffer);
+      yaml::yaml_context ctx{};
+      return read<set_yaml<Opts>()>(std::forward<T>(value), buffer, ctx);
    }
 
 } // namespace glz
