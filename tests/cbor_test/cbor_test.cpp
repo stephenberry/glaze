@@ -7,6 +7,7 @@
 #include <bitset>
 #include <complex>
 #include <deque>
+#include <expected>
 #include <map>
 #include <random>
 #include <span>
@@ -876,6 +877,46 @@ void nullable_tests()
       std::shared_ptr<int> result = std::make_shared<int>(42);
       expect(not glz::read_cbor(result, buffer));
       expect(result == nullptr);
+   };
+}
+
+void expected_tests()
+{
+   "expected<void, int>"_test = [] {
+      std::expected<void, int> obj{};
+      std::string s{};
+      expect(not glz::write_cbor(obj, s));
+
+      std::expected<void, int> obj2{};
+      expect(!glz::read_cbor(obj2, s));
+      expect(bool(obj2));
+
+      obj = std::unexpected(42);
+      expect(not glz::write_cbor(obj, s));
+
+      obj2.emplace();
+      expect(!glz::read_cbor(obj2, s));
+      expect(!obj2);
+      expect(obj2.error() == 42);
+   };
+
+   "expected<std::string, int>"_test = [] {
+      std::expected<std::string, int> obj{"hello"};
+      std::string s{};
+      expect(not glz::write_cbor(obj, s));
+
+      std::expected<std::string, int> obj2{};
+      expect(!glz::read_cbor(obj2, s));
+      expect(bool(obj2));
+      expect(obj2.value() == "hello");
+
+      obj = std::unexpected(42);
+      expect(not glz::write_cbor(obj, s));
+
+      obj2.emplace();
+      expect(!glz::read_cbor(obj2, s));
+      expect(!obj2);
+      expect(obj2.error() == 42);
    };
 }
 
@@ -2639,6 +2680,7 @@ int main()
    map_tests();
    object_tests();
    nullable_tests();
+   expected_tests();
    enum_tests();
    variant_tests();
    pair_tests();
