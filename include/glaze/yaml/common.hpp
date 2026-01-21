@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "glaze/core/common.hpp"
+#include "glaze/util/parse.hpp"
 #include "glaze/yaml/opts.hpp"
 
 namespace glz::yaml
@@ -94,6 +95,43 @@ namespace glz::yaml
       t['`'] = true;
       return t;
    }();
+
+   // YAML escape character table for double-quoted strings
+   // Maps escape char to its actual value (0 means invalid/special handling needed)
+   inline constexpr std::array<char, 256> yaml_unescape_table = [] {
+      std::array<char, 256> t{};
+      t['"'] = '"';
+      t['\\'] = '\\';
+      t['/'] = '/';
+      t['a'] = '\a'; // bell
+      t['b'] = '\b'; // backspace
+      t['t'] = '\t'; // tab
+      t['n'] = '\n'; // newline
+      t['v'] = '\v'; // vertical tab
+      t['f'] = '\f'; // form feed
+      t['r'] = '\r'; // carriage return
+      t['e'] = '\x1B'; // escape
+      t[' '] = ' '; // space
+      t['0'] = '\0'; // null
+      // Note: x, u, U require special handling (hex parsing)
+      // Note: N, _, L, P require special handling (multi-byte UTF-8)
+      return t;
+   }();
+
+   // Table indicating which YAML escapes need special multi-byte handling
+   // N (U+0085), _ (U+00A0), L (U+2028), P (U+2029)
+   inline constexpr std::array<bool, 256> yaml_escape_needs_special = [] {
+      std::array<bool, 256> t{};
+      t['x'] = true; // \xXX
+      t['u'] = true; // \uXXXX
+      t['U'] = true; // \UXXXXXXXX
+      t['N'] = true; // next line U+0085
+      t['_'] = true; // non-breaking space U+00A0
+      t['L'] = true; // line separator U+2028
+      t['P'] = true; // paragraph separator U+2029
+      return t;
+   }();
+
    // Scalar style detection
    enum struct scalar_style : uint8_t {
       plain, // unquoted

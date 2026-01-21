@@ -49,7 +49,8 @@ namespace glz
 
    namespace yaml
    {
-      // Parse a double-quoted string
+      // Parse a double-quoted string using buffer/pointer approach
+      // Uses Glaze's code_point_to_utf8 for Unicode handling
       template <class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_double_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
       {
@@ -59,60 +60,138 @@ namespace glz
          }
 
          ++it; // skip opening quote
-         value.clear();
 
-         while (it != end) {
+         // First pass: find closing quote to determine max length
+         auto start = it;
+         while (it != end && *it != '"') {
             if (*it == '\\') {
                ++it;
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
-               switch (*it) {
-               case '"':
-                  value.push_back('"');
-                  break;
-               case '\\':
-                  value.push_back('\\');
-                  break;
-               case 'n':
-                  value.push_back('\n');
-                  break;
-               case 't':
-                  value.push_back('\t');
-                  break;
-               case 'r':
-                  value.push_back('\r');
-                  break;
-               case '0':
-                  value.push_back('\0');
-                  break;
-               case '/':
-                  value.push_back('/');
-                  break;
-               case 'b':
-                  value.push_back('\b');
-                  break;
-               case 'f':
-                  value.push_back('\f');
-                  break;
-               default:
-                  value.push_back('\\');
-                  value.push_back(*it);
-                  break;
-               }
-               ++it;
             }
-            else if (*it == '"') {
-               ++it; // skip closing quote
-               return;
+            ++it;
+         }
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Allocate buffer with room for potential expansion
+         // Most escapes shrink, but \L and \P expand (2 chars -> 3 UTF-8 bytes)
+         // Worst case is ~1.5x expansion, so 2x is safe
+         const auto input_len = static_cast<size_t>(it - start);
+         value.resize(input_len + (input_len / 2) + 4); // +4 for small strings
+         auto* dst = value.data();
+
+         // Second pass: process escapes and write to buffer
+         auto src = start;
+         while (src != it) {
+            if (*src == '\\') {
+               ++src;
+               const char esc = *src;
+
+               // Check simple escape table first
+               if (yaml_unescape_table[static_cast<unsigned char>(esc)]) {
+                  *dst++ = yaml_unescape_table[static_cast<unsigned char>(esc)];
+                  ++src;
+               }
+               // Handle escapes requiring special processing
+               else if (yaml_escape_needs_special[static_cast<unsigned char>(esc)]) {
+                  ++src; // skip escape char
+                  switch (esc) {
+                  case 'x': {
+                     // \xXX - 2 hex digits
+                     if (static_cast<size_t>(it - src) < 2) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const uint32_t hi = digit_hex_table[static_cast<unsigned char>(src[0])];
+                     const uint32_t lo = digit_hex_table[static_cast<unsigned char>(src[1])];
+                     if ((hi | lo) & 0xF0) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     *dst++ = static_cast<char>((hi << 4) | lo);
+                     src += 2;
+                     break;
+                  }
+                  case 'u': {
+                     // \uXXXX - 4 hex digits (may be surrogate pair)
+                     if (static_cast<size_t>(it - src) < 4) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const uint32_t codepoint = hex_to_u32(&*src);
+                     if (codepoint == 0xFFFFFFFFu) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     src += 4;
+                     dst += code_point_to_utf8(codepoint, dst);
+                     break;
+                  }
+                  case 'U': {
+                     // \UXXXXXXXX - 8 hex digits
+                     if (static_cast<size_t>(it - src) < 8) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const uint32_t hi = hex_to_u32(&*src);
+                     const uint32_t lo = hex_to_u32(&*(src + 4));
+                     if ((hi | lo) == 0xFFFFFFFFu) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     const uint32_t codepoint = (hi << 16) | lo;
+                     src += 8;
+                     if (codepoint <= 0x10FFFF) {
+                        dst += code_point_to_utf8(codepoint, dst);
+                     }
+                     break;
+                  }
+                  case 'N': {
+                     // Next line U+0085
+                     dst += code_point_to_utf8(0x0085, dst);
+                     break;
+                  }
+                  case '_': {
+                     // Non-breaking space U+00A0
+                     dst += code_point_to_utf8(0x00A0, dst);
+                     break;
+                  }
+                  case 'L': {
+                     // Line separator U+2028
+                     dst += code_point_to_utf8(0x2028, dst);
+                     break;
+                  }
+                  case 'P': {
+                     // Paragraph separator U+2029
+                     dst += code_point_to_utf8(0x2029, dst);
+                     break;
+                  }
+                  default:
+                     // Should not reach here due to table check
+                     break;
+                  }
+               }
+               else {
+                  // Unknown escape - pass through literally
+                  *dst++ = '\\';
+                  *dst++ = esc;
+                  ++src;
+               }
             }
             else {
-               value.push_back(*it);
-               ++it;
+               *dst++ = *src++;
             }
          }
-         ctx.error = error_code::unexpected_end;
+
+         // Resize to actual length
+         value.resize(static_cast<size_t>(dst - value.data()));
+         ++it; // skip closing quote
       }
 
       // Parse a single-quoted string
