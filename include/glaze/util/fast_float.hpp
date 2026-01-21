@@ -1482,6 +1482,14 @@ fastfloat_really_inline constexpr bool is_integer(UC c) noexcept {
   return !(c > UC('9') || c < UC('0'));
 }
 
+// Optimized digit parsing: returns digit value [0-9] for digits, or value > 9 for non-digits.
+// Uses unsigned underflow to combine bounds check and digit extraction in one operation.
+// This is faster than separate is_integer() check + digit computation.
+template <typename UC>
+fastfloat_really_inline constexpr uint64_t digit_value(UC c) noexcept {
+  return uint64_t(uint8_t(c) - uint8_t('0'));
+}
+
 fastfloat_really_inline constexpr uint64_t byteswap(uint64_t val) {
   return (val & 0xFF00000000000000) >> 56 | (val & 0x00FF000000000000) >> 40 |
          (val & 0x0000FF0000000000) >> 24 | (val & 0x000000FF00000000) >> 8 |
@@ -1765,12 +1773,11 @@ parse_number_string(UC const *p, UC const *pend,
 
   uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
 
-  while ((p != pend) && is_integer(*p)) {
+  uint64_t digit;
+  while ((p != pend) && (digit = digit_value(*p)) <= 9) {
     // a multiplication by 10 is cheaper than an arbitrary integer
     // multiplication
-    i = 10 * i +
-        uint64_t(*p -
-                 UC('0')); // might overflow, we will handle the overflow later
+    i = 10 * i + digit; // might overflow, we will handle the overflow later
     ++p;
   }
   UC const *const end_of_integer_part = p;
@@ -1796,8 +1803,7 @@ parse_number_string(UC const *p, UC const *pend,
     // for integers with many digits, digit parsing is the primary bottleneck.
     loop_parse_if_eight_digits(p, pend, i);
 
-    while ((p != pend) && is_integer(*p)) {
-      uint8_t digit = uint8_t(*p - UC('0'));
+    while ((p != pend) && (digit = digit_value(*p)) <= 9) {
       ++p;
       i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
     }

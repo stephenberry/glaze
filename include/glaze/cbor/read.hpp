@@ -1541,9 +1541,128 @@ namespace glz
       }
    };
 
+   // Expected types
+   template <is_expected T>
+   struct from<CBOR, T> final
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         using namespace cbor;
+
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         auto parse_val = [&] {
+            if constexpr (not std::is_void_v<typename std::decay_t<T>::value_type>) {
+               if (value) {
+                  parse<CBOR>::op<Opts>(*value, ctx, it, end);
+               }
+               else {
+                  value.emplace();
+                  parse<CBOR>::op<Opts>(*value, ctx, it, end);
+               }
+            }
+            else {
+               value.emplace();
+            }
+         };
+
+         uint8_t peek;
+         std::memcpy(&peek, it, 1);
+         const uint8_t major_type = get_major_type(peek);
+
+         if (major_type == major::map) {
+            auto start = it;
+            ++it;
+
+            const uint8_t additional_info = get_additional_info(peek);
+            const uint64_t n_pairs = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            if (n_pairs == 0) {
+               // empty map
+               if constexpr (std::is_void_v<typename std::decay_t<T>::value_type>) {
+                  value.emplace();
+               }
+               else {
+                  // rewind and parse as value (the value type might be an empty map)
+                  it = start;
+                  parse_val();
+               }
+            }
+            else if (n_pairs == 1) {
+               // could be unexpected wrapper or a single-field object value
+               // peek at the key
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               uint8_t key_initial;
+               std::memcpy(&key_initial, it, 1);
+               const uint8_t key_major = get_major_type(key_initial);
+
+               if (key_major == major::tstr) {
+                  ++it;
+
+                  const uint8_t key_info = get_additional_info(key_initial);
+                  const uint64_t key_len = cbor_detail::decode_arg(ctx, it, end, key_info);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+
+                  static constexpr sv unexpected_key = "unexpected";
+                  if (key_len == unexpected_key.size() && uint64_t(end - it) >= key_len) {
+                     if (std::memcmp(it, unexpected_key.data(), key_len) == 0) {
+                        // this is an unexpected wrapper
+                        it += key_len;
+
+                        using error_type = typename std::decay_t<T>::error_type;
+                        if (!value) {
+                           parse<CBOR>::op<Opts>(value.error(), ctx, it, end);
+                        }
+                        else {
+                           std::decay_t<error_type> error{};
+                           parse<CBOR>::op<Opts>(error, ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]] {
+                              return;
+                           }
+                           value = glz::unexpected(std::move(error));
+                        }
+                        return;
+                     }
+                  }
+                  // not an unexpected wrapper, rewind and parse as value
+                  it = start;
+                  parse_val();
+               }
+               else {
+                  // key is not a string, rewind and parse as value
+                  it = start;
+                  parse_val();
+               }
+            }
+            else {
+               // multiple pairs, must be a value map
+               it = start;
+               parse_val();
+            }
+         }
+         else {
+            // not a map, parse as value directly
+            parse_val();
+         }
+      }
+   };
+
    // Nullable types
    template <nullable_t T>
-      requires(!std::is_array_v<T>)
+      requires(!std::is_array_v<T> && not is_expected<T>)
    struct from<CBOR, T> final
    {
       template <auto Opts>

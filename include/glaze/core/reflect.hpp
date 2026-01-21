@@ -647,18 +647,22 @@ namespace glz
       offset, // Sequential values with offset: value - min_value
       power_of_two, // Powers of 2 (flags): countr_zero(value)
       small_range, // Sparse lookup table for small ranges
-      modular // Perfect hash: (value * seed) % table_size
+      modular, // Perfect hash: (value * seed) % table_size
+      modular_shifted // Perfect hash with shift: ((value >> shift) * seed) % table_size
    };
 
    template <size_t N, size_t TableSize>
    struct int_keys_info_t
    {
+      // Note: table must be first to work around Apple clang NTTP bug where
+      // arrays at the end of structs get corrupted when passed as template parameters
+      std::array<uint8_t, TableSize> table{}; // For small_range/modular: maps key → index
       int_hash_type type{};
       int64_t min_value{};
       int64_t max_value{};
       uint64_t seed{};
       size_t table_size{};
-      std::array<uint8_t, TableSize> table{}; // For small_range/modular: maps key → index
+      uint8_t shift{}; // Right shift to apply before modular hash (handles common power-of-2 factors)
    };
 
    // Specialization for when no table is needed
@@ -670,6 +674,7 @@ namespace glz
       int64_t max_value{};
       uint64_t seed{};
       size_t table_size{};
+      uint8_t shift{}; // Right shift to apply before modular hash (handles common power-of-2 factors)
    };
 
    template <class T>
@@ -789,6 +794,7 @@ namespace glz
          }
          else {
             // Strategy 4: Modular perfect hash (fallback)
+            // First try standard modular hash (faster lookup)
             constexpr auto modular_info = [&]() {
                for (const auto prime : primes_64) {
                   std::array<bool, table_size> used{};
@@ -810,17 +816,70 @@ namespace glz
                return std::pair{false, uint64_t{0}};
             }();
 
-            static_assert(modular_info.first, "Failed to find perfect hash seed for enum");
+            if constexpr (modular_info.first) {
+               // Standard modular hash works
+               int_keys_info_t<N, table_size> info{
+                  .type = int_hash_type::modular, .seed = modular_info.second, .table_size = table_size};
+               info.table.fill(static_cast<uint8_t>(N));
 
-            int_keys_info_t<N, table_size> info{
-               .type = int_hash_type::modular, .seed = modular_info.second, .table_size = table_size};
-            info.table.fill(static_cast<uint8_t>(N));
-
-            for (size_t i = 0; i < N; ++i) {
-               const auto h = (static_cast<uint64_t>(vals[i]) * info.seed) % table_size;
-               info.table[h] = static_cast<uint8_t>(i);
+               for (size_t i = 0; i < N; ++i) {
+                  const auto h = (static_cast<uint64_t>(vals[i]) * info.seed) % table_size;
+                  info.table[h] = static_cast<uint8_t>(i);
+               }
+               return info;
             }
-            return info;
+            else {
+               // Strategy 5: Modular hash with shift for sparse enums with common power-of-2 factors
+               constexpr uint8_t common_shift = [&]() -> uint8_t {
+                  uint8_t min_trailing = 64;
+                  for (const auto v : vals) {
+                     if (v != 0) {
+                        const auto trailing = static_cast<uint8_t>(std::countr_zero(static_cast<uint64_t>(v)));
+                        if (trailing < min_trailing) {
+                           min_trailing = trailing;
+                        }
+                     }
+                  }
+                  return min_trailing == 64 ? 0 : min_trailing;
+               }();
+
+               constexpr auto shifted_info = [&]() {
+                  for (const auto prime : primes_64) {
+                     std::array<bool, table_size> used{};
+                     bool collision = false;
+
+                     for (size_t i = 0; i < N; ++i) {
+                        const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
+                        const auto h = (shifted * prime) % table_size;
+                        if (used[h]) {
+                           collision = true;
+                           break;
+                        }
+                        used[h] = true;
+                     }
+
+                     if (!collision) {
+                        return std::pair{true, prime};
+                     }
+                  }
+                  return std::pair{false, uint64_t{0}};
+               }();
+
+               static_assert(shifted_info.first, "Failed to find perfect hash seed for enum");
+
+               int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
+                                                   .seed = shifted_info.second,
+                                                   .table_size = table_size,
+                                                   .shift = common_shift};
+               info.table.fill(static_cast<uint8_t>(N));
+
+               for (size_t i = 0; i < N; ++i) {
+                  const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
+                  const auto h = (shifted * info.seed) % table_size;
+                  info.table[h] = static_cast<uint8_t>(i);
+               }
+               return info;
+            }
          }
       }
    }
@@ -874,8 +933,13 @@ namespace glz
             }
             return Info.table[static_cast<size_t>(idx)]; // Returns N if slot is empty
          }
-         else { // modular
+         else if constexpr (Info.type == modular) {
             const auto h = (static_cast<uint64_t>(value) * Info.seed) % Info.table_size;
+            return Info.table[h]; // Returns N if slot is empty
+         }
+         else { // modular_shifted
+            const auto shifted = static_cast<uint64_t>(value) >> Info.shift;
+            const auto h = (shifted * Info.seed) % Info.table_size;
             return Info.table[h]; // Returns N if slot is empty
          }
       }
@@ -2551,6 +2615,8 @@ namespace glz
             return info;
          }
          else {
+            // Strategy 4: Modular perfect hash (fallback)
+            // First try standard modular hash (faster lookup)
             constexpr auto modular_info = [&]() {
                for (const auto prime : primes_64) {
                   std::array<bool, table_size> used{};
@@ -2572,17 +2638,70 @@ namespace glz
                return std::pair{false, uint64_t{0}};
             }();
 
-            static_assert(modular_info.first, "Failed to find perfect hash seed for variant int IDs");
+            if constexpr (modular_info.first) {
+               // Standard modular hash works
+               int_keys_info_t<N, table_size> info{
+                  .type = int_hash_type::modular, .seed = modular_info.second, .table_size = table_size};
+               info.table.fill(static_cast<uint8_t>(N));
 
-            int_keys_info_t<N, table_size> info{
-               .type = int_hash_type::modular, .seed = modular_info.second, .table_size = table_size};
-            info.table.fill(static_cast<uint8_t>(N));
-
-            for (size_t i = 0; i < N; ++i) {
-               const auto h = (static_cast<uint64_t>(vals[i]) * info.seed) % table_size;
-               info.table[h] = static_cast<uint8_t>(i);
+               for (size_t i = 0; i < N; ++i) {
+                  const auto h = (static_cast<uint64_t>(vals[i]) * info.seed) % table_size;
+                  info.table[h] = static_cast<uint8_t>(i);
+               }
+               return info;
             }
-            return info;
+            else {
+               // Strategy 5: Modular hash with shift for sparse values with common power-of-2 factors
+               constexpr uint8_t common_shift = [&]() -> uint8_t {
+                  uint8_t min_trailing = 64;
+                  for (const auto v : vals) {
+                     if (v != 0) {
+                        const auto trailing = static_cast<uint8_t>(std::countr_zero(static_cast<uint64_t>(v)));
+                        if (trailing < min_trailing) {
+                           min_trailing = trailing;
+                        }
+                     }
+                  }
+                  return min_trailing == 64 ? 0 : min_trailing;
+               }();
+
+               constexpr auto shifted_info = [&]() {
+                  for (const auto prime : primes_64) {
+                     std::array<bool, table_size> used{};
+                     bool collision = false;
+
+                     for (size_t i = 0; i < N; ++i) {
+                        const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
+                        const auto h = (shifted * prime) % table_size;
+                        if (used[h]) {
+                           collision = true;
+                           break;
+                        }
+                        used[h] = true;
+                     }
+
+                     if (!collision) {
+                        return std::pair{true, prime};
+                     }
+                  }
+                  return std::pair{false, uint64_t{0}};
+               }();
+
+               static_assert(shifted_info.first, "Failed to find perfect hash seed for variant int IDs");
+
+               int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
+                                                   .seed = shifted_info.second,
+                                                   .table_size = table_size,
+                                                   .shift = common_shift};
+               info.table.fill(static_cast<uint8_t>(N));
+
+               for (size_t i = 0; i < N; ++i) {
+                  const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
+                  const auto h = (shifted * info.seed) % table_size;
+                  info.table[h] = static_cast<uint8_t>(i);
+               }
+               return info;
+            }
          }
       }
    }
@@ -2650,8 +2769,13 @@ namespace glz
             }
             return Info.table[static_cast<size_t>(idx)];
          }
-         else { // modular
+         else if constexpr (Info.type == modular) {
             const auto h = (static_cast<uint64_t>(id) * Info.seed) % Info.table_size;
+            return Info.table[h];
+         }
+         else { // modular_shifted
+            const auto shifted = static_cast<uint64_t>(id) >> Info.shift;
+            const auto h = (shifted * Info.seed) % Info.table_size;
             return Info.table[h];
          }
       }

@@ -32,6 +32,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/util/itoa.hpp"
 #include "glaze/util/itoa_40kb.hpp"
+#include "glaze/util/simple_float.hpp"
 
 namespace glz
 {
@@ -305,19 +306,13 @@ namespace glz
                   static_assert(false_v<V>, "invalid float_max_write_precision");
                }
             }
-            // Size optimization: use std::to_chars to avoid dragonbox lookup tables (~238KB)
-            // Only available on platforms with floating-point std::to_chars support
-#if GLZ_USE_STD_FORMAT_FLOAT
+            // Size optimization: use simple_float::to_chars to avoid dragonbox lookup tables (~20KB)
+            // This works on all platforms including bare-metal
             else if constexpr (is_size_optimized(Opts) && is_any_of<V, float, double>) {
                const auto start = reinterpret_cast<char*>(&b[ix]);
-               const auto [ptr, ec] = std::to_chars(start, start + 24, V(value));
-               if (ec != std::errc()) {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-               ix += size_t(ptr - start);
+               const auto end = simple_float::to_chars(start, V(value));
+               ix += size_t(end - start);
             }
-#endif
             else if constexpr (is_any_of<V, float, double>) {
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto end = glz::to_chars(start, value);

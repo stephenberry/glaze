@@ -1009,6 +1009,33 @@ namespace glz
       }
    };
 
+   template <is_expected T>
+   struct to<BEVE, T> final
+   {
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (value) {
+            if constexpr (not std::is_void_v<typename std::decay_t<T>::value_type>) {
+               serialize<BEVE>::op<Opts>(*value, ctx, b, ix);
+            }
+            else {
+               // void value type: serialize as empty object
+               constexpr uint8_t type = 0; // string key
+               constexpr uint8_t tag = tag::object | type;
+               dump_type(ctx, tag, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               dump_compressed_int<0>(b, ix);
+            }
+         }
+         else {
+            serialize<BEVE>::op<Opts>(unexpected_wrapper{&value.error()}, ctx, b, ix);
+         }
+      }
+   };
+
    template <nullable_t T>
       requires(std::is_array_v<T>)
    struct to<BEVE, T>
@@ -1021,7 +1048,7 @@ namespace glz
    };
 
    template <nullable_t T>
-      requires(!std::is_array_v<T>)
+      requires(!std::is_array_v<T> && not is_expected<T>)
    struct to<BEVE, T> final
    {
       template <auto Opts, class B>
