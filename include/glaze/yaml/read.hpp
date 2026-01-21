@@ -238,7 +238,9 @@ namespace glz
 
          while (it != end) {
             auto line_start = it;
-            int32_t line_indent = measure_indent(it, end);
+            int32_t line_indent = measure_indent(it, end, ctx);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             // Check for blank line
             if (it == end || *it == '\n' || *it == '\r') {
@@ -937,7 +939,9 @@ namespace glz
                else {
                   // Check indentation
                   auto line_start = it;
-                  int32_t line_indent = measure_indent(it, end);
+                  int32_t line_indent = measure_indent(it, end, ctx);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
 
                   if (it == end || *it == '\n' || *it == '\r') {
                      // Blank line
@@ -967,7 +971,9 @@ namespace glz
 
             // Measure current indent
             auto line_start = it;
-            int32_t line_indent = measure_indent(it, end);
+            int32_t line_indent = measure_indent(it, end, ctx);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             if (it == end) break;
 
@@ -1010,7 +1016,9 @@ namespace glz
 
                   // Get indent of nested content
                   auto nested_start = it;
-                  int32_t nested_indent = measure_indent(it, end);
+                  int32_t nested_indent = measure_indent(it, end, ctx);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   it = nested_start;
 
                   if (nested_indent > line_indent) {
@@ -1057,7 +1065,9 @@ namespace glz
                }
                else if (*it == ' ') {
                   auto line_start = it;
-                  int32_t line_indent = measure_indent(it, end);
+                  int32_t line_indent = measure_indent(it, end, ctx);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
 
                   if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
                      // Blank or comment line
@@ -1085,7 +1095,9 @@ namespace glz
             auto line_start = it;
             int32_t line_indent = 0;
             if (*it == ' ') {
-               line_indent = measure_indent(it, end);
+               line_indent = measure_indent(it, end, ctx);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             if (it == end) break;
@@ -1149,7 +1161,9 @@ namespace glz
                            skip_newline(it, end);
 
                            auto nested_start = it;
-                           int32_t nested_indent = measure_indent(it, end);
+                           int32_t nested_indent = measure_indent(it, end, ctx);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return false;
                            it = nested_start;
 
                            if (nested_indent > line_indent) {
@@ -1609,7 +1623,9 @@ namespace glz
                if (it == end) break;
 
                // Measure and skip indent
-               yaml::measure_indent(it, end);
+               yaml::measure_indent(it, end, ctx);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
 
                if (it == end || *it == '\n' || *it == '\r') continue;
 

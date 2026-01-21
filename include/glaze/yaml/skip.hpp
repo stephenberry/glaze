@@ -93,7 +93,9 @@ namespace glz::yaml
       while (it != end) {
          // Measure indent of current line
          auto line_start = it;
-         int32_t line_indent = measure_indent(it, end);
+         int32_t line_indent = measure_indent(it, end, ctx);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
 
          // Check if this is a blank line
          if (it != end && (*it == '\n' || *it == '\r')) {
@@ -296,7 +298,9 @@ namespace glz::yaml
 
             // Check next line indent
             auto line_start = it;
-            int32_t line_indent = measure_indent(it, end);
+            int32_t line_indent = measure_indent(it, end, ctx);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             if (it == end) break;
 

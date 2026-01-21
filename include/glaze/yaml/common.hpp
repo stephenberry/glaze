@@ -202,21 +202,25 @@ namespace glz::yaml
    }
 
    // Measure indentation at current position (assumes at start of line)
-   // Returns number of spaces (tabs count as 1 for simplicity)
-   template <class It, class End>
-   GLZ_ALWAYS_INLINE int32_t measure_indent(It&& it, End end) noexcept
+   // Returns number of spaces. Sets error if tabs are encountered (YAML forbids tabs in indentation)
+   template <class It, class End, class Ctx>
+   GLZ_ALWAYS_INLINE int32_t measure_indent(It&& it, End end, Ctx& ctx) noexcept
    {
       int32_t indent = 0;
       while (it != end && *it == ' ') {
          ++indent;
          ++it;
       }
+      // YAML spec: "Tab characters must not be used for indentation"
+      if (it != end && *it == '\t') {
+         ctx.error = error_code::syntax_error;
+      }
       return indent;
    }
 
    // Skip to next line and return new indentation level
-   template <class It, class End>
-   GLZ_ALWAYS_INLINE int32_t skip_to_next_content_line(It&& it, End end) noexcept
+   template <class It, class End, class Ctx>
+   GLZ_ALWAYS_INLINE int32_t skip_to_next_content_line(It&& it, End end, Ctx& ctx) noexcept
    {
       while (it != end) {
          // Skip to end of current line
@@ -231,7 +235,8 @@ namespace glz::yaml
 
          // Measure indent of new line
          auto start = it;
-         int32_t indent = measure_indent(it, end);
+         int32_t indent = measure_indent(it, end, ctx);
+         if (bool(ctx.error)) return -1;
 
          // Check if this is a content line (not blank, not comment-only)
          skip_inline_ws(it, end);
