@@ -527,13 +527,17 @@ namespace glz
       /**
        * @brief Construct an HTTP server
        *
-       * @param executor Optional external asio executor to use. If using an
+       * @param executor Optional external asio executor to use. If using a
        *                 default-constructed asio::any_io_executor() without target
        *                 executor, it creates its own io_context.  Using an external
        *                 executor allows sharing the io_context and its event loop with
        *                 other asio-based components or managing the io_context lifecycle
        *                 externally.
-
+       *
+       * @note When using an external executor, no worker threads are created by start().
+       *       The caller is responsible for running the executor (e.g., calling io_context::run()
+       *       from their own threads).
+       *
        * @param custom_error_handler Optional error handler for server errors.
        *                             If not provided, uses a default handler that prints
        *                             to stderr.
@@ -569,7 +573,7 @@ namespace glz
        *    my_logger.error("Server error at {}:{}: {}",
        *                    loc.file_name(), loc.line(), ec.message());
        * };
-       * glz::http_server server(nullptr, error_handler);
+       * glz::http_server server({}, error_handler);
        * @endcode
        */
       inline http_server(asio::any_io_executor executor = asio::any_io_executor(),
@@ -651,6 +655,12 @@ namespace glz
          : http_server(context ? context->get_executor() : asio::any_io_executor(),
                        custom_error_handler)
       {
+         // Preserve shared ownership to prevent use-after-free. The delegated constructor
+         // only stores io_context when no executor is provided, but the executor alone
+         // doesn't keep the io_context alive.
+         if (context) {
+            io_context = context;
+         }
       }
 
       inline ~http_server()

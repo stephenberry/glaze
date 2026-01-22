@@ -101,7 +101,7 @@ server.on_error([](std::error_code ec, std::source_location loc) {
 });
 ```
 
-### Using an External io_context via it's executor
+### Using an External io_context via its executor
 
 You can provide your own `asio::any_io_executor` to the server, allowing you to share the event loop with other ASIO-based components or manage the lifecycle externally.
 
@@ -114,7 +114,7 @@ You can provide your own `asio::any_io_executor` to the server, allowing you to 
 // Create a shared io_context
 auto io_ctx = std::make_shared<asio::io_context>();
 
-// Pass it's executor to the server constructor
+// Pass its executor to the server constructor
 glz::http_server server(io_ctx->get_executor());
 
 // Configure routes
