@@ -527,6 +527,87 @@ namespace glz
       /**
        * @brief Construct an HTTP server
        *
+       * @param executor Optional external asio executor to use. If using a
+       *                 default-constructed asio::any_io_executor() without target
+       *                 executor, it creates its own io_context.  Using an external
+       *                 executor allows sharing the io_context and its event loop with
+       *                 other asio-based components or managing the io_context lifecycle
+       *                 externally.
+       *
+       * @note When using an external executor, no worker threads are created by start().
+       *       The caller is responsible for running the executor (e.g., calling io_context::run()
+       *       from their own threads).
+       *
+       * @param custom_error_handler Optional error handler for server errors.
+       *                             If not provided, uses a default handler that prints
+       *                             to stderr.
+       *
+       * Example with internal io_context (default):
+       * @code
+       * glz::http_server server;
+       * server.bind(8080);
+       * server.start();  // Creates worker threads using hardware_concurrency()
+       * @endcode
+       *
+       * Example with external io_context:
+       * @code
+       * auto io_ctx = std::make_shared<asio::io_context>();
+       * glz::http_server server(io_ctx->get_executor());
+       * server.bind(8080);
+       * server.start(0);  // Pass 0 to skip creating worker threads
+       *
+       * // Run io_context in your own thread(s)
+       * std::thread io_thread([io_ctx]() {
+       *    io_ctx->run();
+       * });
+       *
+       * // ... later ...
+       * server.stop();
+       * io_ctx->stop();
+       * io_thread.join();
+       * @endcode
+       *
+       * Example with custom error handler:
+       * @code
+       * auto error_handler = [](std::error_code ec, std::source_location loc) {
+       *    my_logger.error("Server error at {}:{}: {}",
+       *                    loc.file_name(), loc.line(), ec.message());
+       * };
+       * glz::http_server server({}, error_handler);
+       * @endcode
+       */
+      inline http_server(asio::any_io_executor executor = asio::any_io_executor(),
+                         glz::error_handler custom_error_handler = {})
+         : io_executor(executor)
+      {
+         if (!io_executor) {
+            io_context = std::make_shared<asio::io_context>();
+            io_executor = io_context->get_executor();
+         }
+         if (custom_error_handler) {
+            error_handler = std::move(custom_error_handler);
+         }
+         else {
+            error_handler = [](std::error_code ec, std::source_location loc) {
+               std::fprintf(stderr, "Error at %s:%d: %s\n", loc.file_name(), static_cast<int>(loc.line()),
+                            ec.message().c_str());
+            };
+         }
+
+         // Initialize SSL context for TLS-enabled servers
+         if constexpr (EnableTLS) {
+#ifdef GLZ_ENABLE_SSL
+            ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tlsv12);
+            ssl_context->set_default_verify_paths();
+#else
+            static_assert(!EnableTLS, "TLS support requires GLZ_ENABLE_SSL to be defined and OpenSSL to be available");
+#endif
+         }
+      }
+
+      /**
+       * @brief Construct an HTTP server (Legacy Constructor, construct using external io_context)
+       *
        * @param context Optional external io_context to use. If nullptr, creates its own.
        *                Using an external io_context allows sharing the event loop with
        *                other asio-based components or managing the io_context lifecycle
@@ -569,28 +650,16 @@ namespace glz
        * glz::http_server server(nullptr, error_handler);
        * @endcode
        */
-      inline http_server(std::shared_ptr<asio::io_context> context = nullptr,
+      inline http_server(std::shared_ptr<asio::io_context> context,
                          glz::error_handler custom_error_handler = {})
-         : io_context(context ? context : std::make_shared<asio::io_context>())
+         : http_server(context ? context->get_executor() : asio::any_io_executor(),
+                       custom_error_handler)
       {
-         if (custom_error_handler) {
-            error_handler = std::move(custom_error_handler);
-         }
-         else {
-            error_handler = [](std::error_code ec, std::source_location loc) {
-               std::fprintf(stderr, "Error at %s:%d: %s\n", loc.file_name(), static_cast<int>(loc.line()),
-                            ec.message().c_str());
-            };
-         }
-
-         // Initialize SSL context for TLS-enabled servers
-         if constexpr (EnableTLS) {
-#ifdef GLZ_ENABLE_SSL
-            ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tlsv12);
-            ssl_context->set_default_verify_paths();
-#else
-            static_assert(!EnableTLS, "TLS support requires GLZ_ENABLE_SSL to be defined and OpenSSL to be available");
-#endif
+         // Preserve shared ownership to prevent use-after-free. The delegated constructor
+         // only stores io_context when no executor is provided, but the executor alone
+         // doesn't keep the io_context alive.
+         if (context) {
+            io_context = context;
          }
       }
 
@@ -616,7 +685,7 @@ namespace glz
       {
          try {
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(address), port);
-            acceptor = std::make_unique<asio::ip::tcp::acceptor>(*io_context, endpoint);
+            acceptor = std::make_unique<asio::ip::tcp::acceptor>(io_executor, endpoint);
          }
          catch (...) {
             error_handler(std::make_error_code(std::errc::address_in_use), std::source_location::current());
@@ -715,9 +784,8 @@ namespace glz
 
          // Start the acceptor
          do_accept();
-
          // Start worker threads (unless explicitly set to 0)
-         if (actual_threads > 0) {
+         if (io_context && actual_threads > 0) {
             threads.reserve(actual_threads);
             for (size_t i = 0; i < actual_threads; ++i) {
                threads.emplace_back([this] {
@@ -759,7 +827,8 @@ namespace glz
          }
 
          // Stop the io_context
-         io_context->stop();
+         if (io_context)
+            io_context->stop();
 
          // Only join threads if we're not in one of the worker threads
          auto current_thread_id = std::this_thread::get_id();
@@ -1222,7 +1291,7 @@ namespace glz
          signal_handling_enabled = true;
 
          // Create signal_set that will handle SIGINT and SIGTERM
-         signals_ = std::make_unique<asio::signal_set>(*io_context, SIGINT, SIGTERM);
+         signals_ = std::make_unique<asio::signal_set>(io_executor, SIGINT, SIGTERM);
 
          // Set up async handler - this properly captures 'this' and integrates with ASIO
          signals_->async_wait([this](std::error_code ec, int signal_number) {
@@ -1319,7 +1388,11 @@ namespace glz
          threads.clear();
       }
 
+      // Get executor for async operations (timers, etc.)
+      asio::any_io_executor get_executor() const { return io_executor; }
+
      private:
+      asio::any_io_executor io_executor;
       std::shared_ptr<asio::io_context> io_context;
       std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
       std::vector<std::thread> threads;
