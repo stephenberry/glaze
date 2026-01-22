@@ -160,9 +160,9 @@ namespace glz
       std::mutex mtx;
       std::unordered_map<connection_key, std::vector<std::shared_ptr<asio::ip::tcp::socket>>, connection_key_hash>
          available_connections;
-      std::shared_ptr<asio::io_context> io_context;
+      asio::any_io_executor io_executor;
 
-      http_connection_pool(std::shared_ptr<asio::io_context> ctx) : io_context(ctx) {}
+      http_connection_pool(asio::any_io_executor executor) : io_executor(executor) {}
 
       std::shared_ptr<asio::ip::tcp::socket> get_connection(const std::string& host, uint16_t port)
       {
@@ -186,7 +186,7 @@ namespace glz
          }
 
          // Create new connection if none are available or they are closed
-         return std::make_shared<asio::ip::tcp::socket>(*io_context);
+         return std::make_shared<asio::ip::tcp::socket>(io_executor);
       }
 
       void return_connection(const std::string& host, uint16_t port, std::shared_ptr<asio::ip::tcp::socket> socket)
@@ -272,9 +272,55 @@ namespace glz
 
    struct http_client
    {
-      http_client()
-         : async_io_context(std::make_shared<asio::io_context>()),
-           connection_pool(std::make_shared<http_connection_pool>(async_io_context))
+      /**
+       * @brief Construct an HTTP client
+       *
+       * @param executor Optional external asio executor to use. If using a
+       *                 default-constructed asio::any_io_executor() without target
+       *                 executor, it creates its own io_context.  Using an external
+       *                 executor allows sharing the io_context and its event loop with
+       *                 other asio-based components or managing the io_context lifecycle
+       *                 externally.
+       *
+       * @note When using an external executor, no worker threads are created by start_workers().
+       *       The caller is responsible for running the executor (e.g., calling io_context::run()
+       *       from their own threads) and to maintence its lifecycle.
+       *
+       *
+       * Example with internal io_context (handler is called from a different thread created by http_client):
+       * @code
+       *   glz::http_client client{};
+       *   client.get_async("http://example.com", {},
+       * 				   [](std::expected<glz::response, std::error_code> resp){
+       * 				     if (resp.has_value()) {
+       * 				       std::cout << resp->response_body << std::endl;
+       * 				     } else {
+       *				          std::cerr << "Error: " << resp.error().message() << std::endl;
+       *				        }
+       *				   });
+       * @endcode
+       *
+       * Example with external provied io_executor (handler runs in same thread which is calling io_ctx.run()).
+       * io_context can be shared for other async operations:
+       * @code
+       *   // Create a shared io_context
+       *   asio::io_context io_ctx;
+       *   glz::http_client client{io_ctx.get_executor()};
+       *   client.get_async("http://example.com", {},
+       * 				   [](std::expected<glz::response, std::error_code> resp){
+       * 				     if (resp.has_value()) {
+       * 				       std::cout << resp->response_body << std::endl;
+       * 				     } else {
+       *				          std::cerr << "Error: " << resp.error().message() << std::endl;
+       *				        }
+       *				   });
+       *   io_ctx.run();
+       * @endcode
+       */
+      http_client(asio::any_io_executor executor = asio::any_io_executor())
+         : async_io_context(executor ? std::shared_ptr<asio::io_context>() : std::make_shared<asio::io_context>()),
+           io_executor(executor ? executor : async_io_context->get_executor()),
+           connection_pool(std::make_shared<http_connection_pool>(io_executor))
       {
          start_workers();
       }
@@ -356,7 +402,7 @@ namespace glz
       {
          auto url_result = parse_url(params.url);
          if (!url_result) {
-            asio::post(*async_io_context,
+            asio::post(io_executor,
                        [on_error = params.on_error, error = url_result.error()]() { on_error(error); });
             return nullptr;
          }
@@ -375,7 +421,7 @@ namespace glz
       {
          auto url_result = parse_url(url);
          if (!url_result) {
-            asio::post(*async_io_context, [handler = std::forward<CompletionHandler>(handler),
+            asio::post(io_executor, [handler = std::forward<CompletionHandler>(handler),
                                            error = url_result.error()] mutable { handler(std::unexpected(error)); });
             return;
          }
@@ -405,7 +451,7 @@ namespace glz
       {
          auto url_result = parse_url(url);
          if (!url_result) {
-            asio::post(*async_io_context, [handler = std::forward<CompletionHandler>(handler),
+            asio::post(io_executor, [handler = std::forward<CompletionHandler>(handler),
                                            error = url_result.error()] mutable { handler(std::unexpected(error)); });
             return;
          }
@@ -437,7 +483,7 @@ namespace glz
          std::string json_str;
          auto ec = glz::write_json(data, json_str);
          if (ec) {
-            asio::post(*async_io_context, [handler = std::forward<CompletionHandler>(handler)]() {
+            asio::post(io_executor, [handler = std::forward<CompletionHandler>(handler)]() {
                handler(std::unexpected(std::make_error_code(std::errc::invalid_argument)));
             });
             return;
@@ -465,14 +511,23 @@ namespace glz
          return future;
       }
 
+      // Get executor for async operations (timers, etc.)
+      asio::any_io_executor get_executor() const { return io_executor; }
+
      private:
-      std::shared_ptr<asio::io_context> async_io_context; // For async operations only
+      // For async operations only when no io_executor is provided
+      std::shared_ptr<asio::io_context> async_io_context;
+      asio::any_io_executor io_executor;
       std::shared_ptr<http_connection_pool> connection_pool;
       std::vector<std::thread> worker_threads;
       std::atomic<bool> running{true};
 
       void start_workers()
       {
+         // don't start worker threads when an io_executor was provided
+         if (!async_io_context)
+            return;
+
          size_t num_threads = std::max(2u, std::thread::hardware_concurrency());
          worker_threads.reserve(num_threads);
 
@@ -496,6 +551,10 @@ namespace glz
 
       void stop_workers()
       {
+         // don't stop worker threads when an io_executor was provided
+         if (!async_io_context)
+            return;
+
          running = false;
          async_io_context->stop();
 
@@ -514,7 +573,7 @@ namespace glz
       {
          auto connection = std::make_shared<http_stream_connection>(1024 * 1024, strategy);
          connection->socket = connection_pool->get_connection(url.host, url.port);
-         connection->timer = std::make_shared<asio::steady_timer>(*async_io_context);
+         connection->timer = std::make_shared<asio::steady_timer>(io_executor);
 
          connection->status_is_error = std::move(status_is_error);
          if (!connection->status_is_error) {
@@ -546,7 +605,7 @@ namespace glz
          // Check if the socket is already open
          if (connection->socket->is_open()) {
             // If already connected, skip resolve and connect, and just send the request
-            asio::post(*async_io_context, [this, url, method, body, headers, connection, on_data = std::move(on_data),
+            asio::post(io_executor, [this, url, method, body, headers, connection, on_data = std::move(on_data),
                                            on_error = std::move(on_error), on_connect = std::move(on_connect),
                                            internal_on_disconnect = std::move(internal_on_disconnect)]() mutable {
                send_stream_request(url, method, body, headers, connection, std::move(on_data), std::move(on_error),
@@ -555,7 +614,7 @@ namespace glz
          }
          else {
             // If not connected, resolve and connect as before
-            auto resolver = std::make_shared<asio::ip::tcp::resolver>(*async_io_context);
+            auto resolver = std::make_shared<asio::ip::tcp::resolver>(io_executor);
             resolver->async_resolve(
                url.host, std::to_string(url.port),
                [this, url, method, body, headers, connection, resolver, on_data = std::move(on_data),
@@ -940,7 +999,7 @@ namespace glz
          try {
             // If socket is not connected, connect it synchronously
             if (!socket->is_open()) {
-               asio::ip::tcp::resolver resolver(*async_io_context);
+               asio::ip::tcp::resolver resolver(io_executor);
                auto endpoints = resolver.resolve(url.host, std::to_string(url.port));
                asio::connect(*socket, endpoints);
             }
@@ -1085,7 +1144,7 @@ namespace glz
             send_request(socket, method, url, body, headers, std::forward<CompletionHandler>(handler));
          }
          else {
-            auto resolver = std::make_shared<asio::ip::tcp::resolver>(*async_io_context);
+            auto resolver = std::make_shared<asio::ip::tcp::resolver>(io_executor);
             resolver->async_resolve(
                url.host, std::to_string(url.port),
                [this, socket, resolver, method, url, body, headers, handler = std::forward<CompletionHandler>(handler)](
