@@ -1388,6 +1388,9 @@ namespace glz
          threads.clear();
       }
 
+      // Get executor for async operations (timers, etc.)
+      asio::any_io_executor get_executor() const { return io_executor; }
+
      private:
       asio::any_io_executor io_executor;
       std::shared_ptr<asio::io_context> io_context;
