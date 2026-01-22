@@ -263,8 +263,8 @@ auto ec = glz::read<glz::opts_size{}>(obj, buffer);
 
 | Level | Preset | Description |
 |-------|--------|-------------|
-| `normal` | (default) | Maximum performance with 40KB+ lookup tables |
-| `size` | `opts_size` | Minimal binary using `std::to_chars`, linear search |
+| `normal` | (default) | Maximum performance (~278KB lookup tables for integers and floats) |
+| `size` | `opts_size` | Minimal binary (~400B integer tables, `std::to_chars` for floats, linear search) |
 
 See [Optimization Levels](https://stephenberry.github.io/glaze/optimization-levels/) for full details.
 
