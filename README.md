@@ -91,7 +91,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 
 ## Binary Performance
 
-Tagged binary specification: [BEVE](https://github.com/stephenberry/beve)
+Tagged binary specification: [BEVE](https://github.com/beve-org/beve)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
@@ -240,7 +240,7 @@ Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:
 
 ### SIMD CMake Options
 
-The CMake has the option `glaze_ENABLE_AVX2`. This will attempt to use `AVX2` SIMD instructions in some cases to improve performance, as long as the system you are configuring on supports it. Set this option to `OFF` to disable the AVX2 instruction set, such as if you are cross-compiling for Arm. If you aren't using CMake the macro `GLZ_USE_AVX2` enables the feature if defined.
+The CMake option `glaze_DISABLE_SIMD_WHEN_SUPPORTED` can be set to `ON` to disable SIMD optimizations (e.g., AVX2) even when the target supports them. This is useful when cross-compiling for Arm or other architectures. If you aren't using CMake, define the macro `GLZ_DISABLE_SIMD` to disable SIMD optimizations. The macro `GLZ_USE_AVX2` is automatically defined when AVX2 support is detected and SIMD is not disabled.
 
 ### Disable Forced Inlining
 
@@ -1230,7 +1230,7 @@ struct A {
 
 template <>
 struct glz::meta<A> {
-   static constexpr auto value = object("x", glz::quoted_num<&A::x>, "y", glz::quoted_num<&A::y>;
+   static constexpr auto value = object("x", glz::quoted_num<&A::x>, "y", glz::quoted_num<&A::y>);
 };
 ```
 
