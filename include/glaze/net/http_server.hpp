@@ -650,10 +650,8 @@ namespace glz
        * glz::http_server server(nullptr, error_handler);
        * @endcode
        */
-      inline http_server(std::shared_ptr<asio::io_context> context,
-                         glz::error_handler custom_error_handler = {})
-         : http_server(context ? context->get_executor() : asio::any_io_executor(),
-                       custom_error_handler)
+      inline http_server(std::shared_ptr<asio::io_context> context, glz::error_handler custom_error_handler = {})
+         : http_server(context ? context->get_executor() : asio::any_io_executor(), custom_error_handler)
       {
          // Preserve shared ownership to prevent use-after-free. The delegated constructor
          // only stores io_context when no executor is provided, but the executor alone
@@ -827,8 +825,7 @@ namespace glz
          }
 
          // Stop the io_context
-         if (io_context)
-            io_context->stop();
+         if (io_context) io_context->stop();
 
          // Only join threads if we're not in one of the worker threads
          auto current_thread_id = std::this_thread::get_id();

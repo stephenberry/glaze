@@ -402,8 +402,7 @@ namespace glz
       {
          auto url_result = parse_url(params.url);
          if (!url_result) {
-            asio::post(io_executor,
-                       [on_error = params.on_error, error = url_result.error()]() { on_error(error); });
+            asio::post(io_executor, [on_error = params.on_error, error = url_result.error()]() { on_error(error); });
             return nullptr;
          }
 
@@ -422,7 +421,7 @@ namespace glz
          auto url_result = parse_url(url);
          if (!url_result) {
             asio::post(io_executor, [handler = std::forward<CompletionHandler>(handler),
-                                           error = url_result.error()] mutable { handler(std::unexpected(error)); });
+                                     error = url_result.error()] mutable { handler(std::unexpected(error)); });
             return;
          }
 
@@ -452,7 +451,7 @@ namespace glz
          auto url_result = parse_url(url);
          if (!url_result) {
             asio::post(io_executor, [handler = std::forward<CompletionHandler>(handler),
-                                           error = url_result.error()] mutable { handler(std::unexpected(error)); });
+                                     error = url_result.error()] mutable { handler(std::unexpected(error)); });
             return;
          }
 
@@ -525,8 +524,7 @@ namespace glz
       void start_workers()
       {
          // don't start worker threads when an io_executor was provided
-         if (!async_io_context)
-            return;
+         if (!async_io_context) return;
 
          size_t num_threads = std::max(2u, std::thread::hardware_concurrency());
          worker_threads.reserve(num_threads);
@@ -552,8 +550,7 @@ namespace glz
       void stop_workers()
       {
          // don't stop worker threads when an io_executor was provided
-         if (!async_io_context)
-            return;
+         if (!async_io_context) return;
 
          running = false;
          async_io_context->stop();
@@ -606,8 +603,8 @@ namespace glz
          if (connection->socket->is_open()) {
             // If already connected, skip resolve and connect, and just send the request
             asio::post(io_executor, [this, url, method, body, headers, connection, on_data = std::move(on_data),
-                                           on_error = std::move(on_error), on_connect = std::move(on_connect),
-                                           internal_on_disconnect = std::move(internal_on_disconnect)]() mutable {
+                                     on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                     internal_on_disconnect = std::move(internal_on_disconnect)]() mutable {
                send_stream_request(url, method, body, headers, connection, std::move(on_data), std::move(on_error),
                                    std::move(on_connect), std::move(internal_on_disconnect));
             });
