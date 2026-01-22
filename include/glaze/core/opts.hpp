@@ -25,6 +25,7 @@ namespace glz
    inline constexpr uint32_t MSGPACK = 30;
    inline constexpr uint32_t NDJSON = 100; // new line delimited JSON
    inline constexpr uint32_t TOML = 400;
+   inline constexpr uint32_t YAML = 450;
    inline constexpr uint32_t STENCIL = 500;
    inline constexpr uint32_t MUSTACHE = 501;
    inline constexpr uint32_t CSV = 10000;
@@ -1355,6 +1356,14 @@ namespace glz
    {
       auto ret = Opts;
       ret.format = TOML;
+      return ret;
+   }
+
+   template <auto Opts>
+   constexpr auto set_yaml()
+   {
+      auto ret = Opts;
+      ret.format = YAML;
       return ret;
    }
 }

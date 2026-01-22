@@ -35,6 +35,22 @@
 
 namespace glz
 {
+   // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup, etc.
+   // We don't put this in the context because we don't want to continually reallocate.
+   // IMPORTANT: Do not use when nested calls may need additional buffers on the same thread.
+   inline std::string& string_buffer() noexcept
+   {
+      static thread_local std::string buffer(256, '\0');
+      return buffer;
+   }
+
+   // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
+   inline std::string& error_buffer() noexcept
+   {
+      static thread_local std::string buffer(256, '\0');
+      return buffer;
+   }
+
    // write out a string like type without quoting it
    template <class T>
    struct raw_t
