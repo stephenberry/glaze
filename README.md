@@ -244,13 +244,13 @@ The CMake option `glaze_DISABLE_SIMD_WHEN_SUPPORTED` can be set to `ON` to disab
 
 ### Disable Forced Inlining
 
-For faster compilation at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
+For faster compilation and reduced binary size at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
 
 ```cmake
 set(glaze_DISABLE_ALWAYS_INLINE ON)
 ```
 
-> **Note:** This primarily reduces compilation time, not binary size. For binary size reduction, see Optimization Levels below.
+> **Note:** This reduces compilation time and binary size, which can be useful for embedded systems where size is critical. For additional binary size reduction, see Optimization Levels below.
 
 ### Optimization Levels (Embedded/Size Optimization)
 
