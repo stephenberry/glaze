@@ -156,6 +156,23 @@ namespace glz
    template <auto Opts>
    GLZ_ALWAYS_INLINE bool parse_ws_colon(is_context auto& ctx, auto&& it, auto end) noexcept
    {
+      if constexpr (not Opts.minified) {
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return true;
+            }
+         }
+
+         if (*it == ':') [[likely]] {
+            ++it;
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return true;
+            }
+            return false;
+         }
+      }
+
       if (skip_ws<Opts>(ctx, it, end)) {
          return true;
       }
@@ -242,13 +259,7 @@ namespace glz
             }
          }
 
-         if (skip_ws<Opts>(ctx, it, end)) {
-            return;
-         }
-         if (match_invalid_end<':', Opts>(ctx, it, end)) {
-            return;
-         }
-         if (skip_ws<Opts>(ctx, it, end)) {
+         if (parse_ws_colon<Opts>(ctx, it, end)) {
             return;
          }
 
@@ -390,13 +401,7 @@ namespace glz
                return;
             }
          }
-         if (skip_ws<Opts>(ctx, it, end)) {
-            return;
-         }
-         if (match_invalid_end<':', Opts>(ctx, it, end)) {
-            return;
-         }
-         if (skip_ws<Opts>(ctx, it, end)) {
+         if (parse_ws_colon<Opts>(ctx, it, end)) {
             return;
          }
 

@@ -26,3 +26,12 @@ foreach(test ${PERF_TESTS})
     endif ()
     add_test(NAME ${test} COMMAND ${test})
 endforeach()
+
+# Optimization Benchmark
+add_executable(benchmark_compare_optimization benchmark_compare_optimization.cpp simdjson/simdjson.cpp)
+target_include_directories(benchmark_compare_optimization PRIVATE simdjson)
+target_link_libraries(benchmark_compare_optimization PRIVATE glz_test_exceptions)
+if (MINGW)
+    target_compile_options(benchmark_compare_optimization PRIVATE "-Wa,-mbig-obj")
+endif ()
+add_test(NAME benchmark_compare_optimization COMMAND benchmark_compare_optimization)
