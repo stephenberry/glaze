@@ -19,4 +19,14 @@ namespace glz
          parse<JSON>::op<Opts>(value.value(), ctx, it, end);
       }
    };
+
+   template <uint32_t Format, is_value_proxy T>
+   struct to<Format, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+      {
+         serialize<Format>::template op<Opts>(value.value(), ctx, args...);
+      }
+   };
 }
