@@ -910,7 +910,7 @@ expect(buffer == "\"Red\"");
 
 > [!TIP]
 >
-> For automatic enum-to-string serialization without writing metadata, consider using [simple_enum](https://github.com/arturbac/simple_enum), which provides Glaze integration.
+> For automatic enum-to-string serialization without writing metadata for each enum, use an enum reflection library ([magic_enum](https://github.com/Neargye/magic_enum), [enchantum](https://github.com/ZXShady/enchantum), or [simple_enum](https://github.com/arturbac/simple_enum)) with a generic `glz::meta` specialization. See [Automatic Enum Strings](https://stephenberry.github.io/glaze/enum-reflection/) for details.
 
 # JSON With Comments (JSONC)
 
