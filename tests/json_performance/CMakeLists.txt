@@ -28,9 +28,18 @@ foreach(test ${PERF_TESTS})
 endforeach()
 
 # Optimization Benchmark
-add_executable(benchmark_compare_optimization benchmark_compare_optimization.cpp simdjson/simdjson.cpp)
-target_include_directories(benchmark_compare_optimization PRIVATE simdjson)
-target_link_libraries(benchmark_compare_optimization PRIVATE glz_test_exceptions)
+include(FetchContent)
+FetchContent_Declare(
+  simdjson
+  URL https://github.com/simdjson/simdjson/archive/refs/tags/v3.11.0.zip
+)
+# We only need the library, not the tests/benchmarks of simdjson
+set(SIMDJSON_JUST_LIBRARY ON CACHE INTERNAL "")
+FetchContent_MakeAvailable(simdjson)
+
+add_executable(benchmark_compare_optimization benchmark_compare_optimization.cpp)
+# Link against simdjson library target provided by their CMake
+target_link_libraries(benchmark_compare_optimization PRIVATE glz_test_exceptions simdjson)
 if (MINGW)
     target_compile_options(benchmark_compare_optimization PRIVATE "-Wa,-mbig-obj")
 endif ()

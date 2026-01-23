@@ -153,8 +153,8 @@ namespace glz
       }
    };
 
-   template <auto Opts>
-   GLZ_ALWAYS_INLINE bool parse_ws_colon(is_context auto& ctx, auto&& it, auto end) noexcept
+   template <char Char, auto Opts>
+   GLZ_ALWAYS_INLINE bool parse_ws_char(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (not Opts.minified) {
          if constexpr (not Opts.null_terminated) {
@@ -164,7 +164,7 @@ namespace glz
             }
          }
 
-         if (*it == ':') [[likely]] {
+         if (*it == Char) [[likely]] {
             ++it;
             if (skip_ws<Opts>(ctx, it, end)) {
                return true;
@@ -176,7 +176,7 @@ namespace glz
       if (skip_ws<Opts>(ctx, it, end)) {
          return true;
       }
-      if (match_invalid_end<':', Opts>(ctx, it, end)) {
+      if (match_invalid_end<Char, Opts>(ctx, it, end)) {
          return true;
       }
       if (skip_ws<Opts>(ctx, it, end)) {
@@ -208,7 +208,8 @@ namespace glz
             }
          }
 
-         if (parse_ws_colon<Opts>(ctx, it, end)) {
+         if (parse_ws_char<':', Opts>(ctx, it, end)) {
+         if (parse_ws_char<':', Opts>(ctx, it, end)) {
             return;
          }
 
@@ -387,7 +388,8 @@ namespace glz
                      return;
                   }
                }
-               if (parse_ws_colon<Opts>(ctx, it, end)) {
+               if (parse_ws_char<':', Opts>(ctx, it, end)) {
+               if (parse_ws_char<':', Opts>(ctx, it, end)) {
                   return;
                }
                parse<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
@@ -641,12 +643,39 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         if (skip_ws<Opts>(ctx, it, end)) {
-            return;
+         if constexpr (not Opts.minified) {
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
+            if (*it == ',') [[likely]] {
+               ++it;
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
+            }
+            else {
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                  return;
+               }
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
+            }
          }
+         else {
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
-         if (match_invalid_end<',', Opts>(ctx, it, end)) {
-            return;
+            if (match_invalid_end<',', Opts>(ctx, it, end)) {
+               return;
+            }
          }
 
          parse<JSON>::op<Opts>(ptr[1], ctx, it, end);
@@ -2115,18 +2144,63 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
             value.emplace(std::move(v));
-            if (skip_ws<Opts>(ctx, it, end)) {
-               return;
-            }
-            if (*it == ']') {
+            if constexpr (not Opts.minified) {
                if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                }
-               ++it;
-               return;
+               if (*it == ',') {
+                  ++it;
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+               }
+               else if (*it == ']') {
+                  if constexpr (not Opts.null_terminated) {
+                     --ctx.depth;
+                  }
+                  ++it;
+                  return;
+               }
+               else {
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+                  if (*it == ',') {
+                     ++it;
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                  }
+                  else if (*it == ']') {
+                     if constexpr (not Opts.null_terminated) {
+                        --ctx.depth;
+                     }
+                     ++it;
+                     return;
+                  }
+                  else [[unlikely]] {
+                     ctx.error = error_code::expected_bracket;
+                     return;
+                  }
+               }
             }
-            if (match_invalid_end<',', Opts>(ctx, it, end)) {
-               return;
+            else {
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
+               if (*it == ']') {
+                  if constexpr (not Opts.null_terminated) {
+                     --ctx.depth;
+                  }
+                  ++it;
+                  return;
+               }
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                  return;
+               }
             }
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
@@ -2285,32 +2359,89 @@ namespace glz
                      }
                   }
 
-                  if (skip_ws<Opts>(ctx, it, end)) {
-                     return;
-                  }
-                  if (*it == ',') [[likely]] {
-                     ++it;
-
-                     if constexpr (!Opts.minified && !Opts.comments) {
-                        if (ws_size && ws_size < size_t(end - it)) {
-                           skip_matching_ws(ws_start, it, ws_size);
+                  if constexpr (not Opts.minified) {
+                     if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
                         }
                      }
+                     if (*it == ',') [[likely]] {
+                        ++it;
+                        if constexpr (!Opts.minified && !Opts.comments) {
+                           if (ws_size && ws_size < size_t(end - it)) {
+                              skip_matching_ws(ws_start, it, ws_size);
+                           }
+                        }
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
+                     }
+                     else if (*it == ']') {
+                        if constexpr (not Opts.null_terminated) {
+                           --ctx.depth;
+                        }
+                        ++it;
+                        return;
+                     }
+                     else {
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if (*it == ',') [[likely]] {
+                           ++it;
 
+                           if constexpr (!Opts.minified && !Opts.comments) {
+                              if (ws_size && ws_size < size_t(end - it)) {
+                                 skip_matching_ws(ws_start, it, ws_size);
+                              }
+                           }
+
+                           if (skip_ws<Opts>(ctx, it, end)) {
+                              return;
+                           }
+                        }
+                        else if (*it == ']') {
+                           if constexpr (not Opts.null_terminated) {
+                              --ctx.depth;
+                           }
+                           ++it;
+                           return;
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::expected_bracket;
+                           return;
+                        }
+                     }
+                  }
+                  else {
                      if (skip_ws<Opts>(ctx, it, end)) {
                         return;
                      }
-                  }
-                  else if (*it == ']') {
-                     if constexpr (not Opts.null_terminated) {
-                        --ctx.depth;
+                     if (*it == ',') [[likely]] {
+                        ++it;
+
+                        if constexpr (!Opts.minified && !Opts.comments) {
+                           if (ws_size && ws_size < size_t(end - it)) {
+                              skip_matching_ws(ws_start, it, ws_size);
+                           }
+                        }
+
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
                      }
-                     ++it;
-                     return;
-                  }
-                  else [[unlikely]] {
-                     ctx.error = error_code::expected_bracket;
-                     return;
+                     else if (*it == ']') {
+                        if constexpr (not Opts.null_terminated) {
+                           --ctx.depth;
+                        }
+                        ++it;
+                        return;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::expected_bracket;
+                        return;
+                     }
                   }
                }
             }
@@ -2409,7 +2540,7 @@ namespace glz
                   return;
             }
 
-            if (parse_ws_colon<Opts>(ctx, it, end)) {
+            if (parse_ws_char<':', Opts>(ctx, it, end)) {
                return;
             }
 
@@ -2417,16 +2548,50 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            if (skip_ws<Opts>(ctx, it, end)) {
-               return;
-            }
-
-            if (*it == ',') {
-               ++it;
+            if constexpr (not Opts.minified) {
                if constexpr (not Opts.null_terminated) {
                   if (it == end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
+                  }
+               }
+               if (*it == ',') {
+                  ++it;
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                  }
+               }
+               else {
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+
+                  if (*it == ',') {
+                     ++it;
+                     if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                     }
+                  }
+               }
+            }
+            else {
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
+
+               if (*it == ',') {
+                  ++it;
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
                   }
                }
             }
@@ -2527,12 +2692,46 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            if (skip_ws<Opts>(ctx, it, end)) {
-               return;
+            if constexpr (not Opts.minified) {
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
+               if (i < n - 1) {
+                  if (*it == ',') {
+                     ++it;
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                  }
+                  else {
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                  }
+               }
+               else {
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+               }
             }
-            if (i < n - 1) {
-               if (match_invalid_end<',', Opts>(ctx, it, end)) {
+            else {
+               if (skip_ws<Opts>(ctx, it, end)) {
                   return;
+               }
+               if (i < n - 1) {
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
             }
             ++i;
@@ -2587,11 +2786,38 @@ namespace glz
                return;
             }
             if constexpr (I != 0) {
-               if (match_invalid_end<',', Opts>(ctx, it, end)) {
-                  return;
+               if constexpr (not Opts.minified) {
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                  }
+                  if (*it == ',') {
+                     ++it;
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                  }
+                  else {
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                  }
                }
-               if (skip_ws<Opts>(ctx, it, end)) {
-                  return;
+               else {
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return;
+                  }
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
             }
             if constexpr (is_std_tuple<T>) {
@@ -2675,24 +2901,79 @@ namespace glz
                return;
             }
 
-            if (skip_ws<Opts>(ctx, it, end)) {
-               return;
-            }
-            if (*it == ']') {
+            if constexpr (not Opts.minified) {
                if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
-               }
-               ++it;
-               if constexpr (not Opts.null_terminated) {
-                  if (it == end) {
-                     ctx.error = error_code::end_reached;
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
                      return;
                   }
                }
-               return;
+               if (*it == ',') {
+                  ++it;
+               }
+               else if (*it == ']') {
+                  if constexpr (not Opts.null_terminated) {
+                     --ctx.depth;
+                  }
+                  ++it;
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) {
+                        ctx.error = error_code::end_reached;
+                        return;
+                     }
+                  }
+                  return;
+               }
+               else {
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+                  if (*it == ',') {
+                     ++it;
+                  }
+                  else if (*it == ']') {
+                     if constexpr (not Opts.null_terminated) {
+                        --ctx.depth;
+                     }
+                     ++it;
+                     if constexpr (not Opts.null_terminated) {
+                        if (it == end) {
+                           ctx.error = error_code::end_reached;
+                           return;
+                        }
+                     }
+                     return;
+                  }
+                  else {
+                     if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                        return;
+                     }
+                  }
+               }
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
-            if (match_invalid_end<',', Opts>(ctx, it, end)) {
-               return;
+            else {
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
+               if (*it == ']') {
+                  if constexpr (not Opts.null_terminated) {
+                     --ctx.depth;
+                  }
+                  ++it;
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) {
+                        ctx.error = error_code::end_reached;
+                        return;
+                     }
+                  }
+                  return;
+               }
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                  return;
+               }
             }
          }
       }
@@ -2901,7 +3182,7 @@ namespace glz
                   }
 
                   if (key == tag.sv()) {
-                     if (parse_ws_colon<Opts>(ctx, it, end)) {
+                     if (parse_ws_char<':', Opts>(ctx, it, end)) {
                         return;
                      }
 
@@ -3039,25 +3320,75 @@ namespace glz
                   first = false;
                }
                else {
-                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
-                     return;
+                  if constexpr (not Opts.minified) {
+                     if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                     }
+                     if (*it == ',') {
+                        ++it;
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
+                        if constexpr ((not Opts.minified) && (num_members > 1 || not Opts.error_on_unknown_keys) &&
+                                      (!Opts.comments)) {
+                           if (ws_size && ws_size < size_t(end - it)) {
+                              skip_matching_ws(ws_start, it, ws_size);
+                           }
+                        }
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
+                     }
+                     else {
+                        if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
+
+                        if constexpr ((not Opts.minified) && (num_members > 1 || not Opts.error_on_unknown_keys) &&
+                                      (!Opts.comments)) {
+                           if (ws_size && ws_size < size_t(end - it)) {
+                              skip_matching_ws(ws_start, it, ws_size);
+                           }
+                        }
+
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
+                     }
                   }
-                  if constexpr (not Opts.null_terminated) {
-                     if (it == end) [[unlikely]] {
-                        ctx.error = error_code::unexpected_end;
+                  else {
+                     if (match_invalid_end<',', Opts>(ctx, it, end)) {
                         return;
                      }
-                  }
-
-                  if constexpr ((not Opts.minified) && (num_members > 1 || not Opts.error_on_unknown_keys) &&
-                                (!Opts.comments)) {
-                     if (ws_size && ws_size < size_t(end - it)) {
-                        skip_matching_ws(ws_start, it, ws_size);
+                     if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
                      }
-                  }
 
-                  if (skip_ws<Opts>(ctx, it, end)) {
-                     return;
+                     if constexpr ((not Opts.minified) && (num_members > 1 || not Opts.error_on_unknown_keys) &&
+                                   (!Opts.comments)) {
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+                     }
+
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                   }
                }
 
@@ -3155,7 +3486,7 @@ namespace glz
                      }
 
                      if (key == tag.sv()) {
-                        if (parse_ws_colon<Opts>(ctx, it, end)) {
+                        if (parse_ws_char<':', Opts>(ctx, it, end)) {
                            return;
                         }
 
@@ -3214,7 +3545,9 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                     if (parse_ws_colon<Opts>(ctx, it, end)) {
+                     if (parse_ws_char<':', Opts>(ctx, it, end)) {
+                     if (parse_ws_char<':', Opts>(ctx, it, end)) {
+                     if (parse_ws_char<':', Opts>(ctx, it, end)) {
                         return;
                      }
 
@@ -3643,13 +3976,44 @@ namespace glz
                   auto start = it;
                   while (*it != '}') {
                      if (it != start) {
-                        if (match_invalid_end<',', Opts>(ctx, it, end)) {
-                           return;
+                        if constexpr (not Opts.minified) {
+                           if constexpr (not Opts.null_terminated) {
+                              if (it == end) [[unlikely]] {
+                                 ctx.error = error_code::unexpected_end;
+                                 return;
+                              }
+                           }
+                           if (*it == ',') {
+                              ++it;
+                              if (skip_ws<Opts>(ctx, it, end)) {
+                                 return;
+                              }
+                           }
+                           else {
+                              if (skip_ws<Opts>(ctx, it, end)) {
+                                 return;
+                              }
+                              if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                                 return;
+                              }
+                              if (skip_ws<Opts>(ctx, it, end)) {
+                                 return;
+                              }
+                           }
+                        }
+                        else {
+                           if (skip_ws<Opts>(ctx, it, end)) {
+                              return;
+                           }
+                           if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                              return;
+                           }
                         }
                      }
-
-                     if (skip_ws<Opts>(ctx, it, end)) {
-                        return;
+                     else {
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
                      }
                      if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                         return;
@@ -3669,7 +4033,7 @@ namespace glz
                         // We first check if a tag is defined and see if the key matches the tag
                         if constexpr (not tag_v<T>.empty()) {
                            if (key == tag_v<T>) {
-                              if (parse_ws_colon<Opts>(ctx, it, end)) {
+                              if (parse_ws_char<':', Opts>(ctx, it, end)) {
                                  return;
                               }
 
@@ -3905,7 +4269,7 @@ namespace glz
                         }
                         else {
                            // Skip unknown key's value (non-tag key in empty variant)
-                           if (parse_ws_colon<Opts>(ctx, it, end)) {
+                           if (parse_ws_char<':', Opts>(ctx, it, end)) {
                               return;
                            }
                            skip_value<JSON>::op<Opts>(ctx, it, end);
@@ -3987,7 +4351,7 @@ namespace glz
                         }
                      }
                      // For tagged variants, continue processing to validate tags
-                     if (parse_ws_colon<Opts>(ctx, it, end)) {
+                     if (parse_ws_char<':', Opts>(ctx, it, end)) {
                         return;
                      }
 
@@ -4304,11 +4668,38 @@ namespace glz
          const auto type_index =
             variant_id_to_index<T>::op(type_id.data(), type_id.data() + type_id.size(), type_id.size());
          if (type_index < ids_v<T>.size()) [[likely]] {
-            if (skip_ws<Opts>(ctx, it, end)) {
-               return;
+            if constexpr (not Opts.minified) {
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
+               if (*it == ',') {
+                  ++it;
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+               }
+               else {
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return;
+                  }
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+               }
             }
-            if (match_invalid_end<',', Opts>(ctx, it, end)) {
-               return;
+            else {
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                  return;
+               }
             }
             if (value.index() != type_index) emplace_runtime_variant(value, type_index);
             std::visit([&](auto&& v) { parse<JSON>::op<Opts>(v, ctx, it, end); }, value);
@@ -4384,10 +4775,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
                if (key == "unexpected") {
-                  if (skip_ws<Opts>(ctx, it, end)) {
-                     return;
-                  }
-                  if (match_invalid_end<':', Opts>(ctx, it, end)) {
+            if (parse_ws_char<':', Opts>(ctx, it, end)) {
                      return;
                   }
                   // read in unexpected value
