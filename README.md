@@ -1,15 +1,17 @@
 # Glaze
 One of the fastest JSON libraries in the world. Glaze reads and writes from object memory, simplifying interfaces and offering incredible performance.
 
-Glaze also supports:
+Formats Supported:
 
-- [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding)
-- [CBOR](https://stephenberry.github.io/glaze/cbor/) (Concise Binary Object Representation)
-- [CSV](https://stephenberry.github.io/glaze/csv/) (Comma Separated Value)
-- [MessagePack](https://stephenberry.github.io/glaze/msgpack/)
-- [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation)
-- [TOML](https://stephenberry.github.io/glaze/toml/) (Tom's Obvious, Minimal Language)
-- [EETF](https://stephenberry.github.io/glaze/EETF/erlang-external-term-format/) (Erlang External Term Format) [optionally included]
+- [JSON](https://stephenberry.github.io/glaze/json/) | `glaze/json.hpp`
+- [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding) | `glaze/beve.hpp`
+- [CBOR](https://stephenberry.github.io/glaze/cbor/) (Concise Binary Object Representation) | `glaze/cbor.hpp`
+- [CSV](https://stephenberry.github.io/glaze/csv/) (Comma Separated Value) | `glaze/csv.hpp`
+- [MessagePack](https://stephenberry.github.io/glaze/msgpack/) | `glaze/msgpack.hpp`
+- [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation) | `glaze/stencil/stencil.hpp`
+- [TOML](https://stephenberry.github.io/glaze/toml/) (Tom's Obvious, Minimal Language) | `glaze/toml.hpp`
+- [YAML](https://stephenberry.github.io/glaze/yaml/) | `glaze/yaml.hpp`
+- [EETF](https://stephenberry.github.io/glaze/EETF/erlang-external-term-format/) (Erlang External Term Format) | `glaze/eetf.hpp`
 - [And Many More Features](https://stephenberry.github.io/glaze/)
 
 > [!NOTE]
@@ -89,7 +91,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 
 ## Binary Performance
 
-Tagged binary specification: [BEVE](https://github.com/stephenberry/beve)
+Tagged binary specification: [BEVE](https://github.com/beve-org/beve)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
@@ -238,17 +240,17 @@ Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:
 
 ### SIMD CMake Options
 
-The CMake has the option `glaze_ENABLE_AVX2`. This will attempt to use `AVX2` SIMD instructions in some cases to improve performance, as long as the system you are configuring on supports it. Set this option to `OFF` to disable the AVX2 instruction set, such as if you are cross-compiling for Arm. If you aren't using CMake the macro `GLZ_USE_AVX2` enables the feature if defined.
+The CMake option `glaze_DISABLE_SIMD_WHEN_SUPPORTED` can be set to `ON` to disable SIMD optimizations (e.g., AVX2) even when the target supports them. This is useful when cross-compiling for Arm or other architectures. If you aren't using CMake, define the macro `GLZ_DISABLE_SIMD` to disable SIMD optimizations. The macro `GLZ_USE_AVX2` is automatically defined when AVX2 support is detected and SIMD is not disabled.
 
 ### Disable Forced Inlining
 
-For faster compilation at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
+For faster compilation and reduced binary size at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
 
 ```cmake
 set(glaze_DISABLE_ALWAYS_INLINE ON)
 ```
 
-> **Note:** This primarily reduces compilation time, not binary size. For binary size reduction, see Optimization Levels below.
+> **Note:** This reduces compilation time and binary size, which can be useful for embedded systems where size is critical. For additional binary size reduction, see Optimization Levels below.
 
 ### Optimization Levels (Embedded/Size Optimization)
 
@@ -261,8 +263,8 @@ auto ec = glz::read<glz::opts_size{}>(obj, buffer);
 
 | Level | Preset | Description |
 |-------|--------|-------------|
-| `normal` | (default) | Maximum performance with 40KB+ lookup tables |
-| `size` | `opts_size` | Minimal binary using `std::to_chars`, linear search |
+| `normal` | (default) | Maximum performance (~278KB lookup tables for integers and floats) |
+| `size` | `opts_size` | Minimal binary (~400B integer tables, `std::to_chars` for floats, linear search) |
 
 See [Optimization Levels](https://stephenberry.github.io/glaze/optimization-levels/) for full details.
 
@@ -908,7 +910,7 @@ expect(buffer == "\"Red\"");
 
 > [!TIP]
 >
-> For automatic enum-to-string serialization without writing metadata, consider using [simple_enum](https://github.com/arturbac/simple_enum), which provides Glaze integration.
+> For automatic enum-to-string serialization without writing metadata for each enum, use an enum reflection library ([magic_enum](https://github.com/Neargye/magic_enum), [enchantum](https://github.com/ZXShady/enchantum), or [simple_enum](https://github.com/arturbac/simple_enum)) with a generic `glz::meta` specialization. See [Automatic Enum Strings](https://stephenberry.github.io/glaze/enum-reflection/) for details.
 
 # JSON With Comments (JSONC)
 
@@ -1228,7 +1230,7 @@ struct A {
 
 template <>
 struct glz::meta<A> {
-   static constexpr auto value = object("x", glz::quoted_num<&A::x>, "y", glz::quoted_num<&A::y>;
+   static constexpr auto value = object("x", glz::quoted_num<&A::x>, "y", glz::quoted_num<&A::y>);
 };
 ```
 

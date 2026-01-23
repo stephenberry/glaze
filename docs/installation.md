@@ -145,24 +145,21 @@ Since Glaze is header-only, you can simply:
 
 ## CMake Configuration Options
 
-### AVX2 Support
-Enable AVX2 SIMD instructions for better performance (if your target supports it):
+### SIMD Support
+AVX2 SIMD instructions are automatically enabled when the compiler detects AVX2 support (the `GLZ_USE_AVX2` macro is defined automatically when `__AVX2__` is available).
+
+### Disable SIMD (Cross-compilation)
+For cross-compilation to ARM or other architectures, disable SIMD optimizations:
 
 ```cmake
-set(glaze_ENABLE_AVX2 ON)
+set(glaze_DISABLE_SIMD_WHEN_SUPPORTED ON)
 FetchContent_MakeAvailable(glaze)
 ```
 
-Or define the macro directly:
+Or define the macro directly before including Glaze headers:
 ```cpp
-#define GLZ_USE_AVX2
-```
-
-### Disable AVX2 (Cross-compilation)
-For cross-compilation to ARM or other architectures:
-
-```cmake
-set(glaze_ENABLE_AVX2 OFF)
+#define GLZ_DISABLE_SIMD
+#include "glaze/glaze.hpp"
 ```
 
 ### Disable Forced Inlining
@@ -216,11 +213,6 @@ project(MyGlazeProject LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Enable AVX2 if building for x86_64
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-    set(glaze_ENABLE_AVX2 ON)
-endif()
 
 include(FetchContent)
 FetchContent_Declare(

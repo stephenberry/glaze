@@ -635,7 +635,9 @@ namespace glz
       power_of_two, // Powers of 2 (flags): countr_zero(value)
       small_range, // Sparse lookup table for small ranges
       modular, // Perfect hash: (value * seed) % table_size
-      modular_shifted // Perfect hash with shift: ((value >> shift) * seed) % table_size
+      modular_shifted, // Perfect hash with shift: ((value >> shift) * seed) % table_size
+      linear_search, // Fallback: linear scan through values (N <= 16)
+      binary_search // Fallback: binary search through sorted values (N > 16)
    };
 
    template <size_t N, size_t TableSize>
@@ -852,20 +854,29 @@ namespace glz
                   return std::pair{false, uint64_t{0}};
                }();
 
-               static_assert(shifted_info.first, "Failed to find perfect hash seed for enum");
+               if constexpr (shifted_info.first) {
+                  int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
+                                                      .seed = shifted_info.second,
+                                                      .table_size = table_size,
+                                                      .shift = common_shift};
+                  info.table.fill(static_cast<uint8_t>(N));
 
-               int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
-                                                   .seed = shifted_info.second,
-                                                   .table_size = table_size,
-                                                   .shift = common_shift};
-               info.table.fill(static_cast<uint8_t>(N));
-
-               for (size_t i = 0; i < N; ++i) {
-                  const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
-                  const auto h = (shifted * info.seed) % table_size;
-                  info.table[h] = static_cast<uint8_t>(i);
+                  for (size_t i = 0; i < N; ++i) {
+                     const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
+                     const auto h = (shifted * info.seed) % table_size;
+                     info.table[h] = static_cast<uint8_t>(i);
+                  }
+                  return info;
                }
-               return info;
+               else {
+                  // Fallback: linear search for small N, binary search for larger N
+                  if constexpr (N <= 16) {
+                     return int_keys_info_t<N, 0>{.type = int_hash_type::linear_search};
+                  }
+                  else {
+                     return int_keys_info_t<N, 0>{.type = int_hash_type::binary_search};
+                  }
+               }
             }
          }
       }
@@ -924,10 +935,73 @@ namespace glz
             const auto h = (static_cast<uint64_t>(value) * Info.seed) % Info.table_size;
             return Info.table[h]; // Returns N if slot is empty
          }
-         else { // modular_shifted
+         else if constexpr (Info.type == modular_shifted) {
             const auto shifted = static_cast<uint64_t>(value) >> Info.shift;
             const auto h = (shifted * Info.seed) % Info.table_size;
             return Info.table[h]; // Returns N if slot is empty
+         }
+         else if constexpr (Info.type == linear_search) {
+            // Linear scan through enum values
+            constexpr auto& values = enum_values_array<T>;
+            for (size_t i = 0; i < N; ++i) {
+               if (values[i] == value) {
+                  return i;
+               }
+            }
+            return N; // Not found
+         }
+         else { // binary_search
+            // Binary search through sorted enum values
+            // Compute sorted indices and values together to avoid capture issues
+            constexpr auto sorted_data = []() {
+               struct result_t
+               {
+                  std::array<size_t, N> indices{};
+                  std::array<U, N> values{};
+               };
+               result_t result{};
+
+               // Initialize indices
+               for (size_t i = 0; i < N; ++i) {
+                  result.indices[i] = i;
+               }
+
+               // Sort indices by their corresponding values (bubble sort for constexpr)
+               constexpr auto& src_values = enum_values_array<T>;
+               for (size_t i = 0; i < N - 1; ++i) {
+                  for (size_t j = i + 1; j < N; ++j) {
+                     if (src_values[result.indices[j]] < src_values[result.indices[i]]) {
+                        auto tmp = result.indices[i];
+                        result.indices[i] = result.indices[j];
+                        result.indices[j] = tmp;
+                     }
+                  }
+               }
+
+               // Build sorted values array
+               for (size_t i = 0; i < N; ++i) {
+                  result.values[i] = src_values[result.indices[i]];
+               }
+
+               return result;
+            }();
+
+            // Binary search
+            size_t left = 0;
+            size_t right = N;
+            while (left < right) {
+               const size_t mid = left + (right - left) / 2;
+               if (sorted_data.values[mid] < value) {
+                  left = mid + 1;
+               }
+               else {
+                  right = mid;
+               }
+            }
+            if (left < N && sorted_data.values[left] == value) {
+               return sorted_data.indices[left];
+            }
+            return N; // Not found
          }
       }
    };
@@ -2204,8 +2278,9 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
-         // For JSON we require at a minimum ":1} characters after a key (1 being a single char number)
-         // This means that we can require all these characters to exist for SWAR parsing
+         // Bounds checks ensure we can safely read the string content and determine its length.
+         // Note: This is used for both object keys and enum values, so we cannot assume
+         // extra characters exist after the closing quote (e.g., standalone enum: "value")
 
          if constexpr (length_range == 0) {
             if ((it + min_length) >= end) [[unlikely]] {
@@ -2217,7 +2292,9 @@ namespace glz
          else {
             if constexpr (length_range == 1) {
                auto quote = it + min_length;
-               if ((quote + 1) >= end) [[unlikely]] {
+               // Ensure we can read *quote to determine if string is min_length or max_length.
+               // The check (quote + 1) > end ensures quote < end, making *quote dereferenceable.
+               if ((quote + 1) > end) [[unlikely]] {
                   return N;
                }
 
@@ -2673,20 +2750,29 @@ namespace glz
                   return std::pair{false, uint64_t{0}};
                }();
 
-               static_assert(shifted_info.first, "Failed to find perfect hash seed for variant int IDs");
+               if constexpr (shifted_info.first) {
+                  int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
+                                                      .seed = shifted_info.second,
+                                                      .table_size = table_size,
+                                                      .shift = common_shift};
+                  info.table.fill(static_cast<uint8_t>(N));
 
-               int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
-                                                   .seed = shifted_info.second,
-                                                   .table_size = table_size,
-                                                   .shift = common_shift};
-               info.table.fill(static_cast<uint8_t>(N));
-
-               for (size_t i = 0; i < N; ++i) {
-                  const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
-                  const auto h = (shifted * info.seed) % table_size;
-                  info.table[h] = static_cast<uint8_t>(i);
+                  for (size_t i = 0; i < N; ++i) {
+                     const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
+                     const auto h = (shifted * info.seed) % table_size;
+                     info.table[h] = static_cast<uint8_t>(i);
+                  }
+                  return info;
                }
-               return info;
+               else {
+                  // Fallback: linear search for small N, binary search for larger N
+                  if constexpr (N <= 16) {
+                     return int_keys_info_t<N, 0>{.type = int_hash_type::linear_search};
+                  }
+                  else {
+                     return int_keys_info_t<N, 0>{.type = int_hash_type::binary_search};
+                  }
+               }
             }
          }
       }
@@ -2759,10 +2845,61 @@ namespace glz
             const auto h = (static_cast<uint64_t>(id) * Info.seed) % Info.table_size;
             return Info.table[h];
          }
-         else { // modular_shifted
+         else if constexpr (Info.type == modular_shifted) {
             const auto shifted = static_cast<uint64_t>(id) >> Info.shift;
             const auto h = (shifted * Info.seed) % Info.table_size;
             return Info.table[h];
+         }
+         else if constexpr (Info.type == linear_search) {
+            for (size_t i = 0; i < N; ++i) {
+               if (ids_v<T>[i] == id) {
+                  return i;
+               }
+            }
+            return N;
+         }
+         else { // binary_search
+            constexpr auto sorted_data = []() {
+               struct result_t
+               {
+                  std::array<size_t, N> indices{};
+                  std::array<U, N> values{};
+               };
+               result_t result{};
+
+               for (size_t i = 0; i < N; ++i) {
+                  result.indices[i] = i;
+               }
+               for (size_t i = 0; i < N - 1; ++i) {
+                  for (size_t j = i + 1; j < N; ++j) {
+                     if (ids_v<T>[result.indices[j]] < ids_v<T>[result.indices[i]]) {
+                        auto tmp = result.indices[i];
+                        result.indices[i] = result.indices[j];
+                        result.indices[j] = tmp;
+                     }
+                  }
+               }
+               for (size_t i = 0; i < N; ++i) {
+                  result.values[i] = ids_v<T>[result.indices[i]];
+               }
+               return result;
+            }();
+
+            size_t left = 0;
+            size_t right = N;
+            while (left < right) {
+               const size_t mid = left + (right - left) / 2;
+               if (sorted_data.values[mid] < id) {
+                  left = mid + 1;
+               }
+               else {
+                  right = mid;
+               }
+            }
+            if (left < N && sorted_data.values[left] == id) {
+               return sorted_data.indices[left];
+            }
+            return N;
          }
       }
    };
