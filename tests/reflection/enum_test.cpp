@@ -186,6 +186,171 @@ suite sparse_enum_tests = [] {
 };
 
 // ============================================================================
+// Two-element enum tests (N==2 optimization)
+// Tests the two_element hash type that avoids hash table for 2-value enums
+// ============================================================================
+
+// Two-element enum with small int values
+enum class TwoElementSmall : int { First = 0, Second = 100 };
+
+template <>
+struct glz::meta<TwoElementSmall>
+{
+   using enum TwoElementSmall;
+   static constexpr auto value = enumerate(First, Second);
+};
+
+// Two-element enum with large uint64_t values (tests uint64_t casting)
+enum class TwoElementLargeU64 : uint64_t { Low = 0, High = 0xFFFFFFFFFFFFFFFFull };
+
+template <>
+struct glz::meta<TwoElementLargeU64>
+{
+   using enum TwoElementLargeU64;
+   static constexpr auto value = enumerate(Low, High);
+};
+
+// Two-element enum with negative int64_t values
+enum class TwoElementNegative : int64_t { Negative = -9223372036854775807ll, Positive = 9223372036854775807ll };
+
+template <>
+struct glz::meta<TwoElementNegative>
+{
+   using enum TwoElementNegative;
+   static constexpr auto value = enumerate(Negative, Positive);
+};
+
+// Two-element enum with sequential values (0, 1)
+enum class TwoElementSequential : int { Zero = 0, One = 1 };
+
+template <>
+struct glz::meta<TwoElementSequential>
+{
+   using enum TwoElementSequential;
+   static constexpr auto value = enumerate(Zero, One);
+};
+
+// Two-element enum with custom names
+enum class TwoElementNamed : int { Off = 0, On = 1 };
+
+template <>
+struct glz::meta<TwoElementNamed>
+{
+   using enum TwoElementNamed;
+   static constexpr auto value = enumerate("OFF", Off, "ON", On);
+};
+
+suite two_element_enum_tests = [] {
+   "two_element_small_serialization"_test = [] {
+      TwoElementSmall e = TwoElementSmall::First;
+      std::string json;
+      expect(not glz::write_json(e, json));
+      expect(json == "\"First\"") << json;
+
+      e = TwoElementSmall::Second;
+      json.clear();
+      expect(not glz::write_json(e, json));
+      expect(json == "\"Second\"") << json;
+   };
+
+   "two_element_small_deserialization"_test = [] {
+      TwoElementSmall e;
+      expect(not glz::read_json(e, R"("First")"));
+      expect(e == TwoElementSmall::First);
+
+      expect(not glz::read_json(e, R"("Second")"));
+      expect(e == TwoElementSmall::Second);
+   };
+
+   "two_element_small_roundtrip"_test = [] {
+      for (auto val : {TwoElementSmall::First, TwoElementSmall::Second}) {
+         std::string json;
+         expect(not glz::write_json(val, json));
+
+         TwoElementSmall parsed;
+         expect(not glz::read_json(parsed, json));
+         expect(parsed == val);
+      }
+   };
+
+   "two_element_large_u64_roundtrip"_test = [] {
+      // Test with max uint64_t value to verify casting works correctly
+      for (auto val : {TwoElementLargeU64::Low, TwoElementLargeU64::High}) {
+         std::string json;
+         expect(not glz::write_json(val, json));
+
+         TwoElementLargeU64 parsed;
+         expect(not glz::read_json(parsed, json));
+         expect(parsed == val);
+      }
+   };
+
+   "two_element_negative_roundtrip"_test = [] {
+      // Test with extreme int64_t values (near min/max)
+      for (auto val : {TwoElementNegative::Negative, TwoElementNegative::Positive}) {
+         std::string json;
+         expect(not glz::write_json(val, json));
+
+         TwoElementNegative parsed;
+         expect(not glz::read_json(parsed, json));
+         expect(parsed == val);
+      }
+   };
+
+   "two_element_sequential_roundtrip"_test = [] {
+      for (auto val : {TwoElementSequential::Zero, TwoElementSequential::One}) {
+         std::string json;
+         expect(not glz::write_json(val, json));
+
+         TwoElementSequential parsed;
+         expect(not glz::read_json(parsed, json));
+         expect(parsed == val);
+      }
+   };
+
+   "two_element_named_serialization"_test = [] {
+      TwoElementNamed e = TwoElementNamed::Off;
+      std::string json;
+      expect(not glz::write_json(e, json));
+      expect(json == "\"OFF\"") << json;
+
+      e = TwoElementNamed::On;
+      json.clear();
+      expect(not glz::write_json(e, json));
+      expect(json == "\"ON\"") << json;
+   };
+
+   "two_element_named_deserialization"_test = [] {
+      TwoElementNamed e;
+      expect(not glz::read_json(e, R"("OFF")"));
+      expect(e == TwoElementNamed::Off);
+
+      expect(not glz::read_json(e, R"("ON")"));
+      expect(e == TwoElementNamed::On);
+   };
+
+   "two_element_get_name"_test = [] {
+      expect(glz::get_enum_name(TwoElementSmall::First) == "First");
+      expect(glz::get_enum_name(TwoElementSmall::Second) == "Second");
+      expect(glz::get_enum_name(TwoElementLargeU64::Low) == "Low");
+      expect(glz::get_enum_name(TwoElementLargeU64::High) == "High");
+      expect(glz::get_enum_name(TwoElementNegative::Negative) == "Negative");
+      expect(glz::get_enum_name(TwoElementNegative::Positive) == "Positive");
+      expect(glz::get_enum_name(TwoElementNamed::Off) == "OFF");
+      expect(glz::get_enum_name(TwoElementNamed::On) == "ON");
+   };
+
+   "two_element_invalid_value"_test = [] {
+      // Test that invalid values return empty name
+      auto invalid = static_cast<TwoElementSmall>(999);
+      expect(glz::get_enum_name(invalid).empty());
+
+      auto invalid2 = static_cast<TwoElementLargeU64>(123);
+      expect(glz::get_enum_name(invalid2).empty());
+   };
+};
+
+// ============================================================================
 // Random enum hash stress tests
 // Tests that the hash algorithm finds seeds for various enum configurations
 // ============================================================================
