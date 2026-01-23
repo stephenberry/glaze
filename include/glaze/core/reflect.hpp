@@ -954,7 +954,8 @@ namespace glz
             // Binary search through sorted enum values
             // Compute sorted indices and values together to avoid capture issues
             constexpr auto sorted_data = []() {
-               struct result_t {
+               struct result_t
+               {
                   std::array<size_t, N> indices{};
                   std::array<U, N> values{};
                };
@@ -2859,7 +2860,8 @@ namespace glz
          }
          else { // binary_search
             constexpr auto sorted_data = []() {
-               struct result_t {
+               struct result_t
+               {
                   std::array<size_t, N> indices{};
                   std::array<U, N> values{};
                };
