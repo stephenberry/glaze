@@ -185,6 +185,12 @@ namespace glz
       return false;
    }
 
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE bool parse_ws_colon(is_context auto& ctx, auto&& it, auto end) noexcept
+   {
+      return parse_ws_char<':', Opts>(ctx, it, end);
+   }
+
    // Extracted from decode_index to reduce code duplication across instantiations.
    // This path handles unknown keys and doesn't depend on the field index I.
    template <auto Opts, class T, class Value>
@@ -208,7 +214,6 @@ namespace glz
             }
          }
 
-         if (parse_ws_char<':', Opts>(ctx, it, end)) {
          if (parse_ws_char<':', Opts>(ctx, it, end)) {
             return;
          }
@@ -388,7 +393,6 @@ namespace glz
                      return;
                   }
                }
-               if (parse_ws_char<':', Opts>(ctx, it, end)) {
                if (parse_ws_char<':', Opts>(ctx, it, end)) {
                   return;
                }
@@ -3545,8 +3549,6 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                     if (parse_ws_char<':', Opts>(ctx, it, end)) {
-                     if (parse_ws_char<':', Opts>(ctx, it, end)) {
                      if (parse_ws_char<':', Opts>(ctx, it, end)) {
                         return;
                      }
