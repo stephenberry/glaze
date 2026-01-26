@@ -35,7 +35,11 @@ jobs:
 
     - name: Run benchmark
       run: |
-        echo '## skip_ws benchmark results' >> "$GITHUB_STEP_SUMMARY"
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
-        "$GITHUB_WORKSPACE/build/skip_ws_benchmark" | tee -a "$GITHUB_STEP_SUMMARY"
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        output=$("$GITHUB_WORKSPACE/build/skip_ws_benchmark")
+        echo "$output"
+        if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+          echo '## skip_ws benchmark results' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$output" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+        fi
