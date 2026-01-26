@@ -45,6 +45,7 @@ jobs:
           echo "PATH=/usr/lib/llvm-${{ matrix.compiler.version }}/bin:$PATH" >> $GITHUB_ENV
 
       - name: Install Boost
+        id: install-boost
         uses: MarkusJx/install-boost@v2
         with:
           boost_version: ${{ matrix.boost_version }}
