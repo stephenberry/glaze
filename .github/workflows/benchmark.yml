@@ -1,0 +1,41 @@
+name: benchmark
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  skip_ws_benchmark:
+    runs-on: ubuntu-24.04
+
+    env:
+      CC: gcc-14
+      CXX: g++-14
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Verify AVX2 support
+      run: grep -q avx2 /proc/cpuinfo && echo "AVX2 is available"
+
+    - name: Configure CMake
+      run: |
+        cmake -S "$GITHUB_WORKSPACE/benchmarks" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER=${{env.CC}} \
+          -DCMAKE_CXX_COMPILER=${{env.CXX}}
+
+    - name: Build
+      run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc) --target skip_ws_benchmark
+
+    - name: Run benchmark
+      run: |
+        echo '## skip_ws benchmark results' >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        "$GITHUB_WORKSPACE/build/skip_ws_benchmark" | tee -a "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"
