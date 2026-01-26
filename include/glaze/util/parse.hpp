@@ -662,6 +662,10 @@ namespace glz
 
          std::memcpy(v, ws, 8);
          std::memcpy(v + 1, it, 8);
+         if (v[0] != v[1]) {
+            return;
+         }
+         it += 8;
          return;
       }
       {
