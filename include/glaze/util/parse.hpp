@@ -20,6 +20,18 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/string_literal.hpp"
 
+#if !defined(GLZ_DISABLE_SIMD) && (defined(__x86_64__) || defined(_M_X64))
+#if defined(_MSC_VER)
+#include <intrin.h>
+#else
+#include <immintrin.h>
+#endif
+
+#if defined(__AVX2__)
+#define GLZ_USE_AVX2
+#endif
+#endif
+
 namespace glz
 {
    inline constexpr std::array<bool, 256> numeric_table = [] {
@@ -562,6 +574,48 @@ namespace glz
 
 namespace glz
 {
+   // std::countr_zero uses another branch check whether the input is zero,
+   // we use this function when we know that x > 0
+   GLZ_ALWAYS_INLINE auto countr_zero(const uint32_t x) noexcept
+   {
+#ifdef _MSC_VER
+      return std::countr_zero(x);
+#else
+#if __has_builtin(__builtin_ctzll)
+      return __builtin_ctzl(x);
+#else
+      return std::countr_zero(x);
+#endif
+#endif
+   }
+
+   GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept
+   {
+#ifdef _MSC_VER
+      return std::countr_zero(x);
+#else
+#if __has_builtin(__builtin_ctzll)
+      return __builtin_ctzll(x);
+#else
+      return std::countr_zero(x);
+#endif
+#endif
+   }
+
+#if defined(__SIZEOF_INT128__)
+   GLZ_ALWAYS_INLINE auto countr_zero(__uint128_t x) noexcept
+   {
+      uint64_t low = uint64_t(x);
+      if (low != 0) {
+         return countr_zero(low);
+      }
+      else {
+         uint64_t high = uint64_t(x >> 64);
+         return countr_zero(high) + 64;
+      }
+   }
+#endif
+
    // Options struct for skip_ws - reduces template instantiations
    struct ws_opts
    {
@@ -588,6 +642,68 @@ namespace glz
       using namespace glz::detail;
 
       if constexpr (not Opts.minified) {
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::end_reached;
+               return true;
+            }
+         }
+
+         if constexpr (Opts.comments) {
+            if (!whitespace_comment_table[uint8_t(*it)]) {
+               return false;
+            }
+         }
+         else {
+            if (!whitespace_table[uint8_t(*it)]) {
+               return false;
+            }
+         }
+
+#if defined(GLZ_USE_AVX2)
+         // SIMD optimization for skipping whitespace
+         // We can only safely use SIMD if we have a buffer end pointer to check against,
+         // or if we can rely on padding.
+         // If Opts.null_terminated is true, we technically don't need to check end for correctness of parsing,
+         // but for SIMD loads we risk reading out of bounds.
+         // For now, we only use SIMD if we can verify bounds against 'end'.
+         // Users providing null-terminated strings should pass the end or ensure padding.
+
+         if (std::distance(it, end) >= 32) {
+             const auto end_m32 = end - 32;
+             const __m256i space = _mm256_set1_epi8(' ');
+             const __m256i newline = _mm256_set1_epi8('\n');
+             const __m256i carriage = _mm256_set1_epi8('\r');
+             const __m256i tab = _mm256_set1_epi8('\t');
+
+             while (it <= end_m32) {
+                 __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(it));
+
+                 __m256i s = _mm256_cmpeq_epi8(chunk, space);
+                 __m256i n = _mm256_cmpeq_epi8(chunk, newline);
+                 __m256i c = _mm256_cmpeq_epi8(chunk, carriage);
+                 __m256i t = _mm256_cmpeq_epi8(chunk, tab);
+
+                 __m256i is_ws = _mm256_or_si256(_mm256_or_si256(s, n), _mm256_or_si256(c, t));
+
+                 // If comments are enabled, we also stop at '/', but we don't treat it as whitespace to be skipped in the block.
+                 // We just stop so the scalar loop can handle it.
+                 // So effectively we look for (!is_ws).
+
+                 uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(is_ws));
+
+                 // mask has 1 for whitespace, 0 for non-whitespace.
+                 // We want to find the first 0.
+                 if (mask == 0xFFFFFFFF) {
+                     it += 32;
+                 } else {
+                     it += countr_zero(~mask);
+                     break;
+                 }
+             }
+         }
+#endif
+
          if constexpr (Opts.null_terminated) {
             if constexpr (Opts.comments) {
                while (whitespace_comment_table[uint8_t(*it)]) {
@@ -700,47 +816,6 @@ namespace glz
       }*/
    }
 
-   // std::countr_zero uses another branch check whether the input is zero,
-   // we use this function when we know that x > 0
-   GLZ_ALWAYS_INLINE auto countr_zero(const uint32_t x) noexcept
-   {
-#ifdef _MSC_VER
-      return std::countr_zero(x);
-#else
-#if __has_builtin(__builtin_ctzll)
-      return __builtin_ctzl(x);
-#else
-      return std::countr_zero(x);
-#endif
-#endif
-   }
-
-   GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept
-   {
-#ifdef _MSC_VER
-      return std::countr_zero(x);
-#else
-#if __has_builtin(__builtin_ctzll)
-      return __builtin_ctzll(x);
-#else
-      return std::countr_zero(x);
-#endif
-#endif
-   }
-
-#if defined(__SIZEOF_INT128__)
-   GLZ_ALWAYS_INLINE auto countr_zero(__uint128_t x) noexcept
-   {
-      uint64_t low = uint64_t(x);
-      if (low != 0) {
-         return countr_zero(low);
-      }
-      else {
-         uint64_t high = uint64_t(x >> 64);
-         return countr_zero(high) + 64;
-      }
-   }
-#endif
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
