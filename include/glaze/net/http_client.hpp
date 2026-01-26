@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <asio.hpp>
 #include <atomic>
 #include <chrono>
 #include <expected>
@@ -18,6 +17,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/http_router.hpp"
 #include "glaze/util/key_transformers.hpp"
 
