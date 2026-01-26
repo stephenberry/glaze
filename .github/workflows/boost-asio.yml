@@ -63,6 +63,8 @@ jobs:
             -DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS" \
             -DCMAKE_EXE_LINKER_FLAGS="$CMAKE_EXE_LINKER_FLAGS" \
             -Dglaze_USE_BUNDLED_ASIO=OFF
+        env:
+          BOOST_ROOT: ${{ steps.install-boost.outputs.BOOST_ROOT }}
 
       - name: Build
         # Only build networking tests that actually use Asio
