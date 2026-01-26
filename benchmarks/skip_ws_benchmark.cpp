@@ -11,6 +11,21 @@
 #include <string>
 #include <vector>
 
+// Structs must be at namespace scope for glaze reflection
+struct TestObj
+{
+   int64_t id{};
+   double value{};
+   std::string name{};
+   bool active{};
+   std::vector<int> scores{};
+};
+
+struct Root
+{
+   std::vector<TestObj> data{};
+};
+
 // ============================================================================
 // Scalar baseline: the pre-SIMD skip_ws implementation (lookup table, 1 byte at a time)
 // This is the reference implementation to compare against.
@@ -176,21 +191,6 @@ int main()
    // Benchmark 3: End-to-end read_json (shows real-world impact)
    // ========================================================================
    {
-      struct TestObj
-      {
-         int64_t id{};
-         double value{};
-         std::string name{};
-         bool active{};
-         std::vector<int> scores{};
-      };
-
-      struct Root
-      {
-         std::vector<TestObj> data{};
-      };
-
-      // Generate test data
       Root original;
       original.data.reserve(10000);
       std::mt19937 rng(42);
@@ -215,10 +215,10 @@ int main()
       }
 
       std::string minified;
-      glz::write_json(original, minified);
+      (void)glz::write_json(original, minified);
 
       std::string prettified;
-      glz::write<glz::opts{.prettify = true}>(original, prettified);
+      (void)glz::write<glz::opts{.prettify = true}>(original, prettified);
 
       std::printf("Minified size:   %.2f MB\n", minified.size() / (1024.0 * 1024.0));
       std::printf("Prettified size: %.2f MB\n\n", prettified.size() / (1024.0 * 1024.0));
