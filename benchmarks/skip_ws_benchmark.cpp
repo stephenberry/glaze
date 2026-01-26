@@ -60,6 +60,77 @@ namespace scalar_baseline
 }
 
 // ============================================================================
+// skip_matching_ws alternatives
+// ============================================================================
+
+// Current library implementation (manual 8/4/2-byte cascade)
+namespace current_matching
+{
+   GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
+   {
+      if (length > 7) {
+         uint64_t v[2];
+         while (length > 8) {
+            std::memcpy(v, ws, 8);
+            std::memcpy(v + 1, it, 8);
+            if (v[0] != v[1]) {
+               return;
+            }
+            length -= 8;
+            ws += 8;
+            it += 8;
+         }
+
+         const auto shift = 8 - length;
+         ws -= shift;
+         it -= shift;
+
+         std::memcpy(v, ws, 8);
+         std::memcpy(v + 1, it, 8);
+         return;
+      }
+      {
+         constexpr uint64_t n{sizeof(uint32_t)};
+         if (length >= n) {
+            uint32_t v[2];
+            std::memcpy(v, ws, n);
+            std::memcpy(v + 1, it, n);
+            if (v[0] != v[1]) {
+               return;
+            }
+            length -= n;
+            ws += n;
+            it += n;
+         }
+      }
+      {
+         constexpr uint64_t n{sizeof(uint16_t)};
+         if (length >= n) {
+            uint16_t v[2];
+            std::memcpy(v, ws, n);
+            std::memcpy(v + 1, it, n);
+            if (v[0] != v[1]) {
+               return;
+            }
+            it += n;
+         }
+      }
+   }
+}
+
+// Proposed: memcmp with a stack buffer
+namespace memcmp_matching
+{
+   // Copy the expected ws pattern to a stack buffer once, then memcmp against it
+   GLZ_ALWAYS_INLINE void skip_matching_ws(const char* ws_buf, auto&& it, size_t ws_size) noexcept
+   {
+      if (std::memcmp(ws_buf, it, ws_size) == 0) {
+         it += ws_size;
+      }
+   }
+}
+
+// ============================================================================
 // Generate whitespace buffers with varying patterns
 // ============================================================================
 
@@ -188,7 +259,83 @@ int main()
    }
 
    // ========================================================================
-   // Benchmark 3: End-to-end read_json (shows real-world impact)
+   // Benchmark 3: skip_matching_ws — current cascade vs memcmp
+   // Simulates prettified JSON: record ws pattern once, match it N times.
+   // ========================================================================
+   {
+      // Typical prettified JSON indentation patterns
+      struct ws_pattern {
+         const char* name;
+         std::string pattern;
+      };
+      ws_pattern patterns[] = {
+         {"\\n + 2 spaces (3B)", std::string("\n  ") + "{"},
+         {"\\n + 4 spaces (5B)", std::string("\n    ") + "{"},
+         {"\\n + 6 spaces (7B)", std::string("\n      ") + "{"},
+         {"\\n + 8 spaces (9B)", std::string("\n        ") + "{"},
+         {"\\n + 3 tabs (4B)", std::string("\n\t\t\t") + "{"},
+      };
+
+      constexpr size_t N = 500000;
+
+      for (auto& [name, data] : patterns) {
+         const size_t ws_size = data.size() - 1; // exclude the '{' terminator
+
+         // Build a buffer of N repeated occurrences: ws + '{' + ws + '{' + ...
+         std::string repeated;
+         repeated.reserve(data.size() * N);
+         for (size_t i = 0; i < N; ++i) {
+            repeated += data;
+         }
+
+         // Stack buffer for the expected pattern (what the memcmp approach would use)
+         char ws_buf[16]{};
+         std::memcpy(ws_buf, data.data(), ws_size);
+
+         const char* ws_ptr = data.data(); // pointer into original pattern
+
+         bencher::stage stage;
+         stage.name = std::string("skip_matching_ws: ") + name;
+
+         stage.run("current (8/4/2 cascade)", [&] {
+            const char* it = repeated.data();
+            const char* end = repeated.data() + repeated.size();
+            while (it < end) {
+               current_matching::skip_matching_ws(ws_ptr, it, ws_size);
+               if (it < end) ++it; // skip the '{' delimiter
+            }
+            bencher::do_not_optimize(it);
+            return ws_size * N;
+         });
+
+         stage.run("memcmp (stack buffer)", [&] {
+            const char* it = repeated.data();
+            const char* end = repeated.data() + repeated.size();
+            while (it < end) {
+               memcmp_matching::skip_matching_ws(ws_buf, it, ws_size);
+               if (it < end) ++it; // skip the '{' delimiter
+            }
+            bencher::do_not_optimize(it);
+            return ws_size * N;
+         });
+
+         stage.run("scalar skip_ws", [&] {
+            const char* it = repeated.data();
+            const char* end = repeated.data() + repeated.size();
+            while (it < end) {
+               scalar_baseline::skip_ws(it);
+               if (it < end) ++it; // skip the '{' delimiter
+            }
+            bencher::do_not_optimize(it);
+            return ws_size * N;
+         });
+
+         bencher::print_results(stage);
+      }
+   }
+
+   // ========================================================================
+   // Benchmark 4: End-to-end read_json (shows real-world impact)
    // ========================================================================
    {
       Root original;
