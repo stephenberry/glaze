@@ -632,6 +632,7 @@ namespace glz
    enum struct int_hash_type {
       direct, // Sequential values starting at 0: value as index
       offset, // Sequential values with offset: value - min_value
+      two_element, // N==2: compare against first value
       power_of_two, // Powers of 2 (flags): countr_zero(value)
       small_range, // Sparse lookup table for small ranges
       modular, // Perfect hash: (value * seed) % table_size
@@ -685,6 +686,13 @@ namespace glz
          else {
             return int_keys_info_t<1, 0>{.type = int_hash_type::offset, .min_value = static_cast<int64_t>(value)};
          }
+      }
+      else if constexpr (N == 2) {
+         // For two-element enums, compare against first value
+         constexpr auto first_value = static_cast<int64_t>(static_cast<U>(glz::get<0>(reflect<T>::values)));
+         constexpr auto second_value = static_cast<int64_t>(static_cast<U>(glz::get<1>(reflect<T>::values)));
+         return int_keys_info_t<2, 0>{
+            .type = int_hash_type::two_element, .min_value = first_value, .max_value = second_value};
       }
       else {
          // Extract values into array for analysis
@@ -910,6 +918,17 @@ namespace glz
          }
          else if constexpr (Info.type == offset) {
             return static_cast<size_t>(value - Info.min_value);
+         }
+         else if constexpr (Info.type == two_element) {
+            // Compare against first value: if match return 0, else check second
+            // Use uint64_t to handle both signed and unsigned underlying types correctly
+            if (static_cast<uint64_t>(value) == static_cast<uint64_t>(Info.min_value)) {
+               return 0;
+            }
+            else if (static_cast<uint64_t>(value) == static_cast<uint64_t>(Info.max_value)) {
+               return 1;
+            }
+            return N; // Not found
          }
          else if constexpr (Info.type == power_of_two) {
             using UnsignedU = std::make_unsigned_t<U>;
@@ -2583,6 +2602,13 @@ namespace glz
             return int_keys_info_t<1, 0>{.type = int_hash_type::offset, .min_value = static_cast<int64_t>(value)};
          }
       }
+      else if constexpr (N == 2) {
+         // For two-element IDs, compare against first value
+         constexpr auto first_value = static_cast<int64_t>(ids_v<T>[0]);
+         constexpr auto second_value = static_cast<int64_t>(ids_v<T>[1]);
+         return int_keys_info_t<2, 0>{
+            .type = int_hash_type::two_element, .min_value = first_value, .max_value = second_value};
+      }
       else {
          // Extract values from ids_v<T>
          constexpr auto vals = []() constexpr {
@@ -2821,6 +2847,17 @@ namespace glz
          }
          else if constexpr (Info.type == offset) {
             return static_cast<size_t>(id - Info.min_value);
+         }
+         else if constexpr (Info.type == two_element) {
+            // Compare against first value: if match return 0, else check second
+            // Use uint64_t to handle both signed and unsigned underlying types correctly
+            if (static_cast<uint64_t>(id) == static_cast<uint64_t>(Info.min_value)) {
+               return 0;
+            }
+            else if (static_cast<uint64_t>(id) == static_cast<uint64_t>(Info.max_value)) {
+               return 1;
+            }
+            return N; // Not found
          }
          else if constexpr (Info.type == power_of_two) {
             using UnsignedU = std::make_unsigned_t<U>;
