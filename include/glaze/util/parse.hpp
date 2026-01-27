@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <bit>
 #include <charconv>
+#include <cstdint>
 #include <cstring>
 #include <iterator>
 #include <span>
@@ -566,28 +567,12 @@ namespace glz
    // we use this function when we know that x > 0
    GLZ_ALWAYS_INLINE auto countr_zero(const uint32_t x) noexcept
    {
-#ifdef _MSC_VER
       return std::countr_zero(x);
-#else
-#if __has_builtin(__builtin_ctzll)
-      return __builtin_ctzl(x);
-#else
-      return std::countr_zero(x);
-#endif
-#endif
    }
 
    GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept
    {
-#ifdef _MSC_VER
       return std::countr_zero(x);
-#else
-#if __has_builtin(__builtin_ctzll)
-      return __builtin_ctzll(x);
-#else
-      return std::countr_zero(x);
-#endif
-#endif
    }
 
 #if defined(__SIZEOF_INT128__)
@@ -660,7 +645,7 @@ namespace glz
    // skip whitespace implementation
    // we do not inline this function to avoid code bloat and instruction cache misses on the hot path
    template <ws_opts Opts>
-   GLZ_FLATTEN void skip_ws_impl(is_context auto&& ctx, auto&& it, auto end) noexcept
+   GLZ_FLATTEN bool skip_ws_impl(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       using namespace glz::detail;
 

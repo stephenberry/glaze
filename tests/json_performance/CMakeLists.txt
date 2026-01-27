@@ -16,11 +16,13 @@ set(PERF_TESTS
     json_perf_objects
     json_perf_discord
     json_perf_benchmark
+    space_prefill_benchmark
 )
 
 foreach(test ${PERF_TESTS})
     add_executable(${test} ${test}.cpp)
     target_link_libraries(${test} PRIVATE glz_test_exceptions)
+    target_include_directories(${test} PRIVATE ${PROJECT_SOURCE_DIR}/include/glaze/ext)
     if (MINGW)
         target_compile_options(${test} PRIVATE "-Wa,-mbig-obj")
     endif ()
