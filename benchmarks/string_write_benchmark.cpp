@@ -1,146 +1,19 @@
-// String write benchmark: old (SWAR-only) vs new (NEON/SSE2/AVX2 direct comparison) approach
+// String write benchmark: SWAR-only (GLZ_DISABLE_SIMD) vs SIMD+SWAR
+// Both paths use glz::write_json for a fair comparison — the only difference
+// is whether SIMD intrinsics (NEON/SSE2/AVX2) are compiled in.
 // Validates correctness across edge cases and measures performance.
 
 #include "bencher/bencher.hpp"
 #include "bencher/diagnostics.hpp"
 
 #include "glaze/json.hpp"
+#include "string_write_no_simd.hpp"
 
-#include <bit>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <random>
 #include <string>
-#include <vector>
-
-// ============================================================================
-// Old string serialization (SWAR 8-byte only, no 16-byte SIMD)
-// This is the baseline before NEON/SSE2 and before AVX2 was changed to
-// direct comparisons. We intentionally disable all SIMD paths to isolate
-// the SWAR code that was previously the only path on ARM.
-// ============================================================================
-
-// Both old and new use glz::write_json for fair comparison.
-// The old baseline uses raw_string mode (memcpy, no escaping/SIMD) to measure
-// overhead, then we add SWAR-only processing separately.
-// The new path is the library's current code (with NEON/SSE2/AVX2 optimizations).
-
-namespace old_impl
-{
-   // Replicates the old SWAR-only inner loop with identical buffer management
-   // to write_json (ensure_space, quote wrapping, etc.) for fair comparison.
-   inline constexpr std::array<uint16_t, 256> char_escape_table = [] {
-      auto combine = [](const char chars[2]) -> uint16_t {
-         if constexpr (std::endian::native == std::endian::big) {
-            return (uint16_t(uint8_t(chars[0])) << 8) | uint16_t(uint8_t(chars[1]));
-         }
-         else {
-            return uint16_t(uint8_t(chars[0])) | (uint16_t(uint8_t(chars[1])) << 8);
-         }
-      };
-      std::array<uint16_t, 256> t{};
-      t['\b'] = combine(R"(\b)");
-      t['\t'] = combine(R"(\t)");
-      t['\n'] = combine(R"(\n)");
-      t['\f'] = combine(R"(\f)");
-      t['\r'] = combine(R"(\r)");
-      t['\"'] = combine(R"(\")");
-      t['\\'] = combine(R"(\\)");
-      return t;
-   }();
-
-   consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }
-
-   inline auto countr_zero(const uint64_t x) noexcept { return std::countr_zero(x); }
-
-   // Matches glz::write_json buffer management exactly, but uses SWAR-only inner loop
-   __attribute__((noinline)) void write_string_old(const std::string& str, std::string& out)
-   {
-      out.clear();
-      const auto n = str.size();
-
-      // Match write_json's ensure_space: ix + 10 + 2*n, resize to 2x if needed
-      const size_t required = 10 + 2 * n;
-      if (required > out.size()) {
-         out.resize(2 * required);
-      }
-
-      size_t ix = 0;
-      std::memcpy(&out[ix], "\"", 1);
-      ++ix;
-
-      const auto* c = str.data();
-      const auto* const e = c + n;
-      const auto start = &out[ix];
-      auto data = start;
-
-      // SWAR 8-byte path only (the old code path used on ARM before NEON)
-      if (n > 7) {
-         for (const auto end_m7 = e - 7; c < end_m7;) {
-            std::memcpy(data, c, 8);
-            uint64_t swar;
-            std::memcpy(&swar, c, 8);
-            if constexpr (std::endian::native == std::endian::big) {
-               swar = std::byteswap(swar);
-            }
-
-            constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
-            const uint64_t lo7 = swar & lo7_mask;
-            const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
-            const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-            const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-            uint64_t next = ~((quote & backslash & less_32) | swar);
-
-            next &= repeat_byte8(0b10000000);
-            if (next == 0) {
-               data += 8;
-               c += 8;
-               continue;
-            }
-
-            const auto length = (countr_zero(next) >> 3);
-            c += length;
-            data += length;
-
-            std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-            data += 2;
-            ++c;
-         }
-      }
-
-      // Scalar tail
-      for (; c < e; ++c) {
-         if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
-            std::memcpy(data, &escaped, 2);
-            data += 2;
-         }
-         else {
-            std::memcpy(data, c, 1);
-            ++data;
-         }
-      }
-
-      ix += size_t(data - start);
-      std::memcpy(&out[ix], "\"", 1);
-      ++ix;
-      out.resize(ix);
-   }
-} // namespace old_impl
-
-// ============================================================================
-// New string serialization: uses the library's current write_json
-// (with NEON/SSE2/AVX2 optimizations)
-// ============================================================================
-
-namespace new_impl
-{
-   __attribute__((noinline)) void write_string_new(const std::string& str, std::string& out)
-   {
-      out.clear();
-      (void)glz::write_json(str, out);
-   }
-} // namespace new_impl
 
 // ============================================================================
 // String generators
@@ -275,29 +148,30 @@ static void verify(const char* name, const std::string& input)
 {
    ++verify_count;
 
-   std::string old_result;
-   old_impl::write_string_old(input, old_result);
+   std::string swar_result;
+   no_simd::write_json_string(input, swar_result);
 
-   std::string new_result;
-   new_impl::write_string_new(input, new_result);
+   std::string simd_result;
+   simd_result.clear();
+   (void)glz::write_json(input, simd_result);
 
-   if (old_result != new_result) {
+   if (swar_result != simd_result) {
       std::fprintf(stderr, "MISMATCH in '%s' (input len %zu):\n", name, input.size());
-      std::fprintf(stderr, "  Old (%zu bytes): %.200s%s\n", old_result.size(), old_result.c_str(),
-                   old_result.size() > 200 ? "..." : "");
-      std::fprintf(stderr, "  New (%zu bytes): %.200s%s\n", new_result.size(), new_result.c_str(),
-                   new_result.size() > 200 ? "..." : "");
+      std::fprintf(stderr, "  SWAR (%zu bytes): %.200s%s\n", swar_result.size(), swar_result.c_str(),
+                   swar_result.size() > 200 ? "..." : "");
+      std::fprintf(stderr, "  SIMD (%zu bytes): %.200s%s\n", simd_result.size(), simd_result.c_str(),
+                   simd_result.size() > 200 ? "..." : "");
 
       // Find first difference
-      for (size_t i = 0; i < std::min(old_result.size(), new_result.size()); ++i) {
-         if (old_result[i] != new_result[i]) {
-            std::fprintf(stderr, "  First diff at byte %zu: old=0x%02X new=0x%02X\n", i,
-                         (unsigned char)old_result[i], (unsigned char)new_result[i]);
+      for (size_t i = 0; i < std::min(swar_result.size(), simd_result.size()); ++i) {
+         if (swar_result[i] != simd_result[i]) {
+            std::fprintf(stderr, "  First diff at byte %zu: SWAR=0x%02X SIMD=0x%02X\n", i,
+                         (unsigned char)swar_result[i], (unsigned char)simd_result[i]);
             break;
          }
       }
-      if (old_result.size() != new_result.size()) {
-         std::fprintf(stderr, "  Length difference: old=%zu new=%zu\n", old_result.size(), new_result.size());
+      if (swar_result.size() != simd_result.size()) {
+         std::fprintf(stderr, "  Length difference: SWAR=%zu SIMD=%zu\n", swar_result.size(), simd_result.size());
       }
    }
    else {
@@ -420,25 +294,25 @@ static void run_correctness_checks()
 static void bench_string(const char* name, const std::string& input)
 {
    // Warmup and verify sizes match
-   std::string old_buf, new_buf;
-   old_impl::write_string_old(input, old_buf);
-   new_impl::write_string_new(input, new_buf);
+   std::string swar_buf, simd_buf;
+   no_simd::write_json_string(input, swar_buf);
+   (void)glz::write_json(input, simd_buf);
 
-   std::printf("%s — old: %zu bytes, new: %zu bytes\n", name, old_buf.size(), new_buf.size());
+   std::printf("%s — SWAR: %zu bytes, SIMD: %zu bytes\n", name, swar_buf.size(), simd_buf.size());
 
    bencher::stage stage;
    stage.name = name;
 
-   stage.run("old (SWAR-only)", [&] {
+   stage.run("SWAR-only", [&] {
       std::string buf;
-      old_impl::write_string_old(input, buf);
+      no_simd::write_json_string(input, buf);
       bencher::do_not_optimize(buf.data());
       return buf.size();
    });
 
-   stage.run("new (SIMD+SWAR)", [&] {
+   stage.run("SIMD+SWAR", [&] {
       std::string buf;
-      new_impl::write_string_new(input, buf);
+      (void)glz::write_json(input, buf);
       bencher::do_not_optimize(buf.data());
       return buf.size();
    });

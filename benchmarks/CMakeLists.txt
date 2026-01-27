@@ -52,11 +52,22 @@ target_compile_options(skip_ws_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
 
-# String write optimization benchmark (old SWAR vs new SIMD)
+# String write optimization benchmark (SWAR-only vs SIMD+SWAR)
+# The no-SIMD baseline is a shared library so the linker can't deduplicate
+# its glz::write template instantiation with the SIMD-enabled one.
+add_library(string_write_no_simd SHARED string_write_no_simd.cpp)
+target_link_libraries(string_write_no_simd PRIVATE glaze)
+target_compile_definitions(string_write_no_simd PRIVATE GLZ_DISABLE_SIMD)
+target_compile_options(string_write_no_simd PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
 add_executable(string_write_benchmark string_write_benchmark.cpp)
 target_link_libraries(string_write_benchmark PRIVATE
   glaze
   bencher::bencher
+  string_write_no_simd
 )
 target_compile_options(string_write_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
