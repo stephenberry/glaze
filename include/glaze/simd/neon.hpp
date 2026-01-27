@@ -19,7 +19,7 @@ namespace glz::detail
          const uint8x16_t bs_vec = vdupq_n_u8('\\');
          const uint8x16_t ctrl_threshold = vdupq_n_u8(0x20);
 
-         auto check = [&](uint8x16_t v) __attribute__((always_inline)) {
+         auto check = [&](uint8x16_t v) {
             return vorrq_u8(
                vorrq_u8(
                   vceqq_u8(v, quote_vec),
