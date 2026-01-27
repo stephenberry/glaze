@@ -43,7 +43,7 @@ namespace glz
       {
          if constexpr (is_resizable) {
             if (needed > b.size()) {
-               b.resize(2 * needed);
+               grow_buffer(b, needed);
             }
             return true;
          }
@@ -169,6 +169,32 @@ namespace glz
       GLZ_ALWAYS_INLINE static constexpr void finalize(std::array<T, N>&, size_t) noexcept {}
    };
 
+   // Detect buffers that support C++23 resize_and_overwrite (e.g. std::string)
+   template <class T>
+   concept has_resize_and_overwrite = requires(T t) {
+      t.resize_and_overwrite(size_t{}, [](auto*, auto n) noexcept -> size_t { return n; });
+   };
+
+   // Grow a resizable buffer to at least `new_size` bytes.
+   // Uses C++23 resize_and_overwrite when available to avoid zero-filling unused space.
+   // Falls back to a tighter growth factor (callers already request worst-case sizes).
+   template <class Buffer>
+   GLZ_ALWAYS_INLINE void grow_buffer(Buffer& b, size_t new_size)
+   {
+      if constexpr (has_resize_and_overwrite<Buffer>) {
+         // resize_and_overwrite avoids zero-filling characters beyond the current size,
+         // which is a significant win for large buffers (e.g., 65 KB → 0 bytes zeroed).
+         // The 2× growth factor is free here since there is no initialization cost.
+         b.resize_and_overwrite(2 * new_size, [](auto*, auto n) noexcept -> std::size_t { return n; });
+      }
+      else {
+         // Without resize_and_overwrite, resize() zero-fills all new elements.
+         // Use 1× growth to minimize the zero-fill cost. Callers already request conservative
+         // (worst-case) sizes, so additional headroom provides little benefit.
+         b.resize(new_size);
+      }
+   }
+
    // Unified buffer space checking for write operations
    // Handles resizable buffers (resize), bounded buffers (error on overflow), and raw pointers (trust caller)
    template <class B>
@@ -179,7 +205,7 @@ namespace glz
 
       if constexpr (vector_like<Buffer>) {
          if (required > b.size()) [[unlikely]] {
-            b.resize(2 * required);
+            grow_buffer(b, required);
          }
          return true;
       }

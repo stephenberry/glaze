@@ -51,3 +51,14 @@ target_compile_options(skip_ws_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
+
+# String write optimization benchmark (old SWAR vs new SIMD)
+add_executable(string_write_benchmark string_write_benchmark.cpp)
+target_link_libraries(string_write_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(string_write_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)

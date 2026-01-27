@@ -111,9 +111,11 @@ namespace matching
 // ============================================================================
 namespace combined
 {
-   BENCH_ALWAYS_INLINE void skip(const char* ws_pattern, const char*& it, size_t ws_size) noexcept
+   BENCH_ALWAYS_INLINE void skip(const char* ws_pattern, const char*& it, const char* end, size_t ws_size) noexcept
    {
-      matching::skip_matching_ws(ws_pattern, it, ws_size);
+      if (ws_size && ws_size < size_t(end - it)) {
+         matching::skip_matching_ws(ws_pattern, it, ws_size);
+      }
       scalar::skip_ws(it);
    }
 }
@@ -152,7 +154,7 @@ static bool verify_correctness(const std::string& buf, const char* ws_pattern, s
    const char* it_b = buf.data();
    size_t skips_b = 0;
    while (it_b < end) {
-      combined::skip(ws_pattern, it_b, ws_size);
+      combined::skip(ws_pattern, it_b, end, ws_size);
       if (it_b < end) ++it_b;
       ++skips_b;
    }
@@ -198,7 +200,7 @@ static void bench_fixed_pattern(const char* name, const std::string& ws, size_t 
       const char* end = buf.data() + buf.size();
       const char* ws_ptr = ws.data();
       while (it < end) {
-         combined::skip(ws_ptr, it, ws_size);
+         combined::skip(ws_ptr, it, end, ws_size);
          if (it < end) ++it;
       }
       bencher::do_not_optimize(it);
@@ -283,7 +285,7 @@ int main()
          const char* ws_ptr = ws_a.data();
          size_t ws_size = ws_a.size();
          while (it < end) {
-            combined::skip(ws_ptr, it, ws_size);
+            combined::skip(ws_ptr, it, end, ws_size);
             if (it < end) ++it;
          }
          bencher::do_not_optimize(it);
@@ -331,7 +333,7 @@ int main()
          const char* ws_ptr = ws_a.data();
          size_t ws_size = ws_a.size();
          while (it < end) {
-            combined::skip(ws_ptr, it, ws_size);
+            combined::skip(ws_ptr, it, end, ws_size);
             if (it < end) ++it;
          }
          bencher::do_not_optimize(it);
@@ -393,7 +395,7 @@ int main()
          const char* ws_ptr = ws_primary.data();
          size_t ws_size = ws_primary.size();
          while (it < end) {
-            combined::skip(ws_ptr, it, ws_size);
+            combined::skip(ws_ptr, it, end, ws_size);
             if (it < end) ++it;
          }
          bencher::do_not_optimize(it);
@@ -535,11 +537,7 @@ int main()
          size_t ws_bytes = 0;
          while (it < end) {
             const char* before = it;
-            if (ws_size && ws_size < size_t(end - it)) {
-               combined::skip(ws_ptr, it, ws_size);
-            } else {
-               scalar::skip_ws(it);
-            }
+            combined::skip(ws_ptr, it, end, ws_size);
             ws_bytes += size_t(it - before);
             if (it < end) ++it;
          }
@@ -585,7 +583,8 @@ int main()
          // then skip_ws handles the rest. This shows the overhead.
          stage.run("matching + skip_ws", [&] {
             const char* it = ws.data();
-            combined::skip(pattern.data(), it, pattern.size());
+            const char* end = ws.data() + ws.size();
+            combined::skip(pattern.data(), it, end, pattern.size());
             bencher::do_not_optimize(it);
             return sz;
          });

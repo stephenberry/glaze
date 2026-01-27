@@ -11,17 +11,10 @@
 #include "glaze/core/chrono.hpp"
 #include "glaze/util/parse.hpp"
 
-#if !defined(GLZ_DISABLE_SIMD) && (defined(__x86_64__) || defined(_M_X64))
-#if defined(_MSC_VER)
-#include <intrin.h>
-#else
-#include <immintrin.h>
-#endif
-
-#if defined(__AVX2__)
-#define GLZ_USE_AVX2
-#endif
-#endif
+#include "glaze/simd/simd.hpp"
+#include "glaze/simd/avx.hpp"
+#include "glaze/simd/sse.hpp"
+#include "glaze/simd/neon.hpp"
 
 #if defined(_MSC_VER) && !defined(__clang__)
 // disable "unreachable code" warnings, which are often invalid due to constexpr branching
@@ -861,73 +854,44 @@ namespace glz
                   const auto start = &b[ix];
                   auto data = start;
 
-                  // We don't check for writing out invalid characters as this can be tested by the user if
-                  // necessary. In the case of invalid JSON characters we write out null characters to
-                  // showcase the error and make the JSON invalid. These would then be detected upon reading
-                  // the JSON.
+                  // By default we don't escape control characters for performance. Invalid JSON characters
+                  // result in null characters in the output, making the JSON invalid — these would then be
+                  // detected upon reading. Enable the `escape_control_characters` option to properly escape
+                  // control characters (0x00–0x1F) as \uXXXX sequences.
 
-#if defined(GLZ_USE_AVX2)
-                  // Optimization for systems with AVX2 support
-                  if (n > 31) {
-                     const __m256i lo7_mask = _mm256_set1_epi8(0b01111111);
-                     const __m256i quote_char = _mm256_set1_epi8('"');
-                     const __m256i backslash_char = _mm256_set1_epi8('\\');
-                     const __m256i less_32_mask = _mm256_set1_epi8(0b01100000);
-                     const __m256i high_bit_mask = _mm256_set1_epi8(static_cast<int8_t>(0b10000000));
-
-                     for (const char* end_m31 = e - 31; c < end_m31;) {
-                        __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(c));
-
-                        _mm256_storeu_si256(reinterpret_cast<__m256i*>(data), v);
-
-                        const __m256i lo7 = _mm256_and_si256(v, lo7_mask);
-                        const __m256i quote = _mm256_add_epi8(_mm256_xor_si256(lo7, quote_char), lo7_mask);
-                        const __m256i backslash = _mm256_add_epi8(_mm256_xor_si256(lo7, backslash_char), lo7_mask);
-                        const __m256i less_32 = _mm256_add_epi8(_mm256_and_si256(v, less_32_mask), lo7_mask);
-
-                        __m256i temp = _mm256_and_si256(quote, backslash);
-                        temp = _mm256_and_si256(temp, less_32);
-                        temp = _mm256_or_si256(temp, v);
-                        __m256i next = _mm256_andnot_si256(temp, _mm256_set1_epi8(-1)); // Equivalent to ~temp
-                        next = _mm256_and_si256(next, high_bit_mask);
-
-                        uint32_t mask = _mm256_movemask_epi8(next);
-
-                        if (mask == 0) {
-                           data += 32;
-                           c += 32;
-                           continue;
-                        }
-
-                        uint32_t length = countr_zero(mask);
-
-                        c += length;
-                        data += length;
-
-                        if constexpr (check_escape_control_characters(Opts)) {
-                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
-                              std::memcpy(data, &escaped, 2);
-                              data += 2;
-                           }
-                           else {
-                              // Write as \uXXXX format for control characters
-                              char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
-                              constexpr char hex_digits[] = "0123456789ABCDEF";
-                              unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
-                              unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
-                              std::memcpy(data, unicode_escape, 6);
-                              data += 6;
-                           }
-                        }
-                        else {
-                           std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                  // Escape handler: writes the escaped form of *c into data, advances both pointers
+                  auto write_escape = [&]() {
+                     if constexpr (check_escape_control_characters(Opts)) {
+                        if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
+                           std::memcpy(data, &escaped, 2);
                            data += 2;
                         }
-                        ++c;
+                        else {
+                           char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+                           constexpr char hex_digits[] = "0123456789ABCDEF";
+                           unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
+                           unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
+                           std::memcpy(data, unicode_escape, 6);
+                           data += 6;
+                        }
                      }
-                  }
+                     else {
+                        std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                        data += 2;
+                     }
+                     ++c;
+                  };
+
+#if defined(GLZ_USE_AVX2)
+                  detail::avx2_string_escape(c, e, data, n, write_escape);
+#endif
+#if defined(GLZ_USE_SSE2)
+                  detail::sse2_string_escape(c, e, data, n, write_escape);
+#elif defined(GLZ_USE_NEON)
+                  detail::neon_string_escape(c, e, data, n, write_escape);
 #endif
 
+                  // SWAR: 8 bytes at a time
                   if (n > 7) {
                      for (const auto end_m7 = e - 7; c < end_m7;) {
                         std::memcpy(data, c, 8);
@@ -954,31 +918,11 @@ namespace glz
                         const auto length = (countr_zero(next) >> 3);
                         c += length;
                         data += length;
-
-                        if constexpr (check_escape_control_characters(Opts)) {
-                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
-                              std::memcpy(data, &escaped, 2);
-                              data += 2;
-                           }
-                           else {
-                              // Write as \uXXXX format for control characters
-                              char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
-                              constexpr char hex_digits[] = "0123456789ABCDEF";
-                              unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
-                              unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
-                              std::memcpy(data, unicode_escape, 6);
-                              data += 6;
-                           }
-                        }
-                        else {
-                           std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-                           data += 2;
-                        }
-                        ++c;
+                        write_escape();
                      }
                   }
 
-                  // Tail end of buffer. Uncommon for long strings.
+                  // Scalar tail
                   for (; c < e; ++c) {
                      if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
                         std::memcpy(data, &escaped, 2);
@@ -986,7 +930,6 @@ namespace glz
                      }
                      else if constexpr (check_escape_control_characters(Opts)) {
                         if (uint8_t(*c) < 0x20) {
-                           // Write as \uXXXX format for control characters
                            char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
                            constexpr char hex_digits[] = "0123456789ABCDEF";
                            unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
