@@ -513,9 +513,51 @@ namespace glz
       return value;
    }
 
+   // Only use this if you are not prettifying
+   // Returns zero if the fixed size cannot be determined
+   template <class T>
+   inline constexpr size_t fixed_padding = [] {
+      constexpr auto N = reflect<T>::size;
+      size_t fixed = 2 + 16; // {} + extra padding
+      for_each_short_circuit<N>([&]<auto I>() -> bool {
+         using val_t = field_t<T, I>;
+         if constexpr (required_padding<val_t>()) {
+            fixed += required_padding<val_t>();
+            fixed += reflect<T>::keys[I].size() + 2; // quoted key length
+            fixed += 2; // colon and comma
+            return false; // continue
+         }
+         else {
+            fixed = 0;
+            return true; // break
+         }
+      });
+      if (fixed) {
+         fixed = round_up_to_nearest_16(fixed);
+      }
+      return fixed;
+   }();
+
+   // Returns true if writing type T to JSON can potentially set ctx.error.
+   // Checks for a static constexpr bool `can_error` in the to<JSON, T> specialization.
+   // If not present, conservatively assumes true.
+   template <class T>
+   constexpr bool write_can_error()
+   {
+      using V = std::remove_cvref_t<T>;
+      if constexpr (requires { { to<JSON, V>::can_error } -> std::convertible_to<bool>; }) {
+         return to<JSON, V>::can_error;
+      }
+      else {
+         return true;
+      }
+   }
+
    template <is_bitset T>
    struct to<JSON, T>
    {
+      static constexpr bool can_error = false;
+
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
@@ -542,6 +584,8 @@ namespace glz
    template <glaze_flags_t T>
    struct to<JSON, T>
    {
+      static constexpr bool can_error = false;
+
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
@@ -644,6 +688,8 @@ namespace glz
    template <boolean_like T>
    struct to<JSON, T>
    {
+      static constexpr bool can_error = false;
+
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&& ctx, B&& b, auto& ix)
       {
@@ -679,6 +725,8 @@ namespace glz
    template <num_t T>
    struct to<JSON, T>
    {
+      static constexpr bool can_error = false;
+
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
@@ -708,6 +756,8 @@ namespace glz
       requires str_t<T> || char_t<T>
    struct to<JSON, T>
    {
+      static constexpr bool can_error = false;
+
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
@@ -962,6 +1012,8 @@ namespace glz
       requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
    struct to<JSON, T>
    {
+      static constexpr bool can_error = false;
+
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
@@ -988,6 +1040,8 @@ namespace glz
       requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
    struct to<JSON, T>
    {
+      static constexpr bool can_error = false;
+
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
@@ -1136,7 +1190,10 @@ namespace glz
 
    template <class T>
    concept array_padding_known =
-      requires { typename T::value_type; } && (required_padding<typename T::value_type>() > 0);
+      requires { typename T::value_type; } &&
+      (required_padding<typename T::value_type>() > 0 ||
+       ((glaze_object_t<typename T::value_type> || reflectable<typename T::value_type>) &&
+        fixed_padding<typename T::value_type> > 0));
 
    template <class T>
       requires(writable_array_t<T> || writable_map_t<T>)
@@ -1156,7 +1213,12 @@ namespace glz
             if constexpr (has_size<T> && array_padding_known<T> && !has_bounded_capacity<B>) {
                const auto n = value.size();
 
-               static constexpr auto value_padding = required_padding<typename T::value_type>();
+               static constexpr auto value_padding = []() -> size_t {
+                  if constexpr (required_padding<typename T::value_type>() > 0)
+                     return required_padding<typename T::value_type>();
+                  else
+                     return fixed_padding<typename T::value_type>;
+               }();
 
                if constexpr (Opts.prettify) {
                   if constexpr (check_new_lines_in_arrays(Opts)) {
@@ -1507,6 +1569,18 @@ namespace glz
    template <nullable_like T>
    struct to<JSON, T>
    {
+      static constexpr bool can_error = [] {
+         if constexpr (has_value_type<T>) {
+            return write_can_error<typename T::value_type>();
+         }
+         else if constexpr (has_element_type<T>) {
+            return write_can_error<typename T::element_type>();
+         }
+         else {
+            return false;
+         }
+      }();
+
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
@@ -1543,6 +1617,8 @@ namespace glz
    template <always_null_t T>
    struct to<JSON, T>
    {
+      static constexpr bool can_error = false;
+
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, B&& b, auto& ix)
       {
@@ -1940,35 +2016,22 @@ namespace glz
       }
    };
 
-   // Only use this if you are not prettifying
-   // Returns zero if the fixed size cannot be determined
-   template <class T>
-   inline constexpr size_t fixed_padding = [] {
-      constexpr auto N = reflect<T>::size;
-      size_t fixed = 2 + 16; // {} + extra padding
-      for_each_short_circuit<N>([&]<auto I>() -> bool {
-         using val_t = field_t<T, I>;
-         if constexpr (required_padding<val_t>()) {
-            fixed += required_padding<val_t>();
-            fixed += reflect<T>::keys[I].size() + 2; // quoted key length
-            fixed += 2; // colon and comma
-            return false; // continue
-         }
-         else {
-            fixed = 0;
-            return true; // break
-         }
-      });
-      if (fixed) {
-         fixed = round_up_to_nearest_16(fixed);
-      }
-      return fixed;
-   }();
-
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && not custom_write<T>)
    struct to<JSON, T>
    {
+      static constexpr bool can_error = [] {
+         constexpr auto N = reflect<T>::size;
+         if constexpr (N == 0) {
+            return false;
+         }
+         else {
+            return []<size_t... I>(std::index_sequence<I...>) {
+               return (write_can_error<field_t<T, I>>() || ...);
+            }(std::make_index_sequence<N>{});
+         }
+      }();
+
       template <auto Options, class V, class B>
          requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
       static void op(V&& value, is_context auto&& ctx, B&& b, auto& ix)
@@ -2012,8 +2075,10 @@ namespace glz
             if constexpr (not check_opening_handled(Options)) {
                if constexpr (Options.prettify) {
                   ctx.depth += check_indentation_width(Options);
-                  if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
-                     return;
+                  if constexpr (not check_write_unchecked(Options)) {
+                     if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+                        return;
+                     }
                   }
                   std::memcpy(&b[ix], "{\n", 2);
                   ix += 2;
@@ -2021,10 +2086,12 @@ namespace glz
                   ix += ctx.depth;
                }
                else {
-                  if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
-                     return;
+                  if constexpr (not check_write_unchecked(Options)) {
+                     if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+                        return;
+                     }
                   }
-                  dump('{', b, ix);
+                  dump<not check_write_unchecked(Options)>('{', b, ix);
                }
             }
 
@@ -2147,15 +2214,17 @@ namespace glz
             }
             else {
                static constexpr size_t fixed_max_size = fixed_padding<T>;
-               if constexpr (fixed_max_size) {
+               if constexpr (fixed_max_size && not check_write_unchecked(Options)) {
                   if (!ensure_space(ctx, b, ix + fixed_max_size)) [[unlikely]] {
                      return;
                   }
                }
 
                for_each<N>([&]<size_t I>() {
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
+                  if constexpr (write_can_error<T>()) {
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                   }
                   if constexpr (not fixed_max_size) {
                      if constexpr (Opts.prettify) {
@@ -2225,8 +2294,10 @@ namespace glz
             if constexpr (not check_closing_handled(Options)) {
                if constexpr (Options.prettify) {
                   ctx.depth -= check_indentation_width(Options);
-                  if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
-                     return;
+                  if constexpr (not check_write_unchecked(Options)) {
+                     if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+                        return;
+                     }
                   }
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
@@ -2236,7 +2307,7 @@ namespace glz
                   ++ix;
                }
                else {
-                  dump('}', b, ix);
+                  dump<not (fixed_padding<T> || check_write_unchecked(Options))>('}', b, ix);
                }
             }
          }
