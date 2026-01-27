@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/simd/simd.hpp"
+#include "glaze/util/bit.hpp"
 #include "glaze/util/inline.hpp"
 
 #if defined(GLZ_USE_SSE2)
