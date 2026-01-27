@@ -45,7 +45,7 @@ namespace glz::detail
                vorrq_u8(check(v0), check(v1)),
                vorrq_u8(check(v2), check(v3)));
 
-            if (vmaxvq_u8(any) == 0) [[likely]] {
+            if (vmaxvq_u8(any) == 0) {
                data += 64;
                c += 64;
                continue;
@@ -61,7 +61,7 @@ namespace glz::detail
             const uint8x16_t v = vld1q_u8(reinterpret_cast<const uint8_t*>(c));
             vst1q_u8(reinterpret_cast<uint8_t*>(data), v); // speculative store
 
-            if (vmaxvq_u8(check(v)) == 0) [[likely]] {
+            if (vmaxvq_u8(check(v)) == 0) {
                data += 16;
                c += 16;
                continue;
