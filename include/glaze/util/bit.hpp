@@ -17,7 +17,7 @@ namespace glz
 #ifdef _MSC_VER
       return std::countr_zero(x);
 #else
-#if __has_builtin(__builtin_ctzll)
+#if __has_builtin(__builtin_ctzl)
       return __builtin_ctzl(x);
 #else
       return std::countr_zero(x);
@@ -59,7 +59,7 @@ namespace glz
 #ifdef _MSC_VER
       return std::countl_zero(x);
 #else
-#if __has_builtin(__builtin_ctzll)
+#if __has_builtin(__builtin_clz)
       return __builtin_clz(x);
 #else
       return std::countl_zero(x);
