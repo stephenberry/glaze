@@ -64,7 +64,7 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
-            skip_string<Opts>(ctx, it, end);
+            skip_string<skip_string_opts(Opts)>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -235,7 +235,7 @@ namespace glz
                   return;
                break;
             case '"':
-               skip_string<Opts>(ctx, it, end);
+               skip_string<skip_string_opts(Opts)>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
@@ -277,7 +277,7 @@ namespace glz
             break;
          }
          case '"': {
-            skip_string<Opts>(ctx, it, end);
+            skip_string<skip_string_opts(Opts)>(ctx, it, end);
             break;
          }
          case 'n': {
@@ -300,7 +300,7 @@ namespace glz
             break;
          }
          default: {
-            skip_number<Opts>(ctx, it, end);
+            skip_number<skip_number_opts(Opts)>(ctx, it, end);
          }
          }
       }
@@ -327,7 +327,7 @@ namespace glz
          break;
       }
       case '"': {
-         skip_string<Opts>(ctx, it, end);
+         skip_string<skip_string_opts(Opts)>(ctx, it, end);
          break;
       }
       case '/': {
@@ -356,7 +356,7 @@ namespace glz
          break;
       }
       default: {
-         skip_number<Opts>(ctx, it, end);
+         skip_number<skip_number_opts(Opts)>(ctx, it, end);
       }
       }
    }

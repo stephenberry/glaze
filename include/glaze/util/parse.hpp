@@ -20,18 +20,6 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/string_literal.hpp"
 
-#if !defined(GLZ_DISABLE_SIMD) && (defined(__x86_64__) || defined(_M_X64))
-#if defined(_MSC_VER)
-#include <intrin.h>
-#else
-#include <immintrin.h>
-#endif
-
-#if defined(__AVX2__)
-#define GLZ_USE_AVX2
-#endif
-#endif
-
 namespace glz
 {
    inline constexpr std::array<bool, 256> numeric_table = [] {
@@ -660,51 +648,52 @@ namespace glz
             }
          }
 
-#if defined(GLZ_USE_AVX2)
-         // SIMD optimization for skipping whitespace
-         // We can only safely use SIMD if we have a buffer end pointer to check against,
-         // or if we can rely on padding.
-         // If Opts.null_terminated is true, we technically don't need to check end for correctness of parsing,
-         // but for SIMD loads we risk reading out of bounds.
-         // For now, we only use SIMD if we can verify bounds against 'end'.
-         // Users providing null-terminated strings should pass the end or ensure padding.
-
-         if (std::distance(it, end) >= 32) {
-             const auto end_m32 = end - 32;
-             const __m256i space = _mm256_set1_epi8(' ');
-             const __m256i newline = _mm256_set1_epi8('\n');
-             const __m256i carriage = _mm256_set1_epi8('\r');
-             const __m256i tab = _mm256_set1_epi8('\t');
-
-             while (it <= end_m32) {
-                 __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(it));
-
-                 __m256i s = _mm256_cmpeq_epi8(chunk, space);
-                 __m256i n = _mm256_cmpeq_epi8(chunk, newline);
-                 __m256i c = _mm256_cmpeq_epi8(chunk, carriage);
-                 __m256i t = _mm256_cmpeq_epi8(chunk, tab);
-
-                 __m256i is_ws = _mm256_or_si256(_mm256_or_si256(s, n), _mm256_or_si256(c, t));
-
-                 // If comments are enabled, we also stop at '/', but we don't treat it as whitespace to be skipped in the block.
-                 // We just stop so the scalar loop can handle it.
-                 // So effectively we look for (!is_ws).
-
-                 uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(is_ws));
-
-                 // mask has 1 for whitespace, 0 for non-whitespace.
-                 // We want to find the first 0.
-                 if (mask == 0xFFFFFFFF) {
-                     it += 32;
-                 } else {
-                     it += countr_zero(~mask);
-                     break;
-                 }
-             }
+         skip_ws_impl<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return true;
          }
-#endif
+      }
 
-         if constexpr (Opts.null_terminated) {
+      return false;
+   }
+
+   // skip whitespace implementation
+   // we do not inline this function to avoid code bloat and instruction cache misses on the hot path
+   template <ws_opts Opts>
+   GLZ_FLATTEN void skip_ws_impl(is_context auto&& ctx, auto&& it, auto end) noexcept
+   {
+      using namespace glz::detail;
+
+      // SWAR optimization for skipping whitespace
+      // We process 8 bytes at a time
+      if (std::distance(it, end) >= 8) {
+         const auto end_m8 = end - 8;
+         while (it <= end_m8) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            if constexpr (std::endian::native == std::endian::big) {
+               chunk = std::byteswap(chunk);
+            }
+
+            const uint64_t ws = has_char<' '>(chunk) | has_char<'\n'>(chunk) | has_char<'\r'>(chunk) | has_char<'\t'>(chunk);
+
+            // ws has 0x80 in bytes that are whitespace.
+            // We want to find the first byte that is NOT whitespace (where 0x80 is NOT set).
+            const uint64_t not_ws = ~ws & 0x8080808080808080;
+
+            if (not_ws == 0) {
+               // All bytes are whitespace
+               it += 8;
+            } else {
+               // Found a non-whitespace byte
+               it += (countr_zero(not_ws) >> 3);
+               // We need to break to handle comments or just finish
+               break;
+            }
+         }
+      }
+
+      if constexpr (Opts.null_terminated) {
             if constexpr (Opts.comments) {
                while (whitespace_comment_table[uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
