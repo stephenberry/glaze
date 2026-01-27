@@ -3,17 +3,16 @@
 // is whether SIMD intrinsics (NEON/SSE2/AVX2) are compiled in.
 // Validates correctness across edge cases and measures performance.
 
-#include "bencher/bencher.hpp"
-#include "bencher/diagnostics.hpp"
-
-#include "glaze/json.hpp"
-#include "string_write_no_simd.hpp"
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <random>
 #include <string>
+
+#include "bencher/bencher.hpp"
+#include "bencher/diagnostics.hpp"
+#include "glaze/json.hpp"
+#include "string_write_no_simd.hpp"
 
 // ============================================================================
 // String generators

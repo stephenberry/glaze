@@ -1,14 +1,14 @@
 // Benchmark for glz::lazy_json parsing patterns
 
-#include "bencher/bencher.hpp"
-#include "bencher/diagnostics.hpp"
-
-#include "glaze/json.hpp"
-
 #include <string>
 
+#include "bencher/bencher.hpp"
+#include "bencher/diagnostics.hpp"
+#include "glaze/json.hpp"
+
 // Struct for deserialization benchmarks
-struct BenchUser {
+struct BenchUser
+{
    int64_t id{};
    std::string name{};
    std::string email{};
@@ -202,7 +202,7 @@ int main()
          auto result = glz::lazy_json(array_json);
          auto items = (*result)["items"];
          int64_t sum = 0;
-         for (auto& item : items) {  // auto& enables parse_pos_ optimization
+         for (auto& item : items) { // auto& enables parse_pos_ optimization
             auto val = item["value"].get<int64_t>();
             if (val) sum += *val;
          }
@@ -212,9 +212,9 @@ int main()
 
       stage.run("glz::lazy_json (indexed)", [&] {
          auto result = glz::lazy_json(array_json);
-         auto items = (*result)["items"].index();  // Build index once
+         auto items = (*result)["items"].index(); // Build index once
          int64_t sum = 0;
-         for (auto& item : items) {  // O(1) iteration
+         for (auto& item : items) { // O(1) iteration
             auto val = item["value"].get<int64_t>();
             if (val) sum += *val;
          }
@@ -254,7 +254,7 @@ int main()
          auto result = glz::lazy_json(large_json);
          auto users = (*result)["users"];
          int64_t sum = 0;
-         for (auto& user : users) {  // auto& enables parse_pos_ optimization
+         for (auto& user : users) { // auto& enables parse_pos_ optimization
             auto score = user["score"].get<int64_t>();
             if (score) sum += *score;
          }
@@ -265,9 +265,9 @@ int main()
 
       stage.run("glz::lazy_json (indexed)", [&] {
          auto result = glz::lazy_json(large_json);
-         auto users = (*result)["users"].index();  // Build index once - O(n)
+         auto users = (*result)["users"].index(); // Build index once - O(n)
          int64_t sum = 0;
-         for (auto& user : users) {  // O(1) iteration
+         for (auto& user : users) { // O(1) iteration
             auto score = user["score"].get<int64_t>();
             if (score) sum += *score;
          }
@@ -320,13 +320,13 @@ int main()
             auto id = users[i * 100]["id"].get<int64_t>();
             if (id) sum += *id;
          }
-         if (sum != 4500) std::abort();  // 0+100+200+...+900 = 4500
+         if (sum != 4500) std::abort(); // 0+100+200+...+900 = 4500
          return large_json.size();
       });
 
       stage.run("glz::lazy_json (indexed)", [&] {
          auto result = glz::lazy_json(large_json);
-         auto users = (*result)["users"].index();  // Build index once
+         auto users = (*result)["users"].index(); // Build index once
          int64_t sum = 0;
          // 10 random accesses - O(1) each after index built
          for (int i = 0; i < 10; ++i) {

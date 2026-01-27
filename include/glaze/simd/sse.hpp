@@ -13,7 +13,7 @@ namespace glz::detail
 {
    template <class Data, class WriteEscape>
    GLZ_ALWAYS_INLINE void sse2_string_escape(const char*& c, const char* e, Data*& data, size_t n,
-                                              WriteEscape&& write_escape)
+                                             WriteEscape&& write_escape)
    {
       // SSE2: 16 bytes at a time with direct comparison instructions
       if (n > 15) {
@@ -26,12 +26,9 @@ namespace glz::detail
             __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i*>(c));
             _mm_storeu_si128(reinterpret_cast<__m128i*>(data), v);
 
-            const uint32_t mask = static_cast<uint32_t>(_mm_movemask_epi8(
-               _mm_or_si128(
-                  _mm_or_si128(
-                     _mm_cmpeq_epi8(v, quote_vec),
-                     _mm_cmpeq_epi8(v, bs_vec)),
-                  _mm_cmpeq_epi8(_mm_and_si128(v, ctrl_mask), zero))));
+            const uint32_t mask = static_cast<uint32_t>(
+               _mm_movemask_epi8(_mm_or_si128(_mm_or_si128(_mm_cmpeq_epi8(v, quote_vec), _mm_cmpeq_epi8(v, bs_vec)),
+                                              _mm_cmpeq_epi8(_mm_and_si128(v, ctrl_mask), zero))));
 
             if (mask == 0) {
                data += 16;

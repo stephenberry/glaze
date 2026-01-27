@@ -9,12 +9,11 @@
 #include <variant>
 
 #include "glaze/core/chrono.hpp"
-#include "glaze/util/parse.hpp"
-
-#include "glaze/simd/simd.hpp"
 #include "glaze/simd/avx.hpp"
-#include "glaze/simd/sse.hpp"
 #include "glaze/simd/neon.hpp"
+#include "glaze/simd/simd.hpp"
+#include "glaze/simd/sse.hpp"
+#include "glaze/util/parse.hpp"
 
 #if defined(_MSC_VER) && !defined(__clang__)
 // disable "unreachable code" warnings, which are often invalid due to constexpr branching
@@ -545,7 +544,9 @@ namespace glz
    constexpr bool write_can_error()
    {
       using V = std::remove_cvref_t<T>;
-      if constexpr (requires { { to<JSON, V>::can_error } -> std::convertible_to<bool>; }) {
+      if constexpr (requires {
+                       { to<JSON, V>::can_error } -> std::convertible_to<bool>;
+                    }) {
          return to<JSON, V>::can_error;
       }
       else {
@@ -1189,11 +1190,10 @@ namespace glz
    }
 
    template <class T>
-   concept array_padding_known =
-      requires { typename T::value_type; } &&
-      (required_padding<typename T::value_type>() > 0 ||
-       ((glaze_object_t<typename T::value_type> || reflectable<typename T::value_type>) &&
-        fixed_padding<typename T::value_type> > 0));
+   concept array_padding_known = requires { typename T::value_type; } &&
+                                 (required_padding<typename T::value_type>() > 0 ||
+                                  ((glaze_object_t<typename T::value_type> || reflectable<typename T::value_type>) &&
+                                   fixed_padding<typename T::value_type> > 0));
 
    template <class T>
       requires(writable_array_t<T> || writable_map_t<T>)
@@ -2307,7 +2307,7 @@ namespace glz
                   ++ix;
                }
                else {
-                  dump<not (fixed_padding<T> || check_write_unchecked(Options))>('}', b, ix);
+                  dump<not(fixed_padding<T> || check_write_unchecked(Options))>('}', b, ix);
                }
             }
          }

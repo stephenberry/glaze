@@ -10,9 +10,6 @@
 //
 // Both must produce the same result. Correctness is verified.
 
-#include "bencher/bencher.hpp"
-#include "bencher/diagnostics.hpp"
-
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -20,6 +17,9 @@
 #include <cstring>
 #include <string>
 #include <vector>
+
+#include "bencher/bencher.hpp"
+#include "bencher/diagnostics.hpp"
 
 // BENCH_ALWAYS_INLINE is provided by bencher/config.hpp
 
@@ -160,7 +160,8 @@ static bool verify_correctness(const std::string& buf, const char* ws_pattern, s
    }
 
    if (it_a != it_b || skips_a != skips_b) {
-      std::fprintf(stderr, "CORRECTNESS FAILURE in '%s': scalar ended at offset %td (%zu skips), combined at %td (%zu skips)\n",
+      std::fprintf(stderr,
+                   "CORRECTNESS FAILURE in '%s': scalar ended at offset %td (%zu skips), combined at %td (%zu skips)\n",
                    test_name, it_a - buf.data(), skips_a, it_b - buf.data(), skips_b);
       return false;
    }
@@ -248,7 +249,7 @@ int main()
 
    {
       // Alternate between 2-space indent and 4-space indent
-      const std::string ws_a = "\n  ";   // 3B
+      const std::string ws_a = "\n  "; // 3B
       const std::string ws_b = "\n    "; // 5B
 
       std::string buf;
@@ -297,7 +298,7 @@ int main()
 
    {
       // Alternate between 4-space and 8-space indent
-      const std::string ws_a = "\n    ";     // 5B
+      const std::string ws_a = "\n    "; // 5B
       const std::string ws_b = "\n        "; // 9B
 
       std::string buf;
@@ -351,9 +352,9 @@ int main()
    std::printf("\n=== Part 3: Realistic nesting (80%% match, 20%% mismatch) ===\n\n");
 
    {
-      const std::string ws_primary = "\n    ";   // 5B — depth 2 (most common)
-      const std::string ws_deeper  = "\n      "; // 7B — depth 3
-      const std::string ws_shallow = "\n  ";     // 3B — depth 1
+      const std::string ws_primary = "\n    "; // 5B — depth 2 (most common)
+      const std::string ws_deeper = "\n      "; // 7B — depth 3
+      const std::string ws_shallow = "\n  "; // 3B — depth 1
 
       std::string buf;
       buf.reserve(N * 6); // rough estimate
@@ -361,9 +362,11 @@ int main()
          size_t mod = i % 10;
          if (mod < 8) {
             buf += ws_primary;
-         } else if (mod < 9) {
+         }
+         else if (mod < 9) {
             buf += ws_deeper;
-         } else {
+         }
+         else {
             buf += ws_shallow;
          }
          buf += '{';
@@ -438,7 +441,8 @@ int main()
       json += "}\n";
 
       // Extract whitespace gaps: sequences of ws chars between non-ws chars
-      struct ws_gap {
+      struct ws_gap
+      {
          size_t offset;
          size_t length;
       };
@@ -454,14 +458,15 @@ int main()
                }
                gaps.push_back({start, i - start});
                total_ws += i - start;
-            } else {
+            }
+            else {
                ++i;
             }
          }
       }
 
-      std::printf("JSON size: %zu bytes, %zu whitespace gaps, %zu total ws bytes\n",
-                  json.size(), gaps.size(), total_ws);
+      std::printf("JSON size: %zu bytes, %zu whitespace gaps, %zu total ws bytes\n", json.size(), gaps.size(),
+                  total_ws);
 
       // Print gap size distribution
       std::array<size_t, 32> size_dist{};
@@ -482,13 +487,21 @@ int main()
       std::string most_common_ws;
       {
          // Count exact pattern frequencies
-         struct pattern_count { std::string pat; size_t count; };
+         struct pattern_count
+         {
+            std::string pat;
+            size_t count;
+         };
          std::vector<pattern_count> pats;
          for (const auto& g : gaps) {
             std::string p = json.substr(g.offset, g.length);
             bool found = false;
             for (auto& pc : pats) {
-               if (pc.pat == p) { ++pc.count; found = true; break; }
+               if (pc.pat == p) {
+                  ++pc.count;
+                  found = true;
+                  break;
+               }
             }
             if (!found) pats.push_back({p, 1});
          }
@@ -498,9 +511,8 @@ int main()
             if (pats[i].count > pats[best].count) best = i;
          }
          most_common_ws = pats[best].pat;
-         std::printf("Most common ws pattern: %zu bytes (%zu/%zu = %.0f%% of gaps)\n\n",
-                     most_common_ws.size(), pats[best].count, gaps.size(),
-                     100.0 * pats[best].count / gaps.size());
+         std::printf("Most common ws pattern: %zu bytes (%zu/%zu = %.0f%% of gaps)\n\n", most_common_ws.size(),
+                     pats[best].count, gaps.size(), 100.0 * pats[best].count / gaps.size());
       }
 
       // Benchmark: iterate through the actual JSON, skipping ws gaps

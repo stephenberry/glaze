@@ -1,16 +1,16 @@
-#include "bencher/bencher.hpp"
-#include "bencher/diagnostics.hpp"
-
-#include "glaze/util/simple_float.hpp"
-#include "glaze/util/glaze_fast_float.hpp"
-
 #include <charconv>
 #include <cstring>
 #include <random>
 #include <vector>
 
+#include "bencher/bencher.hpp"
+#include "bencher/diagnostics.hpp"
+#include "glaze/util/glaze_fast_float.hpp"
+#include "glaze/util/simple_float.hpp"
+
 // Generate test data
-std::vector<float> generate_random_floats(size_t count, uint32_t seed = 12345) {
+std::vector<float> generate_random_floats(size_t count, uint32_t seed = 12345)
+{
    std::mt19937 rng(seed);
    std::uniform_int_distribution<uint32_t> dist;
 
@@ -25,14 +25,16 @@ std::vector<float> generate_random_floats(size_t count, uint32_t seed = 12345) {
       // Skip NaN and Inf
       if (!std::isnan(value) && !std::isinf(value)) {
          result.push_back(value);
-      } else {
+      }
+      else {
          --i; // retry
       }
    }
    return result;
 }
 
-std::vector<double> generate_random_doubles(size_t count, uint32_t seed = 12345) {
+std::vector<double> generate_random_doubles(size_t count, uint32_t seed = 12345)
+{
    std::mt19937_64 rng(seed);
    std::uniform_int_distribution<uint64_t> dist;
 
@@ -46,14 +48,16 @@ std::vector<double> generate_random_doubles(size_t count, uint32_t seed = 12345)
 
       if (!std::isnan(value) && !std::isinf(value)) {
          result.push_back(value);
-      } else {
+      }
+      else {
          --i;
       }
    }
    return result;
 }
 
-std::vector<std::string> serialize_floats(const std::vector<float>& floats) {
+std::vector<std::string> serialize_floats(const std::vector<float>& floats)
+{
    std::vector<std::string> result;
    result.reserve(floats.size());
    char buf[32];
@@ -64,7 +68,8 @@ std::vector<std::string> serialize_floats(const std::vector<float>& floats) {
    return result;
 }
 
-std::vector<std::string> serialize_doubles(const std::vector<double>& doubles) {
+std::vector<std::string> serialize_doubles(const std::vector<double>& doubles)
+{
    std::vector<std::string> result;
    result.reserve(doubles.size());
    char buf[32];
@@ -75,7 +80,8 @@ std::vector<std::string> serialize_doubles(const std::vector<double>& doubles) {
    return result;
 }
 
-int main() {
+int main()
+{
    constexpr size_t N = 100000;
 
    // Pre-generate test data
@@ -237,8 +243,8 @@ int main() {
          size_t total = 0;
          for (const auto& s : float_strings) {
             glz::simple_float::detail::decimal_number dec{};
-            const char* end = glz::simple_float::detail::parse_decimal_strict<false>(
-               s.data(), s.data() + s.size(), dec);
+            const char* end =
+               glz::simple_float::detail::parse_decimal_strict<false>(s.data(), s.data() + s.size(), dec);
             total += (end ? 1 : 0);
             bencher::do_not_optimize(dec);
          }
@@ -250,8 +256,7 @@ int main() {
          size_t total = 0;
          float value;
          for (const auto& s : float_strings) {
-            auto [ptr, ec] = glz::simple_float::from_chars<false>(
-               s.data(), s.data() + s.size(), value);
+            auto [ptr, ec] = glz::simple_float::from_chars<false>(s.data(), s.data() + s.size(), value);
             total += (ptr ? 1 : 0);
             bencher::do_not_optimize(value);
          }

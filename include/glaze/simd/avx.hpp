@@ -13,7 +13,7 @@ namespace glz::detail
 {
    template <class Data, class WriteEscape>
    GLZ_ALWAYS_INLINE void avx2_string_escape(const char*& c, const char* e, Data*& data, size_t n,
-                                              WriteEscape&& write_escape)
+                                             WriteEscape&& write_escape)
    {
       // AVX2: 32 bytes at a time with direct comparison instructions
       if (n > 31) {
@@ -28,11 +28,8 @@ namespace glz::detail
             _mm256_storeu_si256(reinterpret_cast<__m256i*>(data), v);
 
             const uint32_t mask = _mm256_movemask_epi8(
-               _mm256_or_si256(
-                  _mm256_or_si256(
-                     _mm256_cmpeq_epi8(v, quote_vec),
-                     _mm256_cmpeq_epi8(v, bs_vec)),
-                  _mm256_cmpeq_epi8(_mm256_and_si256(v, ctrl_mask), zero)));
+               _mm256_or_si256(_mm256_or_si256(_mm256_cmpeq_epi8(v, quote_vec), _mm256_cmpeq_epi8(v, bs_vec)),
+                               _mm256_cmpeq_epi8(_mm256_and_si256(v, ctrl_mask), zero)));
 
             if (mask == 0) {
                data += 32;

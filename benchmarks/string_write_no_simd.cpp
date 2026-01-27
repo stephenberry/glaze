@@ -1,6 +1,7 @@
 #define GLZ_DISABLE_SIMD
-#include "glaze/json.hpp"
 #include "string_write_no_simd.hpp"
+
+#include "glaze/json.hpp"
 
 namespace no_simd
 {

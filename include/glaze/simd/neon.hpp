@@ -12,7 +12,7 @@ namespace glz::detail
 {
    template <class Data, class WriteEscape>
    GLZ_ALWAYS_INLINE void neon_string_escape(const char*& c, const char* e, Data*& data, size_t n,
-                                              WriteEscape&& write_escape)
+                                             WriteEscape&& write_escape)
    {
       if (n > 15) {
          const uint8x16_t quote_vec = vdupq_n_u8('"');
@@ -20,11 +20,7 @@ namespace glz::detail
          const uint8x16_t ctrl_threshold = vdupq_n_u8(0x20);
 
          auto check = [&](uint8x16_t v) {
-            return vorrq_u8(
-               vorrq_u8(
-                  vceqq_u8(v, quote_vec),
-                  vceqq_u8(v, bs_vec)),
-               vcltq_u8(v, ctrl_threshold));
+            return vorrq_u8(vorrq_u8(vceqq_u8(v, quote_vec), vceqq_u8(v, bs_vec)), vcltq_u8(v, ctrl_threshold));
          };
 
          // Wide path: 64 bytes (4×16) per iteration to reduce loop overhead.
@@ -41,9 +37,7 @@ namespace glz::detail
             vst1q_u8(reinterpret_cast<uint8_t*>(data + 32), v2);
             vst1q_u8(reinterpret_cast<uint8_t*>(data + 48), v3);
 
-            const uint8x16_t any = vorrq_u8(
-               vorrq_u8(check(v0), check(v1)),
-               vorrq_u8(check(v2), check(v3)));
+            const uint8x16_t any = vorrq_u8(vorrq_u8(check(v0), check(v1)), vorrq_u8(check(v2), check(v3)));
 
             if (vmaxvq_u8(any) == 0) {
                data += 64;
