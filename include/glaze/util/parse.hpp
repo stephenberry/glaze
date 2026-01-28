@@ -15,6 +15,7 @@
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/atoi.hpp"
+#include "glaze/util/bit.hpp"
 #include "glaze/util/compare.hpp"
 #include "glaze/util/convert.hpp"
 #include "glaze/util/expected.hpp"
@@ -751,6 +752,10 @@ namespace glz
 
          std::memcpy(v, ws, 8);
          std::memcpy(v + 1, it, 8);
+         if (v[0] != v[1]) {
+            return;
+         }
+         it += 8;
          return;
       }
       {
@@ -788,6 +793,7 @@ namespace glz
          ++it;
       }*/
    }
+
 
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept

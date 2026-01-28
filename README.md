@@ -238,9 +238,25 @@ The buffer refills automatically during parsing, enabling reading of arbitrarily
 
 Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:preprocessor` flag when building with MSVC.
 
-### SIMD CMake Options
+### SIMD Architecture Detection
 
-The CMake option `glaze_DISABLE_SIMD_WHEN_SUPPORTED` can be set to `ON` to disable SIMD optimizations (e.g., AVX2) even when the target supports them. This is useful when cross-compiling for Arm or other architectures. If you aren't using CMake, define the macro `GLZ_DISABLE_SIMD` to disable SIMD optimizations. The macro `GLZ_USE_AVX2` is automatically defined when AVX2 support is detected and SIMD is not disabled.
+Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations using compiler-predefined macros:
+
+| Flag | Detected When | Architecture |
+|------|--------------|--------------|
+| `GLZ_USE_SSE2` | `__x86_64__` or `_M_X64` | x86-64 (always has SSE2) |
+| `GLZ_USE_AVX2` | `__AVX2__` (in addition to x86-64) | x86-64 with AVX2 |
+| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM64 / AArch64 |
+
+Since these are target-architecture macros set by the compiler, cross-compilation works automatically (e.g., an x86 host cross-compiling for ARM will not enable x86 SIMD paths).
+
+To disable SIMD optimizations:
+
+```cmake
+set(glaze_DISABLE_SIMD_WHEN_SUPPORTED ON)
+```
+
+This sets `GLZ_DISABLE_SIMD` as an INTERFACE compile definition, propagated to all targets linking against `glaze::glaze`. Without CMake, define `GLZ_DISABLE_SIMD` before including Glaze headers.
 
 ### Disable Forced Inlining
 
