@@ -202,11 +202,9 @@ namespace glz
    GLZ_ALWAYS_INLINE void dump_newline_indent(const byte_sized auto c, size_t n, B& b,
                                               size_t& ix) noexcept(not vector_like<B>)
    {
-      bool prefilled_with_spaces = false;
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
             resize_and_fill_spaces(b, 2 * k);
-            prefilled_with_spaces = true;
          }
       }
 
@@ -214,18 +212,8 @@ namespace glz
       ++ix;
 
       if (c == ' ') {
-         if (prefilled_with_spaces) {
-             // We just resized and filled with spaces, so we can skip writing
-             ix += n;
-             return;
-         }
-
-         const uint64_t spaces = 0x2020202020202020;
-         while (n >= 8) {
-            std::memcpy(&b[ix], &spaces, 8);
-            ix += 8;
-            n -= 8;
-         }
+         ix += n;
+         return;
       }
       std::memset(&b[ix], c, n);
       ix += n;

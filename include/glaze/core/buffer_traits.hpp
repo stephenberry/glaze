@@ -20,28 +20,14 @@ namespace glz
    template <class B>
    GLZ_ALWAYS_INLINE void resize_and_fill_spaces(B& b, size_t n)
    {
-      if constexpr (requires { b.resize_and_overwrite(n, [](auto*, size_t) { return size_t{}; }); }) {
-         const auto old_size = b.size();
-         b.resize_and_overwrite(n, [old_size](auto* ptr, size_t m) {
-            if (m > old_size) {
-               std::memset(ptr + old_size, ' ', m - old_size);
-            }
-            return m;
-         });
+      if constexpr (requires { b.resize(n, ' '); }) {
+         b.resize(n, ' ');
       }
       else {
-         // Fallback for older C++ or non-string containers
          const auto old_size = b.size();
          b.resize(n);
          if (n > old_size) {
-             // std::string::resize(n) zero-initializes or takes a char.
-             // We want spaces.
-             // b.resize(n, ' ') would work BUT only if n > size.
-             // If we just called resize(n), it filled with 0.
-             // We need to overwrite with spaces.
-             // Optimization: call resize(n, ' ') directly if supported?
-             // std::vector and std::string support resize(n, val).
-             std::memset(b.data() + old_size, ' ', n - old_size);
+            std::memset(b.data() + old_size, ' ', n - old_size);
          }
       }
    }
