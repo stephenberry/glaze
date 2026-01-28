@@ -39,14 +39,9 @@ jobs:
               sudo apt update
               sudo apt-get install -y gcc-${{matrix.gcc}}-multilib g++-${{matrix.gcc}}-multilib libc6-dev-i386
               
-         - name: Remove HTTPS test (requires OpenSSL)
-           run: |
-              # Remove the https_test from tests CMakeLists.txt for this build
-              sed -i '/add_subdirectory(https_test)/d' tests/networking_tests/CMakeLists.txt
-              
          - name: Configure CMake
            run: |
-              CXXFLAGS="-g3 -m32" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+              CXXFLAGS="-g3 -m32" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}} -Dglaze_BUILD_SSL_TESTS=OFF
               
          - name: Build
            run: cmake --build build -j $(nproc)
