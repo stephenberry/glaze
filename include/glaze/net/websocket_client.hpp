@@ -8,10 +8,6 @@
 #include "glaze/net/http_client.hpp"
 #include "glaze/net/websocket_connection.hpp"
 
-#ifdef GLZ_ENABLE_SSL
-#include <asio/ssl.hpp>
-#endif
-
 namespace glz
 {
    struct websocket_client

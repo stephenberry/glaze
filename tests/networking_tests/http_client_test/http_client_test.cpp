@@ -136,7 +136,8 @@ class working_test_server
       // Set up custom error handler to suppress expected shutdown errors
       server_.on_error([this](std::error_code ec, std::source_location loc) {
          // Only log unexpected errors, not normal shutdown errors
-         if (running_ && ec != asio::error::eof && ec != asio::error::operation_aborted) {
+         if (running_ && ec != make_error_code(asio::error::eof) &&
+             ec != make_error_code(asio::error::operation_aborted)) {
             std::fprintf(stderr, "Server error at %s:%d: %s\n", loc.file_name(), static_cast<int>(loc.line()),
                          ec.message().c_str());
          }
@@ -260,7 +261,7 @@ class working_test_server
          asio::ip::tcp::socket socket(io);
          asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), port_);
 
-         std::error_code ec;
+         asio::error_code ec;
          socket.connect(endpoint, ec);
          if (!ec) {
             socket.close();
@@ -408,7 +409,7 @@ class simple_test_client
             }
 
             // Read body
-            std::error_code ec;
+            asio::error_code ec;
             asio::read(socket, response_buffer, asio::transfer_all(), ec);
 
             std::string response_body{std::istreambuf_iterator<char>(&response_buffer),
@@ -830,7 +831,7 @@ suite glz_http_client_tests = [] {
          received_data.append(data);
       };
       auto on_error = [&](std::error_code ec) {
-         if (ec && ec != asio::error::eof && ec != asio::error::operation_aborted) {
+         if (ec && ec != make_error_code(asio::error::eof) && ec != make_error_code(asio::error::operation_aborted)) {
             error_count++;
          }
       };
@@ -886,7 +887,7 @@ suite glz_http_client_tests = [] {
          data_chunks_received++;
       };
       auto on_error = [&](std::error_code ec) {
-         if (ec && ec != asio::error::eof && ec != asio::error::operation_aborted) {
+         if (ec && ec != make_error_code(asio::error::eof) && ec != make_error_code(asio::error::operation_aborted)) {
             error_count++;
          }
       };

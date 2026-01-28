@@ -48,7 +48,7 @@ handshake_result read_handshake_response(asio::ip::tcp::socket& socket)
    std::vector<uint8_t> buffer;
    buffer.reserve(1024);
    std::array<uint8_t, 1024> chunk{};
-   std::error_code ec;
+   asio::error_code ec;
 
    while (true) {
       std::size_t bytes_read = socket.read_some(asio::buffer(chunk), ec);
@@ -147,7 +147,7 @@ std::optional<websocket_frame> poll_for_frame(asio::ip::tcp::socket& socket, std
    auto start = std::chrono::steady_clock::now();
 
    while (std::chrono::steady_clock::now() - start < timeout) {
-      std::error_code ec;
+      asio::error_code ec;
       std::size_t bytes_read = socket.read_some(asio::buffer(buffer), ec);
 
       if (ec == asio::error::would_block) {
