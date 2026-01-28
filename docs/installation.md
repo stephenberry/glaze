@@ -146,27 +146,15 @@ Since Glaze is header-only, you can simply:
 ## CMake Configuration Options
 
 ### SIMD Support
+AVX2 SIMD instructions are automatically enabled when the compiler detects AVX2 support (the `GLZ_USE_AVX2` macro is defined automatically when `__AVX2__` is available).
 
-Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations:
-
-| Flag | Detected When | Architecture |
-|------|--------------|--------------|
-| `GLZ_USE_SSE2` | `__x86_64__` or `_M_X64` | x86-64 (always has SSE2) |
-| `GLZ_USE_AVX2` | `__AVX2__` (in addition to x86-64) | x86-64 with AVX2 |
-| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM64 / AArch64 |
-
-Detection uses compiler-predefined macros that reflect the target architecture, so cross-compilation works correctly without any manual configuration.
-
-### Disable SIMD
-
-To disable all SIMD intrinsics (e.g., when benchmarking SWAR-only performance or working around a platform issue):
+### Disable SIMD (Cross-compilation)
+For cross-compilation to ARM or other architectures, disable SIMD optimizations:
 
 ```cmake
 set(glaze_DISABLE_SIMD_WHEN_SUPPORTED ON)
 FetchContent_MakeAvailable(glaze)
 ```
-
-This sets `GLZ_DISABLE_SIMD` as an INTERFACE compile definition, so it automatically propagates to all targets linking against `glaze::glaze`.
 
 Or define the macro directly before including Glaze headers:
 ```cpp

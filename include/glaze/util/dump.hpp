@@ -18,22 +18,32 @@ namespace glz
    template <class T, class V = std::remove_cvref_t<T>>
    concept byte_sized = sizeof(T) == 1 && (std::same_as<V, char> || std::same_as<V, std::byte>);
 
-   template <uint32_t N, class B>
+   template <uint32_t N, char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void maybe_pad(B& b, size_t ix) noexcept(not vector_like<B>)
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + N; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            if constexpr (PaddingChar == '\0') {
+               b.resize(2 * k);
+            }
+            else {
+               b.resize(2 * k, PaddingChar);
+            }
          }
       }
    }
 
-   template <class B>
+   template <char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void maybe_pad(const size_t n, B& b, size_t ix) noexcept(not vector_like<B>)
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            if constexpr (PaddingChar == '\0') {
+               b.resize(2 * k);
+            }
+            else {
+               b.resize(2 * k, PaddingChar);
+            }
          }
       }
    }
@@ -77,31 +87,41 @@ namespace glz
    // and would duplicate the ensure_space() logic. The padding model (ensure_space checks for
    // ix + n + write_padding_bytes) guarantees sufficient space for subsequent dump calls.
 
-   template <bool Checked = true, class B>
+   template <bool Checked = true, char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump(const byte_sized auto c, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            if constexpr (PaddingChar == '\0') {
+               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            }
+            else {
+               b.resize(b.size() == 0 ? 128 : b.size() * 2, PaddingChar);
+            }
          }
       }
       assign_maybe_cast(c, b, ix);
       ++ix;
    }
 
-   template <auto c, bool Checked = true, class B>
+   template <auto c, bool Checked = true, char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            if constexpr (PaddingChar == '\0') {
+               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            }
+            else {
+               b.resize(b.size() == 0 ? 128 : b.size() * 2, PaddingChar);
+            }
          }
       }
       assign_maybe_cast<c>(b, ix);
       ++ix;
    }
 
-   template <string_literal str, bool Checked = true, class B>
+   template <string_literal str, bool Checked = true, char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       static constexpr auto s = str.sv();
@@ -111,7 +131,12 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               if constexpr (PaddingChar == '\0') {
+                  b.resize(2 * k);
+               }
+               else {
+                  b.resize(2 * k, PaddingChar);
+               }
             }
          }
       }
@@ -119,15 +144,20 @@ namespace glz
       ix += n;
    }
 
-   template <bool Checked = true, class B>
+   template <bool Checked = true, char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump(const sv str, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       const auto n = str.size();
       if constexpr (vector_like<B>) {
          if constexpr (Checked) {
             const auto k = ix + n;
-            if (ix + n > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+            if (k > b.size()) [[unlikely]] {
+               if constexpr (PaddingChar == '\0') {
+                  b.resize(2 * k);
+               }
+               else {
+                  b.resize(2 * k, PaddingChar);
+               }
             }
          }
       }
@@ -162,23 +192,34 @@ namespace glz
       ix += n;
    }
 
-   template <auto c, class B>
+   template <auto c, char PaddingChar = '\0', class B>
    [[deprecated(
       "use dumpn_unchecked(c, n, b, ix) instead of dumpn_unchecked<c>(n, b, ix) to reduce template instantiations")]]
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, size_t& ix) noexcept
    {
-      std::memset(&b[ix], c, n);
-      ix += n;
+      if constexpr (PaddingChar == ' ' && c == ' ') {
+         ix += n;
+      }
+      else {
+         std::memset(&b[ix], c, n);
+         ix += n;
+      }
    }
 
-   template <class B>
+   template <char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dumpn_unchecked(const byte_sized auto c, size_t n, B& b, size_t& ix) noexcept
    {
+      if constexpr (PaddingChar == ' ') {
+         if (c == ' ') {
+            ix += n;
+            return;
+         }
+      }
       std::memset(&b[ix], c, n);
       ix += n;
    }
 
-   template <char IndentChar, class B>
+   template <char IndentChar, char PaddingChar = '\0', class B>
    [[deprecated(
       "use dump_newline_indent(c, n, b, ix) instead of dump_newline_indent<c>(n, b, ix) to reduce template "
       "instantiations")]]
@@ -186,33 +227,53 @@ namespace glz
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            if constexpr (PaddingChar == '\0') {
+               b.resize(2 * k);
+            }
+            else {
+               b.resize(2 * k, PaddingChar);
+            }
          }
       }
 
       assign_maybe_cast<'\n'>(b, ix);
       ++ix;
-      std::memset(&b[ix], IndentChar, n);
-      ix += n;
+      if constexpr (PaddingChar == ' ') {
+         ix += n;
+      }
+      else {
+         std::memset(&b[ix], IndentChar, n);
+         ix += n;
+      }
    }
 
-   template <class B>
+   template <char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump_newline_indent(const byte_sized auto c, size_t n, B& b,
                                               size_t& ix) noexcept(not vector_like<B>)
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            if constexpr (PaddingChar == '\0') {
+               b.resize(2 * k);
+            }
+            else {
+               b.resize(2 * k, PaddingChar);
+            }
          }
       }
 
       assign_maybe_cast('\n', b, ix);
       ++ix;
-      std::memset(&b[ix], c, n);
-      ix += n;
+      if constexpr (PaddingChar == ' ') {
+         ix += n;
+      }
+      else {
+         std::memset(&b[ix], c, n);
+         ix += n;
+      }
    }
 
-   template <const sv& str, bool Checked = true, class B>
+   template <const sv& str, bool Checked = true, char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix) noexcept(not vector_like<B> && not Checked)
    {
       static constexpr auto s = str;
@@ -222,7 +283,12 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               if constexpr (PaddingChar == '\0') {
+                  b.resize(2 * k);
+               }
+               else {
+                  b.resize(2 * k, PaddingChar);
+               }
             }
          }
       }
@@ -230,7 +296,7 @@ namespace glz
       ix += n;
    }
 
-   template <bool Checked = true, class B>
+   template <bool Checked = true, char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump_not_empty(const sv str, B& b, size_t& ix) noexcept(not vector_like<B> && not Checked)
    {
       const auto n = str.size();
@@ -238,7 +304,12 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               if constexpr (PaddingChar == '\0') {
+                  b.resize(2 * k);
+               }
+               else {
+                  b.resize(2 * k, PaddingChar);
+               }
             }
          }
       }
@@ -246,7 +317,7 @@ namespace glz
       ix += n;
    }
 
-   template <bool Checked = true, class B>
+   template <bool Checked = true, char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, B& b, size_t& ix) noexcept(not vector_like<B> && not Checked)
    {
       const auto n = str.size();
@@ -255,7 +326,12 @@ namespace glz
             if constexpr (Checked) {
                const auto k = ix + n;
                if (k > b.size()) [[unlikely]] {
-                  b.resize(2 * k);
+                  if constexpr (PaddingChar == '\0') {
+                     b.resize(2 * k);
+                  }
+                  else {
+                     b.resize(2 * k, PaddingChar);
+                  }
                }
             }
          }
@@ -264,27 +340,37 @@ namespace glz
       }
    }
 
-   template <class B>
+   template <char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump(const vector_like auto& bytes, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       const auto n = bytes.size();
       if constexpr (vector_like<B>) {
          const auto k = ix + n;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            if constexpr (PaddingChar == '\0') {
+               b.resize(2 * k);
+            }
+            else {
+               b.resize(2 * k, PaddingChar);
+            }
          }
       }
       std::memcpy(&b[ix], bytes.data(), n);
       ix += n;
    }
 
-   template <size_t N, class B>
+   template <size_t N, char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE void dump(const std::array<uint8_t, N>& bytes, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if constexpr (vector_like<B>) {
          const auto k = ix + N;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            if constexpr (PaddingChar == '\0') {
+               b.resize(2 * k);
+            }
+            else {
+               b.resize(2 * k, PaddingChar);
+            }
          }
       }
       std::memcpy(&b[ix], bytes.data(), N);

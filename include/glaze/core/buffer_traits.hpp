@@ -43,7 +43,6 @@ namespace glz
       {
          if constexpr (is_resizable) {
             if (needed > b.size()) {
-               // 2× growth amortizes repeated reallocations to O(n) total cost.
                b.resize(2 * needed);
             }
             return true;
@@ -172,7 +171,7 @@ namespace glz
 
    // Unified buffer space checking for write operations
    // Handles resizable buffers (resize), bounded buffers (error on overflow), and raw pointers (trust caller)
-   template <class B>
+   template <char PaddingChar = '\0', class B>
    GLZ_ALWAYS_INLINE bool ensure_space(is_context auto& ctx, B& b,
                                        size_t required) noexcept(not vector_like<std::remove_cvref_t<B>>)
    {
@@ -180,8 +179,12 @@ namespace glz
 
       if constexpr (vector_like<Buffer>) {
          if (required > b.size()) [[unlikely]] {
-            // 2× growth amortizes repeated reallocations to O(n) total cost.
-            b.resize(2 * required);
+            if constexpr (PaddingChar == '\0') {
+               b.resize(2 * required);
+            }
+            else {
+               b.resize(2 * required, PaddingChar);
+            }
          }
          return true;
       }

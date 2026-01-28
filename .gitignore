@@ -54,9 +54,8 @@ alabastar.beve
 *.beve
 *.pem
 
-# Benchmark build artifacts
-benchmarks/build*/
+# Benchmark comparison directory
+benchmarks/
 pr_description.md
 /size_tests
 /tmp_benchmark
-/exterior

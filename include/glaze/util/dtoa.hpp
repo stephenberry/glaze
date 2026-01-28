@@ -5,13 +5,28 @@
 #include <cstdint>
 #include <cstring>
 
-#include "glaze/util/bit.hpp"
 #include "glaze/util/dragonbox.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/itoa.hpp"
 
 namespace glz
 {
+   // std::countl_zero uses another branch check whether the input is zero,
+   // we use this function when we know that x > 0
+   GLZ_ALWAYS_INLINE constexpr auto countl_zero(const uint32_t x) noexcept
+   {
+#ifdef _MSC_VER
+      return std::countl_zero(x);
+#else
+#if __has_builtin(__builtin_ctzll)
+      return __builtin_clz(x);
+#else
+      return std::countl_zero(x);
+#endif
+#endif
+   }
+
+   constexpr int int_log2(uint32_t x) noexcept { return 31 - glz::countl_zero(x | 1); }
 
    inline constexpr uint64_t digit_count_table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788, 12884901788, 12884901788, 17179868184,

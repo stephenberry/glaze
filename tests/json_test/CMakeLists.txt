@@ -157,4 +157,3 @@ add_executable(lazy_test lazy_test.cpp)
 target_link_libraries(lazy_test PRIVATE glz_test_common)
 
 add_test(NAME lazy_test COMMAND lazy_test)
-

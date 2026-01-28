@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <bit>
 #include <charconv>
+#include <cstdint>
 #include <cstring>
 #include <iterator>
 #include <span>
@@ -14,7 +15,6 @@
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/atoi.hpp"
-#include "glaze/util/bit.hpp"
 #include "glaze/util/compare.hpp"
 #include "glaze/util/convert.hpp"
 #include "glaze/util/expected.hpp"
@@ -563,6 +563,32 @@ namespace glz
 
 namespace glz
 {
+   // std::countr_zero uses another branch check whether the input is zero,
+   // we use this function when we know that x > 0
+   GLZ_ALWAYS_INLINE auto countr_zero(const uint32_t x) noexcept
+   {
+      return std::countr_zero(x);
+   }
+
+   GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept
+   {
+      return std::countr_zero(x);
+   }
+
+#if defined(__SIZEOF_INT128__)
+   GLZ_ALWAYS_INLINE auto countr_zero(__uint128_t x) noexcept
+   {
+      uint64_t low = uint64_t(x);
+      if (low != 0) {
+         return countr_zero(low);
+      }
+      else {
+         uint64_t high = uint64_t(x >> 64);
+         return countr_zero(high) + 64;
+      }
+   }
+#endif
+
    // Options struct for skip_ws - reduces template instantiations
    struct ws_opts
    {
@@ -589,52 +615,114 @@ namespace glz
       using namespace glz::detail;
 
       if constexpr (not Opts.minified) {
-         if constexpr (Opts.null_terminated) {
-            if constexpr (Opts.comments) {
-               while (whitespace_comment_table[uint8_t(*it)]) {
-                  if (*it == '/') [[unlikely]] {
-                     skip_comment(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return true;
-                     }
-                  }
-                  else [[likely]] {
-                     ++it;
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::end_reached;
+               return true;
+            }
+         }
+
+         if constexpr (Opts.comments) {
+            if (!whitespace_comment_table[uint8_t(*it)]) {
+               return false;
+            }
+         }
+         else {
+            if (!whitespace_table[uint8_t(*it)]) {
+               return false;
+            }
+         }
+
+         skip_ws_impl<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return true;
+         }
+      }
+
+      return false;
+   }
+
+   // skip whitespace implementation
+   // we do not inline this function to avoid code bloat and instruction cache misses on the hot path
+   template <ws_opts Opts>
+   GLZ_FLATTEN bool skip_ws_impl(is_context auto&& ctx, auto&& it, auto end) noexcept
+   {
+      using namespace glz::detail;
+
+      // SWAR optimization for skipping whitespace
+      // We process 8 bytes at a time
+      if (std::distance(it, end) >= 8) {
+         const auto end_m8 = end - 8;
+         while (it <= end_m8) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            if constexpr (std::endian::native == std::endian::big) {
+               chunk = std::byteswap(chunk);
+            }
+
+            const uint64_t ws = has_char<' '>(chunk) | has_char<'\n'>(chunk) | has_char<'\r'>(chunk) | has_char<'\t'>(chunk);
+
+            // ws has 0x80 in bytes that are whitespace.
+            // We want to find the first byte that is NOT whitespace (where 0x80 is NOT set).
+            const uint64_t not_ws = ~ws & 0x8080808080808080;
+
+            if (not_ws == 0) {
+               // All bytes are whitespace
+               it += 8;
+            } else {
+               // Found a non-whitespace byte
+               it += (countr_zero(not_ws) >> 3);
+               // We need to break to handle comments or just finish
+               break;
+            }
+         }
+      }
+
+      if constexpr (Opts.null_terminated) {
+         if constexpr (Opts.comments) {
+            while (whitespace_comment_table[uint8_t(*it)]) {
+               if (*it == '/') [[unlikely]] {
+                  skip_comment(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return true;
                   }
                }
-            }
-            else {
-               while (whitespace_table[uint8_t(*it)]) {
+               else [[likely]] {
                   ++it;
                }
             }
          }
          else {
-            if constexpr (Opts.comments) {
-               while (it < end && whitespace_comment_table[uint8_t(*it)]) {
-                  if (*it == '/') [[unlikely]] {
-                     skip_comment(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return true;
-                     }
-                  }
-                  else [[likely]] {
-                     ++it;
-                  }
-               }
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::end_reached;
-                  return true;
-               }
+            while (whitespace_table[uint8_t(*it)]) {
+               ++it;
             }
-            else {
-               while (it < end && whitespace_table[uint8_t(*it)]) {
+         }
+      }
+      else {
+         if constexpr (Opts.comments) {
+            while (it < end && whitespace_comment_table[uint8_t(*it)]) {
+               if (*it == '/') [[unlikely]] {
+                  skip_comment(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return true;
+                  }
+               }
+               else [[likely]] {
                   ++it;
                }
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::end_reached;
-                  return true;
-               }
+            }
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::end_reached;
+               return true;
+            }
+         }
+         else {
+            while (it < end && whitespace_table[uint8_t(*it)]) {
+               ++it;
+            }
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::end_reached;
+               return true;
             }
          }
       }
@@ -663,10 +751,6 @@ namespace glz
 
          std::memcpy(v, ws, 8);
          std::memcpy(v + 1, it, 8);
-         if (v[0] != v[1]) {
-            return;
-         }
-         it += 8;
          return;
       }
       {
@@ -704,6 +788,7 @@ namespace glz
          ++it;
       }*/
    }
+
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
