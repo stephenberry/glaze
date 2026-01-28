@@ -29,11 +29,6 @@
 #include "glaze/net/websocket_connection.hpp"
 #include "glaze/util/key_transformers.hpp"
 
-// Conditionally include SSL headers only when needed
-#ifdef GLZ_ENABLE_SSL
-#include <asio/ssl.hpp>
-#endif
-
 // To deconflict Windows.h
 #ifdef DELETE
 #undef DELETE
@@ -1513,10 +1508,10 @@ namespace glz
          }
 
          conn->idle_timer->expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
-         conn->idle_timer->async_wait([conn](std::error_code ec) {
+         conn->idle_timer->async_wait([conn](asio::error_code ec) {
             if (!ec) {
                // Timer expired - close the connection
-               std::error_code close_ec;
+               asio::error_code close_ec;
                conn->socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
                conn->socket->lowest_layer().close(close_ec);
             }
@@ -2016,7 +2011,7 @@ namespace glz
          auto response_buffer = std::make_shared<std::string>(std::move(response_str));
 
          asio::async_write(*conn->socket, asio::buffer(*response_buffer),
-                           [this, conn, response_buffer](std::error_code ec, std::size_t /*bytes_transferred*/) {
+                           [this, conn, response_buffer](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                               if (ec) {
                                  // Write error - connection is dead
                                  return;
@@ -2024,7 +2019,7 @@ namespace glz
 
                               if (conn->should_close) {
                                  // Close the connection gracefully
-                                 std::error_code close_ec;
+                                 asio::error_code close_ec;
                                  conn->socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
                                  conn->socket->lowest_layer().close(close_ec);
                               }

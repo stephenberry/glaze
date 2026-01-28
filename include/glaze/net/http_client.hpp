@@ -240,7 +240,7 @@ namespace glz
          bool expected = false;
          if (should_stop.compare_exchange_strong(expected, true)) {
             if (socket && socket->is_open()) {
-               std::error_code ec;
+               asio::error_code ec;
                // This cancels pending async operations on the socket, triggering their handlers
                // with asio::error::operation_aborted.
                socket->cancel(ec);
@@ -813,7 +813,7 @@ namespace glz
          asio::async_read_until(
             *connection->socket, *connection->buffer, "\r\n",
             [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
-             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t bytes_transferred) mutable {
+             on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t bytes_transferred) mutable {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
                      on_error(ec);
@@ -881,7 +881,7 @@ namespace glz
             *connection->socket, *connection->buffer,
             asio::transfer_exactly(total_to_read - connection->buffer->size()),
             [this, connection, chunk_size, on_data = std::move(on_data), on_error = std::move(on_error),
-             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+             on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
                      on_error(ec);
@@ -931,7 +931,7 @@ namespace glz
          // Use async_read with transfer_at_least(1) - may read more data for efficiency
          asio::async_read(
             *connection->socket, *connection->buffer, asio::transfer_at_least(1),
-            [this, connection, on_data, on_error, on_disconnect](std::error_code ec,
+            [this, connection, on_data, on_error, on_disconnect](asio::error_code ec,
                                                                  std::size_t /*bytes_transferred*/) {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
@@ -966,7 +966,7 @@ namespace glz
          constexpr size_t read_size = 8192;
          connection->socket->async_read_some(
             connection->buffer->prepare(read_size),
-            [this, connection, on_data, on_error, on_disconnect](std::error_code ec, std::size_t bytes_transferred) {
+            [this, connection, on_data, on_error, on_disconnect](asio::error_code ec, std::size_t bytes_transferred) {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
                      on_error(ec);
@@ -1033,11 +1033,11 @@ namespace glz
 
             // Read response headers synchronously
             asio::streambuf response_buffer;
-            std::error_code ec;
+            asio::error_code ec;
             size_t header_bytes = asio::read_until(*socket, response_buffer, "\r\n\r\n", ec);
             if (ec) {
                socket->close();
-               return std::unexpected(ec);
+               return std::unexpected<std::error_code>(ec);
             }
 
             // Create a zero-copy view of the header data
@@ -1096,7 +1096,7 @@ namespace glz
             size_t body_in_buffer = response_buffer.size();
             if (content_length > body_in_buffer) {
                size_t remaining_to_read = content_length - body_in_buffer;
-               std::error_code read_ec;
+               asio::error_code read_ec;
                asio::read(*socket, response_buffer, asio::transfer_exactly(remaining_to_read), read_ec);
                if (read_ec) {
                   socket->close(); // Don't reuse a failed connection
@@ -1304,7 +1304,7 @@ namespace glz
             *socket, *buffer, asio::transfer_exactly(remaining_to_read),
             [this, socket, buffer, url, status_code = parsed_status->status_code,
              response_headers = std::move(response_headers),
-             handler = std::forward<CompletionHandler>(handler)](std::error_code ec, std::size_t) mutable {
+             handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
                // EOF is expected if the server closes the connection.
                if (ec && ec != asio::error::eof) {
                   handler(std::unexpected(ec));

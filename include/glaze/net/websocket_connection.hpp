@@ -35,10 +35,6 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/util/parse.hpp"
 
-#ifdef GLZ_ENABLE_SSL
-#include <asio/ssl.hpp>
-#endif
-
 namespace glz
 {
    // WebSocket opcode constants
