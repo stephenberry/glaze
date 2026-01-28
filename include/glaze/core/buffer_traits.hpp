@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <limits>
 #include <span>
+#include <string>
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/context.hpp"
@@ -14,6 +15,37 @@
 
 namespace glz
 {
+   // Helper to resize and fill with spaces (0x20)
+   // Maintains invariant: Tail of buffer is always spaces
+   template <class B>
+   GLZ_ALWAYS_INLINE void resize_and_fill_spaces(B& b, size_t n)
+   {
+      if constexpr (requires { b.resize_and_overwrite(n, [](auto*, size_t) { return size_t{}; }); }) {
+         const auto old_size = b.size();
+         b.resize_and_overwrite(n, [old_size](auto* ptr, size_t m) {
+            if (m > old_size) {
+               std::memset(ptr + old_size, ' ', m - old_size);
+            }
+            return m;
+         });
+      }
+      else {
+         // Fallback for older C++ or non-string containers
+         const auto old_size = b.size();
+         b.resize(n);
+         if (n > old_size) {
+             // std::string::resize(n) zero-initializes or takes a char.
+             // We want spaces.
+             // b.resize(n, ' ') would work BUT only if n > size.
+             // If we just called resize(n), it filled with 0.
+             // We need to overwrite with spaces.
+             // Optimization: call resize(n, ' ') directly if supported?
+             // std::vector and std::string support resize(n, val).
+             std::memset(b.data() + old_size, ' ', n - old_size);
+         }
+      }
+   }
+
    // Primary template for buffer traits
    // Handles resizable buffers (std::string, std::vector<char>, etc.)
    template <class Buffer>
@@ -44,7 +76,7 @@ namespace glz
          if constexpr (is_resizable) {
             if (needed > b.size()) {
                // 2× growth amortizes repeated reallocations to O(n) total cost.
-               b.resize(2 * needed);
+               resize_and_fill_spaces(b, 2 * needed);
             }
             return true;
          }
@@ -57,7 +89,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void finalize(Buffer& b, size_t written) noexcept(not is_resizable)
       {
          if constexpr (is_resizable) {
-            b.resize(written);
+            b.resize(written); // Standard resize is fine for shrinking/finalizing
          }
          // For fixed buffers: no-op, count is returned in result
       }
@@ -181,7 +213,7 @@ namespace glz
       if constexpr (vector_like<Buffer>) {
          if (required > b.size()) [[unlikely]] {
             // 2× growth amortizes repeated reallocations to O(n) total cost.
-            b.resize(2 * required);
+            resize_and_fill_spaces(b, 2 * required);
          }
          return true;
       }

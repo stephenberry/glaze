@@ -24,12 +24,12 @@ if (MSVC)
   if (matched_cl)
     # for a C++ standards compliant preprocessor, not needed for clang-cl
     target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
-    
+
     if(PROJECT_IS_TOP_LEVEL)
-      target_compile_options(glaze_glaze INTERFACE 
+      target_compile_options(glaze_glaze INTERFACE
         $<$<CONFIG:Release>:/GL>
         $<$<CONFIG:MinSizeRel>:/GL>)
-      target_link_options(glaze_glaze INTERFACE 
+      target_link_options(glaze_glaze INTERFACE
         $<$<CONFIG:Release>:/LTCG /INCREMENTAL:NO>
         $<$<CONFIG:MinSizeRel>:/LTCG /INCREMENTAL:NO>)
     endif()
@@ -101,3 +101,7 @@ if(glaze_ENABLE_SSL)
   target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_SSL)
 endif(glaze_ENABLE_SSL)
 
+option(glaze_BUILD_BENCHMARKS "Build GLAZE benchmarks" OFF)
+if(glaze_BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()
