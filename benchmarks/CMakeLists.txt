@@ -73,3 +73,14 @@ target_compile_options(string_write_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
+
+# Prettify benchmark
+add_executable(prettify_benchmark prettify_benchmark.cpp)
+target_link_libraries(prettify_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(prettify_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)

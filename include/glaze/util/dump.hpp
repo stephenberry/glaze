@@ -7,9 +7,11 @@
 #include <cstddef>
 #include <cstring>
 #include <span>
+#include <string>
 #include <string_view>
 
 #include "glaze/concepts/container_concepts.hpp"
+#include "glaze/core/buffer_traits.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/convert.hpp"
 
@@ -23,7 +25,7 @@ namespace glz
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + N; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            resize_and_fill_spaces(b, 2 * k);
          }
       }
    }
@@ -33,7 +35,7 @@ namespace glz
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            resize_and_fill_spaces(b, 2 * k);
          }
       }
    }
@@ -82,7 +84,7 @@ namespace glz
    {
       if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            resize_and_fill_spaces(b, b.size() == 0 ? 128 : b.size() * 2);
          }
       }
       assign_maybe_cast(c, b, ix);
@@ -94,7 +96,7 @@ namespace glz
    {
       if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            resize_and_fill_spaces(b, b.size() == 0 ? 128 : b.size() * 2);
          }
       }
       assign_maybe_cast<c>(b, ix);
@@ -111,7 +113,7 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               resize_and_fill_spaces(b, 2 * k);
             }
          }
       }
@@ -127,7 +129,7 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (ix + n > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               resize_and_fill_spaces(b, 2 * k);
             }
          }
       }
@@ -142,7 +144,7 @@ namespace glz
       if constexpr (vector_like<B>) {
          const auto k = ix + n;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            resize_and_fill_spaces(b, 2 * k);
          }
       }
       std::memset(&b[ix], c, n);
@@ -155,7 +157,7 @@ namespace glz
       if constexpr (vector_like<B>) {
          const auto k = ix + n;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            resize_and_fill_spaces(b, 2 * k);
          }
       }
       std::memset(&b[ix], c, n);
@@ -202,12 +204,17 @@ namespace glz
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            resize_and_fill_spaces(b, 2 * k);
          }
       }
 
       assign_maybe_cast('\n', b, ix);
       ++ix;
+
+      if (c == ' ') {
+         ix += n;
+         return;
+      }
       std::memset(&b[ix], c, n);
       ix += n;
    }
@@ -222,7 +229,7 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               resize_and_fill_spaces(b, 2 * k);
             }
          }
       }
@@ -238,7 +245,7 @@ namespace glz
          if constexpr (Checked) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+               resize_and_fill_spaces(b, 2 * k);
             }
          }
       }
@@ -255,7 +262,7 @@ namespace glz
             if constexpr (Checked) {
                const auto k = ix + n;
                if (k > b.size()) [[unlikely]] {
-                  b.resize(2 * k);
+                  resize_and_fill_spaces(b, 2 * k);
                }
             }
          }
@@ -271,7 +278,7 @@ namespace glz
       if constexpr (vector_like<B>) {
          const auto k = ix + n;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            resize_and_fill_spaces(b, 2 * k);
          }
       }
       std::memcpy(&b[ix], bytes.data(), n);
@@ -284,7 +291,7 @@ namespace glz
       if constexpr (vector_like<B>) {
          const auto k = ix + N;
          if (k > b.size()) [[unlikely]] {
-            b.resize(2 * k);
+            resize_and_fill_spaces(b, 2 * k);
          }
       }
       std::memcpy(&b[ix], bytes.data(), N);
