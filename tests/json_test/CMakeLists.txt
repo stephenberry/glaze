@@ -158,3 +158,11 @@ target_link_libraries(lazy_test PRIVATE glz_test_common)
 
 add_test(NAME lazy_test COMMAND lazy_test)
 
+## PMR generic test
+
+add_executable(generic_pmr_test generic_pmr_test.cpp)
+
+target_link_libraries(generic_pmr_test PRIVATE glz_test_common)
+
+add_test(NAME generic_pmr_test COMMAND generic_pmr_test)
+
