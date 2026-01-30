@@ -307,19 +307,26 @@ namespace glz
                requires { typename Map::key_compare::is_transparent; });
    };
 
+   // Helper to detect optional-like types (have has_value() method) - used to exclude from array concepts
+   // This is needed because C++26 makes std::optional a range
+   template <class T>
+   concept has_value_method = requires(T t) {
+      { t.has_value() } -> std::convertible_to<bool>;
+   };
+
    template <class T>
    concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T> &&
-                      !nullable_t<T> && !nullable_value_t<T>);
+                      !has_value_method<T>);
 
    template <class T>
    concept readable_array_t =
       (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T> &&
-       !nullable_t<T> && !nullable_value_t<T>);
+       !has_value_method<T>);
 
    template <class T>
    concept writable_array_t =
       (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T> &&
-       !nullable_t<T> && !nullable_value_t<T>);
+       !has_value_method<T>);
 
    template <class T>
    concept fixed_array_value_t =
