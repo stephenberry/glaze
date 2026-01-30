@@ -18,6 +18,14 @@
 #include "glaze/net/http_server.hpp"
 #include "ut/ut.hpp"
 
+#if defined(GLZ_USING_BOOST_ASIO)
+namespace asio
+{
+   using namespace boost::asio;
+   using error_code = boost::system::error_code;
+}
+#endif
+
 using namespace ut;
 
 // Test data structures
@@ -1073,7 +1081,7 @@ struct raw_http_client
 
    void close()
    {
-      std::error_code ec;
+      asio::error_code ec;
       socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
       socket_.close(ec);
    }
@@ -1254,7 +1262,8 @@ struct keepalive_test_server
    void setup_routes()
    {
       server_.on_error([this](std::error_code ec, std::source_location) {
-         if (running_ && ec != asio::error::eof && ec != asio::error::operation_aborted) {
+         if (running_ && ec != make_error_code(asio::error::eof) &&
+             ec != make_error_code(asio::error::operation_aborted)) {
             // Suppress expected errors during tests
          }
       });
