@@ -22,35 +22,51 @@ jobs:
     name: GCC P2996 Reflection Tests
 
     steps:
-    - name: Install prerequisites
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
       run: |
         apt-get update
-        apt-get install -y software-properties-common git cmake
-
-    - uses: actions/checkout@v4
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          software-properties-common \
+          cmake \
+          git \
+          python3
+        update-ca-certificates
 
     - name: Install GCC 16 from Ubuntu Toolchain PPA
+      env:
+        DEBIAN_FRONTEND: noninteractive
       run: |
         add-apt-repository -y ppa:ubuntu-toolchain-r/test
         apt-get update
-        apt-get install -y gcc-16 g++-16 || apt-get install -y gcc g++
+        apt-get install -y gcc-16 g++-16
+
+    - uses: actions/checkout@v4
 
     - name: Verify GCC version and reflection support
       run: |
-        g++-16 --version || g++ --version
+        g++-16 --version
         echo "Checking for reflection support..."
-        echo '#include <meta>' | g++-16 -std=c++26 -freflection -x c++ -c - -o /dev/null 2>&1 || echo "Note: <meta> header check failed"
+        echo 'int main() { return 0; }' | g++-16 -std=c++26 -freflection -x c++ -c - -o /dev/null
+
+    - name: Debug paths
+      run: |
+        echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+        ls -la "$GITHUB_WORKSPACE"
+        ls -la "$GITHUB_WORKSPACE/tests/p2996_test/" || echo "p2996_test dir not found"
 
     - name: Test P2996 reflection (direct compile)
       run: |
         g++-16 -std=c++26 -freflection \
-          -I${{ github.workspace }}/include -DGLZ_REFLECTION26=1 \
-          -o /tmp/p2996_test ${{ github.workspace }}/tests/p2996_test/p2996_test.cpp && \
+          -I"$GITHUB_WORKSPACE/include" -DGLZ_REFLECTION26=1 \
+          -o /tmp/p2996_test "$GITHUB_WORKSPACE/tests/p2996_test/p2996_test.cpp"
         /tmp/p2996_test
 
     - name: Build and run tests with CMake
       run: |
-        cmake -B build \
+        cmake -B "$GITHUB_WORKSPACE/build" -S "$GITHUB_WORKSPACE" \
           -DCMAKE_C_COMPILER=gcc-16 \
           -DCMAKE_CXX_COMPILER=g++-16 \
           -DCMAKE_CXX_FLAGS='-std=c++26 -freflection' \
@@ -60,5 +76,5 @@ jobs:
           -Dglaze_BUILD_NETWORKING_TESTS=OFF \
           -Dglaze_ENABLE_SANITIZERS=OFF \
           -Dglaze_ENABLE_FUZZING=OFF
-        cmake --build build -j $(nproc)
-        ctest --test-dir build --output-on-failure -j $(nproc)
+        cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
+        ctest --test-dir "$GITHUB_WORKSPACE/build" --output-on-failure -j $(nproc)
