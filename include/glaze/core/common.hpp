@@ -250,8 +250,16 @@ namespace glz
    concept u8str_t =
       (basic_string_t<T> || string_view_t<T>) && std::same_as<typename std::decay_t<T>::value_type, char8_t>;
 
+   // Helper to detect optional-like types (have has_value() method)
+   // Used to exclude from concepts that would otherwise match due to C++26 optional being a range
    template <class T>
-   concept str_t = (!std::same_as<std::nullptr_t, T> && std::constructible_from<std::string_view, std::decay_t<T>>) ||
+   concept has_value_method = requires(T t) {
+      { t.has_value() } -> std::convertible_to<bool>;
+   };
+
+   template <class T>
+   concept str_t = (!std::same_as<std::nullptr_t, T> && !has_value_method<T> &&
+                    std::constructible_from<std::string_view, std::decay_t<T>>) ||
                    array_char_t<T> || u8str_t<T>;
 
    template <class T>
@@ -305,13 +313,6 @@ namespace glz
       requires(std::same_as<typename Map::key_compare, std::less<>> ||
                std::same_as<typename Map::key_compare, std::greater<>> ||
                requires { typename Map::key_compare::is_transparent; });
-   };
-
-   // Helper to detect optional-like types (have has_value() method) - used to exclude from array concepts
-   // This is needed because C++26 makes std::optional a range
-   template <class T>
-   concept has_value_method = requires(T t) {
-      { t.has_value() } -> std::convertible_to<bool>;
    };
 
    template <class T>
