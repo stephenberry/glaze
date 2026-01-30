@@ -471,6 +471,15 @@ namespace glz
          for_each<N>([&]<auto I>() constexpr {
             using V = std::decay_t<refl_t<T, I>>;
 
+            // Check if field is skipped during parse - if so, don't require it
+            if constexpr (meta_has_skip<T>) {
+               constexpr auto key = reflect<T>::keys[I];
+               if constexpr (meta<T>::skip(key, {operation::parse})) {
+                  fields[I] = false;
+                  return;
+               }
+            }
+
             // Check if meta<T>::requires_key customization point exists
             if constexpr (meta_has_requires_key<T>) {
                constexpr auto key = reflect<T>::keys[I];
