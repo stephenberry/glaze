@@ -11674,6 +11674,7 @@ struct skip_on_parse_t
 };
 
 template <>
+struct glz::meta<skip_on_parse_t>
 {
    using T = skip_on_parse_t;
    static constexpr auto value = object(&T::name, &T::skipped_field, &T::normal_field);
