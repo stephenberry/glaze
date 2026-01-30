@@ -100,7 +100,12 @@ namespace glz::pmr
       generic(generic&& other) noexcept : data_(std::move(other.data_)), alloc_(other.alloc_) {}
 
       // Move constructor with allocator
-      generic(generic&& other, const allocator_type& alloc) : data_(std::move(other.data_)), alloc_(alloc) {}
+      // Allocators must be equal; use copy constructor for cross-allocator transfers
+      generic(generic&& other, const allocator_type& alloc) : alloc_(alloc)
+      {
+         assert(alloc_ == other.alloc_ && "Cannot move across different allocators; use copy instead");
+         data_ = std::move(other.data_);
+      }
 
       // Value constructors with allocator
       generic(double val, std::pmr::memory_resource* resource = std::pmr::get_default_resource())
@@ -204,8 +209,10 @@ namespace glz::pmr
          return *this;
       }
 
+      // Allocators must be equal; use copy assignment for cross-allocator transfers
       generic& operator=(generic&& other) noexcept
       {
+         assert(alloc_ == other.alloc_ && "Cannot move across different allocators; use copy instead");
          if (this != &other) {
             data_ = std::move(other.data_);
          }
@@ -533,6 +540,7 @@ namespace glz::pmr
             },
             src);
       }
+
    };
 
    // Definition of deep_copy (must be after class definition due to self-reference)
