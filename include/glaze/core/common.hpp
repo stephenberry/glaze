@@ -308,15 +308,18 @@ namespace glz
    };
 
    template <class T>
-   concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
+   concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T> &&
+                      !nullable_t<T> && !nullable_value_t<T>);
 
    template <class T>
    concept readable_array_t =
-      (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T>);
+      (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T> &&
+       !nullable_t<T> && !nullable_value_t<T>);
 
    template <class T>
    concept writable_array_t =
-      (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T>);
+      (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T> &&
+       !nullable_t<T> && !nullable_value_t<T>);
 
    template <class T>
    concept fixed_array_value_t =
@@ -497,9 +500,6 @@ namespace glz
 
    template <class T>
    struct specified<std::atomic<T>> : std::true_type {};
-
-   template <class T>
-   struct specified<std::optional<T>> : std::true_type {};
 
    // P2996 can reflect any class, but we must exclude types with their own Glaze specializations.
    // Types with custom serialization should specialize glz::specified<T> to std::true_type.
