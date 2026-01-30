@@ -11664,6 +11664,64 @@ suite error_on_missing_keys_symbols_tests = [] {
    };
 };
 
+// Test for https://github.com/stephenberry/glaze/issues/2279
+// error_on_missing_keys should not require fields that are skipped via meta::skip
+struct skip_on_parse_t
+{
+   std::string name{};
+   int skipped_field{};
+   int normal_field{};
+};
+
+template <>
+{
+   using T = skip_on_parse_t;
+   static constexpr auto value = object(&T::name, &T::skipped_field, &T::normal_field);
+
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return key == "skipped_field" && ctx.op == glz::operation::parse;
+   }
+};
+
+suite error_on_missing_keys_with_skip_tests = [] {
+   "error_on_missing_keys with meta::skip - skipped field missing from JSON"_test = [] {
+      // When a field is skipped via meta::skip for parse, it should not be required
+      // even when error_on_missing_keys is set
+      skip_on_parse_t obj;
+      obj.skipped_field = 42;
+      std::string json = R"({"name":"test","normal_field":100})"; // skipped_field not in JSON
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      auto ec = glz::read<opts>(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.name == "test");
+      expect(obj.skipped_field == 42); // Unchanged, field was skipped
+      expect(obj.normal_field == 100);
+   };
+
+   "error_on_missing_keys with meta::skip - required field missing"_test = [] {
+      // Ensure that non-skipped fields are still required
+      skip_on_parse_t obj;
+      std::string json = R"({"name":"test"})"; // normal_field missing
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      auto ec = glz::read<opts>(obj, json);
+      expect(ec == glz::error_code::missing_key);
+   };
+
+   "error_on_missing_keys with meta::skip - skipped field present in JSON"_test = [] {
+      // When skipped field is present, it should be skipped (not parsed)
+      skip_on_parse_t obj;
+      obj.skipped_field = 42;
+      std::string json = R"({"name":"test","skipped_field":999,"normal_field":100})";
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      auto ec = glz::read<opts>(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.name == "test");
+      expect(obj.skipped_field == 42); // Unchanged because field is skipped during parse
+      expect(obj.normal_field == 100);
+   };
+};
+
 struct large_struct_t
 {
    bool a = false;
