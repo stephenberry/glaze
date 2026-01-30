@@ -5,6 +5,7 @@
 
 #include <array>
 #include <atomic>
+#include <bitset>
 #include <complex>
 #include <cstddef>
 #include <functional>
