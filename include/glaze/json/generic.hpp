@@ -15,6 +15,8 @@
 
 #if __cpp_exceptions
 #include <stdexcept>
+#else
+#include <cstdlib>
 #endif
 
 namespace glz
