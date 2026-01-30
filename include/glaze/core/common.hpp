@@ -498,6 +498,9 @@ namespace glz
    template <class T>
    struct specified<std::atomic<T>> : std::true_type {};
 
+   template <class T>
+   struct specified<std::optional<T>> : std::true_type {};
+
    // P2996 can reflect any class, but we must exclude types with their own Glaze specializations.
    // Types with custom serialization should specialize glz::specified<T> to std::true_type.
    template <class T>
