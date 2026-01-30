@@ -14,6 +14,9 @@
 #include <variant>
 #include <vector>
 
+// std::pmr::string is not available with the old GCC ABI
+#if !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI != 0
+
 #include "glaze/json/generic.hpp"
 
 namespace glz::pmr
@@ -555,3 +558,5 @@ struct glz::meta<glz::pmr::generic<Mode>>
    using T = glz::pmr::generic<Mode>;
    static constexpr auto value = &T::data;
 };
+
+#endif

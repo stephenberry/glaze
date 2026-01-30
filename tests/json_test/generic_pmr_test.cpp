@@ -11,6 +11,9 @@
 #include "glaze/json/generic_pmr.hpp"
 #include "ut/ut.hpp"
 
+// std::pmr::string is not available with the old GCC ABI
+#if !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI != 0
+
 using namespace ut;
 
 suite pmr_generic_basic_tests = [] {
@@ -343,5 +346,7 @@ suite pmr_generic_i64_u64_tests = [] {
    };
 
 };
+
+#endif
 
 int main() { return 0; }
