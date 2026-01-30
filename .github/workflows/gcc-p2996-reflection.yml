@@ -31,6 +31,7 @@ jobs:
           ca-certificates \
           software-properties-common \
           cmake \
+          make \
           git \
           python3
         update-ca-certificates
