@@ -1,0 +1,60 @@
+name: gcc-p2996-reflection
+
+# C++26 P2996 Reflection Testing with GCC
+# This workflow tests Glaze with GCC trunk (16+) which has P2996 reflection support
+# Uses gcc-latest snapshot packages from: https://jwakely.github.io/pkg-gcc-latest/
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  test-gcc-p2996:
+    runs-on: ubuntu-latest
+    name: GCC P2996 Reflection Tests
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install GCC latest snapshot
+      run: |
+        wget --quiet https://kayari.org/gcc-latest/gcc-latest.deb
+        sudo dpkg -i gcc-latest.deb
+        echo "/opt/gcc-latest/bin" >> $GITHUB_PATH
+        echo "LD_RUN_PATH=/opt/gcc-latest/lib64" >> $GITHUB_ENV
+        echo "LD_LIBRARY_PATH=/opt/gcc-latest/lib64" >> $GITHUB_ENV
+
+    - name: Verify GCC version
+      run: |
+        g++ --version
+        echo "Checking for reflection support..."
+        echo '#include <meta>' | g++ -std=c++26 -freflection -x c++ -c - -o /dev/null 2>&1 || echo "Note: <meta> header check (may not be available yet)"
+
+    - name: Test P2996 reflection (direct compile)
+      run: |
+        g++ -std=c++26 -freflection \
+          -I${{ github.workspace }}/include -DGLZ_REFLECTION26=1 \
+          -Wl,-rpath,/opt/gcc-latest/lib64 \
+          -o /tmp/p2996_test ${{ github.workspace }}/tests/p2996_test/p2996_test.cpp && \
+        /tmp/p2996_test
+
+    - name: Build and run tests with CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_CXX_COMPILER=g++ \
+          -DCMAKE_CXX_FLAGS='-std=c++26 -freflection' \
+          -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,/opt/gcc-latest/lib64' \
+          -DCMAKE_BUILD_TYPE=Release \
+          -Dglaze_DEVELOPER_MODE=ON \
+          -Dglaze_ENABLE_REFLECTION26=ON \
+          -Dglaze_BUILD_NETWORKING_TESTS=OFF \
+          -Dglaze_ENABLE_SANITIZERS=OFF \
+          -Dglaze_ENABLE_FUZZING=OFF
+        cmake --build build -j $(nproc)
+        ctest --test-dir build --output-on-failure -j $(nproc)
