@@ -1410,7 +1410,7 @@ namespace glz
       {
          std::shared_ptr<socket_type> socket;
          std::shared_ptr<asio::streambuf> buffer;
-         std::string body;
+         request request_;
          asio::ip::tcp::endpoint remote_endpoint;
          std::shared_ptr<asio::steady_timer> idle_timer;
          uint32_t request_count = 0;
@@ -1630,10 +1630,10 @@ namespace glz
             send_error_response_with_close(conn, 501, "Not Implemented");
             return;
          }
-         std::string target{target_sv};
-
+         conn->request_.method = *method_opt;
+         conn->request_.target = target_sv;
          // Parse headers
-         std::unordered_map<std::string, std::string> headers;
+         std::unordered_map<std::string, std::string> &headers = conn->request_.headers;
          while (!headers_part.empty()) {
             size_t line_end = headers_part.find("\r\n");
             std::string_view line = headers_part.substr(0, line_end);
@@ -1663,7 +1663,7 @@ namespace glz
 
          if (is_websocket_upgrade(headers)) {
             // WebSocket upgrades take over the connection
-            handle_websocket_upgrade(conn->socket, *method_opt, target, headers, conn->remote_endpoint);
+            handle_websocket_upgrade(conn->socket, *method_opt, conn->request_.target, headers, conn->remote_endpoint);
             return;
          }
 
@@ -1679,30 +1679,30 @@ namespace glz
          }
 
          if (content_length > 0) {
-            conn->body.resize(content_length);
+            conn->request_.body.resize(content_length);
             // Copy what's already in the buffer to the body
             const size_t initial_body_size = std::min(content_length, conn->buffer->size());
             const auto missing_bytes = content_length - initial_body_size;
-            std::memcpy(conn->body.data(), conn->buffer->data().data(), initial_body_size);
+            std::memcpy(conn->request_.body.data(), conn->buffer->data().data(), initial_body_size);
             conn->buffer->consume(initial_body_size);
             if (initial_body_size < content_length) {
-               asio::async_read(*conn->socket, asio::buffer(&conn->body[initial_body_size], missing_bytes),
+               asio::async_read(*conn->socket, asio::buffer(&conn->request_.body[initial_body_size], missing_bytes),
                                 asio::transfer_exactly(missing_bytes),
-                                [this, conn, method_opt, target, headers](std::error_code ec, size_t) {
+                                [this, conn](std::error_code ec, size_t) {
                                    if (ec) {
                                       error_handler(ec, std::source_location::current());
                                       return;
                                    }
                                    // Append newly read data
-                                   process_full_request_with_conn(conn, *method_opt, target, headers);
+                                   process_full_request_with_conn(conn);
                                 });
             }
             else {
-               process_full_request_with_conn(conn, *method_opt, target, headers);
+               process_full_request_with_conn(conn);
             }
          }
          else {
-            process_full_request_with_conn(conn, *method_opt, target, headers);
+            process_full_request_with_conn(conn);
          }
       }
 
@@ -1740,39 +1740,32 @@ namespace glz
       }
 
       // Process a full request using connection state (new keep-alive aware version)
-      inline void process_full_request_with_conn(std::shared_ptr<connection_state> conn, http_method method,
-                                                 const std::string& target,
-                                                 const std::unordered_map<std::string, std::string>& headers)
+      inline void process_full_request_with_conn(std::shared_ptr<connection_state> conn)
       {
-         std::string body = std::move(conn->body);
          // Check for a streaming handler first
-         auto handler_it = streaming_handlers_.find(target);
+         auto handler_it = streaming_handlers_.find(conn->request_.target);
          if (handler_it != streaming_handlers_.end()) {
-            auto method_it = handler_it->second.find(method);
+            auto method_it = handler_it->second.find(conn->request_.method);
             if (method_it != handler_it->second.end()) {
                // Streaming handlers take over the connection (no keep-alive loop)
-               handle_streaming_request(conn->socket, method, target, headers, std::move(body), conn->remote_endpoint,
+               handle_streaming_request(conn->socket, conn->request_.method, conn->request_.target, conn->request_.headers, std::move(conn->request_.body), conn->remote_endpoint,
                                         method_it->second);
                return;
             }
          }
 
          // Create the request object
-         request request;
-         request.method = method;
-         request.target = target;
+         request &request = conn->request_;
          request.remote_ip = conn->remote_endpoint.address().to_string();
          request.remote_port = conn->remote_endpoint.port();
 
          // Parse path and query string from target
-         const auto [path_view, query_string] = split_target(target);
+         const auto [path_view, query_string] = split_target(conn->request_.target);
          request.path = std::string(path_view);
          request.query = parse_urlencoded(query_string);
-         request.headers = headers;
-         request.body = std::move(body);
 
          // Find a matching route
-         auto [handle, params] = root_router.match(method, request.path);
+         auto [handle, params] = root_router.match(conn->request_.method, request.path);
 
          // Create the response object
          response response;
@@ -1790,7 +1783,7 @@ namespace glz
          }
 
          if (!handle) {
-            if (method == http_method::OPTIONS) {
+            if (conn->request_.method == http_method::OPTIONS) {
                std::vector<http_method> allowed_methods;
                std::unordered_map<std::string, std::string> preflight_params;
 
@@ -1802,7 +1795,7 @@ namespace glz
 
                auto try_method = [&](http_method m) {
                   if (m == http_method::OPTIONS) return;
-                  auto [candidate_handle, candidate_params] = root_router.match(m, target);
+                  auto [candidate_handle, candidate_params] = root_router.match(m, conn->request_.target);
                   if (candidate_handle) {
                      allowed_methods.push_back(m);
                      capture_first_params(std::move(candidate_params));
