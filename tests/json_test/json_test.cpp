@@ -6651,6 +6651,44 @@ suite mimics_string_key_tests = [] {
       static_assert(glz::mimics_str_t<mimics_string_key>);
       expect(true);
    };
+
+   // Test for issue #2285: mimic = std::string doesn't work in std::vector<std::pair<...>>
+   "mimics<T, std::string> in vector<pair> write"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> v{{{"key1"}, {"value1"}}, {{"key2"}, {"value2"}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(v, buffer));
+      expect(buffer == R"({"key1":"value1","key2":"value2"})") << buffer;
+   };
+
+   "mimics<T, std::string> in vector<pair> read"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> v;
+      std::string json = R"({"key1":"value1","key2":"value2"})";
+
+      expect(not glz::read_json(v, json));
+      expect(v.size() == 2);
+      expect(v[0].first.value == "key1");
+      expect(v[0].second.value == "value1");
+      expect(v[1].first.value == "key2");
+      expect(v[1].second.value == "value2");
+   };
+
+   "mimics<T, std::string> in vector<pair> roundtrip"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> original{{{"key1"}, {"value1"}},
+                                                                            {{"key2"}, {"value2"}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(original, buffer));
+
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> parsed;
+      expect(not glz::read_json(parsed, buffer));
+
+      expect(parsed.size() == original.size());
+      for (size_t i = 0; i < original.size(); ++i) {
+         expect(parsed[i].first.value == original[i].first.value);
+         expect(parsed[i].second.value == original[i].second.value);
+      }
+   };
 };
 
 suite char_array = [] {
