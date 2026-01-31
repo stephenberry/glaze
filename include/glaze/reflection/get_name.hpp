@@ -69,7 +69,8 @@ namespace glz
 }
 
 // P2996 enum reflection helpers
-// Standard C++26 uses std::define_static_array (P3491) to convert ranges to constant arrays
+// Standard C++26 uses std::define_static_array (P3491) which returns a span
+// Bloomberg Clang uses reflect_constant_array which returns a std::meta::info to be spliced
 namespace glz::detail
 {
    using namespace std::meta;
@@ -79,12 +80,14 @@ namespace glz::detail
    consteval std::string_view get_enum_name_p2996()
    {
 #if defined(__clang__)
-      // Bloomberg Clang uses non-standard reflect_constant_array
+      // Bloomberg Clang: reflect_constant_array returns info, splice to get array
       constexpr info Enums = reflect_constant_array(enumerators_of(^^T));
-#else
-      constexpr info Enums = std::define_static_array(enumerators_of(^^T));
-#endif
       return identifier_of([:Enums:][I]);
+#else
+      // Standard C++26: define_static_array returns span directly
+      constexpr auto Enums = std::define_static_array(enumerators_of(^^T));
+      return identifier_of(Enums[I]);
+#endif
    }
 
    // Get number of enumerators
@@ -93,10 +96,11 @@ namespace glz::detail
    {
 #if defined(__clang__)
       constexpr info Enums = reflect_constant_array(enumerators_of(^^T));
-#else
-      constexpr info Enums = std::define_static_array(enumerators_of(^^T));
-#endif
       return [:Enums:].size();
+#else
+      constexpr auto Enums = std::define_static_array(enumerators_of(^^T));
+      return Enums.size();
+#endif
    }
 }
 
@@ -119,13 +123,18 @@ namespace glz
    {
       if constexpr (B) {
 #if defined(__clang__)
+         // Bloomberg Clang: reflect_constant_array returns info, splice to get array
          constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
-#else
-         constexpr std::meta::info Enums = std::define_static_array(std::meta::enumerators_of(^^E));
-#endif
          template for (constexpr std::meta::info I : [:Enums:])
             if (e == [:I:])
                return std::meta::identifier_of(I);
+#else
+         // Standard C++26: define_static_array returns span directly
+         constexpr auto Enums = std::define_static_array(std::meta::enumerators_of(^^E));
+         template for (constexpr std::meta::info I : Enums)
+            if (e == [:I:])
+               return std::meta::identifier_of(I);
+#endif
       }
       return {};
    }
@@ -137,13 +146,18 @@ namespace glz
    {
       if constexpr (B) {
 #if defined(__clang__)
+         // Bloomberg Clang: reflect_constant_array returns info, splice to get array
          constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
-#else
-         constexpr std::meta::info Enums = std::define_static_array(std::meta::enumerators_of(^^E));
-#endif
          template for (constexpr std::meta::info I : [:Enums:])
             if (s == std::meta::identifier_of(I))
                return [:I:];
+#else
+         // Standard C++26: define_static_array returns span directly
+         constexpr auto Enums = std::define_static_array(std::meta::enumerators_of(^^E));
+         template for (constexpr std::meta::info I : Enums)
+            if (s == std::meta::identifier_of(I))
+               return [:I:];
+#endif
       }
       return std::nullopt;
    }
