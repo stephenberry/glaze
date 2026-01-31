@@ -1498,7 +1498,12 @@ namespace glz
       }
 
       // Start handling a new connection
-      inline void start_connection(std::shared_ptr<connection_state> conn) { read_request(conn); }
+      inline void start_connection(std::shared_ptr<connection_state> conn)
+      {
+         conn->request_.remote_ip = conn->remote_endpoint.address().to_string();
+         conn->request_.remote_port = conn->remote_endpoint.port();
+         read_request(conn);
+      }
 
       // Start or reset the idle timer for keep-alive connections
       inline void start_idle_timer(std::shared_ptr<connection_state> conn)
@@ -1756,8 +1761,6 @@ namespace glz
 
          // Create the request object
          request &request = conn->request_;
-         request.remote_ip = conn->remote_endpoint.address().to_string();
-         request.remote_port = conn->remote_endpoint.port();
 
          // Parse path and query string from target
          const auto [path_view, query_string] = split_target(conn->request_.target);
