@@ -6654,8 +6654,7 @@ suite mimics_string_key_tests = [] {
 
    // Test for issue #2285: mimic = std::string doesn't work in std::vector<std::pair<...>>
    "mimics<T, std::string> in vector<pair> write"_test = [] {
-      std::vector<std::pair<mimics_string_key, mimics_string_key>> v{
-         {{"key1"}, {"value1"}}, {{"key2"}, {"value2"}}};
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> v{{{"key1"}, {"value1"}}, {{"key2"}, {"value2"}}};
 
       std::string buffer{};
       expect(not glz::write_json(v, buffer));
@@ -6675,8 +6674,8 @@ suite mimics_string_key_tests = [] {
    };
 
    "mimics<T, std::string> in vector<pair> roundtrip"_test = [] {
-      std::vector<std::pair<mimics_string_key, mimics_string_key>> original{
-         {{"key1"}, {"value1"}}, {{"key2"}, {"value2"}}};
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> original{{{"key1"}, {"value1"}},
+                                                                            {{"key2"}, {"value2"}}};
 
       std::string buffer{};
       expect(not glz::write_json(original, buffer));
