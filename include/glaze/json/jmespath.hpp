@@ -17,6 +17,43 @@ namespace glz
 {
    namespace jmespath
    {
+      // GCC with UBSan rejects std::string_view::find in constexpr contexts when the
+      // string_view points to data from a template parameter. This is due to pointer
+      // arithmetic in libstdc++'s find implementation being considered non-constant.
+      // See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=71962
+      // These manual implementations avoid that issue on GCC.
+#if defined(__GNUC__) && !defined(__clang__)
+      inline constexpr size_t cx_find(std::string_view sv, char c, size_t pos = 0) noexcept
+      {
+         for (size_t i = pos; i < sv.size(); ++i) {
+            if (sv[i] == c) {
+               return i;
+            }
+         }
+         return std::string_view::npos;
+      }
+
+      inline constexpr size_t cx_rfind(std::string_view sv, char c) noexcept
+      {
+         for (size_t i = sv.size(); i > 0; --i) {
+            if (sv[i - 1] == c) {
+               return i - 1;
+            }
+         }
+         return std::string_view::npos;
+      }
+#else
+      inline constexpr size_t cx_find(std::string_view sv, char c, size_t pos = 0) noexcept
+      {
+         return sv.find(c, pos);
+      }
+
+      inline constexpr size_t cx_rfind(std::string_view sv, char c) noexcept
+      {
+         return sv.rfind(c);
+      }
+#endif
+
       enum struct tokenization_error {
          none, // No error
          unbalanced_brackets, // Mismatched '[' and ']'
@@ -173,8 +210,8 @@ namespace glz
          for (auto token : tokens) {
             size_t start = 0;
             while (start < token.size()) {
-               // Find the next '['
-               auto open = token.find('[', start);
+               // Find the next '[' using constexpr-friendly find
+               auto open = cx_find(token, '[', start);
                if (open == std::string_view::npos) {
                   // No more bracketed segments
                   if (start < token.size()) {
@@ -189,7 +226,7 @@ namespace glz
                      final_tokens.push_back(token.substr(start, open - start));
                   }
                   // Now find the closing bracket ']'
-                  auto close = token.find(']', open + 1);
+                  auto close = cx_find(token, ']', open + 1);
                   if (close == std::string_view::npos) {
                      // Mismatched bracket
                      return tokenization_error::unbalanced_brackets;
@@ -312,15 +349,15 @@ namespace glz
       {
          ArrayParseResult result;
 
-         // Find the first '['
-         auto open_pos = token.find('[');
+         // Find the first '[' using constexpr-friendly find
+         auto open_pos = cx_find(token, '[');
          if (open_pos == std::string_view::npos) {
             // No array access, just a key.
             result.key = token;
             return result;
          }
 
-         auto close_pos = token.rfind(']');
+         auto close_pos = cx_rfind(token, ']');
          if (close_pos == std::string_view::npos || close_pos < open_pos) {
             // Mismatched brackets -> error
             result.key = token.substr(0, open_pos);
