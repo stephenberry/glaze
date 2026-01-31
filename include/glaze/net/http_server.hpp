@@ -1668,7 +1668,7 @@ namespace glz
 
          if (is_websocket_upgrade(headers)) {
             // WebSocket upgrades take over the connection
-            handle_websocket_upgrade(conn->socket, *method_opt, conn->request_.target, headers, conn->remote_endpoint);
+            handle_websocket_upgrade_with_conn(std::move(conn));
             return;
          }
 
@@ -2066,29 +2066,21 @@ namespace glz
          return connection_value.find("upgrade") != std::string::npos;
       }
 
-      inline void handle_websocket_upgrade(std::shared_ptr<socket_type> socket, http_method method,
-                                           const std::string& target,
-                                           const std::unordered_map<std::string, std::string>& headers,
-                                           asio::ip::tcp::endpoint remote_endpoint)
+      inline void handle_websocket_upgrade_with_conn(std::shared_ptr<connection_state> conn)
       {
          // Find matching WebSocket handler
-         auto ws_it = websocket_handlers_.find(target);
+         auto ws_it = websocket_handlers_.find(conn->request_.target);
          if (ws_it == websocket_handlers_.end()) {
-            send_error_response(socket, 404, "Not Found");
+            send_error_response_with_close(conn, 404, "Not Found");
             return;
          }
 
          // Create request object for WebSocket handler
-         request req;
-         req.method = method;
-         req.target = target;
-         req.headers = headers;
-         req.remote_ip = remote_endpoint.address().to_string();
-         req.remote_port = remote_endpoint.port();
+         request req{conn->request_};
 
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
-         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(socket, ws_it->second);
+         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(conn->socket, ws_it->second);
          ws_conn->start(req);
       }
 
@@ -2189,14 +2181,6 @@ namespace glz
                               // response_buffer keeps the string alive for the duration of the async operation
                               // Socket cleanup handled by shared_ptr
                            });
-      }
-
-      inline void send_error_response(std::shared_ptr<socket_type> socket, int status_code, const std::string& message)
-      {
-         response response;
-         response.status(status_code).content_type("text/plain").body(message);
-
-         send_response(socket, response);
       }
 
       inline std::string_view get_status_message(int status_code)
