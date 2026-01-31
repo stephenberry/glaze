@@ -717,6 +717,7 @@ namespace glz
                   thread.join();
                }
             }
+            delete ptr;
          });
 
          threads->reserve(concurrency - uint32_t(run_on_main_thread));
