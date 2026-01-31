@@ -211,32 +211,49 @@ class working_test_server
       });
 
       // Endpoint that sends data periodically, for testing client disconnect
+      // Uses enable_shared_from_this to avoid circular reference memory leaks
       server_.stream_get("/slow-stream", [](request&, streaming_response& res) {
          res.start_stream(200, {{"Content-Type", "text/plain"}});
-         auto conn = res.stream;
 
-         auto timer = std::make_shared<asio::steady_timer>(conn->get_executor());
-         auto counter = std::make_shared<int>(0);
+         struct slow_stream_handler : std::enable_shared_from_this<slow_stream_handler>
+         {
+            std::shared_ptr<streaming_connection_interface> conn;
+            std::shared_ptr<asio::steady_timer> timer;
+            int counter = 0;
 
-         // Use shared_ptr to safely handle recursive lambda calls and avoid compiler-specific segfaults
-         auto send_data = std::make_shared<std::function<void(const std::error_code&)>>();
-         *send_data = [conn, timer, counter, send_data](const std::error_code& ec) {
-            if (ec || !conn->is_open() || *counter >= 10) {
-               if (conn->is_open()) conn->close();
-               return;
+            explicit slow_stream_handler(std::shared_ptr<streaming_connection_interface> c)
+               : conn(std::move(c)), timer(std::make_shared<asio::steady_timer>(conn->get_executor()))
+            {}
+
+            void start()
+            {
+               timer->async_wait([self = shared_from_this()](const std::error_code& ec) { self->on_timer(ec); });
             }
 
-            conn->send_chunk("chunk" + std::to_string((*counter)++) + ";",
-                             [conn, timer, send_data](std::error_code write_ec) {
-                                if (write_ec || !conn->is_open()) {
-                                   if (conn->is_open()) conn->close();
-                                   return;
-                                }
-                                timer->expires_after(std::chrono::milliseconds(50));
-                                timer->async_wait(*send_data);
-                             });
+            void on_timer(const std::error_code& ec)
+            {
+               if (ec || !conn->is_open() || counter >= 10) {
+                  if (conn->is_open()) conn->close();
+                  return;
+               }
+
+               conn->send_chunk("chunk" + std::to_string(counter++) + ";",
+                                [self = shared_from_this()](std::error_code write_ec) { self->on_write(write_ec); });
+            }
+
+            void on_write(std::error_code write_ec)
+            {
+               if (write_ec || !conn->is_open()) {
+                  if (conn->is_open()) conn->close();
+                  return;
+               }
+               timer->expires_after(std::chrono::milliseconds(50));
+               timer->async_wait([self = shared_from_this()](const std::error_code& ec) { self->on_timer(ec); });
+            }
          };
-         timer->async_wait(*send_data);
+
+         auto handler = std::make_shared<slow_stream_handler>(res.stream);
+         handler->start();
       });
 
       // Endpoint that immediately returns an error

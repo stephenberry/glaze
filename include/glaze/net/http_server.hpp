@@ -2463,74 +2463,110 @@ namespace glz
    namespace streaming_utils
    {
       // Create a periodic data sender (works with both HTTP and HTTPS)
+      // Uses enable_shared_from_this to avoid circular reference memory leaks
       template <typename T>
       void send_periodic_data(std::shared_ptr<streaming_connection_interface> conn, std::function<T()> data_generator,
                               std::chrono::milliseconds interval, size_t max_events = 0)
       {
-         auto counter = std::make_shared<size_t>(0);
          if (!conn || !conn->is_open()) return;
-         auto timer = std::make_shared<asio::steady_timer>(conn->get_executor());
 
-         // Use shared_ptr to safely handle recursive lambda calls and avoid compiler-specific segfaults
-         auto send_next = std::make_shared<std::function<void()>>();
-         *send_next = [conn, timer, counter, data_generator, interval, max_events, send_next]() mutable {
-            if (!conn->is_open() || (max_events > 0 && *counter >= max_events)) {
-               conn->close();
-               return;
-            }
+         struct periodic_sender : std::enable_shared_from_this<periodic_sender>
+         {
+            std::shared_ptr<streaming_connection_interface> conn;
+            std::shared_ptr<asio::steady_timer> timer;
+            std::function<T()> data_generator;
+            std::chrono::milliseconds interval;
+            size_t max_events;
+            size_t counter = 0;
 
-            try {
-               T data = data_generator();
-               conn->send_json_event(data, "data", std::to_string(*counter), [=](std::error_code ec) mutable {
-                  if (!ec) {
-                     (*counter)++;
-                     timer->expires_after(interval);
-                     timer->async_wait([send_next, timer, counter](std::error_code) { (*send_next)(); });
-                  }
-                  else {
-                     conn->close();
-                  }
-               });
-            }
-            catch (const std::exception&) {
-               conn->close();
+            periodic_sender(std::shared_ptr<streaming_connection_interface> c, std::function<T()> gen,
+                            std::chrono::milliseconds intv, size_t max_ev)
+               : conn(std::move(c)),
+                 timer(std::make_shared<asio::steady_timer>(conn->get_executor())),
+                 data_generator(std::move(gen)),
+                 interval(intv),
+                 max_events(max_ev)
+            {}
+
+            void send_next()
+            {
+               if (!conn->is_open() || (max_events > 0 && counter >= max_events)) {
+                  conn->close();
+                  return;
+               }
+
+               try {
+                  T data = data_generator();
+                  conn->send_json_event(
+                     data, "data", std::to_string(counter), [self = this->shared_from_this()](std::error_code ec) {
+                        if (!ec) {
+                           self->counter++;
+                           self->timer->expires_after(self->interval);
+                           self->timer->async_wait(
+                              [self](std::error_code) { self->send_next(); });
+                        }
+                        else {
+                           self->conn->close();
+                        }
+                     });
+               }
+               catch (const std::exception&) {
+                  conn->close();
+               }
             }
          };
 
-         (*send_next)();
+         auto sender = std::make_shared<periodic_sender>(conn, std::move(data_generator), interval, max_events);
+         sender->send_next();
       }
 
       // Create a data stream from a collection (works with both HTTP and HTTPS)
+      // Uses enable_shared_from_this to avoid circular reference memory leaks
+      // Note: Makes a copy of the container to ensure data outlives the async operation
       template <typename Container>
       void stream_collection(std::shared_ptr<streaming_connection_interface> conn, const Container& data,
                              std::chrono::milliseconds delay_between_items = std::chrono::milliseconds(10))
       {
-         auto it = std::make_shared<typename Container::const_iterator>(data.begin());
-         auto end_it = data.end();
          if (!conn || !conn->is_open()) return;
-         auto timer = std::make_shared<asio::steady_timer>(conn->get_executor());
 
-         // Use shared_ptr to safely handle recursive lambda calls and avoid compiler-specific segfaults
-         auto send_next = std::make_shared<std::function<void()>>();
-         *send_next = [conn, timer, it, end_it, delay_between_items, send_next]() mutable {
-            if (!conn->is_open() || *it == end_it) {
-               conn->close();
-               return;
-            }
+         struct collection_sender : std::enable_shared_from_this<collection_sender>
+         {
+            std::shared_ptr<streaming_connection_interface> conn;
+            std::shared_ptr<asio::steady_timer> timer;
+            Container data;
+            typename Container::const_iterator it;
+            std::chrono::milliseconds delay;
 
-            conn->send_json_event(**it, "item", "", [=](std::error_code ec) mutable {
-               if (!ec) {
-                  ++(*it);
-                  timer->expires_after(delay_between_items);
-                  timer->async_wait([send_next, timer, it](std::error_code) { (*send_next)(); });
-               }
-               else {
+            collection_sender(std::shared_ptr<streaming_connection_interface> c, Container d, std::chrono::milliseconds dl)
+               : conn(std::move(c)),
+                 timer(std::make_shared<asio::steady_timer>(conn->get_executor())),
+                 data(std::move(d)),
+                 it(data.begin()),
+                 delay(dl)
+            {}
+
+            void send_next()
+            {
+               if (!conn->is_open() || it == data.end()) {
                   conn->close();
+                  return;
                }
-            });
+
+               conn->send_json_event(*it, "item", "", [self = this->shared_from_this()](std::error_code ec) {
+                  if (!ec) {
+                     ++self->it;
+                     self->timer->expires_after(self->delay);
+                     self->timer->async_wait([self](std::error_code) { self->send_next(); });
+                  }
+                  else {
+                     self->conn->close();
+                  }
+               });
+            }
          };
 
-         (*send_next)();
+         auto sender = std::make_shared<collection_sender>(conn, data, delay_between_items);
+         sender->send_next();
       }
    } // namespace streaming_utils
 
