@@ -35,15 +35,16 @@ namespace glz
    };
 
    // glaze_value_t - unwrap custom value types
-   template <glaze_value_t T>
+   template <class T>
+      requires(glaze_value_t<T> && !custom_read<T>)
    struct from<YAML, T>
    {
-      template <auto Opts, is_context Ctx, class It0, class It1>
-      static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end)
+      template <auto Opts, class Value, is_context Ctx, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1 end)
       {
-         using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-         from<YAML, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
-                                          std::forward<It0>(it), std::forward<It1>(end));
+         using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+         from<YAML, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                          std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
    };
 
@@ -999,7 +1000,7 @@ namespace glz
          if (tag == yaml::yaml_tag::null_tag) {
             yaml::skip_inline_ws(it, end);
             // Skip the null value if present
-            if (it != end && *it != '\n' && *it != '\r' && *it != ',' && *it != ']' && *it != '}') {
+            if (it != end && !yaml::flow_context_end_table[static_cast<uint8_t>(*it)]) {
                std::string str;
                yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
             }
@@ -1045,6 +1046,42 @@ namespace glz
 
          using V = std::remove_cvref_t<decltype(*value)>;
          from<YAML, V>::template op<Opts>(*value, ctx, it, end);
+      }
+   };
+
+   // std::nullptr_t - null literal type
+   template <>
+   struct from<YAML, std::nullptr_t>
+   {
+      template <auto Opts, class It>
+      static void op(std::nullptr_t&, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         // Check for null values: null, Null, NULL, ~
+         if (*it == '~') {
+            ++it;
+            return;
+         }
+
+         // Parse as plain scalar and check if it's a null keyword
+         auto start = it;
+         while (it != end && !yaml::plain_scalar_end_table[static_cast<uint8_t>(*it)]) {
+            ++it;
+         }
+
+         std::string_view str{start, static_cast<size_t>(it - start)};
+         if (!yaml::is_yaml_null(str)) {
+            ctx.error = error_code::syntax_error;
+         }
       }
    };
 
@@ -1451,7 +1488,7 @@ namespace glz
             ++it; // Skip '-'
 
             // Check for valid sequence item indicator (- followed by space or newline)
-            if (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r') {
+            if (it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)]) {
                // Not a sequence item (could be a number like -5)
                it = line_start;
                return;
@@ -1462,7 +1499,7 @@ namespace glz
             // Get reference to element to parse into
             auto parse_element = [&](auto& element) {
                // Check what follows
-               if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+               if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                   // Content on same line as dash - set indent to column after "- "
                   // This allows nested block mappings to know their indent level
                   auto saved_indent = ctx.indent;
@@ -1632,7 +1669,7 @@ namespace glz
                         using member_type = std::decay_t<decltype(member)>;
 
                         // Check if value is on same line or next line
-                        if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+                        if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                            from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
                         }
                         else {
@@ -1667,7 +1704,7 @@ namespace glz
                }
 
                // Skip unknown value
-               if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+               if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                   skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
                }
             }
@@ -1817,7 +1854,7 @@ namespace glz
             ++it; // Skip '-'
 
             // Check for valid sequence item indicator (- followed by space or newline)
-            if (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r') {
+            if (it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)]) {
                // Not a sequence item (could be a number like -5)
                it = line_start;
                return;
@@ -1828,7 +1865,7 @@ namespace glz
             value_type element{};
 
             // Check what follows
-            if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+            if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                // Content on same line as dash
                auto saved_indent = ctx.indent;
                ctx.indent = line_indent + 2; // dash + space
@@ -2100,7 +2137,7 @@ namespace glz
                ++it; // Skip '-'
 
                // Check valid sequence indicator
-               if (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r') {
+               if (it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)]) {
                   it = line_start;
                   break;
                }
@@ -2461,7 +2498,7 @@ namespace glz
 
                // Parse value
                val_t val{};
-               if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+               if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                   from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
                }
                if (bool(ctx.error)) [[unlikely]]
@@ -2471,6 +2508,163 @@ namespace glz
 
                yaml::skip_ws_and_comment(it, end);
                yaml::skip_newline(it, end);
+            }
+         }
+      }
+   };
+
+   // ============================================================================
+   // YAML Variant type category traits
+   // ============================================================================
+
+   template <class T>
+   concept yaml_variant_bool_type = bool_t<remove_meta_wrapper_t<T>>;
+
+   template <class T>
+   concept yaml_variant_num_type = num_t<remove_meta_wrapper_t<T>>;
+
+   template <class T>
+   concept yaml_variant_str_type = str_t<remove_meta_wrapper_t<T>>;
+
+   template <class T>
+   concept yaml_variant_object_type =
+      glaze_object_t<T> || reflectable<T> || writable_map_t<T> || readable_map_t<T> || is_memory_object<T>;
+
+   template <class T>
+   concept yaml_variant_array_type = array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>;
+
+   template <class T>
+   concept yaml_variant_null_type = null_t<T>;
+
+   // Type traits wrapping concepts for template template parameter use
+   template <class T>
+   struct is_yaml_variant_bool : std::bool_constant<yaml_variant_bool_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_num : std::bool_constant<yaml_variant_num_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_str : std::bool_constant<yaml_variant_str_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_object : std::bool_constant<yaml_variant_object_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_array : std::bool_constant<yaml_variant_array_type<T>>
+   {};
+   template <class T>
+   struct is_yaml_variant_null : std::bool_constant<yaml_variant_null_type<T>>
+   {};
+
+   // Count types in variant matching a trait
+   template <class Variant, template <class> class Trait>
+   struct yaml_variant_count_impl;
+
+   template <template <class> class Trait, class... Ts>
+   struct yaml_variant_count_impl<std::variant<Ts...>, Trait>
+   {
+      static constexpr size_t value = (size_t(Trait<Ts>::value) + ... + 0);
+   };
+
+   template <class Variant, template <class> class Trait>
+   constexpr size_t yaml_variant_count_v = yaml_variant_count_impl<Variant, Trait>::value;
+
+   // Get first index matching trait (or variant_npos if none)
+   template <class Variant, template <class> class Trait>
+   struct yaml_variant_first_index_impl;
+
+   template <template <class> class Trait, class... Ts>
+   struct yaml_variant_first_index_impl<std::variant<Ts...>, Trait>
+   {
+      static constexpr size_t find()
+      {
+         size_t result = std::variant_npos;
+         size_t idx = 0;
+         ((Trait<Ts>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx), ...);
+         return result;
+      }
+      static constexpr size_t value = find();
+   };
+
+   template <class Variant, template <class> class Trait>
+   constexpr size_t yaml_variant_first_index_v = yaml_variant_first_index_impl<Variant, Trait>::value;
+
+   // Check if variant is auto-deducible based on type composition
+   template <is_variant T>
+   consteval auto yaml_variant_is_auto_deducible()
+   {
+      int bools{}, numbers{}, strings{}, objects{}, arrays{}, nulls{};
+      constexpr auto N = std::variant_size_v<T>;
+      for_each<N>([&]<auto I>() {
+         using V = std::decay_t<std::variant_alternative_t<I, T>>;
+         bools += bool_t<V>;
+         numbers += num_t<V>;
+         strings += str_t<V>;
+         objects += (writable_map_t<V> || readable_map_t<V> || glaze_object_t<V> || reflectable<V> || is_memory_object<V>);
+         arrays += (glaze_array_t<V> || array_t<V> || tuple_t<V> || is_std_tuple<V>);
+         nulls += null_t<V>;
+      });
+      return bools < 2 && numbers < 2 && strings < 2 && objects < 2 && arrays < 2 && nulls < 2;
+   }
+
+   // Process YAML variant alternatives by iterating directly over variant indices
+   template <class Variant, template <class> class Trait>
+   struct process_yaml_variant_alternatives
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         constexpr auto category_count = yaml_variant_count_v<Variant, Trait>;
+
+         if constexpr (category_count == 0) {
+            ctx.error = error_code::no_matching_variant_type;
+         }
+         else if constexpr (category_count == 1) {
+            // Only one type in this category, use it directly
+            constexpr auto first_idx = yaml_variant_first_index_v<Variant, Trait>;
+            using V = std::variant_alternative_t<first_idx, Variant>;
+            if (!std::holds_alternative<V>(value)) value = V{};
+            from<YAML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+         }
+         else {
+            // Multiple types in this category, try each one
+            constexpr auto N = std::variant_size_v<Variant>;
+            bool found_match{};
+            size_t match_idx = 0;
+
+            for_each<N>([&]<size_t I>() {
+               if (found_match) {
+                  return;
+               }
+               using V = std::variant_alternative_t<I, Variant>;
+               if constexpr (Trait<V>::value) {
+                  auto copy_it = it;
+                  if (!std::holds_alternative<V>(value)) {
+                     value = V{};
+                  }
+
+                  yaml::yaml_context temp_ctx{};
+                  from<YAML, V>::template op<Opts>(std::get<V>(value), temp_ctx, it, end);
+
+                  if (!bool(temp_ctx.error)) {
+                     found_match = true;
+                  }
+                  else {
+                     it = copy_it;
+                     if (match_idx + 1 < category_count) {
+                        // Not the last type, continue trying
+                     }
+                     else {
+                        // Last type failed, propagate error
+                        ctx.error = temp_ctx.error;
+                     }
+                  }
+                  ++match_idx;
+               }
+            });
+
+            if (!found_match && !bool(ctx.error)) {
+               ctx.error = error_code::no_matching_variant_type;
             }
          }
       }
@@ -2493,16 +2687,161 @@ namespace glz
             return;
          }
 
-         // Try to detect type from content
-         [[maybe_unused]] const char c = *it;
+         if constexpr (yaml_variant_is_auto_deducible<std::remove_cvref_t<T>>()) {
+            const char c = *it;
 
-         // Try each variant type in order
+            switch (c) {
+            case '{':
+               // Flow mapping - object type
+               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_object>::template op<Opts>(
+                  value, ctx, it, end);
+               return;
+            case '[':
+               // Flow sequence - array type
+               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_array>::template op<Opts>(
+                  value, ctx, it, end);
+               return;
+            case '"':
+            case '\'':
+               // Quoted string
+               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
+                  value, ctx, it, end);
+               return;
+            case 't':
+            case 'T':
+               // Could be "true", "True", "TRUE"
+               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_bool> > 0) {
+                  // Peek ahead to check for boolean
+                  if ((end - it >= 4) &&
+                      ((it[1] == 'r' && it[2] == 'u' && it[3] == 'e') ||
+                       (it[1] == 'R' && it[2] == 'U' && it[3] == 'E'))) {
+                     process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_bool>::template op<Opts>(
+                        value, ctx, it, end);
+                     return;
+                  }
+               }
+               // Otherwise treat as string
+               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
+                  value, ctx, it, end);
+               return;
+            case 'f':
+            case 'F':
+               // Could be "false", "False", "FALSE"
+               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_bool> > 0) {
+                  // Peek ahead to check for boolean
+                  if ((end - it >= 5) &&
+                      ((it[1] == 'a' && it[2] == 'l' && it[3] == 's' && it[4] == 'e') ||
+                       (it[1] == 'A' && it[2] == 'L' && it[3] == 'S' && it[4] == 'E'))) {
+                     process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_bool>::template op<Opts>(
+                        value, ctx, it, end);
+                     return;
+                  }
+               }
+               // Otherwise treat as string
+               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
+                  value, ctx, it, end);
+               return;
+            case 'n':
+            case 'N':
+               // Could be "null", "Null", "NULL"
+               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_null> > 0) {
+                  if ((end - it >= 4) &&
+                      ((it[1] == 'u' && it[2] == 'l' && it[3] == 'l') ||
+                       (it[1] == 'U' && it[2] == 'L' && it[3] == 'L'))) {
+                     constexpr auto first_idx = yaml_variant_first_index_v<std::remove_cvref_t<T>, is_yaml_variant_null>;
+                     using V = std::variant_alternative_t<first_idx, std::remove_cvref_t<T>>;
+                     if (!std::holds_alternative<V>(value)) value = V{};
+                     from<YAML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+                     return;
+                  }
+               }
+               // Otherwise treat as string
+               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
+                  value, ctx, it, end);
+               return;
+            case '~':
+               // Null indicator
+               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_null> > 0) {
+                  constexpr auto first_idx = yaml_variant_first_index_v<std::remove_cvref_t<T>, is_yaml_variant_null>;
+                  using V = std::variant_alternative_t<first_idx, std::remove_cvref_t<T>>;
+                  if (!std::holds_alternative<V>(value)) value = V{};
+                  from<YAML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+                  return;
+               }
+               // Fall through to try other types
+               break;
+            case '-':
+               // Could be negative number or block sequence indicator
+               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_num> > 0) {
+                  // Check if followed by digit or decimal point (number)
+                  if ((end - it >= 2) && (std::isdigit(static_cast<unsigned char>(it[1])) || it[1] == '.')) {
+                     process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_num>::template op<Opts>(
+                        value, ctx, it, end);
+                     return;
+                  }
+                  // Check if followed by space (block sequence indicator)
+                  if ((end - it >= 2) && (it[1] == ' ' || it[1] == '\n' || it[1] == '\r')) {
+                     process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_array>::template op<Opts>(
+                        value, ctx, it, end);
+                     return;
+                  }
+               }
+               // Try as string
+               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
+                  value, ctx, it, end);
+               return;
+            case '+':
+            case '.':
+               // Likely a number
+               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_num> > 0) {
+                  process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_num>::template op<Opts>(
+                     value, ctx, it, end);
+                  return;
+               }
+               // Fall through to try as string
+               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
+                  value, ctx, it, end);
+               return;
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+               // Numeric value
+               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_num> > 0) {
+                  process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_num>::template op<Opts>(
+                     value, ctx, it, end);
+                  return;
+               }
+               // Fall through to try as string
+               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
+                  value, ctx, it, end);
+               return;
+            default:
+               // Plain scalar - try as string first, then fall back to trying all types
+               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_str> > 0) {
+                  process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
+                     value, ctx, it, end);
+                  return;
+               }
+               break;
+            }
+         }
+
+         // For non-auto-deducible variants or fallback, try each type until one succeeds
+         constexpr auto N = std::variant_size_v<std::remove_cvref_t<T>>;
+
          auto try_parse = [&]<size_t I>() -> bool {
             using V = std::variant_alternative_t<I, std::remove_cvref_t<T>>;
             auto start = it;
 
             V v{};
-            context temp_ctx{};
+            yaml::yaml_context temp_ctx{};
             from<YAML, V>::template op<Opts>(v, temp_ctx, it, end);
 
             if (!bool(temp_ctx.error)) {
@@ -2513,9 +2852,6 @@ namespace glz
             it = start;
             return false;
          };
-
-         // Try parsing based on syntax hints
-         constexpr auto N = std::variant_size_v<std::remove_cvref_t<T>>;
 
          bool parsed = false;
          [&]<size_t... Is>(std::index_sequence<Is...>) {
