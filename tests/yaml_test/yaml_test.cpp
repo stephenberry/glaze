@@ -2,7 +2,6 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/yaml.hpp"
-#include "glaze/json/generic.hpp"
 
 #include <array>
 #include <cmath>
@@ -23,6 +22,7 @@
 #include <variant>
 #include <vector>
 
+#include "glaze/json/generic.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;

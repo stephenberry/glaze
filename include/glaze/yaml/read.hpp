@@ -2531,7 +2531,8 @@ namespace glz
       glaze_object_t<T> || reflectable<T> || writable_map_t<T> || readable_map_t<T> || is_memory_object<T>;
 
    template <class T>
-   concept yaml_variant_array_type = array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>;
+   concept yaml_variant_array_type =
+      array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>;
 
    template <class T>
    concept yaml_variant_null_type = null_t<T>;
@@ -2600,7 +2601,8 @@ namespace glz
          bools += bool_t<V>;
          numbers += num_t<V>;
          strings += str_t<V>;
-         objects += (writable_map_t<V> || readable_map_t<V> || glaze_object_t<V> || reflectable<V> || is_memory_object<V>);
+         objects +=
+            (writable_map_t<V> || readable_map_t<V> || glaze_object_t<V> || reflectable<V> || is_memory_object<V>);
          arrays += (glaze_array_t<V> || array_t<V> || tuple_t<V> || is_std_tuple<V>);
          nulls += null_t<V>;
       });
@@ -2712,9 +2714,8 @@ namespace glz
                // Could be "true", "True", "TRUE"
                if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_bool> > 0) {
                   // Peek ahead to check for boolean
-                  if ((end - it >= 4) &&
-                      ((it[1] == 'r' && it[2] == 'u' && it[3] == 'e') ||
-                       (it[1] == 'R' && it[2] == 'U' && it[3] == 'E'))) {
+                  if ((end - it >= 4) && ((it[1] == 'r' && it[2] == 'u' && it[3] == 'e') ||
+                                          (it[1] == 'R' && it[2] == 'U' && it[3] == 'E'))) {
                      process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_bool>::template op<Opts>(
                         value, ctx, it, end);
                      return;
@@ -2729,9 +2730,8 @@ namespace glz
                // Could be "false", "False", "FALSE"
                if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_bool> > 0) {
                   // Peek ahead to check for boolean
-                  if ((end - it >= 5) &&
-                      ((it[1] == 'a' && it[2] == 'l' && it[3] == 's' && it[4] == 'e') ||
-                       (it[1] == 'A' && it[2] == 'L' && it[3] == 'S' && it[4] == 'E'))) {
+                  if ((end - it >= 5) && ((it[1] == 'a' && it[2] == 'l' && it[3] == 's' && it[4] == 'e') ||
+                                          (it[1] == 'A' && it[2] == 'L' && it[3] == 'S' && it[4] == 'E'))) {
                      process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_bool>::template op<Opts>(
                         value, ctx, it, end);
                      return;
@@ -2745,10 +2745,10 @@ namespace glz
             case 'N':
                // Could be "null", "Null", "NULL"
                if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_null> > 0) {
-                  if ((end - it >= 4) &&
-                      ((it[1] == 'u' && it[2] == 'l' && it[3] == 'l') ||
-                       (it[1] == 'U' && it[2] == 'L' && it[3] == 'L'))) {
-                     constexpr auto first_idx = yaml_variant_first_index_v<std::remove_cvref_t<T>, is_yaml_variant_null>;
+                  if ((end - it >= 4) && ((it[1] == 'u' && it[2] == 'l' && it[3] == 'l') ||
+                                          (it[1] == 'U' && it[2] == 'L' && it[3] == 'L'))) {
+                     constexpr auto first_idx =
+                        yaml_variant_first_index_v<std::remove_cvref_t<T>, is_yaml_variant_null>;
                      using V = std::variant_alternative_t<first_idx, std::remove_cvref_t<T>>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      from<YAML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
@@ -2781,8 +2781,8 @@ namespace glz
                   }
                   // Check if followed by space (block sequence indicator)
                   if ((end - it >= 2) && (it[1] == ' ' || it[1] == '\n' || it[1] == '\r')) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_array>::template op<Opts>(
-                        value, ctx, it, end);
+                     process_yaml_variant_alternatives<std::remove_cvref_t<T>,
+                                                       is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
                      return;
                   }
                }
