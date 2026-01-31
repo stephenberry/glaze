@@ -2018,6 +2018,12 @@ namespace glz
                               }
                               else {
                                  // Keep-alive: read the next request
+                                 // Reset request_ structure members before processing next request
+                                 conn->request_.params.clear();
+                                 conn->request_.query.clear();
+                                 conn->request_.headers.clear();
+                                 conn->request_.body.clear();
+
                                  read_request(conn);
                               }
                            });
