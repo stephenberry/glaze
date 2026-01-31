@@ -2572,9 +2572,8 @@ namespace glz
                   constexpr auto& HashInfo = hash_info<keys_t>;
                   for (size_t J = 0; J < Size; ++J) {
                      sv key = reflect<X>::keys[J];
-                     const auto index =
-                        decode_hash_with_size<JSON, keys_t, HashInfo, HashInfo.type>::op(
-                           key.data(), key.data() + key.size(), key.size());
+                     const auto index = decode_hash_with_size<JSON, keys_t, HashInfo, HashInfo.type>::op(
+                        key.data(), key.data() + key.size(), key.size());
                      if (index < K) {
                         bits[index][I] = true;
                      }

@@ -2497,18 +2497,17 @@ namespace glz
 
                try {
                   T data = data_generator();
-                  conn->send_json_event(
-                     data, "data", std::to_string(counter), [self = this->shared_from_this()](std::error_code ec) {
-                        if (!ec) {
-                           self->counter++;
-                           self->timer->expires_after(self->interval);
-                           self->timer->async_wait(
-                              [self](std::error_code) { self->send_next(); });
-                        }
-                        else {
-                           self->conn->close();
-                        }
-                     });
+                  conn->send_json_event(data, "data", std::to_string(counter),
+                                        [self = this->shared_from_this()](std::error_code ec) {
+                                           if (!ec) {
+                                              self->counter++;
+                                              self->timer->expires_after(self->interval);
+                                              self->timer->async_wait([self](std::error_code) { self->send_next(); });
+                                           }
+                                           else {
+                                              self->conn->close();
+                                           }
+                                        });
                }
                catch (const std::exception&) {
                   conn->close();
@@ -2537,7 +2536,8 @@ namespace glz
             typename Container::const_iterator it;
             std::chrono::milliseconds delay;
 
-            collection_sender(std::shared_ptr<streaming_connection_interface> c, Container d, std::chrono::milliseconds dl)
+            collection_sender(std::shared_ptr<streaming_connection_interface> c, Container d,
+                              std::chrono::milliseconds dl)
                : conn(std::move(c)),
                  timer(std::make_shared<asio::steady_timer>(conn->get_executor())),
                  data(std::move(d)),
