@@ -159,6 +159,57 @@ namespace glz::yaml
       return t;
    }();
 
+   // Table for characters that terminate a plain scalar in flow context
+   // Terminators: space, tab, newline, carriage return, colon, comma, [ ] { } #
+   inline constexpr std::array<bool, 256> plain_scalar_end_table = [] {
+      std::array<bool, 256> t{};
+      t[' '] = true;
+      t['\t'] = true;
+      t['\n'] = true;
+      t['\r'] = true;
+      t[':'] = true;
+      t[','] = true;
+      t['['] = true;
+      t[']'] = true;
+      t['{'] = true;
+      t['}'] = true;
+      t['#'] = true;
+      return t;
+   }();
+
+   // Table for whitespace and line ending characters
+   // Characters: space, tab, newline, carriage return
+   inline constexpr std::array<bool, 256> whitespace_or_line_end_table = [] {
+      std::array<bool, 256> t{};
+      t[' '] = true;
+      t['\t'] = true;
+      t['\n'] = true;
+      t['\r'] = true;
+      return t;
+   }();
+
+   // Table for line ending or comment characters
+   // Characters: newline, carriage return, #
+   inline constexpr std::array<bool, 256> line_end_or_comment_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\r'] = true;
+      t['#'] = true;
+      return t;
+   }();
+
+   // Table for flow context ending characters (line end + flow terminators)
+   // Characters: newline, carriage return, comma, ] }
+   inline constexpr std::array<bool, 256> flow_context_end_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\r'] = true;
+      t[','] = true;
+      t[']'] = true;
+      t['}'] = true;
+      return t;
+   }();
+
    // Scalar style detection
    enum struct scalar_style : uint8_t {
       plain, // unquoted
@@ -208,8 +259,7 @@ namespace glz::yaml
 
          // Read tag name
          auto tag_start = it;
-         while (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r' && *it != ':' && *it != ',' &&
-                *it != '[' && *it != ']' && *it != '{' && *it != '}') {
+         while (it != end && !plain_scalar_end_table[static_cast<uint8_t>(*it)]) {
             ++it;
          }
 
@@ -265,8 +315,7 @@ namespace glz::yaml
       }
 
       // Named tag !name - skip it and read name
-      while (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r' && *it != ':' && *it != ',' &&
-             *it != '[' && *it != ']' && *it != '{' && *it != '}') {
+      while (it != end && !plain_scalar_end_table[static_cast<uint8_t>(*it)]) {
          ++it;
       }
 
@@ -457,7 +506,7 @@ namespace glz::yaml
 
          // Check if this is a content line (not blank, not comment-only)
          skip_inline_ws(it, end);
-         if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+         if (it != end && !line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
             it = start; // Reset to start of line
             return indent;
          }

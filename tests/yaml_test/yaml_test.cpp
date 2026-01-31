@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/yaml.hpp"
+#include "glaze/json/generic.hpp"
 
 #include <array>
 #include <cmath>
@@ -1816,6 +1817,84 @@ suite yaml_variant_tests = [] {
       expect(!rec) << glz::format_error(rec, yaml);
       expect(std::holds_alternative<std::string>(parsed));
       expect(std::get<std::string>(parsed) == "hello");
+   };
+
+   "generic_empty_object"_test = [] {
+      std::string yaml = "{}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+   };
+
+   "generic_empty_array"_test = [] {
+      std::string yaml = "[]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+   };
+
+   "generic_string"_test = [] {
+      std::string yaml = "\"hello world\"";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::string>(parsed.data));
+      expect(std::get<std::string>(parsed.data) == "hello world");
+   };
+
+   "generic_number"_test = [] {
+      std::string yaml = "42.5";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+      expect(std::get<double>(parsed.data) == 42.5);
+   };
+
+   "generic_boolean_true"_test = [] {
+      std::string yaml = "true";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<bool>(parsed.data));
+      expect(std::get<bool>(parsed.data) == true);
+   };
+
+   "generic_boolean_false"_test = [] {
+      std::string yaml = "false";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<bool>(parsed.data));
+      expect(std::get<bool>(parsed.data) == false);
+   };
+
+   "generic_null"_test = [] {
+      std::string yaml = "null";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::nullptr_t>(parsed.data));
+   };
+
+   "generic_object_with_values"_test = [] {
+      std::string yaml = "{name: \"test\", value: 123}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+   };
+
+   "generic_array_with_values"_test = [] {
+      std::string yaml = "[1, 2, 3]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 3);
    };
 };
 
