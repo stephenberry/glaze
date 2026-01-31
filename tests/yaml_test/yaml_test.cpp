@@ -1896,6 +1896,399 @@ suite yaml_variant_tests = [] {
       auto& arr = std::get<glz::generic::array_t>(parsed.data);
       expect(arr.size() == 3);
    };
+
+   // ============================================================
+   // Extended glz::generic YAML Tests
+   // ============================================================
+
+   // Number format tests
+   "generic_integer"_test = [] {
+      std::string yaml = "42";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+      expect(std::get<double>(parsed.data) == 42.0);
+   };
+
+   "generic_negative_integer"_test = [] {
+      std::string yaml = "-123";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+      expect(std::get<double>(parsed.data) == -123.0);
+   };
+
+   "generic_negative_float"_test = [] {
+      std::string yaml = "-3.14159";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+      expect(std::abs(std::get<double>(parsed.data) - (-3.14159)) < 1e-10);
+   };
+
+   "generic_scientific_notation"_test = [] {
+      std::string yaml = "1.5e10";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+      expect(std::get<double>(parsed.data) == 1.5e10);
+   };
+
+   "generic_negative_exponent"_test = [] {
+      std::string yaml = "2.5e-3";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+      expect(std::abs(std::get<double>(parsed.data) - 0.0025) < 1e-10);
+   };
+
+   // Boolean format variations
+   "generic_boolean_True"_test = [] {
+      std::string yaml = "True";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<bool>(parsed.data));
+      expect(std::get<bool>(parsed.data) == true);
+   };
+
+   "generic_boolean_FALSE"_test = [] {
+      std::string yaml = "FALSE";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<bool>(parsed.data));
+      expect(std::get<bool>(parsed.data) == false);
+   };
+
+   // Null format variations
+   "generic_null_tilde"_test = [] {
+      std::string yaml = "~";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::nullptr_t>(parsed.data));
+   };
+
+   "generic_null_Null"_test = [] {
+      std::string yaml = "Null";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::nullptr_t>(parsed.data));
+   };
+
+   "generic_null_NULL"_test = [] {
+      std::string yaml = "NULL";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::nullptr_t>(parsed.data));
+   };
+
+   // String format tests
+   "generic_single_quoted_string"_test = [] {
+      std::string yaml = "'hello world'";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::string>(parsed.data));
+      expect(std::get<std::string>(parsed.data) == "hello world");
+   };
+
+   "generic_string_with_escapes"_test = [] {
+      std::string yaml = "\"hello\\nworld\"";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::string>(parsed.data));
+      expect(std::get<std::string>(parsed.data) == "hello\nworld");
+   };
+
+   // Nested object tests
+   "generic_nested_object"_test = [] {
+      std::string yaml = "{outer: {inner: {value: 42}}}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& outer = std::get<glz::generic::object_t>(parsed.data);
+      expect(outer.contains("outer"));
+      expect(std::holds_alternative<glz::generic::object_t>(outer.at("outer").data));
+
+      auto& inner_obj = std::get<glz::generic::object_t>(outer.at("outer").data);
+      expect(inner_obj.contains("inner"));
+   };
+
+   "generic_object_with_array"_test = [] {
+      std::string yaml = "{name: \"test\", values: [1, 2, 3]}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.contains("name"));
+      expect(obj.contains("values"));
+      expect(std::holds_alternative<std::string>(obj.at("name").data));
+      expect(std::holds_alternative<glz::generic::array_t>(obj.at("values").data));
+
+      auto& arr = std::get<glz::generic::array_t>(obj.at("values").data);
+      expect(arr.size() == 3);
+   };
+
+   // Nested array tests
+   "generic_nested_array"_test = [] {
+      std::string yaml = "[[1, 2], [3, 4], [5, 6]]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 3);
+
+      for (const auto& inner : arr) {
+         expect(std::holds_alternative<glz::generic::array_t>(inner.data));
+         expect(std::get<glz::generic::array_t>(inner.data).size() == 2);
+      }
+   };
+
+   "generic_array_of_objects"_test = [] {
+      std::string yaml = "[{a: 1}, {b: 2}, {c: 3}]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 3);
+
+      for (const auto& item : arr) {
+         expect(std::holds_alternative<glz::generic::object_t>(item.data));
+      }
+   };
+
+   // Mixed type array
+   "generic_mixed_array"_test = [] {
+      std::string yaml = "[42, \"hello\", true, null, 3.14]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 5);
+      expect(std::holds_alternative<double>(arr[0].data));
+      expect(std::holds_alternative<std::string>(arr[1].data));
+      expect(std::holds_alternative<bool>(arr[2].data));
+      expect(std::holds_alternative<std::nullptr_t>(arr[3].data));
+      expect(std::holds_alternative<double>(arr[4].data));
+   };
+
+   // Complex nested structure
+   "generic_complex_structure"_test = [] {
+      std::string yaml =
+         "{users: [{name: \"Alice\", age: 30, active: true}, {name: \"Bob\", age: 25, active: false}], "
+         "metadata: {version: 1.5, tags: [\"prod\", \"v2\"]}, nullable_field: null}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("users"));
+      expect(root.contains("metadata"));
+      expect(root.contains("nullable_field"));
+
+      // Check users array
+      auto& users = std::get<glz::generic::array_t>(root.at("users").data);
+      expect(users.size() == 2);
+
+      auto& alice = std::get<glz::generic::object_t>(users[0].data);
+      expect(std::get<std::string>(alice.at("name").data) == "Alice");
+      expect(std::get<double>(alice.at("age").data) == 30.0);
+      expect(std::get<bool>(alice.at("active").data) == true);
+
+      // Check metadata
+      auto& metadata = std::get<glz::generic::object_t>(root.at("metadata").data);
+      expect(std::get<double>(metadata.at("version").data) == 1.5);
+
+      auto& tags = std::get<glz::generic::array_t>(metadata.at("tags").data);
+      expect(tags.size() == 2);
+
+      // Check nullable field
+      expect(std::holds_alternative<std::nullptr_t>(root.at("nullable_field").data));
+   };
+
+   // Deeply nested structure
+   "generic_deeply_nested"_test = [] {
+      std::string yaml = "{a: {b: {c: {d: {e: {f: 42}}}}}}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      // Navigate through the nesting
+      auto* current = &parsed;
+      for (const char* key : {"a", "b", "c", "d", "e"}) {
+         expect(std::holds_alternative<glz::generic::object_t>(current->data));
+         auto& obj = std::get<glz::generic::object_t>(current->data);
+         expect(obj.contains(key));
+         current = &obj.at(key);
+      }
+      expect(std::holds_alternative<glz::generic::object_t>(current->data));
+      auto& final_obj = std::get<glz::generic::object_t>(current->data);
+      expect(std::get<double>(final_obj.at("f").data) == 42.0);
+   };
+
+   // Object with all value types
+   "generic_object_all_types"_test = [] {
+      std::string yaml =
+         "{string_val: \"text\", int_val: 42, float_val: 3.14, bool_true: true, "
+         "bool_false: false, null_val: null, array_val: [1, 2], object_val: {nested: true}}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<std::string>(obj.at("string_val").data));
+      expect(std::holds_alternative<double>(obj.at("int_val").data));
+      expect(std::holds_alternative<double>(obj.at("float_val").data));
+      expect(std::holds_alternative<bool>(obj.at("bool_true").data));
+      expect(std::holds_alternative<bool>(obj.at("bool_false").data));
+      expect(std::holds_alternative<std::nullptr_t>(obj.at("null_val").data));
+      expect(std::holds_alternative<glz::generic::array_t>(obj.at("array_val").data));
+      expect(std::holds_alternative<glz::generic::object_t>(obj.at("object_val").data));
+   };
+
+   // Flow style with whitespace variations
+   "generic_flow_object_with_spaces"_test = [] {
+      std::string yaml = "{ name: \"John\", age: 30, active: true }";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 3);
+      expect(std::get<std::string>(obj.at("name").data) == "John");
+      expect(std::get<double>(obj.at("age").data) == 30.0);
+      expect(std::get<bool>(obj.at("active").data) == true);
+   };
+
+   "generic_flow_array_with_spaces"_test = [] {
+      std::string yaml = "[ 1, 2, 3 ]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 3);
+      expect(std::get<double>(arr[0].data) == 1.0);
+      expect(std::get<double>(arr[1].data) == 2.0);
+      expect(std::get<double>(arr[2].data) == 3.0);
+   };
+
+   "generic_flow_nested"_test = [] {
+      std::string yaml = "{person: {name: \"Alice\", age: 25, hobbies: [\"reading\", \"coding\"]}}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("person"));
+
+      auto& person = std::get<glz::generic::object_t>(root.at("person").data);
+      expect(std::get<std::string>(person.at("name").data) == "Alice");
+      expect(std::get<double>(person.at("age").data) == 25.0);
+
+      auto& hobbies = std::get<glz::generic::array_t>(person.at("hobbies").data);
+      expect(hobbies.size() == 2);
+   };
+
+   // Edge cases
+   "generic_empty_string"_test = [] {
+      std::string yaml = "\"\"";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::string>(parsed.data));
+      expect(std::get<std::string>(parsed.data).empty());
+   };
+
+   "generic_zero"_test = [] {
+      std::string yaml = "0";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+      expect(std::get<double>(parsed.data) == 0.0);
+   };
+
+   "generic_negative_zero"_test = [] {
+      std::string yaml = "-0";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+   };
+
+   "generic_object_single_key"_test = [] {
+      std::string yaml = "{key: \"value\"}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 1);
+      expect(std::get<std::string>(obj.at("key").data) == "value");
+   };
+
+   "generic_array_single_element"_test = [] {
+      std::string yaml = "[42]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 1);
+      expect(std::get<double>(arr[0].data) == 42.0);
+   };
+
+   "generic_object_numeric_string_key"_test = [] {
+      std::string yaml = "{\"123\": \"numeric key\"}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.contains("123"));
+   };
+
+   // Large numbers
+   "generic_large_integer"_test = [] {
+      std::string yaml = "9007199254740992";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+   };
+
+   "generic_very_small_float"_test = [] {
+      std::string yaml = "1e-308";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed.data));
+   };
 };
 
 // ============================================================
