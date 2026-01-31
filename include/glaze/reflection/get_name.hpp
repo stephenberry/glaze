@@ -44,9 +44,15 @@ namespace glz
    template <auto N, class T>
    inline constexpr std::string_view member_nameof = detail::get_member_name_p2996<std::remove_cvref_t<T>, N>();
 
-   // P2996 type_name using display_string_of (returns unqualified name)
+   // P2996 type_name
+   // Bloomberg Clang: display_string_of returns unqualified name
+   // GCC: display_string_of returns qualified name, so use identifier_of instead
    template <class T>
+#if defined(__clang__)
    constexpr auto type_name = std::meta::display_string_of(^^T);
+#else
+   constexpr auto type_name = std::meta::identifier_of(^^T);
+#endif
 
    // Note: P2996 qualified_name_of is not yet available in Bloomberg clang-p2996.
    // When it becomes available, add:
