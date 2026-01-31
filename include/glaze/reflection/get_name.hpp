@@ -102,6 +102,23 @@ namespace glz::detail
       return Enums.size();
 #endif
    }
+
+#if !defined(__clang__)
+   // GCC: Build a lookup table at compile time for runtime use
+   template <class E>
+   consteval auto make_enum_to_string_table()
+   {
+      constexpr auto Enums = std::define_static_array(enumerators_of(^^E));
+      constexpr size_t N = Enums.size();
+      std::array<std::pair<E, std::string_view>, N> table{};
+      size_t i = 0;
+      template for (constexpr info I : Enums) {
+         table[i] = {[:I:], identifier_of(I)};
+         ++i;
+      }
+      return table;
+   }
+#endif
 }
 
 namespace glz
@@ -129,11 +146,13 @@ namespace glz
             if (e == [:I:])
                return std::meta::identifier_of(I);
 #else
-         // Standard C++26: define_static_array returns span directly
-         static constexpr auto Enums = std::define_static_array(std::meta::enumerators_of(^^E));
-         template for (constexpr std::meta::info I : Enums)
-            if (e == [:I:])
-               return std::meta::identifier_of(I);
+         // GCC: Use lookup table to avoid consteval promotion
+         static constexpr auto table = detail::make_enum_to_string_table<E>();
+         for (const auto& [value, name] : table) {
+            if (e == value) {
+               return name;
+            }
+         }
 #endif
       }
       return {};
@@ -152,11 +171,13 @@ namespace glz
             if (s == std::meta::identifier_of(I))
                return [:I:];
 #else
-         // Standard C++26: define_static_array returns span directly
-         static constexpr auto Enums = std::define_static_array(std::meta::enumerators_of(^^E));
-         template for (constexpr std::meta::info I : Enums)
-            if (s == std::meta::identifier_of(I))
-               return [:I:];
+         // GCC: Use lookup table to avoid consteval promotion
+         static constexpr auto table = detail::make_enum_to_string_table<E>();
+         for (const auto& [value, name] : table) {
+            if (s == name) {
+               return value;
+            }
+         }
 #endif
       }
       return std::nullopt;
