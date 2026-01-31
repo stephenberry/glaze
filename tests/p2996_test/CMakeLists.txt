@@ -10,8 +10,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common)
 # P2996 requires specific compiler flags
 target_compile_options(${PROJECT_NAME} PRIVATE
     -freflection
-    -fexpansion-statements
 )
+
+# -fexpansion-statements is Bloomberg Clang-specific, not supported by GCC
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        -fexpansion-statements
+    )
+endif()
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 

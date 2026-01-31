@@ -69,7 +69,7 @@ namespace glz
 }
 
 // P2996 enum reflection helpers
-// Uses reflect_constant_array to convert heap-allocated span to constant array
+// Standard C++26 uses std::define_static_array (P3491) to convert ranges to constant arrays
 namespace glz::detail
 {
    using namespace std::meta;
@@ -78,16 +78,24 @@ namespace glz::detail
    template <class T, size_t I>
    consteval std::string_view get_enum_name_p2996()
    {
+#if defined(__clang__)
+      // Bloomberg Clang uses non-standard reflect_constant_array
       constexpr info Enums = reflect_constant_array(enumerators_of(^^T));
-      constexpr auto arr = [:Enums:];
-      return identifier_of(arr[I]);
+#else
+      constexpr info Enums = std::define_static_array(enumerators_of(^^T));
+#endif
+      return identifier_of([:Enums:][I]);
    }
 
    // Get number of enumerators
    template <class T>
    consteval size_t enum_count_p2996()
    {
+#if defined(__clang__)
       constexpr info Enums = reflect_constant_array(enumerators_of(^^T));
+#else
+      constexpr info Enums = std::define_static_array(enumerators_of(^^T));
+#endif
       return [:Enums:].size();
    }
 }
@@ -110,7 +118,11 @@ namespace glz
    constexpr std::string_view enum_to_string(E e)
    {
       if constexpr (B) {
+#if defined(__clang__)
          constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
+#else
+         constexpr std::meta::info Enums = std::define_static_array(std::meta::enumerators_of(^^E));
+#endif
          template for (constexpr std::meta::info I : [:Enums:])
             if (e == [:I:])
                return std::meta::identifier_of(I);
@@ -124,7 +136,11 @@ namespace glz
    constexpr std::optional<E> string_to_enum(std::string_view s)
    {
       if constexpr (B) {
+#if defined(__clang__)
          constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
+#else
+         constexpr std::meta::info Enums = std::define_static_array(std::meta::enumerators_of(^^E));
+#endif
          template for (constexpr std::meta::info I : [:Enums:])
             if (s == std::meta::identifier_of(I))
                return [:I:];
