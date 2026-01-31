@@ -2378,7 +2378,8 @@ namespace glz
             using V = std::decay_t<decltype(item)>;
 
             if constexpr (str_t<typename V::first_type> ||
-                          (std::is_enum_v<typename V::first_type> && glaze_t<typename V::first_type>)) {
+                          (std::is_enum_v<typename V::first_type> && glaze_t<typename V::first_type>) ||
+                          mimics_str_t<typename V::first_type>) {
                parse<JSON>::op<Opts>(item.first, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2773,7 +2774,7 @@ namespace glz
          }
 
          using first_type = typename T::first_type;
-         if constexpr (str_t<first_type> || is_named_enum<first_type>) {
+         if constexpr (str_t<first_type> || is_named_enum<first_type> || mimics_str_t<first_type>) {
             parse<JSON>::op<Opts>(value.first, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
