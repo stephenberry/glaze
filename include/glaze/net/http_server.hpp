@@ -1753,8 +1753,7 @@ namespace glz
             auto method_it = handler_it->second.find(conn->request_.method);
             if (method_it != handler_it->second.end()) {
                // Streaming handlers take over the connection (no keep-alive loop)
-               handle_streaming_request(conn->socket, conn->request_.method, conn->request_.target, conn->request_.headers, std::move(conn->request_.body), conn->remote_endpoint,
-                                        method_it->second);
+               handle_streaming_request_with_conn(std::move(conn), method_it->second);
                return;
             }
          }
@@ -2084,28 +2083,16 @@ namespace glz
          ws_conn->start(req);
       }
 
-      inline void handle_streaming_request(std::shared_ptr<socket_type> socket, http_method method,
-                                           const std::string& target,
-                                           const std::unordered_map<std::string, std::string>& headers,
-                                           std::string body, asio::ip::tcp::endpoint remote_endpoint,
+      inline void handle_streaming_request_with_conn(std::shared_ptr<connection_state> conn,
                                            const streaming_handler& handler)
       {
-         // Create request object
-         request req;
-         req.method = method;
-         req.target = target;
-         req.headers = headers;
-         req.body = std::move(body);
-         req.remote_ip = remote_endpoint.address().to_string();
-         req.remote_port = remote_endpoint.port();
-
          // Create streaming connection (works for both HTTP and HTTPS via interface)
-         auto stream_conn = std::make_shared<streaming_connection<socket_type>>(socket);
+         auto stream_conn = std::make_shared<streaming_connection<socket_type>>(conn->socket);
          streaming_response stream_res(stream_conn);
 
          try {
             // Call the streaming handler
-            handler(req, stream_res);
+            handler(conn->request_, stream_res);
          }
          catch (const std::exception&) {
             // If handler throws immediately, try to send an error response.
