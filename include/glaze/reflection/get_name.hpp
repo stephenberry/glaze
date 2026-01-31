@@ -108,7 +108,7 @@ namespace glz::detail
    template <class E>
    consteval auto make_enum_to_string_table()
    {
-      constexpr auto Enums = std::define_static_array(enumerators_of(^^E));
+      static constexpr auto Enums = std::define_static_array(enumerators_of(^^E));
       constexpr size_t N = Enums.size();
       std::array<std::pair<E, std::string_view>, N> table{};
       size_t i = 0;
