@@ -130,7 +130,7 @@ namespace glz
                return std::meta::identifier_of(I);
 #else
          // Standard C++26: define_static_array returns span directly
-         constexpr auto Enums = std::define_static_array(std::meta::enumerators_of(^^E));
+         static constexpr auto Enums = std::define_static_array(std::meta::enumerators_of(^^E));
          template for (constexpr std::meta::info I : Enums)
             if (e == [:I:])
                return std::meta::identifier_of(I);
@@ -153,7 +153,7 @@ namespace glz
                return [:I:];
 #else
          // Standard C++26: define_static_array returns span directly
-         constexpr auto Enums = std::define_static_array(std::meta::enumerators_of(^^E));
+         static constexpr auto Enums = std::define_static_array(std::meta::enumerators_of(^^E));
          template for (constexpr std::meta::info I : Enums)
             if (s == std::meta::identifier_of(I))
                return [:I:];
