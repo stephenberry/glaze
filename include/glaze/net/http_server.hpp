@@ -2020,7 +2020,8 @@ namespace glz
                               }
                               else {
                                  // Keep-alive: read the next request
-                                 // Reset request_ structure members before processing next request
+                                 // Reset request_ structure members that accumulate or persist
+                                 // (method, target, path are overwritten; remote_ip/port are connection-level)
                                  conn->request_.params.clear();
                                  conn->request_.query.clear();
                                  conn->request_.headers.clear();
@@ -2074,8 +2075,8 @@ namespace glz
             return;
          }
 
-         // Create request object for WebSocket handler
-         request req{conn->request_};
+         // Create request object for WebSocket handler (move since conn is consumed)
+         request req{std::move(conn->request_)};
 
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
@@ -2084,7 +2085,7 @@ namespace glz
       }
 
       inline void handle_streaming_request_with_conn(std::shared_ptr<connection_state> conn,
-                                           const streaming_handler& handler)
+                                                     const streaming_handler& handler)
       {
          // Create streaming connection (works for both HTTP and HTTPS via interface)
          auto stream_conn = std::make_shared<streaming_connection<socket_type>>(conn->socket);
