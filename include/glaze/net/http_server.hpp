@@ -2107,69 +2107,6 @@ namespace glz
       }
 
 
-      inline void send_response(std::shared_ptr<socket_type> socket, const response& response)
-      {
-         // Note: We can't call response hooks here because we don't have access to the request object
-         // Response hooks are called in process_full_request before calling this method
-
-         // Pre-calculate response size to avoid reallocations
-         size_t estimated_size = 64; // Base size for status line
-
-         for (const auto& [name, value] : response.response_headers) {
-            estimated_size += name.size() + value.size() + 4; // ": " + "\r\n"
-         }
-
-         estimated_size += response.response_body.size() + 128; // Extra buffer for default headers
-
-         // Use a single string with reserved capacity
-         std::string response_str;
-         response_str.reserve(estimated_size);
-
-         // Direct string building without streams
-         response_str.append("HTTP/1.1 ");
-         response_str.append(std::to_string(response.status_code));
-         response_str.append(" ");
-         response_str.append(get_status_message(response.status_code));
-         response_str.append("\r\n");
-
-         for (const auto& [name, value] : response.response_headers) {
-            response_str.append(name);
-            response_str.append(": ");
-            response_str.append(value);
-            response_str.append("\r\n");
-         }
-
-         // Add default headers if not present (using find is faster than streams)
-         if (response.response_headers.find("content-length") == response.response_headers.end()) {
-            response_str.append("Content-Length: ");
-            response_str.append(std::to_string(response.response_body.size()));
-            response_str.append("\r\n");
-         }
-
-         if (response.response_headers.find("date") == response.response_headers.end()) {
-            response_str.append("Date: ");
-            response_str.append(get_current_date());
-            response_str.append("\r\n");
-         }
-
-         if (response.response_headers.find("server") == response.response_headers.end()) {
-            response_str.append("Server: Glaze/1.0\r\n");
-         }
-
-         // End headers and add body
-         response_str.append("\r\n");
-         response_str.append(response.response_body);
-
-         auto response_buffer = std::make_shared<std::string>(std::move(response_str));
-
-         // Send the response asynchronously
-         asio::async_write(*socket, asio::buffer(*response_buffer),
-                           [socket, response_buffer](std::error_code /*ec*/, std::size_t /*bytes_transferred*/) {
-                              // response_buffer keeps the string alive for the duration of the async operation
-                              // Socket cleanup handled by shared_ptr
-                           });
-      }
-
       inline std::string_view get_status_message(int status_code)
       {
          switch (status_code) {
