@@ -1638,7 +1638,7 @@ namespace glz
          conn->request_.method = *method_opt;
          conn->request_.target = target_sv;
          // Parse headers
-         std::unordered_map<std::string, std::string> &headers = conn->request_.headers;
+         std::unordered_map<std::string, std::string>& headers = conn->request_.headers;
          while (!headers_part.empty()) {
             size_t line_end = headers_part.find("\r\n");
             std::string_view line = headers_part.substr(0, line_end);
@@ -1692,8 +1692,7 @@ namespace glz
             conn->buffer->consume(initial_body_size);
             if (initial_body_size < content_length) {
                asio::async_read(*conn->socket, asio::buffer(&conn->request_.body[initial_body_size], missing_bytes),
-                                asio::transfer_exactly(missing_bytes),
-                                [this, conn](std::error_code ec, size_t) {
+                                asio::transfer_exactly(missing_bytes), [this, conn](std::error_code ec, size_t) {
                                    if (ec) {
                                       error_handler(ec, std::source_location::current());
                                       return;
@@ -1759,7 +1758,7 @@ namespace glz
          }
 
          // Create the request object
-         request &request = conn->request_;
+         request& request = conn->request_;
 
          // Parse path and query string from target
          const auto [path_view, query_string] = split_target(conn->request_.target);
@@ -2106,7 +2105,6 @@ namespace glz
             error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
          }
       }
-
 
       inline std::string_view get_status_message(int status_code)
       {
