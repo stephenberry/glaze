@@ -448,37 +448,6 @@ namespace glz
          }
       }
 
-      // Check if the current position looks like a block mapping key
-      // Returns true if we find a pattern like "key:" or "key :" etc.
-      // This is a lookahead that doesn't modify the iterator
-      template <class It, class End>
-      GLZ_ALWAYS_INLINE bool looks_like_block_mapping_key(It it, End end)
-      {
-         // Skip to find potential key content
-         while (it != end) {
-            const char c = *it;
-
-            // If we hit a colon, check if it terminates a key
-            if (c == ':') {
-               // A colon followed by space, newline, or end indicates a key
-               ++it;
-               return it == end || *it == ' ' || *it == '\t' || *it == '\n' || *it == '\r';
-            }
-
-            // Characters that would indicate this is not a block mapping key
-            if (c == '\n' || c == '\r' || c == '#') {
-               return false;
-            }
-
-            // Flow indicators - not in block mapping context
-            if (c == '{' || c == '[' || c == '}' || c == ']' || c == ',') {
-               return false;
-            }
-
-            ++it;
-         }
-         return false;
-      }
 
       // Parse a block scalar (| or >)
       template <class Ctx, class It, class End>
@@ -2713,6 +2682,27 @@ namespace glz
       }
    };
 
+   // Speculatively try parsing as a block mapping into a variant.
+   // Returns true if successful, false otherwise (restoring iterator on failure).
+   // This avoids unbounded lookahead by actually attempting the parse.
+   template <class Variant, auto Opts>
+   GLZ_ALWAYS_INLINE bool try_parse_block_mapping_into_variant(auto&& value, auto&& it, auto end)
+   {
+      if constexpr (yaml_variant_count_v<Variant, is_yaml_variant_object> == 0) {
+         return false;
+      }
+      else {
+         auto start_it = it;
+         yaml::yaml_context temp_ctx{};
+         process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it, end);
+         if (!bool(temp_ctx.error)) {
+            return true;
+         }
+         it = start_it;
+         return false;
+      }
+   }
+
    // Variant support
    template <is_variant T>
    struct from<YAML, T>
@@ -2762,13 +2752,9 @@ namespace glz
                      return;
                   }
                }
-               // Check for block mapping before falling back to string
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_object> > 0) {
-                  if (yaml::looks_like_block_mapping_key(it, end)) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>,
-                                                       is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
-                     return;
-                  }
+               // Try parsing as block mapping speculatively
+               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
+                  return;
                }
                // Otherwise treat as string
                process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
@@ -2786,13 +2772,9 @@ namespace glz
                      return;
                   }
                }
-               // Check for block mapping before falling back to string
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_object> > 0) {
-                  if (yaml::looks_like_block_mapping_key(it, end)) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>,
-                                                       is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
-                     return;
-                  }
+               // Try parsing as block mapping speculatively
+               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
+                  return;
                }
                // Otherwise treat as string
                process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
@@ -2812,13 +2794,9 @@ namespace glz
                      return;
                   }
                }
-               // Check for block mapping before falling back to string
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_object> > 0) {
-                  if (yaml::looks_like_block_mapping_key(it, end)) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>,
-                                                       is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
-                     return;
-                  }
+               // Try parsing as block mapping speculatively
+               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
+                  return;
                }
                // Otherwise treat as string
                process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
@@ -2851,13 +2829,9 @@ namespace glz
                      return;
                   }
                }
-               // Check for block mapping before falling back to string
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_object> > 0) {
-                  if (yaml::looks_like_block_mapping_key(it, end)) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>,
-                                                       is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
-                     return;
-                  }
+               // Try parsing as block mapping speculatively
+               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
+                  return;
                }
                // Try as string
                process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
@@ -2871,13 +2845,9 @@ namespace glz
                      value, ctx, it, end);
                   return;
                }
-               // Check for block mapping before falling back to string
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_object> > 0) {
-                  if (yaml::looks_like_block_mapping_key(it, end)) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>,
-                                                       is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
-                     return;
-                  }
+               // Try parsing as block mapping speculatively
+               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
+                  return;
                }
                // Fall through to try as string
                process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
@@ -2893,13 +2863,9 @@ namespace glz
             case '7':
             case '8':
             case '9':
-               // Check for block mapping first (e.g., "123key: value")
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_object> > 0) {
-                  if (yaml::looks_like_block_mapping_key(it, end)) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>,
-                                                       is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
-                     return;
-                  }
+               // Try parsing as block mapping speculatively (e.g., "123key: value")
+               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
+                  return;
                }
                // Numeric value
                if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_num> > 0) {
@@ -2912,13 +2878,9 @@ namespace glz
                   value, ctx, it, end);
                return;
             default:
-               // Check if this looks like a block mapping (key: value)
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_object> > 0) {
-                  if (yaml::looks_like_block_mapping_key(it, end)) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>,
-                                                       is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
-                     return;
-                  }
+               // Try parsing as block mapping speculatively
+               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
+                  return;
                }
                // Plain scalar - try as string
                if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_str> > 0) {
