@@ -2074,8 +2074,8 @@ namespace glz
             return;
          }
 
-         // Create request object for WebSocket handler (move since conn is consumed)
-         request req{std::move(conn->request_)};
+         // Copy request for WebSocket handler (request body is typically empty for upgrades)
+         request req{conn->request_};
 
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
