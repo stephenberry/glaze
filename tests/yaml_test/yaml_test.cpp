@@ -3162,4 +3162,489 @@ suite yaml_edge_cases = [] {
    };
 };
 
+// ============================================================
+// glz::generic YAML Parsing Tests
+// ============================================================
+
+suite yaml_generic_parsing_tests = [] {
+   // Output formatting - verify proper newlines between entries
+   "generic_flow_mapping_output_formatting"_test = [] {
+      std::string yaml = R"({"name": "Alice", "age": 30})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      // Write back and verify proper formatting
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      // Output should have proper newlines - each key:value on separate lines
+      // Should NOT have entries running together like "30name:"
+      expect(output.find("30name") == std::string::npos) << "Values should be separated by newlines";
+      expect(output.find("Aliceage") == std::string::npos) << "Values should be separated by newlines";
+
+      // Verify it can be parsed back
+      glz::generic reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+   };
+
+   "generic_nested_map_output_formatting"_test = [] {
+      std::string yaml = R"({"outer": {"inner": 42}, "other": "value"})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      // Verify roundtrip
+      glz::generic reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+      expect(std::holds_alternative<glz::generic::object_t>(reparsed.data));
+   };
+
+   // Multi-line flow-style parsing
+   "generic_multiline_flow_mapping"_test = [] {
+      std::string yaml = R"({"name": "Alice",
+"age": 30})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 2u);
+      expect(std::holds_alternative<std::string>(obj.at("name").data));
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+      expect(std::holds_alternative<double>(obj.at("age").data));
+      expect(std::get<double>(obj.at("age").data) == 30.0);
+   };
+
+   "generic_multiline_flow_mapping_multiple_lines"_test = [] {
+      std::string yaml = R"({
+"name": "Bob",
+"age": 25,
+"city": "NYC"
+})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 3u);
+      expect(std::get<std::string>(obj.at("name").data) == "Bob");
+      expect(std::get<double>(obj.at("age").data) == 25.0);
+      expect(std::get<std::string>(obj.at("city").data) == "NYC");
+   };
+
+   "generic_multiline_flow_with_nested"_test = [] {
+      std::string yaml = R"({"person": {"name": "Charlie",
+"age": 35},
+"active": true})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 2u);
+      expect(std::holds_alternative<glz::generic::object_t>(obj.at("person").data));
+      expect(std::holds_alternative<bool>(obj.at("active").data));
+   };
+
+   // Block-style YAML parsing into glz::generic
+   "generic_block_mapping_simple"_test = [] {
+      std::string yaml = "name: Alice";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 1u);
+      expect(std::holds_alternative<std::string>(obj.at("name").data));
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+   };
+
+   "generic_block_mapping_with_document_marker"_test = [] {
+      std::string yaml = "---\nname: Alice";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 1u);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+   };
+
+   "generic_block_mapping_multiple_entries"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+city: NYC)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 3u);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+      expect(std::get<double>(obj.at("age").data) == 30.0);
+      expect(std::get<std::string>(obj.at("city").data) == "NYC");
+   };
+
+   // Note: Nested block-style mappings in glz::generic have limitations with indent tracking.
+   // Use flow-style for nested objects when parsing into glz::generic.
+   "generic_block_mapping_with_flow_nested_object"_test = [] {
+      std::string yaml = R"(person: {name: Bob, age: 25})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.count("person") == 1u);
+      expect(std::holds_alternative<glz::generic::object_t>(obj.at("person").data));
+
+      auto& person = std::get<glz::generic::object_t>(obj.at("person").data);
+      expect(std::get<std::string>(person.at("name").data) == "Bob");
+      expect(std::get<double>(person.at("age").data) == 25.0);
+   };
+
+   // Keys starting with special characters that could be mistaken for other types
+   "generic_block_mapping_key_starts_with_t"_test = [] {
+      std::string yaml = "title: My Document";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(obj.at("title").data) == "My Document");
+   };
+
+   "generic_block_mapping_key_starts_with_f"_test = [] {
+      std::string yaml = "filename: test.txt";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(obj.at("filename").data) == "test.txt");
+   };
+
+   "generic_block_mapping_key_starts_with_n"_test = [] {
+      std::string yaml = "number: 42";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<double>(obj.at("number").data) == 42.0);
+   };
+
+   "generic_block_mapping_key_starts_with_digit"_test = [] {
+      std::string yaml = "123key: value";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(obj.at("123key").data) == "value");
+   };
+
+   // Actual boolean/null values vs keys that start with same letters
+   "generic_block_mapping_true_vs_key"_test = [] {
+      // "true" as a value should be boolean
+      std::string yaml1 = "flag: true";
+      glz::generic parsed1;
+      auto rec1 = glz::read_yaml(parsed1, yaml1);
+      expect(!rec1) << glz::format_error(rec1, yaml1);
+      auto& obj1 = std::get<glz::generic::object_t>(parsed1.data);
+      expect(std::holds_alternative<bool>(obj1.at("flag").data));
+      expect(std::get<bool>(obj1.at("flag").data) == true);
+
+      // "truthy" as a key should be detected as block mapping
+      std::string yaml2 = "truthy: yes";
+      glz::generic parsed2;
+      auto rec2 = glz::read_yaml(parsed2, yaml2);
+      expect(!rec2) << glz::format_error(rec2, yaml2);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed2.data));
+      auto& obj2 = std::get<glz::generic::object_t>(parsed2.data);
+      expect(obj2.count("truthy") == 1u);
+   };
+
+   "generic_block_mapping_false_vs_key"_test = [] {
+      // "false" as a value should be boolean
+      std::string yaml1 = "flag: false";
+      glz::generic parsed1;
+      auto rec1 = glz::read_yaml(parsed1, yaml1);
+      expect(!rec1) << glz::format_error(rec1, yaml1);
+      auto& obj1 = std::get<glz::generic::object_t>(parsed1.data);
+      expect(std::holds_alternative<bool>(obj1.at("flag").data));
+      expect(std::get<bool>(obj1.at("flag").data) == false);
+
+      // "falsy" as a key should be detected as block mapping
+      std::string yaml2 = "falsy: no";
+      glz::generic parsed2;
+      auto rec2 = glz::read_yaml(parsed2, yaml2);
+      expect(!rec2) << glz::format_error(rec2, yaml2);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed2.data));
+      auto& obj2 = std::get<glz::generic::object_t>(parsed2.data);
+      expect(obj2.count("falsy") == 1u);
+   };
+
+   "generic_block_mapping_null_value"_test = [] {
+      // "null" as a value should be null
+      std::string yaml1 = "value: null";
+      glz::generic parsed1;
+      auto rec1 = glz::read_yaml(parsed1, yaml1);
+      expect(!rec1) << glz::format_error(rec1, yaml1);
+      auto& obj1 = std::get<glz::generic::object_t>(parsed1.data);
+      expect(std::holds_alternative<std::nullptr_t>(obj1.at("value").data));
+   };
+
+   // For keys that might conflict with reserved words, use flow style
+   "generic_flow_mapping_null_like_key"_test = [] {
+      std::string yaml = R"({"nullable": "something"})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.count("nullable") == 1u);
+   };
+
+   // Mixed flow and block styles
+   "generic_block_mapping_with_flow_value"_test = [] {
+      std::string yaml = R"(data: {"inner": "value"})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<glz::generic::object_t>(obj.at("data").data));
+   };
+
+   "generic_block_mapping_with_flow_array_value"_test = [] {
+      std::string yaml = "items: [1, 2, 3]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<glz::generic::array_t>(obj.at("items").data));
+
+      auto& arr = std::get<glz::generic::array_t>(obj.at("items").data);
+      expect(arr.size() == 3u);
+   };
+
+   // Roundtrip tests
+   "generic_block_roundtrip"_test = [] {
+      std::string yaml = R"(name: Test
+value: 123
+active: true)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      glz::generic reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+
+      // Verify the data matches
+      auto& obj1 = std::get<glz::generic::object_t>(parsed.data);
+      auto& obj2 = std::get<glz::generic::object_t>(reparsed.data);
+      expect(obj1.size() == obj2.size());
+   };
+
+   // Use flow style for complex nested structures with glz::generic
+   "generic_complex_roundtrip"_test = [] {
+      std::string yaml = R"({"users": [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}], "metadata": {"version": 1, "enabled": true}})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      glz::generic reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+      expect(std::holds_alternative<glz::generic::object_t>(reparsed.data));
+   };
+};
+
+// ============================================================
+// Additional YAML Map Parsing Tests
+// ============================================================
+
+suite yaml_map_parsing_tests = [] {
+   "map_multiline_flow_parsing"_test = [] {
+      std::string yaml = R"({"key1": "value1",
+"key2": "value2",
+"key3": "value3"})";
+      std::map<std::string, std::string> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 3u);
+      expect(parsed["key1"] == "value1");
+      expect(parsed["key2"] == "value2");
+      expect(parsed["key3"] == "value3");
+   };
+
+   "map_multiline_flow_with_spaces"_test = [] {
+      std::string yaml = R"({
+   "a": 1,
+   "b": 2
+})";
+      std::map<std::string, int> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 2u);
+      expect(parsed["a"] == 1);
+      expect(parsed["b"] == 2);
+   };
+
+   "map_flow_with_trailing_comma_newline"_test = [] {
+      std::string yaml = R"({"x": 10,
+"y": 20})";
+      std::map<std::string, int> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 2u);
+   };
+
+   "unordered_map_multiline_flow"_test = [] {
+      std::string yaml = R"({"first": 100,
+"second": 200})";
+      std::unordered_map<std::string, int> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 2u);
+      expect(parsed["first"] == 100);
+      expect(parsed["second"] == 200);
+   };
+};
+
+// ============================================================
+// YAML Variant Edge Cases
+// ============================================================
+
+suite yaml_variant_edge_cases = [] {
+   using test_variant = std::variant<std::nullptr_t, bool, double, std::string, std::vector<int>, std::map<std::string, int>>;
+
+   "variant_block_map_key_t"_test = [] {
+      // Key starting with 't' but not "true"
+      std::string yaml = "test: 42";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::map<std::string, int>>(parsed));
+      auto& m = std::get<std::map<std::string, int>>(parsed);
+      expect(m["test"] == 42);
+   };
+
+   "variant_block_map_key_f"_test = [] {
+      // Key starting with 'f' but not "false"
+      std::string yaml = "foo: 123";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::map<std::string, int>>(parsed));
+      auto& m = std::get<std::map<std::string, int>>(parsed);
+      expect(m["foo"] == 123);
+   };
+
+   "variant_block_map_key_n"_test = [] {
+      // Key starting with 'n' but not "null"
+      std::string yaml = "name: 99";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::map<std::string, int>>(parsed));
+      auto& m = std::get<std::map<std::string, int>>(parsed);
+      expect(m["name"] == 99);
+   };
+
+   "variant_actual_true"_test = [] {
+      std::string yaml = "true";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<bool>(parsed));
+      expect(std::get<bool>(parsed) == true);
+   };
+
+   "variant_actual_false"_test = [] {
+      std::string yaml = "false";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<bool>(parsed));
+      expect(std::get<bool>(parsed) == false);
+   };
+
+   "variant_actual_null"_test = [] {
+      std::string yaml = "null";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::nullptr_t>(parsed));
+   };
+
+   "variant_flow_map"_test = [] {
+      std::string yaml = R"({"a": 1, "b": 2})";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::map<std::string, int>>(parsed));
+   };
+
+   "variant_flow_array"_test = [] {
+      std::string yaml = "[1, 2, 3]";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::vector<int>>(parsed));
+      auto& v = std::get<std::vector<int>>(parsed);
+      expect(v.size() == 3u);
+   };
+
+   "variant_number"_test = [] {
+      std::string yaml = "42.5";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<double>(parsed));
+      expect(std::get<double>(parsed) == 42.5);
+   };
+
+   "variant_quoted_string"_test = [] {
+      std::string yaml = R"("hello world")";
+      test_variant parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::string>(parsed));
+      expect(std::get<std::string>(parsed) == "hello world");
+   };
+};
+
 int main() { return 0; }
