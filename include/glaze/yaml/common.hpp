@@ -417,6 +417,20 @@ namespace glz::yaml
       return false;
    }
 
+   // Skip all whitespace including newlines (spaces, tabs, \n, \r)
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE void skip_ws_and_newlines(It&& it, End end) noexcept
+   {
+      while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
+         if (*it == '\n' || *it == '\r') {
+            skip_newline(it, end);
+         }
+         else {
+            ++it;
+         }
+      }
+   }
+
    // Check if at newline or end
    template <class It, class End>
    GLZ_ALWAYS_INLINE bool at_newline_or_end(It&& it, End end) noexcept

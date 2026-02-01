@@ -2436,14 +2436,7 @@ namespace glz
             // Flow mapping
             ++it;
             // Skip whitespace and newlines after opening brace
-            while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-               if (*it == '\n' || *it == '\r') {
-                  yaml::skip_newline(it, end);
-               }
-               else {
-                  ++it;
-               }
-            }
+            yaml::skip_ws_and_newlines(it, end);
 
             if (it != end && *it == '}') {
                ++it;
@@ -2452,14 +2445,7 @@ namespace glz
 
             while (it != end) {
                // Skip whitespace and newlines at start of each iteration
-               while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-                  if (*it == '\n' || *it == '\r') {
-                     yaml::skip_newline(it, end);
-                  }
-                  else {
-                     ++it;
-                  }
-               }
+               yaml::skip_ws_and_newlines(it, end);
 
                if (it != end && *it == '}') {
                   ++it;
@@ -2498,14 +2484,7 @@ namespace glz
                else if (it != end && *it == ',') {
                   ++it;
                   // Skip whitespace and newlines after comma
-                  while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-                     if (*it == '\n' || *it == '\r') {
-                        yaml::skip_newline(it, end);
-                     }
-                     else {
-                        ++it;
-                     }
-                  }
+                  yaml::skip_ws_and_newlines(it, end);
                }
                else if (it != end && (*it == '\n' || *it == '\r')) {
                   // Allow newlines in flow mappings (without comma)
