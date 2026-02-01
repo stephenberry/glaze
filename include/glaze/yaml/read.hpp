@@ -2600,23 +2600,25 @@ namespace glz
    template <class Variant, template <class> class Trait>
    constexpr size_t yaml_variant_first_index_v = yaml_variant_first_index_impl<Variant, Trait>::value;
 
+   // Precomputed type counts for a variant (similar to JSON's variant_type_count)
+   template <class T>
+   struct yaml_variant_type_count
+   {
+      static constexpr auto n_bool = yaml_variant_count_v<T, is_yaml_variant_bool>;
+      static constexpr auto n_num = yaml_variant_count_v<T, is_yaml_variant_num>;
+      static constexpr auto n_str = yaml_variant_count_v<T, is_yaml_variant_str>;
+      static constexpr auto n_object = yaml_variant_count_v<T, is_yaml_variant_object>;
+      static constexpr auto n_array = yaml_variant_count_v<T, is_yaml_variant_array>;
+      static constexpr auto n_null = yaml_variant_count_v<T, is_yaml_variant_null>;
+   };
+
    // Check if variant is auto-deducible based on type composition
    template <is_variant T>
    consteval auto yaml_variant_is_auto_deducible()
    {
-      int bools{}, numbers{}, strings{}, objects{}, arrays{}, nulls{};
-      constexpr auto N = std::variant_size_v<T>;
-      for_each<N>([&]<auto I>() {
-         using V = std::decay_t<std::variant_alternative_t<I, T>>;
-         bools += bool_t<V>;
-         numbers += num_t<V>;
-         strings += str_t<V>;
-         objects +=
-            (writable_map_t<V> || readable_map_t<V> || glaze_object_t<V> || reflectable<V> || is_memory_object<V>);
-         arrays += (glaze_array_t<V> || array_t<V> || tuple_t<V> || is_std_tuple<V>);
-         nulls += null_t<V>;
-      });
-      return bools < 2 && numbers < 2 && strings < 2 && objects < 2 && arrays < 2 && nulls < 2;
+      using counts = yaml_variant_type_count<T>;
+      return counts::n_bool < 2 && counts::n_num < 2 && counts::n_str < 2 && counts::n_object < 2 &&
+             counts::n_array < 2 && counts::n_null < 2;
    }
 
    // Process YAML variant alternatives by iterating directly over variant indices
@@ -2688,7 +2690,8 @@ namespace glz
    template <class Variant, auto Opts>
    GLZ_ALWAYS_INLINE bool try_parse_block_mapping_into_variant(auto&& value, auto&& it, auto end)
    {
-      if constexpr (yaml_variant_count_v<Variant, is_yaml_variant_object> == 0) {
+      using counts = yaml_variant_type_count<Variant>;
+      if constexpr (counts::n_object == 0) {
          return false;
       }
       else {
@@ -2701,6 +2704,17 @@ namespace glz
          it = start_it;
          return false;
       }
+   }
+
+   // Try block mapping first, then fall back to string.
+   // Common pattern in YAML variant parsing for ambiguous scalars.
+   template <class Variant, auto Opts>
+   GLZ_ALWAYS_INLINE void parse_block_mapping_or_string(auto&& value, auto&& ctx, auto&& it, auto end)
+   {
+      if (try_parse_block_mapping_into_variant<Variant, Opts>(value, it, end)) {
+         return;
+      }
+      process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
    }
 
    // Variant support
@@ -2721,174 +2735,118 @@ namespace glz
          }
 
          if constexpr (yaml_variant_is_auto_deducible<std::remove_cvref_t<T>>()) {
+            using V = std::remove_cvref_t<T>;
+            using counts = yaml_variant_type_count<V>;
             const char c = *it;
 
             switch (c) {
             case '{':
                // Flow mapping - object type
-               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_object>::template op<Opts>(
-                  value, ctx, it, end);
+               process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
                return;
             case '[':
                // Flow sequence - array type
-               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_array>::template op<Opts>(
-                  value, ctx, it, end);
+               process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
                return;
             case '"':
             case '\'':
                // Quoted string
-               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
-                  value, ctx, it, end);
+               process_yaml_variant_alternatives<V, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
                return;
             case 't':
             case 'T':
                // Could be "true", "True", "TRUE"
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_bool> > 0) {
-                  // Peek ahead to check for boolean
+               if constexpr (counts::n_bool > 0) {
                   if ((end - it >= 4) && ((it[1] == 'r' && it[2] == 'u' && it[3] == 'e') ||
                                           (it[1] == 'R' && it[2] == 'U' && it[3] == 'E'))) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_bool>::template op<Opts>(
-                        value, ctx, it, end);
+                     process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it, end);
                      return;
                   }
                }
-               // Try parsing as block mapping speculatively
-               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
-                  return;
-               }
-               // Otherwise treat as string
-               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
-                  value, ctx, it, end);
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
             case 'f':
             case 'F':
                // Could be "false", "False", "FALSE"
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_bool> > 0) {
-                  // Peek ahead to check for boolean
+               if constexpr (counts::n_bool > 0) {
                   if ((end - it >= 5) && ((it[1] == 'a' && it[2] == 'l' && it[3] == 's' && it[4] == 'e') ||
                                           (it[1] == 'A' && it[2] == 'L' && it[3] == 'S' && it[4] == 'E'))) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_bool>::template op<Opts>(
-                        value, ctx, it, end);
+                     process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it, end);
                      return;
                   }
                }
-               // Try parsing as block mapping speculatively
-               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
-                  return;
-               }
-               // Otherwise treat as string
-               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
-                  value, ctx, it, end);
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
             case 'n':
             case 'N':
                // Could be "null", "Null", "NULL"
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_null> > 0) {
+               if constexpr (counts::n_null > 0) {
                   if ((end - it >= 4) && ((it[1] == 'u' && it[2] == 'l' && it[3] == 'l') ||
                                           (it[1] == 'U' && it[2] == 'L' && it[3] == 'L'))) {
-                     constexpr auto first_idx =
-                        yaml_variant_first_index_v<std::remove_cvref_t<T>, is_yaml_variant_null>;
-                     using V = std::variant_alternative_t<first_idx, std::remove_cvref_t<T>>;
-                     if (!std::holds_alternative<V>(value)) value = V{};
-                     from<YAML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+                     constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                     using NullType = std::variant_alternative_t<first_idx, V>;
+                     if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                     from<YAML, NullType>::template op<Opts>(std::get<NullType>(value), ctx, it, end);
                      return;
                   }
                }
-               // Try parsing as block mapping speculatively
-               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
-                  return;
-               }
-               // Otherwise treat as string
-               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
-                  value, ctx, it, end);
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
             case '~':
                // Null indicator
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_null> > 0) {
-                  constexpr auto first_idx = yaml_variant_first_index_v<std::remove_cvref_t<T>, is_yaml_variant_null>;
-                  using V = std::variant_alternative_t<first_idx, std::remove_cvref_t<T>>;
-                  if (!std::holds_alternative<V>(value)) value = V{};
-                  from<YAML, V>::template op<Opts>(std::get<V>(value), ctx, it, end);
+               if constexpr (counts::n_null > 0) {
+                  constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                  using NullType = std::variant_alternative_t<first_idx, V>;
+                  if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                  from<YAML, NullType>::template op<Opts>(std::get<NullType>(value), ctx, it, end);
                   return;
                }
-               // Fall through to try other types
-               break;
+               break; // Fall through to try other types
             case '-':
                // Could be negative number or block sequence indicator
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_num> > 0) {
-                  // Check if followed by digit or decimal point (number)
+               if ((end - it >= 2) && (it[1] == ' ' || it[1] == '\n' || it[1] == '\r')) {
+                  // Block sequence indicator "- "
+                  if constexpr (counts::n_array > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+               }
+               if constexpr (counts::n_num > 0) {
                   if ((end - it >= 2) && (std::isdigit(static_cast<unsigned char>(it[1])) || it[1] == '.')) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_num>::template op<Opts>(
-                        value, ctx, it, end);
-                     return;
-                  }
-                  // Check if followed by space (block sequence indicator)
-                  if ((end - it >= 2) && (it[1] == ' ' || it[1] == '\n' || it[1] == '\r')) {
-                     process_yaml_variant_alternatives<std::remove_cvref_t<T>,
-                                                       is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
+                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
                      return;
                   }
                }
-               // Try parsing as block mapping speculatively
-               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
-                  return;
-               }
-               // Try as string
-               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
-                  value, ctx, it, end);
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
             case '+':
             case '.':
                // Likely a number
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_num> > 0) {
-                  process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_num>::template op<Opts>(
-                     value, ctx, it, end);
+               if constexpr (counts::n_num > 0) {
+                  process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
                   return;
                }
-               // Try parsing as block mapping speculatively
-               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
-                  return;
-               }
-               // Fall through to try as string
-               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
-                  value, ctx, it, end);
-               return;
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-               // Try parsing as block mapping speculatively (e.g., "123key: value")
-               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
-                  return;
-               }
-               // Numeric value
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_num> > 0) {
-                  process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_num>::template op<Opts>(
-                     value, ctx, it, end);
-                  return;
-               }
-               // Fall through to try as string
-               process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
-                  value, ctx, it, end);
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
             default:
-               // Try parsing as block mapping speculatively
-               if (try_parse_block_mapping_into_variant<std::remove_cvref_t<T>, Opts>(value, it, end)) {
+               // Check for digit (0-9) - numeric or block mapping key starting with digit
+               if (c >= '0' && c <= '9') {
+                  // Try block mapping first (e.g., "123key: value")
+                  if (try_parse_block_mapping_into_variant<V, Opts>(value, it, end)) {
+                     return;
+                  }
+                  // Numeric value
+                  if constexpr (counts::n_num > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+                  // Fall through to string
+                  process_yaml_variant_alternatives<V, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
                   return;
                }
-               // Plain scalar - try as string
-               if constexpr (yaml_variant_count_v<std::remove_cvref_t<T>, is_yaml_variant_str> > 0) {
-                  process_yaml_variant_alternatives<std::remove_cvref_t<T>, is_yaml_variant_str>::template op<Opts>(
-                     value, ctx, it, end);
-                  return;
-               }
-               break;
+               // Plain scalar - try block mapping, then string
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+               return;
             }
          }
 
