@@ -13023,8 +13023,15 @@ suite member_function_pointer_serialization = [] {
       std::string buffer{};
       expect(not glz::write<opts_with_function_pointers{}>(thing, buffer));
 #if GLZ_REFLECTION26
-      // P2996 display_string_of returns a simplified representation for member function pointers
-      expect(buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") << buffer;
+      // P2996 display_string_of behavior varies by compiler:
+      // - Bloomberg Clang: "(member-function-pointer-type)"
+      // - GCC: full signature like traditional GCC
+      bool pass = (buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") ||
+                  (buffer ==
+                   R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})") ||
+                  (buffer ==
+                   R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})");
+      expect(pass) << buffer;
 #elif defined(__GNUC__) && !defined(__clang__)
 #if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
       // Old ABI uses std::basic_string<char> without __cxx11 namespace
@@ -13059,8 +13066,12 @@ suite member_function_pointer_serialization = [] {
       std::string buffer2{};
       expect(not glz::write<opts_with_function_pointers{}>(s, buffer2));
 #if GLZ_REFLECTION26
-      // P2996 display_string_of returns a simplified representation for member function pointers
-      expect(buffer2 == R"json({"f1":"(member-function-pointer-type)"})json") << buffer2;
+      // P2996 display_string_of behavior varies by compiler:
+      // - Bloomberg Clang: "(member-function-pointer-type)"
+      // - GCC: full signature like traditional output
+      bool pass = (buffer2 == R"json({"f1":"(member-function-pointer-type)"})json") ||
+                  (buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})");
+      expect(pass) << buffer2;
 #else
       expect(buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})") << buffer2;
 #endif
