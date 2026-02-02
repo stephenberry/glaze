@@ -3462,6 +3462,63 @@ sibling3: three)";
       expect(root.count("sibling3") == 1u);
    };
 
+   // Block array as value in block mapping (was a bug: parsed as string)
+   "generic_block_array_as_value"_test = [] {
+      std::string yaml = R"(items:
+  - first
+  - second
+other: done)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("items") == 1u);
+      expect(root.count("other") == 1u);
+
+      expect(std::holds_alternative<glz::generic::array_t>(root.at("items").data));
+      auto& items = std::get<glz::generic::array_t>(root.at("items").data);
+      expect(items.size() == 2u);
+      expect(std::get<std::string>(items[0].data) == "first");
+      expect(std::get<std::string>(items[1].data) == "second");
+   };
+
+   // Block array with single item
+   "generic_block_array_single_item"_test = [] {
+      std::string yaml = R"(items:
+  - only)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<glz::generic::array_t>(root.at("items").data));
+      auto& items = std::get<glz::generic::array_t>(root.at("items").data);
+      expect(items.size() == 1u);
+   };
+
+   // Multiple block arrays as values
+   "generic_multiple_block_arrays"_test = [] {
+      std::string yaml = R"(first:
+  - a
+  - b
+second:
+  - c
+  - d)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("first") == 1u);
+      expect(root.count("second") == 1u);
+
+      auto& first = std::get<glz::generic::array_t>(root.at("first").data);
+      auto& second = std::get<glz::generic::array_t>(root.at("second").data);
+      expect(first.size() == 2u);
+      expect(second.size() == 2u);
+   };
+
    // Flow-style nested objects also work
    "generic_block_mapping_with_flow_nested_object"_test = [] {
       std::string yaml = R"(person: {name: Bob, age: 25})";

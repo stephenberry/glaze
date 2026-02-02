@@ -1426,6 +1426,9 @@ namespace glz
             }
          }();
 
+         // Track if this is the first item (for handling whitespace-consumed case)
+         bool first_item = true;
+
          while (it != end) {
             // For fixed-size arrays, stop when we've filled all elements
             if constexpr (!resizable<V>) {
@@ -1463,7 +1466,13 @@ namespace glz
                   break; // Found content
                }
                else {
-                  break; // At content (no leading space on this line)
+                  // At content (no leading space on this line)
+                  // If first item and at '-', whitespace was consumed by caller;
+                  // treat as having correct indentation
+                  if (first_item && *it == '-') {
+                     line_indent = sequence_indent;
+                  }
+                  break;
                }
             }
 
@@ -1541,6 +1550,8 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
+
+            first_item = false;
 
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -2007,10 +2018,15 @@ namespace glz
             // But if there was a tag, we need to advance past it
             if (tag != yaml::yaml_tag::none) {
                it = peek;
-               // Rewind to find the start of the line for proper indent handling
-               // Actually, tags are rare for block sequences, just use the peek position
             }
-            yaml::parse_block_sequence<Opts>(value, ctx, it, end, ctx.indent);
+            // If whitespace was already consumed (variant parser path), the iterator is at '-'
+            // and parse_block_sequence would measure indent as 0. In this case, use ctx.indent + 1
+            // as the sequence indent since the sequence is nested within the parent block.
+            int32_t seq_indent = ctx.indent;
+            if (*it == '-' && ctx.indent >= 0) {
+               seq_indent = ctx.indent + 1;
+            }
+            yaml::parse_block_sequence<Opts>(value, ctx, it, end, seq_indent);
          }
          else {
             ctx.error = error_code::syntax_error;
