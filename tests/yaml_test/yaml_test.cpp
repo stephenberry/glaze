@@ -4145,4 +4145,204 @@ suite yaml_variant_edge_cases = [] {
    };
 };
 
+suite generic_colon_in_value_tests = [] {
+   "generic_time_format_hhmm"_test = [] {
+      // Time format HH:MM should parse as string, not fail as number
+      std::string yaml = "time: 12:30";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 1u);
+      expect(std::holds_alternative<std::string>(obj["time"].data));
+      expect(std::get<std::string>(obj["time"].data) == "12:30");
+   };
+
+   "generic_time_format_hhmmss"_test = [] {
+      // Time format HH:MM:SS should parse as string
+      std::string yaml = "time: 12:30:45";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<std::string>(obj["time"].data));
+      expect(std::get<std::string>(obj["time"].data) == "12:30:45");
+   };
+
+   "generic_ip_with_port"_test = [] {
+      // IP:port should parse as string
+      std::string yaml = "addr: 192.168.1.1:8080";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<std::string>(obj["addr"].data));
+      expect(std::get<std::string>(obj["addr"].data) == "192.168.1.1:8080");
+   };
+
+   "generic_url_http"_test = [] {
+      // URLs should parse as strings
+      std::string yaml = "url: http://example.com";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<std::string>(obj["url"].data));
+      expect(std::get<std::string>(obj["url"].data) == "http://example.com");
+   };
+
+   "generic_colon_no_space"_test = [] {
+      // Colon without following space should be part of string
+      std::string yaml = "msg: hello:world";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<std::string>(obj["msg"].data));
+      expect(std::get<std::string>(obj["msg"].data) == "hello:world");
+   };
+};
+
+suite generic_malformed_flow_tests = [] {
+   "generic_malformed_flow_array_in_value"_test = [] {
+      // Unclosed flow array in a block mapping value should produce an error
+      std::string yaml = "note: [not closed";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(bool(rec)) << "Expected error for unclosed flow array";
+   };
+
+   "generic_malformed_flow_object_in_value"_test = [] {
+      // Unclosed flow object in a block mapping value should produce an error
+      std::string yaml = "note: {not closed";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(bool(rec)) << "Expected error for unclosed flow object";
+   };
+
+   "generic_partial_flow_array_in_value"_test = [] {
+      // Partially closed flow array should produce an error
+      std::string yaml = "note: [a, b";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(bool(rec)) << "Expected error for partial flow array";
+   };
+
+   "generic_wellformed_flow_array_in_value"_test = [] {
+      // Well-formed flow array should parse correctly
+      std::string yaml = "note: [a, b, c]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<glz::generic::array_t>(obj["note"].data));
+      auto& arr = std::get<glz::generic::array_t>(obj["note"].data);
+      expect(arr.size() == 3u);
+   };
+
+   "generic_wellformed_flow_object_in_value"_test = [] {
+      // Well-formed flow object should parse correctly
+      std::string yaml = "note: {a: 1, b: 2}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<glz::generic::object_t>(obj["note"].data));
+   };
+};
+
+suite generic_boolean_null_key_tests = [] {
+   "generic_true_as_key"_test = [] {
+      // "true: value" should parse as object with key "true", not as boolean
+      std::string yaml = "true: value";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 1u);
+      expect(obj.contains("true"));
+      expect(std::holds_alternative<std::string>(obj["true"].data));
+      expect(std::get<std::string>(obj["true"].data) == "value");
+   };
+
+   "generic_false_as_key"_test = [] {
+      // "false: value" should parse as object with key "false", not as boolean
+      std::string yaml = "false: value";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.contains("false"));
+      expect(std::get<std::string>(obj["false"].data) == "value");
+   };
+
+   "generic_null_as_key"_test = [] {
+      // "null: value" should parse as object with key "null", not as null
+      std::string yaml = "null: value";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.contains("null"));
+      expect(std::get<std::string>(obj["null"].data) == "value");
+   };
+
+   "generic_true_as_value"_test = [] {
+      // "key: true" should parse true as boolean
+      std::string yaml = "key: true";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<bool>(obj["key"].data));
+      expect(std::get<bool>(obj["key"].data) == true);
+   };
+
+   "generic_false_as_value"_test = [] {
+      // "key: false" should parse false as boolean
+      std::string yaml = "key: false";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<bool>(obj["key"].data));
+      expect(std::get<bool>(obj["key"].data) == false);
+   };
+
+   "generic_null_as_value"_test = [] {
+      // "key: null" should parse null correctly
+      std::string yaml = "key: null";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<glz::generic::null_t>(obj["key"].data));
+   };
+
+   "generic_TRUE_as_key"_test = [] {
+      // "TRUE: value" should parse as object with key "TRUE"
+      std::string yaml = "TRUE: value";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.contains("TRUE"));
+   };
+
+   "generic_False_as_key"_test = [] {
+      // "False: value" should parse as object with key "False"
+      std::string yaml = "False: value";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.contains("False"));
+   };
+};
+
 int main() { return 0; }

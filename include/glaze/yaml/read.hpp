@@ -871,12 +871,17 @@ namespace glz
          // Parse as plain scalar and convert
          auto start = it;
 
-         // Find end of number
+         // Find end of number - use same rules as plain scalar for colons
          while (it != end) {
             const char c = *it;
-            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == ']' || c == '}' || c == '#' ||
-                c == ':') {
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == ']' || c == '}' || c == '#') {
                break;
+            }
+            // Colon only ends number if followed by space/tab/newline/end (YAML mapping indicator)
+            if (c == ':') {
+               if ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n' || *(it + 1) == '\r') {
+                  break;
+               }
             }
             ++it;
          }
@@ -958,13 +963,15 @@ namespace glz
 
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
             auto result = glz::fast_float::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value);
-            if (result.ec != std::errc{}) {
+            // Check both for errors and that all input was consumed (e.g., "12:30" is not a valid number)
+            if (result.ec != std::errc{} || result.ptr != clean_view.data() + clean_view.size()) {
                ctx.error = error_code::parse_number_failure;
             }
          }
          else {
             auto [ptr, ec] = std::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value);
-            if (ec != std::errc{}) {
+            // Check both for errors and that all input was consumed
+            if (ec != std::errc{} || ptr != clean_view.data() + clean_view.size()) {
                ctx.error = error_code::parse_number_failure;
             }
          }
@@ -2876,6 +2883,9 @@ namespace glz
    // Returns true if successful, false otherwise (restoring iterator on failure).
    // Uses quick line-based lookahead to short-circuit obvious non-mappings,
    // then falls back to full parse attempt for potential mappings.
+   // If the line looks like a block mapping (has "key: " pattern) but parsing
+   // fails with a syntax error, that error is propagated (not silently caught)
+   // to avoid hiding malformed content.
    template <class Variant, auto Opts>
    GLZ_ALWAYS_INLINE bool try_parse_block_mapping_into_variant(auto&& value, auto&& ctx, auto&& it, auto end)
    {
@@ -2889,14 +2899,16 @@ namespace glz
             return false;
          }
          // Full parse attempt - use a temporary context that inherits indent from parent
-         auto start_it = it;
          yaml::yaml_context temp_ctx{};
          temp_ctx.indent = ctx.indent; // Propagate indent context for nested parsing
          process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it, end);
          if (!bool(temp_ctx.error)) {
             return true;
          }
-         it = start_it;
+         // The line matched "key: value" pattern but parsing failed.
+         // This indicates malformed content (e.g., unclosed flow collection),
+         // so propagate the error rather than silently falling back to string.
+         ctx.error = temp_ctx.error;
          return false;
       }
    }
@@ -2907,6 +2919,10 @@ namespace glz
    GLZ_ALWAYS_INLINE void parse_block_mapping_or_string(auto&& value, auto&& ctx, auto&& it, auto end)
    {
       if (try_parse_block_mapping_into_variant<Variant, Opts>(value, ctx, it, end)) {
+         return;
+      }
+      // If an error was set (e.g., malformed flow collection in value), don't try to parse as string
+      if (bool(ctx.error)) {
          return;
       }
       process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
@@ -2958,10 +2974,18 @@ namespace glz
                return;
             case 't':
             case 'T':
-               // Could be "true", "True", "TRUE"
+               // Could be "true", "True", "TRUE", or a key starting with t/T
                if constexpr (counts::n_bool > 0) {
                   if ((end - it >= 4) && ((it[1] == 'r' && it[2] == 'u' && it[3] == 'e') ||
                                           (it[1] == 'R' && it[2] == 'U' && it[3] == 'E'))) {
+                     // Check if this is a key (followed by ": ") rather than a boolean value
+                     // "true: value" should parse as {true: value}, not as the boolean true
+                     if ((end - it > 4) && it[4] == ':' &&
+                         (end - it == 5 || it[5] == ' ' || it[5] == '\t' || it[5] == '\n' || it[5] == '\r')) {
+                        // This is "true:" followed by space/tab/newline/end - treat as key
+                        parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                        return;
+                     }
                      process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it, end);
                      return;
                   }
@@ -2970,10 +2994,18 @@ namespace glz
                return;
             case 'f':
             case 'F':
-               // Could be "false", "False", "FALSE"
+               // Could be "false", "False", "FALSE", or a key starting with f/F
                if constexpr (counts::n_bool > 0) {
                   if ((end - it >= 5) && ((it[1] == 'a' && it[2] == 'l' && it[3] == 's' && it[4] == 'e') ||
                                           (it[1] == 'A' && it[2] == 'L' && it[3] == 'S' && it[4] == 'E'))) {
+                     // Check if this is a key (followed by ": ") rather than a boolean value
+                     // "false: value" should parse as {false: value}, not as the boolean false
+                     if ((end - it > 5) && it[5] == ':' &&
+                         (end - it == 6 || it[6] == ' ' || it[6] == '\t' || it[6] == '\n' || it[6] == '\r')) {
+                        // This is "false:" followed by space/tab/newline/end - treat as key
+                        parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                        return;
+                     }
                      process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it, end);
                      return;
                   }
@@ -2982,10 +3014,18 @@ namespace glz
                return;
             case 'n':
             case 'N':
-               // Could be "null", "Null", "NULL"
+               // Could be "null", "Null", "NULL", or a key starting with n/N
                if constexpr (counts::n_null > 0) {
                   if ((end - it >= 4) && ((it[1] == 'u' && it[2] == 'l' && it[3] == 'l') ||
                                           (it[1] == 'U' && it[2] == 'L' && it[3] == 'L'))) {
+                     // Check if this is a key (followed by ": ") rather than a null value
+                     // "null: value" should parse as {null: value}, not as the null type
+                     if ((end - it > 4) && it[4] == ':' &&
+                         (end - it == 5 || it[5] == ' ' || it[5] == '\t' || it[5] == '\n' || it[5] == '\r')) {
+                        // This is "null:" followed by space/tab/newline/end - treat as key
+                        parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                        return;
+                     }
                      constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
                      using NullType = std::variant_alternative_t<first_idx, V>;
                      if (!std::holds_alternative<NullType>(value)) value = NullType{};
@@ -3038,10 +3078,16 @@ namespace glz
                   if (try_parse_block_mapping_into_variant<V, Opts>(value, ctx, it, end)) {
                      return;
                   }
-                  // Numeric value
+                  // Try numeric value speculatively - values like "12:30" look numeric but aren't
                   if constexpr (counts::n_num > 0) {
-                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
-                     return;
+                     auto start_it = it;
+                     yaml::yaml_context temp_ctx{};
+                     temp_ctx.indent = ctx.indent;
+                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it, end);
+                     if (!bool(temp_ctx.error)) {
+                        return; // Successfully parsed as number
+                     }
+                     it = start_it; // Restore and fall through to string
                   }
                   // Fall through to string
                   process_yaml_variant_alternatives<V, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
