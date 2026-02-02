@@ -3550,6 +3550,37 @@ second:
       expect(std::get<std::string>(second.at("name").data) == "Bob");
    };
 
+   // Nested arrays with dash on separate line (value on next line)
+   "generic_nested_array_dash_newline"_test = [] {
+      std::string yaml = R"(-
+  - a
+  - b
+-
+  - c
+  - d)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 2u);
+
+      // First item should be an array with 2 elements
+      expect(std::holds_alternative<glz::generic::array_t>(arr[0].data));
+      auto& first = std::get<glz::generic::array_t>(arr[0].data);
+      expect(first.size() == 2u);
+      expect(std::get<std::string>(first[0].data) == "a");
+      expect(std::get<std::string>(first[1].data) == "b");
+
+      // Second item should be an array with 2 elements
+      expect(std::holds_alternative<glz::generic::array_t>(arr[1].data));
+      auto& second = std::get<glz::generic::array_t>(arr[1].data);
+      expect(second.size() == 2u);
+      expect(std::get<std::string>(second[0].data) == "c");
+      expect(std::get<std::string>(second[1].data) == "d");
+   };
+
    // Comment before nested content should not break parsing
    "generic_comment_before_nested_content"_test = [] {
       std::string yaml = R"(data:

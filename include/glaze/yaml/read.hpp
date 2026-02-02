@@ -1531,8 +1531,10 @@ namespace glz
 
                   if (nested_indent > line_indent) {
                      // Save and set indent for nested parsing
+                     // Set parent indent to one less than content indent so items at
+                     // content indent pass the "indent > parent" check and continue parsing
                      auto saved_indent = ctx.indent;
-                     ctx.indent = nested_indent;
+                     ctx.indent = nested_indent - 1;
                      from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
                      ctx.indent = saved_indent;
                   }
