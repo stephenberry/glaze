@@ -415,7 +415,10 @@ namespace glz
                   dump('\n', b, ix);
                }
                else {
-                  // For complex variant content (maps/arrays), use flow style to avoid indentation issues
+                  // Complex variant content (maps/arrays) uses flow style ({...}, [...]) rather than
+                  // block style. This is a pragmatic choice: proper block-style output would require
+                  // tracking indentation context through the variant visitor, which adds significant
+                  // complexity. Flow style produces valid, parseable YAML that round-trips correctly.
                   serialize<YAML>::op<flow_context_on<Opts>()>(element, ctx, b, ix);
                   dump('\n', b, ix);
                }
