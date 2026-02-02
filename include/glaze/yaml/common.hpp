@@ -445,6 +445,27 @@ namespace glz::yaml
       }
    }
 
+   // Skip all whitespace, newlines, and comments until reaching actual content
+   // This is used at the start of parsing and between top-level elements
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE void skip_ws_newlines_comments(It&& it, End end) noexcept
+   {
+      while (it != end) {
+         if (*it == ' ' || *it == '\t') {
+            ++it;
+         }
+         else if (*it == '\n' || *it == '\r') {
+            skip_newline(it, end);
+         }
+         else if (*it == '#') {
+            skip_comment(it, end);
+         }
+         else {
+            break;
+         }
+      }
+   }
+
    // Check if at newline or end
    template <class It, class End>
    GLZ_ALWAYS_INLINE bool at_newline_or_end(It&& it, End end) noexcept

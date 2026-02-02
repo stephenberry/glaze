@@ -3619,6 +3619,105 @@ status: ok)";
       expect(std::get<std::string>(config.at("setting").data) == "enabled");
    };
 
+   // Indented comment between mapping entries
+   "generic_indented_comment_between_entries"_test = [] {
+      std::string yaml = R"(name: Alice
+  # indented comment
+age: 30)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 2u);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+      expect(std::get<double>(obj.at("age").data) == 30.0);
+   };
+
+   // Leading comment before any content
+   "generic_leading_comment"_test = [] {
+      std::string yaml = R"(# This is a header comment
+name: Alice)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.count("name") == 1u);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+   };
+
+   // Leading comment with blank line
+   "generic_leading_comment_blank_line"_test = [] {
+      std::string yaml = R"(# comment
+
+name: Alice)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+   };
+
+   // Leading whitespace then comment
+   "generic_leading_whitespace_comment"_test = [] {
+      std::string yaml = "  # comment\nname: Alice";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+   };
+
+   // Blank lines with whitespace between entries
+   "generic_blank_lines_with_whitespace"_test = [] {
+      std::string yaml = "name: Alice\n   \nage: 30";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 2u);
+   };
+
+   // Indented comment between array items
+   "generic_indented_comment_in_array"_test = [] {
+      std::string yaml = "- first\n  # comment\n- second";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 2u);
+      expect(std::get<std::string>(arr[0].data) == "first");
+      expect(std::get<std::string>(arr[1].data) == "second");
+   };
+
+   // Comment in nested array
+   "generic_comment_in_nested_array"_test = [] {
+      std::string yaml = R"(items:
+  - first
+  # comment
+  - second)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<glz::generic::array_t>(obj.at("items").data));
+      auto& arr = std::get<glz::generic::array_t>(obj.at("items").data);
+      expect(arr.size() == 2u);
+   };
+
    // Flow-style nested objects also work
    "generic_block_mapping_with_flow_nested_object"_test = [] {
       std::string yaml = R"(person: {name: Bob, age: 25})";

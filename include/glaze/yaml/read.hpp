@@ -1459,8 +1459,11 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  if (it == end || *it == '\n' || *it == '\r') {
-                     // Blank line - continue to next line
+                  if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
+                     // Blank or comment line - continue to next line
+                     if (it != end && *it == '#') {
+                        skip_comment(it, end);
+                     }
                      continue;
                   }
                   break; // Found content
@@ -2527,6 +2530,12 @@ namespace glz
                   break;
                }
 
+               // Skip comment lines (handles indented comments)
+               if (it != end && *it == '#') {
+                  yaml::skip_comment(it, end);
+                  continue;
+               }
+
                if (it == end || *it == '\n' || *it == '\r') continue;
 
                // Parse key
@@ -2889,7 +2898,14 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         yaml::skip_inline_ws(it, end);
+         // At root level (indent == -1), skip leading whitespace, newlines, and comments
+         // For nested values, only skip inline whitespace to preserve block structure
+         if (ctx.indent < 0) {
+            yaml::skip_ws_newlines_comments(it, end);
+         }
+         else {
+            yaml::skip_inline_ws(it, end);
+         }
 
          if (it == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
