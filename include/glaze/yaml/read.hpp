@@ -1508,10 +1508,12 @@ namespace glz
             auto parse_element = [&](auto& element) {
                // Check what follows
                if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                  // Content on same line as dash - set indent to column after "- "
-                  // This allows nested block mappings to know their indent level
+                  // Content on same line as dash - set indent to one less than content column
+                  // This allows nested block mappings to continue parsing keys at the content indent
+                  // For "- key: val", if dash is at column 0, content is at column 2
+                  // We set parent indent to 1 so keys at column 2 pass the "indent > parent" check
                   auto saved_indent = ctx.indent;
-                  ctx.indent = line_indent + 2; // dash + space
+                  ctx.indent = line_indent + 1; // one less than content column
                   from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
                   ctx.indent = saved_indent;
                }

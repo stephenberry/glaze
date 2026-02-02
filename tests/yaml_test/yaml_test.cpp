@@ -3519,6 +3519,37 @@ second:
       expect(second.size() == 2u);
    };
 
+   // Block array of objects - each item should retain all keys
+   "generic_block_array_of_objects"_test = [] {
+      std::string yaml = R"(- name: Alice
+  age: 30
+- name: Bob
+  age: 25)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 2u);
+
+      // First item should have both keys
+      expect(std::holds_alternative<glz::generic::object_t>(arr[0].data));
+      auto& first = std::get<glz::generic::object_t>(arr[0].data);
+      expect(first.size() == 2u);
+      expect(first.count("name") == 1u);
+      expect(first.count("age") == 1u);
+      expect(std::get<std::string>(first.at("name").data) == "Alice");
+
+      // Second item should also have both keys
+      expect(std::holds_alternative<glz::generic::object_t>(arr[1].data));
+      auto& second = std::get<glz::generic::object_t>(arr[1].data);
+      expect(second.size() == 2u);
+      expect(second.count("name") == 1u);
+      expect(second.count("age") == 1u);
+      expect(std::get<std::string>(second.at("name").data) == "Bob");
+   };
+
    // Comment before nested content should not break parsing
    "generic_comment_before_nested_content"_test = [] {
       std::string yaml = R"(data:
