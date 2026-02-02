@@ -3770,6 +3770,35 @@ name: Alice)";
       expect(std::get<std::string>(obj.at("").data) == "value");
    };
 
+   // Empty array item (dash followed by newline should be null)
+   "generic_empty_array_item_first"_test = [] {
+      std::string yaml = "- \n- second";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 2u);
+      expect(std::holds_alternative<glz::generic::null_t>(arr[0].data));
+      expect(std::get<std::string>(arr[1].data) == "second");
+   };
+
+   // Multiple empty array items
+   "generic_empty_array_items_multiple"_test = [] {
+      std::string yaml = "- \n- \n- value";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 3u);
+      expect(std::holds_alternative<glz::generic::null_t>(arr[0].data));
+      expect(std::holds_alternative<glz::generic::null_t>(arr[1].data));
+      expect(std::get<std::string>(arr[2].data) == "value");
+   };
+
    // Flow-style nested objects also work
    "generic_block_mapping_with_flow_nested_object"_test = [] {
       std::string yaml = R"(person: {name: Bob, age: 25})";
