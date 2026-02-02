@@ -802,7 +802,11 @@ namespace glz
             }
          }
          else {
-            // Fallback for other types (including variants)
+            // Fallback for types not explicitly handled above.
+            // Note: Variants with complex content are handled in the map value loop above
+            // (lines 785-796), so they don't reach here. This fallback handles edge cases
+            // like custom types. The newline is safe because serialize<YAML>::op for simple
+            // types doesn't add trailing newlines.
             serialize<YAML>::op<Opts>(value, ctx, b, ix);
             dump('\n', b, ix);
          }
