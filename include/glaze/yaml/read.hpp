@@ -2465,26 +2465,47 @@ namespace glz
          }
          else {
             // Block mapping
+            // Track base indentation for this mapping level (-1 means not yet established)
+            const int32_t parent_indent = ctx.indent;
+            int32_t mapping_indent = -1; // Will be set from first key's indentation
+
             while (it != end) {
-               // Skip blank lines
-               while (it != end && (*it == '\n' || *it == '\r' || *it == ' ' || *it == '#')) {
+               // Skip blank lines and comments
+               while (it != end && (*it == '\n' || *it == '\r' || *it == '#')) {
                   if (*it == '#') {
                      yaml::skip_comment(it, end);
                   }
-                  else if (*it == '\n' || *it == '\r') {
-                     yaml::skip_newline(it, end);
-                  }
                   else {
-                     break;
+                     yaml::skip_newline(it, end);
                   }
                }
 
                if (it == end) break;
 
-               // Measure and skip indent
-               yaml::measure_indent(it, end, ctx);
+               // Measure indent of this line
+               auto line_start = it;
+               int32_t line_indent = yaml::measure_indent(it, end, ctx);
                if (bool(ctx.error)) [[unlikely]]
                   return;
+
+               // For subsequent keys: if dedented to or below parent level, this nested mapping is done
+               // (First key is always accepted since mapping_indent is still -1)
+               // This handles cases where variant parser already skipped leading whitespace
+               if (mapping_indent >= 0 && parent_indent >= 0 && line_indent <= parent_indent) {
+                  it = line_start; // Restore position for parent to handle
+                  break;
+               }
+
+               // Establish mapping indent from first key
+               if (mapping_indent < 0) {
+                  mapping_indent = line_indent;
+               }
+
+               // If dedented below mapping level, this mapping is done
+               if (line_indent < mapping_indent) {
+                  it = line_start; // Restore position for parent to handle
+                  break;
+               }
 
                if (it == end || *it == '\n' || *it == '\r') continue;
 
@@ -2506,7 +2527,50 @@ namespace glz
                // Parse value
                val_t val{};
                if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                  // Value on same line
                   from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
+               }
+               else {
+                  // Value on next line(s) - check for nested block content
+                  yaml::skip_ws_and_comment(it, end);
+                  if (it != end && (*it == '\n' || *it == '\r')) {
+                     yaml::skip_newline(it, end);
+
+                     // Peek at next content line's indentation
+                     auto peek_it = it;
+                     while (peek_it != end && (*peek_it == ' ' || *peek_it == '\n' || *peek_it == '\r')) {
+                        if (*peek_it == '\n' || *peek_it == '\r') {
+                           yaml::skip_newline(peek_it, end);
+                        }
+                        else {
+                           ++peek_it;
+                        }
+                     }
+
+                     // Measure the indent of the next content
+                     auto content_start = it;
+                     while (it != end && (*it == '\n' || *it == '\r')) {
+                        yaml::skip_newline(it, end);
+                     }
+                     int32_t next_indent = yaml::measure_indent(it, end, ctx);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     if (next_indent > line_indent && it != end && *it != '\n' && *it != '\r') {
+                        // Nested content - set context indent and parse
+                        it = content_start;
+                        while (it != end && (*it == '\n' || *it == '\r')) {
+                           yaml::skip_newline(it, end);
+                        }
+                        ctx.indent = line_indent; // Set base for nested parsing
+                        from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
+                        ctx.indent = parent_indent; // Restore
+                     }
+                     else {
+                        // No nested content or dedented - restore position
+                        it = content_start;
+                     }
+                  }
                }
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2514,7 +2578,9 @@ namespace glz
                value.emplace(std::move(key), std::move(val));
 
                yaml::skip_ws_and_comment(it, end);
-               yaml::skip_newline(it, end);
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  yaml::skip_newline(it, end);
+               }
             }
          }
       }
@@ -2708,7 +2774,7 @@ namespace glz
    // Uses quick line-based lookahead to short-circuit obvious non-mappings,
    // then falls back to full parse attempt for potential mappings.
    template <class Variant, auto Opts>
-   GLZ_ALWAYS_INLINE bool try_parse_block_mapping_into_variant(auto&& value, auto&& it, auto end)
+   GLZ_ALWAYS_INLINE bool try_parse_block_mapping_into_variant(auto&& value, auto&& ctx, auto&& it, auto end)
    {
       using counts = yaml_variant_type_count<Variant>;
       if constexpr (counts::n_object == 0) {
@@ -2719,9 +2785,10 @@ namespace glz
          if (!line_could_be_block_mapping(it, end)) {
             return false;
          }
-         // Full parse attempt
+         // Full parse attempt - use a temporary context that inherits indent from parent
          auto start_it = it;
          yaml::yaml_context temp_ctx{};
+         temp_ctx.indent = ctx.indent; // Propagate indent context for nested parsing
          process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it, end);
          if (!bool(temp_ctx.error)) {
             return true;
@@ -2736,7 +2803,7 @@ namespace glz
    template <class Variant, auto Opts>
    GLZ_ALWAYS_INLINE void parse_block_mapping_or_string(auto&& value, auto&& ctx, auto&& it, auto end)
    {
-      if (try_parse_block_mapping_into_variant<Variant, Opts>(value, it, end)) {
+      if (try_parse_block_mapping_into_variant<Variant, Opts>(value, ctx, it, end)) {
          return;
       }
       process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
@@ -2857,7 +2924,7 @@ namespace glz
                // Check for digit (0-9) - numeric or block mapping key starting with digit
                if (c >= '0' && c <= '9') {
                   // Try block mapping first (e.g., "123key: value")
-                  if (try_parse_block_mapping_into_variant<V, Opts>(value, it, end)) {
+                  if (try_parse_block_mapping_into_variant<V, Opts>(value, ctx, it, end)) {
                      return;
                   }
                   // Numeric value

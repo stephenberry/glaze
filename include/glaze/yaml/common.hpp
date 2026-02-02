@@ -19,7 +19,7 @@ namespace glz::yaml
    // Adds indent tracking needed for block-style parsing
    struct yaml_context : context
    {
-      int32_t indent{}; // Current block indent level for YAML parsing
+      int32_t indent{-1}; // Current block indent level for YAML parsing (-1 means top level)
    };
 
    // Lookup table for characters that can start a plain scalar in flow context

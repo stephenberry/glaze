@@ -3300,8 +3300,53 @@ city: NYC)";
       expect(std::get<std::string>(obj.at("city").data) == "NYC");
    };
 
-   // Note: Nested block-style mappings in glz::generic have limitations with indent tracking.
-   // Use flow-style for nested objects when parsing into glz::generic.
+   // Nested block-style mappings into glz::generic
+   "generic_nested_block_style_mapping"_test = [] {
+      std::string yaml = R"(person:
+  name: Bob
+  age: 25)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.count("person") == 1u);
+      expect(std::holds_alternative<glz::generic::object_t>(obj.at("person").data));
+
+      auto& person = std::get<glz::generic::object_t>(obj.at("person").data);
+      expect(std::get<std::string>(person.at("name").data) == "Bob");
+      expect(std::get<double>(person.at("age").data) == 25.0);
+   };
+
+   // First verify simple two-key block mapping works
+   "generic_two_key_simple"_test = [] {
+      std::string yaml = R"(first: 1
+second: 2)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("first") == 1u);
+      expect(root.count("second") == 1u);
+   };
+
+   // Multiple top-level keys, first with nested content
+   "generic_nested_then_simple"_test = [] {
+      std::string yaml = R"(person:
+  name: Bob
+other: simple)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("person") == 1u);
+      expect(root.count("other") == 1u);
+   };
+
+   // Flow-style nested objects also work
    "generic_block_mapping_with_flow_nested_object"_test = [] {
       std::string yaml = R"(person: {name: Bob, age: 25})";
       glz::generic parsed;
