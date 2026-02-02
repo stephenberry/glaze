@@ -3718,6 +3718,58 @@ name: Alice)";
       expect(arr.size() == 2u);
    };
 
+   // Quoted keys in block mapping
+   "generic_quoted_key_double"_test = [] {
+      std::string yaml = R"("name": Alice)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.count("name") == 1u);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+   };
+
+   // Quoted key with spaces
+   "generic_quoted_key_with_spaces"_test = [] {
+      std::string yaml = R"("full name": Alice Smith)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.count("full name") == 1u);
+      expect(std::get<std::string>(obj.at("full name").data) == "Alice Smith");
+   };
+
+   // Quoted key containing colon
+   "generic_quoted_key_with_colon"_test = [] {
+      std::string yaml = R"("key:value": test)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.count("key:value") == 1u);
+      expect(std::get<std::string>(obj.at("key:value").data) == "test");
+   };
+
+   // Empty quoted key
+   "generic_empty_quoted_key"_test = [] {
+      std::string yaml = R"("": value)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.count("") == 1u);
+      expect(std::get<std::string>(obj.at("").data) == "value");
+   };
+
    // Flow-style nested objects also work
    "generic_block_mapping_with_flow_nested_object"_test = [] {
       std::string yaml = R"(person: {name: Bob, age: 25})";

@@ -2839,6 +2839,26 @@ namespace glz
             // Colon followed by space, newline, or end indicates a mapping key
             return it == end || *it == ' ' || *it == '\t' || *it == '\n' || *it == '\r';
          }
+         // Skip over quoted strings - colons inside quotes don't count as key indicators
+         if (c == '"' || c == '\'') {
+            const char quote = c;
+            ++it;
+            while (it != end && *it != quote) {
+               if (*it == '\\' && quote == '"') {
+                  ++it; // Skip escape character
+                  if (it != end) ++it; // Skip escaped character
+               }
+               else if (*it == '\n' || *it == '\r') {
+                  // Unterminated quote on this line
+                  return false;
+               }
+               else {
+                  ++it;
+               }
+            }
+            if (it != end) ++it; // Skip closing quote
+            continue;
+         }
          // Stop at end of line or flow indicators
          if (yaml::block_mapping_end_table[static_cast<uint8_t>(c)]) {
             return false;
@@ -2928,8 +2948,9 @@ namespace glz
                return;
             case '"':
             case '\'':
-               // Quoted string
-               process_yaml_variant_alternatives<V, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
+               // Could be a quoted string OR a quoted key in a block mapping
+               // Try block mapping first (e.g., "key": value), then fall back to string
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
             case 't':
             case 'T':
