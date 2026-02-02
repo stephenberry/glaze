@@ -3346,6 +3346,122 @@ other: simple)";
       expect(root.count("other") == 1u);
    };
 
+   // Three levels of nesting
+   "generic_deeply_nested_block"_test = [] {
+      std::string yaml = R"(level1:
+  level2:
+    level3: deep_value
+    another: 42
+  sibling2: test
+top_sibling: done)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("level1") == 1u);
+      expect(root.count("top_sibling") == 1u);
+
+      auto& level1 = std::get<glz::generic::object_t>(root.at("level1").data);
+      expect(level1.count("level2") == 1u);
+      expect(level1.count("sibling2") == 1u);
+
+      auto& level2 = std::get<glz::generic::object_t>(level1.at("level2").data);
+      expect(std::get<std::string>(level2.at("level3").data) == "deep_value");
+      expect(std::get<double>(level2.at("another").data) == 42.0);
+   };
+
+   // Multiple nested objects at same level
+   "generic_multiple_nested_siblings"_test = [] {
+      std::string yaml = R"(first:
+  a: 1
+  b: 2
+second:
+  c: 3
+  d: 4
+third:
+  e: 5)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("first") == 1u);
+      expect(root.count("second") == 1u);
+      expect(root.count("third") == 1u);
+
+      auto& first = std::get<glz::generic::object_t>(root.at("first").data);
+      expect(std::get<double>(first.at("a").data) == 1.0);
+      expect(std::get<double>(first.at("b").data) == 2.0);
+
+      auto& second = std::get<glz::generic::object_t>(root.at("second").data);
+      expect(std::get<double>(second.at("c").data) == 3.0);
+      expect(std::get<double>(second.at("d").data) == 4.0);
+   };
+
+   // Mixed pattern: simple, nested, simple
+   "generic_simple_nested_simple"_test = [] {
+      std::string yaml = R"(before: start
+nested:
+  inner: value
+after: end)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("before") == 1u);
+      expect(root.count("nested") == 1u);
+      expect(root.count("after") == 1u);
+
+      expect(std::get<std::string>(root.at("before").data) == "start");
+      expect(std::get<std::string>(root.at("after").data) == "end");
+
+      auto& nested = std::get<glz::generic::object_t>(root.at("nested").data);
+      expect(std::get<std::string>(nested.at("inner").data) == "value");
+   };
+
+   // Nested with various value types
+   "generic_nested_mixed_types"_test = [] {
+      std::string yaml = R"(config:
+  name: test
+  count: 100
+  enabled: true
+  ratio: 3.14
+status: ok)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("config") == 1u);
+      expect(root.count("status") == 1u);
+
+      auto& config = std::get<glz::generic::object_t>(root.at("config").data);
+      expect(std::get<std::string>(config.at("name").data) == "test");
+      expect(std::get<double>(config.at("count").data) == 100.0);
+      expect(std::get<bool>(config.at("enabled").data) == true);
+      expect(std::get<double>(config.at("ratio").data) == 3.14);
+   };
+
+   // Nested followed by multiple siblings
+   "generic_nested_then_multiple_siblings"_test = [] {
+      std::string yaml = R"(nested:
+  key: value
+sibling1: one
+sibling2: two
+sibling3: three)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("nested") == 1u);
+      expect(root.count("sibling1") == 1u);
+      expect(root.count("sibling2") == 1u);
+      expect(root.count("sibling3") == 1u);
+   };
+
    // Flow-style nested objects also work
    "generic_block_mapping_with_flow_nested_object"_test = [] {
       std::string yaml = R"(person: {name: Bob, age: 25})";

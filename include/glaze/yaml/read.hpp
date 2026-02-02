@@ -2529,6 +2529,8 @@ namespace glz
                if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                   // Value on same line
                   from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
+                  // Skip trailing whitespace after inline value
+                  yaml::skip_ws_and_comment(it, end);
                }
                else {
                   // Value on next line(s) - check for nested block content
@@ -2562,7 +2564,10 @@ namespace glz
                         while (it != end && (*it == '\n' || *it == '\r')) {
                            yaml::skip_newline(it, end);
                         }
-                        ctx.indent = line_indent; // Set base for nested parsing
+                        // Use next_indent - 1 as the boundary for nested parsing.
+                        // This is more robust than line_indent which may be incorrect
+                        // when entering through the variant path (whitespace already skipped).
+                        ctx.indent = next_indent - 1;
                         from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
                         ctx.indent = parent_indent; // Restore
                      }
@@ -2577,7 +2582,8 @@ namespace glz
 
                value.emplace(std::move(key), std::move(val));
 
-               yaml::skip_ws_and_comment(it, end);
+               // For nested values, iterator is already at start of next line
+               // Only skip newline if we're at one (from inline value case)
                if (it != end && (*it == '\n' || *it == '\r')) {
                   yaml::skip_newline(it, end);
                }
