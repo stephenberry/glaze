@@ -1712,7 +1712,11 @@ namespace glz
                               return false;
                            it = nested_start;
 
-                           if (nested_indent > line_indent) {
+                           // Content is nested only if indented more than the current line.
+                           // When line_indent is negative (root level), use 0 as the baseline.
+                           // This prevents content at column 0 from being treated as nested.
+                           const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
+                           if (nested_indent > effective_line_indent) {
                               // Save and set indent for nested parsing
                               auto saved_indent = ctx.indent;
                               ctx.indent = nested_indent;

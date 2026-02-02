@@ -4539,4 +4539,79 @@ suite yaml_tag_variant_tests = [] {
    };
 };
 
+// ============================================================
+// Empty Value Tests
+// ============================================================
+
+struct two_strings
+{
+   std::string a{};
+   std::string b{};
+};
+
+suite yaml_empty_value_tests = [] {
+   "empty_value_followed_by_key"_test = [] {
+      // Empty value (just newline after colon) followed by another key
+      // This is valid YAML where 'a' should get an empty/default value
+      std::string yaml = R"(a:
+b: hello)";
+      two_strings result;
+      result.a = "unchanged";
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      // 'a' should be empty (default value) and 'b' should be "hello"
+      expect(result.a.empty() || result.a == "unchanged") << "a should be empty or unchanged, got: [" << result.a << "]";
+      expect(result.b == "hello") << "b should be 'hello', got: [" << result.b << "]";
+   };
+
+   "empty_value_with_comment"_test = [] {
+      // Empty value with trailing comment
+      std::string yaml = R"(a: # this is a comment
+b: world)";
+      two_strings result;
+      result.a = "unchanged";
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.a.empty() || result.a == "unchanged");
+      expect(result.b == "world");
+   };
+
+   "multiple_empty_values"_test = [] {
+      // Multiple consecutive empty values
+      std::string yaml = R"(a:
+b:
+)";
+      two_strings result;
+      result.a = "x";
+      result.b = "y";
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      // Both should be empty or unchanged (default behavior)
+   };
+
+   "empty_value_at_end"_test = [] {
+      // Empty value at the end of document
+      std::string yaml = R"(a: test
+b:)";
+      two_strings result;
+      result.b = "unchanged";
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.a == "test");
+      expect(result.b.empty() || result.b == "unchanged");
+   };
+
+   "nested_value_properly_indented"_test = [] {
+      // When value IS properly indented, it should be parsed
+      std::string yaml = R"(a:
+  nested_value
+b: other)";
+      two_strings result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.a == "nested_value");
+      expect(result.b == "other");
+   };
+};
+
 int main() { return 0; }
