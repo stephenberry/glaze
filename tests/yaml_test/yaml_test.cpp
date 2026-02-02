@@ -4345,4 +4345,198 @@ suite generic_boolean_null_key_tests = [] {
    };
 };
 
+suite multiline_flow_sequence_tests = [] {
+   "multiline_flow_sequence_basic"_test = [] {
+      std::string yaml = "[\n  1,\n  2,\n  3\n]";
+      std::vector<int> result;
+      auto rec = glz::read_yaml(result, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(result.size() == 3u);
+      expect(result[0] == 1);
+      expect(result[1] == 2);
+      expect(result[2] == 3);
+   };
+
+   "multiline_flow_sequence_in_map"_test = [] {
+      std::string yaml = "items: [\n  a,\n  b,\n  c\n]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      auto& arr = std::get<glz::generic::array_t>(obj["items"].data);
+      expect(arr.size() == 3u);
+   };
+
+   "multiline_flow_sequence_trailing_newline"_test = [] {
+      std::string yaml = "[1, 2, 3\n]";
+      std::vector<int> result;
+      auto rec = glz::read_yaml(result, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(result.size() == 3u);
+   };
+};
+
+suite infinity_nan_tests = [] {
+   "read_positive_infinity"_test = [] {
+      std::string yaml = "val: .inf";
+      std::map<std::string, double> result;
+      auto rec = glz::read_yaml(result, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::isinf(result["val"]));
+      expect(result["val"] > 0);
+   };
+
+   "read_negative_infinity"_test = [] {
+      std::string yaml = "val: -.inf";
+      std::map<std::string, double> result;
+      auto rec = glz::read_yaml(result, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::isinf(result["val"]));
+      expect(result["val"] < 0);
+   };
+
+   "read_nan"_test = [] {
+      std::string yaml = "val: .nan";
+      std::map<std::string, double> result;
+      auto rec = glz::read_yaml(result, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::isnan(result["val"]));
+   };
+
+   "write_positive_infinity"_test = [] {
+      std::map<std::string, double> data{{"val", std::numeric_limits<double>::infinity()}};
+      std::string yaml;
+      auto rec = glz::write_yaml(data, yaml);
+      expect(!rec);
+      expect(yaml.find(".inf") != std::string::npos);
+      expect(yaml.find("-.inf") == std::string::npos);
+   };
+
+   "write_negative_infinity"_test = [] {
+      std::map<std::string, double> data{{"val", -std::numeric_limits<double>::infinity()}};
+      std::string yaml;
+      auto rec = glz::write_yaml(data, yaml);
+      expect(!rec);
+      expect(yaml.find("-.inf") != std::string::npos);
+   };
+
+   "write_nan"_test = [] {
+      std::map<std::string, double> data{{"val", std::nan("")}};
+      std::string yaml;
+      auto rec = glz::write_yaml(data, yaml);
+      expect(!rec);
+      expect(yaml.find(".nan") != std::string::npos);
+   };
+
+   "roundtrip_infinity"_test = [] {
+      std::map<std::string, double> original{{"val", std::numeric_limits<double>::infinity()}};
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::map<std::string, double> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::isinf(parsed["val"]));
+      expect(parsed["val"] > 0);
+   };
+
+   "roundtrip_nan"_test = [] {
+      std::map<std::string, double> original{{"val", std::nan("")}};
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::map<std::string, double> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::isnan(parsed["val"]));
+   };
+};
+
+suite yaml_tag_variant_tests = [] {
+   "generic_tag_int"_test = [] {
+      std::string yaml = "val: !!int 123";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<double>(obj["val"].data));
+      expect(std::get<double>(obj["val"].data) == 123.0);
+   };
+
+   "generic_tag_float"_test = [] {
+      std::string yaml = "val: !!float 1.5";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<double>(obj["val"].data));
+      expect(std::get<double>(obj["val"].data) == 1.5);
+   };
+
+   "generic_tag_bool"_test = [] {
+      std::string yaml = "val: !!bool true";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<bool>(obj["val"].data));
+      expect(std::get<bool>(obj["val"].data) == true);
+   };
+
+   "generic_tag_null"_test = [] {
+      std::string yaml = "val: !!null ~";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<glz::generic::null_t>(obj["val"].data));
+   };
+
+   "generic_tag_str"_test = [] {
+      std::string yaml = "val: !!str 123";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<std::string>(obj["val"].data));
+      expect(std::get<std::string>(obj["val"].data) == "123");
+   };
+
+   "generic_tag_seq"_test = [] {
+      std::string yaml = "!!seq [1, 2, 3]";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::array_t>(parsed.data));
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 3u);
+   };
+
+   "generic_tag_map"_test = [] {
+      std::string yaml = "!!map {a: 1}";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+   };
+
+   "typed_tag_int"_test = [] {
+      std::string yaml = "!!int 456";
+      int result = 0;
+      auto rec = glz::read_yaml(result, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(result == 456);
+   };
+
+   "typed_tag_str_to_string"_test = [] {
+      std::string yaml = "!!str 789";
+      std::string result;
+      auto rec = glz::read_yaml(result, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(result == "789");
+   };
+};
+
 int main() { return 0; }

@@ -1213,7 +1213,8 @@ namespace glz
          }
 
          ++it; // Skip '['
-         skip_inline_ws(it, end);
+         // Skip whitespace and newlines after opening bracket (YAML allows multi-line flow sequences)
+         skip_ws_and_newlines(it, end);
 
          // Handle empty array
          if (it != end && *it == ']') {
@@ -1226,7 +1227,7 @@ namespace glz
          if constexpr (emplace_backable<V>) {
             // Resizable containers (vector, deque, list)
             while (it != end) {
-               skip_inline_ws(it, end);
+               skip_ws_and_newlines(it, end);
 
                auto& element = value.emplace_back();
                from<YAML, value_type>::template op<flow_context_on<Opts>()>(element, ctx, it, end);
@@ -1234,7 +1235,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               skip_inline_ws(it, end);
+               skip_ws_and_newlines(it, end);
 
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
@@ -1247,7 +1248,7 @@ namespace glz
                }
                else if (*it == ',') {
                   ++it;
-                  skip_inline_ws(it, end);
+                  skip_ws_and_newlines(it, end);
                }
                else {
                   ctx.error = error_code::syntax_error;
@@ -1261,7 +1262,7 @@ namespace glz
             size_t i = 0;
 
             while (it != end && i < n) {
-               skip_inline_ws(it, end);
+               skip_ws_and_newlines(it, end);
 
                from<YAML, value_type>::template op<flow_context_on<Opts>()>(value[i], ctx, it, end);
 
@@ -1269,7 +1270,7 @@ namespace glz
                   return;
 
                ++i;
-               skip_inline_ws(it, end);
+               skip_ws_and_newlines(it, end);
 
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
@@ -1282,7 +1283,7 @@ namespace glz
                }
                else if (*it == ',') {
                   ++it;
-                  skip_inline_ws(it, end);
+                  skip_ws_and_newlines(it, end);
                }
                else {
                   ctx.error = error_code::syntax_error;
@@ -1778,7 +1779,8 @@ namespace glz
          }
 
          ++it; // Skip '['
-         skip_inline_ws(it, end);
+         // Skip whitespace and newlines after opening bracket (YAML allows multi-line flow sequences)
+         skip_ws_and_newlines(it, end);
 
          // Handle empty array
          if (it != end && *it == ']') {
@@ -1787,7 +1789,7 @@ namespace glz
          }
 
          while (it != end) {
-            skip_inline_ws(it, end);
+            skip_ws_and_newlines(it, end);
 
             value_type element{};
             from<YAML, value_type>::template op<flow_context_on<Opts>()>(element, ctx, it, end);
@@ -1797,7 +1799,7 @@ namespace glz
 
             value.emplace(std::move(element));
 
-            skip_inline_ws(it, end);
+            skip_ws_and_newlines(it, end);
 
             if (it == end) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
@@ -1810,7 +1812,7 @@ namespace glz
             }
             else if (*it == ',') {
                ++it;
-               skip_inline_ws(it, end);
+               skip_ws_and_newlines(it, end);
             }
             else {
                ctx.error = error_code::syntax_error;
@@ -2100,7 +2102,8 @@ namespace glz
          if (*it == '[') {
             // Flow sequence
             ++it; // Skip '['
-            yaml::skip_inline_ws(it, end);
+            // Skip whitespace and newlines (YAML allows multi-line flow sequences)
+            yaml::skip_ws_and_newlines(it, end);
 
             for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]]
@@ -2116,7 +2119,7 @@ namespace glz
                      return;
                   }
                   ++it; // Skip ','
-                  yaml::skip_inline_ws(it, end);
+                  yaml::skip_ws_and_newlines(it, end);
                }
 
                if constexpr (is_std_tuple<T>) {
@@ -2133,7 +2136,7 @@ namespace glz
                   from<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(glz::get<I>(value), ctx, it, end);
                }
 
-               yaml::skip_inline_ws(it, end);
+               yaml::skip_ws_and_newlines(it, end);
             });
 
             if (bool(ctx.error)) [[unlikely]]
@@ -2958,6 +2961,70 @@ namespace glz
             const char c = *it;
 
             switch (c) {
+            case '!': {
+               // Tag - parse it and dispatch based on tag type
+               const auto tag = yaml::parse_yaml_tag(it, end);
+               if (tag == yaml::yaml_tag::unknown) {
+                  ctx.error = error_code::feature_not_supported;
+                  return;
+               }
+               yaml::skip_inline_ws(it, end);
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               switch (tag) {
+               case yaml::yaml_tag::str:
+                  process_yaml_variant_alternatives<V, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
+                  return;
+               case yaml::yaml_tag::int_tag:
+               case yaml::yaml_tag::float_tag:
+                  if constexpr (counts::n_num > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               case yaml::yaml_tag::bool_tag:
+                  if constexpr (counts::n_bool > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               case yaml::yaml_tag::null_tag:
+                  if constexpr (counts::n_null > 0) {
+                     constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                     using NullType = std::variant_alternative_t<first_idx, V>;
+                     if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                     from<YAML, NullType>::template op<Opts>(std::get<NullType>(value), ctx, it, end);
+                     return;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               case yaml::yaml_tag::map:
+                  if constexpr (counts::n_object > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               case yaml::yaml_tag::seq:
+                  if constexpr (counts::n_array > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
+                     return;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
+               default:
+                  // none tag - continue with normal parsing based on what follows
+                  break;
+               }
+               // If we get here with a none tag, re-dispatch based on what character is now present
+               // (fall through to the main switch by recursively calling op)
+               from<YAML, V>::template op<Opts>(value, ctx, it, end);
+               return;
+            }
             case '{':
                // Flow mapping - object type
                process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);

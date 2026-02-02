@@ -119,6 +119,22 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 32 + write_padding_bytes)) [[unlikely]] {
             return;
          }
+         // YAML supports .inf, -.inf, and .nan for special float values
+         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            if (std::isnan(value)) {
+               dump(".nan", b, ix);
+               return;
+            }
+            else if (std::isinf(value)) {
+               if (value < 0) {
+                  dump("-.inf", b, ix);
+               }
+               else {
+                  dump(".inf", b, ix);
+               }
+               return;
+            }
+         }
          write_chars::op<Opts>(value, ctx, b, ix);
       }
    };
