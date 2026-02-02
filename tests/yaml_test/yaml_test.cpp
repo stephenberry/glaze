@@ -3519,6 +3519,44 @@ second:
       expect(second.size() == 2u);
    };
 
+   // Comment before nested content should not break parsing
+   "generic_comment_before_nested_content"_test = [] {
+      std::string yaml = R"(data:
+  # This is a comment
+  key: value
+end: done)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.count("data") == 1u);
+      expect(root.count("end") == 1u);
+
+      // data should be an object, not an empty string
+      expect(std::holds_alternative<glz::generic::object_t>(root.at("data").data));
+      auto& data = std::get<glz::generic::object_t>(root.at("data").data);
+      expect(data.count("key") == 1u);
+      expect(std::get<std::string>(data.at("key").data) == "value");
+   };
+
+   // Multiple comments before nested content
+   "generic_multiple_comments_before_nested"_test = [] {
+      std::string yaml = R"(config:
+  # First comment
+  # Second comment
+  setting: enabled
+status: ok)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<glz::generic::object_t>(root.at("config").data));
+      auto& config = std::get<glz::generic::object_t>(root.at("config").data);
+      expect(std::get<std::string>(config.at("setting").data) == "enabled");
+   };
+
    // Flow-style nested objects also work
    "generic_block_mapping_with_flow_nested_object"_test = [] {
       std::string yaml = R"(person: {name: Bob, age: 25})";

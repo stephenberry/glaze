@@ -2554,21 +2554,44 @@ namespace glz
                   if (it != end && (*it == '\n' || *it == '\r')) {
                      yaml::skip_newline(it, end);
 
-                     // Peek at next content line's indentation
+                     // Peek at next content line's indentation, skipping blank lines and comments
                      auto peek_it = it;
-                     while (peek_it != end && (*peek_it == ' ' || *peek_it == '\n' || *peek_it == '\r')) {
+                     while (peek_it != end) {
                         if (*peek_it == '\n' || *peek_it == '\r') {
                            yaml::skip_newline(peek_it, end);
                         }
-                        else {
+                        else if (*peek_it == ' ') {
                            ++peek_it;
+                        }
+                        else if (*peek_it == '#') {
+                           yaml::skip_comment(peek_it, end);
+                        }
+                        else {
+                           break;
                         }
                      }
 
-                     // Measure the indent of the next content
+                     // Measure the indent of the next content, skipping blank lines and comments
                      auto content_start = it;
-                     while (it != end && (*it == '\n' || *it == '\r')) {
-                        yaml::skip_newline(it, end);
+                     while (it != end) {
+                        if (*it == '\n' || *it == '\r') {
+                           yaml::skip_newline(it, end);
+                        }
+                        else if (*it == '#') {
+                           // Skip leading spaces before measuring
+                           auto line_start = it;
+                           while (it != end && *it == ' ') ++it;
+                           if (it != end && *it == '#') {
+                              yaml::skip_comment(it, end);
+                           }
+                           else {
+                              it = line_start; // Not a comment line, restore
+                              break;
+                           }
+                        }
+                        else {
+                           break;
+                        }
                      }
                      int32_t next_indent = yaml::measure_indent(it, end, ctx);
                      if (bool(ctx.error)) [[unlikely]]
@@ -2576,9 +2599,30 @@ namespace glz
 
                      if (next_indent > line_indent && it != end && *it != '\n' && *it != '\r') {
                         // Nested content - set context indent and parse
+                        // Skip to the actual content (past newlines and comment-only lines)
                         it = content_start;
-                        while (it != end && (*it == '\n' || *it == '\r')) {
-                           yaml::skip_newline(it, end);
+                        while (it != end) {
+                           if (*it == '\n' || *it == '\r') {
+                              yaml::skip_newline(it, end);
+                           }
+                           else if (*it == ' ') {
+                              // Check if this line is a comment
+                              auto line_start = it;
+                              while (it != end && *it == ' ') ++it;
+                              if (it != end && *it == '#') {
+                                 yaml::skip_comment(it, end);
+                              }
+                              else {
+                                 it = line_start; // Not a comment, restore and break
+                                 break;
+                              }
+                           }
+                           else if (*it == '#') {
+                              yaml::skip_comment(it, end);
+                           }
+                           else {
+                              break;
+                           }
                         }
                         // Use next_indent - 1 as the boundary for nested parsing.
                         // This is more robust than line_indent which may be incorrect
