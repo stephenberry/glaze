@@ -210,6 +210,20 @@ namespace glz::yaml
       return t;
    }();
 
+   // Table for characters that terminate block mapping key scanning
+   // Characters: newline, carriage return, flow indicators { [ ] } ,
+   inline constexpr std::array<bool, 256> block_mapping_end_table = [] {
+      std::array<bool, 256> t{};
+      t['\n'] = true;
+      t['\r'] = true;
+      t['{'] = true;
+      t['['] = true;
+      t[']'] = true;
+      t['}'] = true;
+      t[','] = true;
+      return t;
+   }();
+
    // Scalar style detection
    enum struct scalar_style : uint8_t {
       plain, // unquoted

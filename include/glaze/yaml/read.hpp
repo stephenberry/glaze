@@ -448,7 +448,6 @@ namespace glz
          }
       }
 
-
       // Parse a block scalar (| or >)
       template <class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_block_scalar(std::string& value, Ctx& ctx, It& it, End end, int32_t base_indent)
@@ -1399,8 +1398,7 @@ namespace glz
             }
             else if (it != end && (*it == '\n' || *it == '\r')) {
                // Allow newlines in flow mappings
-               skip_newline(it, end);
-               skip_inline_ws(it, end);
+               skip_ws_and_newlines(it, end);
             }
             else {
                ctx.error = error_code::syntax_error;
@@ -2457,8 +2455,7 @@ namespace glz
                }
                else if (it != end && (*it == '\n' || *it == '\r')) {
                   // Allow newlines in flow mappings (without comma)
-                  yaml::skip_newline(it, end);
-                  yaml::skip_inline_ws(it, end);
+                  yaml::skip_ws_and_newlines(it, end);
                }
                else {
                   ctx.error = error_code::syntax_error;
@@ -2684,9 +2681,32 @@ namespace glz
       }
    };
 
+   // Quick check if current line contains a colon that could indicate a block mapping key.
+   // Only scans to end of line (bounded by newline), so O(line length) not O(input).
+   // Returns false for obvious non-mappings to avoid expensive full parse attempts.
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE bool line_could_be_block_mapping(It it, End end)
+   {
+      while (it != end) {
+         const char c = *it;
+         if (c == ':') {
+            ++it;
+            // Colon followed by space, newline, or end indicates a mapping key
+            return it == end || *it == ' ' || *it == '\t' || *it == '\n' || *it == '\r';
+         }
+         // Stop at end of line or flow indicators
+         if (yaml::block_mapping_end_table[static_cast<uint8_t>(c)]) {
+            return false;
+         }
+         ++it;
+      }
+      return false;
+   }
+
    // Speculatively try parsing as a block mapping into a variant.
    // Returns true if successful, false otherwise (restoring iterator on failure).
-   // This avoids unbounded lookahead by actually attempting the parse.
+   // Uses quick line-based lookahead to short-circuit obvious non-mappings,
+   // then falls back to full parse attempt for potential mappings.
    template <class Variant, auto Opts>
    GLZ_ALWAYS_INLINE bool try_parse_block_mapping_into_variant(auto&& value, auto&& it, auto end)
    {
@@ -2695,6 +2715,11 @@ namespace glz
          return false;
       }
       else {
+         // Quick check: if no colon on this line, can't be a block mapping
+         if (!line_could_be_block_mapping(it, end)) {
+            return false;
+         }
+         // Full parse attempt
          auto start_it = it;
          yaml::yaml_context temp_ctx{};
          process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it, end);
