@@ -26,8 +26,11 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
-         // Skip document start marker (---) if present
-         yaml::skip_document_start(it, end);
+         // Skip YAML directives and document start marker (---) if present
+         yaml::skip_document_start(it, end, ctx);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
 
          using V = std::remove_cvref_t<T>;
          from<YAML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), end);

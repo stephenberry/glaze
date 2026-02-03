@@ -2593,6 +2593,177 @@ name: test
       expect(!ec) << glz::format_error(ec, yaml);
       expect(obj.x == 42);
    };
+
+   // YAML directive tests
+   "yaml_version_directive"_test = [] {
+      std::string yaml = R"(%YAML 1.2
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 42);
+      expect(obj.name == "test");
+   };
+
+   "yaml_tag_directive"_test = [] {
+      std::string yaml = R"(%TAG ! tag:example.com,2000:
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 42);
+   };
+
+   "yaml_multiple_directives"_test = [] {
+      std::string yaml = R"(%YAML 1.2
+%TAG ! tag:example.com,2000:
+%TAG !! tag:yaml.org,2002:
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 42);
+   };
+
+   "yaml_directive_with_generic"_test = [] {
+      std::string yaml = R"(%YAML 1.2
+---
+name: Alice)";
+      glz::generic parsed;
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(obj.size() == 1u);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+   };
+
+   "yaml_directive_with_blank_lines"_test = [] {
+      std::string yaml = R"(%YAML 1.2
+
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 42);
+   };
+
+   // YAML 1.1 should be accepted (per spec)
+   "yaml_directive_version_1_1"_test = [] {
+      std::string yaml = R"(%YAML 1.1
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 42);
+   };
+
+   // Higher minor versions should be accepted (per spec: process with warning)
+   "yaml_directive_version_1_3"_test = [] {
+      std::string yaml = R"(%YAML 1.3
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 42);
+   };
+
+   // Duplicate %YAML directive is an error (per spec)
+   "yaml_directive_duplicate_error"_test = [] {
+      std::string yaml = R"(%YAML 1.2
+%YAML 1.2
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(bool(ec)) << "Duplicate %YAML directive should be an error";
+   };
+
+   // %YAML with major version > 1 should be rejected (per spec)
+   "yaml_directive_major_version_2_error"_test = [] {
+      std::string yaml = R"(%YAML 2.0
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(bool(ec)) << "%YAML 2.0 should be rejected";
+   };
+
+   // %YAML with major version 3 should be rejected
+   "yaml_directive_major_version_3_error"_test = [] {
+      std::string yaml = R"(%YAML 3.0
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(bool(ec)) << "%YAML 3.0 should be rejected";
+   };
+
+   // Unknown directives should be silently ignored (per spec)
+   "yaml_directive_unknown_ignored"_test = [] {
+      std::string yaml = R"(%FOOBAR some params here
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 42);
+   };
+
+   // Multiple unknown directives should be ignored
+   "yaml_directive_multiple_unknown_ignored"_test = [] {
+      std::string yaml = R"(%FOO bar
+%BAZ qux
+%YAML 1.2
+%ANOTHER directive
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 42);
+   };
+
+   // %YAML 1.0 should be accepted (major version 1)
+   "yaml_directive_version_1_0"_test = [] {
+      std::string yaml = R"(%YAML 1.0
+---
+x: 42
+y: 3.14
+name: test)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 42);
+   };
 };
 
 // ============================================================
