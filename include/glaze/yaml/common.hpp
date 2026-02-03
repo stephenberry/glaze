@@ -473,8 +473,105 @@ namespace glz::yaml
       return it == end || *it == '\n' || *it == '\r';
    }
 
-   // Skip document start marker (---) if present at beginning
-   // Handles: ---, ---\n, --- comment\n, etc.
+   // Skip YAML directives (%YAML, %TAG, etc.) and document start marker (---)
+   // YAML directives are lines starting with % that appear before ---
+   // Handles: %YAML 1.2\n---\ndata, %TAG...\n---\ndata, ---, ---\n, --- comment\n, etc.
+   //
+   // Per YAML 1.2.2 spec:
+   // - It is an error to specify more than one %YAML directive for the same document
+   // - Documents with %YAML major version > 1 should be rejected
+   // - Unknown directives should be ignored (with warning, but we silently skip)
+   template <class It, class End, class Ctx>
+   GLZ_ALWAYS_INLINE void skip_document_start(It&& it, End end, Ctx& ctx) noexcept
+   {
+      // Skip any leading whitespace and newlines
+      while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
+         if (*it == '\n' || *it == '\r') {
+            skip_newline(it, end);
+         }
+         else {
+            ++it;
+         }
+      }
+
+      // Track if we've seen a %YAML directive (duplicates are an error per spec)
+      bool seen_yaml_directive = false;
+
+      // Process YAML directives (lines starting with %) until we hit --- or content
+      // Directives must appear at the start of a line and before ---
+      while (it != end && *it == '%') {
+         ++it; // Skip the '%'
+
+         // Parse directive name
+         auto name_start = it;
+         while (it != end && *it != ' ' && *it != '\t' && *it != '\n' && *it != '\r') {
+            ++it;
+         }
+         std::string_view directive_name(name_start, static_cast<size_t>(it - name_start));
+
+         // Check for %YAML directive
+         if (directive_name == "YAML") {
+            // Error on duplicate %YAML directive (per spec: "It is an error to specify
+            // more than one YAML directive for the same document")
+            if (seen_yaml_directive) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            seen_yaml_directive = true;
+
+            // Skip whitespace before version
+            while (it != end && (*it == ' ' || *it == '\t')) {
+               ++it;
+            }
+
+            // Parse major version number
+            if (it != end && *it >= '0' && *it <= '9') {
+               int major_version = 0;
+               while (it != end && *it >= '0' && *it <= '9') {
+                  major_version = major_version * 10 + (*it - '0');
+                  ++it;
+               }
+
+               // Check for major version > 1 (per spec: should be rejected)
+               if (major_version > 1) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+         }
+         // %TAG and other directives are silently skipped (per spec: should be ignored)
+
+         // Skip to end of directive line
+         while (it != end && *it != '\n' && *it != '\r') {
+            ++it;
+         }
+         // Skip the newline
+         skip_newline(it, end);
+         // Skip any blank lines or whitespace between directives
+         while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
+            if (*it == '\n' || *it == '\r') {
+               skip_newline(it, end);
+            }
+            else {
+               ++it;
+            }
+         }
+      }
+
+      // Check for ---
+      if (end - it >= 3 && it[0] == '-' && it[1] == '-' && it[2] == '-') {
+         auto after = it + 3;
+         // Must be followed by whitespace, newline, or end
+         if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' || *after == '#') {
+            it = after;
+            // Skip rest of line (whitespace and optional comment)
+            skip_ws_and_comment(it, end);
+            skip_newline(it, end);
+         }
+      }
+   }
+
+   // Overload without context for backwards compatibility (no error checking)
    template <class It, class End>
    GLZ_ALWAYS_INLINE void skip_document_start(It&& it, End end) noexcept
    {
@@ -488,13 +585,29 @@ namespace glz::yaml
          }
       }
 
+      // Skip YAML directives (lines starting with %) until we hit --- or content
+      while (it != end && *it == '%') {
+         // Skip to end of directive line
+         while (it != end && *it != '\n' && *it != '\r') {
+            ++it;
+         }
+         skip_newline(it, end);
+         // Skip any blank lines
+         while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
+            if (*it == '\n' || *it == '\r') {
+               skip_newline(it, end);
+            }
+            else {
+               ++it;
+            }
+         }
+      }
+
       // Check for ---
       if (end - it >= 3 && it[0] == '-' && it[1] == '-' && it[2] == '-') {
          auto after = it + 3;
-         // Must be followed by whitespace, newline, or end
          if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' || *after == '#') {
             it = after;
-            // Skip rest of line (whitespace and optional comment)
             skip_ws_and_comment(it, end);
             skip_newline(it, end);
          }
