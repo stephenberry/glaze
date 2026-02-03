@@ -23,6 +23,10 @@ namespace glz
    // Using value 3 (next available after BEVE=1, CBOR=2)
    inline constexpr uint32_t ZMEM = 3;
 
+   // ZMEM requires little-endian byte order for zero-copy memory access
+   static_assert(std::endian::native == std::endian::little,
+                 "ZMEM format requires a little-endian architecture");
+
    namespace zmem
    {
       // ============================================================================
