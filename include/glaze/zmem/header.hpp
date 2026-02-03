@@ -58,7 +58,7 @@ namespace glz
       // Wire Format Types
       // ============================================================================
 
-      // Vector reference stored in inline section for complex structs
+      // Vector reference stored in inline section for variable structs
       struct vector_ref
       {
          uint64_t offset; // Byte offset to array data (relative to byte 8)
@@ -149,7 +149,7 @@ namespace glz
       template <class T>
       inline constexpr bool is_zmem_optional_v = is_zmem_optional<T>::value;
 
-      // Check if a type is a std::vector (which makes struct complex)
+      // Check if a type is a std::vector (which makes struct variable)
       template <class T>
       struct is_std_vector : std::false_type {};
 
@@ -159,7 +159,7 @@ namespace glz
       template <class T>
       inline constexpr bool is_std_vector_v = is_std_vector<T>::value;
 
-      // Check if a type is a std::string (variable-length, makes struct complex)
+      // Check if a type is a std::string (variable-length, makes struct variable)
       template <class T>
       struct is_std_string : std::false_type {};
 
@@ -203,23 +203,23 @@ namespace glz
       inline constexpr bool is_std_array_v = is_std_array<T>::value;
 
       // ============================================================================
-      // Simple vs Complex Struct Detection
+      // Fixed vs Variable Type Detection
       // ============================================================================
 
-      // A type is "simple" in ZMEM if it's trivially copyable
-      // (no vectors, no std::string, no complex nested types)
+      // A type is "fixed" in ZMEM if it's trivially copyable
+      // (no vectors, no std::string, no variable nested types)
 
       // Forward declaration for recursive check
       template <class T>
-      struct is_simple_type;
+      struct is_fixed_type;
 
-      // Primitives are simple
+      // Primitives are fixed
       template <class T>
       concept zmem_primitive = std::is_arithmetic_v<T> || std::is_enum_v<T>;
 
-      // Check if type is simple (can be memcpy'd directly)
+      // Check if type is fixed (can be memcpy'd directly)
       template <class T>
-      struct is_simple_type
+      struct is_fixed_type
       {
          static constexpr bool value =
             std::is_trivially_copyable_v<T> &&
@@ -228,11 +228,11 @@ namespace glz
       };
 
       template <class T>
-      inline constexpr bool is_simple_type_v = is_simple_type<T>::value;
+      inline constexpr bool is_fixed_type_v = is_fixed_type<T>::value;
 
-      // Complex types contain vectors or variable-length strings
+      // Variable types contain vectors or variable-length strings
       template <class T>
-      inline constexpr bool is_complex_type_v = !is_simple_type_v<T>;
+      inline constexpr bool is_variable_type_v = !is_fixed_type_v<T>;
 
       // ============================================================================
       // Stack Allocation Thresholds

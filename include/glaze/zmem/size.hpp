@@ -44,14 +44,14 @@ namespace glz
       // ========================================================================
 
       template <class T, std::size_t N>
-         requires is_simple_type_v<T>
+         requires is_fixed_type_v<T>
       GLZ_ALWAYS_INLINE constexpr size_t compute_size(const T (&)[N]) noexcept
       {
          return sizeof(T) * N;
       }
 
       template <class T, std::size_t N>
-         requires is_simple_type_v<T>
+         requires is_fixed_type_v<T>
       GLZ_ALWAYS_INLINE constexpr size_t compute_size(const std::array<T, N>&) noexcept
       {
          return sizeof(T) * N;
@@ -81,9 +81,9 @@ namespace glz
       // Size computation for vectors
       // ========================================================================
 
-      // Simple element type: count (8) + elements
+      // Fixed element type: count (8) + elements
       template <class T, class Alloc>
-         requires is_simple_type_v<T>
+         requires is_fixed_type_v<T>
       GLZ_ALWAYS_INLINE size_t compute_size(const std::vector<T, Alloc>& v) noexcept
       {
          return 8 + v.size() * sizeof(T);
@@ -91,12 +91,12 @@ namespace glz
 
       // Forward declarations for mutually recursive size computation
       template <class T>
-         requires(!is_simple_type_v<T> && !is_std_array_v<T> && (glz::reflectable<T> || glz::glaze_object_t<T>))
+         requires(!is_fixed_type_v<T> && !is_std_array_v<T> && (glz::reflectable<T> || glz::glaze_object_t<T>))
       size_t compute_size(const T& value) noexcept;
 
-      // Complex element type: count (8) + offset table + elements
+      // Variable element type: count (8) + offset table + elements
       template <class T, class Alloc>
-         requires(!is_simple_type_v<T>)
+         requires(!is_fixed_type_v<T>)
       size_t compute_size(const std::vector<T, Alloc>& v) noexcept
       {
          const size_t count = v.size();
@@ -133,7 +133,7 @@ namespace glz
       // ========================================================================
 
       template <class T, std::size_t Extent>
-         requires is_simple_type_v<T>
+         requires is_fixed_type_v<T>
       GLZ_ALWAYS_INLINE size_t compute_size(const std::span<T, Extent>& s) noexcept
       {
          if constexpr (Extent == std::dynamic_extent) {
@@ -149,19 +149,19 @@ namespace glz
       // ========================================================================
 
       template <class K, class V>
-         requires is_simple_type_v<V>
+         requires is_fixed_type_v<V>
       GLZ_ALWAYS_INLINE size_t compute_size(const std::pair<K, V>&) noexcept
       {
-         // Simple pair: key alignment + key + value alignment + value
+         // Fixed pair: key alignment + key + value alignment + value
          // For size computation, we use worst-case alignment
          return sizeof(K) + (alignof(V) - 1) + sizeof(V);
       }
 
       template <class K, class V>
-         requires(!is_simple_type_v<V>)
+         requires(!is_fixed_type_v<V>)
       size_t compute_size(const std::pair<K, V>& p) noexcept
       {
-         // Complex value: key + value (no alignment padding in complex maps)
+         // Variable value: key + value (no alignment padding in variable value maps)
          return compute_size(p.first) + compute_size(p.second);
       }
 
@@ -169,9 +169,9 @@ namespace glz
       // Size computation for maps
       // ========================================================================
 
-      // Simple value type
+      // Fixed value type
       template <class K, class V, class Cmp, class Alloc>
-         requires is_simple_type_v<V>
+         requires is_fixed_type_v<V>
       size_t compute_size(const std::map<K, V, Cmp, Alloc>& m) noexcept
       {
          size_t total = 8;  // count
@@ -182,9 +182,9 @@ namespace glz
          return total;
       }
 
-      // Complex value type
+      // Variable value type
       template <class K, class V, class Cmp, class Alloc>
-         requires(!is_simple_type_v<V>)
+         requires(!is_fixed_type_v<V>)
       size_t compute_size(const std::map<K, V, Cmp, Alloc>& m) noexcept
       {
          const size_t count = m.size();
@@ -201,18 +201,18 @@ namespace glz
       }
 
       // ========================================================================
-      // Size computation for simple structs (trivially copyable)
+      // Size computation for fixed structs (trivially copyable)
       // ========================================================================
 
       template <class T>
-         requires(std::is_aggregate_v<T> && is_simple_type_v<T> && !is_std_array_v<T>)
+         requires(std::is_aggregate_v<T> && is_fixed_type_v<T> && !is_std_array_v<T>)
       GLZ_ALWAYS_INLINE constexpr size_t compute_size(const T&) noexcept
       {
          return sizeof(T);
       }
 
       // ========================================================================
-      // Size computation for complex structs
+      // Size computation for variable structs
       // ========================================================================
 
       // Member access helper for size computation (works for both reflectable and glaze_object_t)
@@ -227,10 +227,10 @@ namespace glz
       }
 
       template <class T>
-         requires(!is_simple_type_v<T> && !is_std_array_v<T> && (glz::reflectable<T> || glz::glaze_object_t<T>))
+         requires(!is_fixed_type_v<T> && !is_std_array_v<T> && (glz::reflectable<T> || glz::glaze_object_t<T>))
       size_t compute_size(const T& value) noexcept
       {
-         // Complex struct: size header (8) + inline section + variable section
+         // Variable struct: size header (8) + inline section + variable section
          size_t total = 8;  // size header
 
          constexpr auto N = reflect<T>::size;
@@ -240,7 +240,7 @@ namespace glz
             decltype(auto) member = access_member_for_size<T, I>(value);
             using MemberType = field_t<T, I>;
 
-            if constexpr (is_simple_type_v<MemberType>) {
+            if constexpr (is_fixed_type_v<MemberType>) {
                total += sizeof(MemberType);
             }
             else if constexpr (is_std_vector_v<MemberType>) {
@@ -248,7 +248,7 @@ namespace glz
                total += 16;
                // Variable section: vector data
                using ElemType = typename MemberType::value_type;
-               if constexpr (is_simple_type_v<ElemType>) {
+               if constexpr (is_fixed_type_v<ElemType>) {
                   total += member.size() * sizeof(ElemType);
                }
                else {
@@ -264,7 +264,7 @@ namespace glz
                total += member.size();
             }
             else {
-               // Nested complex type
+               // Nested variable type
                total += compute_size(member);
             }
          });

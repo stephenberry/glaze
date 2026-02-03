@@ -15,7 +15,7 @@ using namespace ut;
 // Test Structs
 // ============================================================================
 
-// Simple struct - trivially copyable (zero overhead serialization)
+// Fixed struct - trivially copyable (zero overhead serialization)
 struct Point {
    float x;
    float y;
@@ -37,7 +37,7 @@ struct Color {
 };
 static_assert(sizeof(Color) == 4);
 
-// Simple struct with padding
+// Fixed struct with padding
 struct Mixed {
    uint8_t a;
    // padding
@@ -48,25 +48,25 @@ struct Mixed {
 };
 static_assert(sizeof(Mixed) == 12);
 
-// Simple struct with fixed array
+// Fixed struct with fixed array
 struct Matrix2x2 {
    float data[4];
 };
 static_assert(sizeof(Matrix2x2) == 16);
 
-// Complex struct - has vector field
+// Variable struct - has vector field
 struct Entity {
    uint64_t id;
    std::vector<float> weights;
 };
 
-// Complex struct with string
+// Variable struct with string
 struct LogEntry {
    uint64_t timestamp;
    std::string message;
 };
 
-// Nested simple struct
+// Nested fixed struct
 struct Transform {
    Vec3 position;
    Vec3 rotation;
@@ -74,8 +74,8 @@ struct Transform {
 };
 static_assert(sizeof(Transform) == 36);
 
-// Complex struct for map value testing
-struct MapComplexValue {
+// Variable struct for map value testing
+struct MapVariableValue {
    std::string name;
    std::vector<int32_t> values;
 };
@@ -161,13 +161,13 @@ suite primitives_tests = [] {
    };
 };
 
-suite simple_struct_tests = [] {
+suite fixed_struct_tests = [] {
    "point_zero_overhead"_test = [] {
       std::string buffer;
       Point p{1.0f, 2.0f};
       auto err = glz::write_zmem(p, buffer);
       expect(!err);
-      expect(buffer.size() == sizeof(Point)) << "Simple struct should have zero overhead";
+      expect(buffer.size() == sizeof(Point)) << "Fixed struct should have zero overhead";
 
       Point result{};
       err = glz::read_zmem(result, buffer);
@@ -207,7 +207,7 @@ suite simple_struct_tests = [] {
       expect(result.d == m.d);
    };
 
-   "nested_simple_struct"_test = [] {
+   "nested_fixed_struct"_test = [] {
       std::string buffer;
       Transform t{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
       auto err = glz::write_zmem(t, buffer);
@@ -311,7 +311,7 @@ suite vector_tests = [] {
       expect(result.empty());
    };
 
-   "vector_of_simple_structs"_test = [] {
+   "vector_of_fixed_structs"_test = [] {
       std::string buffer;
       std::vector<Point> v = {{1, 2}, {3, 4}, {5, 6}};
       auto err = glz::write_zmem(v, buffer);
@@ -437,7 +437,7 @@ suite optional_tests = [] {
 };
 
 suite map_tests = [] {
-   "map_simple_values"_test = [] {
+   "map_fixed_values"_test = [] {
       std::string buffer;
       std::map<int32_t, float> m = {{1, 1.0f}, {2, 2.0f}, {3, 3.0f}};
       auto err = glz::write_zmem(m, buffer);
@@ -481,8 +481,8 @@ suite map_tests = [] {
       expect(it->first == 3);
    };
 
-   "map_complex_values_string"_test = [] {
-      // Map with string values (complex type)
+   "map_variable_values_string"_test = [] {
+      // Map with string values (variable type)
       std::string buffer;
       std::map<int32_t, std::string> m = {
          {1, "hello"},
@@ -501,8 +501,8 @@ suite map_tests = [] {
       expect(result[3] == "test");
    };
 
-   "map_complex_values_vector"_test = [] {
-      // Map with vector values (complex type)
+   "map_variable_values_vector"_test = [] {
+      // Map with vector values (variable type)
       std::string buffer;
       std::map<int32_t, std::vector<int32_t>> m = {
          {1, {10, 20, 30}},
@@ -521,8 +521,8 @@ suite map_tests = [] {
       expect(result[3] == std::vector<int32_t>{60, 70, 80, 90});
    };
 
-   "map_complex_empty"_test = [] {
-      // Empty map with complex value type
+   "map_variable_empty"_test = [] {
+      // Empty map with variable value type
       std::string buffer;
       std::map<int32_t, std::string> m;
       auto err = glz::write_zmem(m, buffer);
@@ -534,8 +534,8 @@ suite map_tests = [] {
       expect(result.empty());
    };
 
-   "map_complex_single_entry"_test = [] {
-      // Single entry map with complex value
+   "map_variable_single_entry"_test = [] {
+      // Single entry map with variable value
       std::string buffer;
       std::map<uint64_t, std::string> m = {{42, "answer to everything"}};
       auto err = glz::write_zmem(m, buffer);
@@ -548,10 +548,10 @@ suite map_tests = [] {
       expect(result[42] == "answer to everything");
    };
 
-   "map_complex_nested_struct"_test = [] {
+   "map_variable_nested_struct"_test = [] {
       // Map with struct values containing vectors
       std::string buffer;
-      std::map<int32_t, MapComplexValue> m = {
+      std::map<int32_t, MapVariableValue> m = {
          {1, {"first", {1, 2, 3}}},
          {2, {"second", {4, 5}}},
          {3, {"third", {}}}
@@ -559,7 +559,7 @@ suite map_tests = [] {
       auto err = glz::write_zmem(m, buffer);
       expect(!err);
 
-      std::map<int32_t, MapComplexValue> result;
+      std::map<int32_t, MapVariableValue> result;
       err = glz::read_zmem(result, buffer);
       expect(!err);
       expect(result.size() == 3u);
@@ -607,7 +607,7 @@ suite layout_tests = [] {
 };
 
 suite wire_format_tests = [] {
-   "simple_struct_exact_bytes"_test = [] {
+   "fixed_struct_exact_bytes"_test = [] {
       Point p{1.0f, 2.0f};
       std::string buffer;
       auto err = glz::write_zmem(p, buffer);
@@ -655,7 +655,7 @@ suite wire_format_tests = [] {
 // glaze_object_t Tests (types with glz::meta metadata)
 // ============================================================================
 
-// Simple struct with explicit glaze metadata (not reflectable)
+// Fixed struct with explicit glaze metadata (not reflectable)
 struct MetaPoint {
    float x_coord;
    float y_coord;
@@ -670,7 +670,7 @@ struct glz::meta<MetaPoint> {
    );
 };
 
-// Complex struct with glaze metadata
+// Variable struct with glaze metadata
 struct MetaEntity {
    uint64_t entity_id;
    std::string entity_name;
@@ -705,13 +705,13 @@ struct glz::meta<MetaTransform> {
 };
 
 suite glaze_object_tests = [] {
-   "meta_simple_struct_roundtrip"_test = [] {
+   "meta_fixed_struct_roundtrip"_test = [] {
       std::string buffer;
       MetaPoint p{3.14f, 2.71f};
       auto err = glz::write_zmem(p, buffer);
       expect(!err);
-      // Simple glaze_object_t should have zero overhead (same as reflectable)
-      expect(buffer.size() == sizeof(MetaPoint)) << "Simple meta struct should have zero overhead";
+      // Fixed glaze_object_t should have zero overhead (same as reflectable)
+      expect(buffer.size() == sizeof(MetaPoint)) << "Fixed meta struct should have zero overhead";
 
       MetaPoint result{};
       err = glz::read_zmem(result, buffer);
@@ -720,7 +720,7 @@ suite glaze_object_tests = [] {
       expect(result.y_coord == p.y_coord);
    };
 
-   "meta_complex_struct_roundtrip"_test = [] {
+   "meta_variable_struct_roundtrip"_test = [] {
       std::string buffer;
       MetaEntity entity{42, "TestEntity", {1, 2, 3, 4, 5}};
       auto err = glz::write_zmem(entity, buffer);

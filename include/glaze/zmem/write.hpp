@@ -112,12 +112,12 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(const T (&value)[N], is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr bool unchecked = is_write_unchecked<Opts>();
-         if constexpr (zmem::is_simple_type_v<T>) {
-            // For simple element types, write contiguously
+         if constexpr (zmem::is_fixed_type_v<T>) {
+            // For fixed element types, write contiguously
             zmem::write_bytes<unchecked>(value, sizeof(T) * N, b, ix);
          }
          else {
-            // For complex element types, serialize each element
+            // For variable element types, serialize each element
             for (std::size_t i = 0; i < N; ++i) {
                to<ZMEM, T>::template op<Opts>(value[i], ctx, b, ix);
             }
@@ -133,7 +133,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(const std::array<T, N>& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr bool unchecked = is_write_unchecked<Opts>();
-         if constexpr (zmem::is_simple_type_v<T>) {
+         if constexpr (zmem::is_fixed_type_v<T>) {
             zmem::write_bytes<unchecked>(value.data(), sizeof(T) * N, b, ix);
          }
          else {
@@ -172,9 +172,9 @@ namespace glz
       }
    };
 
-   // std::vector - simple element types (contiguous)
+   // std::vector - fixed element types (contiguous)
    template <class T, class Alloc>
-      requires zmem::is_simple_type_v<T>
+      requires zmem::is_fixed_type_v<T>
    struct to<ZMEM, std::vector<T, Alloc>> final
    {
       template <auto Opts, class B>
@@ -192,9 +192,9 @@ namespace glz
       }
    };
 
-   // std::vector - complex element types (offset table + self-contained elements)
+   // std::vector - variable element types (offset table + self-contained elements)
    template <class T, class Alloc>
-      requires(!zmem::is_simple_type_v<T>)
+      requires(!zmem::is_fixed_type_v<T>)
    struct to<ZMEM, std::vector<T, Alloc>> final
    {
       template <auto Opts, class B>
@@ -208,7 +208,7 @@ namespace glz
             return;
          }
 
-         // For complex elements, we need an offset table
+         // For variable elements, we need an offset table
          // Reserve space for offset table: (count + 1) * 8 bytes
          const size_t offset_table_start = ix;
          const size_t offset_table_size = (count + 1) * sizeof(uint64_t);
@@ -296,7 +296,7 @@ namespace glz
 
    // std::span (for read-only views)
    template <class T, std::size_t Extent>
-      requires zmem::is_simple_type_v<T>
+      requires zmem::is_fixed_type_v<T>
    struct to<ZMEM, std::span<T, Extent>> final
    {
       template <auto Opts, class B>
@@ -345,8 +345,8 @@ namespace glz
                                        is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr bool unchecked = is_write_unchecked<Opts>();
-         if constexpr (zmem::is_simple_type_v<V>) {
-            // Simple map: count + entries (fixed-size, no offset table needed)
+         if constexpr (zmem::is_fixed_type_v<V>) {
+            // Fixed value map: count + entries (fixed-size, no offset table needed)
             const uint64_t count = value.size();
             zmem::write_value<unchecked>(count, b, ix);
 
@@ -355,7 +355,7 @@ namespace glz
             }
          }
          else {
-            // Complex map format:
+            // Variable value map format:
             // [size:8][count:8][offset_table:(count+1)*8][entries...]
             // This enables O(log N) binary search on sorted keys
 
@@ -400,14 +400,14 @@ namespace glz
             }
 
             // Serialize each entry and record offsets
-            // For complex maps, serialize key and value directly without alignment padding
-            // (the complex value's 8-byte header provides natural alignment)
+            // For variable value maps, serialize key and value directly without alignment padding
+            // (the variable value's 8-byte header provides natural alignment)
             size_t entry_idx = 0;
             for (const auto& [k, v] : value) {
                offsets[entry_idx++] = ix - data_section_start;
                // Write key directly
                to<ZMEM, K>::template op<Opts>(k, ctx, b, ix);
-               // Write value directly (complex value has its own size header)
+               // Write value directly (variable value has its own size header)
                to<ZMEM, V>::template op<Opts>(v, ctx, b, ix);
             }
             offsets[count] = ix - data_section_start; // Sentinel
@@ -446,28 +446,28 @@ namespace glz
    };
 
    // ============================================================================
-   // Simple Struct Serialization (Trivially Copyable)
+   // Fixed Struct Serialization (Trivially Copyable)
    // ============================================================================
 
-   // For simple aggregate types (trivially copyable structs)
+   // For fixed aggregate types (trivially copyable structs)
    template <class T>
-      requires(std::is_aggregate_v<T> && zmem::is_simple_type_v<T> && !zmem::is_std_array_v<T>)
+      requires(std::is_aggregate_v<T> && zmem::is_fixed_type_v<T> && !zmem::is_std_array_v<T>)
    struct to<ZMEM, T> final
    {
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&&, B&& b, auto& ix)
       {
          constexpr bool unchecked = is_write_unchecked<Opts>();
-         // Simple struct: direct memcpy with zero overhead
+         // Fixed struct: direct memcpy with zero overhead
          zmem::write_bytes<unchecked>(&value, sizeof(T), b, ix);
       }
    };
 
    // ============================================================================
-   // Complex Struct Serialization (Has Vectors/Strings)
+   // Variable Struct Serialization (Has Vectors/Strings)
    // ============================================================================
 
-   // Complex structs need reflection to handle inline and variable sections
+   // Variable structs need reflection to handle inline and variable sections
    // This requires glaze metadata to be defined for the struct
    //
    // OPTIMIZATION: Single-pass serialization with compile-time layout
@@ -480,7 +480,7 @@ namespace glz
    struct inline_section_size_calculator;
 
    template <class T>
-      requires(!zmem::is_simple_type_v<T> && !zmem::is_std_array_v<T>
+      requires(!zmem::is_fixed_type_v<T> && !zmem::is_std_array_v<T>
                && (glz::reflectable<T> || glz::glaze_object_t<T>))
    struct to<ZMEM, T> final
    {
@@ -542,8 +542,8 @@ namespace glz
       static consteval size_t member_inline_size() {
          using MemberType = member_type_at<I>;
 
-         if constexpr (zmem::is_simple_type_v<MemberType>) {
-            // Simple types: direct sizeof
+         if constexpr (zmem::is_fixed_type_v<MemberType>) {
+            // Fixed types: direct sizeof
             return sizeof(MemberType);
          }
          else if constexpr (zmem::is_std_vector_v<MemberType> || zmem::is_std_string_v<MemberType>) {
@@ -551,7 +551,7 @@ namespace glz
             return 16;
          }
          else if constexpr (std::is_aggregate_v<MemberType> && !zmem::is_std_array_v<MemberType>) {
-            // Nested complex type: 8-byte size header + its inline section
+            // Nested variable type: 8-byte size header + its inline section
             return 8 + inline_section_size_calculator<MemberType>::value;
          }
          else {
@@ -617,7 +617,7 @@ namespace glz
 
             if (count > 0) {
                using ElemType = typename MemberType::value_type;
-               if constexpr (zmem::is_simple_type_v<ElemType>) {
+               if constexpr (zmem::is_fixed_type_v<ElemType>) {
                   zmem::write_bytes<unchecked>(member.data(), sizeof(ElemType) * count, b, ix);
                }
                else {
@@ -655,7 +655,7 @@ namespace glz
       {
          constexpr bool unchecked = is_write_unchecked<Opts>();
 
-         // Complex struct format:
+         // Variable struct format:
          // [size:8][inline section][variable section]
 
          // Pre-reserve buffer space using compile-time inline section size
@@ -686,8 +686,8 @@ namespace glz
             decltype(auto) member = access_member<I>(value);
             using MemberType = member_type_at<I>;
 
-            if constexpr (zmem::is_simple_type_v<MemberType>) {
-               // Simple member: write inline (direct memcpy, no bounds check)
+            if constexpr (zmem::is_fixed_type_v<MemberType>) {
+               // Fixed member: write inline (direct memcpy, no bounds check)
                std::memcpy(b.data() + ix, &member, sizeof(MemberType));
                ix += sizeof(MemberType);
             }
@@ -698,7 +698,7 @@ namespace glz
                ix += 16;
             }
             else {
-               // Nested complex type: recursive serialization
+               // Nested variable type: recursive serialization
                to<ZMEM, MemberType>::template op<Opts>(member, ctx, b, ix);
             }
          });
@@ -721,17 +721,17 @@ namespace glz
    };
 
    // ============================================================================
-   // Inline Section Size Calculator (for recursive nested complex types)
+   // Inline Section Size Calculator (for recursive nested variable types)
    // ============================================================================
 
-   // Primary template handles complex aggregate types with reflection support
+   // Primary template handles variable aggregate types with reflection support
    // This is the only case where inline_section_size_calculator should be used
-   // (nested complex types within a complex struct)
+   // (nested variable types within a variable struct)
    template <class T>
    struct inline_section_size_calculator
    {
       static constexpr size_t value = []() consteval {
-         if constexpr (!zmem::is_simple_type_v<T> && !zmem::is_std_array_v<T> &&
+         if constexpr (!zmem::is_fixed_type_v<T> && !zmem::is_std_array_v<T> &&
                        (glz::reflectable<T> || glz::glaze_object_t<T>)) {
             return to<ZMEM, T>::InlineSectionSize;
          }

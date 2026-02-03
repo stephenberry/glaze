@@ -1,13 +1,13 @@
 # ZMEM (Zero-Copy Memory Format)
 
-ZMEM is a high-performance binary serialization format designed for maximum performance with **zero overhead for simple structs** and efficient handling of complex types with vectors and strings.
+ZMEM is a high-performance binary serialization format designed for maximum performance with **zero overhead for fixed structs** and efficient handling of variable types with vectors and strings.
 
 ## Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **Zero overhead** | Simple structs serialize with exact `sizeof()` bytes - no headers, no tags |
-| **Zero-copy reads** | Simple types can be read directly from the buffer without copying |
+| **Zero overhead** | Fixed structs serialize with exact `sizeof()` bytes - no headers, no tags |
+| **Zero-copy reads** | Fixed types can be read directly from the buffer without copying |
 | **Deterministic** | Same logical value always produces identical bytes |
 | **Little-endian** | Explicit wire format specification for cross-platform compatibility |
 | **Pre-allocation** | Compute exact serialized size before writing to eliminate resize checks |
@@ -29,7 +29,7 @@ For self-describing formats with schema evolution, consider [BEVE](./binary.md) 
 ```cpp
 #include "glaze/zmem.hpp"
 
-// Simple struct - trivially copyable (zero overhead)
+// Fixed struct - trivially copyable (zero overhead)
 struct Point {
    float x;
    float y;
@@ -52,18 +52,18 @@ if (!ec) {
 }
 ```
 
-## Simple vs Complex Types
+## Fixed vs Variable Types
 
 ZMEM distinguishes between two categories of types:
 
-### Simple Types (Zero Overhead)
+### Fixed Types (Zero Overhead)
 
-Simple types are trivially copyable and serialize with **zero overhead** - just their raw bytes:
+Fixed types are trivially copyable and serialize with **zero overhead** - just their raw bytes:
 
 - Primitives: `bool`, `int8_t` through `int64_t`, `uint8_t` through `uint64_t`, `float`, `double`
 - Enums
 - Fixed-size arrays: `T[N]`, `std::array<T, N>`
-- Structs containing only simple types
+- Structs containing only fixed types
 
 ```cpp
 struct Transform {
@@ -79,13 +79,13 @@ glz::write_zmem(t, buffer);
 // buffer.size() == 36 (exact sizeof)
 ```
 
-### Complex Types (With Headers)
+### Variable Types (With Headers)
 
-Complex types contain variable-length data and require headers:
+Variable types contain variable-length data and require headers:
 
-- `std::vector<T>`: 8-byte count + elements (+ offset table for complex elements)
+- `std::vector<T>`: 8-byte count + elements (+ offset table for variable elements)
 - `std::string`: 8-byte length + character data
-- `std::map<K, V>`: Count + entries (+ offset table for complex values)
+- `std::map<K, V>`: Count + entries (+ offset table for variable values)
 - Structs containing vectors or strings: 8-byte size header + inline section + variable section
 
 ```cpp
@@ -192,17 +192,17 @@ glz::write_zmem(std_opt, buffer);
 ZMEM supports `std::map` with sorted keys (required by the format):
 
 ```cpp
-// Simple value type - no offset table needed
-std::map<int32_t, float> simple_map = {{1, 1.0f}, {2, 2.0f}, {3, 3.0f}};
-glz::write_zmem(simple_map, buffer);
+// Fixed value type - no offset table needed
+std::map<int32_t, float> fixed_map = {{1, 1.0f}, {2, 2.0f}, {3, 3.0f}};
+glz::write_zmem(fixed_map, buffer);
 
-// Complex value type - includes offset table for O(log N) binary search
-std::map<int32_t, std::string> complex_map = {
+// Variable value type - includes offset table for O(log N) binary search
+std::map<int32_t, std::string> variable_map = {
    {1, "one"},
    {2, "two"},
    {3, "three"}
 };
-glz::write_zmem(complex_map, buffer);
+glz::write_zmem(variable_map, buffer);
 ```
 
 `std::unordered_map` is also supported - keys are sorted before serialization.
@@ -243,7 +243,7 @@ glz::write_zmem(mp, buffer2);  // 8 bytes
 
 ## Wire Format Specification
 
-### Simple Types
+### Fixed Types
 
 | Type | Wire Size | Format |
 |------|-----------|--------|
@@ -253,20 +253,20 @@ glz::write_zmem(mp, buffer2);  // 8 bytes
 | `int32_t`/`uint32_t`/`float` | 4 bytes | Little-endian |
 | `int64_t`/`uint64_t`/`double` | 8 bytes | Little-endian |
 | `T[N]` | `N * sizeof(T)` | Contiguous elements |
-| Simple struct | `sizeof(T)` | Direct memory layout |
+| Fixed struct | `sizeof(T)` | Direct memory layout |
 
-### Complex Types
+### Variable Types
 
 | Type | Wire Format |
 |------|-------------|
-| `std::vector<T>` (simple T) | `[count:8][elements...]` |
-| `std::vector<T>` (complex T) | `[count:8][offset_table:(count+1)*8][elements...]` |
+| `std::vector<T>` (fixed T) | `[count:8][elements...]` |
+| `std::vector<T>` (variable T) | `[count:8][offset_table:(count+1)*8][elements...]` |
 | `std::string` | `[length:8][chars...]` |
-| Complex struct | `[size:8][inline_section][variable_section]` |
-| `std::map<K,V>` (simple V) | `[count:8][entries...]` |
-| `std::map<K,V>` (complex V) | `[size:8][count:8][offset_table:(count+1)*8][entries...]` |
+| Variable struct | `[size:8][inline_section][variable_section]` |
+| `std::map<K,V>` (fixed V) | `[count:8][entries...]` |
+| `std::map<K,V>` (variable V) | `[size:8][count:8][offset_table:(count+1)*8][entries...]` |
 
-### Complex Struct Layout
+### Variable Struct Layout
 
 For structs containing vectors or strings:
 
@@ -310,13 +310,13 @@ if (ec) {
 
 ## Performance Characteristics
 
-| Operation | Simple Types | Complex Types |
-|-----------|--------------|---------------|
+| Operation | Fixed Types | Variable Types |
+|-----------|-------------|----------------|
 | Write | Single `memcpy` | Header + inline pass + variable pass |
 | Read | Single `memcpy` | Parse headers + extract fields |
 | Size computation | `sizeof(T)` | Traverse structure |
 
-For simple structs, ZMEM achieves the theoretical minimum serialization overhead: zero bytes beyond the data itself.
+For fixed structs, ZMEM achieves the theoretical minimum serialization overhead: zero bytes beyond the data itself.
 
 ## API Reference
 

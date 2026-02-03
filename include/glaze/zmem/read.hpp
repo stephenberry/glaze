@@ -63,7 +63,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(T (&value)[N], is_context auto&& ctx, auto&& it, auto&& end)
       {
-         if constexpr (zmem::is_simple_type_v<T>) {
+         if constexpr (zmem::is_fixed_type_v<T>) {
             const size_t size = sizeof(T) * N;
             if (static_cast<size_t>(end - it) < size) {
                ctx.error = error_code::unexpected_end;
@@ -88,7 +88,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(std::array<T, N>& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
-         if constexpr (zmem::is_simple_type_v<T>) {
+         if constexpr (zmem::is_fixed_type_v<T>) {
             const size_t size = sizeof(T) * N;
             if (static_cast<size_t>(end - it) < size) {
                ctx.error = error_code::unexpected_end;
@@ -147,9 +147,9 @@ namespace glz
       }
    };
 
-   // std::vector - simple element types
+   // std::vector - fixed element types
    template <class T, class Alloc>
-      requires zmem::is_simple_type_v<T>
+      requires zmem::is_fixed_type_v<T>
    struct from<ZMEM, std::vector<T, Alloc>> final
    {
       template <auto Opts>
@@ -180,9 +180,9 @@ namespace glz
       }
    };
 
-   // std::vector - complex element types
+   // std::vector - variable element types
    template <class T, class Alloc>
-      requires(!zmem::is_simple_type_v<T>)
+      requires(!zmem::is_fixed_type_v<T>)
    struct from<ZMEM, std::vector<T, Alloc>> final
    {
       template <auto Opts>
@@ -304,8 +304,8 @@ namespace glz
       {
          value.clear();
 
-         if constexpr (zmem::is_simple_type_v<V>) {
-            // Simple map: count + entries (fixed-size, no offset table)
+         if constexpr (zmem::is_fixed_type_v<V>) {
+            // Fixed value map: count + entries (fixed-size, no offset table)
             if (static_cast<size_t>(end - it) < sizeof(uint64_t)) {
                ctx.error = error_code::unexpected_end;
                return;
@@ -324,7 +324,7 @@ namespace glz
             }
          }
          else {
-            // Complex map format:
+            // Variable value map format:
             // [size:8][count:8][offset_table:(count+1)*8][entries...]
             if (static_cast<size_t>(end - it) < sizeof(uint64_t) * 2) {
                ctx.error = error_code::unexpected_end;
@@ -392,17 +392,17 @@ namespace glz
    };
 
    // ============================================================================
-   // Simple Struct Deserialization
+   // Fixed Struct Deserialization
    // ============================================================================
 
    template <class T>
-      requires(std::is_aggregate_v<T> && zmem::is_simple_type_v<T> && !zmem::is_std_array_v<T>)
+      requires(std::is_aggregate_v<T> && zmem::is_fixed_type_v<T> && !zmem::is_std_array_v<T>)
    struct from<ZMEM, T> final
    {
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
-         // Simple struct: direct memcpy
+         // Fixed struct: direct memcpy
          if (static_cast<size_t>(end - it) < sizeof(T)) {
             ctx.error = error_code::unexpected_end;
             return;
@@ -414,11 +414,11 @@ namespace glz
    };
 
    // ============================================================================
-   // Complex Struct Deserialization
+   // Variable Struct Deserialization
    // ============================================================================
 
    template <class T>
-      requires(!zmem::is_simple_type_v<T> && !zmem::is_std_array_v<T>
+      requires(!zmem::is_fixed_type_v<T> && !zmem::is_std_array_v<T>
                && (glz::reflectable<T> || glz::glaze_object_t<T>))
    struct from<ZMEM, T> final
    {
@@ -442,7 +442,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
-         // Complex struct format: [size:8][inline section][variable section]
+         // Variable struct format: [size:8][inline section][variable section]
 
          if (static_cast<size_t>(end - it) < sizeof(uint64_t)) {
             ctx.error = error_code::unexpected_end;
@@ -469,7 +469,7 @@ namespace glz
             decltype(auto) member = access_member<I>(value);
             using MemberType = member_type_at<I>;
 
-            if constexpr (zmem::is_simple_type_v<MemberType>) {
+            if constexpr (zmem::is_fixed_type_v<MemberType>) {
                from<ZMEM, MemberType>::template op<Opts>(member, ctx, it, struct_end);
             }
             else if constexpr (zmem::is_std_vector_v<MemberType>) {
@@ -491,12 +491,12 @@ namespace glz
 
                if (ref.count > 0) {
                   auto data_it = base + ref.offset;
-                  if constexpr (zmem::is_simple_type_v<ElemType>) {
+                  if constexpr (zmem::is_fixed_type_v<ElemType>) {
                      const size_t data_size = sizeof(ElemType) * ref.count;
                      std::memcpy(member.data(), &(*data_it), data_size);
                   }
                   else {
-                     // Complex elements
+                     // Variable elements
                      for (size_t i = 0; i < ref.count; ++i) {
                         from<ZMEM, ElemType>::template op<Opts>(member[i], ctx, data_it, struct_end);
                         if (bool(ctx.error)) return;
@@ -525,7 +525,7 @@ namespace glz
                }
             }
             else {
-               // Nested complex type
+               // Nested variable type
                from<ZMEM, MemberType>::template op<Opts>(member, ctx, it, struct_end);
             }
          });
