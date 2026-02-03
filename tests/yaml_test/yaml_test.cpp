@@ -4913,4 +4913,539 @@ suite yaml_generic_write_indentation_tests = [] {
    };
 };
 
+// ============================================================
+// Issue #2291: Strings starting with . or + should not be treated as numbers
+// ============================================================
+
+suite yaml_dot_prefix_string_tests = [] {
+   // Test for issue #2291: strings starting with '.' should not be treated as numbers
+   "generic_dot_prefixed_strings"_test = [] {
+      std::string yaml = R"(file_extensions:
+  - .c
+  - .cpp
+  - .h)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("file_extensions"));
+      auto& arr = std::get<glz::generic::array_t>(root.at("file_extensions").data);
+      expect(arr.size() == 3);
+      expect(std::holds_alternative<std::string>(arr[0].data));
+      expect(std::get<std::string>(arr[0].data) == ".c");
+      expect(std::get<std::string>(arr[1].data) == ".cpp");
+      expect(std::get<std::string>(arr[2].data) == ".h");
+   };
+
+   // Test that .inf, .nan are still parsed as numbers in generic context
+   "generic_special_floats_still_work"_test = [] {
+      std::string yaml = R"(values:
+  - .inf
+  - -.inf
+  - .nan)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      auto& arr = std::get<glz::generic::array_t>(root.at("values").data);
+      expect(arr.size() == 3);
+      // In glz::generic, numbers are stored as double
+      expect(std::holds_alternative<double>(arr[0].data));
+      expect(std::isinf(std::get<double>(arr[0].data)));
+      expect(std::get<double>(arr[0].data) > 0);
+      expect(std::holds_alternative<double>(arr[1].data));
+      expect(std::isinf(std::get<double>(arr[1].data)));
+      expect(std::get<double>(arr[1].data) < 0);
+      expect(std::holds_alternative<double>(arr[2].data));
+      expect(std::isnan(std::get<double>(arr[2].data)));
+   };
+
+   // Test for inline comments after values containing special characters
+   "generic_inline_comment_after_value_simple"_test = [] {
+      // Simple inline comment test without backslash
+      std::string yaml = R"(match: hello|world  # This is a comment)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("match"));
+      expect(std::holds_alternative<std::string>(root.at("match").data));
+      expect(std::get<std::string>(root.at("match").data) == "hello|world");
+   };
+
+   "generic_inline_comment_with_regex"_test = [] {
+      // Test with regex-like value containing backslash
+      std::string yaml = R"(match: regex  # comment)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("match"));
+      expect(std::get<std::string>(root.at("match").data) == "regex");
+   };
+
+   // Test + prefixed strings (similar to . issue)
+   "generic_plus_prefixed_strings"_test = [] {
+      std::string yaml = R"(items:
+  - +foo
+  - +bar)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      auto& arr = std::get<glz::generic::array_t>(root.at("items").data);
+      expect(arr.size() == 2);
+      expect(std::holds_alternative<std::string>(arr[0].data));
+      expect(std::get<std::string>(arr[0].data) == "+foo");
+      expect(std::get<std::string>(arr[1].data) == "+bar");
+   };
+
+   // Test that +5 and .5 are still parsed as numbers
+   "generic_plus_and_dot_numbers"_test = [] {
+      std::string yaml = R"(values:
+  - +5
+  - .5
+  - +.5)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      auto& arr = std::get<glz::generic::array_t>(root.at("values").data);
+      expect(arr.size() == 3);
+      expect(std::holds_alternative<double>(arr[0].data));
+      expect(std::get<double>(arr[0].data) == 5.0);
+      expect(std::holds_alternative<double>(arr[1].data));
+      expect(std::get<double>(arr[1].data) == 0.5);
+      expect(std::holds_alternative<double>(arr[2].data));
+      expect(std::get<double>(arr[2].data) == 0.5);
+   };
+};
+
+// ============================================================
+// Issue #2291: Sublime Text syntax file parsing tests
+// ============================================================
+
+suite yaml_sublime_syntax_tests = [] {
+   // Test for issue #2291: inline comment after regex-like value
+   // From Python.sublime-syntax line 410
+   // First, test a simple version without the sequence context
+   "sublime_inline_comment_simple"_test = [] {
+      // First verify parsing works without backslash
+      std::string yaml1 = R"(match: hello|world  # comment)";
+      glz::generic parsed1;
+      auto rec1 = glz::read_yaml(parsed1, yaml1);
+      expect(!rec1) << glz::format_error(rec1, yaml1);
+      auto& root1 = std::get<glz::generic::object_t>(parsed1.data);
+      expect(root1.contains("match"));
+      expect(std::get<std::string>(root1.at("match").data) == "hello|world");
+
+      // Now test with backslash (escaped regex)
+      std::string yaml2 = R"(match: test\Svalue  # comment)";
+      glz::generic parsed2;
+      auto rec2 = glz::read_yaml(parsed2, yaml2);
+      expect(!rec2) << glz::format_error(rec2, yaml2);
+      auto& root2 = std::get<glz::generic::object_t>(parsed2.data);
+      expect(root2.contains("match"));
+      // In raw string, \S is backslash-S
+      expect(std::get<std::string>(root2.at("match").data) == "test\\Svalue");
+   };
+
+   // Test a sequence item with mapping
+   "sublime_sequence_mapping"_test = [] {
+      std::string yaml = R"(- match: hello|world  # comment
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 1);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "hello|world");
+      expect(item.contains("pop"));
+   };
+
+   // Test simpler backslash in sequence
+   "sublime_backslash_in_sequence"_test = [] {
+      std::string yaml = R"(- match: test\Svalue
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 1);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "test\\Svalue");
+   };
+
+   // Test backslash with comment in sequence
+   "sublime_backslash_comment_sequence"_test = [] {
+      std::string yaml = R"(- match: test\S  # comment
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 1);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "test\\S");
+   };
+
+   // Test caret and pipe in sequence
+   "sublime_caret_pipe"_test = [] {
+      std::string yaml = R"(- match: ^|  # comment
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "^|");
+   };
+
+   // Test parentheses in sequence
+   "sublime_parens"_test = [] {
+      std::string yaml = R"(- match: (?=test)  # comment
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "(?=test)");
+   };
+
+   // Test caret-pipe-parens without backslash
+   "sublime_caret_pipe_parens"_test = [] {
+      std::string yaml = R"(- match: ^|(?=test)  # comment
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "^|(?=test)");
+   };
+
+   // Test just parens with backslash
+   "sublime_parens_backslash"_test = [] {
+      std::string yaml = R"(- match: (?=\S)  # comment
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "(?=\\S)");
+   };
+
+   // Test the full pattern without comment
+   "sublime_full_pattern_no_comment"_test = [] {
+      std::string yaml = R"(- match: ^|(?=\S)
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "^|(?=\\S)");
+   };
+
+   // Test reverse order: backslash first, then caret-pipe
+   "sublime_backslash_then_caretpipe"_test = [] {
+      std::string yaml = R"(- match: (?=\S)|^ # comment
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "(?=\\S)|^");
+   };
+
+   // Test separate: caret-pipe-parens plus backslash later
+   "sublime_combo_no_backslash_in_parens"_test = [] {
+      std::string yaml = R"(- match: ^|(?=X)\S # comment
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      expect(std::get<std::string>(item.at("match").data) == "^|(?=X)\\S");
+   };
+
+   // Test as simple key-value (not in sequence)
+   "sublime_pattern_simple_kv"_test = [] {
+      std::string yaml = R"(match: ^|(?=\S)  # comment)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("match"));
+      expect(std::get<std::string>(root.at("match").data) == "^|(?=\\S)");
+   };
+
+   // Test the full context with sequence and backslash
+   "sublime_inline_comment_with_regex"_test = [] {
+      std::string yaml = R"(- match: ^|(?=\S)  # Note: Ensure to highlight shebang
+  pop: 1)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 1);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("match"));
+      // The value should be the regex pattern without the comment
+      expect(std::get<std::string>(item.at("match").data) == "^|(?=\\S)");
+      expect(item.contains("pop"));
+   };
+
+   // Test for issue #2291: file_extensions with dot-prefixed strings
+   "sublime_file_extensions"_test = [] {
+      std::string yaml = R"(file_extensions:
+  - py
+  - py3
+  - pyw
+  - pyi
+  - .pyx
+  - .pxd)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      auto& arr = std::get<glz::generic::array_t>(root.at("file_extensions").data);
+      expect(arr.size() == 6);
+      expect(std::get<std::string>(arr[0].data) == "py");
+      expect(std::get<std::string>(arr[4].data) == ".pyx");
+      expect(std::get<std::string>(arr[5].data) == ".pxd");
+   };
+
+   // Test for issue #2291: block scalar with chomping indicator
+   "sublime_block_scalar_chomping"_test = [] {
+      std::string yaml = R"(first_line_match: |-
+  (?xi:
+    ^ \#! .* \bpython\b
+  ))";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("first_line_match"));
+      auto& val = std::get<std::string>(root.at("first_line_match").data);
+      // Block scalar with strip chomping - no trailing newline
+      expect(val.find("(?xi:") != std::string::npos);
+   };
+
+   // Test for YAML directives
+   "sublime_yaml_directive"_test = [] {
+      std::string yaml = R"(%YAML 1.2
+---
+name: Python
+scope: source.python)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("name"));
+      expect(std::get<std::string>(root.at("name").data) == "Python");
+   };
+
+   // Test for nested structure similar to sublime-syntax contexts
+   "sublime_contexts_structure"_test = [] {
+      std::string yaml = R"(contexts:
+  prototype:
+    - include: scope:source.shell.bash#prototype
+  main:
+    - include: scope:source.shell.bash)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("contexts"));
+      auto& contexts = std::get<glz::generic::object_t>(root.at("contexts").data);
+      expect(contexts.contains("prototype"));
+      expect(contexts.contains("main"));
+   };
+};
+
+// Tests for multiline plain scalar folding (issue #2291)
+suite yaml_multiline_plain_scalar_tests = [] {
+   // Test multiline value where content starts on next line after key
+   "multiline_scope_value"_test = [] {
+      std::string yaml = R"(- match: '(\.)'
+  scope:
+    meta.statement.conditional.case.python
+    keyword.control.conditional.case.python)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 1);
+      auto& item = std::get<glz::generic::object_t>(arr[0].data);
+      expect(item.contains("scope"));
+      // The two lines should be folded with a space
+      expect(std::get<std::string>(item.at("scope").data) ==
+             "meta.statement.conditional.case.python keyword.control.conditional.case.python");
+   };
+
+   // Test that sequence items at same indent don't get folded
+   "sequence_items_not_folded"_test = [] {
+      std::string yaml = R"(- hello
+- world
+- test)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 3);
+      expect(std::get<std::string>(arr[0].data) == "hello");
+      expect(std::get<std::string>(arr[1].data) == "world");
+      expect(std::get<std::string>(arr[2].data) == "test");
+   };
+
+   // Test that mapping keys at same indent don't get folded
+   "mapping_keys_not_folded"_test = [] {
+      std::string yaml = R"(key1: value1
+key2: value2)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.size() == 2);
+      expect(std::get<std::string>(root.at("key1").data) == "value1");
+      expect(std::get<std::string>(root.at("key2").data) == "value2");
+   };
+
+   // Test three-line multiline scalar
+   "three_line_multiline_scalar"_test = [] {
+      std::string yaml = R"(key:
+  line one
+  line two
+  line three)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("key"));
+      expect(std::get<std::string>(root.at("key").data) == "line one line two line three");
+   };
+};
+
+// Tests for boolean-like string values (issue #2291)
+suite yaml_boolean_like_string_tests = [] {
+   // Test that "False\b" is treated as a string, not a boolean
+   "false_with_backslash_b"_test = [] {
+      std::string yaml = R"(match: False\b)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("match"));
+      expect(std::holds_alternative<std::string>(root.at("match").data));
+      expect(std::get<std::string>(root.at("match").data) == "False\\b");
+   };
+
+   // Test that "True\b" is treated as a string, not a boolean
+   "true_with_backslash_b"_test = [] {
+      std::string yaml = R"(match: True\b)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("match"));
+      expect(std::holds_alternative<std::string>(root.at("match").data));
+      expect(std::get<std::string>(root.at("match").data) == "True\\b");
+   };
+
+   // Test that "Null\b" is treated as a string, not null
+   "null_with_backslash_b"_test = [] {
+      std::string yaml = R"(match: Null\b)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("match"));
+      expect(std::holds_alternative<std::string>(root.at("match").data));
+      expect(std::get<std::string>(root.at("match").data) == "Null\\b");
+   };
+
+   // Test that plain "False" is still treated as a boolean
+   "plain_false_is_boolean"_test = [] {
+      std::string yaml = R"(value: False)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("value"));
+      expect(std::holds_alternative<bool>(root.at("value").data));
+      expect(std::get<bool>(root.at("value").data) == false);
+   };
+
+   // Test that plain "True" is still treated as a boolean
+   "plain_true_is_boolean"_test = [] {
+      std::string yaml = R"(value: True)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("value"));
+      expect(std::holds_alternative<bool>(root.at("value").data));
+      expect(std::get<bool>(root.at("value").data) == true);
+   };
+
+   // Test "False" followed by comment is still boolean
+   "false_with_comment_is_boolean"_test = [] {
+      std::string yaml = R"(value: False # comment)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::holds_alternative<bool>(root.at("value").data));
+      expect(std::get<bool>(root.at("value").data) == false);
+   };
+};
+
 int main() { return 0; }
