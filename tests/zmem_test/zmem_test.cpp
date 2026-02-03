@@ -80,6 +80,72 @@ struct MapVariableValue {
    std::vector<int32_t> values;
 };
 
+// Additional structs for lazy_zmem tests
+struct ByteData {
+   uint64_t id;
+   std::vector<uint8_t> bytes;
+};
+
+struct BigData {
+   uint32_t tag;
+   std::vector<uint64_t> values;
+};
+
+struct DoubleData {
+   uint64_t id;
+   std::vector<double> values;
+};
+
+struct MultiString {
+   std::string first;
+   std::string second;
+   std::string third;
+};
+
+struct MultiVector {
+   std::vector<int32_t> a;
+   std::vector<int32_t> b;
+   std::vector<int32_t> c;
+};
+
+struct MixedData {
+   std::string prefix;
+   std::vector<float> values;
+   std::string suffix;
+};
+
+struct FixedBetween {
+   std::string name;
+   uint64_t count;
+   std::vector<int32_t> data;
+};
+
+struct Inner {
+   std::string value;
+};
+
+struct Middle {
+   uint32_t id;
+   Inner inner;
+};
+
+struct Outer {
+   std::string name;
+   Middle middle;
+   std::vector<int32_t> data;
+};
+
+struct AllVariable {
+   std::string a;
+   std::string b;
+   std::vector<uint8_t> c;
+};
+
+struct BinaryContainer {
+   uint64_t id;
+   std::vector<uint8_t> binary;
+};
+
 // ============================================================================
 // Test Suites
 // ============================================================================
@@ -1032,6 +1098,313 @@ suite lazy_zmem_tests = [] {
       expect(weights.size() == 10000u);
       expect(weights[0] == 0.0f);
       expect(weights[9999] == 9999.0f);
+   };
+
+   "lazy_default_view_invalid"_test = [] {
+      glz::lazy_zmem_view<Point> view;
+      expect(!view.valid());
+      expect(view.data() == nullptr);
+      expect(view.size() == 0u);
+   };
+
+   "lazy_unicode_string"_test = [] {
+      LogEntry entry{42, "Hello, \xe4\xb8\x96\xe7\x95\x8c! \xf0\x9f\x8c\x8d"}; // UTF-8: "Hello, 世界! 🌍"
+      std::string buffer;
+      auto err = glz::write_zmem(entry, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<LogEntry>(buffer);
+      std::string_view msg = view.get<1>();
+      expect(msg == entry.message);
+      expect(msg.size() == entry.message.size());
+   };
+
+   "lazy_single_char_string"_test = [] {
+      LogEntry entry{1, "X"};
+      std::string buffer;
+      auto err = glz::write_zmem(entry, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<LogEntry>(buffer);
+      std::string_view msg = view.get<1>();
+      expect(msg == "X");
+      expect(msg.size() == 1u);
+   };
+
+   "lazy_single_element_vector"_test = [] {
+      Entity entity{1, {42.0f}};
+      std::string buffer;
+      auto err = glz::write_zmem(entity, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Entity>(buffer);
+      std::span<const float> weights = view.get<1>();
+      expect(weights.size() == 1u);
+      expect(weights[0] == 42.0f);
+   };
+
+   "lazy_vector_of_fixed_structs"_test = [] {
+      std::vector<Point> points = {{1.0f, 2.0f}, {3.0f, 4.0f}, {5.0f, 6.0f}};
+      std::string buffer;
+      auto err = glz::write_zmem(points, buffer);
+      expect(!err);
+
+      // For top-level vectors, we read count then access data
+      uint64_t count;
+      std::memcpy(&count, buffer.data(), sizeof(uint64_t));
+      expect(count == 3u);
+
+      // Data starts after count (8 bytes)
+      const Point* data = reinterpret_cast<const Point*>(buffer.data() + 8);
+      expect(data[0].x == 1.0f);
+      expect(data[1].y == 4.0f);
+      expect(data[2].x == 5.0f);
+   };
+
+   "lazy_consistency_with_read"_test = [] {
+      // Verify lazy view returns same values as regular read_zmem
+      Person person{12345, "Consistency Test", {10, 20, 30, 40, 50}};
+      std::string buffer;
+      auto err = glz::write_zmem(person, buffer);
+      expect(!err);
+
+      // Read via regular API
+      Person read_result{};
+      err = glz::read_zmem(read_result, buffer);
+      expect(!err);
+
+      // Read via lazy view
+      auto view = glz::lazy_zmem<Person>(buffer);
+      uint64_t lazy_id = view.get<0>();
+      std::string_view lazy_name = view.get<1>();
+      std::span<const int32_t> lazy_scores = view.get<2>();
+
+      // Compare
+      expect(lazy_id == read_result.id);
+      expect(lazy_name == read_result.name);
+      expect(lazy_scores.size() == read_result.scores.size());
+      for (size_t i = 0; i < lazy_scores.size(); ++i) {
+         expect(lazy_scores[i] == read_result.scores[i]);
+      }
+   };
+
+   "lazy_vector_different_types_u8"_test = [] {
+      ByteData data{1, {0x00, 0xFF, 0x42, 0xAB}};
+      std::string buffer;
+      auto err = glz::write_zmem(data, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<ByteData>(buffer);
+      std::span<const uint8_t> bytes = view.get<1>();
+      expect(bytes.size() == 4u);
+      expect(bytes[0] == 0x00u);
+      expect(bytes[1] == 0xFFu);
+      expect(bytes[2] == 0x42u);
+      expect(bytes[3] == 0xABu);
+   };
+
+   "lazy_vector_different_types_u64"_test = [] {
+      BigData data{42, {0x123456789ABCDEF0ULL, 0xFEDCBA9876543210ULL}};
+      std::string buffer;
+      auto err = glz::write_zmem(data, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<BigData>(buffer);
+      std::span<const uint64_t> values = view.get<1>();
+      expect(values.size() == 2u);
+      expect(values[0] == 0x123456789ABCDEF0ULL);
+      expect(values[1] == 0xFEDCBA9876543210ULL);
+   };
+
+   "lazy_vector_doubles"_test = [] {
+      DoubleData data{99, {3.14159265358979, 2.71828182845904, 1.41421356237309}};
+      std::string buffer;
+      auto err = glz::write_zmem(data, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<DoubleData>(buffer);
+      std::span<const double> values = view.get<1>();
+      expect(values.size() == 3u);
+      expect(values[0] == 3.14159265358979);
+      expect(values[1] == 2.71828182845904);
+      expect(values[2] == 1.41421356237309);
+   };
+
+   "lazy_multiple_strings"_test = [] {
+      MultiString data{"Hello", "World", "!"};
+      std::string buffer;
+      auto err = glz::write_zmem(data, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<MultiString>(buffer);
+      expect(view.get<0>() == "Hello");
+      expect(view.get<1>() == "World");
+      expect(view.get<2>() == "!");
+   };
+
+   "lazy_multiple_vectors"_test = [] {
+      MultiVector data{{1, 2}, {3, 4, 5}, {6}};
+      std::string buffer;
+      auto err = glz::write_zmem(data, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<MultiVector>(buffer);
+
+      std::span<const int32_t> a = view.get<0>();
+      expect(a.size() == 2u);
+      expect(a[0] == 1);
+      expect(a[1] == 2);
+
+      std::span<const int32_t> b = view.get<1>();
+      expect(b.size() == 3u);
+      expect(b[0] == 3);
+      expect(b[2] == 5);
+
+      std::span<const int32_t> c = view.get<2>();
+      expect(c.size() == 1u);
+      expect(c[0] == 6);
+   };
+
+   "lazy_mixed_strings_and_vectors"_test = [] {
+      MixedData data{"START", {1.0f, 2.0f, 3.0f}, "END"};
+      std::string buffer;
+      auto err = glz::write_zmem(data, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<MixedData>(buffer);
+      expect(view.get<0>() == "START");
+
+      std::span<const float> values = view.get<1>();
+      expect(values.size() == 3u);
+      expect(values[1] == 2.0f);
+
+      expect(view.get<2>() == "END");
+   };
+
+   "lazy_fixed_between_variable"_test = [] {
+      FixedBetween fb{"test", 42, {1, 2, 3}};
+      std::string buffer;
+      auto err = glz::write_zmem(fb, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<FixedBetween>(buffer);
+      expect(view.get<0>() == "test");
+      expect(view.get<1>() == 42u);
+
+      std::span<const int32_t> data = view.get<2>();
+      expect(data.size() == 3u);
+   };
+
+   "lazy_deeply_nested"_test = [] {
+      Outer outer{"outer", {123, {"inner_value"}}, {10, 20, 30}};
+      std::string buffer;
+      auto err = glz::write_zmem(outer, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Outer>(buffer);
+      expect(view.get<0>() == "outer");
+
+      auto middle_view = view.get<1>();
+      expect(middle_view.get<0>() == 123u);
+
+      auto inner_view = middle_view.get<1>();
+      expect(inner_view.get<0>() == "inner_value");
+
+      std::span<const int32_t> data = view.get<2>();
+      expect(data.size() == 3u);
+      expect(data[0] == 10);
+   };
+
+   "lazy_all_variable_fields"_test = [] {
+      AllVariable data{"first", "second", {1, 2, 3, 4, 5}};
+      std::string buffer;
+      auto err = glz::write_zmem(data, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<AllVariable>(buffer);
+      expect(view.get<0>() == "first");
+      expect(view.get<1>() == "second");
+
+      std::span<const uint8_t> c = view.get<2>();
+      expect(c.size() == 5u);
+      expect(c[4] == 5u);
+   };
+
+   "lazy_binary_data"_test = [] {
+      // Test with binary data containing null bytes
+      std::vector<uint8_t> binary_data = {0x00, 0x01, 0x00, 0xFF, 0x00, 0xFE};
+      BinaryContainer data{1, binary_data};
+      std::string buffer;
+      auto err = glz::write_zmem(data, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<BinaryContainer>(buffer);
+      std::span<const uint8_t> binary = view.get<1>();
+      expect(binary.size() == 6u);
+      expect(binary[0] == 0x00u);
+      expect(binary[2] == 0x00u);
+      expect(binary[3] == 0xFFu);
+      expect(binary[5] == 0xFEu);
+   };
+
+   "lazy_span_iteration"_test = [] {
+      Entity entity{1, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f}};
+      std::string buffer;
+      auto err = glz::write_zmem(entity, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Entity>(buffer);
+      std::span<const float> weights = view.get<1>();
+
+      // Test range-based for loop
+      float sum = 0.0f;
+      for (float w : weights) {
+         sum += w;
+      }
+      expect(sum == 150.0f);
+
+      // Test iterator access
+      expect(*weights.begin() == 10.0f);
+      expect(*(weights.end() - 1) == 50.0f);
+   };
+
+   "lazy_string_view_operations"_test = [] {
+      LogEntry entry{1, "Hello, World!"};
+      std::string buffer;
+      auto err = glz::write_zmem(entry, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<LogEntry>(buffer);
+      std::string_view msg = view.get<1>();
+
+      // Test string_view operations
+      expect(msg.starts_with("Hello"));
+      expect(msg.ends_with("!"));
+      expect(msg.find("World") == 7u);
+      expect(msg.substr(0, 5) == "Hello");
+   };
+
+   "lazy_reuse_buffer"_test = [] {
+      // Test that we can reuse buffer for multiple serializations
+      std::string buffer;
+
+      Person p1{1, "Alice", {100}};
+      auto err = glz::write_zmem(p1, buffer);
+      expect(!err);
+
+      auto view1 = glz::lazy_zmem<Person>(buffer);
+      expect(view1.get<0>() == 1u);
+      expect(view1.get<1>() == "Alice");
+
+      // Reuse buffer
+      Person p2{2, "Bob", {200, 201}};
+      err = glz::write_zmem(p2, buffer);
+      expect(!err);
+
+      auto view2 = glz::lazy_zmem<Person>(buffer);
+      expect(view2.get<0>() == 2u);
+      expect(view2.get<1>() == "Bob");
+      expect(view2.get<2>().size() == 2u);
    };
 };
 
