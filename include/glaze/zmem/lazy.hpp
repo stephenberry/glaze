@@ -212,7 +212,7 @@ namespace glz
             // String field: return string_view into buffer
             zmem::string_ref ref;
             std::memcpy(&ref, field_ptr, sizeof(zmem::string_ref));
-            return std::string_view{base_ + ref.offset, ref.length};
+            return std::string_view{base_ + ref.offset, static_cast<size_t>(ref.length)};
          }
          else if constexpr (zmem::is_std_vector_v<MemberType>) {
             using ElemType = typename MemberType::value_type;
@@ -236,7 +236,7 @@ namespace glz
             // The nested struct starts with its own size header
             uint64_t nested_size;
             std::memcpy(&nested_size, field_ptr, sizeof(uint64_t));
-            return lazy_zmem_view<MemberType>{field_ptr, sizeof(uint64_t) + nested_size};
+            return lazy_zmem_view<MemberType>{field_ptr, static_cast<size_t>(sizeof(uint64_t) + nested_size)};
          }
       }
    };
