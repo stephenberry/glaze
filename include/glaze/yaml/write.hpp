@@ -768,9 +768,7 @@ namespace glz
          }
          else if constexpr (is_variant<V>) {
             // Handle variants by visiting and recursing with the same indent level
-            std::visit([&](auto&& inner) {
-               write_block_mapping_nested<Opts>(inner, ctx, b, ix, indent_level);
-            }, value);
+            std::visit([&](auto&& inner) { write_block_mapping_nested<Opts>(inner, ctx, b, ix, indent_level); }, value);
          }
          else if constexpr (writable_array_t<V>) {
             write_block_sequence<Opts>(value, ctx, b, ix, indent_level);

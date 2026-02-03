@@ -2920,7 +2920,8 @@ namespace glz
          // Full parse attempt - use a temporary context that inherits indent from parent
          yaml::yaml_context temp_ctx{};
          temp_ctx.indent = ctx.indent; // Propagate indent context for nested parsing
-         process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it, end);
+         process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it,
+                                                                                               end);
          if (!bool(temp_ctx.error)) {
             return true;
          }
@@ -3020,14 +3021,16 @@ namespace glz
                   return;
                case yaml::yaml_tag::map:
                   if constexpr (counts::n_object > 0) {
-                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
+                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                     end);
                      return;
                   }
                   ctx.error = error_code::syntax_error;
                   return;
                case yaml::yaml_tag::seq:
                   if constexpr (counts::n_array > 0) {
-                     process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
+                     process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it,
+                                                                                                    end);
                      return;
                   }
                   ctx.error = error_code::syntax_error;
@@ -3133,7 +3136,8 @@ namespace glz
                if ((end - it >= 2) && (it[1] == ' ' || it[1] == '\n' || it[1] == '\r')) {
                   // Block sequence indicator "- "
                   if constexpr (counts::n_array > 0) {
-                     process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
+                     process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it,
+                                                                                                    end);
                      return;
                   }
                }
@@ -3166,7 +3170,8 @@ namespace glz
                      auto start_it = it;
                      yaml::yaml_context temp_ctx{};
                      temp_ctx.indent = ctx.indent;
-                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it, end);
+                     process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
+                                                                                                  end);
                      if (!bool(temp_ctx.error)) {
                         return; // Successfully parsed as number
                      }

@@ -4197,7 +4197,8 @@ active: true)";
 
    // Use flow style for complex nested structures with glz::generic
    "generic_complex_roundtrip"_test = [] {
-      std::string yaml = R"({"users": [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}], "metadata": {"version": 1, "enabled": true}})";
+      std::string yaml =
+         R"({"users": [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}], "metadata": {"version": 1, "enabled": true}})";
       glz::generic parsed;
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
@@ -4270,7 +4271,8 @@ suite yaml_map_parsing_tests = [] {
 // ============================================================
 
 suite yaml_variant_edge_cases = [] {
-   using test_variant = std::variant<std::nullptr_t, bool, double, std::string, std::vector<int>, std::map<std::string, int>>;
+   using test_variant =
+      std::variant<std::nullptr_t, bool, double, std::string, std::vector<int>, std::map<std::string, int>>;
 
    "variant_block_map_key_t"_test = [] {
       // Key starting with 't' but not "true"
@@ -4783,7 +4785,8 @@ b: hello)";
       auto ec = glz::read_yaml(result, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       // 'a' should be empty (default value) and 'b' should be "hello"
-      expect(result.a.empty() || result.a == "unchanged") << "a should be empty or unchanged, got: [" << result.a << "]";
+      expect(result.a.empty() || result.a == "unchanged")
+         << "a should be empty or unchanged, got: [" << result.a << "]";
       expect(result.b == "hello") << "b should be 'hello', got: [" << result.b << "]";
    };
 
