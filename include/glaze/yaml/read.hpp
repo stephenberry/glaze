@@ -468,7 +468,7 @@ namespace glz
       // - A single newline between lines becomes a single space
       // - Blank lines are preserved as literal newlines
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_plain_scalar_multiline(std::string& value, Ctx& ctx, It& it, End end,
+      GLZ_ALWAYS_INLINE void parse_plain_scalar_multiline(std::string& value, Ctx&, It& it, End end,
                                                           int32_t base_indent)
       {
          value.clear();
@@ -500,7 +500,6 @@ namespace glz
                   }
 
                   // Check if this is a blank line or comment-only line
-                  auto line_start = lookahead;
                   int32_t line_indent = 0;
 
                   while (lookahead != end && *lookahead == ' ') {
