@@ -813,7 +813,7 @@ namespace glz
          file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
       }
       else {
-         return {error_code::file_open_failure};
+         return {.ec = error_code::file_open_failure};
       }
 
       return {};
@@ -835,7 +835,7 @@ namespace glz
       bytes_written = 0;
       context ctx{};
       serialize<ZMEM>::op<set_zmem_unchecked<Opts>()>(value, ctx, buffer, bytes_written);
-      return {ctx.error};
+      return {.ec = ctx.error};
    }
 
    // Write ZMEM with automatic pre-allocation (compute size, allocate, write unchecked)
@@ -859,7 +859,7 @@ namespace glz
          buffer.resize(bytes_written);
       }
 
-      return {ctx.error};
+      return {.ec = ctx.error};
    }
 
    // Write ZMEM to new string with pre-allocation (fastest for new allocations)
