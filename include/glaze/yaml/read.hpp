@@ -426,7 +426,16 @@ namespace glz
 
             // End conditions
             if (c == '\n' || c == '\r') break;
-            if (c == '#') break; // Comment
+
+            // Per YAML spec: # only starts a comment when preceded by whitespace
+            // "foo#bar" is a valid plain scalar, but "foo #bar" has a comment
+            if (c == '#') {
+               // Check if preceded by whitespace (comment indicator)
+               if (value.empty() || value.back() == ' ' || value.back() == '\t') {
+                  break; // This is a comment
+               }
+               // Otherwise # is part of the scalar value
+            }
 
             // Flow indicators end plain scalars in flow context
             if (in_flow && (c == ',' || c == ']' || c == '}')) break;

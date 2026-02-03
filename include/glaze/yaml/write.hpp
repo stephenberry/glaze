@@ -762,6 +762,16 @@ namespace glz
          if constexpr (glaze_object_t<V> || reflectable<V>) {
             write_block_mapping<Opts>(value, ctx, b, ix, indent_level);
          }
+         else if constexpr (glaze_value_t<V>) {
+            // Unwrap glaze_value_t types (like glz::generic) and recurse
+            write_block_mapping_nested<Opts>(get_member(value, meta_wrapper_v<V>), ctx, b, ix, indent_level);
+         }
+         else if constexpr (is_variant<V>) {
+            // Handle variants by visiting and recursing with the same indent level
+            std::visit([&](auto&& inner) {
+               write_block_mapping_nested<Opts>(inner, ctx, b, ix, indent_level);
+            }, value);
+         }
          else if constexpr (writable_array_t<V>) {
             write_block_sequence<Opts>(value, ctx, b, ix, indent_level);
          }

@@ -409,6 +409,58 @@ name: test)";
       expect(obj.x == 42);
       expect(obj.name == "test");
    };
+
+   // Per YAML spec, # only starts a comment when preceded by whitespace
+   "hash_in_plain_scalar"_test = [] {
+      std::string yaml = "name: foo#bar";
+      simple_struct obj{};
+      obj.x = 1;
+      obj.y = 1.0;
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.name == "foo#bar") << "Hash should be part of scalar, not start comment";
+   };
+
+   "hash_with_space_is_comment"_test = [] {
+      std::string yaml = "name: foo #bar";
+      simple_struct obj{};
+      obj.x = 1;
+      obj.y = 1.0;
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.name == "foo") << "Space+hash should start a comment";
+   };
+
+   "multiple_hashes_in_scalar"_test = [] {
+      std::string yaml = "name: a#b#c#d";
+      simple_struct obj{};
+      obj.x = 1;
+      obj.y = 1.0;
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.name == "a#b#c#d");
+   };
+
+   "url_with_fragment"_test = [] {
+      std::string yaml = "name: http://example.com/page#section";
+      simple_struct obj{};
+      obj.x = 1;
+      obj.y = 1.0;
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.name == "http://example.com/page#section");
+   };
+
+   "hash_at_start_is_comment"_test = [] {
+      std::string yaml = R"(x: 1
+y: 1.0
+#name: should_be_ignored
+name: actual_value)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.name == "actual_value");
+   };
 };
 
 suite yaml_roundtrip_tests = [] {
@@ -4782,6 +4834,79 @@ b: other)";
       expect(!ec) << glz::format_error(ec, yaml);
       expect(result.a == "nested_value");
       expect(result.b == "other");
+   };
+};
+
+// ============================================================
+// glz::generic Write Indentation Tests
+// ============================================================
+
+suite yaml_generic_write_indentation_tests = [] {
+   "generic_nested_write_indentation"_test = [] {
+      // Parse nested YAML into generic
+      std::string yaml = R"(level1:
+  level2:
+    level3: deep_value)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      // Write back and verify indentation
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      // Output should have proper indentation
+      expect(output.find("level1:") != std::string::npos);
+      expect(output.find("  level2:") != std::string::npos) << "level2 should be indented under level1";
+      expect(output.find("    level3:") != std::string::npos) << "level3 should be indented under level2";
+   };
+
+   "generic_complex_nested_write_indentation"_test = [] {
+      std::string yaml = R"(contexts:
+  prototype:
+    - include: scope:source.shell.bash#prototype
+  main:
+    - include: scope:source.shell.bash)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      // Verify nested structure has proper indentation
+      expect(output.find("contexts:") != std::string::npos);
+      // The nested keys should be indented
+      expect(output.find("  main:") != std::string::npos || output.find("  prototype:") != std::string::npos)
+         << "Nested keys should be indented";
+   };
+
+   "generic_roundtrip_preserves_structure"_test = [] {
+      std::string yaml = R"(root:
+  child1:
+    grandchild: value1
+  child2: value2)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      // Parse the output again
+      glz::generic reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+
+      // Verify structure is preserved
+      auto& root = std::get<glz::generic::object_t>(reparsed.data);
+      expect(root.contains("root"));
+      auto& rootObj = std::get<glz::generic::object_t>(root.at("root").data);
+      expect(rootObj.contains("child1"));
+      expect(rootObj.contains("child2"));
    };
 };
 
