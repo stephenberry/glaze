@@ -178,7 +178,7 @@ namespace glz
    struct to<ZMEM, std::vector<T, Alloc>> final
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(const std::vector<T, Alloc>& value, is_context auto&&, B&& b, auto& ix)
+      GLZ_ALWAYS_INLINE static void op(const std::vector<T, Alloc>& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr bool unchecked = is_write_unchecked<Opts>();
          // For top-level vector serialization (Array message format):
@@ -187,7 +187,24 @@ namespace glz
          zmem::write_value<unchecked>(count, b, ix);
 
          if (count > 0) {
-            zmem::write_bytes<unchecked>(value.data(), sizeof(T) * count, b, ix);
+            if constexpr (std::is_aggregate_v<T> && !zmem::is_std_array_v<T>) {
+               // Fixed struct elements need padding to 8 bytes each
+               constexpr size_t padding = zmem::padded_size_8(sizeof(T)) - sizeof(T);
+               if constexpr (padding == 0) {
+                  // No padding needed, write contiguously
+                  zmem::write_bytes<unchecked>(value.data(), sizeof(T) * count, b, ix);
+               }
+               else {
+                  // Write each element with padding
+                  for (const auto& elem : value) {
+                     to<ZMEM, T>::template op<Opts>(elem, ctx, b, ix);
+                  }
+               }
+            }
+            else {
+               // Primitives and arrays: write contiguously
+               zmem::write_bytes<unchecked>(value.data(), sizeof(T) * count, b, ix);
+            }
          }
       }
    };
@@ -458,8 +475,13 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&&, B&& b, auto& ix)
       {
          constexpr bool unchecked = is_write_unchecked<Opts>();
-         // Fixed struct: direct memcpy with zero overhead
+         // Fixed struct: direct memcpy
          zmem::write_bytes<unchecked>(&value, sizeof(T), b, ix);
+         // Pad to multiple of 8 bytes for safe zero-copy access
+         constexpr size_t padding = zmem::padded_size_8(sizeof(T)) - sizeof(T);
+         if constexpr (padding > 0) {
+            zmem::write_padding<unchecked>(padding, b, ix);
+         }
       }
    };
 
@@ -600,6 +622,13 @@ namespace glz
          decltype(auto) member = access_member<MemberIndex>(value);
          using MemberType = member_type_at<MemberIndex>;
 
+         // Align to 8 bytes before writing variable data
+         // This ensures all variable section data is 8-byte aligned for safe zero-copy access
+         const size_t padding = zmem::padding_for_alignment(ix - inline_start, 8);
+         if (padding > 0) {
+            zmem::write_padding<unchecked>(padding, b, ix);
+         }
+
          const uint64_t offset = ix - inline_start;
 
          if constexpr (zmem::is_std_vector_v<MemberType>) {
@@ -714,7 +743,14 @@ namespace glz
             }(std::make_index_sequence<NumVariable>{});
          }
 
-         // Patch total size
+         // Pad total size to 8-byte boundary
+         // This ensures nested variable structs maintain 8-byte alignment for subsequent fields
+         const size_t end_padding = zmem::padding_for_alignment(ix - size_pos - 8, 8);
+         if (end_padding > 0) {
+            zmem::write_padding<unchecked>(end_padding, b, ix);
+         }
+
+         // Patch total size (includes padding)
          const uint64_t total_size = zmem::to_little_endian(static_cast<uint64_t>(ix - size_pos - 8));
          std::memcpy(b.data() + size_pos, &total_size, sizeof(uint64_t));
       }

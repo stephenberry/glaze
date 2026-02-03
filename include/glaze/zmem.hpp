@@ -11,3 +11,4 @@
 #include "glaze/zmem/size.hpp"
 #include "glaze/zmem/write.hpp"
 #include "glaze/zmem/read.hpp"
+#include "glaze/zmem/lazy.hpp"

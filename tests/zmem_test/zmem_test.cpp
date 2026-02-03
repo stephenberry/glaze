@@ -181,7 +181,7 @@ suite fixed_struct_tests = [] {
       Vec3 v{1.0f, 2.0f, 3.0f};
       auto err = glz::write_zmem(v, buffer);
       expect(!err);
-      expect(buffer.size() == sizeof(Vec3));
+      expect(buffer.size() == glz::zmem::padded_size_8(sizeof(Vec3)));  // 12 -> 16 bytes
 
       Vec3 result{};
       err = glz::read_zmem(result, buffer);
@@ -196,7 +196,7 @@ suite fixed_struct_tests = [] {
       Mixed m{1, 2, 3, 4};
       auto err = glz::write_zmem(m, buffer);
       expect(!err);
-      expect(buffer.size() == sizeof(Mixed));
+      expect(buffer.size() == glz::zmem::padded_size_8(sizeof(Mixed)));  // 12 -> 16 bytes
 
       Mixed result{};
       err = glz::read_zmem(result, buffer);
@@ -212,7 +212,7 @@ suite fixed_struct_tests = [] {
       Transform t{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
       auto err = glz::write_zmem(t, buffer);
       expect(!err);
-      expect(buffer.size() == sizeof(Transform));
+      expect(buffer.size() == glz::zmem::padded_size_8(sizeof(Transform)));  // 36 -> 40 bytes
 
       Transform result{};
       err = glz::read_zmem(result, buffer);
@@ -227,7 +227,7 @@ suite fixed_struct_tests = [] {
       Color c{255, 128, 64, 32};
       auto err = glz::write_zmem(c, buffer);
       expect(!err);
-      expect(buffer.size() == sizeof(Color));
+      expect(buffer.size() == glz::zmem::padded_size_8(sizeof(Color)));  // 4 -> 8 bytes
 
       Color result{};
       err = glz::read_zmem(result, buffer);
@@ -774,6 +774,264 @@ suite glaze_object_tests = [] {
       expect(result.entity_id == entity.entity_id);
       expect(result.entity_name == entity.entity_name);
       expect(result.entity_tags == entity.entity_tags);
+   };
+};
+
+// ============================================================================
+// lazy_zmem Tests (zero-copy views)
+// ============================================================================
+
+// Variable struct for lazy view testing
+struct Person {
+   uint64_t id;
+   std::string name;
+   std::vector<int32_t> scores;
+};
+
+// Nested variable struct
+struct Team {
+   std::string team_name;
+   std::vector<float> ratings;
+};
+
+struct Organization {
+   uint64_t org_id;
+   Team team;
+   std::string description;
+};
+
+suite lazy_zmem_tests = [] {
+   "lazy_fixed_struct_as_fixed"_test = [] {
+      Point p{3.14f, 2.71f};
+      std::string buffer;
+      auto err = glz::write_zmem(p, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Point>(buffer);
+      expect(view.valid());
+      expect(view.size() == buffer.size());
+
+      const Point& ref = view.as_fixed();
+      expect(ref.x == p.x);
+      expect(ref.y == p.y);
+   };
+
+   "lazy_fixed_struct_get_fields"_test = [] {
+      Point p{1.5f, 2.5f};
+      std::string buffer;
+      auto err = glz::write_zmem(p, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Point>(buffer);
+      expect(view.get<0>() == p.x);
+      expect(view.get<1>() == p.y);
+   };
+
+   "lazy_fixed_nested_struct"_test = [] {
+      Transform t{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+      std::string buffer;
+      auto err = glz::write_zmem(t, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Transform>(buffer);
+      const Transform& ref = view.as_fixed();
+      expect(ref.position.x == t.position.x);
+      expect(ref.rotation.y == t.rotation.y);
+      expect(ref.scale.z == t.scale.z);
+   };
+
+   "lazy_variable_struct_string"_test = [] {
+      LogEntry entry{12345, "Hello, lazy world!"};
+      std::string buffer;
+      auto err = glz::write_zmem(entry, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<LogEntry>(buffer);
+      expect(view.valid());
+
+      // Get timestamp (fixed field)
+      uint64_t ts = view.get<0>();
+      expect(ts == entry.timestamp);
+
+      // Get message as string_view (zero-copy)
+      std::string_view msg = view.get<1>();
+      expect(msg == entry.message);
+   };
+
+   "lazy_variable_struct_vector"_test = [] {
+      Entity entity{42, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f}};
+      std::string buffer;
+      auto err = glz::write_zmem(entity, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Entity>(buffer);
+      expect(view.valid());
+
+      // Get id (fixed field)
+      uint64_t id = view.get<0>();
+      expect(id == entity.id);
+
+      // Get weights as span (zero-copy)
+      std::span<const float> weights = view.get<1>();
+      expect(weights.size() == entity.weights.size());
+      for (size_t i = 0; i < weights.size(); ++i) {
+         expect(weights[i] == entity.weights[i]);
+      }
+   };
+
+   "lazy_variable_struct_multiple_fields"_test = [] {
+      Person person{100, "Alice", {95, 87, 92, 88}};
+      std::string buffer;
+      auto err = glz::write_zmem(person, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Person>(buffer);
+
+      uint64_t id = view.get<0>();
+      expect(id == person.id);
+
+      std::string_view name = view.get<1>();
+      expect(name == person.name);
+
+      std::span<const int32_t> scores = view.get<2>();
+      expect(scores.size() == person.scores.size());
+      expect(scores[0] == 95);
+      expect(scores[3] == 88);
+   };
+
+   "lazy_empty_string"_test = [] {
+      LogEntry entry{999, ""};
+      std::string buffer;
+      auto err = glz::write_zmem(entry, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<LogEntry>(buffer);
+      std::string_view msg = view.get<1>();
+      expect(msg.empty());
+   };
+
+   "lazy_empty_vector"_test = [] {
+      Entity entity{123, {}};
+      std::string buffer;
+      auto err = glz::write_zmem(entity, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Entity>(buffer);
+      std::span<const float> weights = view.get<1>();
+      expect(weights.empty());
+   };
+
+   "lazy_nested_variable_struct"_test = [] {
+      Organization org{
+         42,
+         {"Engineering", {4.5f, 4.8f, 4.2f}},
+         "Software development team"
+      };
+      std::string buffer;
+      auto err = glz::write_zmem(org, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Organization>(buffer);
+
+      uint64_t org_id = view.get<0>();
+      expect(org_id == org.org_id);
+
+      // Get nested Team as a lazy view
+      auto team_view = view.get<1>();
+      std::string_view team_name = team_view.get<0>();
+      expect(team_name == org.team.team_name);
+
+      std::span<const float> ratings = team_view.get<1>();
+      expect(ratings.size() == org.team.ratings.size());
+      expect(ratings[0] == 4.5f);
+
+      std::string_view desc = view.get<2>();
+      expect(desc == org.description);
+   };
+
+   "lazy_from_raw_pointer"_test = [] {
+      Point p{10.0f, 20.0f};
+      std::string buffer;
+      auto err = glz::write_zmem(p, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Point>(buffer.data(), buffer.size());
+      expect(view.valid());
+      expect(view.as_fixed().x == p.x);
+   };
+
+   "lazy_from_void_pointer"_test = [] {
+      Point p{30.0f, 40.0f};
+      std::string buffer;
+      auto err = glz::write_zmem(p, buffer);
+      expect(!err);
+
+      const void* data = buffer.data();
+      auto view = glz::lazy_zmem<Point>(data, buffer.size());
+      expect(view.valid());
+      expect(view.as_fixed().y == p.y);
+   };
+
+   "lazy_meta_fixed_struct"_test = [] {
+      MetaPoint p{1.0f, 2.0f};
+      std::string buffer;
+      auto err = glz::write_zmem(p, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<MetaPoint>(buffer);
+      const MetaPoint& ref = view.as_fixed();
+      expect(ref.x_coord == p.x_coord);
+      expect(ref.y_coord == p.y_coord);
+   };
+
+   "lazy_meta_variable_struct"_test = [] {
+      MetaEntity entity{777, "LazyMeta", {10, 20, 30}};
+      std::string buffer;
+      auto err = glz::write_zmem(entity, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<MetaEntity>(buffer);
+
+      uint64_t id = view.get<0>();
+      expect(id == entity.entity_id);
+
+      std::string_view name = view.get<1>();
+      expect(name == entity.entity_name);
+
+      std::span<const int32_t> tags = view.get<2>();
+      expect(tags.size() == entity.entity_tags.size());
+      expect(tags[0] == 10);
+      expect(tags[2] == 30);
+   };
+
+   "lazy_long_string"_test = [] {
+      std::string long_message(10000, 'X');
+      LogEntry entry{1, long_message};
+      std::string buffer;
+      auto err = glz::write_zmem(entry, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<LogEntry>(buffer);
+      std::string_view msg = view.get<1>();
+      expect(msg.size() == 10000u);
+      expect(msg == long_message);
+   };
+
+   "lazy_large_vector"_test = [] {
+      Entity entity{1, {}};
+      entity.weights.resize(10000);
+      for (size_t i = 0; i < entity.weights.size(); ++i) {
+         entity.weights[i] = static_cast<float>(i);
+      }
+      std::string buffer;
+      auto err = glz::write_zmem(entity, buffer);
+      expect(!err);
+
+      auto view = glz::lazy_zmem<Entity>(buffer);
+      std::span<const float> weights = view.get<1>();
+      expect(weights.size() == 10000u);
+      expect(weights[0] == 0.0f);
+      expect(weights[9999] == 9999.0f);
    };
 };
 

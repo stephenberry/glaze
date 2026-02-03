@@ -81,12 +81,19 @@ namespace glz
       // Size computation for vectors
       // ========================================================================
 
-      // Fixed element type: count (8) + elements
+      // Fixed element type: count (8) + elements (each padded to 8 bytes if struct)
       template <class T, class Alloc>
          requires is_fixed_type_v<T>
       GLZ_ALWAYS_INLINE size_t compute_size(const std::vector<T, Alloc>& v) noexcept
       {
-         return 8 + v.size() * sizeof(T);
+         if constexpr (std::is_aggregate_v<T> && !is_std_array_v<T>) {
+            // Fixed struct elements use padded size
+            return 8 + v.size() * padded_size_8(sizeof(T));
+         }
+         else {
+            // Primitives and arrays use natural size
+            return 8 + v.size() * sizeof(T);
+         }
       }
 
       // Forward declarations for mutually recursive size computation
@@ -208,7 +215,8 @@ namespace glz
          requires(std::is_aggregate_v<T> && is_fixed_type_v<T> && !is_std_array_v<T>)
       GLZ_ALWAYS_INLINE constexpr size_t compute_size(const T&) noexcept
       {
-         return sizeof(T);
+         // Fixed struct sizes are padded to multiples of 8 bytes for safe zero-copy access
+         return padded_size_8(sizeof(T));
       }
 
       // ========================================================================
@@ -230,46 +238,71 @@ namespace glz
          requires(!is_fixed_type_v<T> && !is_std_array_v<T> && (glz::reflectable<T> || glz::glaze_object_t<T>))
       size_t compute_size(const T& value) noexcept
       {
-         // Variable struct: size header (8) + inline section + variable section
-         size_t total = 8;  // size header
-
+         // Variable struct: size header (8) + inline section + variable section + padding
          constexpr auto N = reflect<T>::size;
 
-         // Compute inline section and variable section sizes
+         // Phase 1: Compute inline section size (fixed at compile time conceptually)
+         size_t inline_size = 0;
+         for_each<N>([&]<size_t I>() {
+            using MemberType = field_t<T, I>;
+
+            if constexpr (is_fixed_type_v<MemberType>) {
+               inline_size += sizeof(MemberType);
+            }
+            else if constexpr (is_std_vector_v<MemberType> || is_std_string_v<MemberType>) {
+               inline_size += 16;  // vector_ref or string_ref
+            }
+            else {
+               // Nested variable struct: will be computed recursively
+               // For inline size, we don't add anything here - nested structs
+               // have their own size header and are handled below
+            }
+         });
+
+         // Phase 2: Compute variable section size with 8-byte alignment padding
+         size_t variable_size = 0;
          for_each<N>([&]<size_t I>() {
             decltype(auto) member = access_member_for_size<T, I>(value);
             using MemberType = field_t<T, I>;
 
-            if constexpr (is_fixed_type_v<MemberType>) {
-               total += sizeof(MemberType);
-            }
-            else if constexpr (is_std_vector_v<MemberType>) {
-               // Inline: 16-byte reference
-               total += 16;
-               // Variable section: vector data
+            if constexpr (is_std_vector_v<MemberType>) {
+               // Alignment padding before this field's data
+               const size_t current_offset = inline_size + variable_size;
+               variable_size += padding_for_alignment(current_offset, 8);
+
+               // Vector data
                using ElemType = typename MemberType::value_type;
                if constexpr (is_fixed_type_v<ElemType>) {
-                  total += member.size() * sizeof(ElemType);
+                  variable_size += member.size() * sizeof(ElemType);
                }
                else {
                   for (const auto& elem : member) {
-                     total += compute_size(elem);
+                     variable_size += compute_size(elem);
                   }
                }
             }
             else if constexpr (is_std_string_v<MemberType>) {
-               // Inline: 16-byte reference
-               total += 16;
-               // Variable section: string data
-               total += member.size();
+               // Alignment padding before this field's data
+               const size_t current_offset = inline_size + variable_size;
+               variable_size += padding_for_alignment(current_offset, 8);
+
+               // String data
+               variable_size += member.size();
             }
-            else {
-               // Nested variable type
-               total += compute_size(member);
+            else if constexpr (!is_fixed_type_v<MemberType>) {
+               // Nested variable struct - computed inline, includes its own size header
+               inline_size += compute_size(member);
             }
          });
 
-         return total;
+         // Total content size (inline + variable)
+         size_t content_size = inline_size + variable_size;
+
+         // End padding to make content size a multiple of 8
+         content_size += padding_for_alignment(content_size, 8);
+
+         // Total = 8-byte size header + content
+         return 8 + content_size;
       }
 
    }  // namespace zmem

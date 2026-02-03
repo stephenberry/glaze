@@ -166,16 +166,39 @@ namespace glz
          zmem::byteswap_le(count);
          it += sizeof(uint64_t);
 
-         const size_t data_size = sizeof(T) * count;
-         if (static_cast<size_t>(end - it) < data_size) {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
          value.resize(count);
          if (count > 0) {
-            std::memcpy(value.data(), &(*it), data_size);
-            it += data_size;
+            if constexpr (std::is_aggregate_v<T> && !zmem::is_std_array_v<T>) {
+               // Fixed struct elements have padding to 8 bytes
+               constexpr size_t wire_size = zmem::padded_size_8(sizeof(T));
+               const size_t data_size = wire_size * count;
+               if (static_cast<size_t>(end - it) < data_size) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if constexpr (wire_size == sizeof(T)) {
+                  // No padding, can memcpy all at once
+                  std::memcpy(value.data(), &(*it), sizeof(T) * count);
+               }
+               else {
+                  // Has padding, copy each element
+                  for (size_t i = 0; i < count; ++i) {
+                     std::memcpy(&value[i], &(*it) + i * wire_size, sizeof(T));
+                  }
+               }
+               it += data_size;
+            }
+            else {
+               // Primitives and arrays: no padding
+               const size_t data_size = sizeof(T) * count;
+               if (static_cast<size_t>(end - it) < data_size) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               std::memcpy(value.data(), &(*it), data_size);
+               it += data_size;
+            }
          }
       }
    };
@@ -402,14 +425,15 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
-         // Fixed struct: direct memcpy
-         if (static_cast<size_t>(end - it) < sizeof(T)) {
+         // Fixed struct: direct memcpy + skip padding to 8-byte boundary
+         constexpr size_t wire_size = zmem::padded_size_8(sizeof(T));
+         if (static_cast<size_t>(end - it) < wire_size) {
             ctx.error = error_code::unexpected_end;
             return;
          }
 
          std::memcpy(&value, &(*it), sizeof(T));
-         it += sizeof(T);
+         it += wire_size;  // Skip padding bytes too
       }
    };
 

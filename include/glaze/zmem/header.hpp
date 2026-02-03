@@ -264,6 +264,12 @@ namespace glz
          return offset + padding_for_alignment(offset, alignment);
       }
 
+      // Round size up to multiple of 8 (for fixed struct wire sizes)
+      GLZ_ALWAYS_INLINE constexpr size_t padded_size_8(size_t size) noexcept
+      {
+         return (size + 7) & ~size_t(7);
+      }
+
       // ============================================================================
       // Buffer Operations
       // ============================================================================
