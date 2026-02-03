@@ -63,7 +63,7 @@ namespace glz
       // ============================================================================
 
       // Vector reference stored in inline section for variable structs
-      struct vector_ref
+      struct alignas(8) vector_ref
       {
          uint64_t offset; // Byte offset to array data (relative to byte 8)
          uint64_t count;  // Number of elements
@@ -72,7 +72,7 @@ namespace glz
       static_assert(alignof(vector_ref) == 8);
 
       // String reference for variable-length strings
-      struct string_ref
+      struct alignas(8) string_ref
       {
          uint64_t offset; // Byte offset to string data (relative to byte 8)
          uint64_t length; // Byte length (NOT null-terminated)
@@ -85,9 +85,10 @@ namespace glz
       // ============================================================================
 
       // ZMEM optional with explicit layout for wire compatibility
-      // Layout: [present:1][padding:alignof(T)-1][value:sizeof(T)]
+      // Layout: [present:1][padding:alignment-1][value:sizeof(T)]
+      // Use 8-byte alignment for 64-bit types to ensure consistent layout across 32/64-bit platforms
       template <class T>
-      struct alignas(alignof(T)) optional
+      struct alignas(sizeof(T) >= 8 ? 8 : alignof(T)) optional
       {
          uint8_t present{0};
          // Padding bytes (implicit in struct layout due to alignment)
