@@ -426,6 +426,29 @@ namespace glz
       {
          constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
+         bool is_empty = false;
+         if constexpr (requires { value.empty(); }) {
+            is_empty = value.empty();
+         }
+         else if constexpr (requires { value.begin(); value.end(); }) {
+            is_empty = (value.begin() == value.end());
+         }
+
+         if (is_empty) {
+            const int32_t spaces = indent_level * indent_width;
+            if (!ensure_space(ctx, b, ix + spaces + 8)) [[unlikely]] {
+               return;
+            }
+            for (int32_t i = 0; i < spaces; ++i) {
+               b[ix++] = ' ';
+            }
+            dump("[]", b, ix);
+            if (indent_level > 0) {
+               dump('\n', b, ix);
+            }
+            return;
+         }
+
          bool first = true;
          for (auto&& element : value) {
             if (bool(ctx.error)) [[unlikely]]

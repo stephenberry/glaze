@@ -1497,7 +1497,7 @@ namespace glz
          }
 
          ++it; // Skip '{'
-         skip_inline_ws(it, end);
+         skip_ws_and_newlines(it, end);
 
          // Handle empty mapping
          if (it != end && *it == '}') {
@@ -1506,7 +1506,7 @@ namespace glz
          }
 
          while (it != end) {
-            skip_inline_ws(it, end);
+            skip_ws_and_newlines(it, end);
 
             if (it != end && *it == '}') {
                ++it;
@@ -1528,7 +1528,7 @@ namespace glz
                return;
             }
             ++it;
-            skip_inline_ws(it, end);
+            skip_ws_and_newlines(it, end);
 
             // Look up key and parse value
             const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(

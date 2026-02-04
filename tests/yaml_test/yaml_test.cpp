@@ -104,6 +104,11 @@ struct glz::meta<enum_struct>
    static constexpr auto value = object("name", &T::name, "color", &T::color);
 };
 
+struct reflectable_config
+{
+   std::vector<int> servers{};
+};
+
 suite yaml_write_tests = [] {
    "write_simple_struct"_test = [] {
       simple_struct obj{42, 3.14, "test"};
@@ -3296,6 +3301,43 @@ spec:
       };
 
       roundtrip_yaml<k8s_deployment>(yaml, check);
+   };
+
+   "reflectable_flow_mapping_empty_sequence_roundtrip"_test = [] {
+      const std::string yaml = R"({
+  "servers":
+  [
+
+  ]
+})";
+      auto check = [](const reflectable_config& cfg) { expect(cfg.servers.empty()); };
+      roundtrip_yaml<reflectable_config>(yaml, check);
+   };
+
+   "generic_flow_mapping_empty_sequence_output"_test = [] {
+      const std::string yaml = R"({
+  "servers":
+  [
+
+  ]
+})";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+      expect(output.find("servers") != std::string::npos);
+      expect(output.find("[]") != std::string::npos);
+
+      glz::generic reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+      auto& root = std::get<glz::generic::object_t>(reparsed.data);
+      expect(root.contains("servers"));
+      auto& servers = std::get<glz::generic::array_t>(root.at("servers").data);
+      expect(servers.empty());
    };
 
    "external_advanced_generic_roundtrip"_test = [] {
