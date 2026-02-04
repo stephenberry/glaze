@@ -623,6 +623,182 @@ namespace glz
    // Serialization uses the compile-time inline layout (alignment + offsets) and
    // writes variable payloads with inline-base-relative offsets.
 
+   template <class T>
+      requires(!zmem::is_fixed_type_v<T> && !zmem::is_std_array_v<T>
+               && (glz::reflectable<T> || glz::glaze_object_t<T>))
+   struct to<ZMEM, T> final
+   {
+      static constexpr auto N = reflect<T>::size;
+      using Layout = zmem::inline_layout<T>;
+
+      template <size_t I>
+      using member_type_at = field_t<T, I>;
+
+      template <size_t I>
+      GLZ_ALWAYS_INLINE static decltype(auto) access_member(auto&& value)
+      {
+         if constexpr (reflectable<T>) {
+            return get_member(value, get<I>(to_tie(value)));
+         }
+         else {
+            return get_member(value, get<I>(reflect<T>::values));
+         }
+      }
+
+      template <size_t MemberIndex, auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void write_variable_member_data(
+         const T& value,
+         size_t ref_pos,
+         size_t inline_base,
+         is_context auto&& ctx,
+         B& b,
+         size_t& ix)
+      {
+         constexpr bool unchecked = is_write_unchecked<Opts>();
+         decltype(auto) member = access_member<MemberIndex>(value);
+         using MemberType = member_type_at<MemberIndex>;
+
+         size_t alignment = size_t{8};
+         if constexpr (zmem::is_std_vector_v<MemberType>) {
+            using ElemType = typename MemberType::value_type;
+            alignment = zmem::vector_data_alignment<ElemType>();
+         }
+         else if constexpr (zmem::is_std_map_like_v<MemberType>) {
+            using K = typename MemberType::key_type;
+            using V = typename MemberType::mapped_type;
+            alignment = zmem::map_data_alignment<K, V>();
+         }
+
+         const size_t padding = zmem::padding_for_alignment(ix - inline_base, alignment);
+         if (padding > 0) {
+            zmem::write_padding<unchecked>(padding, b, ix);
+         }
+
+         const uint64_t offset = ix - inline_base;
+
+         if constexpr (zmem::is_std_vector_v<MemberType>) {
+            const uint64_t count = member.size();
+            if constexpr (std::endian::native == std::endian::little) {
+               uint64_t ref_data[2] = {offset, count};
+               std::memcpy(b.data() + ref_pos, ref_data, sizeof(ref_data));
+            }
+            else {
+               uint64_t ref_data[2] = {zmem::to_little_endian(offset), zmem::to_little_endian(count)};
+               std::memcpy(b.data() + ref_pos, ref_data, sizeof(ref_data));
+            }
+
+            if (count > 0) {
+               zmem::write_vector_data<Opts>(member, ctx, b, ix);
+            }
+         }
+         else if constexpr (zmem::is_std_string_v<MemberType>) {
+            using CharT = typename MemberType::value_type;
+            const uint64_t length = member.size() * sizeof(CharT);
+            if constexpr (std::endian::native == std::endian::little) {
+               uint64_t ref_data[2] = {offset, length};
+               std::memcpy(b.data() + ref_pos, ref_data, sizeof(ref_data));
+            }
+            else {
+               uint64_t ref_data[2] = {zmem::to_little_endian(offset), zmem::to_little_endian(length)};
+               std::memcpy(b.data() + ref_pos, ref_data, sizeof(ref_data));
+            }
+
+            if (length > 0) {
+               zmem::write_bytes<unchecked>(member.data(), length, b, ix);
+            }
+         }
+         else if constexpr (zmem::is_std_map_like_v<MemberType>) {
+            const auto entries = zmem::make_sorted_entries(member);
+            const uint64_t count = entries.size();
+            if constexpr (std::endian::native == std::endian::little) {
+               uint64_t ref_data[2] = {offset, count};
+               std::memcpy(b.data() + ref_pos, ref_data, sizeof(ref_data));
+            }
+            else {
+               uint64_t ref_data[2] = {zmem::to_little_endian(offset), zmem::to_little_endian(count)};
+               std::memcpy(b.data() + ref_pos, ref_data, sizeof(ref_data));
+            }
+
+            if (count > 0) {
+               zmem::write_map_payload_aligned<Opts>(entries, inline_base, ctx, b, ix);
+            }
+         }
+         else {
+            const uint64_t offset_le = std::endian::native == std::endian::little
+                                          ? offset
+                                          : zmem::to_little_endian(offset);
+            std::memcpy(b.data() + ref_pos, &offset_le, sizeof(uint64_t));
+            to<ZMEM, MemberType>::template op<Opts>(member, ctx, b, ix);
+         }
+      }
+
+      template <auto Opts, class B>
+      GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&& ctx, B& b, auto& ix)
+      {
+         constexpr bool unchecked = is_write_unchecked<Opts>();
+
+         constexpr size_t header_plus_inline = 8 + Layout::InlineBasePadding + Layout::InlineSectionSize;
+         if constexpr (!unchecked && resizable<std::remove_cvref_t<B>>) {
+            const size_t required = ix + header_plus_inline;
+            if (required > b.size()) {
+               b.resize((std::max)(b.size() * 2, required));
+            }
+         }
+
+         const size_t size_pos = ix;
+         std::memset(b.data() + ix, 0, 8);
+         ix += 8;
+
+         if constexpr (Layout::InlineBasePadding > 0) {
+            zmem::write_padding<unchecked>(Layout::InlineBasePadding, b, ix);
+         }
+
+         const size_t inline_base = ix;
+         std::array<size_t, N> ref_positions{};
+
+         for_each<N>([&]<size_t I>() {
+            using MemberType = member_type_at<I>;
+            constexpr size_t field_alignment = Layout::template field_alignment<I>();
+            const size_t pad = zmem::padding_for_alignment(ix - inline_base, field_alignment);
+            if (pad > 0) {
+               zmem::write_padding<unchecked>(pad, b, ix);
+            }
+
+            if constexpr (zmem::is_fixed_type_v<MemberType>) {
+               decltype(auto) member = access_member<I>(value);
+               std::memcpy(b.data() + ix, &member, sizeof(MemberType));
+               ix += sizeof(MemberType);
+            }
+            else if constexpr (zmem::is_std_vector_v<MemberType> || zmem::is_std_string_v<MemberType>
+                               || zmem::is_std_map_like_v<MemberType>) {
+               ref_positions[I] = ix;
+               std::memset(b.data() + ix, 0, 16);
+               ix += 16;
+            }
+            else {
+               ref_positions[I] = ix;
+               std::memset(b.data() + ix, 0, 8);
+               ix += 8;
+            }
+         });
+
+         for_each<N>([&]<size_t I>() {
+            using MemberType = member_type_at<I>;
+            if constexpr (zmem::is_variable_member_type<MemberType>()) {
+               write_variable_member_data<I, Opts>(value, ref_positions[I], inline_base, ctx, b, ix);
+            }
+         });
+
+         const size_t end_padding = zmem::padding_for_alignment(ix - size_pos - 8, 8);
+         if (end_padding > 0) {
+            zmem::write_padding<unchecked>(end_padding, b, ix);
+         }
+
+         const uint64_t total_size = zmem::to_little_endian(static_cast<uint64_t>(ix - size_pos - 8));
+         std::memcpy(b.data() + size_pos, &total_size, sizeof(uint64_t));
+      }
+   };
+
    // ============================================================================
    // Helper Functions
    // ============================================================================

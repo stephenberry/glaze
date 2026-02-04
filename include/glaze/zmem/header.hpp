@@ -102,11 +102,20 @@ namespace glz
       template <class T>
       inline constexpr size_t optional_alignment_v = (sizeof(T) >= 8 ? 8 : alignof(T));
 
+      template <size_t N>
+      struct optional_padding_storage
+      {
+         std::array<uint8_t, N> bytes{};
+      };
+
+      template <>
+      struct optional_padding_storage<0> {};
+
       template <class T>
       struct alignas(optional_alignment_v<T>) optional
       {
          uint8_t present{0};
-         std::array<uint8_t, optional_alignment_v<T> - 1> padding{};
+         [[no_unique_address]] optional_padding_storage<optional_alignment_v<T> - 1> padding{};
          T value{};
 
          constexpr optional() noexcept = default;
