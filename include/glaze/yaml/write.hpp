@@ -378,8 +378,7 @@ namespace glz
       consteval bool is_simple_type()
       {
          using V = std::remove_cvref_t<T>;
-         return bool_t<V> || num_t<V> || str_t<V> || char_t<V> || std::is_enum_v<V> ||
-                std::same_as<V, std::nullptr_t>;
+         return bool_t<V> || num_t<V> || str_t<V> || char_t<V> || std::is_enum_v<V> || std::same_as<V, std::nullptr_t>;
       }
 
       // Runtime check if a variant currently holds a simple type

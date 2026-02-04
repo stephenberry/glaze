@@ -3379,7 +3379,8 @@ namespace glz
                   auto start_it = it;
                   yaml::yaml_context temp_ctx{};
                   temp_ctx.indent = ctx.indent;
-                  process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it, end);
+                  process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
+                                                                                               end);
                   if (!bool(temp_ctx.error)) {
                      return; // Successfully parsed as number
                   }

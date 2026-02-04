@@ -3119,7 +3119,6 @@ struct advanced_doc
    std::optional<std::string> note{};
 };
 
-
 suite yaml_file_io_tests = [] {
    "write_file_yaml"_test = [] {
       file_struct obj{42, 3.14, "test_file"};
@@ -3431,7 +3430,8 @@ note: null
          expect(doc.description.find("This is a folded description") != std::string::npos);
          expect(doc.description.find("Second paragraph.") != std::string::npos);
          expect(doc.literal == "line one\n  line two\nline three");
-         expect(doc.multiline_plain == "meta.statement.conditional.case.python keyword.control.conditional.case.python");
+         expect(doc.multiline_plain ==
+                "meta.statement.conditional.case.python keyword.control.conditional.case.python");
          expect(doc.quoted == "beta: colon");
 
          expect(doc.flags.enabled);
