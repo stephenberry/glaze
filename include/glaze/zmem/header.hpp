@@ -3,13 +3,16 @@
 
 #pragma once
 
+#include <array>
 #include <bit>
 #include <cstdint>
 #include <cstring>
+#include <map>
 #include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <vector>
 
 #include "glaze/core/opts.hpp"
@@ -65,7 +68,7 @@ namespace glz
       // Vector reference stored in inline section for variable structs
       struct alignas(8) vector_ref
       {
-         uint64_t offset; // Byte offset to array data (relative to byte 8)
+         uint64_t offset; // Byte offset to array data (relative to inline_base)
          uint64_t count;  // Number of elements
       };
       static_assert(sizeof(vector_ref) == 16);
@@ -74,11 +77,20 @@ namespace glz
       // String reference for variable-length strings
       struct alignas(8) string_ref
       {
-         uint64_t offset; // Byte offset to string data (relative to byte 8)
+         uint64_t offset; // Byte offset to string data (relative to inline_base)
          uint64_t length; // Byte length (NOT null-terminated)
       };
       static_assert(sizeof(string_ref) == 16);
       static_assert(alignof(string_ref) == 8);
+
+      // Map reference stored in inline section for variable structs
+      struct alignas(8) map_ref
+      {
+         uint64_t offset; // Byte offset to map payload (relative to inline_base)
+         uint64_t count;  // Number of entries
+      };
+      static_assert(sizeof(map_ref) == 16);
+      static_assert(alignof(map_ref) == 8);
 
       // ============================================================================
       // Optional Type with Guaranteed Layout
@@ -88,10 +100,13 @@ namespace glz
       // Layout: [present:1][padding:alignment-1][value:sizeof(T)]
       // Use 8-byte alignment for 64-bit types to ensure consistent layout across 32/64-bit platforms
       template <class T>
-      struct alignas(sizeof(T) >= 8 ? 8 : alignof(T)) optional
+      inline constexpr size_t optional_alignment_v = (sizeof(T) >= 8 ? 8 : alignof(T));
+
+      template <class T>
+      struct alignas(optional_alignment_v<T>) optional
       {
          uint8_t present{0};
-         // Padding bytes (implicit in struct layout due to alignment)
+         std::array<uint8_t, optional_alignment_v<T> - 1> padding{};
          T value{};
 
          constexpr optional() noexcept = default;
@@ -174,6 +189,29 @@ namespace glz
       template <class T>
       inline constexpr bool is_std_string_v = is_std_string<T>::value;
 
+      // Check if a type is a std::map
+      template <class T>
+      struct is_std_map : std::false_type {};
+
+      template <class K, class V, class Cmp, class Alloc>
+      struct is_std_map<std::map<K, V, Cmp, Alloc>> : std::true_type {};
+
+      template <class T>
+      inline constexpr bool is_std_map_v = is_std_map<T>::value;
+
+      // Check if a type is a std::unordered_map
+      template <class T>
+      struct is_std_unordered_map : std::false_type {};
+
+      template <class K, class V, class Hash, class Eq, class Alloc>
+      struct is_std_unordered_map<std::unordered_map<K, V, Hash, Eq, Alloc>> : std::true_type {};
+
+      template <class T>
+      inline constexpr bool is_std_unordered_map_v = is_std_unordered_map<T>::value;
+
+      template <class T>
+      inline constexpr bool is_std_map_like_v = is_std_map_v<T> || is_std_unordered_map_v<T>;
+
       // Check if a type is a fixed-size array (char[N] for strings)
       template <class T>
       struct is_fixed_string : std::false_type {};
@@ -233,6 +271,12 @@ namespace glz
       };
 
       template <class T>
+      struct is_fixed_type<optional<T>>
+      {
+         static constexpr bool value = is_fixed_type<T>::value;
+      };
+
+      template <class T>
       inline constexpr bool is_fixed_type_v = is_fixed_type<T>::value;
 
       // Variable types contain vectors or variable-length strings
@@ -268,6 +312,12 @@ namespace glz
       GLZ_ALWAYS_INLINE constexpr size_t padded_size_8(size_t size) noexcept
       {
          return (size + 7) & ~size_t(7);
+      }
+
+      // Round size up to alignment (for fixed struct wire sizes)
+      GLZ_ALWAYS_INLINE constexpr size_t padded_size(size_t size, size_t alignment) noexcept
+      {
+         return align_up(size, alignment);
       }
 
       // ============================================================================

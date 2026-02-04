@@ -58,7 +58,7 @@ ZMEM distinguishes between two categories of types:
 
 ### Fixed Types (Zero Overhead)
 
-Fixed types are trivially copyable and serialize with **zero overhead** - just their raw bytes:
+Fixed types are trivially copyable and serialize as their raw bytes. Fixed structs are padded to an 8-byte boundary on the wire for safe zero-copy access:
 
 - Primitives: `bool`, `int8_t` through `int64_t`, `uint8_t` through `uint64_t`, `float`, `double`
 - Enums
@@ -76,7 +76,7 @@ static_assert(sizeof(Transform) == 36);
 Transform t{{1,2,3}, {4,5,6}, {7,8,9}};
 std::string buffer;
 glz::write_zmem(t, buffer);
-// buffer.size() == 36 (exact sizeof)
+// buffer.size() == 40 (padded to 8-byte boundary)
 ```
 
 ### Variable Types (With Headers)
@@ -85,7 +85,7 @@ Variable types contain variable-length data and require headers:
 
 - `std::vector<T>`: 8-byte count + elements (+ offset table for variable elements)
 - `std::string`: 8-byte length + character data
-- `std::map<K, V>`: Count + entries (+ offset table for variable values)
+- `std::map<K, V>`: Count + entries (variable values stored in the map payload)
 - Structs containing vectors or strings: 8-byte size header + inline section + variable section
 
 ```cpp
@@ -189,14 +189,14 @@ glz::write_zmem(std_opt, buffer);
 
 ## Maps
 
-ZMEM supports `std::map` with sorted keys (required by the format):
+ZMEM supports `std::map` with sorted keys (required by the format). Variable map values are stored in the map payload and referenced from each entry:
 
 ```cpp
-// Fixed value type - no offset table needed
+// Fixed value type - entries only
 std::map<int32_t, float> fixed_map = {{1, 1.0f}, {2, 2.0f}, {3, 3.0f}};
 glz::write_zmem(fixed_map, buffer);
 
-// Variable value type - includes offset table for O(log N) binary search
+// Variable value type - entries include refs to payload data
 std::map<int32_t, std::string> variable_map = {
    {1, "one"},
    {2, "two"},
@@ -253,7 +253,7 @@ glz::write_zmem(mp, buffer2);  // 8 bytes
 | `int32_t`/`uint32_t`/`float` | 4 bytes | Little-endian |
 | `int64_t`/`uint64_t`/`double` | 8 bytes | Little-endian |
 | `T[N]` | `N * sizeof(T)` | Contiguous elements |
-| Fixed struct | `sizeof(T)` | Direct memory layout |
+| Fixed struct | `align_up(sizeof(T), max(8, alignof(T)))` | Direct memory layout + padding |
 
 ### Variable Types
 
@@ -264,7 +264,7 @@ glz::write_zmem(mp, buffer2);  // 8 bytes
 | `std::string` | `[length:8][chars...]` |
 | Variable struct | `[size:8][inline_section][variable_section]` |
 | `std::map<K,V>` (fixed V) | `[count:8][entries...]` |
-| `std::map<K,V>` (variable V) | `[size:8][count:8][offset_table:(count+1)*8][entries...]` |
+| `std::map<K,V>` (variable V) | `[count:8][entries...][variable_data...]` |
 
 ### Variable Struct Layout
 
@@ -272,16 +272,19 @@ For structs containing vectors or strings:
 
 ```
 [size:8]                    # Total size of struct data (excluding this header)
+[inline_base padding]       # Optional padding to align the inline section
 [inline section]            # Fixed-size fields + references to variable data
   - Simple fields: raw bytes
   - Vector fields: [offset:8][count:8]
   - String fields: [offset:8][length:8]
+  - Map fields: [offset:8][count:8]
 [variable section]          # Variable-length data
   - Vector data
   - String data
+  - Map payloads
 ```
 
-Offsets are relative to byte 8 (after the size header).
+Offsets are relative to inline_base (start of inline section after size header + padding).
 
 ## Error Handling
 
@@ -316,7 +319,7 @@ if (ec) {
 | Read | Single `memcpy` | Parse headers + extract fields |
 | Size computation | `sizeof(T)` | Traverse structure |
 
-For fixed structs, ZMEM achieves the theoretical minimum serialization overhead: zero bytes beyond the data itself.
+For fixed structs, ZMEM pads to an 8-byte boundary for safe zero-copy access (at most 7 bytes of padding).
 
 ## API Reference
 

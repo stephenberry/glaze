@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/zmem/header.hpp"
+#include "glaze/zmem/layout.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/common.hpp"
@@ -87,8 +88,8 @@ namespace glz
       GLZ_ALWAYS_INLINE size_t compute_size(const std::vector<T, Alloc>& v) noexcept
       {
          if constexpr (std::is_aggregate_v<T> && !is_std_array_v<T>) {
-            // Fixed struct elements use padded size
-            return 8 + v.size() * padded_size_8(sizeof(T));
+            // Fixed struct elements use padded stride (min 8 bytes)
+            return 8 + v.size() * vector_fixed_stride<T>();
          }
          else {
             // Primitives and arrays use natural size
@@ -107,16 +108,79 @@ namespace glz
       size_t compute_size(const std::vector<T, Alloc>& v) noexcept
       {
          const size_t count = v.size();
-         size_t total = 8;  // count
+         return 8 + compute_vector_payload_size(v);
+      }
 
-         if (count > 0) {
-            total += (count + 1) * 8;  // offset table
+      template <class Vec>
+      GLZ_ALWAYS_INLINE size_t compute_vector_payload_size(const Vec& v) noexcept
+      {
+         using ElemType = typename Vec::value_type;
+         const size_t count = v.size();
+         if (count == 0) {
+            return 0;
+         }
+
+         if constexpr (is_fixed_type_v<ElemType>) {
+            if constexpr (std::is_aggregate_v<ElemType> && !is_std_array_v<ElemType>) {
+               return count * vector_fixed_stride<ElemType>();
+            }
+            else {
+               return count * sizeof(ElemType);
+            }
+         }
+         else {
+            size_t total = (count + 1) * 8;  // offset table
             for (const auto& elem : v) {
-               total += compute_size(elem);
+               if constexpr (is_std_string_v<ElemType>) {
+                  using CharT = typename ElemType::value_type;
+                  total += elem.size() * sizeof(CharT);
+               }
+               else {
+                  total += compute_size(elem);
+               }
+            }
+            return total;
+         }
+      }
+
+      template <class K, class V, class Map>
+      GLZ_ALWAYS_INLINE size_t compute_map_payload_size(const Map& m, size_t payload_offset) noexcept
+      {
+         const size_t count = m.size();
+         if (count == 0) {
+            return 0;
+         }
+
+         constexpr size_t entry_stride = map_entry_stride<K, V>();
+         size_t offset = entry_stride * count;
+
+         if constexpr (is_fixed_type_v<V>) {
+            return offset;
+         }
+
+         for (const auto& [k, v] : m) {
+            size_t value_alignment = size_t{8};
+            if constexpr (is_std_vector_v<V>) {
+               using ElemType = typename V::value_type;
+               value_alignment = vector_data_alignment<ElemType>();
+            }
+
+            const size_t pad = padding_for_alignment(payload_offset + offset, value_alignment);
+            offset += pad;
+
+            if constexpr (is_std_vector_v<V>) {
+               offset += compute_vector_payload_size(v);
+            }
+            else if constexpr (is_std_string_v<V>) {
+               using CharT = typename V::value_type;
+               offset += v.size() * sizeof(CharT);
+            }
+            else {
+               offset += compute_size(v);
             }
          }
 
-         return total;
+         return offset;
       }
 
       // ========================================================================
@@ -182,10 +246,14 @@ namespace glz
       size_t compute_size(const std::map<K, V, Cmp, Alloc>& m) noexcept
       {
          size_t total = 8;  // count
-         for (const auto& [k, v] : m) {
-            // Use pair size with alignment
-            total += compute_size(std::pair<K, V>{k, v});
+         if (m.empty()) {
+            return total;
          }
+
+         const size_t padding = padding_for_alignment(total, map_data_alignment<K, V>());
+         total += padding;
+         const size_t payload_offset = total;
+         total += compute_map_payload_size<K, V>(m, payload_offset);
          return total;
       }
 
@@ -194,16 +262,15 @@ namespace glz
          requires(!is_fixed_type_v<V>)
       size_t compute_size(const std::map<K, V, Cmp, Alloc>& m) noexcept
       {
-         const size_t count = m.size();
-         size_t total = 8 + 8;  // size header + count
-
-         if (count > 0) {
-            total += (count + 1) * 8;  // offset table
-            for (const auto& [k, v] : m) {
-               total += compute_size(k) + compute_size(v);
-            }
+         size_t total = 8;  // count
+         if (m.empty()) {
+            return total;
          }
 
+         const size_t padding = padding_for_alignment(total, map_data_alignment<K, V>());
+         total += padding;
+         const size_t payload_offset = total;
+         total += compute_map_payload_size<K, V>(m, payload_offset);
          return total;
       }
 
@@ -215,8 +282,9 @@ namespace glz
          requires(std::is_aggregate_v<T> && is_fixed_type_v<T> && !is_std_array_v<T>)
       GLZ_ALWAYS_INLINE constexpr size_t compute_size(const T&) noexcept
       {
-         // Fixed struct sizes are padded to multiples of 8 bytes for safe zero-copy access
-         return padded_size_8(sizeof(T));
+         // Fixed struct sizes are padded to alignment (min 8 bytes) for safe zero-copy access
+         constexpr size_t alignment = alignof(T) > 8 ? alignof(T) : 8;
+         return padded_size(sizeof(T), alignment);
       }
 
       // ========================================================================
@@ -238,70 +306,45 @@ namespace glz
          requires(!is_fixed_type_v<T> && !is_std_array_v<T> && (glz::reflectable<T> || glz::glaze_object_t<T>))
       size_t compute_size(const T& value) noexcept
       {
-         // Variable struct: size header (8) + inline section + variable section + padding
          constexpr auto N = reflect<T>::size;
+         using Layout = inline_layout<T>;
 
-         // Phase 1: Compute inline section size (fixed at compile time conceptually)
-         size_t inline_size = 0;
-         for_each<N>([&]<size_t I>() {
-            using MemberType = field_t<T, I>;
-
-            if constexpr (is_fixed_type_v<MemberType>) {
-               inline_size += sizeof(MemberType);
-            }
-            else if constexpr (is_std_vector_v<MemberType> || is_std_string_v<MemberType>) {
-               inline_size += 16;  // vector_ref or string_ref
-            }
-            else {
-               // Nested variable struct: will be computed recursively
-               // For inline size, we don't add anything here - nested structs
-               // have their own size header and are handled below
-            }
-         });
-
-         // Phase 2: Compute variable section size with 8-byte alignment padding
          size_t variable_size = 0;
          for_each<N>([&]<size_t I>() {
             decltype(auto) member = access_member_for_size<T, I>(value);
             using MemberType = field_t<T, I>;
 
             if constexpr (is_std_vector_v<MemberType>) {
-               // Alignment padding before this field's data
-               const size_t current_offset = inline_size + variable_size;
-               variable_size += padding_for_alignment(current_offset, 8);
-
-               // Vector data
                using ElemType = typename MemberType::value_type;
-               if constexpr (is_fixed_type_v<ElemType>) {
-                  variable_size += member.size() * sizeof(ElemType);
-               }
-               else {
-                  for (const auto& elem : member) {
-                     variable_size += compute_size(elem);
-                  }
-               }
+               const size_t alignment = vector_data_alignment<ElemType>();
+               const size_t current_offset = Layout::InlineSectionSize + variable_size;
+               variable_size += padding_for_alignment(current_offset, alignment);
+               variable_size += compute_vector_payload_size(member);
             }
             else if constexpr (is_std_string_v<MemberType>) {
-               // Alignment padding before this field's data
-               const size_t current_offset = inline_size + variable_size;
+               const size_t current_offset = Layout::InlineSectionSize + variable_size;
                variable_size += padding_for_alignment(current_offset, 8);
-
-               // String data
-               variable_size += member.size();
+               using CharT = typename MemberType::value_type;
+               variable_size += member.size() * sizeof(CharT);
+            }
+            else if constexpr (is_std_map_like_v<MemberType>) {
+               using K = typename MemberType::key_type;
+               using V = typename MemberType::mapped_type;
+               const size_t alignment = map_data_alignment<K, V>();
+               const size_t current_offset = Layout::InlineSectionSize + variable_size;
+               variable_size += padding_for_alignment(current_offset, alignment);
+               const size_t payload_offset = Layout::InlineSectionSize + variable_size;
+               variable_size += compute_map_payload_size<K, V>(member, payload_offset);
             }
             else if constexpr (!is_fixed_type_v<MemberType>) {
-               // Nested variable struct - computed inline, includes its own size header
-               inline_size += compute_size(member);
+               const size_t current_offset = Layout::InlineSectionSize + variable_size;
+               variable_size += padding_for_alignment(current_offset, 8);
+               variable_size += compute_size(member);
             }
          });
 
-         // Total content size (inline + variable)
-         size_t content_size = inline_size + variable_size;
-
-         // End padding to make content size a multiple of 8
+         size_t content_size = Layout::InlineBasePadding + Layout::InlineSectionSize + variable_size;
          content_size += padding_for_alignment(content_size, 8);
-
-         // Total = 8-byte size header + content
          return 8 + content_size;
       }
 

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/zmem/header.hpp"
+#include "glaze/zmem/layout.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/meta.hpp"
@@ -12,6 +13,7 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/reflection/to_tuple.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <map>
 
@@ -84,6 +86,233 @@ namespace glz
 
       template <class T>
       inline constexpr bool is_variable_member_ptr_v = is_variable_member_ptr<std::remove_cvref_t<T>>::value;
+
+
+      template <bool Unchecked, class T, class B>
+      GLZ_ALWAYS_INLINE void write_fixed_raw(const T& value, B& b, size_t& ix) noexcept
+      {
+         if constexpr (std::is_arithmetic_v<T> || std::is_enum_v<T>) {
+            write_value<Unchecked>(value, b, ix);
+         }
+         else {
+            write_bytes<Unchecked>(&value, sizeof(T), b, ix);
+         }
+      }
+
+      template <auto Opts, class Vec, class B>
+      GLZ_ALWAYS_INLINE void write_vector_data(const Vec& value, is_context auto&& ctx, B& b, size_t& ix)
+      {
+         constexpr bool unchecked = glz::is_write_unchecked<Opts>();
+         using ElemType = typename Vec::value_type;
+         const uint64_t count = value.size();
+         if (count == 0) return;
+
+         if constexpr (zmem::is_fixed_type_v<ElemType>) {
+            if constexpr (std::is_aggregate_v<ElemType> && !zmem::is_std_array_v<ElemType>) {
+               constexpr size_t stride = zmem::vector_fixed_stride<ElemType>();
+               if constexpr (stride == sizeof(ElemType)) {
+                  write_bytes<unchecked>(value.data(), sizeof(ElemType) * count, b, ix);
+               }
+               else {
+                  for (const auto& elem : value) {
+                     to<ZMEM, ElemType>::template op<Opts>(elem, ctx, b, ix);
+                  }
+               }
+            }
+            else {
+               write_bytes<unchecked>(value.data(), sizeof(ElemType) * count, b, ix);
+            }
+         }
+         else {
+            const size_t offset_table_start = ix;
+            const size_t offset_table_size = (count + 1) * sizeof(uint64_t);
+
+            if constexpr (!unchecked && resizable<std::remove_cvref_t<B>>) {
+               if (ix + offset_table_size > b.size()) {
+                  b.resize((std::max)(b.size() * 2, ix + offset_table_size));
+               }
+            }
+            std::memset(b.data() + ix, 0, offset_table_size);
+            ix += offset_table_size;
+
+            const size_t data_section_start = ix;
+
+            uint64_t stack_offsets[zmem::offset_table_stack_threshold + 1];
+            std::vector<uint64_t> heap_offsets;
+            uint64_t* offsets;
+
+            if (count <= zmem::offset_table_stack_threshold) {
+               offsets = stack_offsets;
+            }
+            else {
+               heap_offsets.resize(count + 1);
+               offsets = heap_offsets.data();
+            }
+
+            for (size_t i = 0; i < count; ++i) {
+               offsets[i] = ix - data_section_start;
+               if constexpr (zmem::is_std_string_v<ElemType>) {
+                  using CharT = typename ElemType::value_type;
+                  const uint64_t length = value[i].size() * sizeof(CharT);
+                  if (length > 0) {
+                     write_bytes<unchecked>(value[i].data(), length, b, ix);
+                  }
+               }
+               else {
+                  to<ZMEM, ElemType>::template op<Opts>(value[i], ctx, b, ix);
+               }
+            }
+            offsets[count] = ix - data_section_start;
+
+            if constexpr (std::endian::native == std::endian::big) {
+               for (size_t i = 0; i <= count; ++i) {
+                  offsets[i] = std::byteswap(offsets[i]);
+               }
+            }
+            std::memcpy(b.data() + offset_table_start, offsets, offset_table_size);
+         }
+      }
+
+      template <class Map>
+      GLZ_ALWAYS_INLINE auto make_sorted_entries(const Map& value)
+      {
+         using K = typename Map::key_type;
+         using V = typename Map::mapped_type;
+
+         std::vector<std::pair<K, V>> entries;
+         entries.reserve(value.size());
+         for (const auto& [k, v] : value) {
+            entries.emplace_back(k, v);
+         }
+
+         if constexpr (zmem::is_std_unordered_map_v<Map>) {
+            std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+               return a.first < b.first;
+            });
+         }
+
+         return entries;
+      }
+
+      template <auto Opts, class Entries, class B>
+      GLZ_ALWAYS_INLINE void write_map_payload_aligned(const Entries& entries,
+                                                       size_t inline_base,
+                                                       is_context auto&& ctx,
+                                                       B& b,
+                                                       size_t& ix)
+      {
+         constexpr bool unchecked = glz::is_write_unchecked<Opts>();
+         using Entry = std::remove_cvref_t<typename Entries::value_type>;
+         using K = std::remove_cvref_t<typename Entry::first_type>;
+         using V = std::remove_cvref_t<typename Entry::second_type>;
+
+         const uint64_t count = entries.size();
+         if (count == 0) return;
+
+         constexpr size_t entry_stride = zmem::map_entry_stride<K, V>();
+         constexpr size_t value_offset = zmem::map_value_offset_in_entry<K, V>();
+
+         std::array<size_t, zmem::offset_table_stack_threshold> stack_positions{};
+         std::vector<size_t> heap_positions;
+         size_t* offset_positions = nullptr;
+
+         if constexpr (!zmem::is_fixed_type_v<V>) {
+            if (count <= zmem::offset_table_stack_threshold) {
+               offset_positions = stack_positions.data();
+            }
+            else {
+               heap_positions.resize(count);
+               offset_positions = heap_positions.data();
+            }
+         }
+
+         size_t entry_index = 0;
+         for (const auto& [k, v] : entries) {
+            const size_t entry_start = ix;
+            write_fixed_raw<unchecked>(k, b, ix);
+
+            const size_t pad_to_value = value_offset - sizeof(K);
+            if (pad_to_value > 0) {
+               write_padding<unchecked>(pad_to_value, b, ix);
+            }
+
+            if constexpr (zmem::is_fixed_type_v<V>) {
+               write_fixed_raw<unchecked>(v, b, ix);
+               const size_t tail_pad = entry_stride - (value_offset + sizeof(V));
+               if (tail_pad > 0) {
+                  write_padding<unchecked>(tail_pad, b, ix);
+               }
+            }
+            else if constexpr (zmem::is_std_vector_v<V>) {
+               write_value<unchecked, uint64_t>(0, b, ix); // offset placeholder
+               write_value<unchecked>(static_cast<uint64_t>(v.size()), b, ix);
+               offset_positions[entry_index] = entry_start + value_offset;
+               const size_t tail_pad = entry_stride - (value_offset + 16);
+               if (tail_pad > 0) {
+                  write_padding<unchecked>(tail_pad, b, ix);
+               }
+            }
+            else if constexpr (zmem::is_std_string_v<V>) {
+               using CharT = typename V::value_type;
+               const uint64_t length = v.size() * sizeof(CharT);
+               write_value<unchecked, uint64_t>(0, b, ix); // offset placeholder
+               write_value<unchecked>(length, b, ix);
+               offset_positions[entry_index] = entry_start + value_offset;
+               const size_t tail_pad = entry_stride - (value_offset + 16);
+               if (tail_pad > 0) {
+                  write_padding<unchecked>(tail_pad, b, ix);
+               }
+            }
+            else {
+               write_value<unchecked, uint64_t>(0, b, ix); // offset placeholder
+               offset_positions[entry_index] = entry_start + value_offset;
+               const size_t tail_pad = entry_stride - (value_offset + 8);
+               if (tail_pad > 0) {
+                  write_padding<unchecked>(tail_pad, b, ix);
+               }
+            }
+
+            ++entry_index;
+         }
+
+         if constexpr (!zmem::is_fixed_type_v<V>) {
+            size_t value_index = 0;
+            for (const auto& [k, v] : entries) {
+               size_t value_alignment = size_t{8};
+               if constexpr (zmem::is_std_vector_v<V>) {
+                  using ElemType = typename V::value_type;
+                  value_alignment = zmem::vector_data_alignment<ElemType>();
+               }
+
+               const size_t padding = zmem::padding_for_alignment(ix - inline_base, value_alignment);
+               if (padding > 0) {
+                  write_padding<unchecked>(padding, b, ix);
+               }
+
+               const uint64_t offset = ix - inline_base;
+               const uint64_t offset_le = std::endian::native == std::endian::little
+                                             ? offset
+                                             : zmem::to_little_endian(offset);
+               std::memcpy(b.data() + offset_positions[value_index], &offset_le, sizeof(uint64_t));
+
+               if constexpr (zmem::is_std_vector_v<V>) {
+                  write_vector_data<Opts>(v, ctx, b, ix);
+               }
+               else if constexpr (zmem::is_std_string_v<V>) {
+                  using CharT = typename V::value_type;
+                  const uint64_t length = v.size() * sizeof(CharT);
+                  if (length > 0) {
+                     write_bytes<unchecked>(v.data(), length, b, ix);
+                  }
+               }
+               else {
+                  to<ZMEM, V>::template op<Opts>(v, ctx, b, ix);
+               }
+
+               ++value_index;
+            }
+         }
+      }
 
    } // namespace zmem
 
@@ -188,21 +417,17 @@ namespace glz
 
          if (count > 0) {
             if constexpr (std::is_aggregate_v<T> && !zmem::is_std_array_v<T>) {
-               // Fixed struct elements need padding to 8 bytes each
-               constexpr size_t padding = zmem::padded_size_8(sizeof(T)) - sizeof(T);
-               if constexpr (padding == 0) {
-                  // No padding needed, write contiguously
+               constexpr size_t stride = zmem::vector_fixed_stride<T>();
+               if constexpr (stride == sizeof(T)) {
                   zmem::write_bytes<unchecked>(value.data(), sizeof(T) * count, b, ix);
                }
                else {
-                  // Write each element with padding
                   for (const auto& elem : value) {
                      to<ZMEM, T>::template op<Opts>(elem, ctx, b, ix);
                   }
                }
             }
             else {
-               // Primitives and arrays: write contiguously
                zmem::write_bytes<unchecked>(value.data(), sizeof(T) * count, b, ix);
             }
          }
@@ -225,51 +450,7 @@ namespace glz
             return;
          }
 
-         // For variable elements, we need an offset table
-         // Reserve space for offset table: (count + 1) * 8 bytes
-         const size_t offset_table_start = ix;
-         const size_t offset_table_size = (count + 1) * sizeof(uint64_t);
-
-         // Write placeholder offsets (will be patched later)
-         // Batch the placeholder writes for efficiency
-         if constexpr (!unchecked && resizable<std::remove_cvref_t<B>>) {
-            if (ix + offset_table_size > b.size()) {
-               b.resize((std::max)(b.size() * 2, ix + offset_table_size));
-            }
-         }
-         std::memset(b.data() + ix, 0, offset_table_size);
-         ix += offset_table_size;
-
-         const size_t data_section_start = ix;
-
-         // Use stack allocation for small arrays, heap for large
-         // Stack: up to 64 elements (512 bytes), avoids heap allocation in hot path
-         uint64_t stack_offsets[zmem::offset_table_stack_threshold + 1];
-         std::vector<uint64_t> heap_offsets;
-         uint64_t* offsets;
-
-         if (count <= zmem::offset_table_stack_threshold) {
-            offsets = stack_offsets;
-         } else {
-            heap_offsets.resize(count + 1);
-            offsets = heap_offsets.data();
-         }
-
-         // Serialize each element and record offsets
-         for (size_t i = 0; i < count; ++i) {
-            offsets[i] = ix - data_section_start;
-            to<ZMEM, T>::template op<Opts>(value[i], ctx, b, ix);
-         }
-         offsets[count] = ix - data_section_start; // Sentinel
-
-         // Patch offset table - batch write with endian conversion
-         // On little-endian systems (most modern CPUs), skip the conversion loop entirely
-         if constexpr (std::endian::native == std::endian::big) {
-            for (size_t i = 0; i <= count; ++i) {
-               offsets[i] = std::byteswap(offsets[i]);
-            }
-         }
-         std::memcpy(b.data() + offset_table_start, offsets, offset_table_size);
+         zmem::write_vector_data<Opts>(value, ctx, b, ix);
       }
    };
 
@@ -362,89 +543,26 @@ namespace glz
                                        is_context auto&& ctx, B&& b, auto& ix)
       {
          constexpr bool unchecked = is_write_unchecked<Opts>();
-         if constexpr (zmem::is_fixed_type_v<V>) {
-            // Fixed value map: count + entries (fixed-size, no offset table needed)
-            const uint64_t count = value.size();
-            zmem::write_value<unchecked>(count, b, ix);
+         const uint64_t count = value.size();
+         const size_t map_start = ix;
+         zmem::write_value<unchecked>(count, b, ix);
 
-            for (const auto& [k, v] : value) {
-               to<ZMEM, std::pair<const K, V>>::template op<Opts>(std::pair<const K, V>{k, v}, ctx, b, ix);
-            }
+         if (count == 0) {
+            return;
          }
-         else {
-            // Variable value map format:
-            // [size:8][count:8][offset_table:(count+1)*8][entries...]
-            // This enables O(log N) binary search on sorted keys
 
-            // Reserve space for size header
-            const size_t size_pos = ix;
-            zmem::write_value<unchecked, uint64_t>(0, b, ix); // Placeholder
-
-            const uint64_t count = value.size();
-            zmem::write_value<unchecked>(count, b, ix);
-
-            if (count == 0) {
-               // Patch size (just the count field, 8 bytes)
-               const uint64_t total_size = zmem::to_little_endian(static_cast<uint64_t>(8));
-               std::memcpy(b.data() + size_pos, &total_size, sizeof(uint64_t));
-               return;
-            }
-
-            // Reserve space for offset table: (count + 1) * 8 bytes
-            const size_t offset_table_start = ix;
-            const size_t offset_table_size = (count + 1) * sizeof(uint64_t);
-
-            if constexpr (!unchecked && resizable<std::remove_cvref_t<B>>) {
-               if (ix + offset_table_size > b.size()) {
-                  b.resize((std::max)(b.size() * 2, ix + offset_table_size));
-               }
-            }
-            std::memset(b.data() + ix, 0, offset_table_size);
-            ix += offset_table_size;
-
-            const size_t data_section_start = ix;
-
-            // Use stack allocation for small maps, heap for large
-            uint64_t stack_offsets[zmem::offset_table_stack_threshold + 1];
-            std::vector<uint64_t> heap_offsets;
-            uint64_t* offsets;
-
-            if (count <= zmem::offset_table_stack_threshold) {
-               offsets = stack_offsets;
-            } else {
-               heap_offsets.resize(count + 1);
-               offsets = heap_offsets.data();
-            }
-
-            // Serialize each entry and record offsets
-            // For variable value maps, serialize key and value directly without alignment padding
-            // (the variable value's 8-byte header provides natural alignment)
-            size_t entry_idx = 0;
-            for (const auto& [k, v] : value) {
-               offsets[entry_idx++] = ix - data_section_start;
-               // Write key directly
-               to<ZMEM, K>::template op<Opts>(k, ctx, b, ix);
-               // Write value directly (variable value has its own size header)
-               to<ZMEM, V>::template op<Opts>(v, ctx, b, ix);
-            }
-            offsets[count] = ix - data_section_start; // Sentinel
-
-            // Patch offset table - batch write with endian conversion
-            if constexpr (std::endian::native == std::endian::big) {
-               for (size_t i = 0; i <= count; ++i) {
-                  offsets[i] = std::byteswap(offsets[i]);
-               }
-            }
-            std::memcpy(b.data() + offset_table_start, offsets, offset_table_size);
-
-            // Patch size
-            const uint64_t total_size = zmem::to_little_endian(static_cast<uint64_t>(ix - size_pos - 8));
-            std::memcpy(b.data() + size_pos, &total_size, sizeof(uint64_t));
+         const size_t map_alignment = zmem::map_data_alignment<K, V>();
+         const size_t padding = zmem::padding_for_alignment(ix - map_start, map_alignment);
+         if (padding > 0) {
+            zmem::write_padding<unchecked>(padding, b, ix);
          }
+
+         const auto entries = zmem::make_sorted_entries(value);
+         zmem::write_map_payload_aligned<Opts>(entries, map_start, ctx, b, ix);
       }
    };
 
-   // std::unordered_map - needs sorting before serialization
+   // std::unordered_map - keys are sorted before serialization
    template <class K, class V, class Hash, class Eq, class Alloc>
    struct to<ZMEM, std::unordered_map<K, V, Hash, Eq, Alloc>> final
    {
@@ -452,13 +570,23 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(const std::unordered_map<K, V, Hash, Eq, Alloc>& value,
                                        is_context auto&& ctx, B&& b, auto& ix)
       {
-         // Convert to sorted vector of pairs
-         std::vector<std::pair<K, V>> sorted_entries(value.begin(), value.end());
-         std::sort(sorted_entries.begin(), sorted_entries.end(),
-                   [](const auto& a, const auto& b) { return a.first < b.first; });
+         constexpr bool unchecked = is_write_unchecked<Opts>();
+         const uint64_t count = value.size();
+         const size_t map_start = ix;
+         zmem::write_value<unchecked>(count, b, ix);
 
-         // Use vector serialization
-         to<ZMEM, std::vector<std::pair<K, V>>>::template op<Opts>(sorted_entries, ctx, b, ix);
+         if (count == 0) {
+            return;
+         }
+
+         const size_t map_alignment = zmem::map_data_alignment<K, V>();
+         const size_t padding = zmem::padding_for_alignment(ix - map_start, map_alignment);
+         if (padding > 0) {
+            zmem::write_padding<unchecked>(padding, b, ix);
+         }
+
+         const auto entries = zmem::make_sorted_entries(value);
+         zmem::write_map_payload_aligned<Opts>(entries, map_start, ctx, b, ix);
       }
    };
 
@@ -477,8 +605,10 @@ namespace glz
          constexpr bool unchecked = is_write_unchecked<Opts>();
          // Fixed struct: direct memcpy
          zmem::write_bytes<unchecked>(&value, sizeof(T), b, ix);
-         // Pad to multiple of 8 bytes for safe zero-copy access
-         constexpr size_t padding = zmem::padded_size_8(sizeof(T)) - sizeof(T);
+         // Pad to alignment (minimum 8 bytes) for safe zero-copy access
+         constexpr size_t alignment = alignof(T) > 8 ? alignof(T) : 8;
+         constexpr size_t wire_size = zmem::padded_size(sizeof(T), alignment);
+         constexpr size_t padding = wire_size - sizeof(T);
          if constexpr (padding > 0) {
             zmem::write_padding<unchecked>(padding, b, ix);
          }
@@ -489,294 +619,9 @@ namespace glz
    // Variable Struct Serialization (Has Vectors/Strings)
    // ============================================================================
 
-   // Variable structs need reflection to handle inline and variable sections
-   // This requires glaze metadata to be defined for the struct
-   //
-   // OPTIMIZATION: Single-pass serialization with compile-time layout
-   // - Variable member indices are computed at compile time
-   // - No runtime dispatch (O(1) instead of O(N) per variable member)
-   // - No deferred writes array needed
-
-   // Forward declaration for recursive inline size calculation
-   template <class T>
-   struct inline_section_size_calculator;
-
-   template <class T>
-      requires(!zmem::is_fixed_type_v<T> && !zmem::is_std_array_v<T>
-               && (glz::reflectable<T> || glz::glaze_object_t<T>))
-   struct to<ZMEM, T> final
-   {
-      static constexpr auto N = reflect<T>::size;
-
-      // ========================================================================
-      // Compile-Time Member Type Extraction
-      // ========================================================================
-
-      // Use field_t which works for both reflectable and glaze_object_t types
-      template <size_t I>
-      using member_type_at = field_t<T, I>;
-
-      // ========================================================================
-      // Compile-Time Variable Member Index Computation
-      // ========================================================================
-
-      // Check if member at index I is a variable member (vector or string)
-      template <size_t I>
-      static consteval bool is_variable_member() {
-         if constexpr (I >= N) {
-            return false;
-         } else {
-            using MemberType = member_type_at<I>;
-            return zmem::is_std_vector_v<MemberType> || zmem::is_std_string_v<MemberType>;
-         }
-      }
-
-      // Count variable members at compile time
-      static consteval size_t count_variable_members() {
-         return []<size_t... Is>(std::index_sequence<Is...>) consteval {
-            return ((is_variable_member<Is>() ? size_t{1} : size_t{0}) + ...);
-         }(std::make_index_sequence<N>{});
-      }
-
-      static constexpr size_t NumVariable = count_variable_members();
-
-      // Get array of variable member indices at compile time
-      static consteval auto compute_variable_indices() {
-         // Use size 1 minimum to avoid zero-size array
-         std::array<size_t, NumVariable == 0 ? 1 : NumVariable> result{};
-         if constexpr (NumVariable > 0) {
-            size_t idx = 0;
-            [&]<size_t... Is>(std::index_sequence<Is...>) {
-               ((is_variable_member<Is>() ? void(result[idx++] = Is) : void()), ...);
-            }(std::make_index_sequence<N>{});
-         }
-         return result;
-      }
-
-      static constexpr auto VariableIndices = compute_variable_indices();
-
-      // ========================================================================
-      // Compile-Time Inline Section Size Calculation
-      // ========================================================================
-
-      // Calculate the inline size contribution of a single member
-      template <size_t I>
-      static consteval size_t member_inline_size() {
-         using MemberType = member_type_at<I>;
-
-         if constexpr (zmem::is_fixed_type_v<MemberType>) {
-            // Fixed types: direct sizeof
-            return sizeof(MemberType);
-         }
-         else if constexpr (zmem::is_std_vector_v<MemberType> || zmem::is_std_string_v<MemberType>) {
-            // Variable members: 16-byte reference (offset + count/length)
-            return 16;
-         }
-         else if constexpr (std::is_aggregate_v<MemberType> && !zmem::is_std_array_v<MemberType>) {
-            // Nested variable type: 8-byte size header + its inline section
-            return 8 + inline_section_size_calculator<MemberType>::value;
-         }
-         else {
-            // Fallback for other types
-            return sizeof(MemberType);
-         }
-      }
-
-      // Total inline section size (excluding the 8-byte size header of this struct)
-      static consteval size_t compute_inline_section_size() {
-         return []<size_t... Is>(std::index_sequence<Is...>) consteval {
-            return (member_inline_size<Is>() + ... + size_t{0});
-         }(std::make_index_sequence<N>{});
-      }
-
-      static constexpr size_t InlineSectionSize = compute_inline_section_size();
-
-      // ========================================================================
-      // Member Access Helper (works for both reflectable and glaze_object_t)
-      // ========================================================================
-
-      template <size_t I>
-      GLZ_ALWAYS_INLINE static decltype(auto) access_member(auto&& value) {
-         if constexpr (reflectable<T>) {
-            return get_member(value, get<I>(to_tie(value)));
-         }
-         else {
-            return get_member(value, get<I>(reflect<T>::values));
-         }
-      }
-
-      // ========================================================================
-      // Variable Member Data Writer (compile-time dispatched)
-      // ========================================================================
-
-      template <size_t MemberIndex, auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void write_variable_member_data(
-         const T& value,
-         size_t ref_pos,
-         size_t inline_start,
-         is_context auto&& ctx,
-         B&& b,
-         size_t& ix)
-      {
-         constexpr bool unchecked = is_write_unchecked<Opts>();
-         decltype(auto) member = access_member<MemberIndex>(value);
-         using MemberType = member_type_at<MemberIndex>;
-
-         // Align to 8 bytes before writing variable data
-         // This ensures all variable section data is 8-byte aligned for safe zero-copy access
-         const size_t padding = zmem::padding_for_alignment(ix - inline_start, 8);
-         if (padding > 0) {
-            zmem::write_padding<unchecked>(padding, b, ix);
-         }
-
-         const uint64_t offset = ix - inline_start;
-
-         if constexpr (zmem::is_std_vector_v<MemberType>) {
-            const uint64_t count = member.size();
-            // Combined write: offset and count together (single memcpy)
-            // Skip endian conversion on little-endian systems (most modern CPUs)
-            if constexpr (std::endian::native == std::endian::little) {
-               uint64_t ref_data[2] = {offset, count};
-               std::memcpy(b.data() + ref_pos, ref_data, 16);
-            }
-            else {
-               uint64_t ref_data[2] = {zmem::to_little_endian(offset), zmem::to_little_endian(count)};
-               std::memcpy(b.data() + ref_pos, ref_data, 16);
-            }
-
-            if (count > 0) {
-               using ElemType = typename MemberType::value_type;
-               if constexpr (zmem::is_fixed_type_v<ElemType>) {
-                  zmem::write_bytes<unchecked>(member.data(), sizeof(ElemType) * count, b, ix);
-               }
-               else {
-                  for (const auto& elem : member) {
-                     to<ZMEM, ElemType>::template op<Opts>(elem, ctx, b, ix);
-                  }
-               }
-            }
-         }
-         else if constexpr (zmem::is_std_string_v<MemberType>) {
-            const uint64_t length = member.size();
-            // Combined write: offset and length together (single memcpy)
-            // Skip endian conversion on little-endian systems (most modern CPUs)
-            if constexpr (std::endian::native == std::endian::little) {
-               uint64_t ref_data[2] = {offset, length};
-               std::memcpy(b.data() + ref_pos, ref_data, 16);
-            }
-            else {
-               uint64_t ref_data[2] = {zmem::to_little_endian(offset), zmem::to_little_endian(length)};
-               std::memcpy(b.data() + ref_pos, ref_data, 16);
-            }
-
-            if (length > 0) {
-               zmem::write_bytes<unchecked>(member.data(), length, b, ix);
-            }
-         }
-      }
-
-      // ========================================================================
-      // Main Serialization Entry Point
-      // ========================================================================
-
-      template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&& ctx, B&& b, auto& ix)
-      {
-         constexpr bool unchecked = is_write_unchecked<Opts>();
-
-         // Variable struct format:
-         // [size:8][inline section][variable section]
-
-         // Pre-reserve buffer space using compile-time inline section size
-         // This eliminates resize checks during inline section writes
-         // (Skip if unchecked - buffer already pre-allocated)
-         constexpr size_t header_plus_inline = 8 + InlineSectionSize;
-         if constexpr (!unchecked && resizable<std::remove_cvref_t<B>>) {
-            const size_t required = ix + header_plus_inline;
-            if (required > b.size()) {
-               b.resize((std::max)(b.size() * 2, required));
-            }
-         }
-
-         // Write size header placeholder (no bounds check needed - pre-reserved)
-         const size_t size_pos = ix;
-         std::memcpy(b.data() + ix, "\0\0\0\0\0\0\0\0", 8);
-         ix += 8;
-
-         const size_t inline_start = ix;
-
-         // Track positions of variable member references (stack allocated, fixed size)
-         std::array<size_t, NumVariable == 0 ? 1 : NumVariable> ref_positions{};
-         size_t var_idx = 0;
-
-         // Phase 1: Write inline section (no resize checks - pre-reserved or unchecked)
-         // Variable member placeholders are recorded for later patching
-         for_each<N>([&]<size_t I>() {
-            decltype(auto) member = access_member<I>(value);
-            using MemberType = member_type_at<I>;
-
-            if constexpr (zmem::is_fixed_type_v<MemberType>) {
-               // Fixed member: write inline (direct memcpy, no bounds check)
-               std::memcpy(b.data() + ix, &member, sizeof(MemberType));
-               ix += sizeof(MemberType);
-            }
-            else if constexpr (zmem::is_std_vector_v<MemberType> || zmem::is_std_string_v<MemberType>) {
-               // Variable member: record position and write placeholder (16 bytes)
-               ref_positions[var_idx++] = ix;
-               std::memset(b.data() + ix, 0, 16);
-               ix += 16;
-            }
-            else {
-               // Nested variable type: recursive serialization
-               to<ZMEM, MemberType>::template op<Opts>(member, ctx, b, ix);
-            }
-         });
-
-         // Phase 2: Write variable section and patch references
-         // Compile-time unrolled - O(NumVariable) with direct dispatch, no O(N) search
-         if constexpr (NumVariable > 0) {
-            [&]<size_t... Idx>(std::index_sequence<Idx...>) {
-               // Each Idx maps to VariableIndices[Idx] which is the actual member index
-               // This is O(1) dispatch per variable member instead of O(N)
-               ((write_variable_member_data<VariableIndices[Idx], Opts>(
-                  value, ref_positions[Idx], inline_start, ctx, b, ix)), ...);
-            }(std::make_index_sequence<NumVariable>{});
-         }
-
-         // Pad total size to 8-byte boundary
-         // This ensures nested variable structs maintain 8-byte alignment for subsequent fields
-         const size_t end_padding = zmem::padding_for_alignment(ix - size_pos - 8, 8);
-         if (end_padding > 0) {
-            zmem::write_padding<unchecked>(end_padding, b, ix);
-         }
-
-         // Patch total size (includes padding)
-         const uint64_t total_size = zmem::to_little_endian(static_cast<uint64_t>(ix - size_pos - 8));
-         std::memcpy(b.data() + size_pos, &total_size, sizeof(uint64_t));
-      }
-   };
-
-   // ============================================================================
-   // Inline Section Size Calculator (for recursive nested variable types)
-   // ============================================================================
-
-   // Primary template handles variable aggregate types with reflection support
-   // This is the only case where inline_section_size_calculator should be used
-   // (nested variable types within a variable struct)
-   template <class T>
-   struct inline_section_size_calculator
-   {
-      static constexpr size_t value = []() consteval {
-         if constexpr (!zmem::is_fixed_type_v<T> && !zmem::is_std_array_v<T> &&
-                       (glz::reflectable<T> || glz::glaze_object_t<T>)) {
-            return to<ZMEM, T>::InlineSectionSize;
-         }
-         else {
-            // Fallback for types that don't match (shouldn't normally be reached)
-            return sizeof(T);
-         }
-      }();
-   };
+   // Variable structs need reflection to handle inline and variable sections.
+   // Serialization uses the compile-time inline layout (alignment + offsets) and
+   // writes variable payloads with inline-base-relative offsets.
 
    // ============================================================================
    // Helper Functions

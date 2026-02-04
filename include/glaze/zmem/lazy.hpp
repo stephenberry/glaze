@@ -7,49 +7,29 @@
 #include <string_view>
 
 #include "glaze/zmem/header.hpp"
+#include "glaze/zmem/layout.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/reflection/to_tuple.hpp"
-#include "glaze/util/for_each.hpp"
 
 namespace glz
 {
    namespace zmem
    {
-      // ============================================================================
-      // Field Size Classification
-      // ============================================================================
-
-      // Check if a field type has compile-time known inline size
-      template <class FieldType>
-      consteval bool has_fixed_inline_size() noexcept
+      template <class T>
+      struct strided_span
       {
-         if constexpr (is_fixed_type_v<FieldType>) {
-            return true;
-         }
-         else if constexpr (is_std_vector_v<FieldType> || is_std_string_v<FieldType>) {
-            return true; // 16-byte ref is fixed size
-         }
-         else {
-            return false; // Nested variable struct has runtime size
-         }
-      }
+         const char* data{};
+         size_t count{};
+         size_t stride{};
 
-      // Get the compile-time inline size for types that have it
-      template <class FieldType>
-      consteval size_t fixed_inline_size() noexcept
-      {
-         if constexpr (is_fixed_type_v<FieldType>) {
-            return sizeof(FieldType);
-         }
-         else if constexpr (is_std_vector_v<FieldType> || is_std_string_v<FieldType>) {
-            return 16; // vector_ref or string_ref
-         }
-         else {
-            return 0; // Should not be called for nested variable structs
-         }
-      }
+         [[nodiscard]] size_t size() const noexcept { return count; }
 
-   } // namespace zmem
+         [[nodiscard]] const T& operator[](size_t index) const noexcept
+         {
+            return *reinterpret_cast<const T*>(data + index * stride);
+         }
+      };
+   }
 
    // ============================================================================
    // lazy_zmem_view - Zero-copy view into ZMEM data
@@ -99,8 +79,8 @@ namespace glz
             base_ = data_;
          }
          else {
-            // Variable struct: skip 8-byte size header
-            base_ = data_ + sizeof(uint64_t);
+            // Variable struct: skip size header and inline-base padding
+            base_ = data_ + zmem::inline_layout<T>::InlineBaseOffset;
          }
       }
 
@@ -172,31 +152,7 @@ namespace glz
       template <size_t TargetIndex>
       [[nodiscard]] const char* compute_field_ptr() const noexcept
       {
-         const char* ptr = base_;
-
-         // Iterate through fields 0 to TargetIndex-1, accumulating offset
-         [&]<size_t... Is>(std::index_sequence<Is...>) {
-            ((advance_ptr_for_field<Is>(ptr, TargetIndex)), ...);
-         }(std::make_index_sequence<TargetIndex>{});
-
-         return ptr;
-      }
-
-      template <size_t I>
-      void advance_ptr_for_field(const char*& ptr, [[maybe_unused]] size_t target) const noexcept
-      {
-         using FieldType = field_t<T, I>;
-
-         if constexpr (zmem::has_fixed_inline_size<FieldType>()) {
-            // Fixed-size field: advance by compile-time constant
-            ptr += zmem::fixed_inline_size<FieldType>();
-         }
-         else {
-            // Nested variable struct: read size header and advance by 8 + runtime size
-            uint64_t nested_size;
-            std::memcpy(&nested_size, ptr, sizeof(uint64_t));
-            ptr += sizeof(uint64_t) + nested_size;
-         }
+         return base_ + zmem::inline_layout<T>::Offsets[TargetIndex];
       }
 
       template <class MemberType>
@@ -221,9 +177,14 @@ namespace glz
             std::memcpy(&ref, field_ptr, sizeof(zmem::vector_ref));
 
             if constexpr (zmem::is_fixed_type_v<ElemType>) {
-               // Fixed element vector: return span into buffer
-               const ElemType* elem_ptr = reinterpret_cast<const ElemType*>(base_ + ref.offset);
-               return std::span<const ElemType>{elem_ptr, static_cast<size_t>(ref.count)};
+               constexpr size_t stride = zmem::vector_fixed_stride<ElemType>();
+               if constexpr (stride == sizeof(ElemType)) {
+                  const ElemType* elem_ptr = reinterpret_cast<const ElemType*>(base_ + ref.offset);
+                  return std::span<const ElemType>{elem_ptr, static_cast<size_t>(ref.count)};
+               }
+               else {
+                  return zmem::strided_span<ElemType>{base_ + ref.offset, static_cast<size_t>(ref.count), stride};
+               }
             }
             else {
                // Variable element vector: return raw data pointer and count
@@ -231,12 +192,19 @@ namespace glz
                return std::pair{base_ + ref.offset, ref.count};
             }
          }
+         else if constexpr (zmem::is_std_map_like_v<MemberType>) {
+            zmem::map_ref ref;
+            std::memcpy(&ref, field_ptr, sizeof(zmem::map_ref));
+            return std::pair{base_ + ref.offset, ref.count};
+         }
          else {
             // Nested variable struct: return a lazy view into it
-            // The nested struct starts with its own size header
+            uint64_t offset;
+            std::memcpy(&offset, field_ptr, sizeof(uint64_t));
+            const char* nested_ptr = base_ + offset;
             uint64_t nested_size;
-            std::memcpy(&nested_size, field_ptr, sizeof(uint64_t));
-            return lazy_zmem_view<MemberType>{field_ptr, static_cast<size_t>(sizeof(uint64_t) + nested_size)};
+            std::memcpy(&nested_size, nested_ptr, sizeof(uint64_t));
+            return lazy_zmem_view<MemberType>{nested_ptr, static_cast<size_t>(sizeof(uint64_t) + nested_size)};
          }
       }
    };
