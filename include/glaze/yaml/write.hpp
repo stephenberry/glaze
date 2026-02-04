@@ -430,7 +430,10 @@ namespace glz
          if constexpr (requires { value.empty(); }) {
             is_empty = value.empty();
          }
-         else if constexpr (requires { value.begin(); value.end(); }) {
+         else if constexpr (requires {
+                               value.begin();
+                               value.end();
+                            }) {
             is_empty = (value.begin() == value.end());
          }
 
