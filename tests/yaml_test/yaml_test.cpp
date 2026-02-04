@@ -543,6 +543,19 @@ suite yaml_block_scalar_tests = [] {
       // Multiline strings should use block scalar or quoted string
    };
 
+   "roundtrip_literal_block_keep_multiple_newlines"_test = [] {
+      std::string original = "line1\nline2\n\n\n";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml.find("|+") != std::string::npos);
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
    "read_literal_block_scalar"_test = [] {
       std::string yaml = R"(x: 1
 y: 1.0
@@ -4949,6 +4962,16 @@ suite generic_boolean_null_key_tests = [] {
       expect(obj.contains("true"));
       expect(std::holds_alternative<std::string>(obj["true"].data));
       expect(std::get<std::string>(obj["true"].data) == "value");
+   };
+
+   "generic_true_colon_no_space"_test = [] {
+      // "true:foo" should parse as a string, not a key or boolean
+      std::string yaml = "true:foo";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<std::string>(parsed.data));
+      expect(std::get<std::string>(parsed.data) == "true:foo");
    };
 
    "generic_false_as_key"_test = [] {

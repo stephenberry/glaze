@@ -3157,7 +3157,6 @@ namespace glz
                case '\t':
                case '\n':
                case '\r':
-               case ':':
                case ',':
                case ']':
                case '}':
@@ -3167,7 +3166,14 @@ namespace glz
                }
             };
             auto is_word_boundary = [&](const auto ptr) {
-               return (ptr == end) || is_plain_scalar_boundary(*ptr);
+               if (ptr == end) {
+                  return true;
+               }
+               if (*ptr == ':') {
+                  auto next = ptr + 1;
+                  return (next == end) || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+               }
+               return is_plain_scalar_boundary(*ptr);
             };
 
             switch (c) {
