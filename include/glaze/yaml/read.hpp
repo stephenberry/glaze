@@ -711,13 +711,6 @@ namespace glz
             trailing_newlines.clear();
             first_line = false;
 
-            // Add indentation beyond content_indent for literal style
-            if (indicator == '|' && line_indent > content_indent) {
-               for (int32_t i = content_indent; i < line_indent; ++i) {
-                  value.push_back(' ');
-               }
-            }
-
             // Skip to content_indent level
             it = line_start;
             for (int32_t i = 0; i < content_indent && it != end && *it == ' '; ++i) {
@@ -1899,7 +1892,13 @@ namespace glz
                            if (nested_indent > effective_line_indent) {
                               // Save and set indent for nested parsing
                               auto saved_indent = ctx.indent;
-                              ctx.indent = nested_indent;
+                              if constexpr (readable_map_t<member_type>) {
+                                 // Map parsing expects parent indent, not the map's key indent
+                                 ctx.indent = nested_indent - 1;
+                              }
+                              else {
+                                 ctx.indent = nested_indent;
+                              }
                               from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
                               ctx.indent = saved_indent;
                            }

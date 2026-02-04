@@ -2959,6 +2959,154 @@ struct glz::meta<file_struct>
    static constexpr auto value = object("x", &T::x, "y", &T::y, "name", &T::name);
 };
 
+struct k8s_metadata
+{
+   std::string name{};
+   std::map<std::string, std::string> labels{};
+};
+
+struct k8s_label_selector
+{
+   std::map<std::string, std::string> matchLabels{};
+};
+
+struct k8s_container_port
+{
+   int containerPort{};
+};
+
+struct k8s_container
+{
+   std::string name{};
+   std::string image{};
+   std::vector<k8s_container_port> ports{};
+};
+
+struct k8s_pod_spec
+{
+   std::vector<k8s_container> containers{};
+};
+
+struct k8s_pod_template_metadata
+{
+   std::map<std::string, std::string> labels{};
+};
+
+struct k8s_pod_template
+{
+   k8s_pod_template_metadata metadata{};
+   k8s_pod_spec spec{};
+};
+
+struct k8s_deployment_spec
+{
+   int replicas{};
+   k8s_label_selector selector{};
+   k8s_pod_template template_{};
+};
+
+template <>
+struct glz::meta<k8s_deployment_spec>
+{
+   static constexpr std::string_view rename_key(const std::string_view key)
+   {
+      if (key == "template_") {
+         return "template";
+      }
+      return key;
+   }
+};
+
+struct k8s_deployment
+{
+   std::string apiVersion{};
+   std::string kind{};
+   k8s_metadata metadata{};
+   k8s_deployment_spec spec{};
+};
+
+struct k8s_service_port
+{
+   std::string name{};
+   std::string protocol{};
+   int port{};
+   int targetPort{};
+};
+
+struct k8s_service_spec
+{
+   std::map<std::string, std::string> selector{};
+   std::vector<k8s_service_port> ports{};
+};
+
+struct k8s_service
+{
+   std::string apiVersion{};
+   std::string kind{};
+   k8s_metadata metadata{};
+   k8s_service_spec spec{};
+};
+
+template <class T, class Check>
+static void roundtrip_yaml(const std::string& yaml, Check&& check)
+{
+   T parsed{};
+   auto rec = glz::read_yaml(parsed, yaml);
+   expect(!rec) << glz::format_error(rec, yaml);
+   check(parsed);
+
+   std::string output;
+   auto wec = glz::write_yaml(parsed, output);
+   expect(!wec);
+
+   T reparsed{};
+   auto rec2 = glz::read_yaml(reparsed, output);
+   expect(!rec2) << glz::format_error(rec2, output);
+   check(reparsed);
+}
+
+struct advanced_flags
+{
+   bool enabled{};
+   bool archived{};
+};
+
+struct advanced_counts
+{
+   int retries{};
+   int timeout_ms{};
+   double ratio{};
+};
+
+struct advanced_flow
+{
+   std::vector<int> values{};
+   std::map<std::string, std::string> mapping{};
+};
+
+struct advanced_nested
+{
+   std::string name{};
+   std::vector<int> ids{};
+   std::map<std::string, std::string> labels{};
+};
+
+struct advanced_doc
+{
+   std::string title{};
+   std::string description{};
+   std::string literal{};
+   std::string multiline_plain{};
+   std::string quoted{};
+   advanced_flags flags{};
+   advanced_counts counts{};
+   std::vector<std::string> list{};
+   advanced_flow flow{};
+   advanced_nested nested{};
+   std::optional<std::string> note{};
+};
+
+
 suite yaml_file_io_tests = [] {
    "write_file_yaml"_test = [] {
       file_struct obj{42, 3.14, "test_file"};
@@ -2983,6 +3131,318 @@ suite yaml_file_io_tests = [] {
       file_struct obj{};
       auto ec = glz::read_file_yaml(obj, "./nonexistent_file.yaml");
       expect(bool(ec)); // Should error
+   };
+};
+
+// ============================================================
+// External YAML String Tests
+// ============================================================
+
+suite yaml_external_yaml_string_tests = [] {
+   // Sources:
+   // - https://k8s-examples.container-solutions.com/examples/Deployment/simple-deployment.yaml
+   // - https://k8s-examples.container-solutions.com/examples/Service/simple.yaml
+   "external_service_generic_roundtrip"_test = [] {
+      const std::string yaml = R"(---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-service
+spec:
+  selector:
+    app: App1
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 9376
+)";
+      auto check = [](const glz::generic& parsed) {
+         auto& root = std::get<glz::generic::object_t>(parsed.data);
+         expect(std::get<std::string>(root.at("kind").data) == "Service");
+
+         auto& spec = std::get<glz::generic::object_t>(root.at("spec").data);
+         auto& selector = std::get<glz::generic::object_t>(spec.at("selector").data);
+         expect(std::get<std::string>(selector.at("app").data) == "App1");
+
+         auto& ports = std::get<glz::generic::array_t>(spec.at("ports").data);
+         expect(ports.size() == 1);
+         auto& port0 = std::get<glz::generic::object_t>(ports[0].data);
+         expect(std::get<std::string>(port0.at("name").data) == "http");
+         expect(std::get<double>(port0.at("port").data) == 80.0);
+      };
+
+      roundtrip_yaml<glz::generic>(yaml, check);
+   };
+
+   "external_service_struct_roundtrip"_test = [] {
+      const std::string yaml = R"(---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-service
+spec:
+  selector:
+    app: App1
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 9376
+)";
+      auto check = [](const k8s_service& svc) {
+         expect(svc.apiVersion == "v1");
+         expect(svc.kind == "Service");
+         expect(svc.metadata.name == "simple-service");
+         expect(svc.spec.selector.at("app") == "App1");
+         expect(svc.spec.ports.size() == 1);
+         expect(svc.spec.ports[0].protocol == "TCP");
+         expect(svc.spec.ports[0].port == 80);
+         expect(svc.spec.ports[0].targetPort == 9376);
+      };
+
+      roundtrip_yaml<k8s_service>(yaml, check);
+   };
+
+   "external_deployment_generic_roundtrip"_test = [] {
+      const std::string yaml = R"(---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.7.9
+          ports:
+            - containerPort: 80
+)";
+      auto check = [](const glz::generic& parsed) {
+         auto& root = std::get<glz::generic::object_t>(parsed.data);
+         expect(std::get<std::string>(root.at("kind").data) == "Deployment");
+
+         auto& spec = std::get<glz::generic::object_t>(root.at("spec").data);
+         expect(std::get<double>(spec.at("replicas").data) == 3.0);
+
+         auto& template_obj = std::get<glz::generic::object_t>(spec.at("template").data);
+         auto& pod_spec = std::get<glz::generic::object_t>(template_obj.at("spec").data);
+         auto& containers = std::get<glz::generic::array_t>(pod_spec.at("containers").data);
+         expect(containers.size() == 1);
+
+         auto& container0 = std::get<glz::generic::object_t>(containers[0].data);
+         expect(std::get<std::string>(container0.at("name").data) == "nginx");
+         expect(std::get<std::string>(container0.at("image").data) == "nginx:1.7.9");
+      };
+
+      roundtrip_yaml<glz::generic>(yaml, check);
+   };
+
+   "external_deployment_struct_roundtrip"_test = [] {
+      const std::string yaml = R"(---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.7.9
+          ports:
+            - containerPort: 80
+)";
+      auto check = [](const k8s_deployment& dep) {
+         expect(dep.apiVersion == "apps/v1");
+         expect(dep.kind == "Deployment");
+         expect(dep.metadata.name == "nginx-deployment");
+         expect(dep.spec.replicas == 3);
+         expect(dep.spec.template_.spec.containers.size() == 1);
+         expect(dep.spec.template_.spec.containers[0].image == "nginx:1.7.9");
+         expect(dep.spec.template_.spec.containers[0].ports.size() == 1);
+         expect(dep.spec.template_.spec.containers[0].ports[0].containerPort == 80);
+      };
+
+      roundtrip_yaml<k8s_deployment>(yaml, check);
+   };
+
+   "external_advanced_generic_roundtrip"_test = [] {
+      const std::string yaml = R"(---
+title: "Advanced YAML"
+description: >
+  This is a folded
+  description with a blank line.
+
+  Second paragraph.
+literal: |-
+  line one
+    line two
+  line three
+multiline_plain:
+  meta.statement.conditional.case.python
+  keyword.control.conditional.case.python
+quoted: "beta: colon"
+flags:
+  enabled: true
+  archived: false
+counts:
+  retries: 3
+  timeout_ms: 1500
+  ratio: 0.75
+list:
+  - alpha
+  - "beta: colon"
+  - 'gamma # not comment'
+flow:
+  values: [1, 2, 3]
+  mapping: {a: one, b: two, c: three}
+nested:
+  name: sample
+  ids: [10, 20, 30]
+  labels:
+    env: dev
+    tier: backend
+note: null
+)";
+      auto check = [](const glz::generic& parsed) {
+         auto& root = std::get<glz::generic::object_t>(parsed.data);
+         expect(std::get<std::string>(root.at("title").data) == "Advanced YAML");
+
+         auto& description = std::get<std::string>(root.at("description").data);
+         expect(description.find("This is a folded description") != std::string::npos);
+         expect(description.find("Second paragraph.") != std::string::npos);
+
+         expect(std::get<std::string>(root.at("literal").data) == "line one\n  line two\nline three");
+         expect(std::get<std::string>(root.at("multiline_plain").data) ==
+                "meta.statement.conditional.case.python keyword.control.conditional.case.python");
+         expect(std::get<std::string>(root.at("quoted").data) == "beta: colon");
+
+         auto& flags = std::get<glz::generic::object_t>(root.at("flags").data);
+         expect(std::get<bool>(flags.at("enabled").data));
+         expect(!std::get<bool>(flags.at("archived").data));
+
+         auto& counts = std::get<glz::generic::object_t>(root.at("counts").data);
+         expect(std::get<double>(counts.at("retries").data) == 3.0);
+         expect(std::get<double>(counts.at("timeout_ms").data) == 1500.0);
+         expect(std::abs(std::get<double>(counts.at("ratio").data) - 0.75) < 0.0001);
+
+         auto& list = std::get<glz::generic::array_t>(root.at("list").data);
+         expect(list.size() == 3);
+         expect(std::get<std::string>(list[0].data) == "alpha");
+         expect(std::get<std::string>(list[1].data) == "beta: colon");
+         expect(std::get<std::string>(list[2].data) == "gamma # not comment");
+
+         auto& flow = std::get<glz::generic::object_t>(root.at("flow").data);
+         auto& values = std::get<glz::generic::array_t>(flow.at("values").data);
+         expect(values.size() == 3);
+         expect(std::get<double>(values[0].data) == 1.0);
+         expect(std::get<double>(values[2].data) == 3.0);
+         auto& mapping = std::get<glz::generic::object_t>(flow.at("mapping").data);
+         expect(std::get<std::string>(mapping.at("b").data) == "two");
+
+         auto& nested = std::get<glz::generic::object_t>(root.at("nested").data);
+         expect(std::get<std::string>(nested.at("name").data) == "sample");
+         auto& ids = std::get<glz::generic::array_t>(nested.at("ids").data);
+         expect(ids.size() == 3);
+         auto& labels = std::get<glz::generic::object_t>(nested.at("labels").data);
+         expect(std::get<std::string>(labels.at("env").data) == "dev");
+         expect(std::get<std::string>(labels.at("tier").data) == "backend");
+
+         auto& note = root.at("note").data;
+         expect(std::holds_alternative<std::nullptr_t>(note));
+      };
+
+      roundtrip_yaml<glz::generic>(yaml, check);
+   };
+
+   "external_advanced_struct_roundtrip"_test = [] {
+      const std::string yaml = R"(---
+title: "Advanced YAML"
+description: >
+  This is a folded
+  description with a blank line.
+
+  Second paragraph.
+literal: |-
+  line one
+    line two
+  line three
+multiline_plain:
+  meta.statement.conditional.case.python
+  keyword.control.conditional.case.python
+quoted: "beta: colon"
+flags:
+  enabled: true
+  archived: false
+counts:
+  retries: 3
+  timeout_ms: 1500
+  ratio: 0.75
+list:
+  - alpha
+  - "beta: colon"
+  - 'gamma # not comment'
+flow:
+  values: [1, 2, 3]
+  mapping: {a: one, b: two, c: three}
+nested:
+  name: sample
+  ids: [10, 20, 30]
+  labels:
+    env: dev
+    tier: backend
+note: null
+)";
+      auto check = [](const advanced_doc& doc) {
+         expect(doc.title == "Advanced YAML");
+         expect(doc.description.find("This is a folded description") != std::string::npos);
+         expect(doc.description.find("Second paragraph.") != std::string::npos);
+         expect(doc.literal == "line one\n  line two\nline three");
+         expect(doc.multiline_plain == "meta.statement.conditional.case.python keyword.control.conditional.case.python");
+         expect(doc.quoted == "beta: colon");
+
+         expect(doc.flags.enabled);
+         expect(!doc.flags.archived);
+         expect(doc.counts.retries == 3);
+         expect(doc.counts.timeout_ms == 1500);
+         expect(std::abs(doc.counts.ratio - 0.75) < 0.0001);
+
+         expect(doc.list.size() == 3);
+         expect(doc.list[2] == "gamma # not comment");
+
+         expect(doc.flow.values.size() == 3);
+         expect(doc.flow.values[0] == 1);
+         expect(doc.flow.mapping.at("b") == "two");
+
+         expect(doc.nested.name == "sample");
+         expect(doc.nested.ids.size() == 3);
+         expect(doc.nested.labels.at("env") == "dev");
+         expect(doc.nested.labels.at("tier") == "backend");
+
+         expect(!doc.note.has_value());
+      };
+
+      roundtrip_yaml<advanced_doc>(yaml, check);
    };
 };
 
