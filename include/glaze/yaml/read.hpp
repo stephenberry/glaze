@@ -460,6 +460,151 @@ namespace glz
          }
       }
 
+      // Parse a multiline plain scalar with folding (for block context)
+      // This handles plain scalars that span multiple lines, where continuation
+      // lines are indented more than the base indent level.
+      // Per YAML spec:
+      // - Continuation lines must be more indented than the base indent
+      // - A single newline between lines becomes a single space
+      // - Blank lines are preserved as literal newlines
+      template <class Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE void parse_plain_scalar_multiline(std::string& value, Ctx&, It& it, End end,
+                                                          int32_t base_indent)
+      {
+         value.clear();
+
+         while (it != end) {
+            const char c = *it;
+
+            // Check for newline - potential continuation
+            if (c == '\n' || c == '\r') {
+               // Trim trailing whitespace from current line
+               while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
+                  value.pop_back();
+               }
+
+               // Count consecutive blank lines
+               int blank_lines = 0;
+               auto lookahead = it;
+
+               while (lookahead != end) {
+                  // Skip the newline
+                  if (*lookahead == '\r' && (lookahead + 1) != end && *(lookahead + 1) == '\n') {
+                     ++lookahead;
+                  }
+                  if (lookahead != end && (*lookahead == '\n' || *lookahead == '\r')) {
+                     ++lookahead;
+                  }
+                  else {
+                     break;
+                  }
+
+                  // Check if this is a blank line or comment-only line
+                  int32_t line_indent = 0;
+
+                  while (lookahead != end && *lookahead == ' ') {
+                     ++line_indent;
+                     ++lookahead;
+                  }
+
+                  if (lookahead == end || *lookahead == '\n' || *lookahead == '\r') {
+                     // Blank line
+                     ++blank_lines;
+                     continue;
+                  }
+
+                  if (*lookahead == '#') {
+                     // Comment-only line - skip to end of line
+                     while (lookahead != end && *lookahead != '\n' && *lookahead != '\r') {
+                        ++lookahead;
+                     }
+                     ++blank_lines;
+                     continue;
+                  }
+
+                  // Found content - check indentation
+                  // Continuation lines must be at the same or greater indent than the first content line
+                  if (line_indent < base_indent) {
+                     // Dedented - end of scalar
+                     return;
+                  }
+
+                  // Check for structural indicators that end the scalar
+                  // Sequence indicator (- followed by space/newline/end)
+                  if (*lookahead == '-') {
+                     auto after_dash = lookahead + 1;
+                     if (after_dash == end || *after_dash == ' ' || *after_dash == '\t' || *after_dash == '\n' ||
+                         *after_dash == '\r') {
+                        // This is a new sequence item, not a continuation
+                        return;
+                     }
+                  }
+
+                  // Check for mapping key indicator (content followed by : and space)
+                  // This is a heuristic - we look for ": " pattern which indicates a mapping key
+                  {
+                     auto scan = lookahead;
+                     while (scan != end && *scan != '\n' && *scan != '\r') {
+                        if (*scan == ':') {
+                           auto after_colon = scan + 1;
+                           if (after_colon == end || *after_colon == ' ' || *after_colon == '\t' ||
+                               *after_colon == '\n' || *after_colon == '\r') {
+                              // This looks like a mapping key - end the scalar
+                              return;
+                           }
+                        }
+                        ++scan;
+                     }
+                  }
+
+                  // This is a continuation line
+                  // Add appropriate line breaks for blank lines
+                  for (int i = 0; i < blank_lines; ++i) {
+                     value.push_back('\n');
+                  }
+
+                  // Add a space to fold the newline (unless we added literal newlines for blank lines)
+                  if (blank_lines == 0 && !value.empty()) {
+                     value.push_back(' ');
+                  }
+
+                  // Move iterator to the content position
+                  it = lookahead;
+                  break;
+               }
+
+               // If we exhausted the lookahead, we're done
+               if (lookahead == end) {
+                  return;
+               }
+
+               continue; // Process the character at the new position
+            }
+
+            // Per YAML spec: # only starts a comment when preceded by whitespace
+            if (c == '#') {
+               if (value.empty() || value.back() == ' ' || value.back() == '\t') {
+                  break; // This is a comment
+               }
+            }
+
+            // Colon followed by space/newline ends plain scalar (potential nested mapping)
+            if (c == ':') {
+               if ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n' || *(it + 1) == '\r') {
+                  break;
+               }
+            }
+
+            value.push_back(c);
+            ++it;
+         }
+
+         // Trim trailing whitespace
+         while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
+            value.pop_back();
+         }
+      }
+
       // Parse a block scalar (| or >)
       template <class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_block_scalar(std::string& value, Ctx& ctx, It& it, End end, int32_t base_indent)
@@ -565,13 +710,6 @@ namespace glz
             }
             trailing_newlines.clear();
             first_line = false;
-
-            // Add indentation beyond content_indent for literal style
-            if (indicator == '|' && line_indent > content_indent) {
-               for (int32_t i = content_indent; i < line_indent; ++i) {
-                  value.push_back(' ');
-               }
-            }
 
             // Skip to content_indent level
             it = line_start;
@@ -720,7 +858,19 @@ namespace glz
             yaml::parse_block_scalar(str, ctx, it, end, 0);
             break;
          case yaml::scalar_style::plain:
-            yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
+            // In block context with known indent, use multiline parsing to support
+            // plain scalars that span multiple lines (folding behavior)
+            if constexpr (!yaml::check_flow_context(Opts)) {
+               if (ctx.indent >= 0) {
+                  yaml::parse_plain_scalar_multiline(str, ctx, it, end, ctx.indent);
+               }
+               else {
+                  yaml::parse_plain_scalar(str, ctx, it, end, false);
+               }
+            }
+            else {
+               yaml::parse_plain_scalar(str, ctx, it, end, true);
+            }
             break;
          }
 
@@ -973,17 +1123,28 @@ namespace glz
             clean_view = num_str;
          }
 
+         // YAML allows leading '+' for positive numbers, but C++ from_chars doesn't
+         // Strip leading '+' if present
+         auto parse_view = clean_view;
+         if (!parse_view.empty() && parse_view.front() == '+') {
+            parse_view.remove_prefix(1);
+            if (parse_view.empty()) {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
+         }
+
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-            auto result = glz::fast_float::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value);
+            auto result = glz::fast_float::from_chars(parse_view.data(), parse_view.data() + parse_view.size(), value);
             // Check both for errors and that all input was consumed (e.g., "12:30" is not a valid number)
-            if (result.ec != std::errc{} || result.ptr != clean_view.data() + clean_view.size()) {
+            if (result.ec != std::errc{} || result.ptr != parse_view.data() + parse_view.size()) {
                ctx.error = error_code::parse_number_failure;
             }
          }
          else {
-            auto [ptr, ec] = std::from_chars(clean_view.data(), clean_view.data() + clean_view.size(), value);
+            auto [ptr, ec] = std::from_chars(parse_view.data(), parse_view.data() + parse_view.size(), value);
             // Check both for errors and that all input was consumed
-            if (ec != std::errc{} || ptr != clean_view.data() + clean_view.size()) {
+            if (ec != std::errc{} || ptr != parse_view.data() + parse_view.size()) {
                ctx.error = error_code::parse_number_failure;
             }
          }
@@ -1731,7 +1892,13 @@ namespace glz
                            if (nested_indent > effective_line_indent) {
                               // Save and set indent for nested parsing
                               auto saved_indent = ctx.indent;
-                              ctx.indent = nested_indent;
+                              if constexpr (readable_map_t<member_type>) {
+                                 // Map parsing expects parent indent, not the map's key indent
+                                 ctx.indent = nested_indent - 1;
+                              }
+                              else {
+                                 ctx.indent = nested_indent;
+                              }
                               from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
                               ctx.indent = saved_indent;
                            }
@@ -2862,12 +3029,18 @@ namespace glz
    template <class It, class End>
    GLZ_ALWAYS_INLINE bool line_could_be_block_mapping(It it, End end)
    {
+      bool prev_was_whitespace = true; // Start of value acts like after whitespace
       while (it != end) {
          const char c = *it;
          if (c == ':') {
             ++it;
             // Colon followed by space, newline, or end indicates a mapping key
             return it == end || *it == ' ' || *it == '\t' || *it == '\n' || *it == '\r';
+         }
+         // Per YAML spec: # only starts a comment when preceded by whitespace
+         // Stop scanning if we hit a comment - any colon after is not a key indicator
+         if (c == '#' && prev_was_whitespace) {
+            return false;
          }
          // Skip over quoted strings - colons inside quotes don't count as key indicators
          if (c == '"' || c == '\'') {
@@ -2887,12 +3060,14 @@ namespace glz
                }
             }
             if (it != end) ++it; // Skip closing quote
+            prev_was_whitespace = false;
             continue;
          }
          // Stop at end of line or flow indicators
          if (yaml::block_mapping_end_table[static_cast<uint8_t>(c)]) {
             return false;
          }
+         prev_was_whitespace = (c == ' ' || c == '\t');
          ++it;
       }
       return false;
@@ -2976,6 +3151,30 @@ namespace glz
             using V = std::remove_cvref_t<T>;
             using counts = yaml_variant_type_count<V>;
             const char c = *it;
+            auto is_plain_scalar_boundary = [](const char ch) {
+               switch (ch) {
+               case ' ':
+               case '\t':
+               case '\n':
+               case '\r':
+               case ',':
+               case ']':
+               case '}':
+                  return true;
+               default:
+                  return false;
+               }
+            };
+            auto is_word_boundary = [&](const auto ptr) {
+               if (ptr == end) {
+                  return true;
+               }
+               if (*ptr == ':') {
+                  auto next = ptr + 1;
+                  return (next == end) || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+               }
+               return is_plain_scalar_boundary(*ptr);
+            };
 
             switch (c) {
             case '!': {
@@ -3060,63 +3259,86 @@ namespace glz
                return;
             case 't':
             case 'T':
-               // Could be "true", "True", "TRUE", or a key starting with t/T
+               // Could be "true", "True", "TRUE", or a key/string starting with t/T
                if constexpr (counts::n_bool > 0) {
                   if ((end - it >= 4) && ((it[1] == 'r' && it[2] == 'u' && it[3] == 'e') ||
                                           (it[1] == 'R' && it[2] == 'U' && it[3] == 'E'))) {
-                     // Check if this is a key (followed by ": ") rather than a boolean value
-                     // "true: value" should parse as {true: value}, not as the boolean true
-                     if ((end - it > 4) && it[4] == ':' &&
-                         (end - it == 5 || it[5] == ' ' || it[5] == '\t' || it[5] == '\n' || it[5] == '\r')) {
-                        // This is "true:" followed by space/tab/newline/end - treat as key
-                        parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                     // Check what follows the word "true"
+                     const auto after_true = it + 4;
+                     const bool at_word_boundary = is_word_boundary(after_true);
+
+                     if (at_word_boundary) {
+                        // Check if this is a key (followed by ": ") rather than a boolean value
+                        // "true: value" should parse as {true: value}, not as the boolean true
+                        if ((end - it > 4) && it[4] == ':' &&
+                            (end - it == 5 || it[5] == ' ' || it[5] == '\t' || it[5] == '\n' || it[5] == '\r')) {
+                           // This is "true:" followed by space/tab/newline/end - treat as key
+                           parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                           return;
+                        }
+                        process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it,
+                                                                                                      end);
                         return;
                      }
-                     process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it, end);
-                     return;
+                     // "true" is followed by more characters (e.g., "True\b") - treat as string
                   }
                }
                parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
             case 'f':
             case 'F':
-               // Could be "false", "False", "FALSE", or a key starting with f/F
+               // Could be "false", "False", "FALSE", or a key/string starting with f/F
                if constexpr (counts::n_bool > 0) {
                   if ((end - it >= 5) && ((it[1] == 'a' && it[2] == 'l' && it[3] == 's' && it[4] == 'e') ||
                                           (it[1] == 'A' && it[2] == 'L' && it[3] == 'S' && it[4] == 'E'))) {
-                     // Check if this is a key (followed by ": ") rather than a boolean value
-                     // "false: value" should parse as {false: value}, not as the boolean false
-                     if ((end - it > 5) && it[5] == ':' &&
-                         (end - it == 6 || it[6] == ' ' || it[6] == '\t' || it[6] == '\n' || it[6] == '\r')) {
-                        // This is "false:" followed by space/tab/newline/end - treat as key
-                        parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                     // Check what follows the word "false"
+                     const auto after_false = it + 5;
+                     const bool at_word_boundary = is_word_boundary(after_false);
+
+                     if (at_word_boundary) {
+                        // Check if this is a key (followed by ": ") rather than a boolean value
+                        // "false: value" should parse as {false: value}, not as the boolean false
+                        if ((end - it > 5) && it[5] == ':' &&
+                            (end - it == 6 || it[6] == ' ' || it[6] == '\t' || it[6] == '\n' || it[6] == '\r')) {
+                           // This is "false:" followed by space/tab/newline/end - treat as key
+                           parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                           return;
+                        }
+                        process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it,
+                                                                                                      end);
                         return;
                      }
-                     process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it, end);
-                     return;
+                     // "false" is followed by more characters (e.g., "False\b") - treat as string
                   }
                }
                parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
             case 'n':
             case 'N':
-               // Could be "null", "Null", "NULL", or a key starting with n/N
+               // Could be "null", "Null", "NULL", or a key/string starting with n/N
                if constexpr (counts::n_null > 0) {
                   if ((end - it >= 4) && ((it[1] == 'u' && it[2] == 'l' && it[3] == 'l') ||
                                           (it[1] == 'U' && it[2] == 'L' && it[3] == 'L'))) {
-                     // Check if this is a key (followed by ": ") rather than a null value
-                     // "null: value" should parse as {null: value}, not as the null type
-                     if ((end - it > 4) && it[4] == ':' &&
-                         (end - it == 5 || it[5] == ' ' || it[5] == '\t' || it[5] == '\n' || it[5] == '\r')) {
-                        // This is "null:" followed by space/tab/newline/end - treat as key
-                        parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                     // Check what follows the word "null"
+                     const auto after_null = it + 4;
+                     const bool at_word_boundary = is_word_boundary(after_null);
+
+                     if (at_word_boundary) {
+                        // Check if this is a key (followed by ": ") rather than a null value
+                        // "null: value" should parse as {null: value}, not as the null type
+                        if ((end - it > 4) && it[4] == ':' &&
+                            (end - it == 5 || it[5] == ' ' || it[5] == '\t' || it[5] == '\n' || it[5] == '\r')) {
+                           // This is "null:" followed by space/tab/newline/end - treat as key
+                           parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
+                           return;
+                        }
+                        constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
+                        using NullType = std::variant_alternative_t<first_idx, V>;
+                        if (!std::holds_alternative<NullType>(value)) value = NullType{};
+                        from<YAML, NullType>::template op<Opts>(std::get<NullType>(value), ctx, it, end);
                         return;
                      }
-                     constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
-                     using NullType = std::variant_alternative_t<first_idx, V>;
-                     if (!std::holds_alternative<NullType>(value)) value = NullType{};
-                     from<YAML, NullType>::template op<Opts>(std::get<NullType>(value), ctx, it, end);
-                     return;
+                     // "null" is followed by more characters (e.g., "Null\b") - treat as string
                   }
                }
                parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
@@ -3151,10 +3373,17 @@ namespace glz
                return;
             case '+':
             case '.':
-               // Likely a number
+               // Could be a number (.5, +5, .inf, etc.) or a string (.c, .cpp, +name, etc.)
+               // Try parsing as number speculatively, fall back to string on failure
                if constexpr (counts::n_num > 0) {
-                  process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
-                  return;
+                  auto start_it = it;
+                  yaml::yaml_context temp_ctx{};
+                  temp_ctx.indent = ctx.indent;
+                  process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it, end);
+                  if (!bool(temp_ctx.error)) {
+                     return; // Successfully parsed as number
+                  }
+                  it = start_it; // Restore and fall through to string
                }
                parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
