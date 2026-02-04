@@ -6012,4 +6012,154 @@ suite yaml_boolean_like_string_tests = [] {
    };
 };
 
+// Tests for block scalar followed by another key in same mapping
+struct block_scalar_sibling_struct
+{
+   std::string k1{};
+   std::string k2{};
+};
+
+suite yaml_block_scalar_sibling_tests = [] {
+   // Issue: Block scalar followed by another key at same indent level loses k2
+   "block_scalar_sibling_key_in_sequence"_test = [] {
+      std::string yaml = R"(- k1: |
+    a
+    b
+  k2: c)";
+      std::vector<block_scalar_sibling_struct> result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.size() == 1u);
+      expect(result[0].k1 == "a\nb\n") << "k1 was: " << result[0].k1;
+      expect(result[0].k2 == "c") << "k2 was: " << result[0].k2;
+   };
+
+   "block_scalar_sibling_key_simple"_test = [] {
+      std::string yaml = R"(k1: |
+  a
+  b
+k2: c)";
+      block_scalar_sibling_struct result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.k1 == "a\nb\n") << "k1 was: " << result.k1;
+      expect(result.k2 == "c") << "k2 was: " << result.k2;
+   };
+};
+
+suite yaml_quoted_string_folding_tests = [] {
+   // Issue: Quoted strings should fold line breaks
+   // Single newline -> space, double newline -> single newline
+   // Backslash at end of line (double-quoted only) -> no space
+   "double_quoted_line_folding"_test = [] {
+      // Note: trailing spaces on some lines are significant
+      std::string yaml = R"(- "very \"long\"
+  'string' with
+
+  paragraph gap, \n and
+  s\
+  p\
+  a\
+  c\
+  e\
+  s.")";
+      std::vector<std::string> result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.size() == 1u);
+      // Expected: line breaks fold to spaces, blank line becomes \n, \n is literal newline, \ at end of line means no space
+      expect(result[0] == "very \"long\" 'string' with\nparagraph gap, \n and spaces.") << "got: " << result[0];
+   };
+
+   "single_quoted_line_folding"_test = [] {
+      std::string yaml = R"(- 'very "long"
+  ''string'' with
+
+  paragraph gap, \n and
+  spaces.')";
+      std::vector<std::string> result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.size() == 1u);
+      // Expected: line breaks fold to spaces, blank line becomes \n, \n is literal (two chars), trailing spaces trimmed
+      expect(result[0] == "very \"long\" 'string' with\nparagraph gap, \\n and spaces.") << "got: " << result[0];
+   };
+
+   "double_quoted_simple_folding"_test = [] {
+      std::string yaml = R"("hello
+  world")";
+      std::string result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result == "hello world") << "got: " << result;
+   };
+
+   "single_quoted_simple_folding"_test = [] {
+      std::string yaml = R"('hello
+  world')";
+      std::string result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result == "hello world") << "got: " << result;
+   };
+
+   "double_quoted_blank_line_becomes_newline"_test = [] {
+      std::string yaml = R"("line1
+
+  line2")";
+      std::string result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result == "line1\nline2") << "got: " << result;
+   };
+
+   "double_quoted_backslash_continuation"_test = [] {
+      std::string yaml = R"("no\
+  space")";
+      std::string result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result == "nospace") << "got: " << result;
+   };
+
+   // Test from StackOverflow answer with trailing whitespace on lines
+   // Trailing whitespace before a line break is trimmed in YAML quoted strings
+   "stackoverflow_example_double_quoted"_test = [] {
+      // Note: there are trailing spaces after "and" on line 5 - these get trimmed
+      std::string yaml =
+         "- \"very \\\"long\\\"\n"
+         "  'string' with\n"
+         "\n"
+         "  paragraph gap, \\n and        \n"
+         "  s\\\n"
+         "  p\\\n"
+         "  a\\\n"
+         "  c\\\n"
+         "  e\\\n"
+         "  s.\"";
+      std::vector<std::string> result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.size() == 1u);
+      // Trailing spaces are trimmed, backslash continuations should work
+      expect(result[0] == "very \"long\" 'string' with\nparagraph gap, \n and spaces.") << "got: " << result[0];
+   };
+
+   "stackoverflow_example_single_quoted"_test = [] {
+      // Note: there are trailing spaces after "and" on line 5 - these get trimmed
+      std::string yaml =
+         "- 'very \"long\"\n"
+         "  ''string'' with\n"
+         "\n"
+         "  paragraph gap, \\n and        \n"
+         "  spaces.'";
+      std::vector<std::string> result;
+      auto ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.size() == 1u);
+      // In single-quoted, \n is literal two chars, trailing spaces trimmed
+      expect(result[0] == "very \"long\" 'string' with\nparagraph gap, \\n and spaces.") << "got: " << result[0];
+   };
+};
+
 int main() { return 0; }
