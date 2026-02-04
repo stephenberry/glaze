@@ -3152,6 +3152,24 @@ namespace glz
             using V = std::remove_cvref_t<T>;
             using counts = yaml_variant_type_count<V>;
             const char c = *it;
+            auto is_plain_scalar_boundary = [](const char ch) {
+               switch (ch) {
+               case ' ':
+               case '\t':
+               case '\n':
+               case '\r':
+               case ':':
+               case ',':
+               case ']':
+               case '}':
+                  return true;
+               default:
+                  return false;
+               }
+            };
+            auto is_word_boundary = [&](const auto ptr) {
+               return (ptr == end) || is_plain_scalar_boundary(*ptr);
+            };
 
             switch (c) {
             case '!': {
@@ -3242,10 +3260,7 @@ namespace glz
                                           (it[1] == 'R' && it[2] == 'U' && it[3] == 'E'))) {
                      // Check what follows the word "true"
                      const auto after_true = it + 4;
-                     const bool at_word_boundary =
-                        (after_true == end) || (*after_true == ' ') || (*after_true == '\t') ||
-                        (*after_true == '\n') || (*after_true == '\r') || (*after_true == '#') ||
-                        (*after_true == ':') || (*after_true == ',') || (*after_true == ']') || (*after_true == '}');
+                     const bool at_word_boundary = is_word_boundary(after_true);
 
                      if (at_word_boundary) {
                         // Check if this is a key (followed by ": ") rather than a boolean value
@@ -3273,11 +3288,7 @@ namespace glz
                                           (it[1] == 'A' && it[2] == 'L' && it[3] == 'S' && it[4] == 'E'))) {
                      // Check what follows the word "false"
                      const auto after_false = it + 5;
-                     const bool at_word_boundary =
-                        (after_false == end) || (*after_false == ' ') || (*after_false == '\t') ||
-                        (*after_false == '\n') || (*after_false == '\r') || (*after_false == '#') ||
-                        (*after_false == ':') || (*after_false == ',') || (*after_false == ']') ||
-                        (*after_false == '}');
+                     const bool at_word_boundary = is_word_boundary(after_false);
 
                      if (at_word_boundary) {
                         // Check if this is a key (followed by ": ") rather than a boolean value
@@ -3305,10 +3316,7 @@ namespace glz
                                           (it[1] == 'U' && it[2] == 'L' && it[3] == 'L'))) {
                      // Check what follows the word "null"
                      const auto after_null = it + 4;
-                     const bool at_word_boundary =
-                        (after_null == end) || (*after_null == ' ') || (*after_null == '\t') ||
-                        (*after_null == '\n') || (*after_null == '\r') || (*after_null == '#') ||
-                        (*after_null == ':') || (*after_null == ',') || (*after_null == ']') || (*after_null == '}');
+                     const bool at_word_boundary = is_word_boundary(after_null);
 
                      if (at_word_boundary) {
                         // Check if this is a key (followed by ": ") rather than a null value

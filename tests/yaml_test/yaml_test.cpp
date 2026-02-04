@@ -5409,6 +5409,45 @@ suite yaml_boolean_like_string_tests = [] {
       expect(std::get<std::string>(root.at("match").data) == "Null\\b");
    };
 
+   // Test that "true#comment" is treated as a string (not a boolean)
+   "true_hash_comment_is_string"_test = [] {
+      std::string yaml = R"(match: true#comment)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("match"));
+      expect(std::holds_alternative<std::string>(root.at("match").data));
+      expect(std::get<std::string>(root.at("match").data) == "true#comment");
+   };
+
+   // Test that "false#comment" is treated as a string (not a boolean)
+   "false_hash_comment_is_string"_test = [] {
+      std::string yaml = R"(match: false#comment)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("match"));
+      expect(std::holds_alternative<std::string>(root.at("match").data));
+      expect(std::get<std::string>(root.at("match").data) == "false#comment");
+   };
+
+   // Test that "null#comment" is treated as a string (not null)
+   "null_hash_comment_is_string"_test = [] {
+      std::string yaml = R"(match: null#comment)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("match"));
+      expect(std::holds_alternative<std::string>(root.at("match").data));
+      expect(std::get<std::string>(root.at("match").data) == "null#comment");
+   };
+
    // Test that plain "False" is still treated as a boolean
    "plain_false_is_boolean"_test = [] {
       std::string yaml = R"(value: False)";
