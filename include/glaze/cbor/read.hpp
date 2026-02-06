@@ -1334,6 +1334,9 @@ namespace glz
          }
 
          static constexpr auto N = reflect<T>::size;
+         if constexpr (N == 0) {
+            (void)value;
+         }
 
          uint64_t n_keys;
          if (additional_info == info::indefinite) {

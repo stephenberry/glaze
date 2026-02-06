@@ -1693,6 +1693,9 @@ namespace glz
          ++it;
 
          static constexpr auto N = reflect<T>::size;
+         if constexpr (N == 0) {
+            (void)value;
+         }
 
          static constexpr bit_array<N> all_fields = [] {
             bit_array<N> arr{};
