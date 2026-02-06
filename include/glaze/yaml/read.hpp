@@ -2753,13 +2753,13 @@ namespace glz
                         }
                         else if (*it == '#') {
                            // Skip leading spaces before measuring
-                           auto line_start = it;
+                           auto comment_start = it;
                            while (it != end && *it == ' ') ++it;
                            if (it != end && *it == '#') {
                               yaml::skip_comment(it, end);
                            }
                            else {
-                              it = line_start; // Not a comment line, restore
+                              it = comment_start; // Not a comment line, restore
                               break;
                            }
                         }
@@ -2781,13 +2781,13 @@ namespace glz
                            }
                            else if (*it == ' ') {
                               // Check if this line is a comment
-                              auto line_start = it;
+                              auto comment_start = it;
                               while (it != end && *it == ' ') ++it;
                               if (it != end && *it == '#') {
                                  yaml::skip_comment(it, end);
                               }
                               else {
-                                 it = line_start; // Not a comment, restore and break
+                                 it = comment_start; // Not a comment, restore and break
                                  break;
                               }
                            }

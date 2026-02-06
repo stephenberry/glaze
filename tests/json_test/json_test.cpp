@@ -12731,7 +12731,7 @@ struct glz::meta<cast_obj>
 
 struct cast_nullable_obj
 {
-   std::optional<int> a;
+   std::optional<double> a;
    std::string b;
 };
 
@@ -12739,7 +12739,7 @@ template <>
 struct glz::meta<cast_nullable_obj>
 {
    using T = cast_nullable_obj;
-   static constexpr auto value = object("a", cast<&T::a, std::optional<double>>, "b", &T::b);
+   static constexpr auto value = object("a", cast<&T::a, std::optional<int>>, "b", &T::b);
 };
 
 suite cast_tests = [] {
@@ -12780,11 +12780,11 @@ suite cast_tests = [] {
       expect(obj.b == "hello");
 
       // Test with value present
-      data = R"({"a":42.5,"b":"world"})";
+      data = R"({"a":42,"b":"world"})";
       ec = glz::read<opts>(obj, data);
       expect(!ec) << glz::format_error(ec, data);
       expect(obj.a.has_value());
-      expect(obj.a.value() == 42);
+      expect(obj.a.value() == 42.0);
       expect(obj.b == "world");
 
       // Test missing required field

@@ -3770,11 +3770,11 @@ namespace glz
                                  constexpr auto variant_size = std::variant_size_v<T>;
                                  if constexpr (ids_size < variant_size) {
                                     // Use the first unlabeled type as the default
-                                    const auto type_index = ids_size;
+                                    const auto default_type_index = ids_size;
 
                                     it = start; // we restart our object parsing now that we know the target type
-                                    tag_specified_index = type_index; // Store the default type index
-                                    if (value.index() != type_index) emplace_runtime_variant(value, type_index);
+                                    tag_specified_index = default_type_index; // Store the default type index
+                                    if (value.index() != default_type_index) emplace_runtime_variant(value, default_type_index);
                                     std::visit(
                                        [&](auto&& v) {
                                           using V = std::decay_t<decltype(v)>;
