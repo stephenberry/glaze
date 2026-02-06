@@ -2146,7 +2146,13 @@ namespace glz
          auto time_t_now = std::chrono::system_clock::to_time_t(now);
 
          char buf[100];
+#ifdef _MSC_VER
+         std::tm tm_buf;
+         gmtime_s(&tm_buf, &time_t_now);
+         std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", &tm_buf);
+#else
          std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", std::gmtime(&time_t_now));
+#endif
 
          return buf;
       }

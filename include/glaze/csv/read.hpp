@@ -632,8 +632,8 @@ namespace glz
                }
             }
 
-            return; // Exit early for column-wise
          }
+         else { // else used instead of early return to fix MSVC unreachable code warning
 
          // Handle header row if skip_header_row is enabled
          if constexpr (requires { Opts.skip_header_row; }) {
@@ -794,6 +794,7 @@ namespace glz
                   }
                }
             }
+         }
          }
       }
    };
