@@ -8,12 +8,6 @@
 #include "glaze/yaml.hpp"
 #include "ut/ut.hpp"
 
-// GCC false positive: warns about backslash-newline inside raw string literals
-// where backslash has no special meaning.
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wbackslash-newline-escape"
-#endif
-
 using namespace ut;
 
 // Normalize JSON: parse then re-serialize to canonical form
@@ -4626,9 +4620,7 @@ alias: *anchor
 
    // DE56_02 (known failure): Trailing tabs in double quoted
    "DE56_02"_test = [] {
-      std::string yaml = R"yaml("3 trailing\	
-    tab"
-)yaml";
+      std::string yaml = "\"3 trailing\\\t\n    tab\"\n";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       // known failure - no assertions
@@ -4636,9 +4628,7 @@ alias: *anchor
 
    // DE56_03 (known failure): Trailing tabs in double quoted
    "DE56_03"_test = [] {
-      std::string yaml = R"yaml("4 trailing\	  
-    tab"
-)yaml";
+      std::string yaml = "\"4 trailing\\\t  \n    tab\"\n";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       // known failure - no assertions
