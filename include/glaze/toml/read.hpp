@@ -263,9 +263,9 @@ namespace glz
          int base = 10;
 
         public:
-         constexpr void inform_base(int base) noexcept { this->base = base; }
+         constexpr void inform_base(int b) noexcept { base = b; }
 
-         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, this->base); }
+         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, base); }
 
          template <std::unsigned_integral T>
          constexpr bool try_accumulate(T& v, int digit) const noexcept
@@ -295,9 +295,9 @@ namespace glz
         public:
          constexpr void inform_negated() noexcept { this->negated = true; }
 
-         constexpr void inform_base(int base) noexcept { this->base = base; }
+         constexpr void inform_base(int b) noexcept { base = b; }
 
-         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, this->base); }
+         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, base); }
 
          template <std::signed_integral T>
          constexpr bool try_accumulate(T& v, int digit) const noexcept

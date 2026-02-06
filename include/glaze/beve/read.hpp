@@ -1619,6 +1619,10 @@ namespace glz
       }
    };
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<BEVE, T> final
@@ -1828,6 +1832,9 @@ namespace glz
          }
       }
    };
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
    template <class T>
       requires glaze_array_t<T>
