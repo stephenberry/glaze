@@ -40,4 +40,4 @@ jobs:
 
     - name: Test
       working-directory: build
-      run: ctest --build-config ${{env.BUILD_TYPE}}
+      run: ctest --build-config ${{env.BUILD_TYPE}} --timeout 120
