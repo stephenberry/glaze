@@ -68,34 +68,7 @@ namespace glz
          ++it; // skip opening quote
          auto start = it;
 
-         // Pass 1: Find closing quote using SWAR
-         // Process 8 bytes at a time looking for quote or backslash
-         const auto remaining = static_cast<size_t>(end - it);
-         if (remaining >= 8) {
-            const auto* end8 = &*(end - 7); // Safe to read 8 bytes up to here
-            while (it < end8) {
-               uint64_t chunk;
-               std::memcpy(&chunk, &*it, 8);
-               if constexpr (std::endian::native == std::endian::big) {
-                  chunk = std::byteswap(chunk);
-               }
-
-               // Check for quote or backslash
-               const uint64_t has_quote_mask = glz::has_quote(chunk);
-               const uint64_t has_backslash_mask = glz::has_escape(chunk);
-               const uint64_t special = has_quote_mask | has_backslash_mask;
-
-               if (special) {
-                  // Found a special character - process byte by byte from here
-                  const auto offset = countr_zero(special) >> 3;
-                  it += offset;
-                  break;
-               }
-               it += 8;
-            }
-         }
-
-         // Finish finding the closing quote byte-by-byte
+         // Pass 1: Find closing quote byte-by-byte (need to handle newlines and escapes)
          while (it != end && *it != '"') {
             if (*it == '\\') {
                ++it;
@@ -119,42 +92,56 @@ namespace glz
          auto* dst = value.data();
          auto* const dst_start = dst;
 
-         // Pass 2: Copy and process escapes using SWAR
+         // Pass 2: Copy and process escapes and line folding
          auto src = start;
          const auto* const src_end = &*it;
 
          while (src < src_end) {
-            const auto src_remaining = static_cast<size_t>(src_end - src);
-
-            // Try to copy 8 bytes at a time when no escapes
-            if (src_remaining >= 8) {
-               uint64_t chunk;
-               std::memcpy(&chunk, src, 8);
-               if constexpr (std::endian::native == std::endian::big) {
-                  chunk = std::byteswap(chunk);
+            // Check for newline - needs line folding
+            if (*src == '\n' || *src == '\r') {
+               // Trim trailing whitespace from output before processing newline
+               while (dst > dst_start && (*(dst - 1) == ' ' || *(dst - 1) == '\t')) {
+                  --dst;
                }
 
-               // Check for backslash using SWAR
-               const uint64_t has_backslash_mask = glz::has_escape(chunk);
-               if (!has_backslash_mask) {
-                  // No backslash in this chunk - copy all 8 bytes
-                  std::memcpy(dst, src, 8);
-                  src += 8;
-                  dst += 8;
-                  continue;
+               // Skip the newline
+               if (*src == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                  src += 2; // CRLF
+               }
+               else {
+                  ++src;
                }
 
-               // Found a backslash - copy bytes up to it
-               const auto offset = countr_zero(has_backslash_mask) >> 3;
-               if (offset > 0) {
-                  std::memcpy(dst, src, offset);
-                  dst += offset;
-                  src += offset;
+               // Skip leading whitespace on next line
+               while (src < src_end && (*src == ' ' || *src == '\t')) {
+                  ++src;
                }
+
+               // Check if this is a blank line (another newline follows)
+               if (src < src_end && (*src == '\n' || *src == '\r')) {
+                  // Blank line(s) - output newlines for each blank line
+                  while (src < src_end && (*src == '\n' || *src == '\r')) {
+                     *dst++ = '\n';
+                     // Skip the newline
+                     if (*src == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                        src += 2; // CRLF
+                     }
+                     else {
+                        ++src;
+                     }
+                     // Skip leading whitespace on next line
+                     while (src < src_end && (*src == ' ' || *src == '\t')) {
+                        ++src;
+                     }
+                  }
+                  // Don't add space - we're now at content after blank line(s)
+               }
+               else {
+                  // Single newline - fold to space
+                  *dst++ = ' ';
+               }
+               continue;
             }
-
-            // Process one character (possibly an escape)
-            if (src >= src_end) break;
 
             if (*src == '\\') {
                ++src;
@@ -165,6 +152,24 @@ namespace glz
                }
 
                const unsigned char esc = static_cast<unsigned char>(*src);
+
+               // Check for escaped newline (line continuation - no space)
+               if (esc == '\n' || esc == '\r') {
+                  // Skip the newline
+                  if (esc == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                     src += 2; // CRLF
+                  }
+                  else {
+                     ++src;
+                  }
+
+                  // Skip leading whitespace on next line
+                  while (src < src_end && (*src == ' ' || *src == '\t')) {
+                     ++src;
+                  }
+                  // No output - this is line continuation without space
+                  continue;
+               }
 
                // Check simple escape table first
                if (yaml_escape_is_simple[esc]) {
@@ -266,8 +271,9 @@ namespace glz
          ++it; // skip closing quote
       }
 
-      // SWAR-optimized single-quoted string parsing
+      // Single-quoted string parsing with line folding
       // Only escape is '' -> ' (doubled single quote)
+      // Line breaks are folded: single newline -> space, blank line -> newline
       template <class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_single_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
       {
@@ -281,65 +287,11 @@ namespace glz
          ++it; // skip opening quote
          auto start = it;
 
-         // Pass 1: Find closing quote using SWAR
-         const auto remaining = static_cast<size_t>(end - it);
-         if (remaining >= 8) {
-            const auto* end8 = &*(end - 7);
-            while (it < end8) {
-               uint64_t chunk;
-               std::memcpy(&chunk, &*it, 8);
-               if constexpr (std::endian::native == std::endian::big) {
-                  chunk = std::byteswap(chunk);
-               }
-
-               const uint64_t has_sq = glz::has_char<'\''>(chunk);
-               if (has_sq) {
-                  const auto offset = countr_zero(has_sq) >> 3;
-                  it += offset;
-                  break;
-               }
-               it += 8;
-            }
-         }
-
-         // Finish finding quote byte-by-byte
-         while (it != end && *it != '\'') {
-            ++it;
-         }
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         // Now scan for '' escapes and find actual end
-         auto scan = start;
-         auto actual_end = it;
-         bool has_escapes = false;
-
-         while (scan < actual_end) {
-            if (*scan == '\'') {
-               if (scan + 1 < end && *(scan + 1) == '\'') {
-                  has_escapes = true;
-                  scan += 2;
-               }
-               else {
-                  actual_end = scan;
-                  break;
-               }
-            }
-            else {
-               ++scan;
-            }
-         }
-
-         // Continue scanning past '' escapes to find true end
-         it = scan;
+         // Pass 1: Find closing quote (handling '' escapes)
          while (it != end) {
             if (*it == '\'') {
                if ((it + 1) != end && *(it + 1) == '\'') {
-                  has_escapes = true;
-                  it += 2;
+                  it += 2; // Skip escaped quote
                }
                else {
                   break; // Found closing quote
@@ -355,54 +307,63 @@ namespace glz
             return;
          }
 
-         actual_end = it;
-         const auto input_len = static_cast<size_t>(actual_end - start);
-
-         if (!has_escapes) {
-            // Fast path: no escapes, direct assign
-            value.assign(&*start, input_len);
-            ++it; // skip closing quote
-            return;
-         }
-
-         // Has escapes: need to process
+         const auto input_len = static_cast<size_t>(it - start);
          value.resize(input_len + string_padding_bytes);
          auto* dst = value.data();
          auto* const dst_start = dst;
          auto src = start;
-         const auto* const src_end = &*actual_end;
+         const auto* const src_end = &*it;
 
+         // Pass 2: Process content with line folding and '' escapes
          while (src < src_end) {
-            const auto src_remaining = static_cast<size_t>(src_end - src);
-
-            // Try to copy 8 bytes at a time
-            if (src_remaining >= 8) {
-               uint64_t chunk;
-               std::memcpy(&chunk, src, 8);
-               if constexpr (std::endian::native == std::endian::big) {
-                  chunk = std::byteswap(chunk);
+            // Check for newline - needs line folding
+            if (*src == '\n' || *src == '\r') {
+               // Trim trailing whitespace from output before processing newline
+               while (dst > dst_start && (*(dst - 1) == ' ' || *(dst - 1) == '\t')) {
+                  --dst;
                }
 
-               const uint64_t has_sq = glz::has_char<'\''>(chunk);
-               if (!has_sq) {
-                  std::memcpy(dst, src, 8);
-                  src += 8;
-                  dst += 8;
-                  continue;
+               // Skip the newline
+               if (*src == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                  src += 2; // CRLF
+               }
+               else {
+                  ++src;
                }
 
-               const auto offset = countr_zero(has_sq) >> 3;
-               if (offset > 0) {
-                  std::memcpy(dst, src, offset);
-                  dst += offset;
-                  src += offset;
+               // Skip leading whitespace on next line
+               while (src < src_end && (*src == ' ' || *src == '\t')) {
+                  ++src;
                }
+
+               // Check if this is a blank line (another newline follows)
+               if (src < src_end && (*src == '\n' || *src == '\r')) {
+                  // Blank line(s) - output newlines for each blank line
+                  while (src < src_end && (*src == '\n' || *src == '\r')) {
+                     *dst++ = '\n';
+                     // Skip the newline
+                     if (*src == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
+                        src += 2; // CRLF
+                     }
+                     else {
+                        ++src;
+                     }
+                     // Skip leading whitespace on next line
+                     while (src < src_end && (*src == ' ' || *src == '\t')) {
+                        ++src;
+                     }
+                  }
+                  // Don't add space - we're now at content after blank line(s)
+               }
+               else {
+                  // Single newline - fold to space
+                  *dst++ = ' ';
+               }
+               continue;
             }
 
-            if (src >= src_end) break;
-
             if (*src == '\'') {
-               // Must be '' (escaped quote)
+               // Must be '' (escaped quote) - we validated this in pass 1
                *dst++ = '\'';
                src += 2;
             }
