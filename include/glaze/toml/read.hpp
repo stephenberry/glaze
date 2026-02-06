@@ -1941,6 +1941,10 @@ namespace glz
       }
    } // namespace detail
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
    template <class T>
       requires(readable_map_t<T> && not glaze_object_t<T> && not reflectable<T> && not custom_read<T>)
    struct from<TOML, T>
@@ -1980,31 +1984,30 @@ namespace glz
                if constexpr (toml::check_is_internal(Opts)) {
                   return; // if it's internal we return to root
                }
-               else { // else used to fix MSVC unreachable code warning
-                  ++it;
-                  if (it != end && *it == '[') {
-                     // Array of tables [[name]] - not fully supported for maps yet
-                     // For now, skip array of tables in map context
+
+               ++it;
+               if (it != end && *it == '[') {
+                  // Array of tables [[name]] - not fully supported for maps yet
+                  // For now, skip array of tables in map context
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               else {
+                  // Table section [name]
+                  skip_ws_and_comments(it, end);
+                  current_section_path.clear();
+                  if (!parse_toml_key(current_section_path, ctx, it, end)) {
+                     return;
+                  }
+                  if (it == end || *it != ']') {
                      ctx.error = error_code::syntax_error;
                      return;
                   }
-                  else {
-                     // Table section [name]
-                     skip_ws_and_comments(it, end);
-                     current_section_path.clear();
-                     if (!parse_toml_key(current_section_path, ctx, it, end)) {
-                        return;
-                     }
-                     if (it == end || *it != ']') {
-                        ctx.error = error_code::syntax_error;
-                        return;
-                     }
-                     ++it; // skip ']'
+                  ++it; // skip ']'
 
-                     // Ensure the nested map structure exists for this section
-                     if (!detail::ensure_map_path<Opts>(value, std::span{current_section_path}, ctx)) {
-                        return;
-                     }
+                  // Ensure the nested map structure exists for this section
+                  if (!detail::ensure_map_path<Opts>(value, std::span{current_section_path}, ctx)) {
+                     return;
                   }
                }
             }
@@ -2039,6 +2042,9 @@ namespace glz
             }
          }
       }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
    };
 
    template <class T>

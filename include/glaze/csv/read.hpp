@@ -493,6 +493,10 @@ namespace glz
       using Row = typename T::value_type;
       using Value = typename Row::value_type;
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
@@ -632,8 +636,8 @@ namespace glz
                }
             }
 
+            return; // Exit early for column-wise
          }
-         else { // else used instead of early return to fix MSVC unreachable code warning
 
          // Handle header row if skip_header_row is enabled
          if constexpr (requires { Opts.skip_header_row; }) {
@@ -795,8 +799,10 @@ namespace glz
                }
             }
          }
-         }
       }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
    };
 
    template <char delim>

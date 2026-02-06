@@ -3087,6 +3087,10 @@ namespace glz
       process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
    }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
    // Variant support
    template <is_variant T>
    struct from<YAML, T>
@@ -3390,7 +3394,6 @@ namespace glz
                return;
             }
          }
-         else { // else used to fix MSVC unreachable code warning
 
          // For non-auto-deducible variants or fallback, try each type until one succeeds
          constexpr auto N = std::variant_size_v<std::remove_cvref_t<T>>;
@@ -3420,8 +3423,10 @@ namespace glz
          if (!parsed) {
             ctx.error = error_code::no_matching_variant_type;
          }
-         }
       }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
    };
 
    // Convenience functions

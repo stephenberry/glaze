@@ -1341,6 +1341,11 @@ namespace glz
             }
 
             // Second pass: write members
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
             for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -1403,6 +1408,9 @@ namespace glz
                   }
                }
             });
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
          }
          else {
             // Static path: use compile-time count for better performance
