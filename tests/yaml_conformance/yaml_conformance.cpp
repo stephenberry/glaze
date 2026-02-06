@@ -8,6 +8,12 @@
 #include "glaze/yaml.hpp"
 #include "ut/ut.hpp"
 
+// GCC false positive: warns about backslash-newline inside raw string literals
+// where backslash has no special meaning.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wbackslash-newline-escape"
+#endif
+
 using namespace ut;
 
 // Normalize JSON: parse then re-serialize to canonical form
