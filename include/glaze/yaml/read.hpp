@@ -1522,7 +1522,9 @@ namespace glz
                   ctx.error = error_code::unknown_key;
                   return;
                }
-               skip_yaml_value<Opts>(ctx, it, end, 0, true);
+               else { // else used to fix MSVC unreachable code warning
+                  skip_yaml_value<Opts>(ctx, it, end, 0, true);
+               }
             }
 
             if (bool(ctx.error)) [[unlikely]]
@@ -1875,10 +1877,11 @@ namespace glz
                   ctx.error = error_code::unknown_key;
                   return;
                }
-
-               // Skip unknown value
-               if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                  skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
+               else { // else used to fix MSVC unreachable code warning
+                  // Skip unknown value
+                  if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                     skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
+                  }
                }
             }
 
@@ -3160,15 +3163,19 @@ namespace glz
                      process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, ctx, it, end);
                      return;
                   }
-                  ctx.error = error_code::syntax_error;
-                  return;
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                case yaml::yaml_tag::bool_tag:
                   if constexpr (counts::n_bool > 0) {
                      process_yaml_variant_alternatives<V, is_yaml_variant_bool>::template op<Opts>(value, ctx, it, end);
                      return;
                   }
-                  ctx.error = error_code::syntax_error;
-                  return;
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                case yaml::yaml_tag::null_tag:
                   if constexpr (counts::n_null > 0) {
                      constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_null>;
@@ -3177,24 +3184,30 @@ namespace glz
                      from<YAML, NullType>::template op<Opts>(std::get<NullType>(value), ctx, it, end);
                      return;
                   }
-                  ctx.error = error_code::syntax_error;
-                  return;
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                case yaml::yaml_tag::map:
                   if constexpr (counts::n_object > 0) {
                      process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
                                                                                                      end);
                      return;
                   }
-                  ctx.error = error_code::syntax_error;
-                  return;
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                case yaml::yaml_tag::seq:
                   if constexpr (counts::n_array > 0) {
                      process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it,
                                                                                                     end);
                      return;
                   }
-                  ctx.error = error_code::syntax_error;
-                  return;
+                  else { // else used to fix MSVC unreachable code warning
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                default:
                   // none tag - continue with normal parsing based on what follows
                   break;
@@ -3377,6 +3390,7 @@ namespace glz
                return;
             }
          }
+         else { // else used to fix MSVC unreachable code warning
 
          // For non-auto-deducible variants or fallback, try each type until one succeeds
          constexpr auto N = std::variant_size_v<std::remove_cvref_t<T>>;
@@ -3405,6 +3419,7 @@ namespace glz
 
          if (!parsed) {
             ctx.error = error_code::no_matching_variant_type;
+         }
          }
       }
    };

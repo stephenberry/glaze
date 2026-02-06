@@ -1509,10 +1509,11 @@ namespace glz
                   ctx.error = error_code::unknown_key;
                   return;
                }
-
-               skip_value<TOML>::template op<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
+               else { // else used to fix MSVC unreachable code warning
+                  skip_value<TOML>::template op<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                }
             }
 
@@ -1598,9 +1599,10 @@ namespace glz
                ctx.error = error_code::unknown_key;
                return false;
             }
-
-            skip_value<TOML>::template op<Opts>(ctx, it, end);
-            return !bool(ctx.error);
+            else { // else used to fix MSVC unreachable code warning
+               skip_value<TOML>::template op<Opts>(ctx, it, end);
+               return !bool(ctx.error);
+            }
          }
          return !bool(ctx.error);
       }
@@ -1684,10 +1686,11 @@ namespace glz
                ctx.error = error_code::unknown_key;
                return false;
             }
-
-            // Skip unknown key's content
-            skip_value<TOML>::template op<Opts>(ctx, it, end);
-            return !bool(ctx.error);
+            else { // else used to fix MSVC unreachable code warning
+               // Skip unknown key's content
+               skip_value<TOML>::template op<Opts>(ctx, it, end);
+               return !bool(ctx.error);
+            }
          }
       }
    }
@@ -1977,30 +1980,31 @@ namespace glz
                if constexpr (toml::check_is_internal(Opts)) {
                   return; // if it's internal we return to root
                }
-
-               ++it;
-               if (it != end && *it == '[') {
-                  // Array of tables [[name]] - not fully supported for maps yet
-                  // For now, skip array of tables in map context
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               else {
-                  // Table section [name]
-                  skip_ws_and_comments(it, end);
-                  current_section_path.clear();
-                  if (!parse_toml_key(current_section_path, ctx, it, end)) {
-                     return;
-                  }
-                  if (it == end || *it != ']') {
+               else { // else used to fix MSVC unreachable code warning
+                  ++it;
+                  if (it != end && *it == '[') {
+                     // Array of tables [[name]] - not fully supported for maps yet
+                     // For now, skip array of tables in map context
                      ctx.error = error_code::syntax_error;
                      return;
                   }
-                  ++it; // skip ']'
+                  else {
+                     // Table section [name]
+                     skip_ws_and_comments(it, end);
+                     current_section_path.clear();
+                     if (!parse_toml_key(current_section_path, ctx, it, end)) {
+                        return;
+                     }
+                     if (it == end || *it != ']') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     ++it; // skip ']'
 
-                  // Ensure the nested map structure exists for this section
-                  if (!detail::ensure_map_path<Opts>(value, std::span{current_section_path}, ctx)) {
-                     return;
+                     // Ensure the nested map structure exists for this section
+                     if (!detail::ensure_map_path<Opts>(value, std::span{current_section_path}, ctx)) {
+                        return;
+                     }
                   }
                }
             }
