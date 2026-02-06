@@ -280,7 +280,7 @@ namespace glz
                return false;
             }
 
-            v = v * this->base + digit;
+            v = static_cast<T>(v * this->base + digit);
 
             return true;
          }
@@ -313,7 +313,7 @@ namespace glz
                   return false;
                }
 
-               v = v * this->base - digit;
+               v = static_cast<T>(v * this->base - digit);
 
                return true;
             }
@@ -324,7 +324,7 @@ namespace glz
                return false;
             }
 
-            v = v * this->base + digit;
+            v = static_cast<T>(v * this->base + digit);
 
             return true;
          }
