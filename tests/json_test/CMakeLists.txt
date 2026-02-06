@@ -158,3 +158,10 @@ target_link_libraries(lazy_test PRIVATE glz_test_common)
 
 add_test(NAME lazy_test COMMAND lazy_test)
 
+## Non-aggregate reflection test - C++26 P2996 reflection for non-aggregate types
+
+add_executable(non_aggregate_reflection_test non_aggregate_reflection_test.cpp)
+
+target_link_libraries(non_aggregate_reflection_test PRIVATE glz_test_common)
+
+add_test(NAME non_aggregate_reflection_test COMMAND non_aggregate_reflection_test)
