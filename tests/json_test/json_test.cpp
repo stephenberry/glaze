@@ -11149,7 +11149,7 @@ struct glz::meta<mixed_member_format_t>
 struct scientific_format_t
 {
    double large{1234567.89};
-   double small{0.000123456};
+   double small_val{0.000123456}; // "small" is a macro on Windows (rpcndr.h)
 };
 
 template <>
@@ -11157,7 +11157,7 @@ struct glz::meta<scientific_format_t>
 {
    using T = scientific_format_t;
    static constexpr auto value =
-      glz::object("large", glz::float_format<&T::large, "{:.2e}">, "small", glz::float_format<&T::small, "{:.3E}">);
+      glz::object("large", glz::float_format<&T::large, "{:.2e}">, "small", glz::float_format<&T::small_val, "{:.3E}">);
 };
 
 suite float_format_wrapper_tests = [] {
@@ -11222,7 +11222,7 @@ suite float_format_wrapper_tests = [] {
       std::string input = R"({"large":1e6,"small":1e-6})";
       expect(!glz::read_json(obj, input));
       expect(obj.large == 1e6);
-      expect(obj.small == 1e-6);
+      expect(obj.small_val == 1e-6);
    };
 
    "float_format_wrapper_negative_values"_test = [] {
