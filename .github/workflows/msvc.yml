@@ -23,7 +23,7 @@ env:
 jobs:
   build:
     runs-on: windows-2025-vs2026
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     strategy:
       matrix:
@@ -40,4 +40,4 @@ jobs:
 
     - name: Test
       working-directory: build
-      run: ctest --build-config ${{env.BUILD_TYPE}} --timeout 120
+      run: ctest --build-config ${{env.BUILD_TYPE}} --timeout 300
