@@ -6034,6 +6034,23 @@ suite yaml_block_scalar_sibling_tests = [] {
       expect(result[0].k2 == "c") << "k2 was: " << result[0].k2;
    };
 
+   "block_scalar_sibling_key_in_sequence_generic"_test = [] {
+      std::string yaml = R"(- k1: |
+    a
+    b
+  k2: c)";
+      glz::generic parsed;
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 1u);
+      auto& obj = std::get<glz::generic::object_t>(arr[0].data);
+      expect(obj.count("k1") == 1u);
+      expect(obj.count("k2") == 1u);
+      expect(std::get<std::string>(obj.at("k1").data) == "a\nb\n") << "k1 was: " << std::get<std::string>(obj.at("k1").data);
+      expect(std::get<std::string>(obj.at("k2").data) == "c") << "k2 was: " << std::get<std::string>(obj.at("k2").data);
+   };
+
    "block_scalar_sibling_key_simple"_test = [] {
       std::string yaml = R"(k1: |
   a
