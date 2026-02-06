@@ -6067,7 +6067,8 @@ suite yaml_quoted_string_folding_tests = [] {
       auto ec = glz::read_yaml(result, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(result.size() == 1u);
-      // Expected: line breaks fold to spaces, blank line becomes \n, \n is literal newline, \ at end of line means no space
+      // Expected: line breaks fold to spaces, blank line becomes \n, \n is literal newline, \ at end of line means no
+      // space
       expect(result[0] == "very \"long\" 'string' with\nparagraph gap, \n and spaces.") << "got: " << result[0];
    };
 
