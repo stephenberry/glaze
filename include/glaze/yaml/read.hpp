@@ -816,7 +816,7 @@ namespace glz
             break;
          case yaml::scalar_style::literal_block:
          case yaml::scalar_style::folded_block:
-            yaml::parse_block_scalar(str, ctx, it, end, 0);
+            yaml::parse_block_scalar(str, ctx, it, end, ctx.indent >= 0 ? ctx.indent : 0);
             break;
          case yaml::scalar_style::plain:
             // In block context with known indent, use multiline parsing to support
@@ -2719,8 +2719,21 @@ namespace glz
                if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                   // Value on same line
                   from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
-                  // Skip trailing whitespace after inline value
-                  yaml::skip_ws_and_comment(it, end);
+                  // Skip trailing whitespace after inline value, but don't consume
+                  // leading indent of the next line (happens after block scalar parsing)
+                  if (it != end) {
+                     if (*it == ' ' || *it == '\t') {
+                        auto peek = it;
+                        yaml::skip_inline_ws(peek, end);
+                        if (peek != end && *peek != '\n' && *peek != '\r' && *peek != '#') {
+                           // Content after whitespace = leading indent of new line
+                           // Don't consume; let the outer loop measure indent properly
+                        }
+                        else {
+                           yaml::skip_ws_and_comment(it, end);
+                        }
+                     }
+                  }
                }
                else {
                   // Value on next line(s) - check for nested block content
