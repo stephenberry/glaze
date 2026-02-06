@@ -134,7 +134,7 @@ void tests()
       int i = 0;
       inc.value()(i);
       expect(i == 1);
-      io->call<void>("/inc", i);
+      std::ignore = io->call<void>("/inc", i);
       expect(i == 2);
 
       auto f = io->get_fn<std::function<double(const int&, const double&)>>("/f");

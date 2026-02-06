@@ -437,7 +437,7 @@ class simple_test_client
 
             promise.set_value(std::move(resp));
          }
-         catch (const std::exception& e) {
+         catch (const std::exception&) {
             promise.set_value(std::unexpected(std::make_error_code(std::errc::connection_refused)));
          }
       });

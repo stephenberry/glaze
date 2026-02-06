@@ -109,14 +109,24 @@ namespace
       }
 
       // Write private key
-      FILE* key_file = fopen("wss_test_key.pem", "w");
+      FILE* key_file = nullptr;
+#ifdef _MSC_VER
+      fopen_s(&key_file, "wss_test_key.pem", "w");
+#else
+      key_file = fopen("wss_test_key.pem", "w");
+#endif
       if (key_file) {
          PEM_write_PrivateKey(key_file, pkey, nullptr, nullptr, 0, nullptr, nullptr);
          fclose(key_file);
       }
 
       // Write certificate
-      FILE* cert_file = fopen("wss_test_cert.pem", "w");
+      FILE* cert_file = nullptr;
+#ifdef _MSC_VER
+      fopen_s(&cert_file, "wss_test_cert.pem", "w");
+#else
+      cert_file = fopen("wss_test_cert.pem", "w");
+#endif
       if (cert_file) {
          PEM_write_X509(cert_file, x509);
          fclose(cert_file);

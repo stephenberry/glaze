@@ -354,9 +354,8 @@ void async_server_test()
 
 struct error_api
 {
-   std::function<int()> func = []() {
+   std::function<int()> func = []() -> int {
       throw std::runtime_error("func error");
-      return 0;
    };
 };
 
@@ -436,13 +435,11 @@ suite send_receive_api_tests = [] {
 
 struct keep_alive_api
 {
-   std::function<int()> broken = []() {
+   std::function<int()> broken = []() -> int {
       throw std::runtime_error("broken");
-      return 0;
    };
-   std::function<int()> unknown_broken = []() {
+   std::function<int()> unknown_broken = []() -> int {
       throw 5;
-      return 0;
    };
    std::function<int()> works = []() { return 42; };
 };

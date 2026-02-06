@@ -610,7 +610,7 @@ suite async_string_tests = [] {
       std::vector<std::string> to_append;
       std::string expected_result;
       for (int i = 0; i < num_threads; ++i) {
-         std::string append_str(512, '0' + i);
+         std::string append_str(512, char('0' + i));
          to_append.push_back(append_str);
          expected_result += append_str;
       }
@@ -637,7 +637,7 @@ suite async_string_tests = [] {
       std::string expected_final_string = initial_string;
       std::vector<std::string> appends;
       for (int i = 0; i < num_threads; ++i) {
-         std::string append_str(256, '0' + i);
+         std::string append_str(256, char('0' + i));
          appends.push_back(append_str);
          expected_final_string += append_str;
       }
@@ -685,7 +685,7 @@ suite async_string_tests = [] {
       std::string expected_append;
       std::vector<std::string> to_append;
       for (int i = 0; i < num_threads; ++i) {
-         std::string append_str(512, '0' + i);
+         std::string append_str(512, char('0' + i));
          to_append.push_back(append_str);
          expected_append += append_str;
       }
