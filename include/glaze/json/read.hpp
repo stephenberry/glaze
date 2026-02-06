@@ -3774,7 +3774,8 @@ namespace glz
 
                                     it = start; // we restart our object parsing now that we know the target type
                                     tag_specified_index = default_type_index; // Store the default type index
-                                    if (value.index() != default_type_index) emplace_runtime_variant(value, default_type_index);
+                                    if (value.index() != default_type_index)
+                                       emplace_runtime_variant(value, default_type_index);
                                     std::visit(
                                        [&](auto&& v) {
                                           using V = std::decay_t<decltype(v)>;

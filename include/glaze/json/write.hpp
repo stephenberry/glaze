@@ -548,8 +548,8 @@ namespace glz
          return false; // hidden/skip types are never written
       }
       else if constexpr (requires {
-                       { to<JSON, V>::can_error } -> std::convertible_to<bool>;
-                    }) {
+                            { to<JSON, V>::can_error } -> std::convertible_to<bool>;
+                         }) {
          return to<JSON, V>::can_error;
       }
       else {

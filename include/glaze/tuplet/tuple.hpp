@@ -175,7 +175,8 @@ namespace glz
          -> tuple<type_t<Inner>...>
       {
          // .template added to fix MSVC bug
-         return {{{static_cast<type_t<Outer>&&>(tup.template identity_t<Outer>::value).template identity_t<Inner>::value}...}};
+         return {{{static_cast<type_t<Outer>&&>(tup.template identity_t<Outer>::value)
+                      .template identity_t<Inner>::value}...}};
       }
 
       template <class... T>
