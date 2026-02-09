@@ -475,12 +475,8 @@ namespace glz
                   }
 
                   if (*lookahead == '#') {
-                     // Comment-only line - skip to end of line
-                     while (lookahead != end && *lookahead != '\n' && *lookahead != '\r') {
-                        ++lookahead;
-                     }
-                     ++blank_lines;
-                     continue;
+                     // Comments end plain scalars per YAML spec
+                     return;
                   }
 
                   // Found content - check indentation
@@ -816,14 +812,14 @@ namespace glz
             break;
          case yaml::scalar_style::literal_block:
          case yaml::scalar_style::folded_block:
-            yaml::parse_block_scalar(str, ctx, it, end, ctx.indent >= 0 ? ctx.indent : 0);
+            yaml::parse_block_scalar(str, ctx, it, end, ctx.current_indent() >= 0 ? ctx.current_indent() : 0);
             break;
          case yaml::scalar_style::plain:
             // In block context with known indent, use multiline parsing to support
             // plain scalars that span multiple lines (folding behavior)
             if constexpr (!yaml::check_flow_context(Opts)) {
-               if (ctx.indent >= 0) {
-                  yaml::parse_plain_scalar_multiline(str, ctx, it, end, ctx.indent);
+               if (ctx.current_indent() >= 0) {
+                  yaml::parse_plain_scalar_multiline(str, ctx, it, end, ctx.current_indent());
                }
                else {
                   yaml::parse_plain_scalar(str, ctx, it, end, false);
@@ -1659,10 +1655,9 @@ namespace glz
                   // This allows nested block mappings to continue parsing keys at the content indent
                   // For "- key: val", if dash is at column 0, content is at column 2
                   // We set parent indent to 1 so keys at column 2 pass the "indent > parent" check
-                  auto saved_indent = ctx.indent;
-                  ctx.indent = line_indent + 1; // one less than content column
+                  if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return;
                   from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
-                  ctx.indent = saved_indent;
+                  ctx.pop_indent();
                }
                else {
                   // Value on next line - nested block
@@ -1684,10 +1679,9 @@ namespace glz
                      // Save and set indent for nested parsing
                      // Set parent indent to one less than content indent so items at
                      // content indent pass the "indent > parent" check and continue parsing
-                     auto saved_indent = ctx.indent;
-                     ctx.indent = nested_indent - 1;
+                     if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return;
                      from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
-                     ctx.indent = saved_indent;
+                     ctx.pop_indent();
                   }
                   // else: empty element (default constructed)
                }
@@ -1835,7 +1829,10 @@ namespace glz
 
                         // Check if value is on same line or next line
                         if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                           // Set indent so multiline plain scalars can find continuation lines
+                           if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return false;
                            from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
+                           ctx.pop_indent();
                         }
                         else {
                            // Value on next line - nested block
@@ -1853,17 +1850,16 @@ namespace glz
                            // This prevents content at column 0 from being treated as nested.
                            const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
                            if (nested_indent > effective_line_indent) {
-                              // Save and set indent for nested parsing
-                              auto saved_indent = ctx.indent;
+                              // Push indent for nested parsing
                               if constexpr (readable_map_t<member_type>) {
                                  // Map parsing expects parent indent, not the map's key indent
-                                 ctx.indent = nested_indent - 1;
+                                 if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return false;
                               }
                               else {
-                                 ctx.indent = nested_indent;
+                                 if (!ctx.push_indent(nested_indent)) [[unlikely]] return false;
                               }
                               from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
-                              ctx.indent = saved_indent;
+                              ctx.pop_indent();
                            }
                            // else: keep default value
                         }
@@ -2044,10 +2040,9 @@ namespace glz
             // Check what follows
             if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                // Content on same line as dash
-               auto saved_indent = ctx.indent;
-               ctx.indent = line_indent + 2; // dash + space
+               if (!ctx.push_indent(line_indent + 2)) [[unlikely]] return;
                from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
-               ctx.indent = saved_indent;
+               ctx.pop_indent();
             }
             else {
                // Value on next line - nested block
@@ -2062,10 +2057,9 @@ namespace glz
                it = nested_start;
 
                if (nested_indent > line_indent) {
-                  auto saved_indent = ctx.indent;
-                  ctx.indent = nested_indent;
+                  if (!ctx.push_indent(nested_indent)) [[unlikely]] return;
                   from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
-                  ctx.indent = saved_indent;
+                  ctx.pop_indent();
                }
                // else: empty element (default constructed)
             }
@@ -2128,7 +2122,7 @@ namespace glz
             if (tag != yaml::yaml_tag::none) {
                it = peek;
             }
-            yaml::parse_block_sequence_set<Opts>(value, ctx, it, end, ctx.indent);
+            yaml::parse_block_sequence_set<Opts>(value, ctx, it, end, ctx.current_indent());
          }
          else {
             ctx.error = error_code::syntax_error;
@@ -2187,11 +2181,11 @@ namespace glz
                it = peek;
             }
             // If whitespace was already consumed (variant parser path), the iterator is at '-'
-            // and parse_block_sequence would measure indent as 0. In this case, use ctx.indent + 1
+            // and parse_block_sequence would measure indent as 0. In this case, use current_indent() + 1
             // as the sequence indent since the sequence is nested within the parent block.
-            int32_t seq_indent = ctx.indent;
-            if (*it == '-' && ctx.indent >= 0) {
-               seq_indent = ctx.indent + 1;
+            int32_t seq_indent = ctx.current_indent();
+            if (*it == '-' && ctx.current_indent() >= 0) {
+               seq_indent = ctx.current_indent() + 1;
             }
             yaml::parse_block_sequence<Opts>(value, ctx, it, end, seq_indent);
          }
@@ -2540,7 +2534,7 @@ namespace glz
          }
          else {
             // Block mapping - use indent from context (set by parent parser)
-            yaml::parse_block_mapping<Opts>(value, ctx, it, end, ctx.indent);
+            yaml::parse_block_mapping<Opts>(value, ctx, it, end, ctx.current_indent());
          }
       }
    };
@@ -2650,7 +2644,7 @@ namespace glz
          else {
             // Block mapping
             // Track base indentation for this mapping level (-1 means not yet established)
-            const int32_t parent_indent = ctx.indent;
+            const int32_t parent_indent = ctx.current_indent();
             int32_t mapping_indent = -1; // Will be set from first key's indentation
 
             while (it != end) {
@@ -2717,8 +2711,10 @@ namespace glz
                // Parse value
                val_t val{};
                if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                  // Value on same line
+                  // Value on same line - set indent for multiline plain scalar parsing
+                  if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return;
                   from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
+                  ctx.pop_indent();
                   // Skip trailing whitespace after inline value, but don't consume
                   // leading indent of the next line (happens after block scalar parsing)
                   if (it != end) {
@@ -2814,9 +2810,9 @@ namespace glz
                         // Use next_indent - 1 as the boundary for nested parsing.
                         // This is more robust than line_indent which may be incorrect
                         // when entering through the variant path (whitespace already skipped).
-                        ctx.indent = next_indent - 1;
+                        if (!ctx.push_indent(next_indent - 1)) [[unlikely]] return;
                         from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
-                        ctx.indent = parent_indent; // Restore
+                        ctx.pop_indent();
                      }
                      else {
                         // No nested content or dedented - restore position
@@ -3071,7 +3067,7 @@ namespace glz
          }
          // Full parse attempt - use a temporary context that inherits indent from parent
          yaml::yaml_context temp_ctx{};
-         temp_ctx.indent = ctx.indent; // Propagate indent context for nested parsing
+         temp_ctx.indent_stack = ctx.indent_stack; // Propagate indent context for nested parsing
          process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
          if (!bool(temp_ctx.error)) {
@@ -3116,7 +3112,7 @@ namespace glz
 
          // At root level (indent == -1), skip leading whitespace, newlines, and comments
          // For nested values, only skip inline whitespace to preserve block structure
-         if (ctx.indent < 0) {
+         if (ctx.current_indent() < 0) {
             yaml::skip_ws_newlines_comments(it, end);
          }
          else {
@@ -3369,7 +3365,7 @@ namespace glz
                if constexpr (counts::n_num > 0) {
                   auto start_it = it;
                   yaml::yaml_context temp_ctx{};
-                  temp_ctx.indent = ctx.indent;
+                  temp_ctx.indent_stack = ctx.indent_stack;
                   process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
                   if (!bool(temp_ctx.error)) {
@@ -3390,7 +3386,7 @@ namespace glz
                   if constexpr (counts::n_num > 0) {
                      auto start_it = it;
                      yaml::yaml_context temp_ctx{};
-                     temp_ctx.indent = ctx.indent;
+                     temp_ctx.indent_stack = ctx.indent_stack;
                      process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                   end);
                      if (!bool(temp_ctx.error)) {

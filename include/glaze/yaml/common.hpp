@@ -19,7 +19,36 @@ namespace glz::yaml
    // Adds indent tracking needed for block-style parsing
    struct yaml_context : context
    {
-      int32_t indent{-1}; // Current block indent level for YAML parsing (-1 means top level)
+      // Indent stack for block-style parsing.
+      // Empty stack == top level (equivalent to indent of -1).
+      // back() gives the current block indent level.
+      std::vector<int16_t> indent_stack = [] {
+         std::vector<int16_t> v;
+         v.reserve(max_recursive_depth_limit);
+         return v;
+      }();
+
+      int32_t current_indent() const noexcept
+      {
+         return indent_stack.empty() ? int32_t(-1) : indent_stack.back();
+      }
+
+      bool push_indent(int32_t indent) noexcept
+      {
+         if (indent_stack.size() >= max_recursive_depth_limit) [[unlikely]] {
+            error = error_code::exceeded_max_recursive_depth;
+            return false;
+         }
+         indent_stack.push_back(static_cast<int16_t>(indent));
+         return true;
+      }
+
+      void pop_indent() noexcept
+      {
+         if (!indent_stack.empty()) {
+            indent_stack.pop_back();
+         }
+      }
    };
 
    // Lookup table for characters that can start a plain scalar in flow context

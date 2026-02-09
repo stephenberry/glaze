@@ -3439,7 +3439,7 @@ e
       // known failure - no assertions
    };
 
-   // 36F6 (known failure): Multiline plain scalar with empty line
+   // 36F6: Multiline plain scalar with empty line
    "36F6"_test = [] {
       std::string yaml = R"yaml(---
 plain: a
@@ -3449,7 +3449,13 @@ plain: a
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         auto expected = normalize_json(R"({"plain":"a b\nc"})");
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 3GZX (known failure): Spec Example 7.1. Alias Nodes
