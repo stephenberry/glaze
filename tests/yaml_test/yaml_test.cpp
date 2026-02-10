@@ -2869,18 +2869,236 @@ numbers: [1, 2, 3])";
 // Anchor and Alias Tests (if supported)
 // ============================================================
 
-// Note: Anchors/aliases are advanced YAML features
-// Adding placeholder tests to verify error handling
+// Anchor/Alias Tests (source span replay)
 
 suite yaml_anchor_tests = [] {
-   "anchor_not_supported"_test = [] {
-      std::string yaml = R"(
-anchor: &anchor_name value
-alias: *anchor_name)";
+   "scalar_anchor_alias_string"_test = [] {
+      std::string yaml = R"(anchor: &a hello
+alias: *a)";
       std::map<std::string, std::string> obj{};
-      [[maybe_unused]] auto ec = glz::read_yaml(obj, yaml);
-      // Anchors may not be supported - check for error or partial parse
-      // This test documents current behavior
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["anchor"] == "hello");
+      expect(obj["alias"] == "hello");
+   };
+
+   "scalar_anchor_alias_int"_test = [] {
+      std::string yaml = R"(anchor: &a 42
+alias: *a)";
+      std::map<std::string, int> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["anchor"] == 42);
+      expect(obj["alias"] == 42);
+   };
+
+   "scalar_anchor_alias_double"_test = [] {
+      std::string yaml = R"(anchor: &a 3.14
+alias: *a)";
+      std::map<std::string, double> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["anchor"] == 3.14);
+      expect(obj["alias"] == 3.14);
+   };
+
+   "scalar_anchor_alias_bool"_test = [] {
+      std::string yaml = R"(anchor: &a true
+alias: *a)";
+      std::map<std::string, bool> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["anchor"] == true);
+      expect(obj["alias"] == true);
+   };
+
+   "scalar_anchor_alias_generic"_test = [] {
+      std::string yaml = R"(first: &anchor Value
+second: *anchor)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"first":"Value","second":"Value"})") << json;
+   };
+
+   "anchor_on_flow_mapping"_test = [] {
+      std::string yaml = R"(root: &m {key1: val1, key2: val2}
+alias: *m)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"alias":{"key1":"val1","key2":"val2"},"root":{"key1":"val1","key2":"val2"}})") << json;
+   };
+
+   "anchor_on_flow_sequence"_test = [] {
+      std::string yaml = R"(root: &s [1, 2, 3]
+alias: *s)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"alias":[1,2,3],"root":[1,2,3]})") << json;
+   };
+
+   "multiple_anchors"_test = [] {
+      std::string yaml = R"(a: &x hello
+b: &y world
+c: *x
+d: *y)";
+      std::map<std::string, std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["a"] == "hello");
+      expect(obj["b"] == "world");
+      expect(obj["c"] == "hello");
+      expect(obj["d"] == "world");
+   };
+
+   "anchor_override"_test = [] {
+      std::string yaml = R"(a: &x first
+b: *x
+c: &x second
+d: *x)";
+      std::map<std::string, std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["a"] == "first");
+      expect(obj["b"] == "first");
+      expect(obj["c"] == "second");
+      expect(obj["d"] == "second");
+   };
+
+   "anchor_double_quoted"_test = [] {
+      std::string yaml = "a: &q \"hello world\"\nb: *q";
+      std::map<std::string, std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["a"] == "hello world");
+      expect(obj["b"] == "hello world");
+   };
+
+   "anchor_single_quoted"_test = [] {
+      std::string yaml = "a: &q 'hello world'\nb: *q";
+      std::map<std::string, std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["a"] == "hello world");
+      expect(obj["b"] == "hello world");
+   };
+
+   "undefined_alias_error"_test = [] {
+      std::string yaml = "a: *nonexistent";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec)) << "Expected error for undefined alias";
+   };
+
+   "anchor_on_alias_error"_test = [] {
+      std::string yaml = "key1: &a value\nkey2: &b *a";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec)) << "Expected error for anchor on alias";
+   };
+
+   "nested_anchor_reference"_test = [] {
+      std::string yaml = R"(outer:
+  inner: &val deep
+ref: *val)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"outer":{"inner":"deep"},"ref":"deep"})") << json;
+   };
+
+   "aliases_in_block_sequence"_test = [] {
+      std::string yaml = R"(- &a hello
+- &b world
+- *a
+- *b)";
+      std::vector<std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.size() == 4);
+      expect(obj[0] == "hello");
+      expect(obj[1] == "world");
+      expect(obj[2] == "hello");
+      expect(obj[3] == "world");
+   };
+
+   "anchor_on_sequence_value"_test = [] {
+      std::string yaml = R"(&seq
+- a)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"(["a"])") << json;
+   };
+
+   "document_start_anchor"_test = [] {
+      std::string yaml = R"(--- &seq
+- a)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"(["a"])") << json;
+   };
+
+   "spec_2_10_sammy_sosa"_test = [] {
+      std::string yaml = R"(---
+hr:
+  - Mark McGwire
+  - &SS Sammy Sosa
+rbi:
+  - *SS
+  - Ken Griffey)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"hr":["Mark McGwire","Sammy Sosa"],"rbi":["Sammy Sosa","Ken Griffey"]})") << json;
+   };
+
+   "anchor_on_flow_map_typed"_test = [] {
+      std::string yaml = R"(root: &m {x: 1, y: 2}
+copy: *m)";
+      std::map<std::string, std::map<std::string, int>> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["root"]["x"] == 1);
+      expect(obj["root"]["y"] == 2);
+      expect(obj["copy"]["x"] == 1);
+      expect(obj["copy"]["y"] == 2);
+   };
+
+   "anchor_on_flow_seq_typed"_test = [] {
+      std::string yaml = R"(root: &s [10, 20, 30]
+copy: *s)";
+      std::map<std::string, std::vector<int>> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["root"].size() == 3);
+      expect(obj["root"][0] == 10);
+      expect(obj["copy"].size() == 3);
+      expect(obj["copy"][2] == 30);
+   };
+
+   "anchor_skip_unknown_key"_test = [] {
+      // Test that skip_yaml_value handles anchors/aliases when skipping
+      std::string yaml = R"(x: 1
+y: 1.0
+name: &a skipped
+extra: *a)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 1);
+      expect(obj.y == 1.0);
+      expect(obj.name == "skipped");
    };
 };
 

@@ -53,6 +53,46 @@ namespace glz
 
    namespace yaml
    {
+      // Handle YAML alias (*name) by replaying the stored anchor span.
+      // Returns true if alias was handled (caller should return).
+      // Returns false if current char is not '*' (caller continues normally).
+      template <auto Opts, class T, class Ctx, class It, class End>
+      bool handle_alias(T&& value, Ctx& ctx, It& it, [[maybe_unused]] End end) noexcept
+      {
+         if (it == end || *it != '*') return false;
+
+         ++it; // skip '*'
+         auto name = parse_anchor_name(it, end);
+         if (name.empty()) {
+            ctx.error = error_code::syntax_error;
+            return true;
+         }
+
+         auto anchor_it = ctx.anchors.find(std::string(name));
+         if (anchor_it == ctx.anchors.end()) {
+            ctx.error = error_code::syntax_error; // undefined alias
+            return true;
+         }
+
+         auto& span = anchor_it->second;
+         auto replay_it = span.begin;
+         auto replay_end = span.end;
+
+         // Save indent context and set up for replay
+         auto saved_indent_stack = std::move(ctx.indent_stack);
+         ctx.indent_stack.clear();
+         if (span.base_indent > 0) {
+            ctx.push_indent(span.base_indent - 1);
+         }
+
+         using V = std::remove_cvref_t<T>;
+         from<YAML, V>::template op<Opts>(std::forward<T>(value), ctx, replay_it, replay_end);
+
+         // Restore indent context
+         ctx.indent_stack = std::move(saved_indent_stack);
+         return true;
+      }
+
       // SWAR-optimized double-quoted string parsing
       // Uses 8-byte chunks for fast scanning and copying
       template <class Ctx, class It, class End>
@@ -712,8 +752,20 @@ namespace glz
             return false;
          }
 
-         if (check_unsupported_feature(*it, ctx)) [[unlikely]] {
-            return false;
+         // Skip anchor on key (parse past &name without recording)
+         if (*it == '&') {
+            ++it;
+            parse_anchor_name(it, end);
+            skip_inline_ws(it, end);
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return false;
+            }
+            // Anchor on alias is invalid per YAML spec
+            if (*it == '*') {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
          }
 
          if (*it == '"') {
@@ -796,8 +848,31 @@ namespace glz
             return;
          }
 
-         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
-            return;
+         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+
+         bool has_anchor = false;
+         std::string anchor_name;
+         const char* anchor_start{};
+         const int32_t anchor_indent = ctx.current_indent();
+         if (it != end && *it == '&') {
+            ++it;
+            auto name = yaml::parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            yaml::skip_inline_ws(it, end);
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            if (*it == '*') {
+               ctx.error = error_code::syntax_error; // anchor on alias invalid
+               return;
+            }
+            has_anchor = true;
+            anchor_name = std::string(name);
+            anchor_start = &*it;
          }
 
          std::string str;
@@ -833,6 +908,9 @@ namespace glz
 
          if (!bool(ctx.error)) {
             value = std::move(str);
+            if (has_anchor) {
+               ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
+            }
          }
       }
    };
@@ -872,8 +950,27 @@ namespace glz
             return;
          }
 
-         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
-            return;
+         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+
+         bool has_anchor = false;
+         std::string anchor_name;
+         const char* anchor_start{};
+         const int32_t anchor_indent = ctx.current_indent();
+         if (it != end && *it == '&') {
+            ++it;
+            auto name = yaml::parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            yaml::skip_inline_ws(it, end);
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            has_anchor = true;
+            anchor_name = std::string(name);
+            anchor_start = &*it;
          }
 
          // Parse as plain scalar first
@@ -890,6 +987,10 @@ namespace glz
          }
          else {
             ctx.error = error_code::expected_true_or_false;
+         }
+
+         if (has_anchor && !bool(ctx.error)) {
+            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
          }
       }
    };
@@ -940,9 +1041,34 @@ namespace glz
             return;
          }
 
-         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
-            return;
+         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+
+         bool has_anchor = false;
+         std::string anchor_name;
+         const char* anchor_start{};
+         const int32_t anchor_indent = ctx.current_indent();
+         if (it != end && *it == '&') {
+            ++it;
+            auto name = yaml::parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            yaml::skip_inline_ws(it, end);
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            has_anchor = true;
+            anchor_name = std::string(name);
+            anchor_start = &*it;
          }
+
+         auto finalize = [&] {
+            if (has_anchor && !bool(ctx.error)) {
+               ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
+            }
+         };
 
          // Check for special float values
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
@@ -955,12 +1081,14 @@ namespace glz
                                      std::string_view(it, 3) == "INF")) {
                   value = std::numeric_limits<std::remove_cvref_t<T>>::infinity();
                   it += 3;
+                  finalize();
                   return;
                }
                if (it + 3 <= end && (std::string_view(it, 3) == "nan" || std::string_view(it, 3) == "NaN" ||
                                      std::string_view(it, 3) == "NAN")) {
                   value = std::numeric_limits<std::remove_cvref_t<T>>::quiet_NaN();
                   it += 3;
+                  finalize();
                   return;
                }
                it = start;
@@ -980,6 +1108,7 @@ namespace glz
                         value = std::numeric_limits<std::remove_cvref_t<T>>::infinity();
                      }
                      it += 3;
+                     finalize();
                      return;
                   }
                }
@@ -1056,6 +1185,7 @@ namespace glz
                   if (ec != std::errc{}) {
                      ctx.error = error_code::parse_number_failure;
                   }
+                  finalize();
                   return;
                }
             }
@@ -1105,6 +1235,8 @@ namespace glz
                ctx.error = error_code::parse_number_failure;
             }
          }
+
+         finalize();
       }
    };
 
@@ -1152,9 +1284,9 @@ namespace glz
 
          yaml::skip_inline_ws(it, end);
 
-         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
-            return;
-         }
+         // Handle alias for the whole nullable value
+         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+         // Anchors (&name) pass through to the inner type handler
 
          // Check for null value (without tag)
          if (tag == yaml::yaml_tag::none) {
@@ -1258,8 +1390,27 @@ namespace glz
             return;
          }
 
-         if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
-            return;
+         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+
+         bool has_anchor = false;
+         std::string anchor_name;
+         const char* anchor_start{};
+         const int32_t anchor_indent = ctx.current_indent();
+         if (it != end && *it == '&') {
+            ++it;
+            auto name = yaml::parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            yaml::skip_inline_ws(it, end);
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            has_anchor = true;
+            anchor_name = std::string(name);
+            anchor_start = &*it;
          }
 
          // Parse as string (quoted or plain)
@@ -1311,6 +1462,10 @@ namespace glz
                   }
                },
                index);
+         }
+
+         if (has_anchor && !bool(ctx.error)) {
+            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
          }
       }
    };
@@ -2230,6 +2385,37 @@ namespace glz
             return;
          }
 
+         // Handle alias
+         if (peek != end && *peek == '*') {
+            it = peek;
+            yaml::handle_alias<Opts>(value, ctx, it, end);
+            return;
+         }
+
+         // Handle anchor
+         bool has_anchor = false;
+         std::string anchor_name;
+         const char* anchor_start{};
+         const int32_t anchor_indent = ctx.current_indent();
+         if (peek != end && *peek == '&') {
+            it = peek;
+            ++it;
+            auto name = yaml::parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            yaml::skip_inline_ws(it, end);
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            has_anchor = true;
+            anchor_name = std::string(name);
+            anchor_start = &*it;
+            peek = it;
+         }
+
          if (*peek == '[') {
             // Flow sequence
             it = peek;
@@ -2237,13 +2423,17 @@ namespace glz
          }
          else if (*peek == '-') {
             // Block sequence
-            if (tag != yaml::yaml_tag::none) {
+            if (tag != yaml::yaml_tag::none || has_anchor) {
                it = peek;
             }
             yaml::parse_block_sequence_set<Opts>(value, ctx, it, end, ctx.current_indent());
          }
          else {
             ctx.error = error_code::syntax_error;
+         }
+
+         if (has_anchor && !bool(ctx.error)) {
+            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
          }
       }
    };
@@ -2287,6 +2477,37 @@ namespace glz
             return;
          }
 
+         // Handle alias
+         if (peek != end && *peek == '*') {
+            it = peek;
+            yaml::handle_alias<Opts>(value, ctx, it, end);
+            return;
+         }
+
+         // Handle anchor
+         bool has_anchor = false;
+         std::string anchor_name;
+         const char* anchor_start{};
+         const int32_t anchor_indent = ctx.current_indent();
+         if (peek != end && *peek == '&') {
+            it = peek;
+            ++it;
+            auto name = yaml::parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            yaml::skip_inline_ws(it, end);
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            has_anchor = true;
+            anchor_name = std::string(name);
+            anchor_start = &*it;
+            peek = it;
+         }
+
          if (*peek == '[') {
             // Flow sequence - consume whitespace and parse
             it = peek;
@@ -2295,7 +2516,7 @@ namespace glz
          else if (*peek == '-') {
             // Block sequence - don't consume leading whitespace, let parse_block_sequence handle it
             // But if there was a tag, we need to advance past it
-            if (tag != yaml::yaml_tag::none) {
+            if (tag != yaml::yaml_tag::none || has_anchor) {
                it = peek;
             }
             // If whitespace was already consumed (variant parser path), the iterator is at '-'
@@ -2309,6 +2530,10 @@ namespace glz
          }
          else {
             ctx.error = error_code::syntax_error;
+         }
+
+         if (has_anchor && !bool(ctx.error)) {
+            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
          }
       }
    };
@@ -2530,8 +2755,15 @@ namespace glz
 
             // Parse key
             if constexpr (str_t<first_type>) {
-               if (yaml::check_unsupported_feature(*it, ctx)) [[unlikely]] {
-                  return;
+               // Skip anchor on key
+               if (*it == '&') {
+                  ++it;
+                  yaml::parse_anchor_name(it, end);
+                  yaml::skip_inline_ws(it, end);
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                }
                std::string key_str;
                const auto style = yaml::detect_scalar_style(*it);
@@ -2646,6 +2878,30 @@ namespace glz
             return; // Empty input - keep default values
          }
 
+         // Handle alias
+         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+
+         // Handle anchor
+         bool has_anchor = false;
+         std::string anchor_name;
+         const char* anchor_start{};
+         const int32_t anchor_indent = ctx.current_indent();
+         if (it != end && *it == '&') {
+            ++it;
+            auto name = yaml::parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            yaml::skip_inline_ws(it, end);
+            if (it == end) {
+               return; // Empty input with anchor - keep default values
+            }
+            has_anchor = true;
+            anchor_name = std::string(name);
+            anchor_start = &*it;
+         }
+
          if (*it == '{') {
             // Flow mapping
             yaml::parse_flow_mapping<Opts>(value, ctx, it, end);
@@ -2653,6 +2909,10 @@ namespace glz
          else {
             // Block mapping - use indent from context (set by parent parser)
             yaml::parse_block_mapping<Opts>(value, ctx, it, end, ctx.current_indent());
+         }
+
+         if (has_anchor && !bool(ctx.error)) {
+            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
          }
       }
    };
@@ -2692,6 +2952,31 @@ namespace glz
             return;
          }
 
+         // Handle alias
+         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+
+         // Handle anchor
+         bool has_anchor = false;
+         std::string anchor_name;
+         const char* anchor_start{};
+         const int32_t anchor_indent = ctx.current_indent();
+         if (it != end && *it == '&') {
+            ++it;
+            auto name = yaml::parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            yaml::skip_inline_ws(it, end);
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            has_anchor = true;
+            anchor_name = std::string(name);
+            anchor_start = &*it;
+         }
+
          using key_t = typename std::remove_cvref_t<T>::key_type;
          using val_t = typename std::remove_cvref_t<T>::mapped_type;
 
@@ -2703,6 +2988,9 @@ namespace glz
 
             if (it != end && *it == '}') {
                ++it;
+               if (has_anchor) {
+                  ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
+               }
                return;
             }
 
@@ -2712,7 +3000,7 @@ namespace glz
 
                if (it != end && *it == '}') {
                   ++it;
-                  return;
+                  break;
                }
 
                // Parse key
@@ -2742,7 +3030,7 @@ namespace glz
 
                if (it != end && *it == '}') {
                   ++it;
-                  return;
+                  break;
                }
                else if (it != end && *it == ',') {
                   ++it;
@@ -2798,6 +3086,10 @@ namespace glz
                   value.emplace(std::move(key), std::move(val));
                   return true;
                });
+         }
+
+         if (has_anchor && !bool(ctx.error)) {
+            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
          }
       }
    };
@@ -2937,10 +3229,12 @@ namespace glz
                   }
 
                   yaml::yaml_context temp_ctx{};
+                  temp_ctx.anchors = ctx.anchors;
                   from<YAML, V>::template op<Opts>(std::get<V>(value), temp_ctx, it, end);
 
                   if (!bool(temp_ctx.error)) {
                      found_match = true;
+                     ctx.anchors = std::move(temp_ctx.anchors);
                   }
                   else {
                      it = copy_it;
@@ -3035,9 +3329,11 @@ namespace glz
          // Full parse attempt - use a temporary context that inherits indent from parent
          yaml::yaml_context temp_ctx{};
          temp_ctx.indent_stack = ctx.indent_stack; // Propagate indent context for nested parsing
+         temp_ctx.anchors = ctx.anchors;
          process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
          if (!bool(temp_ctx.error)) {
+            ctx.anchors = std::move(temp_ctx.anchors);
             return true;
          }
          // The line matched "key: value" pattern but parsing failed.
@@ -3121,6 +3417,37 @@ namespace glz
             };
 
             switch (c) {
+            case '&': {
+               // Anchor before value: parse name, then re-dispatch
+               ++it;
+               auto aname = yaml::parse_anchor_name(it, end);
+               if (aname.empty()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               yaml::skip_inline_ws(it, end);
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               // Anchor on alias (&anchor *alias) is invalid per YAML spec
+               if (*it == '*') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               const char* anchor_start = &*it;
+               const int32_t anchor_indent = ctx.current_indent();
+               from<YAML, V>::template op<Opts>(value, ctx, it, end);
+               if (!bool(ctx.error)) {
+                  ctx.anchors[std::string(aname)] = {anchor_start, &*it, anchor_indent};
+               }
+               return;
+            }
+            case '*': {
+               // Alias: look up anchor and replay
+               yaml::handle_alias<Opts>(value, ctx, it, end);
+               return;
+            }
             case '!': {
                // Tag - parse it and dispatch based on tag type
                const auto tag = yaml::parse_yaml_tag(it, end);
@@ -3333,9 +3660,11 @@ namespace glz
                   auto start_it = it;
                   yaml::yaml_context temp_ctx{};
                   temp_ctx.indent_stack = ctx.indent_stack;
+                  temp_ctx.anchors = ctx.anchors;
                   process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
                   if (!bool(temp_ctx.error)) {
+                     ctx.anchors = std::move(temp_ctx.anchors);
                      return; // Successfully parsed as number
                   }
                   it = start_it; // Restore and fall through to string
@@ -3354,9 +3683,11 @@ namespace glz
                      auto start_it = it;
                      yaml::yaml_context temp_ctx{};
                      temp_ctx.indent_stack = ctx.indent_stack;
+                     temp_ctx.anchors = ctx.anchors;
                      process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                   end);
                      if (!bool(temp_ctx.error)) {
+                        ctx.anchors = std::move(temp_ctx.anchors);
                         return; // Successfully parsed as number
                      }
                      it = start_it; // Restore and fall through to string
@@ -3380,10 +3711,12 @@ namespace glz
 
             V v{};
             yaml::yaml_context temp_ctx{};
+            temp_ctx.anchors = ctx.anchors;
             from<YAML, V>::template op<Opts>(v, temp_ctx, it, end);
 
             if (!bool(temp_ctx.error)) {
                value = std::move(v);
+               ctx.anchors = std::move(temp_ctx.anchors);
                return true;
             }
 

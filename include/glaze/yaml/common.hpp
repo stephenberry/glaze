@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "glaze/core/common.hpp"
@@ -49,6 +50,15 @@ namespace glz::yaml
             indent_stack.pop_back();
          }
       }
+
+      // Anchor/alias support: maps anchor name -> source span
+      struct anchor_span
+      {
+         const char* begin{};
+         const char* end{};
+         int32_t base_indent{};
+      };
+      std::unordered_map<std::string, anchor_span> anchors{};
    };
 
    // Lookup table for characters that can start a plain scalar in flow context
@@ -718,6 +728,23 @@ namespace glz::yaml
          return true;
       }
       return false;
+   }
+
+   // Parse an anchor or alias name. Advances iterator past the name.
+   // Anchor/alias names end at whitespace, flow indicators, or colon.
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE std::string_view parse_anchor_name(It& it, End end) noexcept
+   {
+      auto start = it;
+      while (it != end) {
+         const char c = *it;
+         if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == '[' || c == ']' || c == '{' ||
+             c == '}' || c == ':') {
+            break;
+         }
+         ++it;
+      }
+      return std::string_view(&*start, static_cast<size_t>(it - start));
    }
 
    // Detect scalar style from first character

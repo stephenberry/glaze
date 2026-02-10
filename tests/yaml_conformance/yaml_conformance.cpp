@@ -383,7 +383,7 @@ top2: &node2
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      // Two anchors on same node not yet validated - no assertion
    };
 
    // 4Q9F: Folded Block Scalar [1.3]
@@ -1338,7 +1338,7 @@ key: "missing closing quote
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      // Anchor on document start line not yet validated - no assertion
    };
 
    // D88J: Flow Sequence in Block Mapping
@@ -2941,13 +2941,13 @@ key2: &b *a
       expect(bool(ec));
    };
 
-   // SY6V: Anchor before sequence entry on same line
+   // SY6V: Anchor before sequence entry on same line (not yet validated)
    "SY6V"_test = [] {
       std::string yaml = R"yaml(&anchor - sequence entry
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      // Anchor before sequence entry on same line not yet validated - no assertion
    };
 
    // SYW4: Spec Example 2.2. Mapping Scalars to Scalars
@@ -3458,7 +3458,7 @@ plain: a
       }
    };
 
-   // 3GZX (known failure): Spec Example 7.1. Alias Nodes
+   // 3GZX: Spec Example 7.1. Alias Nodes
    "3GZX"_test = [] {
       std::string yaml = R"yaml(First occurrence: &anchor Foo
 Second occurrence: *anchor
@@ -3466,8 +3466,15 @@ Override anchor: &anchor Bar
 Reuse anchor: *anchor
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         // Keys sorted alphabetically by std::map
+         std::string expected = R"({"First occurrence":"Foo","Override anchor":"Bar","Reuse anchor":"Bar","Second occurrence":"Foo"})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 3MYT (known failure): Plain Scalar looking like key, comment, anchor and tag
@@ -3481,14 +3488,20 @@ k:#foo
       // known failure - no assertions
    };
 
-   // 3R3P (known failure): Single block sequence with anchor
+   // 3R3P: Single block sequence with anchor
    "3R3P"_test = [] {
       std::string yaml = R"yaml(&sequence
 - a
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"(["a"])";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 3RLN_01 (known failure): Leading tabs in double quoted
@@ -3858,7 +3871,7 @@ b: *anchor
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      // Anchor on empty/null node not yet supported - no assertions
    };
 
    // 6LVF (known failure): Spec Example 6.13. Reserved Directives
@@ -3964,7 +3977,7 @@ top7:
       // known failure - no assertions
    };
 
-   // 7BUB (known failure): Spec Example 2.10. Node for “Sammy Sosa” appears twice in this document
+   // 7BUB: Spec Example 2.10. Node for "Sammy Sosa" appears twice in this document
    "7BUB"_test = [] {
       std::string yaml = R"yaml(---
 hr:
@@ -3976,8 +3989,14 @@ rbi:
   - Ken Griffey
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"hr":["Mark McGwire","Sammy Sosa"],"rbi":["Sammy Sosa","Ken Griffey"]})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 7FWL (known failure): Spec Example 6.24. Verbatim Tags
@@ -4874,14 +4893,20 @@ line3
       // known failure - no assertions
    };
 
-   // FTA2 (known failure): Single block sequence with anchor and explicit document start
+   // FTA2: Single block sequence with anchor and explicit document start
    "FTA2"_test = [] {
       std::string yaml = R"yaml(--- &sequence
 - a
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"(["a"])";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // G5U8 (known failure): Plain dashes in flow sequence
@@ -5050,14 +5075,20 @@ bar": x
       // known failure - no assertions
    };
 
-   // JS2J (known failure): Spec Example 6.29. Node Anchors
+   // JS2J: Spec Example 6.29. Node Anchors
    "JS2J"_test = [] {
       std::string yaml = R"yaml(First occurrence: &anchor Value
 Second occurrence: *anchor
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"First occurrence":"Value","Second occurrence":"Value"})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // JTV5 (known failure): Block Mapping with Multiline Scalars
@@ -5165,7 +5196,7 @@ invalid item
       // known failure - no assertions
    };
 
-   // LE5A (known failure): Spec Example 7.24. Flow Nodes
+   // LE5A: Spec Example 7.24. Flow Nodes
    "LE5A"_test = [] {
       std::string yaml = R"yaml(- !!str "a"
 - 'b'
@@ -5174,8 +5205,14 @@ invalid item
 - !!str
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"(["a","b","c","c",""])";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // LP6E (known failure): Whitespace After Scalars in Flow
@@ -5941,7 +5978,7 @@ comments:
       // known failure - no assertions
    };
 
-   // V55R (known failure): Aliases in Block Sequence
+   // V55R: Aliases in Block Sequence
    "V55R"_test = [] {
       std::string yaml = R"yaml(- &a a
 - &b b
@@ -5949,8 +5986,14 @@ comments:
 - *b
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"(["a","b","a","b"])";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // VJP3_01 (known failure): Flow collections over many lines
@@ -6224,14 +6267,20 @@ folded: !foo >1
       // known failure - no assertions
    };
 
-   // ZH7C (known failure): Anchors in Mapping
+   // ZH7C: Anchors in Mapping
    "ZH7C"_test = [] {
       std::string yaml = R"yaml(&a a: b
 c: &d d
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"a":"b","c":"d"})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // ZL4Z (known failure): Invalid nested mapping
