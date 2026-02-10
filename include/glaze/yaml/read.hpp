@@ -1710,7 +1710,229 @@ namespace glz
          }
       }
 
-      // Parse block mapping
+      // Detect whether there is nested block content after a `key:` with no same-line value.
+      // Called with `it` positioned after the colon and any trailing inline whitespace.
+      // Peeks ahead past blank lines and comment-only lines to find the first content line.
+      // Returns the indent of that content if it's nested (> effective line_indent), else -1.
+      // On return, `it` is positioned right after the key line's newline.
+      // If return >= 0, caller should call skip_to_content() to advance to the content.
+      template <class Ctx, class It, class End>
+      int32_t detect_nested_value_indent(Ctx& ctx, It& it, End end, int32_t line_indent)
+      {
+         skip_ws_and_comment(it, end);
+         if (it == end || (*it != '\n' && *it != '\r')) {
+            return -1;
+         }
+         skip_newline(it, end);
+         auto content_start = it;
+
+         // Peek ahead to find the first content line (skip blank/comment lines)
+         auto peek = it;
+         while (peek != end) {
+            if (*peek == '\n' || *peek == '\r') {
+               skip_newline(peek, end);
+            }
+            else if (*peek == '#') {
+               skip_comment(peek, end);
+            }
+            else if (*peek == ' ') {
+               auto line_start = peek;
+               while (peek != end && *peek == ' ') ++peek;
+               if (peek == end || *peek == '\n' || *peek == '\r') {
+                  continue; // blank line with trailing spaces
+               }
+               if (*peek == '#') {
+                  skip_comment(peek, end);
+                  continue; // comment-only line
+               }
+               peek = line_start; // content found, restore to measure properly
+               break;
+            }
+            else {
+               break; // content at column 0
+            }
+         }
+
+         // Measure indent of the content line
+         int32_t content_indent = measure_indent(peek, end, ctx);
+         if (bool(ctx.error)) [[unlikely]] return -1;
+
+         const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
+         if (content_indent > effective_line_indent && peek != end && *peek != '\n' && *peek != '\r') {
+            it = content_start;
+            return content_indent;
+         }
+
+         it = content_start;
+         return -1;
+      }
+
+      // Skip blank lines and comment-only lines.
+      // Leaves `it` at the start of indentation whitespace of the first content line.
+      template <class It, class End>
+      void skip_to_content(It& it, End end)
+      {
+         while (it != end) {
+            if (*it == '\n' || *it == '\r') {
+               skip_newline(it, end);
+            }
+            else if (*it == '#') {
+               skip_comment(it, end);
+            }
+            else if (*it == ' ') {
+               auto line_start = it;
+               while (it != end && *it == ' ') ++it;
+               if (it == end || *it == '\n' || *it == '\r') {
+                  continue; // blank line with trailing spaces
+               }
+               if (*it == '#') {
+                  skip_comment(it, end);
+                  continue; // comment-only line
+               }
+               it = line_start; // content found, restore to start of indent
+               return;
+            }
+            else {
+               return; // content at column 0
+            }
+         }
+      }
+
+      // Shared loop for block mapping parsing.
+      // Handles blank/comment skipping, indent detection, dedent, and trailing whitespace.
+      // process_entry(ctx, it, end, line_indent) should parse key+colon+value and return
+      // true to continue or false to stop.
+      //
+      // mapping_indent >= 0: caller knows the key indent (struct case, first key may be mid-line)
+      // mapping_indent < 0: discover from first key (map case)
+      template <auto Opts, class Ctx, class It, class End, class ProcessEntry>
+      void parse_block_mapping_loop(Ctx& ctx, It& it, End end,
+                                    int32_t mapping_indent,
+                                    ProcessEntry&& process_entry)
+      {
+         const int32_t parent_indent = ctx.current_indent();
+         const bool discover_indent = (mapping_indent < 0);
+         bool first_key = !discover_indent;
+
+         while (it != end) {
+            auto line_start = it;
+            int32_t line_indent = first_key ? mapping_indent : 0;
+
+            // Skip blank lines and comments, measure indent
+            while (it != end) {
+               if (*it == '#') {
+                  skip_comment(it, end);
+                  skip_newline(it, end);
+                  first_key = false;
+                  line_indent = 0;
+               }
+               else if (*it == '\n' || *it == '\r') {
+                  skip_newline(it, end);
+                  first_key = false;
+                  line_indent = 0;
+               }
+               else if (*it == ' ') {
+                  line_start = it;
+                  line_indent = measure_indent(it, end, ctx);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
+                     first_key = false;
+                     continue; // Blank or comment line
+                  }
+
+                  // Early dedent check
+                  if (mapping_indent >= 0 && line_indent < mapping_indent) {
+                     it = line_start;
+                     return;
+                  }
+
+                  first_key = false;
+                  break; // Found content
+               }
+               else {
+                  line_start = it;
+                  break; // Content at column 0
+               }
+            }
+
+            if (it == end) break;
+
+            // Check document end (only for struct case - map parser lets key parsing
+            // handle '...' which produces appropriate errors for invalid content)
+            if (!discover_indent && at_document_end(it, end)) break;
+
+            // Dedent checks (skip on first key for struct case)
+            // Must check BEFORE establishing mapping_indent so the first discovered key
+            // isn't rejected by the parent_indent check (mapping_indent is still -1).
+            if (!first_key) {
+               // Parent indent check for nested maps (only after mapping_indent established)
+               if (discover_indent && mapping_indent >= 0 && parent_indent >= 0 && line_indent <= parent_indent) {
+                  it = line_start;
+                  return;
+               }
+               if (mapping_indent >= 0 && line_indent < mapping_indent) {
+                  it = line_start;
+                  return;
+               }
+            }
+
+            // Establish mapping indent from first key (map case)
+            if (mapping_indent < 0) {
+               mapping_indent = line_indent;
+            }
+
+            // Sequence indicator check (struct case only - map parser lets key parsing
+            // handle '- ' which produces appropriate errors for misindented items)
+            if (!discover_indent && *it == '-' && ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n')) {
+               it = line_start;
+               return;
+            }
+
+            // Skip indented comment lines
+            if (*it == '#') {
+               skip_comment(it, end);
+               first_key = false;
+               continue;
+            }
+
+            // Skip blank/empty lines after indent
+            if (*it == '\n' || *it == '\r') {
+               first_key = false;
+               continue;
+            }
+
+            // Process this mapping entry (key + colon + value)
+            if (!process_entry(ctx, it, end, line_indent)) {
+               return;
+            }
+            first_key = false;
+
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            // Trailing whitespace handling (peek-ahead pattern).
+            // After parsing, iterator may be at leading indent of next line.
+            // Don't consume it - let the outer loop handle indent measurement.
+            if (it != end) {
+               if (*it == ' ' || *it == '\t') {
+                  auto peek = it;
+                  skip_inline_ws(peek, end);
+                  if (peek != end && *peek != '\n' && *peek != '\r' && *peek != '#') {
+                     continue; // At leading indent of new line
+                  }
+               }
+               skip_inline_ws(it, end);
+               skip_comment(it, end);
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  skip_newline(it, end);
+               }
+            }
+         }
+      }
+
+      // Parse block mapping for struct/object types
       // key1: value1
       // key2: value2
       template <auto Opts, class T, class Ctx, class It, class End>
@@ -1720,193 +1942,89 @@ namespace glz
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
 
-         // Track if we're on the first key (might be mid-line from sequence "- key: value")
-         bool first_key = true;
+         // Clamp to >= 0 so the shared loop uses struct mode (discover_indent = false)
+         if (mapping_indent < 0) mapping_indent = 0;
 
-         while (it != end) {
-            // Find next content line and measure its indent
-            auto line_start = it;
-            int32_t line_indent =
-               first_key ? mapping_indent : 0; // Default: mapping_indent for mid-line, 0 for new lines
-
-            // Skip blank lines and comments (only if not first key mid-line)
-            while (it != end) {
-               if (*it == '#') {
-                  skip_comment(it, end);
-                  skip_newline(it, end);
-                  first_key = false;
-                  line_indent = 0; // Next line starts fresh
+         parse_block_mapping_loop<Opts>(ctx, it, end, mapping_indent,
+            [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
+               // Parse key using thread-local buffer to avoid allocation
+               auto& key = string_buffer();
+               key.clear();
+               if (!parse_yaml_key(key, ctx, it, end, false)) {
+                  return false;
                }
-               else if (*it == '\n' || *it == '\r') {
-                  skip_newline(it, end);
-                  first_key = false;
-                  line_indent = 0; // Next line starts fresh
+
+               skip_inline_ws(it, end);
+
+               // Expect colon
+               if (it == end || *it != ':') {
+                  ctx.error = error_code::syntax_error;
+                  return false;
                }
-               else if (*it == ' ') {
-                  line_start = it;
-                  line_indent = measure_indent(it, end, ctx);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+               ++it;
+               skip_inline_ws(it, end);
 
-                  if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
-                     // Blank or comment line - continue to next
-                     first_key = false;
-                     continue;
-                  }
+               // Look up key
+               const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
+                  key.data(), key.data() + key.size(), key.size());
 
-                  // Found content - line_indent is set, check dedent
-                  if (line_indent < mapping_indent) {
-                     it = line_start;
-                     return; // Dedented
-                  }
+               const bool key_matches = index < N && std::string_view{key} == reflect<U>::keys[index];
 
-                  first_key = false;
-                  break;
-               }
-               else {
-                  // Content at current position (no leading whitespace)
-                  // line_indent was set at top of outer loop iteration
-                  line_start = it;
-                  break;
-               }
-            }
-
-            if (it == end) break;
-
-            // Check for document end marker
-            if (at_document_end(it, end)) break;
-
-            // Check for dedent (applies when line_indent was measured or defaulted to 0)
-            if (!first_key && line_indent < mapping_indent) {
-               it = line_start;
-               return;
-            }
-
-            // Check for sequence indicator (not a mapping key)
-            if (*it == '-' && ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n')) {
-               it = line_start;
-               return;
-            }
-
-            // Parse key using thread-local buffer to avoid allocation
-            auto& key = string_buffer();
-            key.clear();
-            if (!parse_yaml_key(key, ctx, it, end, false)) {
-               return;
-            }
-            first_key = false; // After first key, always check indent
-
-            skip_inline_ws(it, end);
-
-            // Expect colon
-            if (it == end || *it != ':') {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            ++it;
-            skip_inline_ws(it, end);
-
-            // Look up key
-            const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
-               key.data(), key.data() + key.size(), key.size());
-
-            const bool key_matches = index < N && std::string_view{key} == reflect<U>::keys[index];
-
-            if (key_matches) [[likely]] {
-               visit<N>(
-                  [&]<size_t I>() {
-                     if (I == index) {
-                        decltype(auto) member = [&]() -> decltype(auto) {
-                           if constexpr (reflectable<U>) {
-                              return get<I>(to_tie(value));
-                           }
-                           else {
-                              return get_member(value, get<I>(reflect<U>::values));
-                           }
-                        }();
-
-                        using member_type = std::decay_t<decltype(member)>;
-
-                        // Check if value is on same line or next line
-                        if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                           // Set indent so multiline plain scalars can find continuation lines
-                           if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return false;
-                           from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
-                           ctx.pop_indent();
-                        }
-                        else {
-                           // Value on next line - nested block
-                           skip_ws_and_comment(it, end);
-                           skip_newline(it, end);
-
-                           auto nested_start = it;
-                           int32_t nested_indent = measure_indent(it, end, ctx);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return false;
-                           it = nested_start;
-
-                           // Content is nested only if indented more than the current line.
-                           // When line_indent is negative (root level), use 0 as the baseline.
-                           // This prevents content at column 0 from being treated as nested.
-                           const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
-                           if (nested_indent > effective_line_indent) {
-                              // Push indent for nested parsing
-                              if constexpr (readable_map_t<member_type>) {
-                                 // Map parsing expects parent indent, not the map's key indent
-                                 if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return false;
+               if (key_matches) [[likely]] {
+                  visit<N>(
+                     [&]<size_t I>() {
+                        if (I == index) {
+                           decltype(auto) member = [&]() -> decltype(auto) {
+                              if constexpr (reflectable<U>) {
+                                 return get<I>(to_tie(value));
                               }
                               else {
-                                 if (!ctx.push_indent(nested_indent)) [[unlikely]] return false;
+                                 return get_member(value, get<I>(reflect<U>::values));
                               }
+                           }();
+
+                           using member_type = std::decay_t<decltype(member)>;
+
+                           // Check if value is on same line or next line
+                           if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                              if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return false;
                               from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
                               ctx.pop_indent();
                            }
-                           // else: keep default value
+                           else {
+                              int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
+                              if (nested_indent >= 0) {
+                                 skip_to_content(it, end);
+                                 if constexpr (readable_map_t<member_type>) {
+                                    if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return false;
+                                 }
+                                 else {
+                                    if (!ctx.push_indent(nested_indent)) [[unlikely]] return false;
+                                 }
+                                 from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
+                                 ctx.pop_indent();
+                              }
+                           }
                         }
+                        return !bool(ctx.error);
+                     },
+                     index);
+               }
+               else {
+                  if constexpr (Opts.error_on_unknown_keys) {
+                     ctx.error = error_code::unknown_key;
+                     return false;
+                  }
+                  else { // else used to fix MSVC unreachable code warning
+                     // Skip unknown value
+                     if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                        skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
                      }
-                     return !bool(ctx.error);
-                  },
-                  index);
-            }
-            else {
-               if constexpr (Opts.error_on_unknown_keys) {
-                  ctx.error = error_code::unknown_key;
-                  return;
-               }
-               else { // else used to fix MSVC unreachable code warning
-                  // Skip unknown value
-                  if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                     skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
                   }
                }
-            }
 
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            // Skip to end of current line (trailing whitespace, comment) and newline
-            // But don't skip if we're already at the start of a new line
-            // (which happens after nested block parsing returns)
-            if (it != end) {
-               // Check if we're at leading whitespace of a new line (not trailing whitespace)
-               // Leading whitespace would have content (not newline/comment) after it
-               if (*it == ' ' || *it == '\t') {
-                  auto peek = it;
-                  skip_inline_ws(peek, end);
-                  if (peek != end && *peek != '\n' && *peek != '\r' && *peek != '#') {
-                     // There's content after whitespace - we're at leading indent of new line
-                     // Don't skip anything, let the outer loop handle it
-                     continue;
-                  }
-               }
-               // Skip trailing whitespace and comment on current line
-               skip_inline_ws(it, end);
-               skip_comment(it, end);
-               if (it != end && (*it == '\n' || *it == '\r')) {
-                  skip_newline(it, end);
-               }
-            }
-         }
+               return !bool(ctx.error);
+            });
       }
 
       // Parse flow sequence into set types [item, item, ...]
@@ -2642,195 +2760,44 @@ namespace glz
             }
          }
          else {
-            // Block mapping
-            // Track base indentation for this mapping level (-1 means not yet established)
-            const int32_t parent_indent = ctx.current_indent();
-            int32_t mapping_indent = -1; // Will be set from first key's indentation
+            // Block mapping - use shared loop with map-specific callback
+            yaml::parse_block_mapping_loop<Opts>(ctx, it, end, int32_t(-1),
+               [&](auto& ctx, auto& it, auto end, int32_t line_indent) -> bool {
+                  key_t key{};
+                  from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return false;
 
-            while (it != end) {
-               // Skip blank lines and comments
-               while (it != end && (*it == '\n' || *it == '\r' || *it == '#')) {
-                  if (*it == '#') {
-                     yaml::skip_comment(it, end);
+                  yaml::skip_inline_ws(it, end);
+
+                  if (it == end || *it != ':') {
+                     ctx.error = error_code::syntax_error;
+                     return false;
+                  }
+                  ++it;
+                  yaml::skip_inline_ws(it, end);
+
+                  val_t val{};
+                  if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                     if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return false;
+                     from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
+                     ctx.pop_indent();
                   }
                   else {
-                     yaml::skip_newline(it, end);
-                  }
-               }
-
-               if (it == end) break;
-
-               // Measure indent of this line
-               auto line_start = it;
-               int32_t line_indent = yaml::measure_indent(it, end, ctx);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
-               // For subsequent keys: if dedented to or below parent level, this nested mapping is done
-               // (First key is always accepted since mapping_indent is still -1)
-               // This handles cases where variant parser already skipped leading whitespace
-               if (mapping_indent >= 0 && parent_indent >= 0 && line_indent <= parent_indent) {
-                  it = line_start; // Restore position for parent to handle
-                  break;
-               }
-
-               // Establish mapping indent from first key
-               if (mapping_indent < 0) {
-                  mapping_indent = line_indent;
-               }
-
-               // If dedented below mapping level, this mapping is done
-               if (line_indent < mapping_indent) {
-                  it = line_start; // Restore position for parent to handle
-                  break;
-               }
-
-               // Skip comment lines (handles indented comments)
-               if (it != end && *it == '#') {
-                  yaml::skip_comment(it, end);
-                  continue;
-               }
-
-               if (it == end || *it == '\n' || *it == '\r') continue;
-
-               // Parse key
-               key_t key{};
-               from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
-               yaml::skip_inline_ws(it, end);
-
-               if (it == end || *it != ':') {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               ++it;
-               yaml::skip_inline_ws(it, end);
-
-               // Parse value
-               val_t val{};
-               if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                  // Value on same line - set indent for multiline plain scalar parsing
-                  if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return;
-                  from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
-                  ctx.pop_indent();
-                  // Skip trailing whitespace after inline value, but don't consume
-                  // leading indent of the next line (happens after block scalar parsing)
-                  if (it != end) {
-                     if (*it == ' ' || *it == '\t') {
-                        auto peek = it;
-                        yaml::skip_inline_ws(peek, end);
-                        if (peek != end && *peek != '\n' && *peek != '\r' && *peek != '#') {
-                           // Content after whitespace = leading indent of new line
-                           // Don't consume; let the outer loop measure indent properly
-                        }
-                        else {
-                           yaml::skip_ws_and_comment(it, end);
-                        }
-                     }
-                  }
-               }
-               else {
-                  // Value on next line(s) - check for nested block content
-                  yaml::skip_ws_and_comment(it, end);
-                  if (it != end && (*it == '\n' || *it == '\r')) {
-                     yaml::skip_newline(it, end);
-
-                     // Peek at next content line's indentation, skipping blank lines and comments
-                     auto peek_it = it;
-                     while (peek_it != end) {
-                        if (*peek_it == '\n' || *peek_it == '\r') {
-                           yaml::skip_newline(peek_it, end);
-                        }
-                        else if (*peek_it == ' ') {
-                           ++peek_it;
-                        }
-                        else if (*peek_it == '#') {
-                           yaml::skip_comment(peek_it, end);
-                        }
-                        else {
-                           break;
-                        }
-                     }
-
-                     // Measure the indent of the next content, skipping blank lines and comments
-                     auto content_start = it;
-                     while (it != end) {
-                        if (*it == '\n' || *it == '\r') {
-                           yaml::skip_newline(it, end);
-                        }
-                        else if (*it == '#') {
-                           // Skip leading spaces before measuring
-                           auto comment_start = it;
-                           while (it != end && *it == ' ') ++it;
-                           if (it != end && *it == '#') {
-                              yaml::skip_comment(it, end);
-                           }
-                           else {
-                              it = comment_start; // Not a comment line, restore
-                              break;
-                           }
-                        }
-                        else {
-                           break;
-                        }
-                     }
-                     int32_t next_indent = yaml::measure_indent(it, end, ctx);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     if (next_indent > line_indent && it != end && *it != '\n' && *it != '\r') {
-                        // Nested content - set context indent and parse
-                        // Skip to the actual content (past newlines and comment-only lines)
-                        it = content_start;
-                        while (it != end) {
-                           if (*it == '\n' || *it == '\r') {
-                              yaml::skip_newline(it, end);
-                           }
-                           else if (*it == ' ') {
-                              // Check if this line is a comment
-                              auto comment_start = it;
-                              while (it != end && *it == ' ') ++it;
-                              if (it != end && *it == '#') {
-                                 yaml::skip_comment(it, end);
-                              }
-                              else {
-                                 it = comment_start; // Not a comment, restore and break
-                                 break;
-                              }
-                           }
-                           else if (*it == '#') {
-                              yaml::skip_comment(it, end);
-                           }
-                           else {
-                              break;
-                           }
-                        }
-                        // Use next_indent - 1 as the boundary for nested parsing.
-                        // This is more robust than line_indent which may be incorrect
-                        // when entering through the variant path (whitespace already skipped).
-                        if (!ctx.push_indent(next_indent - 1)) [[unlikely]] return;
+                     int32_t nested_indent = yaml::detect_nested_value_indent(ctx, it, end, line_indent);
+                     if (nested_indent >= 0) {
+                        yaml::skip_to_content(it, end);
+                        if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return false;
                         from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
                         ctx.pop_indent();
                      }
-                     else {
-                        // No nested content or dedented - restore position
-                        it = content_start;
-                     }
                   }
-               }
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+                  if (bool(ctx.error)) [[unlikely]]
+                     return false;
 
-               value.emplace(std::move(key), std::move(val));
-
-               // For nested values, iterator is already at start of next line
-               // Only skip newline if we're at one (from inline value case)
-               if (it != end && (*it == '\n' || *it == '\r')) {
-                  yaml::skip_newline(it, end);
-               }
-            }
+                  value.emplace(std::move(key), std::move(val));
+                  return true;
+               });
          }
       }
    };
