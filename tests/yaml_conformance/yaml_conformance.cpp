@@ -3643,14 +3643,14 @@ omitted value:,
       // known failure - no assertions
    };
 
-   // 4H7K (known failure): Flow sequence with invalid extra closing bracket
+   // 4H7K: Flow sequence with invalid extra closing bracket
    "4H7K"_test = [] {
       std::string yaml = R"yaml(---
 [ a, b, c ] ]
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // 4MUZ_00: Flow mapping colon on line after key
@@ -3734,24 +3734,32 @@ block: |
       }
    };
 
-   // 52DL (known failure): Explicit Non-Specific Tag [1.3]
+   // 52DL: Explicit Non-Specific Tag [1.3]
    "52DL"_test = [] {
       std::string yaml = R"yaml(---
 ! a
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml("a"
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
-   // 55WF (known failure): Invalid escape in double quoted string
+   // 55WF: Invalid escape in double quoted string
    "55WF"_test = [] {
       std::string yaml = R"yaml(---
 "\."
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // 565N (known failure): Construct Binary
@@ -3822,7 +3830,7 @@ mapping: !!map
       // known failure - no assertions
    };
 
-   // 5TRB (known failure): Invalid document-start marker in doublequoted tring
+   // 5TRB: Invalid document-start marker in doublequoted tring
    "5TRB"_test = [] {
       std::string yaml = R"yaml(---
 "
@@ -3831,7 +3839,15 @@ mapping: !!map
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml(" --- "
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 5TYM (known failure): Spec Example 6.21. Local Tag Prefix
@@ -4271,13 +4287,21 @@ suite yaml_conformance_known_failures_2 = [] {
       // known failure - no assertions
    };
 
-   // 8MK2 (known failure): Explicit Non-Specific Tag
+   // 8MK2: Explicit Non-Specific Tag
    "8MK2"_test = [] {
       std::string yaml = R"yaml(! a
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml("a"
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 8UDB (known failure): Spec Example 7.14. Flow Sequence Entries
@@ -4395,14 +4419,14 @@ matches %: 20
       // known failure - no assertions
    };
 
-   // 9JBA (known failure): Invalid comment after end of flow sequence
+   // 9JBA: Invalid comment after end of flow sequence
    "9JBA"_test = [] {
       std::string yaml = R"yaml(---
 [ a, b, c, ]#invalid
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // 9KAX: Various combinations of tags and anchors
@@ -4457,14 +4481,14 @@ value11
       // known failure - no assertions
    };
 
-   // 9MAG (known failure): Flow sequence with invalid comma at the beginning
+   // 9MAG: Flow sequence with invalid comma at the beginning
    "9MAG"_test = [] {
       std::string yaml = R"yaml(---
 [ , a, b, c ]
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // 9MMW (known failure): Single Pair Implicit Entries
@@ -4739,14 +4763,14 @@ word2
       // known failure - no assertions
    };
 
-   // CTN5 (known failure): Flow sequence with invalid extra comma
+   // CTN5: Flow sequence with invalid extra comma
    "CTN5"_test = [] {
       std::string yaml = R"yaml(---
 [ a, b, c, , ]
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // CUP7 (known failure): Spec Example 5.6. Node Property Indicators
@@ -4759,7 +4783,7 @@ alias: *anchor
       // known failure - no assertions
    };
 
-   // CVW2 (known failure): Invalid comment after comma
+   // CVW2: Invalid comment after comma
    "CVW2"_test = [] {
       std::string yaml = R"yaml(---
 [ a, b, c,#invalid
@@ -4767,7 +4791,7 @@ alias: *anchor
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // D49Q (known failure): Multiline single quoted implicit keys
@@ -5239,14 +5263,14 @@ text: |
       // known failure - no assertions
    };
 
-   // HRE5 (known failure): Double quoted scalar with escaped single quote
+   // HRE5: Double quoted scalar with escaped single quote
    "HRE5"_test = [] {
       std::string yaml = R"yaml(---
 double: "quoted \' scalar"
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // HS5T (known failure): Spec Example 7.12. Plain Lines
@@ -5420,7 +5444,7 @@ keep: |+
       }
    };
 
-   // KS4U (known failure): Invalid item after end of flow sequence
+   // KS4U: Invalid item after end of flow sequence
    "KS4U"_test = [] {
       std::string yaml = R"yaml(---
 [
@@ -5430,7 +5454,7 @@ invalid item
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // L24T_00 (known failure): Trailing line of spaces
@@ -5921,7 +5945,7 @@ bar:
       // known failure - no assertions
    };
 
-   // RXY3 (known failure): Invalid document-end marker in single quoted string
+   // RXY3: Invalid document-end marker in single quoted string
    "RXY3"_test = [] {
       std::string yaml = R"yaml(---
 '
@@ -5930,7 +5954,15 @@ bar:
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml(" ... "
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
 };
@@ -6167,7 +6199,7 @@ invalid
       // known failure - no assertions
    };
 
-   // U3C3 (known failure): Spec Example 6.16. “TAG” directive
+   // U3C3: Spec Example 6.16. “TAG” directive
    "U3C3"_test = [] {
       std::string yaml = R"yaml(%TAG !yaml! tag:yaml.org,2002:
 ---
@@ -6175,7 +6207,15 @@ invalid
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml("foo"
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // U3XV: Node and Mapping Key Anchors
@@ -6230,13 +6270,13 @@ top7:
       // known failure - no assertions
    };
 
-   // U99R (known failure): Invalid comma in tag
+   // U99R: Invalid comma in tag
    "U99R"_test = [] {
       std::string yaml = R"yaml(- !!str, xxx
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // U9NS (known failure): Spec Example 2.8. Play by Play Feed from a Game
