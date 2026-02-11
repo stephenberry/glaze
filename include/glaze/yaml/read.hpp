@@ -128,6 +128,18 @@ namespace glz
          return true;
       }
 
+      template <class It, class End>
+      GLZ_ALWAYS_INLINE bool alias_token_is_mapping_key(It it, End end) noexcept
+      {
+         if (it == end || *it != '*') return false;
+         ++it; // skip '*'
+         auto name = parse_anchor_name(it, end);
+         if (name.empty()) return false;
+         skip_inline_ws(it, end);
+         return (it != end && *it == ':') &&
+                ((it + 1) == end || whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
+      }
+
       // SWAR-optimized double-quoted string parsing
       // Uses 8-byte chunks for fast scanning and copying
       template <class Ctx, class It, class End>
@@ -835,6 +847,27 @@ namespace glz
                }
                else if (*replay_it == '\'') {
                   parse_single_quoted_string(key, ctx, replay_it, replay_end);
+               }
+               else if (*replay_it == '[' || *replay_it == '{') {
+                  // Canonicalize complex alias keys (flow seq/map) to a stable string form.
+                  glz::generic key_node{};
+                  yaml_context temp_ctx{};
+                  temp_ctx.indent_stack = ctx.indent_stack;
+                  temp_ctx.anchors = ctx.anchors;
+                  from<YAML, glz::generic>::template op<flow_context_on<opts{.error_on_unknown_keys = false}>()>(
+                     key_node, temp_ctx, replay_it, replay_end);
+                  if (bool(temp_ctx.error)) [[unlikely]] {
+                     ctx.error = temp_ctx.error;
+                     return false;
+                  }
+                  ctx.anchors = std::move(temp_ctx.anchors);
+
+                  if (auto* s = key_node.template get_if<std::string>()) {
+                     key = *s;
+                  }
+                  else {
+                     (void)glz::write_json(key_node, key);
+                  }
                }
                else {
                   parse_plain_scalar(key, ctx, replay_it, replay_end, false);
@@ -3049,8 +3082,10 @@ namespace glz
             return; // Empty input - keep default values
          }
 
-         // Handle alias
-         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+         // Handle alias value (but keep "*alias : value" for mapping-key parsing)
+         if (!yaml::alias_token_is_mapping_key(it, end)) {
+            if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+         }
 
          // Handle anchor
          bool has_anchor = false;
@@ -3123,8 +3158,10 @@ namespace glz
             return;
          }
 
-         // Handle alias
-         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+         // Handle alias value (but keep "*alias : value" for mapping-key parsing)
+         if (!yaml::alias_token_is_mapping_key(it, end)) {
+            if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
+         }
 
          // Handle anchor
          bool has_anchor = false;
@@ -3886,8 +3923,9 @@ namespace glz
                   yaml::skip_inline_ws(it, end);
                   anchor_on_same_line = false;
                }
-               // Anchor on alias (&anchor *alias) is invalid per YAML spec
-               if (*it == '*') {
+               // Anchor on alias (&anchor *alias) is invalid per YAML spec.
+               // But alias-as-key (&anchor *alias : value) is valid.
+               if (*it == '*' && !yaml::alias_token_is_mapping_key(it, end)) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -3952,7 +3990,22 @@ namespace glz
                return;
             }
             case '*': {
-               // Alias: look up anchor and replay
+               // In block context, "*alias : value" starts a mapping with an alias key.
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  if (yaml::alias_token_is_mapping_key(it, end)) {
+                     if constexpr (counts::n_object > 0) {
+                        process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                        end);
+                        return;
+                     }
+                     else {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
+
+               // Alias value: look up anchor and replay
                yaml::handle_alias<Opts>(value, ctx, it, end);
                return;
             }

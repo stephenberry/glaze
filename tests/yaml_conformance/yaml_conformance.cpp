@@ -3357,7 +3357,7 @@ Sammy Sosa: {
 // ============================================================================
 
 suite yaml_conformance_known_failures_1 = [] {
-   // 26DV (known failure): Whitespace around colon in mappings
+   // 26DV: Whitespace around colon in mappings
    "26DV"_test = [] {
       std::string yaml = R"yaml("top1" :
   "key1" : &alias1 scalar1
@@ -3373,8 +3373,33 @@ top6:
   &anchor6 'key6' : scalar6
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - alias-as-key in nested context and &anchor on next-line mapping need more work
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "top1": {
+    "key1": "scalar1"
+  },
+  "top2": {
+    "key2": "scalar2"
+  },
+  "top3": {
+    "scalar1": "scalar3"
+  },
+  "top4": {
+    "scalar2": "scalar4"
+  },
+  "top5": "scalar5",
+  "top6": {
+    "key6": "scalar6"
+  }
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 2CMS (known failure): Invalid mapping in plain multiline
@@ -6266,13 +6291,23 @@ block scalar: |
       // known failure - no assertions
    };
 
-   // X38W (known failure): Aliases in Flow Objects
+   // X38W: Aliases in Flow Objects
    "X38W"_test = [] {
       std::string yaml = R"yaml({ &a [a, &b b]: *b, *a : [c, *b, d]}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "[\"a\",\"b\"]": "b"
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // X4QW (known failure): Comment without whitespace after block scalar indicator
