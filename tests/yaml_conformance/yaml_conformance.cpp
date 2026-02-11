@@ -382,8 +382,21 @@ top2: &node2
   &v2 val2
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // Two anchors on same node not yet validated - no assertion
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "top1": {
+    "key1": "val1"
+  },
+  "top2": "val2"
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 4Q9F: Folded Block Scalar [1.3]
@@ -1337,8 +1350,18 @@ key: "missing closing quote
       std::string yaml = R"yaml(--- &anchor a: b
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // Anchor on document start line not yet validated - no assertion
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "a": "b"
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // D88J: Flow Sequence in Block Mapping
@@ -2946,8 +2969,18 @@ key2: &b *a
       std::string yaml = R"yaml(&anchor - sequence entry
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // Anchor before sequence entry on same line not yet validated - no assertion
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml([
+  "sequence entry"
+]
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // SYW4: Spec Example 2.2. Mapping Scalars to Scalars
