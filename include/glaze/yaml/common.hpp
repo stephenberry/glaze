@@ -566,14 +566,27 @@ namespace glz::yaml
    template <class It, class End, class Ctx>
    GLZ_ALWAYS_INLINE void skip_document_start(It&& it, End end, Ctx& ctx) noexcept
    {
-      // Skip any leading whitespace and newlines
-      while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-         if (*it == '\n' || *it == '\r') {
+      // Skip leading blank/comment-only lines before directives or document start.
+      while (it != end) {
+         auto line = it;
+         skip_inline_ws(line, end);
+         if (line == end) {
+            it = line;
+            break;
+         }
+         if (*line == '#') {
+            it = line;
+            skip_comment(it, end);
             skip_newline(it, end);
+            continue;
          }
-         else {
-            ++it;
+         if (*line == '\n' || *line == '\r') {
+            it = line;
+            skip_newline(it, end);
+            continue;
          }
+         it = line;
+         break;
       }
 
       // Track if we've seen a %YAML directive (duplicates are an error per spec)
@@ -660,14 +673,26 @@ namespace glz::yaml
          }
          // Skip the newline
          skip_newline(it, end);
-         // Skip any blank lines or whitespace between directives
-         while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-            if (*it == '\n' || *it == '\r') {
+         // Skip blank and comment-only lines between directives and document start.
+         while (it != end) {
+            auto line = it;
+            skip_inline_ws(line, end);
+            if (line == end) {
+               it = line;
+               break;
+            }
+            if (*line == '#') {
+               it = line;
+               skip_comment(it, end);
                skip_newline(it, end);
+               continue;
             }
-            else {
-               ++it;
+            if (*line == '\n' || *line == '\r') {
+               it = line;
+               skip_newline(it, end);
+               continue;
             }
+            break;
          }
       }
 
@@ -695,14 +720,27 @@ namespace glz::yaml
    template <class It, class End>
    GLZ_ALWAYS_INLINE void skip_document_start(It&& it, End end) noexcept
    {
-      // Skip any leading whitespace and newlines
-      while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-         if (*it == '\n' || *it == '\r') {
+      // Skip leading blank/comment-only lines before directives or document start.
+      while (it != end) {
+         auto line = it;
+         skip_inline_ws(line, end);
+         if (line == end) {
+            it = line;
+            break;
+         }
+         if (*line == '#') {
+            it = line;
+            skip_comment(it, end);
             skip_newline(it, end);
+            continue;
          }
-         else {
-            ++it;
+         if (*line == '\n' || *line == '\r') {
+            it = line;
+            skip_newline(it, end);
+            continue;
          }
+         it = line;
+         break;
       }
 
       // Skip YAML directives (lines starting with %) until we hit --- or content
@@ -712,14 +750,26 @@ namespace glz::yaml
             ++it;
          }
          skip_newline(it, end);
-         // Skip any blank lines
-         while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-            if (*it == '\n' || *it == '\r') {
+         // Skip blank/comment-only lines
+         while (it != end) {
+            auto line = it;
+            skip_inline_ws(line, end);
+            if (line == end) {
+               it = line;
+               break;
+            }
+            if (*line == '#') {
+               it = line;
+               skip_comment(it, end);
                skip_newline(it, end);
+               continue;
             }
-            else {
-               ++it;
+            if (*line == '\n' || *line == '\r') {
+               it = line;
+               skip_newline(it, end);
+               continue;
             }
+            break;
          }
       }
 
