@@ -10,6 +10,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/json/generic.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/type_traits.hpp"
@@ -569,6 +570,11 @@ namespace glz
                         // This is a new sequence item, not a continuation
                         return;
                      }
+                  }
+
+                  // Node properties and aliases start a new node, not a continuation line.
+                  if (*lookahead == '&' || *lookahead == '*' || *lookahead == '!') {
+                     return;
                   }
 
                   // Check for mapping key indicator (content followed by : and space)
@@ -1807,6 +1813,9 @@ namespace glz
 
          // Track if this is the first item (for handling whitespace-consumed case)
          bool first_item = true;
+         bool has_pending_item_anchor = false;
+         std::string pending_item_anchor_name{};
+         int32_t pending_item_anchor_indent = sequence_indent;
 
          while (it != end) {
             // For fixed-size arrays, stop when we've filled all elements
@@ -1869,6 +1878,36 @@ namespace glz
                return;
             }
 
+            // YAML allows node properties on a standalone line before a sequence entry:
+            // &anchor
+            // - value
+            if (*it == '&') {
+               ++it;
+               auto pending_name = parse_anchor_name(it, end);
+               if (pending_name.empty()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               skip_inline_ws(it, end);
+               if (it != end && *it == '#') {
+                  skip_comment(it, end);
+               }
+
+               has_pending_item_anchor = true;
+               pending_item_anchor_name = std::string(pending_name);
+               pending_item_anchor_indent = line_indent;
+
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  skip_newline(it, end);
+                  continue;
+               }
+
+               if (it == end || *it != '-') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+
             // Expect dash for sequence item
             if (*it != '-') {
                it = line_start;
@@ -1888,6 +1927,8 @@ namespace glz
 
             // Get reference to element to parse into
             auto parse_element = [&](auto& element) {
+               const char* element_start = (it != end) ? &*it : nullptr;
+
                // Check what follows
                if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                   // Content on same line as dash - set indent to one less than content column
@@ -1895,7 +1936,10 @@ namespace glz
                   // For "- key: val", if dash is at column 0, content is at column 2
                   // We set parent indent to 1 so keys at column 2 pass the "indent > parent" check
                   if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return;
+                  const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
+                  ctx.sequence_item_value_context = true;
                   from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
+                  ctx.sequence_item_value_context = prev_sequence_item_value_context;
                   ctx.pop_indent();
                }
                else {
@@ -1919,10 +1963,19 @@ namespace glz
                      // Set parent indent to one less than content indent so items at
                      // content indent pass the "indent > parent" check and continue parsing
                      if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return;
+                     const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
+                     ctx.sequence_item_value_context = true;
                      from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
+                     ctx.sequence_item_value_context = prev_sequence_item_value_context;
                      ctx.pop_indent();
                   }
                   // else: empty element (default constructed)
+               }
+
+               if (has_pending_item_anchor && !bool(ctx.error)) {
+                  const char* element_end = (it != end) ? &*it : element_start;
+                  ctx.anchors[std::move(pending_item_anchor_name)] = {element_start, element_end, pending_item_anchor_indent};
+                  has_pending_item_anchor = false;
                }
             };
 
@@ -2000,6 +2053,17 @@ namespace glz
          if (content_indent > effective_line_indent && peek != end && *peek != '\n' && *peek != '\r') {
             it = content_start;
             return content_indent;
+         }
+
+         // YAML allows "indentless sequences" as mapping values:
+         // key:
+         // - item
+         if (content_indent == effective_line_indent && peek != end && *peek == '-') {
+            const auto after_dash = peek + 1;
+            if (after_dash == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_dash)]) {
+               it = content_start;
+               return content_indent;
+            }
          }
 
          it = content_start;
@@ -2150,6 +2214,17 @@ namespace glz
 
             if (bool(ctx.error)) [[unlikely]]
                return;
+
+            if constexpr (yaml::check_flow_context(Opts)) {
+               // In flow context, an implicit "key: value" pair used as a sequence entry
+               // ends at ',', ']', or '}'. Let the enclosing flow parser consume it.
+               auto flow_end = it;
+               skip_inline_ws(flow_end, end);
+               if (flow_end != end && (*flow_end == ',' || *flow_end == ']' || *flow_end == '}')) {
+                  it = flow_end;
+                  return;
+               }
+            }
 
             // Trailing whitespace handling (peek-ahead pattern).
             // After parsing, iterator may be at leading indent of next line.
@@ -2603,11 +2678,8 @@ namespace glz
             if (tag != yaml::yaml_tag::none || has_anchor) {
                it = peek;
             }
-            // If whitespace was already consumed (variant parser path), the iterator is at '-'
-            // and parse_block_sequence would measure indent as 0. In this case, use current_indent() + 1
-            // as the sequence indent since the sequence is nested within the parent block.
             int32_t seq_indent = ctx.current_indent();
-            if (*it == '-' && ctx.current_indent() >= 0) {
+            if (*it == '-' && ctx.current_indent() >= 0 && !ctx.allow_indentless_sequence) {
                seq_indent = ctx.current_indent() + 1;
             }
             yaml::parse_block_sequence<Opts>(value, ctx, it, end, seq_indent);
@@ -3135,6 +3207,107 @@ namespace glz
             // Block mapping - use shared loop with map-specific callback
             yaml::parse_block_mapping_loop<Opts>(ctx, it, end, int32_t(-1),
                [&](auto& ctx, auto& it, auto end, int32_t line_indent) -> bool {
+                  auto parse_map_value = [&](val_t& val) -> bool {
+                     if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                        if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return false;
+                        from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
+                        ctx.pop_indent();
+                     }
+                     else {
+                        int32_t nested_indent = yaml::detect_nested_value_indent(ctx, it, end, line_indent);
+                        if (nested_indent >= 0) {
+                           yaml::skip_to_content(it, end);
+                           if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return false;
+                           from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
+                           ctx.pop_indent();
+                        }
+                     }
+                     return !bool(ctx.error);
+                  };
+
+                  // Explicit key entry form:
+                  // ? key
+                  // : value
+                  if (*it == '?' && ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))])) {
+                     ++it; // skip '?'
+                     yaml::skip_inline_ws(it, end);
+
+                     key_t key{};
+                     if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
+                        glz::generic key_node{};
+                        auto key_it = it;
+                        bool has_key_node = false;
+
+                        if (key_it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*key_it)]) {
+                           has_key_node = true;
+                           if (!ctx.push_indent(ctx.current_indent() + 1)) [[unlikely]] return false;
+                           from<YAML, glz::generic>::template op<Opts>(key_node, ctx, key_it, end);
+                           ctx.pop_indent();
+                        }
+                        else {
+                           int32_t nested_key_indent = yaml::detect_nested_value_indent(ctx, key_it, end, line_indent);
+                           if (nested_key_indent >= 0) {
+                              yaml::skip_to_content(key_it, end);
+                              has_key_node = true;
+                              if (!ctx.push_indent(nested_key_indent - 1)) [[unlikely]] return false;
+                              from<YAML, glz::generic>::template op<Opts>(key_node, ctx, key_it, end);
+                              ctx.pop_indent();
+                           }
+                        }
+                        if (bool(ctx.error)) [[unlikely]]
+                           return false;
+
+                        it = key_it;
+
+                        if (!has_key_node || key_node.is_null()) {
+                           key.clear();
+                        }
+                        else if (auto* s = key_node.template get_if<std::string>()) {
+                           key = *s;
+                        }
+                        else {
+                           std::string key_json;
+                           (void)glz::write_json(key_node, key_json);
+                           key = std::move(key_json);
+                        }
+                     }
+                     else {
+                        if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+                           from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return false;
+                        }
+                     }
+
+                     yaml::skip_inline_ws(it, end);
+                     yaml::skip_comment(it, end);
+
+                     // Value indicator may appear on the next line at the same indent.
+                     if (it != end && (*it == '\n' || *it == '\r')) {
+                        auto probe = it;
+                        yaml::skip_newline(probe, end);
+                        auto value_line = probe;
+                        int32_t value_indent = yaml::measure_indent(value_line, end, ctx);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return false;
+                        if (value_line != end && *value_line == ':' && value_indent == line_indent) {
+                           yaml::skip_newline(it, end);
+                           yaml::skip_inline_ws(it, end);
+                        }
+                     }
+
+                     val_t val{};
+                     if (it != end && *it == ':') {
+                        ++it;
+                        yaml::skip_inline_ws(it, end);
+                        if (!parse_map_value(val)) [[unlikely]]
+                           return false;
+                     }
+
+                     value.emplace(std::move(key), std::move(val));
+                     return true;
+                  }
+
                   key_t key{};
                   from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
@@ -3150,21 +3323,7 @@ namespace glz
                   yaml::skip_inline_ws(it, end);
 
                   val_t val{};
-                  if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                     if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return false;
-                     from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
-                     ctx.pop_indent();
-                  }
-                  else {
-                     int32_t nested_indent = yaml::detect_nested_value_indent(ctx, it, end, line_indent);
-                     if (nested_indent >= 0) {
-                        yaml::skip_to_content(it, end);
-                        if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return false;
-                        from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
-                        ctx.pop_indent();
-                     }
-                  }
-                  if (bool(ctx.error)) [[unlikely]]
+                  if (!parse_map_value(val)) [[unlikely]]
                      return false;
 
                   value.emplace(std::move(key), std::move(val));
@@ -3511,6 +3670,7 @@ namespace glz
                }
                yaml::skip_inline_ws(it, end);
                bool anchor_on_same_line = true;
+               bool value_is_indentless_sequence = false;
                if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
                   // Anchor followed by end-of-line. Check if the value continues on the
                   // next line (indented past current context) or if this is an empty node.
@@ -3535,7 +3695,17 @@ namespace glz
                            ++peek;
                         }
                         if (peek != end && *peek != '\n' && *peek != '\r') {
-                           value_on_next_line = (next_indent > ctx.current_indent());
+                           const bool indentless_sequence =
+                              (!ctx.sequence_item_value_context) && (next_indent == ctx.current_indent()) &&
+                              (*peek == '-') &&
+                              ((peek + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(peek + 1))]);
+                           value_is_indentless_sequence = indentless_sequence;
+                           const bool same_indent_property_node =
+                              (next_indent == ctx.current_indent()) &&
+                              (*peek == '!' || *peek == '&' || *peek == '*' || *peek == '[' || *peek == '{' ||
+                               *peek == '"' || *peek == '\'' || *peek == '|' || *peek == '>');
+                           value_on_next_line =
+                              (next_indent > ctx.current_indent()) || indentless_sequence || same_indent_property_node;
                         }
                      }
                   }
@@ -3603,7 +3773,10 @@ namespace glz
                   return;
                }
 
+               const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
+               ctx.allow_indentless_sequence = value_is_indentless_sequence;
                from<YAML, V>::template op<Opts>(value, ctx, it, end);
+               ctx.allow_indentless_sequence = prev_allow_indentless_sequence;
                if (!bool(ctx.error)) {
                   ctx.anchors[std::string(aname)] = {anchor_start, &*it, anchor_indent};
                }
@@ -3697,6 +3870,17 @@ namespace glz
             case '[':
                // Flow sequence - array type
                process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
+               return;
+            case '?':
+               // Explicit mapping key indicator ("? key")
+               if ((end - it >= 2) && yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[1])]) {
+                  if constexpr (counts::n_object > 0) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                     end);
+                     return;
+                  }
+               }
+               parse_block_mapping_or_string<V, Opts>(value, ctx, it, end);
                return;
             case '"':
             case '\'':

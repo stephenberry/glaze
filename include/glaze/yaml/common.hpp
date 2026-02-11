@@ -59,6 +59,14 @@ namespace glz::yaml
          int32_t base_indent{};
       };
       std::unordered_map<std::string, anchor_span> anchors{};
+
+      // True while parsing the value payload of a "- item" block-sequence entry.
+      // Used to distinguish indentless-sequence continuation from next sibling items.
+      bool sequence_item_value_context = false;
+
+      // Enables one parse step where a same-indent "- item" is valid as the node
+      // content (used for anchor before indentless sequence).
+      bool allow_indentless_sequence = false;
    };
 
    // Lookup table for characters that can start a plain scalar in flow context
@@ -784,10 +792,13 @@ namespace glz::yaml
    GLZ_ALWAYS_INLINE std::string_view parse_anchor_name(It& it, End end) noexcept
    {
       auto start = it;
+      if (start == end) return {};
       while (it != end) {
          const char c = *it;
+         // Per YAML, anchor names end at whitespace or flow indicators.
+         // Colon is allowed in anchor names.
          if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == '[' || c == ']' || c == '{' ||
-             c == '}' || c == ':') {
+             c == '}') {
             break;
          }
          ++it;
