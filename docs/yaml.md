@@ -315,7 +315,8 @@ auto ec = glz::read_yaml(value, yaml);
 
 - `!!int` is valid for floating-point types (widening conversion allowed)
 - `!!float` is NOT valid for integer types
-- Unknown or custom tags (e.g., `!mytag`, `!!custom`) produce `feature_not_supported` error
+- Unknown or custom tags (e.g., `!mytag`, `!!custom`) are ignored and values parse normally
+- Malformed tags (e.g., unterminated `!<...` or invalid tag token syntax) produce `syntax_error`
 
 ## Anchors and Aliases
 

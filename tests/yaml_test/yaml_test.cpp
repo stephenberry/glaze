@@ -848,20 +848,44 @@ suite yaml_tag_tests = [] {
       expect(ec.ec == glz::error_code::syntax_error);
    };
 
-   "unknown_custom_tag_error"_test = [] {
+   "unknown_custom_tag_ignored"_test = [] {
       std::string yaml = "!mytag value";
       std::string value;
       auto ec = glz::read_yaml(value, yaml);
-      expect(bool(ec));
-      expect(ec.ec == glz::error_code::feature_not_supported);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "value");
    };
 
-   "unknown_shorthand_tag_error"_test = [] {
+   "unknown_shorthand_tag_ignored"_test = [] {
       std::string yaml = "!!custom value";
       std::string value;
       auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "value");
+   };
+
+   "malformed_named_tag_error"_test = [] {
+      std::string yaml = "!invalid{}tag value";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
       expect(bool(ec));
-      expect(ec.ec == glz::error_code::feature_not_supported);
+      expect(ec.ec == glz::error_code::syntax_error);
+   };
+
+   "malformed_verbatim_tag_error"_test = [] {
+      std::string yaml = "!<tag:yaml.org,2002:str value";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
+   };
+
+   "malformed_empty_shorthand_tag_error"_test = [] {
+      std::string yaml = "!! value";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
    };
 
    "verbatim_tag_str"_test = [] {
@@ -3099,6 +3123,85 @@ extra: *a)";
       expect(obj.x == 1);
       expect(obj.y == 1.0);
       expect(obj.name == "skipped");
+   };
+
+   "anchor_empty_node"_test = [] {
+      std::string yaml = R"(a: &anchor
+b: *anchor)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"a":null,"b":null})") << json;
+   };
+
+   "alias_as_mapping_key"_test = [] {
+      std::string yaml = R"(a: &ref hello
+*ref : world)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"a":"hello","hello":"world"})") << json;
+   };
+
+   "anchor_on_key_with_alias"_test = [] {
+      std::string yaml = R"(&a a: &b b
+*b : *a)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"a":"b","b":"a"})") << json;
+   };
+
+   "anchor_block_mapping_replay"_test = [] {
+      std::string yaml = R"(bill-to: &id001
+    given: Chris
+    family: Dumars
+ship-to: *id001)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      std::string expected = R"({"bill-to":{"family":"Dumars","given":"Chris"},"ship-to":{"family":"Dumars","given":"Chris"}})";
+      expect(json == expected) << json;
+   };
+};
+
+// ============================================================
+// Tab Handling Tests
+// ============================================================
+
+suite yaml_tab_tests = [] {
+   "tab_in_literal_block_scalar"_test = [] {
+      std::string yaml = "|\n literal\n \ttext\n";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERR");
+      expect(json == R"("literal\n\ttext\n")") << json;
+   };
+
+   "tab_in_block_scalar_mapping"_test = [] {
+      std::string yaml = "block:\t|\n  void main() {\n  \tprintf(\"hello\");\n  }\n";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+   };
+
+   "tab_as_indentation_error"_test = [] {
+      std::string yaml = "a:\n\tb: value\n";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(bool(ec)) << "Tab as indentation should error";
+   };
+
+   "tab_after_spaces_in_mapping_error"_test = [] {
+      std::string yaml = "a:\n  \tb: value\n";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(bool(ec)) << "Tab after spaces in mapping indentation should error";
    };
 };
 

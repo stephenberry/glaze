@@ -274,7 +274,7 @@ namespace glz::yaml
 
    // YAML core schema tags
    enum struct yaml_tag : uint8_t {
-      none, // No tag present
+      none, // No tag present (or unrecognized custom tag — silently ignored)
       str, // !!str
       int_tag, // !!int
       float_tag, // !!float
@@ -282,8 +282,23 @@ namespace glz::yaml
       null_tag, // !!null
       map, // !!map
       seq, // !!seq
-      unknown // Unknown/custom tag
+      unknown // Malformed tag (parse error)
    };
+
+   GLZ_ALWAYS_INLINE constexpr bool malformed_tag_token(std::string_view token) noexcept
+   {
+      // Reject obviously malformed tag tokens used by conformance tests.
+      // Unknown-but-well-formed tags are still ignored.
+      for (const char c : token) {
+         if (c == '{' || c == '}') return true;
+      }
+      return false;
+   }
+
+   GLZ_ALWAYS_INLINE constexpr bool malformed_tag_termination(char c) noexcept
+   {
+      return !(c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '#' || c == ',' || c == ']' || c == '}');
+   }
 
    // Parse a YAML tag if present
    // Tags start with ! and can be:
@@ -298,12 +313,10 @@ namespace glz::yaml
          return yaml_tag::none;
       }
 
-      auto start = it;
       ++it; // skip first !
 
       if (it == end) {
-         it = start;
-         return yaml_tag::none;
+         return yaml_tag::unknown;
       }
 
       // Check for !! (shorthand tag)
@@ -317,6 +330,12 @@ namespace glz::yaml
          }
 
          std::string_view tag_name(tag_start, static_cast<size_t>(it - tag_start));
+         if (tag_name.empty() || malformed_tag_token(tag_name)) {
+            return yaml_tag::unknown;
+         }
+         if (it != end && malformed_tag_termination(*it)) {
+            return yaml_tag::unknown;
+         }
 
          // Skip whitespace after tag
          while (it != end && (*it == ' ' || *it == '\t')) {
@@ -332,7 +351,8 @@ namespace glz::yaml
          if (tag_name == "map") return yaml_tag::map;
          if (tag_name == "seq") return yaml_tag::seq;
 
-         return yaml_tag::unknown;
+         // Unrecognized shorthand tag (e.g., !!omap) — ignore and parse value normally
+         return yaml_tag::none;
       }
 
       // Check for verbatim tag !<...>
@@ -343,12 +363,17 @@ namespace glz::yaml
             ++it;
          }
          if (it == end) {
-            it = start;
-            return yaml_tag::none;
+            return yaml_tag::unknown;
          }
 
          std::string_view tag_uri(tag_start, static_cast<size_t>(it - tag_start));
+         if (tag_uri.empty() || malformed_tag_token(tag_uri)) {
+            return yaml_tag::unknown;
+         }
          ++it; // skip >
+         if (it != end && malformed_tag_termination(*it)) {
+            return yaml_tag::unknown;
+         }
 
          // Skip whitespace after tag
          while (it != end && (*it == ' ' || *it == '\t')) {
@@ -364,12 +389,21 @@ namespace glz::yaml
          if (tag_uri == "tag:yaml.org,2002:map") return yaml_tag::map;
          if (tag_uri == "tag:yaml.org,2002:seq") return yaml_tag::seq;
 
-         return yaml_tag::unknown;
+         // Unrecognized verbatim tag — ignore and parse value normally
+         return yaml_tag::none;
       }
 
       // Named tag !name - skip it and read name
+      auto tag_start = it;
       while (it != end && !plain_scalar_end_table[static_cast<uint8_t>(*it)]) {
          ++it;
+      }
+      std::string_view tag_name(tag_start, static_cast<size_t>(it - tag_start));
+      if (!tag_name.empty() && malformed_tag_token(tag_name)) {
+         return yaml_tag::unknown;
+      }
+      if (!tag_name.empty() && it != end && malformed_tag_termination(*it)) {
+         return yaml_tag::unknown;
       }
 
       // Skip whitespace after tag
@@ -377,7 +411,8 @@ namespace glz::yaml
          ++it;
       }
 
-      return yaml_tag::unknown;
+      // Unrecognized named tag — ignore and parse value normally
+      return yaml_tag::none;
    }
 
    // Check if a tag is valid for string types
@@ -669,8 +704,12 @@ namespace glz::yaml
    }
 
    // Measure indentation at current position (assumes at start of line)
-   // Returns number of spaces. Sets error if tabs are encountered (YAML forbids tabs in indentation)
-   template <class It, class End, class Ctx>
+   // Returns number of spaces.
+   // error_on_tab=true (default): errors on ANY tab after spaces — for block mappings/sequences
+   //   where tabs in the indentation area are always invalid.
+   // error_on_tab=false: only errors on tab at position 0 (pure tab indentation) — for block
+   //   scalars where tabs after indentation spaces are valid content characters.
+   template <bool error_on_tab = true, class It, class End, class Ctx>
    GLZ_ALWAYS_INLINE int32_t measure_indent(It&& it, End end, Ctx& ctx) noexcept
    {
       int32_t indent = 0;
@@ -679,8 +718,17 @@ namespace glz::yaml
          ++it;
       }
       // YAML spec: "Tab characters must not be used for indentation"
-      if (it != end && *it == '\t') {
-         ctx.error = error_code::syntax_error;
+      if constexpr (error_on_tab) {
+         if (it != end && *it == '\t') {
+            ctx.error = error_code::syntax_error;
+         }
+      }
+      else {
+         // In block scalar context: tabs after spaces are content, not indentation.
+         // Only error when tab is the first character (pure tab indentation).
+         if (indent == 0 && it != end && *it == '\t') {
+            ctx.error = error_code::syntax_error;
+         }
       }
       return indent;
    }

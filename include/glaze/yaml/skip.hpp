@@ -93,7 +93,7 @@ namespace glz::yaml
       while (it != end) {
          // Measure indent of current line
          auto line_start = it;
-         int32_t line_indent = measure_indent(it, end, ctx);
+         int32_t line_indent = measure_indent<false>(it, end, ctx);
          if (bool(ctx.error)) [[unlikely]]
             return;
 

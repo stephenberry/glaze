@@ -34,6 +34,34 @@ namespace glz
 
          using V = std::remove_cvref_t<T>;
          from<YAML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
+
+         // A directive line (%YAML/%TAG/...) is only valid in the document prefix.
+         // If parsing stopped before the end and we encounter a directive in the
+         // remaining tail, treat it as malformed stream structure.
+         if constexpr (!check_partial_read(Opts)) {
+            if (!bool(ctx.error)) {
+               auto tail = it;
+               bool seen_document_end_marker = false;
+               while (tail != end) {
+                  auto line = tail;
+                  while (line != end && (*line == ' ' || *line == '\t')) ++line;
+                  if (yaml::at_document_end(line, end)) {
+                     seen_document_end_marker = true;
+                  }
+                  if (line != end && *line == '%') {
+                     // YAML directives are only valid in document prefixes. A directive
+                     // encountered mid-document (without a prior ...) is malformed.
+                     if (!seen_document_end_marker) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+
+                  while (tail != end && *tail != '\n' && *tail != '\r') ++tail;
+                  yaml::skip_newline(tail, end);
+               }
+            }
+         }
       }
    };
 
@@ -75,6 +103,12 @@ namespace glz
          }
 
          auto& span = anchor_it->second;
+
+         // Empty anchor span (anchor on null/empty node) — leave value as default
+         if (span.begin == span.end) {
+            return true;
+         }
+
          auto replay_it = span.begin;
          auto replay_end = span.end;
 
@@ -657,7 +691,7 @@ namespace glz
 
          while (it != end) {
             auto line_start = it;
-            int32_t line_indent = measure_indent(it, end, ctx);
+            int32_t line_indent = measure_indent<false>(it, end, ctx);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -752,10 +786,50 @@ namespace glz
             return false;
          }
 
-         // Skip anchor on key (parse past &name without recording)
+         // Handle alias as key (*name resolves to anchor value)
+         if (*it == '*') {
+            ++it;
+            auto name = parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            auto anchor_it = ctx.anchors.find(std::string(name));
+            if (anchor_it == ctx.anchors.end()) {
+               ctx.error = error_code::syntax_error; // undefined alias
+               return false;
+            }
+            auto& span = anchor_it->second;
+            if (span.begin == span.end) {
+               key.clear(); // empty anchor
+            }
+            else {
+               // Replay the anchor span to extract the key string
+               auto replay_it = span.begin;
+               auto replay_end = span.end;
+               if (*replay_it == '"') {
+                  parse_double_quoted_string(key, ctx, replay_it, replay_end);
+               }
+               else if (*replay_it == '\'') {
+                  parse_single_quoted_string(key, ctx, replay_it, replay_end);
+               }
+               else {
+                  parse_plain_scalar(key, ctx, replay_it, replay_end, false);
+               }
+            }
+            return !bool(ctx.error);
+         }
+
+         // Handle anchor on key (&name before key text)
+         bool has_key_anchor = false;
+         std::string key_anchor_name;
          if (*it == '&') {
             ++it;
-            parse_anchor_name(it, end);
+            auto name = parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
             skip_inline_ws(it, end);
             if (it == end) {
                ctx.error = error_code::unexpected_end;
@@ -766,15 +840,17 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return false;
             }
+            has_key_anchor = true;
+            key_anchor_name = std::string(name);
          }
+
+         const char* key_start = &*it;
 
          if (*it == '"') {
             parse_double_quoted_string(key, ctx, it, end);
-            return !bool(ctx.error);
          }
          else if (*it == '\'') {
             parse_single_quoted_string(key, ctx, it, end);
-            return !bool(ctx.error);
          }
          else {
             // Plain key - read until colon
@@ -808,6 +884,14 @@ namespace glz
                return false;
             }
          }
+
+         if (bool(ctx.error)) return false;
+
+         // Store anchor on key if present
+         if (has_key_anchor) {
+            ctx.anchors[std::move(key_anchor_name)] = {key_start, &*it, ctx.current_indent()};
+         }
+
          return true;
       }
 
@@ -833,7 +917,7 @@ namespace glz
          // Check for tag
          const auto tag = yaml::parse_yaml_tag(it, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
          if (!yaml::tag_valid_for_string(tag)) [[unlikely]] {
@@ -935,7 +1019,7 @@ namespace glz
          // Check for tag
          const auto tag = yaml::parse_yaml_tag(it, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
          if (!yaml::tag_valid_for_bool(tag)) [[unlikely]] {
@@ -1015,7 +1099,7 @@ namespace glz
          // Check for tag
          const auto tag = yaml::parse_yaml_tag(it, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
 
@@ -1261,7 +1345,7 @@ namespace glz
          auto tag_start = it;
          const auto tag = yaml::parse_yaml_tag(it, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
 
@@ -1375,7 +1459,7 @@ namespace glz
          // Check for tag - named enums are read as strings
          const auto tag = yaml::parse_yaml_tag(it, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
          if (!yaml::tag_valid_for_string(tag)) [[unlikely]] {
@@ -2369,7 +2453,7 @@ namespace glz
          // Check for tag
          const auto tag = yaml::parse_yaml_tag(peek, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
          if (!yaml::tag_valid_for_seq(tag)) [[unlikely]] {
@@ -2461,7 +2545,7 @@ namespace glz
          // Check for tag
          const auto tag = yaml::parse_yaml_tag(peek, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
          if (!yaml::tag_valid_for_seq(tag)) [[unlikely]] {
@@ -2568,7 +2652,7 @@ namespace glz
          // Check for tag
          const auto tag = yaml::parse_yaml_tag(it, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
          if (!yaml::tag_valid_for_seq(tag)) [[unlikely]] {
@@ -2725,7 +2809,7 @@ namespace glz
          // Check for tag - pairs are treated as single-entry mappings
          const auto tag = yaml::parse_yaml_tag(it, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
          if (!yaml::tag_valid_for_map(tag)) [[unlikely]] {
@@ -2864,7 +2948,7 @@ namespace glz
          // Check for tag
          const auto tag = yaml::parse_yaml_tag(it, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
          if (!yaml::tag_valid_for_map(tag)) [[unlikely]] {
@@ -2937,7 +3021,7 @@ namespace glz
          // Check for tag
          const auto tag = yaml::parse_yaml_tag(it, end);
          if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::feature_not_supported;
+            ctx.error = error_code::syntax_error;
             return;
          }
          if (!yaml::tag_valid_for_map(tag)) [[unlikely]] {
@@ -3426,9 +3510,50 @@ namespace glz
                   return;
                }
                yaml::skip_inline_ws(it, end);
-               if (it == end) {
-                  ctx.error = error_code::unexpected_end;
-                  return;
+               bool anchor_on_same_line = true;
+               if (it == end || *it == '\n' || *it == '\r' || *it == '#') {
+                  // Anchor followed by end-of-line. Check if the value continues on the
+                  // next line (indented past current context) or if this is an empty node.
+                  bool value_on_next_line = false;
+                  if (it != end) {
+                     auto peek = it;
+                     // Skip comment if present
+                     if (*peek == '#') {
+                        while (peek != end && *peek != '\n' && *peek != '\r') ++peek;
+                     }
+                     // Skip newline
+                     if (peek != end && (*peek == '\n' || *peek == '\r')) {
+                        yaml::skip_newline(peek, end);
+                        // Skip blank lines
+                        while (peek != end && (*peek == '\n' || *peek == '\r')) {
+                           yaml::skip_newline(peek, end);
+                        }
+                        // Measure indent of next content line
+                        int32_t next_indent = 0;
+                        while (peek != end && *peek == ' ') {
+                           ++next_indent;
+                           ++peek;
+                        }
+                        if (peek != end && *peek != '\n' && *peek != '\r') {
+                           value_on_next_line = (next_indent > ctx.current_indent());
+                        }
+                     }
+                  }
+                  if (!value_on_next_line) {
+                     // Anchor on empty/null node — store empty span, leave value as default
+                     ctx.anchors[std::string(aname)] = {&*it, &*it, ctx.current_indent()};
+                     return;
+                  }
+                  // Value is on next line — advance past newline/blank lines to the content
+                  if (*it == '#') {
+                     while (it != end && *it != '\n' && *it != '\r') ++it;
+                  }
+                  if (it != end) yaml::skip_newline(it, end);
+                  while (it != end && (*it == '\n' || *it == '\r')) {
+                     yaml::skip_newline(it, end);
+                  }
+                  yaml::skip_inline_ws(it, end);
+                  anchor_on_same_line = false;
                }
                // Anchor on alias (&anchor *alias) is invalid per YAML spec
                if (*it == '*') {
@@ -3437,6 +3562,47 @@ namespace glz
                }
                const char* anchor_start = &*it;
                const int32_t anchor_indent = ctx.current_indent();
+
+               // Check if the anchor is on a mapping key (&name key: value).
+               // Only when the anchor and key are on the SAME line — if the value was on the
+               // next line, the anchor applies to the entire next-line content.
+               if (anchor_on_same_line && line_could_be_block_mapping(it, end)) {
+                  // Find the key span by scanning to the key-value separator
+                  auto key_scan = it;
+                  if (*key_scan == '"' || *key_scan == '\'') {
+                     // Quoted key: skip to closing quote
+                     const char quote = *key_scan;
+                     ++key_scan;
+                     while (key_scan != end && *key_scan != quote) {
+                        if (*key_scan == '\\' && quote == '"') {
+                           ++key_scan;
+                           if (key_scan != end) ++key_scan;
+                        }
+                        else {
+                           ++key_scan;
+                        }
+                     }
+                     if (key_scan != end) ++key_scan; // past closing quote
+                  }
+                  else {
+                     // Plain key: scan to ':'
+                     while (key_scan != end) {
+                        if (*key_scan == ':') {
+                           auto next = key_scan + 1;
+                           if (next == end || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r') {
+                              break;
+                           }
+                        }
+                        ++key_scan;
+                     }
+                  }
+                  // Store anchor with just the key text span
+                  ctx.anchors[std::string(aname)] = {anchor_start, &*key_scan, anchor_indent};
+                  // Parse the mapping normally — anchor "aname" is already available for alias resolution
+                  from<YAML, V>::template op<Opts>(value, ctx, it, end);
+                  return;
+               }
+
                from<YAML, V>::template op<Opts>(value, ctx, it, end);
                if (!bool(ctx.error)) {
                   ctx.anchors[std::string(aname)] = {anchor_start, &*it, anchor_indent};
@@ -3452,7 +3618,7 @@ namespace glz
                // Tag - parse it and dispatch based on tag type
                const auto tag = yaml::parse_yaml_tag(it, end);
                if (tag == yaml::yaml_tag::unknown) {
-                  ctx.error = error_code::feature_not_supported;
+                  ctx.error = error_code::syntax_error;
                   return;
                }
                yaml::skip_inline_ws(it, end);
