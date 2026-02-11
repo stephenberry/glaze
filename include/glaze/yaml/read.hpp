@@ -504,7 +504,7 @@ namespace glz
       // - A single newline between lines becomes a single space
       // - Blank lines are preserved as literal newlines
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_plain_scalar_multiline(std::string& value, Ctx&, It& it, End end,
+      GLZ_ALWAYS_INLINE void parse_plain_scalar_multiline(std::string& value, Ctx& ctx, It& it, End end,
                                                           int32_t base_indent)
       {
          value.clear();
@@ -555,7 +555,7 @@ namespace glz
                   }
 
                   // Found content - check indentation
-                  // Continuation lines must be at the same or greater indent than the first content line
+                  // Continuation lines must not dedent below the parent block.
                   if (line_indent < base_indent) {
                      // Dedented - end of scalar
                      return;
@@ -572,8 +572,9 @@ namespace glz
                      }
                   }
 
-                  // Node properties and aliases start a new node, not a continuation line.
-                  if (*lookahead == '&' || *lookahead == '*' || *lookahead == '!') {
+                  // In a "- item" value context, an anchor/tag/alias at the start
+                  // of a continuation candidate starts a new node, not scalar content.
+                  if (ctx.sequence_item_value_context && (*lookahead == '&' || *lookahead == '*' || *lookahead == '!')) {
                      return;
                   }
 
@@ -792,6 +793,22 @@ namespace glz
             return false;
          }
 
+         // Tags on keys (e.g. "!!str : value")
+         const auto tag = parse_yaml_tag(it, end);
+         if (tag == yaml_tag::unknown) {
+            ctx.error = error_code::syntax_error;
+            return false;
+         }
+         if (!tag_valid_for_string(tag)) {
+            ctx.error = error_code::syntax_error;
+            return false;
+         }
+         skip_inline_ws(it, end);
+         if (it == end) {
+            ctx.error = error_code::unexpected_end;
+            return false;
+         }
+
          // Handle alias as key (*name resolves to anchor value)
          if (*it == '*') {
             ++it;
@@ -885,10 +902,7 @@ namespace glz
                key.pop_back();
             }
 
-            if (key.empty()) {
-               ctx.error = error_code::syntax_error;
-               return false;
-            }
+            // Empty keys are valid YAML (":" in block or flow mappings).
          }
 
          if (bool(ctx.error)) return false;
@@ -987,7 +1001,8 @@ namespace glz
                   yaml::parse_plain_scalar_multiline(str, ctx, it, end, ctx.current_indent());
                }
                else {
-                  yaml::parse_plain_scalar(str, ctx, it, end, false);
+                  // Top-level plain scalars may continue on indented lines.
+                  yaml::parse_plain_scalar_multiline(str, ctx, it, end, int32_t(1));
                }
             }
             else {
@@ -3161,9 +3176,55 @@ namespace glz
 
                // Parse key
                key_t key{};
-               from<YAML, key_t>::template op<yaml::flow_context_on<Opts>()>(key, ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
+                  auto key_probe = it;
+                  yaml::skip_inline_ws(key_probe, end);
+
+                  // Use full node parsing only for structurally complex flow keys.
+                  // Plain/quoted/alias keys stay on parse_yaml_key() for compatibility.
+                  bool parse_complex_flow_key = false;
+                  if (key_probe != end) {
+                     if (*key_probe == '[' || *key_probe == '{') {
+                        parse_complex_flow_key = true;
+                     }
+                     else if (*key_probe == '&') {
+                        ++key_probe;
+                        yaml::parse_anchor_name(key_probe, end);
+                        yaml::skip_inline_ws(key_probe, end);
+                        if (key_probe != end && (*key_probe == '[' || *key_probe == '{')) {
+                           parse_complex_flow_key = true;
+                        }
+                     }
+                  }
+
+                  if (parse_complex_flow_key) {
+                     glz::generic key_node{};
+                     from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if (key_node.is_null()) {
+                        key.clear();
+                     }
+                     else if (auto* s = key_node.template get_if<std::string>()) {
+                        key = *s;
+                     }
+                     else {
+                        std::string key_json;
+                        (void)glz::write_json(key_node, key_json);
+                        key = std::move(key_json);
+                     }
+                  }
+                  else {
+                     if (!yaml::parse_yaml_key(key, ctx, it, end, true)) {
+                        return;
+                     }
+                  }
+               }
+               else {
+                  from<YAML, key_t>::template op<yaml::flow_context_on<Opts>()>(key, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
 
                yaml::skip_inline_ws(it, end);
 
@@ -3309,9 +3370,38 @@ namespace glz
                   }
 
                   key_t key{};
-                  from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return false;
+                  if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
+                     auto key_probe = it;
+                     yaml::skip_inline_ws(key_probe, end);
+                     const bool complex_flow_key = (key_probe != end && (*key_probe == '[' || *key_probe == '{'));
+                     if (complex_flow_key) {
+                        glz::generic key_node{};
+                        from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return false;
+                        if (key_node.is_null()) {
+                           key.clear();
+                        }
+                        else if (auto* s = key_node.template get_if<std::string>()) {
+                           key = *s;
+                        }
+                        else {
+                           std::string key_json;
+                           (void)glz::write_json(key_node, key_json);
+                           key = std::move(key_json);
+                        }
+                     }
+                     else {
+                        from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return false;
+                     }
+                  }
+                  else {
+                     from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return false;
+                  }
 
                   yaml::skip_inline_ws(it, end);
 
@@ -3507,16 +3597,20 @@ namespace glz
    GLZ_ALWAYS_INLINE bool line_could_be_block_mapping(It it, End end)
    {
       bool prev_was_whitespace = true; // Start of value acts like after whitespace
+      int flow_depth = 0;
       while (it != end) {
          const char c = *it;
-         if (c == ':') {
+         if (c == '\n' || c == '\r') {
+            return false;
+         }
+         if (c == ':' && flow_depth == 0) {
             ++it;
             // Colon followed by space, newline, or end indicates a mapping key
             return it == end || *it == ' ' || *it == '\t' || *it == '\n' || *it == '\r';
          }
          // Per YAML spec: # only starts a comment when preceded by whitespace
          // Stop scanning if we hit a comment - any colon after is not a key indicator
-         if (c == '#' && prev_was_whitespace) {
+         if (c == '#' && flow_depth == 0 && prev_was_whitespace) {
             return false;
          }
          // Skip over quoted strings - colons inside quotes don't count as key indicators
@@ -3540,8 +3634,19 @@ namespace glz
             prev_was_whitespace = false;
             continue;
          }
-         // Stop at end of line or flow indicators
-         if (yaml::block_mapping_end_table[static_cast<uint8_t>(c)]) {
+         if (c == '[' || c == '{') {
+            ++flow_depth;
+            prev_was_whitespace = false;
+            ++it;
+            continue;
+         }
+         if ((c == ']' || c == '}') && flow_depth > 0) {
+            --flow_depth;
+            prev_was_whitespace = false;
+            ++it;
+            continue;
+         }
+         if (c == ',' && flow_depth == 0) {
             return false;
          }
          prev_was_whitespace = (c == ' ' || c == '\t');
@@ -3592,6 +3697,62 @@ namespace glz
    template <class Variant, auto Opts>
    GLZ_ALWAYS_INLINE void parse_block_mapping_or_string(auto&& value, auto&& ctx, auto&& it, auto end)
    {
+      if constexpr (yaml::check_flow_context(Opts)) {
+         // In flow context, only treat plain content as an implicit "key: value"
+         // when a mapping separator appears before the next top-level flow delimiter.
+         auto could_be_implicit_flow_pair = [&](auto pos) {
+            int depth = 0;
+            while (pos != end) {
+               const char c = *pos;
+               if (c == '"' || c == '\'') {
+                  const char quote = c;
+                  ++pos;
+                  while (pos != end && *pos != quote) {
+                     if (*pos == '\\' && quote == '"') {
+                        ++pos;
+                        if (pos != end) ++pos;
+                     }
+                     else {
+                        ++pos;
+                     }
+                  }
+                  if (pos != end) ++pos;
+                  continue;
+               }
+               if (c == '[' || c == '{') {
+                  ++depth;
+                  ++pos;
+                  continue;
+               }
+               if (c == ']' || c == '}') {
+                  if (depth == 0) return false;
+                  --depth;
+                  ++pos;
+                  continue;
+               }
+               if (c == ',' && depth == 0) return false;
+               if (c == ':' && depth == 0) {
+                  auto next = pos + 1;
+                  return next == end || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+               }
+               ++pos;
+            }
+            return false;
+         };
+
+         if (could_be_implicit_flow_pair(it)) {
+            if (try_parse_block_mapping_into_variant<Variant, Opts>(value, ctx, it, end)) {
+               return;
+            }
+            if (bool(ctx.error)) {
+               return;
+            }
+         }
+
+         process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
+         return;
+      }
+
       if (try_parse_block_mapping_into_variant<Variant, Opts>(value, ctx, it, end)) {
          return;
       }
@@ -3733,44 +3894,52 @@ namespace glz
                const char* anchor_start = &*it;
                const int32_t anchor_indent = ctx.current_indent();
 
-               // Check if the anchor is on a mapping key (&name key: value).
-               // Only when the anchor and key are on the SAME line — if the value was on the
-               // next line, the anchor applies to the entire next-line content.
-               if (anchor_on_same_line && line_could_be_block_mapping(it, end)) {
-                  // Find the key span by scanning to the key-value separator
-                  auto key_scan = it;
-                  if (*key_scan == '"' || *key_scan == '\'') {
-                     // Quoted key: skip to closing quote
-                     const char quote = *key_scan;
-                     ++key_scan;
-                     while (key_scan != end && *key_scan != quote) {
-                        if (*key_scan == '\\' && quote == '"') {
-                           ++key_scan;
-                           if (key_scan != end) ++key_scan;
-                        }
-                        else {
-                           ++key_scan;
-                        }
-                     }
-                     if (key_scan != end) ++key_scan; // past closing quote
-                  }
-                  else {
-                     // Plain key: scan to ':'
-                     while (key_scan != end) {
-                        if (*key_scan == ':') {
-                           auto next = key_scan + 1;
-                           if (next == end || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r') {
-                              break;
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  // Check if the anchor is on a block-mapping key (&name key: value).
+                  // Only when the anchor and key are on the SAME line — if the value was on the
+                  // next line, the anchor applies to the entire next-line content.
+                  if (anchor_on_same_line && line_could_be_block_mapping(it, end)) {
+                     // Find the key span by scanning to the key-value separator
+                     auto key_scan = it;
+                     if (*key_scan == '"' || *key_scan == '\'') {
+                        // Quoted key: skip to closing quote
+                        const char quote = *key_scan;
+                        ++key_scan;
+                        while (key_scan != end && *key_scan != quote) {
+                           if (*key_scan == '\\' && quote == '"') {
+                              ++key_scan;
+                              if (key_scan != end) ++key_scan;
+                           }
+                           else {
+                              ++key_scan;
                            }
                         }
-                        ++key_scan;
+                        if (key_scan != end) ++key_scan; // past closing quote
                      }
+                     else {
+                        // Plain key: scan to ':'
+                        while (key_scan != end) {
+                           if (*key_scan == ':') {
+                              auto next = key_scan + 1;
+                              if (next == end || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r') {
+                                 break;
+                              }
+                           }
+                           ++key_scan;
+                        }
+                     }
+                     // Store anchor with just the key text span
+                     ctx.anchors[std::string(aname)] = {anchor_start, &*key_scan, anchor_indent};
+                     // Parse as an object alternative so complex keys (e.g. flow collections) stay in mapping context.
+                     if constexpr (counts::n_object > 0) {
+                        process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                        end);
+                     }
+                     else {
+                        from<YAML, V>::template op<Opts>(value, ctx, it, end);
+                     }
+                     return;
                   }
-                  // Store anchor with just the key text span
-                  ctx.anchors[std::string(aname)] = {anchor_start, &*key_scan, anchor_indent};
-                  // Parse the mapping normally — anchor "aname" is already available for alias resolution
-                  from<YAML, V>::template op<Opts>(value, ctx, it, end);
-                  return;
                }
 
                const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
@@ -3795,7 +3964,21 @@ namespace glz
                   return;
                }
                yaml::skip_inline_ws(it, end);
+               if (it != end && *it == '#') {
+                  yaml::skip_comment(it, end);
+               }
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  yaml::skip_ws_newlines_comments(it, end);
+               }
                if (it == end) {
+                  if (tag == yaml::yaml_tag::str) {
+                     if constexpr (counts::n_str > 0) {
+                        constexpr auto first_idx = yaml_variant_first_index_v<V, is_yaml_variant_str>;
+                        using StrType = std::variant_alternative_t<first_idx, V>;
+                        value = StrType{};
+                        return;
+                     }
+                  }
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -3864,10 +4047,26 @@ namespace glz
                return;
             }
             case '{':
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  // In block context, "{...}: value" can be a complex mapping key.
+                  if (ctx.current_indent() < 0 && line_could_be_block_mapping(it, end)) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                     end);
+                     return;
+                  }
+               }
                // Flow mapping - object type
                process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it, end);
                return;
             case '[':
+               if constexpr (!yaml::check_flow_context(Opts)) {
+                  // In block context, "[...]: value" can be a complex mapping key.
+                  if (ctx.current_indent() < 0 && line_could_be_block_mapping(it, end)) {
+                     process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,
+                                                                                                     end);
+                     return;
+                  }
+               }
                // Flow sequence - array type
                process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it, end);
                return;

@@ -3431,15 +3431,26 @@ this is#not: a comment
       // known failure - no assertions
    };
 
-   // 2SXE (known failure): Anchors With Colon in Name
+   // 2SXE: Anchors With Colon in Name
    "2SXE"_test = [] {
       std::string yaml = R"yaml(&a: key: &a value
 foo:
   *a:
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "key": "value",
+  "foo": "key"
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 2XXW (known failure): Spec Example 2.25. Unordered Sets
@@ -3511,15 +3522,23 @@ Reuse anchor: *anchor
       }
    };
 
-   // 3MYT (known failure): Plain Scalar looking like key, comment, anchor and tag
+   // 3MYT: Plain Scalar looking like key, comment, anchor and tag
    "3MYT"_test = [] {
       std::string yaml = R"yaml(---
 k:#foo
  &a !t s
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml("k:#foo &a !t s"
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 3R3P: Single block sequence with anchor
@@ -3822,15 +3841,25 @@ x: { y: z }in: valid
       // known failure - no assertions
    };
 
-   // 6BFJ (known failure): Mapping, key and flow sequence item anchors
+   // 6BFJ: Mapping, key and flow sequence item anchors
    "6BFJ"_test = [] {
       std::string yaml = R"yaml(---
 &mapping
 &key [ &item a, b, c ]: value
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "[\"a\",\"b\",\"c\"]": "value"
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 6CK3 (known failure): Spec Example 6.26. Tag Shorthands
@@ -4335,7 +4364,7 @@ matches %: 20
       // known failure - no assertions
    };
 
-   // 9KAX (known failure): Various combinations of tags and anchors
+   // 9KAX: Various combinations of tags and anchors
    "9KAX"_test = [] {
       std::string yaml = R"yaml(---
 &a1
@@ -4365,8 +4394,16 @@ a6: 1
 value11
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml("scalar1"
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 9KBC (known failure): Mapping starting at --- line
@@ -6470,7 +6507,7 @@ a: 'b': c
       // known failure - no assertions
    };
 
-   // ZWK4 (known failure): Key with anchor after missing explicit mapping value
+   // ZWK4: Key with anchor after missing explicit mapping value
    "ZWK4"_test = [] {
       std::string yaml = R"yaml(---
 a: 1
@@ -6478,8 +6515,20 @@ a: 1
 &anchor c: 3
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "a": 1,
+  "b": null,
+  "c": 3
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
 };
