@@ -578,10 +578,13 @@ namespace glz::yaml
 
       // Track if we've seen a %YAML directive (duplicates are an error per spec)
       bool seen_yaml_directive = false;
+      bool saw_any_directive = false;
+      bool consumed_document_start = false;
 
       // Process YAML directives (lines starting with %) until we hit --- or content
       // Directives must appear at the start of a line and before ---
       while (it != end && *it == '%') {
+         saw_any_directive = true;
          ++it; // Skip the '%'
 
          // Parse directive name
@@ -606,19 +609,47 @@ namespace glz::yaml
                ++it;
             }
 
-            // Parse major version number
-            if (it != end && *it >= '0' && *it <= '9') {
-               int major_version = 0;
-               while (it != end && *it >= '0' && *it <= '9') {
-                  major_version = major_version * 10 + (*it - '0');
-                  ++it;
-               }
+            // Parse major.minor version and reject malformed forms.
+            if (it == end || *it < '0' || *it > '9') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            int major_version = 0;
+            while (it != end && *it >= '0' && *it <= '9') {
+               major_version = major_version * 10 + (*it - '0');
+               ++it;
+            }
+            if (it == end || *it != '.') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it; // skip '.'
+            if (it == end || *it < '0' || *it > '9') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            while (it != end && *it >= '0' && *it <= '9') {
+               ++it;
+            }
 
-               // Check for major version > 1 (per spec: should be rejected)
-               if (major_version > 1) {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
+            // Check for major version > 1 (per spec: should be rejected)
+            if (major_version > 1) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            // After the version, only spaces/tabs and optional comment are allowed.
+            // A '#' must be separated by at least one space.
+            if (it != end && *it == '#') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            while (it != end && (*it == ' ' || *it == '\t')) {
+               ++it;
+            }
+            if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+               ctx.error = error_code::syntax_error;
+               return;
             }
          }
          // %TAG and other directives are silently skipped (per spec: should be ignored)
@@ -645,11 +676,18 @@ namespace glz::yaml
          auto after = it + 3;
          // Must be followed by whitespace, newline, or end
          if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' || *after == '#') {
+            consumed_document_start = true;
             it = after;
             // Skip rest of line (whitespace and optional comment)
             skip_ws_and_comment(it, end);
             skip_newline(it, end);
          }
+      }
+
+      // A directives section must be followed by a document start marker.
+      if (saw_any_directive && !consumed_document_start) {
+         ctx.error = error_code::syntax_error;
+         return;
       }
    }
 
