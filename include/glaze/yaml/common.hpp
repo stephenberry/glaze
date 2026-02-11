@@ -67,6 +67,9 @@ namespace glz::yaml
       // Enables one parse step where a same-indent "- item" is valid as the node
       // content (used for anchor before indentless sequence).
       bool allow_indentless_sequence = false;
+
+      // Start of the YAML buffer, set by top-level parse entry.
+      const char* stream_begin = nullptr;
    };
 
    // Lookup table for characters that can start a plain scalar in flow context

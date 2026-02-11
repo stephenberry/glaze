@@ -27,6 +27,11 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
+         if constexpr (requires { ctx.stream_begin; }) {
+            if (!ctx.stream_begin && it != end) {
+               ctx.stream_begin = &*it;
+            }
+         }
          // Skip YAML directives and document start marker (---) if present
          yaml::skip_document_start(it, end, ctx);
          if (bool(ctx.error)) [[unlikely]] {
@@ -56,13 +61,47 @@ namespace glz
          // remaining tail, treat it as malformed stream structure.
          if constexpr (!check_partial_read(Opts)) {
             if (!bool(ctx.error)) {
+               auto is_document_start = [&](auto pos) {
+                  if (end - pos >= 3 && pos[0] == '-' && pos[1] == '-' && pos[2] == '-') {
+                     auto after = pos + 3;
+                     return after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' ||
+                            *after == '#';
+                  }
+                  return false;
+               };
+
                auto tail_scan = it;
                bool seen_document_end_marker = false;
                while (tail_scan != end) {
                   auto line = tail_scan;
                   while (line != end && (*line == ' ' || *line == '\t')) ++line;
+                  if (line != tail_scan && line != end && *line != '\n' && *line != '\r' && *line != '#') {
+                     return; // Indented tail may belong to continuation content.
+                  }
+                  if (line == end) {
+                     return;
+                  }
+                  if (*line == ':' || *line == '?') {
+                     return; // Explicit key/value continuation.
+                  }
+                  if (*line == '\n' || *line == '\r') {
+                     tail_scan = line;
+                     yaml::skip_newline(tail_scan, end);
+                     continue;
+                  }
+                  if (*line == '#') {
+                     while (tail_scan != end && *tail_scan != '\n' && *tail_scan != '\r') ++tail_scan;
+                     yaml::skip_newline(tail_scan, end);
+                     continue;
+                  }
                   if (yaml::at_document_end(line, end)) {
                      seen_document_end_marker = true;
+                     while (tail_scan != end && *tail_scan != '\n' && *tail_scan != '\r') ++tail_scan;
+                     yaml::skip_newline(tail_scan, end);
+                     continue;
+                  }
+                  if (is_document_start(line)) {
+                     return; // Additional documents are allowed in the stream tail.
                   }
                   if (line != end && *line == '%') {
                      // YAML directives are only valid in document prefixes. A directive
@@ -71,10 +110,13 @@ namespace glz
                         ctx.error = error_code::syntax_error;
                         return;
                      }
+                     return;
                   }
-
-                  while (tail_scan != end && *tail_scan != '\n' && *tail_scan != '\r') ++tail_scan;
-                  yaml::skip_newline(tail_scan, end);
+                  if (seen_document_end_marker) {
+                     return; // Implicit next document after explicit document end marker.
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             }
          }
@@ -602,9 +644,16 @@ namespace glz
 
       // Parse a plain scalar (unquoted)
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_plain_scalar(std::string& value, Ctx&, It& it, End end, bool in_flow)
+      GLZ_ALWAYS_INLINE void parse_plain_scalar(std::string& value, Ctx& ctx, It& it, End end, bool in_flow)
       {
          value.clear();
+         if (in_flow && it != end && *it == '-') {
+            auto next = it + 1;
+            if (next == end || *next == ',' || *next == ']' || *next == '}') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
 
          while (it != end) {
             const char c = *it;
@@ -642,6 +691,10 @@ namespace glz
          // Trim trailing whitespace
          while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
             value.pop_back();
+         }
+
+         if (in_flow && (value == "---" || value == "...")) {
+            ctx.error = error_code::syntax_error;
          }
       }
 
@@ -803,6 +856,7 @@ namespace glz
 
          const char indicator = *it;
          ++it;
+         const auto header_start = it;
 
          // Chomping indicator: - (strip), + (keep), or none (clip)
          char chomping = ' '; // default: clip
@@ -837,6 +891,11 @@ namespace glz
                // Skip whitespace
             }
             else if (*it == '#') {
+               // Block scalar comments require separation whitespace.
+               if (it == header_start || (*(it - 1) != ' ' && *(it - 1) != '\t')) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                // Skip comment
                while (it != end && *it != '\n' && *it != '\r') {
                   ++it;
@@ -861,6 +920,7 @@ namespace glz
 
          // Determine content indentation
          int32_t content_indent = -1;
+         int32_t leading_blank_indent_max = -1;
          bool first_line = true;
          std::string trailing_newlines;
 
@@ -872,6 +932,9 @@ namespace glz
 
             // Check for blank line
             if (it == end || *it == '\n' || *it == '\r') {
+               if (content_indent < 0) {
+                  leading_blank_indent_max = (std::max)(leading_blank_indent_max, line_indent);
+               }
                trailing_newlines.push_back('\n');
                skip_newline(it, end);
                continue;
@@ -889,6 +952,10 @@ namespace glz
                if (content_indent <= base_indent) {
                   it = line_start;
                   break;
+               }
+               if (leading_blank_indent_max > content_indent) {
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             }
 
@@ -1010,6 +1077,7 @@ namespace glz
                   yaml_context temp_ctx{};
                   temp_ctx.indent_stack = ctx.indent_stack;
                   temp_ctx.anchors = ctx.anchors;
+                  temp_ctx.stream_begin = ctx.stream_begin;
                   from<YAML, glz::generic>::template op<flow_context_on<opts{.error_on_unknown_keys = false}>()>(
                      key_node, temp_ctx, replay_it, replay_end);
                   if (bool(temp_ctx.error)) [[unlikely]] {
@@ -2094,10 +2162,18 @@ namespace glz
                skip_inline_ws(it, end);
             }
             else if (it != end && (*it == '\n' || *it == '\r')) {
-               // Allow newlines in flow mappings
+               // Newlines without a separating comma are only valid before the
+               // closing '}' of the current flow mapping.
                skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
+               if (it != end && *it == '}') {
+                  ++it;
+                  validate_flow_node_adjacent_tail(ctx, it, end);
+                  return;
+               }
+               ctx.error = error_code::syntax_error;
+               return;
             }
             else {
                ctx.error = error_code::syntax_error;
@@ -2499,6 +2575,7 @@ namespace glz
          const int32_t parent_indent = ctx.current_indent();
          const bool discover_indent = (mapping_indent < 0);
          bool first_key = !discover_indent;
+         bool discovered_first_key_mid_line = false;
 
          while (it != end) {
             auto line_start = it;
@@ -2592,6 +2669,21 @@ namespace glz
             // Establish mapping indent from first key (map case)
             if (mapping_indent < 0) {
                mapping_indent = line_indent;
+               if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                  if (ctx.stream_begin && line_start > ctx.stream_begin) {
+                     const char prev = *(line_start - 1);
+                     discovered_first_key_mid_line = (prev != '\n' && prev != '\r');
+                  }
+               }
+            }
+
+            // In discovered-indent block mappings, sibling keys must stay at the same
+            // indent level, except when the first key started mid-line (e.g. "--- k: v").
+            if (discover_indent && mapping_indent >= 0 && line_indent > mapping_indent && !discovered_first_key_mid_line &&
+                (parent_indent < 0 || mapping_indent > 0 ||
+                 (parent_indent >= 0 && mapping_indent == 0 && line_indent > (parent_indent + 1)))) {
+               ctx.error = error_code::syntax_error;
+               return;
             }
 
             // Sequence indicator check (struct case only - map parser lets key parsing
@@ -2646,6 +2738,17 @@ namespace glz
                   }
                }
                skip_inline_ws(it, end);
+               if (it != end && *it == '#') {
+                  if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+                     if (it > line_start) {
+                        const char prev = *(it - 1);
+                        if (prev != ' ' && prev != '\t') {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                  }
+               }
                skip_comment(it, end);
                if (it != end && (*it == '\n' || *it == '\r')) {
                   skip_newline(it, end);
@@ -3696,6 +3799,9 @@ namespace glz
 
                if (it != end && *it == '}') {
                   ++it;
+                  yaml::validate_flow_node_adjacent_tail(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   break;
                }
                else if (it != end && *it == ',') {
@@ -3704,8 +3810,17 @@ namespace glz
                   yaml::skip_ws_and_newlines(it, end);
                }
                else if (it != end && (*it == '\n' || *it == '\r')) {
-                  // Allow newlines in flow mappings (without comma)
+                  // Newlines without comma may only precede the closing '}'.
                   yaml::skip_ws_and_newlines(it, end);
+                  if (it != end && *it == '}') {
+                     ++it;
+                     yaml::validate_flow_node_adjacent_tail(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     break;
+                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
                else {
                   ctx.error = error_code::syntax_error;
@@ -4020,6 +4135,7 @@ namespace glz
 
                   yaml::yaml_context temp_ctx{};
                   temp_ctx.anchors = ctx.anchors;
+                  temp_ctx.stream_begin = ctx.stream_begin;
                   from<YAML, V>::template op<Opts>(std::get<V>(value), temp_ctx, it, end);
 
                   if (!bool(temp_ctx.error)) {
@@ -4141,6 +4257,7 @@ namespace glz
          yaml::yaml_context temp_ctx{};
          temp_ctx.indent_stack = ctx.indent_stack; // Propagate indent context for nested parsing
          temp_ctx.anchors = ctx.anchors;
+         temp_ctx.stream_begin = ctx.stream_begin;
          process_yaml_variant_alternatives<Variant, is_yaml_variant_object>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
          if (!bool(temp_ctx.error)) {
@@ -4713,6 +4830,7 @@ namespace glz
                   yaml::yaml_context temp_ctx{};
                   temp_ctx.indent_stack = ctx.indent_stack;
                   temp_ctx.anchors = ctx.anchors;
+                  temp_ctx.stream_begin = ctx.stream_begin;
                   process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                end);
                   if (!bool(temp_ctx.error)) {
@@ -4736,6 +4854,7 @@ namespace glz
                      yaml::yaml_context temp_ctx{};
                      temp_ctx.indent_stack = ctx.indent_stack;
                      temp_ctx.anchors = ctx.anchors;
+                     temp_ctx.stream_begin = ctx.stream_begin;
                      process_yaml_variant_alternatives<V, is_yaml_variant_num>::template op<Opts>(value, temp_ctx, it,
                                                                                                   end);
                      if (!bool(temp_ctx.error)) {
@@ -4764,6 +4883,7 @@ namespace glz
             V v{};
             yaml::yaml_context temp_ctx{};
             temp_ctx.anchors = ctx.anchors;
+            temp_ctx.stream_begin = ctx.stream_begin;
             from<YAML, V>::template op<Opts>(v, temp_ctx, it, end);
 
             if (!bool(temp_ctx.error)) {

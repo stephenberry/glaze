@@ -3786,8 +3786,20 @@ description:
  The binary value above is a tiny arrow encoded as a gif image.
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "canonical": "R0lGODlhDAAMAIQAAP//9/X17unp5WZmZgAAAOfn515eXvPz7Y6OjuDg4J+fn5OTk6enp56enmlpaWNjY6Ojo4SEhP/++f/++f/++f/++f/++f/++f/++f/++f/++f/++f/++f/++f/++f/++SH+Dk1hZGUgd2l0aCBHSU1QACwAAAAADAAMAAAFLCAgjoEwnuNAFOhpEMTRiggcz4BNJHrv/zCFcLiwMWYNG84BwwEeECcgggoBADs=",
+  "generic": "R0lGODlhDAAMAIQAAP//9/X17unp5WZmZgAAAOfn515eXvPz7Y6OjuDg4J+fn5\nOTk6enp56enmlpaWNjY6Ojo4SEhP/++f/++f/++f/++f/++f/++f/++f/++f/+\n+f/++f/++f/++f/++f/++SH+Dk1hZGUgd2l0aCBHSU1QACwAAAAADAAMAAAFLC\nAgjoEwnuNAFOhpEMTRiggcz4BNJHrv/zCFcLiwMWYNG84BwwEeECcgggoBADs=\n",
+  "description": "The binary value above is a tiny arrow encoded as a gif image."
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 57H4 (known failure): Spec Example 8.22. Block Collection Nodes
@@ -3841,7 +3853,7 @@ mapping: !!map
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // 5MUD (known failure): Colon and adjacent value on next line
@@ -3942,7 +3954,7 @@ x: { y: z }in: valid
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // 6BFJ: Mapping, key and flow sequence item anchors
@@ -4860,7 +4872,7 @@ invalid: x
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // BEC7: Spec Example 6.14. “YAML” directive
@@ -4890,7 +4902,7 @@ word2
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // BU8L: Node Anchor and Tag on Seperate Lines
@@ -5309,8 +5321,8 @@ bar: 2
  wrong: 2
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // DWX9 (known failure): Spec Example 8.8. Literal Content
@@ -5390,8 +5402,8 @@ scalar2
  k2: v2
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // EX5H (known failure): Multiline Scalar at Top Level [1.3]
@@ -5526,7 +5538,7 @@ line3
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // GH63 (known failure): Mixed Block Mapping (explicit to implicit)
@@ -5628,8 +5640,8 @@ double: "quoted \' scalar"
   no: key
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // HWV9 (known failure): Document-end marker
@@ -6138,8 +6150,8 @@ document
  key2: "bad indentation"
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // N782 (known failure): Invalid document markers in flow style
@@ -6151,7 +6163,7 @@ document
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // NB6Z (known failure): Multiline plain value with tabs on empty lines
@@ -6237,7 +6249,7 @@ key: value
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // P76L (known failure): Spec Example 6.19. Secondary Tag Handle
@@ -6513,7 +6525,7 @@ Stack:
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // S9E8 (known failure): Spec Example 5.3. Block Structure Indicators
@@ -6581,7 +6593,7 @@ seq:
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // T26H (known failure): Spec Example 8.8. Literal Content [1.3]
@@ -6629,7 +6641,7 @@ seq:
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // TD5N (known failure): Invalid scalar after sequence
@@ -6640,7 +6652,7 @@ invalid
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // U3C3: Spec Example 6.16. “TAG” directive
@@ -6977,7 +6989,7 @@ block scalar: |
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // X38W: Aliases in Flow Objects
@@ -7006,7 +7018,7 @@ block scalar: |
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // X8DW (known failure): Explicit key and value seperated by comment
@@ -7191,7 +7203,7 @@ bar: 1
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      expect(bool(ec));
    };
 
    // Z67P (known failure): Spec Example 8.21. Block Scalar Nodes [1.3]
