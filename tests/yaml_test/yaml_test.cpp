@@ -687,6 +687,24 @@ suite yaml_writer_edge_case_tests = [] {
       expect(!wec);
       expect(yaml == "'a:b': 1\n'x#y': 2\n");
    };
+
+   "write_flow_map_with_multiline_scalar_roundtrip"_test = [] {
+      const std::map<std::string, std::string> original{
+         {"name", "svc"},
+         {"script", "echo start\n./run"},
+         {"notes", "line1\nline2\n"},
+      };
+
+      std::string yaml{};
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      std::map<std::string, std::string> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
 };
 
 suite yaml_special_values_tests = [] {
@@ -3919,6 +3937,151 @@ note: null
       };
 
       roundtrip_yaml<advanced_doc>(yaml, check);
+   };
+};
+
+suite yaml_large_writer_document_tests = [] {
+   "write_large_generic_document_with_many_features"_test = [] {
+      glz::generic doc{};
+      doc["apiVersion"] = "v2";
+      doc["kind"] = "ApplicationBundle";
+      doc["description"] = "Large generated writer test document\nWith nested maps and sequences";
+      doc["runbook"] = "step one\nstep two\n";
+      doc["audit_log"] = "entry-a\nentry-b\n\n\n";
+
+      doc["metadata"]["name"] = "platform-core";
+      doc["metadata"]["labels"]["app"] = "platform";
+      doc["metadata"]["labels"]["tier"] = "backend";
+      doc["metadata"]["annotations"]["owner"] = "platform-team";
+      doc["metadata"]["annotations"]["source"] = "generated/test";
+
+      doc["quoted_examples"]["bool_like"] = "true";
+      doc["quoted_examples"]["num_like"] = "123";
+      doc["quoted_examples"]["contains_colon"] = "alpha: beta";
+      doc["quoted_examples"]["contains_hash"] = "value # literal";
+
+      doc["limits"]["max_connections"] = 5000;
+      doc["limits"]["burst"] = 250;
+      doc["flags"]["enabled"] = true;
+      doc["flags"]["maintenance_mode"] = false;
+      doc["note"] = nullptr;
+
+      doc["deployments"].data = glz::generic::array_t{};
+      auto& deployments = std::get<glz::generic::array_t>(doc["deployments"].data);
+      for (int i = 0; i < 16; ++i) {
+         glz::generic service{};
+         service["name"] = "svc-" + std::to_string(i);
+         service["image"] = "registry.example.com/app:" + std::to_string(100 + i);
+         service["replicas"] = (i % 4) + 1;
+         service["enabled"] = (i % 2 == 0);
+         service["startup_script"] = "echo start\n./run --port=8080";
+         service["notes"] = "release\nnotes\n";
+         service["ports"].data = glz::generic::array_t{};
+         auto& ports = std::get<glz::generic::array_t>(service["ports"].data);
+         for (int p = 0; p < 3; ++p) {
+            glz::generic port{};
+            port["name"] = "p" + std::to_string(p);
+            port["port"] = 8000 + p;
+            port["protocol"] = "TCP";
+            ports.emplace_back(std::move(port));
+         }
+         deployments.emplace_back(std::move(service));
+      }
+
+      std::string yaml{};
+      auto wec = glz::write_yaml(doc, yaml);
+      expect(!wec);
+      expect(yaml.size() > 4000);
+      expect(yaml.find("description: |-") != std::string::npos);
+      expect(yaml.find("runbook: |") != std::string::npos);
+      expect(yaml.find("audit_log: |+") != std::string::npos);
+      expect(yaml.find("'true'") != std::string::npos);
+      expect(yaml.find("'123'") != std::string::npos);
+      expect(yaml.find("'alpha: beta'") != std::string::npos);
+      expect(yaml.find("'value # literal'") != std::string::npos);
+
+      glz::generic parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(root.at("kind").data) == "ApplicationBundle");
+      expect(std::get<std::string>(root.at("description").data) ==
+             "Large generated writer test document\nWith nested maps and sequences");
+      expect(std::get<std::string>(root.at("runbook").data) == "step one\nstep two\n");
+      expect(std::get<std::string>(root.at("audit_log").data) == "entry-a\nentry-b\n\n\n\n");
+      expect(std::holds_alternative<std::nullptr_t>(root.at("note").data));
+
+      auto& parsed_deployments = std::get<glz::generic::array_t>(root.at("deployments").data);
+      expect(parsed_deployments.size() == 16);
+      auto& d7 = std::get<glz::generic::object_t>(parsed_deployments[7].data);
+      expect(std::get<std::string>(d7.at("name").data) == "svc-7");
+      expect(std::get<double>(d7.at("replicas").data) == 4.0);
+      expect(!std::get<bool>(d7.at("enabled").data));
+      expect(std::get<std::string>(d7.at("startup_script").data) == "echo start\n./run --port=8080");
+      expect(std::get<std::string>(d7.at("notes").data) == "release\nnotes\n");
+
+      auto& q = std::get<glz::generic::object_t>(root.at("quoted_examples").data);
+      expect(std::get<std::string>(q.at("bool_like").data) == "true");
+      expect(std::get<std::string>(q.at("num_like").data) == "123");
+   };
+
+   "write_large_struct_document_with_many_features"_test = [] {
+      advanced_doc original{};
+      original.title = "Writer Stress Document";
+      original.description = "Structured writer test document\nWith many nested features";
+      original.literal = "line one\n  line two\nline three\n\n\n";
+      original.multiline_plain = "alpha: beta # comment-like";
+      original.quoted = "beta: colon # hash";
+      original.flags = {true, false};
+      original.counts = {7, 4500, 0.875};
+      original.flow.values = {1, 2, 3, 4, 5, 6};
+      original.flow.mapping = {{"a", "one"}, {"b", "two"}, {"c", "three"}, {"d", "four"}};
+      original.nested.name = "writer-nested";
+      original.nested.labels = {{"env", "prod"}, {"tier", "backend"}, {"owner", "platform"}};
+      for (int i = 0; i < 64; ++i) {
+         original.list.push_back("item-" + std::to_string(i));
+         original.nested.ids.push_back(1000 + i);
+      }
+      original.list.push_back("true");
+      original.list.push_back("123");
+      original.list.push_back("contains: colon");
+      original.list.push_back("contains # hash");
+      original.note = "operator note line 1\noperator note line 2\n";
+
+      std::string yaml{};
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml.size() > 1800);
+      expect(yaml.find("description: |-") != std::string::npos);
+      expect(yaml.find("literal: |+") != std::string::npos);
+      expect(yaml.find("note: |") != std::string::npos);
+      expect(yaml.find("'true'") != std::string::npos);
+      expect(yaml.find("'123'") != std::string::npos);
+      expect(yaml.find("'contains: colon'") != std::string::npos);
+      expect(yaml.find("'contains # hash'") != std::string::npos);
+
+      advanced_doc parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(parsed.title == original.title);
+      expect(parsed.description == original.description);
+      expect(parsed.literal == (original.literal + "\n"));
+      expect(parsed.multiline_plain == original.multiline_plain);
+      expect(parsed.quoted == original.quoted);
+      expect(parsed.flags.enabled == original.flags.enabled);
+      expect(parsed.flags.archived == original.flags.archived);
+      expect(parsed.counts.retries == original.counts.retries);
+      expect(parsed.counts.timeout_ms == original.counts.timeout_ms);
+      expect(std::abs(parsed.counts.ratio - original.counts.ratio) < 0.0001);
+      expect(parsed.list.size() == original.list.size());
+      expect(parsed.list[65] == "123");
+      expect(parsed.flow.mapping.at("d") == "four");
+      expect(parsed.nested.ids.size() == original.nested.ids.size());
+      expect(parsed.nested.labels.at("owner") == "platform");
+      expect(parsed.note.has_value());
+      expect(parsed.note.value() == original.note.value());
    };
 };
 

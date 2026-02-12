@@ -282,6 +282,13 @@ namespace glz
 
          // Use literal block style for multiline strings
          if (str.find('\n') != std::string_view::npos) {
+            // Block scalars are not valid inside flow collections ({...}, [...]).
+            // Emit double-quoted escaped form in flow context.
+            if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
+               write_double_quoted_string(str, ctx, b, ix);
+               return;
+            }
+
             size_t trailing_newlines = 0;
             for (size_t i = str.size(); i > 0; --i) {
                if (str[i - 1] == '\n') {
