@@ -193,7 +193,7 @@ namespace glz
             return true;
          }
 
-         auto anchor_it = ctx.anchors.find(std::string(name));
+         auto anchor_it = ctx.anchors.find(name);
          if (anchor_it == ctx.anchors.end()) {
             ctx.error = error_code::syntax_error; // undefined alias
             return true;
@@ -1286,7 +1286,7 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return false;
             }
-            auto anchor_it = ctx.anchors.find(std::string(name));
+            auto anchor_it = ctx.anchors.find(name);
             if (anchor_it == ctx.anchors.end()) {
                ctx.error = error_code::syntax_error; // undefined alias
                return false;

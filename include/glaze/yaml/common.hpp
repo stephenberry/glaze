@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -58,7 +59,25 @@ namespace glz::yaml
          const char* end{};
          int32_t base_indent{};
       };
-      std::unordered_map<std::string, anchor_span> anchors{};
+
+      struct transparent_string_hash
+      {
+         using is_transparent = void;
+
+         size_t operator()(std::string_view key) const noexcept
+         {
+            return std::hash<std::string_view>{}(key);
+         }
+      };
+
+      struct transparent_string_equal
+      {
+         using is_transparent = void;
+
+         bool operator()(std::string_view lhs, std::string_view rhs) const noexcept { return lhs == rhs; }
+      };
+
+      std::unordered_map<std::string, anchor_span, transparent_string_hash, transparent_string_equal> anchors{};
 
       // True while parsing the value payload of a "- item" block-sequence entry.
       // Used to distinguish indentless-sequence continuation from next sibling items.
