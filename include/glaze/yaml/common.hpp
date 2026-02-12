@@ -64,6 +64,10 @@ namespace glz::yaml
       // Used to distinguish indentless-sequence continuation from next sibling items.
       bool sequence_item_value_context = false;
 
+      // True while parsing an explicit block mapping key ("? key").
+      // Used by plain-scalar folding to terminate on explicit key/value indicators.
+      bool explicit_mapping_key_context = false;
+
       // Enables one parse step where a same-indent "- item" is valid as the node
       // content (used for anchor before indentless sequence).
       bool allow_indentless_sequence = false;

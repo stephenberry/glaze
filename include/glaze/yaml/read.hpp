@@ -574,7 +574,7 @@ namespace glz
       }
 
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void skip_flow_ws_and_newlines(Ctx& ctx, It& it, End end)
+      GLZ_ALWAYS_INLINE void skip_flow_ws_and_newlines(Ctx& ctx, It& it, End end, bool* saw_line_break = nullptr)
       {
          bool at_line_start = false;
          bool saw_separation_ws = false;
@@ -606,6 +606,7 @@ namespace glz
             }
             if (*it == '\n' || *it == '\r') {
                skip_newline(it, end);
+               if (saw_line_break) *saw_line_break = true;
                at_line_start = true;
                saw_separation_ws = true;
                line_has_indent = false;
@@ -628,6 +629,7 @@ namespace glz
                skip_comment(it, end);
                if (it != end && (*it == '\n' || *it == '\r')) {
                   skip_newline(it, end);
+                  if (saw_line_break) *saw_line_break = true;
                   at_line_start = true;
                   saw_separation_ws = true;
                   continue;
@@ -724,13 +726,6 @@ namespace glz
       GLZ_ALWAYS_INLINE void parse_plain_scalar(std::string& value, Ctx& ctx, It& it, End end, bool in_flow)
       {
          value.clear();
-         if (in_flow && it != end && *it == '-') {
-            auto next = it + 1;
-            if (next == end || *next == ',' || *next == ']' || *next == '}') {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-         }
 
          while (it != end) {
             const char c = *it;
@@ -740,22 +735,23 @@ namespace glz
                if (in_flow) {
                   auto continuation = it;
                   skip_newline(continuation, end);
+                  bool continuation_is_comment = false;
 
                   while (continuation != end) {
                      while (continuation != end && (*continuation == ' ' || *continuation == '\t')) {
                         ++continuation;
                      }
                      if (continuation != end && *continuation == '#') {
-                        skip_comment(continuation, end);
-                        if (continuation != end && (*continuation == '\n' || *continuation == '\r')) {
-                           skip_newline(continuation, end);
-                           continue;
-                        }
+                        // Comment lines terminate plain flow scalars; the caller
+                        // will consume comments/separators outside this scalar.
+                        continuation_is_comment = true;
+                        break;
                      }
                      break;
                   }
 
-                  if (continuation == end || *continuation == ',' || *continuation == ']' || *continuation == '}') {
+                  if (continuation_is_comment || continuation == end || *continuation == ',' || *continuation == ']' ||
+                      *continuation == '}' || *continuation == ':') {
                      break;
                   }
 
@@ -886,6 +882,23 @@ namespace glz
                      if (after_dash == end || *after_dash == ' ' || *after_dash == '\t' || *after_dash == '\n' ||
                          *after_dash == '\r') {
                         // This is a new sequence item, not a continuation
+                        return;
+                     }
+                  }
+
+                  if (ctx.explicit_mapping_key_context) {
+                     // In explicit mapping keys ("? key"), a following explicit
+                     // key/value indicator starts a new mapping entry.
+                     if (*lookahead == '?' || *lookahead == ':') {
+                        auto after = lookahead + 1;
+                        if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r') {
+                           return;
+                        }
+                     }
+
+                     // Node-property indicators at the start of a continuation
+                     // line begin a new key node in explicit-key context.
+                     if (*lookahead == '&' || *lookahead == '*' || *lookahead == '!') {
                         return;
                      }
                   }
@@ -1292,7 +1305,9 @@ namespace glz
 
                   auto continuation = it;
                   skip_newline(continuation, end);
+                  int32_t continuation_indent = 0;
                   while (continuation != end && (*continuation == ' ' || *continuation == '\t')) {
+                     if (*continuation == ' ') ++continuation_indent;
                      ++continuation;
                   }
 
@@ -1314,6 +1329,52 @@ namespace glz
                   // not belong to the key content.
                   if (*continuation == ',' || *continuation == ']' || *continuation == '}' || *continuation == ':') {
                      break;
+                  }
+
+                  if (ctx.explicit_mapping_key_context) {
+                     if (*continuation == '?' || *continuation == ':') {
+                        auto after = continuation + 1;
+                        if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r') {
+                           break;
+                        }
+                     }
+
+                     if (*continuation == '&' || *continuation == '*' || *continuation == '!') {
+                        break;
+                     }
+
+                     if (*continuation == '-') {
+                        auto after = continuation + 1;
+                        if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r') {
+                           break;
+                        }
+                     }
+
+                     if (ctx.current_indent() >= 0 && continuation_indent <= ctx.current_indent()) {
+                        break;
+                     }
+
+                     // A continuation line that contains an implicit mapping-key
+                     // indicator (": " / ":\n") starts a new entry, not key text.
+                     {
+                        auto scan = continuation;
+                        while (scan != end && *scan != '\n' && *scan != '\r') {
+                           if (*scan == ':') {
+                              auto after_colon = scan + 1;
+                              const bool tight_key_colon =
+                                 (scan == continuation) || (*(scan - 1) != ' ' && *(scan - 1) != '\t');
+                              if (tight_key_colon &&
+                                  (after_colon == end || *after_colon == ' ' || *after_colon == '\t' ||
+                                   *after_colon == '\n' || *after_colon == '\r')) {
+                                 break;
+                              }
+                           }
+                           ++scan;
+                        }
+                        if (scan != end && *scan == ':') {
+                           break;
+                        }
+                     }
                   }
 
                   if (!key.empty() && key.back() != ' ') {
@@ -2108,11 +2169,16 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               skip_flow_ws_and_newlines(ctx, it, end);
+               bool saw_line_break_before_separator = false;
+               skip_flow_ws_and_newlines(ctx, it, end, &saw_line_break_before_separator);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
                if (it != end && *it == ':') {
+                  if (saw_line_break_before_separator) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                   if constexpr (std::same_as<std::remove_cvref_t<value_type>, glz::generic>) {
                      glz::generic key_node = std::move(element);
                      ++it;
@@ -4071,6 +4137,7 @@ namespace glz
                         return;
                   }
                }
+               bool key_allows_linebreak_before_colon = explicit_flow_key;
 
                // Parse key
                key_t key{};
@@ -4086,8 +4153,12 @@ namespace glz
                      // Plain/quoted/alias keys stay on parse_yaml_key() for compatibility.
                      bool parse_complex_flow_key = false;
                      if (key_probe != end) {
+                        if (*key_probe == '"' || *key_probe == '\'') {
+                           key_allows_linebreak_before_colon = true;
+                        }
                         if (*key_probe == '[' || *key_probe == '{') {
                            parse_complex_flow_key = true;
+                           key_allows_linebreak_before_colon = true;
                         }
                         else if (*key_probe == '&') {
                            ++key_probe;
@@ -4095,6 +4166,7 @@ namespace glz
                            yaml::skip_inline_ws(key_probe, end);
                            if (key_probe != end && (*key_probe == '[' || *key_probe == '{')) {
                               parse_complex_flow_key = true;
+                              key_allows_linebreak_before_colon = true;
                            }
                         }
                      }
@@ -4136,6 +4208,7 @@ namespace glz
                // Separation between flow key and ':' may include comments/newlines.
                // A bare line break without a comment between key and ':' is invalid.
                bool saw_key_comment = false;
+               bool saw_key_linebreak = false;
                while (it != end) {
                   yaml::skip_inline_ws(it, end);
                   if (it != end && *it == '#') {
@@ -4144,6 +4217,10 @@ namespace glz
                   }
                   if (it != end && (*it == '\n' || *it == '\r')) {
                      if (!saw_key_comment) {
+                        if (!key_allows_linebreak_before_colon) {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                         // Without an intervening comment, only allow line-break
                         // separation if the next line is an indented ':' marker.
                         auto look = it;
@@ -4158,6 +4235,7 @@ namespace glz
                            return;
                         }
                      }
+                     saw_key_linebreak = true;
                      yaml::skip_newline(it, end);
                      continue;
                   }
@@ -4207,6 +4285,18 @@ namespace glz
                   return;
                }
                ++it;
+
+               // If the key/value indicator was reached only after a line break,
+               // require an explicit separator after ':' (spaces, line break, comment,
+               // omitted value delimiter, or end). Adjacent values like ":bar" are
+               // malformed in this layout.
+               if (saw_key_linebreak && it != end &&
+                   !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)] && *it != '#' && *it != ',' &&
+                   *it != '}') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
                yaml::skip_inline_ws(it, end);
 
                // Parse value
@@ -4348,6 +4438,10 @@ namespace glz
                         int32_t nested_indent = yaml::detect_nested_value_indent(ctx, it, end, line_indent);
                         if (nested_indent >= 0) {
                            yaml::skip_to_content(it, end);
+                           if (it != end && *it == ':' && (it + 1) != end && *(it + 1) == '\t') {
+                              ctx.error = error_code::syntax_error;
+                              return false;
+                           }
                            if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return false;
                            from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
                            ctx.pop_indent();
@@ -4369,14 +4463,7 @@ namespace glz
 
                      key_t key{};
                      if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
-                        auto key_it = it;
-                        yaml::skip_inline_ws(key_it, end);
-                        if (key_it != end && (*key_it == '[' || *key_it == '{')) {
-                           glz::generic key_node{};
-                           from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx, key_it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return false;
-                           it = key_it;
+                        auto to_string_key = [&](glz::generic& key_node) {
                            if (key_node.is_null()) {
                               key.clear();
                            }
@@ -4388,10 +4475,89 @@ namespace glz
                               (void)glz::write_json(key_node, key_json);
                               key = std::move(key_json);
                            }
+                        };
+
+                        auto key_it = it;
+                        yaml::skip_inline_ws(key_it, end);
+
+                        auto content = key_it;
+                        yaml::skip_to_content(content, end);
+                        bool handled_anchor_only_empty_key = false;
+
+                        // Anchor on an empty explicit key node:
+                        //   ? &a
+                        //   : value
+                        if (content != end && *content == '&') {
+                           auto anchor_probe = content + 1;
+                           auto anchor_name = yaml::parse_anchor_name(anchor_probe, end);
+                           if (!anchor_name.empty()) {
+                              auto after_anchor = anchor_probe;
+                              yaml::skip_inline_ws(after_anchor, end);
+
+                              auto value_indicator = after_anchor;
+                              if (value_indicator != end && *value_indicator == ':') {
+                                 key.clear();
+                                 ctx.anchors[std::string(anchor_name)] = {content, content, ctx.current_indent()};
+                                 it = value_indicator;
+                                 handled_anchor_only_empty_key = true;
+                              }
+                              else {
+                                 if (value_indicator != end && *value_indicator == '#') {
+                                    yaml::skip_comment(value_indicator, end);
+                                 }
+                                 if (value_indicator != end && (*value_indicator == '\n' || *value_indicator == '\r')) {
+                                    yaml::skip_newline(value_indicator, end);
+                                    auto value_line = value_indicator;
+                                    int32_t value_indent = yaml::measure_indent(value_line, end, ctx);
+                                    if (bool(ctx.error)) [[unlikely]]
+                                       return false;
+                                    if (value_line != end && *value_line == ':' && value_indent >= line_indent) {
+                                       key.clear();
+                                       ctx.anchors[std::string(anchor_name)] = {content, content, ctx.current_indent()};
+                                       it = value_line;
+                                       handled_anchor_only_empty_key = true;
+                                    }
+                                 }
+                              }
+                           }
+                        }
+
+                        if (handled_anchor_only_empty_key) {
+                           // 'it' already points to the explicit value indicator ':'
+                        }
+                        else if (content == end || *content == ':') {
+                           key.clear();
+                           it = content;
                         }
                         else {
-                           if (!yaml::parse_yaml_key(key, ctx, it, end, true)) {
-                              return false;
+                           const bool complex_explicit_key =
+                              (*content == '[' || *content == '{' || *content == '-' || *content == '?' ||
+                               *content == '|' || *content == '>' || *content == '&' || *content == '!' ||
+                               *content == '*' || *content == '"' || *content == '\'');
+
+                           if (complex_explicit_key || content != key_it) {
+                              auto key_node_it = content;
+                              glz::generic key_node{};
+                              if (*content == '[' || *content == '{') {
+                                 from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx,
+                                                                                                       key_node_it, end);
+                              }
+                              else {
+                                 from<YAML, glz::generic>::template op<Opts>(key_node, ctx, key_node_it, end);
+                              }
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return false;
+                              it = key_node_it;
+                              to_string_key(key_node);
+                           }
+                           else {
+                              const bool prev_explicit_mapping_key_context = ctx.explicit_mapping_key_context;
+                              ctx.explicit_mapping_key_context = true;
+                              const bool ok = yaml::parse_yaml_key(key, ctx, it, end, true);
+                              ctx.explicit_mapping_key_context = prev_explicit_mapping_key_context;
+                              if (!ok) {
+                                 return false;
+                              }
                            }
                         }
                      }
@@ -4426,6 +4592,15 @@ namespace glz
                         if (it != end && *it == '\t') {
                            ctx.error = error_code::syntax_error;
                            return false;
+                        }
+                        if (it != end && (*it == '\n' || *it == '\r')) {
+                           auto probe = it;
+                           yaml::skip_newline(probe, end);
+                           while (probe != end && *probe == ' ') ++probe;
+                           if (probe != end && *probe == ':' && ((probe + 1) != end) && *(probe + 1) == '\t') {
+                              ctx.error = error_code::syntax_error;
+                              return false;
+                           }
                         }
                         yaml::skip_inline_ws(it, end);
                         if (!parse_map_value(val)) [[unlikely]]
@@ -4687,8 +4862,9 @@ namespace glz
          if (c == '#' && flow_depth == 0 && prev_was_whitespace) {
             return false;
          }
-         // Skip over quoted strings - colons inside quotes don't count as key indicators
-         if (c == '"' || c == '\'') {
+         // Skip over quoted strings only when they start a quoted token.
+         // Quote characters are otherwise valid in plain scalars/keys.
+         if ((c == '"' || c == '\'') && prev_was_whitespace) {
             const char quote = c;
             ++it;
             while (it != end && *it != quote) {
@@ -4720,9 +4896,6 @@ namespace glz
             ++it;
             continue;
          }
-         if (c == ',' && flow_depth == 0) {
-            return false;
-         }
          prev_was_whitespace = (c == ' ' || c == '\t');
          ++it;
       }
@@ -4749,7 +4922,7 @@ namespace glz
          if (c == '#' && flow_depth == 0 && prev_was_whitespace) {
             return false;
          }
-         if (c == '"' || c == '\'') {
+         if ((c == '"' || c == '\'') && prev_was_whitespace) {
             const char quote = c;
             ++it;
             while (it != end && *it != quote) {
@@ -4957,6 +5130,23 @@ namespace glz
             using V = std::remove_cvref_t<T>;
             using counts = yaml_variant_type_count<V>;
             const char c = *it;
+            if constexpr (!yaml::check_flow_context(Opts)) {
+               // At document root, a line beginning with '---' / '...' must be
+               // a document marker token. Adjacent content (e.g. '---word') is
+               // malformed and must not be treated as a plain scalar.
+               if (ctx.current_indent() < 0 && (end - it >= 3)) {
+                  const bool malformed_doc_start =
+                     (it[0] == '-' && it[1] == '-' && it[2] == '-' && (end - it > 3) &&
+                      !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
+                  const bool malformed_doc_end =
+                     (it[0] == '.' && it[1] == '.' && it[2] == '.' && (end - it > 3) &&
+                      !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
+                  if (malformed_doc_start || malformed_doc_end) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               }
+            }
             auto is_plain_scalar_boundary = [](const char ch) {
                switch (ch) {
                case ' ':
@@ -5009,6 +5199,24 @@ namespace glz
                      }
                      return false;
                   }
+
+                  // If the next non-empty line is an implicit mapping entry,
+                  // don't treat it as scalar continuation for auto-deduced
+                  // booleans/nulls.
+                  {
+                     auto scan = look;
+                     while (scan != end && *scan != '\n' && *scan != '\r') {
+                        if (*scan == ':') {
+                           auto after_colon = scan + 1;
+                           if (after_colon == end || *after_colon == ' ' || *after_colon == '\t' ||
+                               *after_colon == '\n' || *after_colon == '\r') {
+                              return false;
+                           }
+                        }
+                        ++scan;
+                     }
+                  }
+
                   return line_indent > ctx.current_indent();
                }
                return false;
