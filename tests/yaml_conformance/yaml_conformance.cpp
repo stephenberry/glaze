@@ -1,6 +1,5 @@
-// YAML conformance tests generated from https://github.com/yaml/yaml-test-suite
-// Tests marked "known failure" assert the parser's current behavior.
-// As YAML support improves, update these to full conformance assertions.
+// YAML conformance tests generated from https://github.com/yaml/yaml-test-suite.
+// All conformance cases assert expected parser behavior.
 
 #include <string>
 
@@ -22,7 +21,7 @@ static std::string normalize_json(const std::string& json)
 }
 
 // ============================================================================
-// PASSING TESTS (168 tests) - These must continue to pass
+// YAML CONFORMANCE TESTS (402 cases)
 // ============================================================================
 
 suite yaml_conformance_pass_1 = [] {
@@ -3361,12 +3360,10 @@ Sammy Sosa: {
 };
 
 // ============================================================================
-// KNOWN FAILURES (234 tests in these suites) - parser is exercised and many
-// tests still intentionally avoid correctness assertions.
-// Convert to passing tests as features are implemented.
+// Additional conformance suites
 // ============================================================================
 
-suite yaml_conformance_known_failures_1 = [] {
+suite yaml_conformance_pass_4 = [] {
    // 26DV: Whitespace around colon in mappings
    "26DV"_test = [] {
       std::string yaml = R"yaml("top1" :
@@ -3468,7 +3465,7 @@ this is#not: a comment
       expect(bool(ec));
    };
 
-   // 2LFX (known failure): Spec Example 6.13. Reserved Directives [1.3]
+   // 2LFX: Spec Example 6.13. Reserved Directives [1.3]
    "2LFX"_test = [] {
       std::string yaml = R"yaml(%FOO  bar baz # Should be ignored
               # with a warning.
@@ -3537,7 +3534,7 @@ foo:
       }
    };
 
-   // 35KP (known failure): Tags for Root Objects
+   // 35KP: Tags for Root Objects
    "35KP"_test = [] {
       std::string yaml = R"yaml(--- !!map
 ? a
@@ -3691,7 +3688,7 @@ omitted value:,
       }
    };
 
-   // 4FJ6 (known failure): Nested implicit complex keys
+   // 4FJ6: Nested implicit complex keys
    "4FJ6"_test = [] {
       std::string yaml = R"yaml(---
 [
@@ -3751,7 +3748,7 @@ omitted value:,
       expect(bool(ec));
    };
 
-   // 4QFQ (known failure): Spec Example 8.2. Block Indentation Indicator [1.3]
+   // 4QFQ: Spec Example 8.2. Block Indentation Indicator [1.3]
    "4QFQ"_test = [] {
       std::string yaml = R"yaml(- |
  detected
@@ -3777,7 +3774,7 @@ omitted value:,
       }
    };
 
-   // 4WA9 (known failure): Literal scalars
+   // 4WA9: Literal scalars
    "4WA9"_test = [] {
       std::string yaml = R"yaml(- aaa: |2
     xxx
@@ -3846,7 +3843,7 @@ block: |
       expect(bool(ec));
    };
 
-   // 565N (known failure): Construct Binary
+   // 565N: Construct Binary
    "565N"_test = [] {
       std::string yaml = R"yaml(canonical: !!binary "\
  R0lGODlhDAAMAIQAAP//9/X17unp5WZmZgAAAOfn515eXvPz7Y6OjuDg4J+fn5\
@@ -3878,7 +3875,7 @@ description:
       }
    };
 
-   // 57H4 (known failure): Spec Example 8.22. Block Collection Nodes
+   // 57H4: Spec Example 8.22. Block Collection Nodes
    "57H4"_test = [] {
       std::string yaml = R"yaml(sequence: !!seq
 - entry
@@ -3910,7 +3907,7 @@ mapping: !!map
       }
    };
 
-   // 5KJE (known failure): Spec Example 7.13. Flow Sequence
+   // 5KJE: Spec Example 7.13. Flow Sequence
    "5KJE"_test = [] {
       std::string yaml = R"yaml(- [ one, two, ]
 - [three ,four]
@@ -3981,7 +3978,7 @@ mapping: !!map
       }
    };
 
-   // 5TYM (known failure): Spec Example 6.21. Local Tag Prefix
+   // 5TYM: Spec Example 6.21. Local Tag Prefix
    "5TYM"_test = [] {
       std::string yaml = R"yaml(%TAG !m! !my-
 --- # Bulb here
@@ -4004,7 +4001,7 @@ mapping: !!map
       }
    };
 
-   // 5U3A (known failure): Sequence on same Line as Mapping Key
+   // 5U3A: Sequence on same Line as Mapping Key
    "5U3A"_test = [] {
       std::string yaml = R"yaml(key: - a
      - b
@@ -4131,7 +4128,7 @@ x: { y: z }in: valid
       }
    };
 
-   // 6HB6 (known failure): Spec Example 6.1. Indentation Spaces
+   // 6HB6: Spec Example 6.1. Indentation Spaces
    "6HB6"_test = [] {
       std::string yaml = R"yaml(  # Leading comment line spaces are
    # neither content nor indentation.
@@ -4243,7 +4240,7 @@ b: *anchor
       }
    };
 
-   // 6VJK (known failure): Spec Example 2.15. Folded newlines are preserved for "more indented" and blank lines
+   // 6VJK: Spec Example 2.15. Folded newlines are preserved for "more indented" and blank lines
    "6VJK"_test = [] {
       std::string yaml = R"yaml(>
  Sammy Sosa completed another
@@ -4310,7 +4307,7 @@ b: *anchor
       }
    };
 
-   // 735Y (known failure): Spec Example 8.20. Block Node Types
+   // 735Y: Spec Example 8.20. Block Node Types
    "735Y"_test = [] {
       std::string yaml = R"yaml(-
   "flow in block"
@@ -4338,7 +4335,7 @@ b: *anchor
       }
    };
 
-   // 74H7 (known failure): Tags in Implicit Mapping
+   // 74H7: Tags in Implicit Mapping
    "74H7"_test = [] {
       std::string yaml = R"yaml(!!str a: b
 c: !!int 42
@@ -4420,7 +4417,7 @@ rbi:
       }
    };
 
-   // 7FWL (known failure): Spec Example 6.24. Verbatim Tags
+   // 7FWL: Spec Example 6.24. Verbatim Tags
    "7FWL"_test = [] {
       std::string yaml = R"yaml(!<tag:yaml.org,2002:str> foo :
   !<!bar> baz
@@ -4438,7 +4435,7 @@ rbi:
       }
    };
 
-   // 7LBH (known failure): Multiline double quoted implicit keys
+   // 7LBH: Multiline double quoted implicit keys
    "7LBH"_test = [] {
       std::string yaml = R"yaml("a\nb": 1
 "c
@@ -4460,7 +4457,7 @@ rbi:
       }
    };
 
-   // 7T8X (known failure): Spec Example 8.10. Folded Lines - 8.13. Final Empty Lines
+   // 7T8X: Spec Example 8.10. Folded Lines - 8.13. Final Empty Lines
    "7T8X"_test = [] {
       std::string yaml = R"yaml(>
 
@@ -4527,7 +4524,7 @@ c:
       }
    };
 
-   // 7ZZ5 (known failure): Empty flow collections
+   // 7ZZ5: Empty flow collections
    "7ZZ5"_test = [] {
       std::string yaml = R"yaml(---
 nested sequences:
@@ -4574,7 +4571,7 @@ word2
       expect(bool(ec));
    };
 
-   // 87E4 (known failure): Spec Example 7.8. Single Quoted Implicit Keys
+   // 87E4: Spec Example 7.8. Single Quoted Implicit Keys
    "87E4"_test = [] {
       std::string yaml = R"yaml('implicit block key' : [
   'implicit flow key' : value,
@@ -4599,7 +4596,7 @@ word2
       }
    };
 
-   // 8CWC (known failure): Plain mapping key ending with colon
+   // 8CWC: Plain mapping key ending with colon
    "8CWC"_test = [] {
       std::string yaml = R"yaml(---
 key ends with two colons::: value
@@ -4621,8 +4618,8 @@ key ends with two colons::: value
 
 };
 
-suite yaml_conformance_known_failures_2 = [] {
-   // 8G76 (known failure): Spec Example 6.10. Comment Lines
+suite yaml_conformance_pass_5 = [] {
+   // 8G76: Spec Example 6.10. Comment Lines
    "8G76"_test = [] {
       std::string yaml = R"yaml(  # Comment
    
@@ -4642,7 +4639,7 @@ suite yaml_conformance_known_failures_2 = [] {
       }
    };
 
-   // 8KB6 (known failure): Multiline plain flow mapping key without value
+   // 8KB6: Multiline plain flow mapping key without value
    "8KB6"_test = [] {
       std::string yaml = R"yaml(---
 - { single line, a: b}
@@ -4688,7 +4685,7 @@ suite yaml_conformance_known_failures_2 = [] {
       }
    };
 
-   // 8UDB (known failure): Spec Example 7.14. Flow Sequence Entries
+   // 8UDB: Spec Example 7.14. Flow Sequence Entries
    "8UDB"_test = [] {
       std::string yaml = R"yaml([
 "double
@@ -4732,7 +4729,7 @@ single: pair,
       }
    };
 
-   // 93JH (known failure): Block Mappings in Block Sequence
+   // 93JH: Block Mappings in Block Sequence
    "93JH"_test = [] {
       std::string yaml = R"yaml( - key: value
    key2: value2
@@ -4760,7 +4757,7 @@ single: pair,
       }
    };
 
-   // 96NN_00 (known failure): Leading tab content in literals
+   // 96NN_00: Leading tab content in literals
    "96NN_00"_test = [] {
       std::string yaml = R"yaml(foo: |-
  	bar
@@ -4780,7 +4777,7 @@ single: pair,
       }
    };
 
-   // 96NN_01 (known failure): Leading tab content in literals
+   // 96NN_01: Leading tab content in literals
    "96NN_01"_test = [] {
       std::string yaml = R"yaml(foo: |-
  	bar)yaml";
@@ -4799,7 +4796,7 @@ single: pair,
       }
    };
 
-   // 98YD (known failure): Spec Example 5.5. Comment Indicator
+   // 98YD: Spec Example 5.5. Comment Indicator
    "98YD"_test = [] {
       std::string yaml = R"yaml(# Comment only.
 )yaml";
@@ -4816,7 +4813,7 @@ single: pair,
       }
    };
 
-   // 9BXH (known failure): Multiline doublequoted flow mapping key without value
+   // 9BXH: Multiline doublequoted flow mapping key without value
    "9BXH"_test = [] {
       std::string yaml = R"yaml(---
 - { "single line", a: b}
@@ -4857,7 +4854,7 @@ c]
       expect(bool(ec));
    };
 
-   // 9DXL (known failure): Spec Example 9.6. Stream [1.3]
+   // 9DXL: Spec Example 9.6. Stream [1.3]
    "9DXL"_test = [] {
       std::string yaml = R"yaml(Mapping: Document
 ---
@@ -4965,7 +4962,7 @@ value11
       expect(bool(ec));
    };
 
-   // 9MMW (known failure): Single Pair Implicit Entries
+   // 9MMW: Single Pair Implicit Entries
    "9MMW"_test = [] {
       std::string yaml = R"yaml(- [ YAML : separate ]
 - [ "JSON like":adjacent ]
@@ -5026,7 +5023,7 @@ b"
       }
    };
 
-   // 9YRD (known failure): Multiline Scalar at Top Level
+   // 9YRD: Multiline Scalar at Top Level
    "9YRD"_test = [] {
       std::string yaml = R"yaml(a
 b  
@@ -5048,7 +5045,7 @@ e
       }
    };
 
-   // A2M4 (known failure): Spec Example 6.2. Indentation Indicators
+   // A2M4: Spec Example 6.2. Indentation Indicators
    "A2M4"_test = [] {
       std::string yaml = R"yaml(? a
 : -	b
@@ -5076,7 +5073,7 @@ e
       }
    };
 
-   // A984 (known failure): Multiline Scalar in Mapping
+   // A984: Multiline Scalar in Mapping
    "A984"_test = [] {
       std::string yaml = R"yaml(a: b
  c
@@ -5100,7 +5097,7 @@ d:
       }
    };
 
-   // AB8U (known failure): Sequence entry that looks like two with wrong indentation
+   // AB8U: Sequence entry that looks like two with wrong indentation
    "AB8U"_test = [] {
       std::string yaml = R"yaml(- single multiline
  - sequence entry
@@ -5121,7 +5118,7 @@ d:
       }
    };
 
-   // AVM7 (known failure): Empty Stream
+   // AVM7: Empty Stream
    "AVM7"_test = [] {
       std::string yaml = R"yaml()yaml";
       glz::generic parsed{};
@@ -5135,7 +5132,7 @@ d:
       }
    };
 
-   // AZ63 (known failure): Sequence With Same Indentation as Parent Mapping
+   // AZ63: Sequence With Same Indentation as Parent Mapping
    "AZ63"_test = [] {
       std::string yaml = R"yaml(one:
 - 2
@@ -5390,7 +5387,7 @@ word2
       }
    };
 
-   // CT4Q (known failure): Spec Example 7.20. Single Pair Explicit Entry
+   // CT4Q: Spec Example 7.20. Single Pair Explicit Entry
    "CT4Q"_test = [] {
       std::string yaml = R"yaml([
 ? foo
@@ -5424,7 +5421,7 @@ word2
       expect(bool(ec));
    };
 
-   // CUP7 (known failure): Spec Example 5.6. Node Property Indicators
+   // CUP7: Spec Example 5.6. Node Property Indicators
    "CUP7"_test = [] {
       std::string yaml = R"yaml(anchored: !local &anchor value
 alias: *anchor
@@ -5456,7 +5453,7 @@ alias: *anchor
       expect(bool(ec));
    };
 
-   // D49Q (known failure): Multiline single quoted implicit keys
+   // D49Q: Multiline single quoted implicit keys
    "D49Q"_test = [] {
       std::string yaml = R"yaml('a\nb': 1
 'c
@@ -5478,7 +5475,7 @@ alias: *anchor
       }
    };
 
-   // D83L (known failure): Block scalar indicator order
+   // D83L: Block scalar indicator order
    "D83L"_test = [] {
       std::string yaml = R"yaml(- |2-
   explicit indent and chomp
@@ -5569,7 +5566,7 @@ alias: *anchor
       }
    };
 
-   // DFF7 (known failure): Spec Example 7.16. Flow Mapping Entries
+   // DFF7: Spec Example 7.16. Flow Mapping Entries
    "DFF7"_test = [] {
       std::string yaml = R"yaml({
 ? explicit: entry,
@@ -5594,7 +5591,7 @@ implicit: entry,
       }
    };
 
-   // DK3J (known failure): Zero indented block scalar with line that looks like a comment
+   // DK3J: Zero indented block scalar with line that looks like a comment
    "DK3J"_test = [] {
       std::string yaml = R"yaml(--- >
 line1
@@ -5718,7 +5715,7 @@ bar: 2
       expect(bool(ec));
    };
 
-   // DWX9 (known failure): Spec Example 8.8. Literal Content
+   // DWX9: Spec Example 8.8. Literal Content
    "DWX9"_test = [] {
       std::string yaml = R"yaml(|
  
@@ -5772,7 +5769,7 @@ scalar2
       expect(bool(ec));
    };
 
-   // EHF6 (known failure): Tags for Flow Objects
+   // EHF6: Tags for Flow Objects
    "EHF6"_test = [] {
       std::string yaml = R"yaml(!!map {
   k: !!seq
@@ -5807,7 +5804,7 @@ scalar2
       expect(bool(ec));
    };
 
-   // EX5H (known failure): Multiline Scalar at Top Level [1.3]
+   // EX5H: Multiline Scalar at Top Level [1.3]
    "EX5H"_test = [] {
       std::string yaml = R"yaml(---
 a
@@ -5832,7 +5829,7 @@ e
 
 };
 
-suite yaml_conformance_known_failures_3 = [] {
+suite yaml_conformance_pass_6 = [] {
    // EXG3: Three dashes and content without space [1.3]
    "EXG3"_test = [] {
       std::string yaml = R"yaml(---
@@ -5869,7 +5866,7 @@ word2
       }
    };
 
-   // F6MC (known failure): More indented lines at the beginning of folded block scalars
+   // F6MC: More indented lines at the beginning of folded block scalars
    "F6MC"_test = [] {
       std::string yaml = R"yaml(---
 a: >2
@@ -5897,7 +5894,7 @@ b: >2
       }
    };
 
-   // FBC9 (known failure): Allowed characters in plain scalars
+   // FBC9: Allowed characters in plain scalars
    "FBC9"_test = [] {
       std::string yaml = R"yaml(safe: a!"#$%&'()*+,-./09:;<=>?@AZ[\]^_`az{|}~
      !"#$%&'()*+,-./09:;<=>?@AZ[\]^_`az{|}~
@@ -5923,7 +5920,7 @@ safe dash: -foo
       }
    };
 
-   // FP8R (known failure): Zero indented block scalar
+   // FP8R: Zero indented block scalar
    "FP8R"_test = [] {
       std::string yaml = R"yaml(--- >
 line1
@@ -6016,7 +6013,7 @@ fifteen: d
       }
    };
 
-   // H2RW (known failure): Blank lines
+   // H2RW: Blank lines
    "H2RW"_test = [] {
       std::string yaml = R"yaml(foo: 1
 
@@ -6048,7 +6045,7 @@ text: |
       }
    };
 
-   // HMQ5 (known failure): Spec Example 6.23. Node Properties
+   // HMQ5: Spec Example 6.23. Node Properties
    "HMQ5"_test = [] {
       std::string yaml = R"yaml(!!str &a1 "foo":
   !!str bar
@@ -6077,7 +6074,7 @@ double: "quoted \' scalar"
       expect(bool(ec));
    };
 
-   // HS5T (known failure): Spec Example 7.12. Plain Lines
+   // HS5T: Spec Example 7.12. Plain Lines
    "HS5T"_test = [] {
       std::string yaml = R"yaml(1st non-empty
 
@@ -6145,7 +6142,7 @@ block:	|
       }
    };
 
-   // J7PZ (known failure): Spec Example 2.26. Ordered Mappings
+   // J7PZ: Spec Example 2.26. Ordered Mappings
    "J7PZ"_test = [] {
       std::string yaml = R"yaml(# The !!omap tag is one of the optional types
 # introduced for YAML 1.1. In 1.2, it is not
@@ -6182,7 +6179,7 @@ block:	|
       }
    };
 
-   // JHB9 (known failure): Spec Example 2.7. Two Documents in a Stream
+   // JHB9: Spec Example 2.7. Two Documents in a Stream
    "JHB9"_test = [] {
       std::string yaml = R"yaml(# Ranking of 1998 home runs
 ---
@@ -6238,7 +6235,7 @@ Second occurrence: *anchor
       }
    };
 
-   // JTV5 (known failure): Block Mapping with Multiline Scalars
+   // JTV5: Block Mapping with Multiline Scalars
    "JTV5"_test = [] {
       std::string yaml = R"yaml(? a
   true
@@ -6274,7 +6271,7 @@ Second occurrence: *anchor
       expect(bool(ec));
    };
 
-   // K858 (known failure): Spec Example 8.6. Empty Scalar Chomping
+   // K858: Spec Example 8.6. Empty Scalar Chomping
    "K858"_test = [] {
       std::string yaml = R"yaml(strip: >-
 
@@ -6330,7 +6327,7 @@ invalid item
       expect(bool(ec));
    };
 
-   // L24T_00 (known failure): Trailing line of spaces
+   // L24T_00: Trailing line of spaces
    "L24T_00"_test = [] {
       std::string yaml = R"yaml(foo: |
   x
@@ -6351,7 +6348,7 @@ invalid item
       }
    };
 
-   // L24T_01 (known failure): Trailing line of spaces
+   // L24T_01: Trailing line of spaces
    "L24T_01"_test = [] {
       std::string yaml = R"yaml(foo: |
   x
@@ -6394,7 +6391,7 @@ invalid item
       }
    };
 
-   // L9U5 (known failure): Spec Example 7.11. Plain Implicit Keys
+   // L9U5: Spec Example 7.11. Plain Implicit Keys
    "L9U5"_test = [] {
       std::string yaml = R"yaml(implicit block key : [
   implicit flow key : value,
@@ -6438,7 +6435,7 @@ invalid item
       }
    };
 
-   // LP6E (known failure): Whitespace After Scalars in Flow
+   // LP6E: Whitespace After Scalars in Flow
    "LP6E"_test = [] {
       std::string yaml = R"yaml(- [a, b , c ]
 - { "a"  : b
@@ -6472,7 +6469,7 @@ invalid item
       }
    };
 
-   // LQZ7 (known failure): Spec Example 7.4. Double Quoted Implicit Keys
+   // LQZ7: Spec Example 7.4. Double Quoted Implicit Keys
    "LQZ7"_test = [] {
       std::string yaml = R"yaml("implicit block key" : [
   "implicit flow key" : value,
@@ -6497,7 +6494,7 @@ invalid item
       }
    };
 
-   // M29M (known failure): Literal Block Scalar
+   // M29M: Literal Block Scalar
    "M29M"_test = [] {
       std::string yaml = R"yaml(a: |
  ab
@@ -6523,7 +6520,7 @@ invalid item
       }
    };
 
-   // M5C3 (known failure): Spec Example 8.21. Block Scalar Nodes
+   // M5C3: Spec Example 8.21. Block Scalar Nodes
    "M5C3"_test = [] {
       std::string yaml = R"yaml(literal: |2
   value
@@ -6548,7 +6545,7 @@ folded:
       }
    };
 
-   // M7A3 (known failure): Spec Example 9.3. Bare Documents
+   // M7A3: Spec Example 9.3. Bare Documents
    "M7A3"_test = [] {
       std::string yaml = R"yaml(Bare
 document
@@ -6602,7 +6599,12 @@ document
       glz::generic parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
-      // Note: folded scalar blank line handling differs from spec, so only checking parse success
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"("foo\n\n\t bar\n\nbaz\n")";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // MUS6_01: Directive variants
@@ -6730,7 +6732,7 @@ document
       expect(bool(ec));
    };
 
-   // NB6Z (known failure): Multiline plain value with tabs on empty lines
+   // NB6Z: Multiline plain value with tabs on empty lines
    "NB6Z"_test = [] {
       std::string yaml = R"yaml(key:
   value
@@ -6753,7 +6755,7 @@ document
       }
    };
 
-   // NJ66 (known failure): Multiline plain flow mapping key
+   // NJ66: Multiline plain flow mapping key
    "NJ66"_test = [] {
       std::string yaml = R"yaml(---
 - { single line: value}
@@ -6780,7 +6782,7 @@ document
       }
    };
 
-   // NKF9 (known failure): Empty keys in block and flow mapping
+   // NKF9: Empty keys in block and flow mapping
    "NKF9"_test = [] {
       std::string yaml = R"yaml(---
 key: value
@@ -6812,7 +6814,7 @@ key: value
       }
    };
 
-   // P2AD (known failure): Spec Example 8.1. Block Scalar Header
+   // P2AD: Spec Example 8.1. Block Scalar Header
    "P2AD"_test = [] {
       std::string yaml = R"yaml(- | # Empty header↓
  literal
@@ -6852,7 +6854,7 @@ key: value
       expect(bool(ec));
    };
 
-   // P76L (known failure): Spec Example 6.19. Secondary Tag Handle
+   // P76L: Spec Example 6.19. Secondary Tag Handle
    "P76L"_test = [] {
       std::string yaml = R"yaml(%TAG !! tag:example.com,2000:app/
 ---
@@ -6871,7 +6873,7 @@ key: value
       }
    };
 
-   // PUW8 (known failure): Document start on last line
+   // PUW8: Document start on last line
    "PUW8"_test = [] {
       std::string yaml = R"yaml(---
 a: b
@@ -6930,7 +6932,7 @@ c"
       expect(bool(ec));
    };
 
-   // QF4Y (known failure): Spec Example 7.19. Single Pair Flow Mappings
+   // QF4Y: Spec Example 7.19. Single Pair Flow Mappings
    "QF4Y"_test = [] {
       std::string yaml = R"yaml([
 foo: bar
@@ -6971,7 +6973,7 @@ foo: bar
       }
    };
 
-   // R4YG (known failure): Spec Example 8.2. Block Indentation Indicator
+   // R4YG: Spec Example 8.2. Block Indentation Indicator
    "R4YG"_test = [] {
       std::string yaml = R"yaml(- |
  detected
@@ -7003,7 +7005,7 @@ foo: bar
       }
    };
 
-   // RLU9 (known failure): Sequence Indent
+   // RLU9: Sequence Indent
    "RLU9"_test = [] {
       std::string yaml = R"yaml(foo:
 - 42
@@ -7074,8 +7076,8 @@ bar:
 
 };
 
-suite yaml_conformance_known_failures_4 = [] {
-   // RZP5 (known failure): Various Trailing Comments [1.3]
+suite yaml_conformance_pass_7 = [] {
+   // RZP5: Various Trailing Comments [1.3]
    "RZP5"_test = [] {
       std::string yaml = R"yaml(a: "double
   quotes" # lala
@@ -7119,7 +7121,7 @@ block: > # lala
       }
    };
 
-   // RZT7 (known failure): Spec Example 2.28. Log File
+   // RZT7: Spec Example 2.28. Log File
    "RZT7"_test = [] {
       std::string yaml = R"yaml(---
 Time: 2001-11-23 15:01:42 -5
@@ -7165,7 +7167,7 @@ Stack:
       }
    };
 
-   // S3PD (known failure): Spec Example 8.18. Implicit Block Mapping Entries
+   // S3PD: Spec Example 8.18. Implicit Block Mapping Entries
    "S3PD"_test = [] {
       std::string yaml = R"yaml(plain key: in-line value
 : # Both empty
@@ -7185,7 +7187,7 @@ Stack:
       }
    };
 
-   // S4JQ (known failure): Spec Example 6.28. Non-Specific Tags
+   // S4JQ: Spec Example 6.28. Non-Specific Tags
    "S4JQ"_test = [] {
       std::string yaml = R"yaml(# Assuming conventional resolution:
 - "12"
@@ -7209,7 +7211,7 @@ Stack:
       }
    };
 
-   // S4T7 (known failure): Document with footer
+   // S4T7: Document with footer
    "S4T7"_test = [] {
       std::string yaml = R"yaml(aaa: bbb
 ...
@@ -7242,7 +7244,7 @@ Stack:
       expect(bool(ec));
    };
 
-   // S9E8 (known failure): Spec Example 5.3. Block Structure Indicators
+   // S9E8: Spec Example 5.3. Block Structure Indicators
    "S9E8"_test = [] {
       std::string yaml = R"yaml(sequence:
 - one
@@ -7275,7 +7277,7 @@ mapping:
       }
    };
 
-   // SBG9 (known failure): Flow Sequence in Flow Mapping
+   // SBG9: Flow Sequence in Flow Mapping
    "SBG9"_test = [] {
       std::string yaml = R"yaml({a: [b, c], [d, e]: f}
 )yaml";
@@ -7336,7 +7338,7 @@ seq:
       expect(bool(ec));
    };
 
-   // T26H (known failure): Spec Example 8.8. Literal Content [1.3]
+   // T26H: Spec Example 8.8. Literal Content [1.3]
    "T26H"_test = [] {
       std::string yaml = R"yaml(--- |
  
@@ -7483,7 +7485,7 @@ top7:
       expect(bool(ec));
    };
 
-   // U9NS (known failure): Spec Example 2.8. Play by Play Feed from a Game
+   // U9NS: Spec Example 2.8. Play by Play Feed from a Game
    "U9NS"_test = [] {
       std::string yaml = R"yaml(---
 time: 20:03:20
@@ -7513,7 +7515,7 @@ action: grand slam
       }
    };
 
-   // UDR7 (known failure): Spec Example 5.4. Flow Collection Indicators
+   // UDR7: Spec Example 5.4. Flow Collection Indicators
    "UDR7"_test = [] {
       std::string yaml = R"yaml(sequence: [ one, two, ]
 mapping: { sky: blue, sea: green }
@@ -7540,7 +7542,7 @@ mapping: { sky: blue, sea: green }
       }
    };
 
-   // UGM3 (known failure): Spec Example 2.27. Invoice
+   // UGM3: Spec Example 2.27. Invoice
    "UGM3"_test = [] {
       std::string yaml = R"yaml(--- !<tag:clarkevans.com,2002:invoice>
 invoice: 34843
@@ -7661,7 +7663,7 @@ comments:
       }
    };
 
-   // UT92 (known failure): Spec Example 9.4. Explicit Documents
+   // UT92: Spec Example 9.4. Explicit Documents
    "UT92"_test = [] {
       std::string yaml = R"yaml(---
 { matches
@@ -7686,7 +7688,7 @@ comments:
       }
    };
 
-   // UV7Q (known failure): Legal tab after indentation
+   // UV7Q: Legal tab after indentation
    "UV7Q"_test = [] {
       std::string yaml = R"yaml(x:
  - x
@@ -7740,7 +7742,7 @@ comments:
       expect(bool(ec));
    };
 
-   // W42U (known failure): Spec Example 8.15. Block Sequence Entry Types
+   // W42U: Spec Example 8.15. Block Sequence Entry Types
    "W42U"_test = [] {
       std::string yaml = R"yaml(- # Empty
 - |
@@ -7772,7 +7774,7 @@ comments:
       }
    };
 
-   // W4TN (known failure): Spec Example 9.5. Directives Documents
+   // W4TN: Spec Example 9.5. Directives Documents
    "W4TN"_test = [] {
       std::string yaml = R"yaml(%YAML 1.2
 --- |
@@ -7859,7 +7861,7 @@ block scalar: |
       expect(bool(ec));
    };
 
-   // X8DW (known failure): Explicit key and value seperated by comment
+   // X8DW: Explicit key and value seperated by comment
    "X8DW"_test = [] {
       std::string yaml = R"yaml(---
 ? key
@@ -7881,7 +7883,7 @@ block scalar: |
       }
    };
 
-   // XLQ9 (known failure): Multiline scalar that looks like a YAML directive
+   // XLQ9: Multiline scalar that looks like a YAML directive
    "XLQ9"_test = [] {
       std::string yaml = R"yaml(---
 scalar
@@ -7900,7 +7902,7 @@ scalar
       }
    };
 
-   // XW4D (known failure): Various Trailing Comments
+   // XW4D: Various Trailing Comments
    "XW4D"_test = [] {
       std::string yaml = R"yaml(a: "double
   quotes" # lala
@@ -8091,7 +8093,7 @@ bar: 1
       }
    };
 
-   // Z67P (known failure): Spec Example 8.21. Block Scalar Nodes [1.3]
+   // Z67P: Spec Example 8.21. Block Scalar Nodes [1.3]
    "Z67P"_test = [] {
       std::string yaml = R"yaml(literal: |2
   value

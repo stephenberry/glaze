@@ -1069,6 +1069,7 @@ namespace glz
          int32_t content_indent = -1;
          int32_t leading_blank_indent_max = -1;
          bool first_line = true;
+         bool previous_line_starts_with_tab = false;
          std::string trailing_newlines;
 
          while (it != end) {
@@ -1118,6 +1119,14 @@ namespace glz
                break;
             }
 
+            // Skip to content_indent level
+            it = line_start;
+            for (int32_t i = 0; i < content_indent && it != end && *it == ' '; ++i) {
+               ++it;
+            }
+
+            const bool current_line_starts_with_tab = (it != end && *it == '\t');
+
             // Add previous newlines (unless this is the first line)
             if (!first_line) {
                if (indicator == '|') {
@@ -1125,23 +1134,22 @@ namespace glz
                   value += trailing_newlines;
                }
                else {
-                  // Folded: single newline becomes space, multiple preserved
-                  if (trailing_newlines.size() == 1) {
+                  // Folded: single newline becomes space, paragraph breaks keep one newline.
+                  // When a paragraph break is adjacent to a tab-leading line, preserve it fully.
+                  const size_t break_count = trailing_newlines.size();
+                  if (break_count == 1) {
                      value.push_back(' ');
                   }
-                  else {
-                     value += trailing_newlines.substr(1); // Keep all but first
+                  else if (break_count > 1) {
+                     const bool preserve_all = previous_line_starts_with_tab || current_line_starts_with_tab;
+                     const size_t preserve_count = preserve_all ? break_count : (break_count - 1);
+                     value.append(preserve_count, '\n');
                   }
                }
             }
             trailing_newlines.clear();
             first_line = false;
-
-            // Skip to content_indent level
-            it = line_start;
-            for (int32_t i = 0; i < content_indent && it != end && *it == ' '; ++i) {
-               ++it;
-            }
+            previous_line_starts_with_tab = current_line_starts_with_tab;
 
             // Read line content
             while (it != end && *it != '\n' && *it != '\r') {
