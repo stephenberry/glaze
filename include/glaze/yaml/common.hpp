@@ -794,8 +794,7 @@ namespace glz::yaml
    {
       if (end - it >= 3 && it[0] == '-' && it[1] == '-' && it[2] == '-') {
          auto after = it + 3;
-         while (after != end && (*after == ' ' || *after == '\t')) ++after;
-         return after == end || *after == '\n' || *after == '\r' || *after == '#';
+         return after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r';
       }
       return false;
    }
