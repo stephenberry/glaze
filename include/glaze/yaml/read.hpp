@@ -2780,6 +2780,13 @@ namespace glz
       // Returns the indent of that content if it's nested (> effective line_indent), else -1.
       // On return, `it` is positioned right after the key line's newline.
       // If return >= 0, caller should call skip_to_content() to advance to the content.
+      //
+      // High-level state machine:
+      // 1) Validate that we are at end-of-key line and move to the next line.
+      // 2) Scan forward to first real content line, skipping blank/comment lines.
+      //    Also skip "property-only" lines (YAML node properties with no value yet).
+      // 3) Measure indent and validate tab/structural edge cases.
+      // 4) Return nested indent when content is truly nested, otherwise -1.
       template <class Ctx, class It, class End>
       int32_t detect_nested_value_indent(Ctx& ctx, It& it, End end, int32_t line_indent)
       {
@@ -2809,8 +2816,15 @@ namespace glz
                   skip_comment(peek, end);
                   continue; // comment-only line
                }
-               // Property-only lines ("!tag", "&anchor", or combinations) do not
-               // establish nested content indentation; continue to the next line.
+               // YAML allows node properties to appear on standalone lines before the
+               // actual node value, for example:
+               //   key:
+               //     !tag
+               //     &anchor
+               //     actual: value
+               // This loop recognizes chains of properties (`!tag`, `&anchor`, optional
+               // inline spaces/comments) and treats those lines as non-content so they do
+               // not incorrectly define nested indentation.
                {
                   auto prop = peek;
                   bool saw_property = false;
