@@ -1125,12 +1125,31 @@ namespace glz
          }
 
          const char* key_start = &*it;
+         bool quoted_key_spans_lines = false;
 
          if (*it == '"') {
+            auto quoted_start = it;
             parse_double_quoted_string(key, ctx, it, end);
+            if (!bool(ctx.error)) {
+               for (auto p = quoted_start; p != it; ++p) {
+                  if (*p == '\n' || *p == '\r') {
+                     quoted_key_spans_lines = true;
+                     break;
+                  }
+               }
+            }
          }
          else if (*it == '\'') {
+            auto quoted_start = it;
             parse_single_quoted_string(key, ctx, it, end);
+            if (!bool(ctx.error)) {
+               for (auto p = quoted_start; p != it; ++p) {
+                  if (*p == '\n' || *p == '\r') {
+                     quoted_key_spans_lines = true;
+                     break;
+                  }
+               }
+            }
          }
          else {
             // Plain key - read until colon
@@ -1163,6 +1182,12 @@ namespace glz
          }
 
          if (bool(ctx.error)) return false;
+
+         // Implicit mapping keys must be single-line in both block and flow styles.
+         if (quoted_key_spans_lines && !in_flow) {
+            ctx.error = error_code::syntax_error;
+            return false;
+         }
 
          // Store anchor on key if present
          if (has_key_anchor) {
@@ -2099,7 +2124,25 @@ namespace glz
                return;
             }
 
-            skip_inline_ws(it, end);
+            // Separation between flow key and ':' may include comments/newlines.
+            // A bare line break without a comment between key and ':' is invalid.
+            bool saw_key_comment = false;
+            while (it != end) {
+               skip_inline_ws(it, end);
+               if (it != end && *it == '#') {
+                  skip_comment(it, end);
+                  saw_key_comment = true;
+               }
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  if (!saw_key_comment) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  skip_newline(it, end);
+                  continue;
+               }
+               break;
+            }
 
             // Expect colon
             if (it == end || *it != ':') {
@@ -2647,9 +2690,9 @@ namespace glz
 
             if (it == end) break;
 
-            // Check document end (only for struct case - map parser lets key parsing
-            // handle '...' which produces appropriate errors for invalid content)
-            if (!discover_indent && at_document_end(it, end)) break;
+            // Document boundaries terminate the current mapping in both discovered
+            // and fixed-indent modes.
+            if (at_document_end(it, end) || at_document_start(it, end)) break;
 
             // Dedent checks (skip on first key for struct case)
             // Must check BEFORE establishing mapping_indent so the first discovered key
@@ -3778,7 +3821,25 @@ namespace glz
                      return;
                }
 
-               yaml::skip_inline_ws(it, end);
+               // Separation between flow key and ':' may include comments/newlines.
+               // A bare line break without a comment between key and ':' is invalid.
+               bool saw_key_comment = false;
+               while (it != end) {
+                  yaml::skip_inline_ws(it, end);
+                  if (it != end && *it == '#') {
+                     yaml::skip_comment(it, end);
+                     saw_key_comment = true;
+                  }
+                  if (it != end && (*it == '\n' || *it == '\r')) {
+                     if (!saw_key_comment) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     yaml::skip_newline(it, end);
+                     continue;
+                  }
+                  break;
+               }
 
                if (it == end || *it != ':') {
                   ctx.error = error_code::syntax_error;

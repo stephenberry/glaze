@@ -787,6 +787,19 @@ namespace glz::yaml
       }
    }
 
+   // Check if at document start marker (---)
+   // Returns true if at --- followed by whitespace/newline/end
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE bool at_document_start(It&& it, End end) noexcept
+   {
+      if (end - it >= 3 && it[0] == '-' && it[1] == '-' && it[2] == '-') {
+         auto after = it + 3;
+         while (after != end && (*after == ' ' || *after == '\t')) ++after;
+         return after == end || *after == '\n' || *after == '\r' || *after == '#';
+      }
+      return false;
+   }
+
    // Check if at document end marker (...)
    // Returns true if at ... followed by whitespace/newline/end
    template <class It, class End>
@@ -794,10 +807,8 @@ namespace glz::yaml
    {
       if (end - it >= 3 && it[0] == '.' && it[1] == '.' && it[2] == '.') {
          auto after = it + 3;
-         // Must be followed by whitespace, newline, or end
-         if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' || *after == '#') {
-            return true;
-         }
+         while (after != end && (*after == ' ' || *after == '\t')) ++after;
+         return after == end || *after == '\n' || *after == '\r' || *after == '#';
       }
       return false;
    }

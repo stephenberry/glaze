@@ -4332,8 +4332,8 @@ rbi:
 , word2]
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // 7W2P (known failure): Block Mapping with Missing Values
@@ -4462,8 +4462,8 @@ suite yaml_conformance_known_failures_2 = [] {
   line, a: b}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // 8MK2: Explicit Non-Specific Tag
@@ -4567,8 +4567,8 @@ single: pair,
   line", a: b}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // 9C9N (known failure): Wrong indented flow sequence
@@ -5048,8 +5048,8 @@ word2
 ]
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // CTN5: Flow sequence with invalid extra comma
@@ -5431,8 +5431,8 @@ suite yaml_conformance_known_failures_3 = [] {
 word2
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // F2C7: Anchors and Tags
@@ -5776,8 +5776,8 @@ Second occurrence: *anchor
   42
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // K3WX (known failure): Colon and adjacent value after comment on next line
@@ -5787,8 +5787,18 @@ Second occurrence: *anchor
   :bar }
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "foo": "bar"
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // K858 (known failure): Spec Example 8.6. Empty Scalar Chomping
@@ -6187,8 +6197,8 @@ document
   line: value}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // NKF9 (known failure): Empty keys in block and flow mapping
@@ -6270,8 +6280,18 @@ a: b
 ---
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "a": "b"
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // PW8X: Anchors on Empty Scalars
@@ -6511,8 +6531,18 @@ Stack:
 ...
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string expected_json = R"yaml({
+  "aaa": "bbb"
+}
+)yaml";
+         auto expected = normalize_json(expected_json);
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // S98Z (known failure): Block scalar with more spaces than first content line
@@ -7040,8 +7070,8 @@ scalar
 %YAML 1.2
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      // known failure - no assertions
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // XW4D (known failure): Various Trailing Comments
