@@ -589,6 +589,106 @@ name: >
    };
 };
 
+suite yaml_writer_edge_case_tests = [] {
+   "write_string_chomping_strip_marker"_test = [] {
+      const std::string original = "line1\nline2";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "|-\n  line1\n  line2\n");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_string_chomping_clip_marker"_test = [] {
+      const std::string original = "line1\nline2\n";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "|\n  line1\n  line2\n");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_string_chomping_keep_marker"_test = [] {
+      const std::string original = "line1\nline2\n\n\n";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "|+\n  line1\n  line2\n  \n  \n");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_scalar_prefers_single_quotes_for_colon"_test = [] {
+      const std::string original = "hello: world";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "'hello: world'");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_scalar_uses_double_quotes_when_single_quote_present"_test = [] {
+      const std::string original = "it's: good";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "\"it's: good\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_double_quoted_escapes_tabs_quotes_backslashes_and_control"_test = [] {
+      const std::string original = std::string("it's\t\"ok\"\\path") + char(0x01);
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "\"it's\\t\\\"ok\\\"\\\\path\\x01\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_bool_like_and_number_like_scalars_are_quoted"_test = [] {
+      std::string bool_yaml{};
+      auto bool_wec = glz::write_yaml(std::string{"true"}, bool_yaml);
+      expect(!bool_wec);
+      expect(bool_yaml == "'true'");
+
+      std::string number_yaml{};
+      auto num_wec = glz::write_yaml(std::string{"123"}, number_yaml);
+      expect(!num_wec);
+      expect(number_yaml == "'123'");
+   };
+
+   "write_map_keys_with_indicators_are_quoted"_test = [] {
+      std::map<std::string, int> value{{"a:b", 1}, {"x#y", 2}};
+      std::string yaml{};
+      auto wec = glz::write_yaml(value, yaml);
+      expect(!wec);
+      expect(yaml == "'a:b': 1\n'x#y': 2\n");
+   };
+};
+
 suite yaml_special_values_tests = [] {
    "read_infinity"_test = [] {
       std::string yaml = "x: 0\ny: .inf\nname: inf";
