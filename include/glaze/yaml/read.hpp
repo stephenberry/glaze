@@ -236,6 +236,79 @@ namespace glz
                 ((it + 1) == end || whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
       }
 
+      struct node_property_state
+      {
+         bool has_anchor = false;
+         std::string anchor_name{};
+         const char* anchor_start{};
+         int32_t anchor_indent = 0;
+      };
+
+      struct node_property_policy
+      {
+         bool allow_alias = true;
+         bool alias_can_be_mapping_key = false;
+         bool allow_empty_after_anchor = false;
+         bool disallow_anchor_on_alias = false;
+      };
+
+      // Parse alias/anchor node properties shared across YAML value parsers.
+      // Returns true when caller should stop (alias consumed, tolerated empty anchor, or syntax/error).
+      template <auto Opts, node_property_policy Policy = node_property_policy{}, class T, class Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE bool parse_node_properties(T&& value, Ctx& ctx, It& it, End end, node_property_state& state) noexcept
+      {
+         state.has_anchor = false;
+         state.anchor_name.clear();
+         state.anchor_start = nullptr;
+         state.anchor_indent = ctx.current_indent();
+
+         if constexpr (Policy.allow_alias) {
+            if constexpr (Policy.alias_can_be_mapping_key) {
+               if (!alias_token_is_mapping_key(it, end)) {
+                  if (handle_alias<Opts>(std::forward<T>(value), ctx, it, end)) return true;
+               }
+            }
+            else {
+               if (handle_alias<Opts>(std::forward<T>(value), ctx, it, end)) return true;
+            }
+         }
+
+         if (it != end && *it == '&') {
+            ++it;
+            auto name = parse_anchor_name(it, end);
+            if (name.empty()) {
+               ctx.error = error_code::syntax_error;
+               return true;
+            }
+            skip_inline_ws(it, end);
+            if (it == end) {
+               if constexpr (!Policy.allow_empty_after_anchor) {
+                  ctx.error = error_code::unexpected_end;
+               }
+               return true;
+            }
+            if constexpr (Policy.disallow_anchor_on_alias) {
+               if (*it == '*') {
+                  ctx.error = error_code::syntax_error;
+                  return true;
+               }
+            }
+            state.has_anchor = true;
+            state.anchor_name = std::string(name);
+            state.anchor_start = &*it;
+         }
+
+         return false;
+      }
+
+      template <class Ctx, class It>
+      GLZ_ALWAYS_INLINE void finalize_node_anchor(node_property_state& state, Ctx& ctx, It it) noexcept
+      {
+         if (state.has_anchor && !bool(ctx.error)) {
+            ctx.anchors[std::move(state.anchor_name)] = {state.anchor_start, &*it, state.anchor_indent};
+         }
+      }
+
       // SWAR-optimized double-quoted string parsing
       // Uses 8-byte chunks for fast scanning and copying
       template <class Ctx, class It, class End>
@@ -1477,32 +1550,10 @@ namespace glz
             return;
          }
 
-         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
-
-         bool has_anchor = false;
-         std::string anchor_name;
-         const char* anchor_start{};
-         const int32_t anchor_indent = ctx.current_indent();
-         if (it != end && *it == '&') {
-            ++it;
-            auto name = yaml::parse_anchor_name(it, end);
-            if (name.empty()) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            yaml::skip_inline_ws(it, end);
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            if (*it == '*') {
-               ctx.error = error_code::syntax_error; // anchor on alias invalid
-               return;
-            }
-            has_anchor = true;
-            anchor_name = std::string(name);
-            anchor_start = &*it;
-         }
+         yaml::node_property_state node_props{};
+         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, false, false, true}>(
+                value, ctx, it, end, node_props))
+            return;
 
          std::string str;
          const auto style = yaml::detect_scalar_style(*it);
@@ -1542,9 +1593,7 @@ namespace glz
 
          if (!bool(ctx.error)) {
             value = std::move(str);
-            if (has_anchor) {
-               ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
-            }
+            yaml::finalize_node_anchor(node_props, ctx, it);
          }
       }
    };
@@ -1584,28 +1633,8 @@ namespace glz
             return;
          }
 
-         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
-
-         bool has_anchor = false;
-         std::string anchor_name;
-         const char* anchor_start{};
-         const int32_t anchor_indent = ctx.current_indent();
-         if (it != end && *it == '&') {
-            ++it;
-            auto name = yaml::parse_anchor_name(it, end);
-            if (name.empty()) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            yaml::skip_inline_ws(it, end);
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            has_anchor = true;
-            anchor_name = std::string(name);
-            anchor_start = &*it;
-         }
+         yaml::node_property_state node_props{};
+         if (yaml::parse_node_properties<Opts>(value, ctx, it, end, node_props)) return;
 
          // Parse as plain scalar first
          std::string str;
@@ -1623,9 +1652,7 @@ namespace glz
             ctx.error = error_code::expected_true_or_false;
          }
 
-         if (has_anchor && !bool(ctx.error)) {
-            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
-         }
+         yaml::finalize_node_anchor(node_props, ctx, it);
       }
    };
 
@@ -1675,33 +1702,11 @@ namespace glz
             return;
          }
 
-         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
-
-         bool has_anchor = false;
-         std::string anchor_name;
-         const char* anchor_start{};
-         const int32_t anchor_indent = ctx.current_indent();
-         if (it != end && *it == '&') {
-            ++it;
-            auto name = yaml::parse_anchor_name(it, end);
-            if (name.empty()) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            yaml::skip_inline_ws(it, end);
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            has_anchor = true;
-            anchor_name = std::string(name);
-            anchor_start = &*it;
-         }
+         yaml::node_property_state node_props{};
+         if (yaml::parse_node_properties<Opts>(value, ctx, it, end, node_props)) return;
 
          auto finalize = [&] {
-            if (has_anchor && !bool(ctx.error)) {
-               ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
-            }
+            yaml::finalize_node_anchor(node_props, ctx, it);
          };
 
          // Check for special float values
@@ -2024,28 +2029,8 @@ namespace glz
             return;
          }
 
-         if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
-
-         bool has_anchor = false;
-         std::string anchor_name;
-         const char* anchor_start{};
-         const int32_t anchor_indent = ctx.current_indent();
-         if (it != end && *it == '&') {
-            ++it;
-            auto name = yaml::parse_anchor_name(it, end);
-            if (name.empty()) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            yaml::skip_inline_ws(it, end);
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            has_anchor = true;
-            anchor_name = std::string(name);
-            anchor_start = &*it;
-         }
+         yaml::node_property_state node_props{};
+         if (yaml::parse_node_properties<Opts>(value, ctx, it, end, node_props)) return;
 
          // Parse as string (quoted or plain)
          std::string str;
@@ -2098,9 +2083,7 @@ namespace glz
                index);
          }
 
-         if (has_anchor && !bool(ctx.error)) {
-            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
-         }
+         yaml::finalize_node_anchor(node_props, ctx, it);
       }
    };
 
@@ -3539,35 +3522,10 @@ namespace glz
             return;
          }
 
-         // Handle alias
-         if (peek != end && *peek == '*') {
+         yaml::node_property_state node_props{};
+         if (yaml::parse_node_properties<Opts>(value, ctx, peek, end, node_props)) {
             it = peek;
-            yaml::handle_alias<Opts>(value, ctx, it, end);
             return;
-         }
-
-         // Handle anchor
-         bool has_anchor = false;
-         std::string anchor_name;
-         const char* anchor_start{};
-         const int32_t anchor_indent = ctx.current_indent();
-         if (peek != end && *peek == '&') {
-            it = peek;
-            ++it;
-            auto name = yaml::parse_anchor_name(it, end);
-            if (name.empty()) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            yaml::skip_inline_ws(it, end);
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            has_anchor = true;
-            anchor_name = std::string(name);
-            anchor_start = &*it;
-            peek = it;
          }
 
          if (*peek == '[') {
@@ -3577,7 +3535,7 @@ namespace glz
          }
          else if (*peek == '-') {
             // Block sequence
-            if (tag != yaml::yaml_tag::none || has_anchor) {
+            if (tag != yaml::yaml_tag::none || node_props.has_anchor) {
                it = peek;
             }
             int32_t seq_indent = ctx.current_indent();
@@ -3591,9 +3549,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
          }
 
-         if (has_anchor && !bool(ctx.error)) {
-            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
-         }
+         yaml::finalize_node_anchor(node_props, ctx, it);
       }
    };
 
@@ -3636,35 +3592,10 @@ namespace glz
             return;
          }
 
-         // Handle alias
-         if (peek != end && *peek == '*') {
+         yaml::node_property_state node_props{};
+         if (yaml::parse_node_properties<Opts>(value, ctx, peek, end, node_props)) {
             it = peek;
-            yaml::handle_alias<Opts>(value, ctx, it, end);
             return;
-         }
-
-         // Handle anchor
-         bool has_anchor = false;
-         std::string anchor_name;
-         const char* anchor_start{};
-         const int32_t anchor_indent = ctx.current_indent();
-         if (peek != end && *peek == '&') {
-            it = peek;
-            ++it;
-            auto name = yaml::parse_anchor_name(it, end);
-            if (name.empty()) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            yaml::skip_inline_ws(it, end);
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            has_anchor = true;
-            anchor_name = std::string(name);
-            anchor_start = &*it;
-            peek = it;
          }
 
          if (*peek == '[') {
@@ -3675,7 +3606,7 @@ namespace glz
          else if (*peek == '-') {
             // Block sequence - don't consume leading whitespace, let parse_block_sequence handle it
             // But if there was a tag, we need to advance past it
-            if (tag != yaml::yaml_tag::none || has_anchor) {
+            if (tag != yaml::yaml_tag::none || node_props.has_anchor) {
                it = peek;
             }
             int32_t seq_indent = ctx.current_indent();
@@ -3689,9 +3620,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
          }
 
-         if (has_anchor && !bool(ctx.error)) {
-            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
-         }
+         yaml::finalize_node_anchor(node_props, ctx, it);
       }
    };
 
@@ -4035,31 +3964,10 @@ namespace glz
             return; // Empty input - keep default values
          }
 
-         // Handle alias value (but keep "*alias : value" for mapping-key parsing)
-         if (!yaml::alias_token_is_mapping_key(it, end)) {
-            if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
-         }
-
-         // Handle anchor
-         bool has_anchor = false;
-         std::string anchor_name;
-         const char* anchor_start{};
-         const int32_t anchor_indent = ctx.current_indent();
-         if (it != end && *it == '&') {
-            ++it;
-            auto name = yaml::parse_anchor_name(it, end);
-            if (name.empty()) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            yaml::skip_inline_ws(it, end);
-            if (it == end) {
-               return; // Empty input with anchor - keep default values
-            }
-            has_anchor = true;
-            anchor_name = std::string(name);
-            anchor_start = &*it;
-         }
+         yaml::node_property_state node_props{};
+         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, true, true, false}>(
+                value, ctx, it, end, node_props))
+            return;
 
          if (*it == '{') {
             // Flow mapping
@@ -4070,9 +3978,7 @@ namespace glz
             yaml::parse_block_mapping<Opts>(value, ctx, it, end, ctx.current_indent());
          }
 
-         if (has_anchor && !bool(ctx.error)) {
-            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
-         }
+         yaml::finalize_node_anchor(node_props, ctx, it);
       }
    };
 
@@ -4111,32 +4017,10 @@ namespace glz
             return;
          }
 
-         // Handle alias value (but keep "*alias : value" for mapping-key parsing)
-         if (!yaml::alias_token_is_mapping_key(it, end)) {
-            if (yaml::handle_alias<Opts>(value, ctx, it, end)) return;
-         }
-
-         // Handle anchor
-         bool has_anchor = false;
-         std::string anchor_name;
-         const char* anchor_start{};
-         const int32_t anchor_indent = ctx.current_indent();
-         if (it != end && *it == '&') {
-            ++it;
-            auto name = yaml::parse_anchor_name(it, end);
-            if (name.empty()) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            yaml::skip_inline_ws(it, end);
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            has_anchor = true;
-            anchor_name = std::string(name);
-            anchor_start = &*it;
-         }
+         yaml::node_property_state node_props{};
+         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, true, false, false}>(
+                value, ctx, it, end, node_props))
+            return;
 
          using key_t = typename std::remove_cvref_t<T>::key_type;
          using val_t = typename std::remove_cvref_t<T>::mapped_type;
@@ -4152,9 +4036,7 @@ namespace glz
                yaml::validate_flow_node_adjacent_tail(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               if (has_anchor) {
-                  ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
-               }
+               yaml::finalize_node_anchor(node_props, ctx, it);
                return;
             }
 
@@ -4733,9 +4615,7 @@ namespace glz
                });
          }
 
-         if (has_anchor && !bool(ctx.error)) {
-            ctx.anchors[std::move(anchor_name)] = {anchor_start, &*it, anchor_indent};
-         }
+         yaml::finalize_node_anchor(node_props, ctx, it);
       }
    };
 
