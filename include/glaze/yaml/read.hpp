@@ -54,6 +54,24 @@ namespace glz
                return;
             }
          }
+
+         // A bare document boundary marker at root denotes an empty document.
+         // Examples: "---\n---\n", "# comment\n...\n"
+         if (yaml::at_document_start(it, end) || yaml::at_document_end(it, end)) {
+            if constexpr (requires { value = nullptr; }) {
+               value = nullptr;
+               return;
+            }
+            else if constexpr (nullable_like<V>) {
+               value = {};
+               return;
+            }
+            else {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
+
          from<YAML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
 
          // A directive line (%YAML/%TAG/...) is only valid in the document prefix.
@@ -2135,6 +2153,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
@@ -2174,9 +2193,15 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
+               if (saw_line_break_before_separator && it != end && *it == ',') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
                if (it != end && *it == ':') {
                   if (saw_line_break_before_separator) {
                      ctx.error = error_code::syntax_error;
+
                      return;
                   }
                   if constexpr (std::same_as<std::remove_cvref_t<value_type>, glz::generic>) {
@@ -2288,9 +2313,15 @@ namespace glz
                   return;
 
                ++i;
-               skip_flow_ws_and_newlines(ctx, it, end);
+               bool saw_line_break_before_separator = false;
+               skip_flow_ws_and_newlines(ctx, it, end, &saw_line_break_before_separator);
                if (bool(ctx.error)) [[unlikely]]
                   return;
+
+               if (saw_line_break_before_separator && it != end && *it == ',') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
 
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
@@ -3313,7 +3344,15 @@ namespace glz
 
             value.emplace(std::move(element));
 
-            skip_ws_and_newlines(it, end);
+            bool saw_line_break_before_separator = false;
+            skip_flow_ws_and_newlines(ctx, it, end, &saw_line_break_before_separator);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            if (saw_line_break_before_separator && it != end && *it == ',') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
 
             if (it == end) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
@@ -4297,7 +4336,30 @@ namespace glz
                   return;
                }
 
-               yaml::skip_inline_ws(it, end);
+               yaml::skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // Omitted value after an explicit ':' maps to an implicit null.
+               if (it != end && (*it == ',' || *it == '}')) {
+                  val_t val{};
+                  if (!parse_implicit_null(val)) [[unlikely]]
+                     return;
+
+                  value.emplace(std::move(key), std::move(val));
+
+                  if (*it == '}') {
+                     ++it;
+                     yaml::validate_flow_node_adjacent_tail(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     break;
+                  }
+
+                  ++it; // skip comma
+                  yaml::skip_ws_and_newlines(it, end);
+                  continue;
+               }
 
                // Parse value
                val_t val{};
