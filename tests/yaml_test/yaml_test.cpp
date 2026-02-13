@@ -589,6 +589,124 @@ name: >
    };
 };
 
+suite yaml_writer_edge_case_tests = [] {
+   "write_string_chomping_strip_marker"_test = [] {
+      const std::string original = "line1\nline2";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "|-\n  line1\n  line2\n");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_string_chomping_clip_marker"_test = [] {
+      const std::string original = "line1\nline2\n";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "|\n  line1\n  line2\n");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_string_chomping_keep_marker"_test = [] {
+      const std::string original = "line1\nline2\n\n\n";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "|+\n  line1\n  line2\n  \n  \n");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_scalar_prefers_single_quotes_for_colon"_test = [] {
+      const std::string original = "hello: world";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "'hello: world'");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_scalar_uses_double_quotes_when_single_quote_present"_test = [] {
+      const std::string original = "it's: good";
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "\"it's: good\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_double_quoted_escapes_tabs_quotes_backslashes_and_control"_test = [] {
+      const std::string original = std::string("it's\t\"ok\"\\path") + char(0x01);
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "\"it's\\t\\\"ok\\\"\\\\path\\x01\"");
+
+      std::string parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_bool_like_and_number_like_scalars_are_quoted"_test = [] {
+      std::string bool_yaml{};
+      auto bool_wec = glz::write_yaml(std::string{"true"}, bool_yaml);
+      expect(!bool_wec);
+      expect(bool_yaml == "'true'");
+
+      std::string number_yaml{};
+      auto num_wec = glz::write_yaml(std::string{"123"}, number_yaml);
+      expect(!num_wec);
+      expect(number_yaml == "'123'");
+   };
+
+   "write_map_keys_with_indicators_are_quoted"_test = [] {
+      std::map<std::string, int> value{{"a:b", 1}, {"x#y", 2}};
+      std::string yaml{};
+      auto wec = glz::write_yaml(value, yaml);
+      expect(!wec);
+      expect(yaml == "'a:b': 1\n'x#y': 2\n");
+   };
+
+   "write_flow_map_with_multiline_scalar_roundtrip"_test = [] {
+      const std::map<std::string, std::string> original{
+         {"name", "svc"},
+         {"script", "echo start\n./run"},
+         {"notes", "line1\nline2\n"},
+      };
+
+      std::string yaml{};
+      constexpr glz::yaml::yaml_opts opts{.flow_style = true};
+      auto wec = glz::write<opts>(original, yaml);
+      expect(!wec);
+
+      std::map<std::string, std::string> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == original);
+   };
+};
+
 suite yaml_special_values_tests = [] {
    "read_infinity"_test = [] {
       std::string yaml = "x: 0\ny: .inf\nname: inf";
@@ -848,20 +966,44 @@ suite yaml_tag_tests = [] {
       expect(ec.ec == glz::error_code::syntax_error);
    };
 
-   "unknown_custom_tag_error"_test = [] {
+   "unknown_custom_tag_ignored"_test = [] {
       std::string yaml = "!mytag value";
       std::string value;
       auto ec = glz::read_yaml(value, yaml);
-      expect(bool(ec));
-      expect(ec.ec == glz::error_code::feature_not_supported);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "value");
    };
 
-   "unknown_shorthand_tag_error"_test = [] {
+   "unknown_shorthand_tag_ignored"_test = [] {
       std::string yaml = "!!custom value";
       std::string value;
       auto ec = glz::read_yaml(value, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(value == "value");
+   };
+
+   "malformed_named_tag_error"_test = [] {
+      std::string yaml = "!invalid{}tag value";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
       expect(bool(ec));
-      expect(ec.ec == glz::error_code::feature_not_supported);
+      expect(ec.ec == glz::error_code::syntax_error);
+   };
+
+   "malformed_verbatim_tag_error"_test = [] {
+      std::string yaml = "!<tag:yaml.org,2002:str value";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
+   };
+
+   "malformed_empty_shorthand_tag_error"_test = [] {
+      std::string yaml = "!! value";
+      std::string value;
+      auto ec = glz::read_yaml(value, yaml);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
    };
 
    "verbatim_tag_str"_test = [] {
@@ -2641,6 +2783,18 @@ name: test)";
       expect(obj.x == 42);
    };
 
+   "document_start_inline_first_key"_test = [] {
+      std::string yaml = R"(--- key: value
+next: item)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(obj.at("key").data) == "value");
+      expect(std::get<std::string>(obj.at("next").data) == "item");
+   };
+
    "document_end_marker"_test = [] {
       std::string yaml = R"(x: 42
 y: 3.14
@@ -2869,18 +3023,315 @@ numbers: [1, 2, 3])";
 // Anchor and Alias Tests (if supported)
 // ============================================================
 
-// Note: Anchors/aliases are advanced YAML features
-// Adding placeholder tests to verify error handling
+// Anchor/Alias Tests (source span replay)
 
 suite yaml_anchor_tests = [] {
-   "anchor_not_supported"_test = [] {
-      std::string yaml = R"(
-anchor: &anchor_name value
-alias: *anchor_name)";
+   "scalar_anchor_alias_string"_test = [] {
+      std::string yaml = R"(anchor: &a hello
+alias: *a)";
       std::map<std::string, std::string> obj{};
-      [[maybe_unused]] auto ec = glz::read_yaml(obj, yaml);
-      // Anchors may not be supported - check for error or partial parse
-      // This test documents current behavior
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["anchor"] == "hello");
+      expect(obj["alias"] == "hello");
+   };
+
+   "scalar_anchor_alias_int"_test = [] {
+      std::string yaml = R"(anchor: &a 42
+alias: *a)";
+      std::map<std::string, int> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["anchor"] == 42);
+      expect(obj["alias"] == 42);
+   };
+
+   "scalar_anchor_alias_double"_test = [] {
+      std::string yaml = R"(anchor: &a 3.14
+alias: *a)";
+      std::map<std::string, double> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["anchor"] == 3.14);
+      expect(obj["alias"] == 3.14);
+   };
+
+   "scalar_anchor_alias_bool"_test = [] {
+      std::string yaml = R"(anchor: &a true
+alias: *a)";
+      std::map<std::string, bool> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["anchor"] == true);
+      expect(obj["alias"] == true);
+   };
+
+   "scalar_anchor_alias_generic"_test = [] {
+      std::string yaml = R"(first: &anchor Value
+second: *anchor)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"first":"Value","second":"Value"})") << json;
+   };
+
+   "anchor_on_flow_mapping"_test = [] {
+      std::string yaml = R"(root: &m {key1: val1, key2: val2}
+alias: *m)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"alias":{"key1":"val1","key2":"val2"},"root":{"key1":"val1","key2":"val2"}})") << json;
+   };
+
+   "anchor_on_flow_sequence"_test = [] {
+      std::string yaml = R"(root: &s [1, 2, 3]
+alias: *s)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"alias":[1,2,3],"root":[1,2,3]})") << json;
+   };
+
+   "multiple_anchors"_test = [] {
+      std::string yaml = R"(a: &x hello
+b: &y world
+c: *x
+d: *y)";
+      std::map<std::string, std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["a"] == "hello");
+      expect(obj["b"] == "world");
+      expect(obj["c"] == "hello");
+      expect(obj["d"] == "world");
+   };
+
+   "anchor_override"_test = [] {
+      std::string yaml = R"(a: &x first
+b: *x
+c: &x second
+d: *x)";
+      std::map<std::string, std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["a"] == "first");
+      expect(obj["b"] == "first");
+      expect(obj["c"] == "second");
+      expect(obj["d"] == "second");
+   };
+
+   "anchor_double_quoted"_test = [] {
+      std::string yaml = "a: &q \"hello world\"\nb: *q";
+      std::map<std::string, std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["a"] == "hello world");
+      expect(obj["b"] == "hello world");
+   };
+
+   "anchor_single_quoted"_test = [] {
+      std::string yaml = "a: &q 'hello world'\nb: *q";
+      std::map<std::string, std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["a"] == "hello world");
+      expect(obj["b"] == "hello world");
+   };
+
+   "undefined_alias_error"_test = [] {
+      std::string yaml = "a: *nonexistent";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec)) << "Expected error for undefined alias";
+   };
+
+   "anchor_on_alias_error"_test = [] {
+      std::string yaml = "key1: &a value\nkey2: &b *a";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec)) << "Expected error for anchor on alias";
+   };
+
+   "nested_anchor_reference"_test = [] {
+      std::string yaml = R"(outer:
+  inner: &val deep
+ref: *val)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"outer":{"inner":"deep"},"ref":"deep"})") << json;
+   };
+
+   "aliases_in_block_sequence"_test = [] {
+      std::string yaml = R"(- &a hello
+- &b world
+- *a
+- *b)";
+      std::vector<std::string> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.size() == 4);
+      expect(obj[0] == "hello");
+      expect(obj[1] == "world");
+      expect(obj[2] == "hello");
+      expect(obj[3] == "world");
+   };
+
+   "anchor_on_sequence_value"_test = [] {
+      std::string yaml = R"(&seq
+- a)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"(["a"])") << json;
+   };
+
+   "document_start_anchor"_test = [] {
+      std::string yaml = R"(--- &seq
+- a)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"(["a"])") << json;
+   };
+
+   "spec_2_10_sammy_sosa"_test = [] {
+      std::string yaml = R"(---
+hr:
+  - Mark McGwire
+  - &SS Sammy Sosa
+rbi:
+  - *SS
+  - Ken Griffey)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERROR");
+      expect(json == R"({"hr":["Mark McGwire","Sammy Sosa"],"rbi":["Sammy Sosa","Ken Griffey"]})") << json;
+   };
+
+   "anchor_on_flow_map_typed"_test = [] {
+      std::string yaml = R"(root: &m {x: 1, y: 2}
+copy: *m)";
+      std::map<std::string, std::map<std::string, int>> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["root"]["x"] == 1);
+      expect(obj["root"]["y"] == 2);
+      expect(obj["copy"]["x"] == 1);
+      expect(obj["copy"]["y"] == 2);
+   };
+
+   "anchor_on_flow_seq_typed"_test = [] {
+      std::string yaml = R"(root: &s [10, 20, 30]
+copy: *s)";
+      std::map<std::string, std::vector<int>> obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj["root"].size() == 3);
+      expect(obj["root"][0] == 10);
+      expect(obj["copy"].size() == 3);
+      expect(obj["copy"][2] == 30);
+   };
+
+   "anchor_skip_unknown_key"_test = [] {
+      // Test that skip_yaml_value handles anchors/aliases when skipping
+      std::string yaml = R"(x: 1
+y: 1.0
+name: &a skipped
+extra: *a)";
+      simple_struct obj{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.x == 1);
+      expect(obj.y == 1.0);
+      expect(obj.name == "skipped");
+   };
+
+   "anchor_empty_node"_test = [] {
+      std::string yaml = R"(a: &anchor
+b: *anchor)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"a":null,"b":null})") << json;
+   };
+
+   "alias_as_mapping_key"_test = [] {
+      std::string yaml = R"(a: &ref hello
+*ref : world)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"a":"hello","hello":"world"})") << json;
+   };
+
+   "anchor_on_key_with_alias"_test = [] {
+      std::string yaml = R"(&a a: &b b
+*b : *a)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"a":"b","b":"a"})") << json;
+   };
+
+   "anchor_block_mapping_replay"_test = [] {
+      std::string yaml = R"(bill-to: &id001
+    given: Chris
+    family: Dumars
+ship-to: *id001)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      std::string expected = R"({"bill-to":{"family":"Dumars","given":"Chris"},"ship-to":{"family":"Dumars","given":"Chris"}})";
+      expect(json == expected) << json;
+   };
+};
+
+// ============================================================
+// Tab Handling Tests
+// ============================================================
+
+suite yaml_tab_tests = [] {
+   "tab_in_literal_block_scalar"_test = [] {
+      std::string yaml = "|\n literal\n \ttext\n";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("ERR");
+      expect(json == R"("literal\n\ttext\n")") << json;
+   };
+
+   "tab_in_block_scalar_mapping"_test = [] {
+      std::string yaml = "block:\t|\n  void main() {\n  \tprintf(\"hello\");\n  }\n";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+   };
+
+   "tab_as_indentation_error"_test = [] {
+      std::string yaml = "a:\n\tb: value\n";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(bool(ec)) << "Tab as indentation should error";
+   };
+
+   "tab_after_spaces_in_mapping_error"_test = [] {
+      std::string yaml = "a:\n  \tb: value\n";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(bool(ec)) << "Tab after spaces in mapping indentation should error";
    };
 };
 
@@ -3498,6 +3949,151 @@ note: null
       };
 
       roundtrip_yaml<advanced_doc>(yaml, check);
+   };
+};
+
+suite yaml_large_writer_document_tests = [] {
+   "write_large_generic_document_with_many_features"_test = [] {
+      glz::generic doc{};
+      doc["apiVersion"] = "v2";
+      doc["kind"] = "ApplicationBundle";
+      doc["description"] = "Large generated writer test document\nWith nested maps and sequences";
+      doc["runbook"] = "step one\nstep two\n";
+      doc["audit_log"] = "entry-a\nentry-b\n\n\n";
+
+      doc["metadata"]["name"] = "platform-core";
+      doc["metadata"]["labels"]["app"] = "platform";
+      doc["metadata"]["labels"]["tier"] = "backend";
+      doc["metadata"]["annotations"]["owner"] = "platform-team";
+      doc["metadata"]["annotations"]["source"] = "generated/test";
+
+      doc["quoted_examples"]["bool_like"] = "true";
+      doc["quoted_examples"]["num_like"] = "123";
+      doc["quoted_examples"]["contains_colon"] = "alpha: beta";
+      doc["quoted_examples"]["contains_hash"] = "value # literal";
+
+      doc["limits"]["max_connections"] = 5000;
+      doc["limits"]["burst"] = 250;
+      doc["flags"]["enabled"] = true;
+      doc["flags"]["maintenance_mode"] = false;
+      doc["note"] = nullptr;
+
+      doc["deployments"].data = glz::generic::array_t{};
+      auto& deployments = std::get<glz::generic::array_t>(doc["deployments"].data);
+      for (int i = 0; i < 16; ++i) {
+         glz::generic service{};
+         service["name"] = "svc-" + std::to_string(i);
+         service["image"] = "registry.example.com/app:" + std::to_string(100 + i);
+         service["replicas"] = (i % 4) + 1;
+         service["enabled"] = (i % 2 == 0);
+         service["startup_script"] = "echo start\n./run --port=8080";
+         service["notes"] = "release\nnotes\n";
+         service["ports"].data = glz::generic::array_t{};
+         auto& ports = std::get<glz::generic::array_t>(service["ports"].data);
+         for (int p = 0; p < 3; ++p) {
+            glz::generic port{};
+            port["name"] = "p" + std::to_string(p);
+            port["port"] = 8000 + p;
+            port["protocol"] = "TCP";
+            ports.emplace_back(std::move(port));
+         }
+         deployments.emplace_back(std::move(service));
+      }
+
+      std::string yaml{};
+      auto wec = glz::write_yaml(doc, yaml);
+      expect(!wec);
+      expect(yaml.size() > 4000);
+      expect(yaml.find("description: |-") != std::string::npos);
+      expect(yaml.find("runbook: |") != std::string::npos);
+      expect(yaml.find("audit_log: |+") != std::string::npos);
+      expect(yaml.find("'true'") != std::string::npos);
+      expect(yaml.find("'123'") != std::string::npos);
+      expect(yaml.find("'alpha: beta'") != std::string::npos);
+      expect(yaml.find("'value # literal'") != std::string::npos);
+
+      glz::generic parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(root.at("kind").data) == "ApplicationBundle");
+      expect(std::get<std::string>(root.at("description").data) ==
+             "Large generated writer test document\nWith nested maps and sequences");
+      expect(std::get<std::string>(root.at("runbook").data) == "step one\nstep two\n");
+      expect(std::get<std::string>(root.at("audit_log").data) == "entry-a\nentry-b\n\n\n\n");
+      expect(std::holds_alternative<std::nullptr_t>(root.at("note").data));
+
+      auto& parsed_deployments = std::get<glz::generic::array_t>(root.at("deployments").data);
+      expect(parsed_deployments.size() == 16);
+      auto& d7 = std::get<glz::generic::object_t>(parsed_deployments[7].data);
+      expect(std::get<std::string>(d7.at("name").data) == "svc-7");
+      expect(std::get<double>(d7.at("replicas").data) == 4.0);
+      expect(!std::get<bool>(d7.at("enabled").data));
+      expect(std::get<std::string>(d7.at("startup_script").data) == "echo start\n./run --port=8080");
+      expect(std::get<std::string>(d7.at("notes").data) == "release\nnotes\n");
+
+      auto& q = std::get<glz::generic::object_t>(root.at("quoted_examples").data);
+      expect(std::get<std::string>(q.at("bool_like").data) == "true");
+      expect(std::get<std::string>(q.at("num_like").data) == "123");
+   };
+
+   "write_large_struct_document_with_many_features"_test = [] {
+      advanced_doc original{};
+      original.title = "Writer Stress Document";
+      original.description = "Structured writer test document\nWith many nested features";
+      original.literal = "line one\n  line two\nline three\n\n\n";
+      original.multiline_plain = "alpha: beta # comment-like";
+      original.quoted = "beta: colon # hash";
+      original.flags = {true, false};
+      original.counts = {7, 4500, 0.875};
+      original.flow.values = {1, 2, 3, 4, 5, 6};
+      original.flow.mapping = {{"a", "one"}, {"b", "two"}, {"c", "three"}, {"d", "four"}};
+      original.nested.name = "writer-nested";
+      original.nested.labels = {{"env", "prod"}, {"tier", "backend"}, {"owner", "platform"}};
+      for (int i = 0; i < 64; ++i) {
+         original.list.push_back("item-" + std::to_string(i));
+         original.nested.ids.push_back(1000 + i);
+      }
+      original.list.push_back("true");
+      original.list.push_back("123");
+      original.list.push_back("contains: colon");
+      original.list.push_back("contains # hash");
+      original.note = "operator note line 1\noperator note line 2\n";
+
+      std::string yaml{};
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml.size() > 1800);
+      expect(yaml.find("description: |-") != std::string::npos);
+      expect(yaml.find("literal: |+") != std::string::npos);
+      expect(yaml.find("note: |") != std::string::npos);
+      expect(yaml.find("'true'") != std::string::npos);
+      expect(yaml.find("'123'") != std::string::npos);
+      expect(yaml.find("'contains: colon'") != std::string::npos);
+      expect(yaml.find("'contains # hash'") != std::string::npos);
+
+      advanced_doc parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      expect(parsed.title == original.title);
+      expect(parsed.description == original.description);
+      expect(parsed.literal == (original.literal + "\n"));
+      expect(parsed.multiline_plain == original.multiline_plain);
+      expect(parsed.quoted == original.quoted);
+      expect(parsed.flags.enabled == original.flags.enabled);
+      expect(parsed.flags.archived == original.flags.archived);
+      expect(parsed.counts.retries == original.counts.retries);
+      expect(parsed.counts.timeout_ms == original.counts.timeout_ms);
+      expect(std::abs(parsed.counts.ratio - original.counts.ratio) < 0.0001);
+      expect(parsed.list.size() == original.list.size());
+      expect(parsed.list[65] == "123");
+      expect(parsed.flow.mapping.at("d") == "four");
+      expect(parsed.nested.ids.size() == original.nested.ids.size());
+      expect(parsed.nested.labels.at("owner") == "platform");
+      expect(parsed.note.has_value());
+      expect(parsed.note.value() == original.note.value());
    };
 };
 
@@ -4779,6 +5375,32 @@ suite yaml_map_parsing_tests = [] {
       expect(parsed["first"] == 100);
       expect(parsed["second"] == 200);
    };
+
+   "map_inline_plain_mapping_value_rejected"_test = [] {
+      std::string yaml = "outer: inner: value";
+      std::map<std::string, std::string> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(bool(rec)) << "Expected error for inline plain mapping indicator in block value";
+   };
+
+   "map_inline_plain_mapping_value_quoted_allowed"_test = [] {
+      std::string yaml = R"(outer: "inner: value")";
+      std::map<std::string, std::string> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 1u);
+      expect(parsed["outer"] == "inner: value");
+   };
+
+   "map_inline_plain_mapping_value_flow_allowed"_test = [] {
+      std::string yaml = R"(outer: {inner: value})";
+      std::map<std::string, std::map<std::string, std::string>> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 1u);
+      expect(parsed["outer"].size() == 1u);
+      expect(parsed["outer"]["inner"] == "value");
+   };
 };
 
 // ============================================================
@@ -5823,6 +6445,72 @@ scope: source.python)";
       auto& contexts = std::get<glz::generic::object_t>(root.at("contexts").data);
       expect(contexts.contains("prototype"));
       expect(contexts.contains("main"));
+
+      auto& prototype_entries = std::get<glz::generic::array_t>(contexts.at("prototype").data);
+      expect(prototype_entries.size() == 1u);
+      auto& prototype_entry = std::get<glz::generic::object_t>(prototype_entries[0].data);
+      expect(std::get<std::string>(prototype_entry.at("include").data) == "scope:source.shell.bash#prototype");
+
+      auto& main_entries = std::get<glz::generic::array_t>(contexts.at("main").data);
+      expect(main_entries.size() == 1u);
+      auto& main_entry = std::get<glz::generic::object_t>(main_entries[0].data);
+      expect(std::get<std::string>(main_entry.at("include").data) == "scope:source.shell.bash");
+   };
+
+   "sublime_shell_unix_generic_roundtrip"_test = [] {
+      std::string yaml = R"(---
+name: Shell-Unix-Generic
+hidden: true
+scope: source.shell
+contexts:
+  prototype:
+    - include: scope:source.shell.bash#prototype
+  main:
+    - include: scope:source.shell.bash)";
+
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      glz::generic reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+
+      auto& root = std::get<glz::generic::object_t>(reparsed.data);
+      expect(std::get<std::string>(root.at("name").data) == "Shell-Unix-Generic");
+      expect(std::get<bool>(root.at("hidden").data) == true);
+      expect(std::get<std::string>(root.at("scope").data) == "source.shell");
+
+      auto& contexts = std::get<glz::generic::object_t>(root.at("contexts").data);
+      auto& prototype_entries = std::get<glz::generic::array_t>(contexts.at("prototype").data);
+      auto& prototype_entry = std::get<glz::generic::object_t>(prototype_entries[0].data);
+      expect(std::get<std::string>(prototype_entry.at("include").data) == "scope:source.shell.bash#prototype");
+   };
+
+   "sublime_hash_separator_after_block_scalar"_test = [] {
+      std::string yaml = R"(variables:
+  magic_variables: |-
+    (?x: __(?:
+    | class
+    )__\b )
+
+##############################################################################
+
+contexts:
+  main:
+    - match: '')";
+
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("variables"));
+      expect(root.contains("contexts"));
    };
 };
 
@@ -6032,6 +6720,23 @@ suite yaml_block_scalar_sibling_tests = [] {
       expect(result.size() == 1u);
       expect(result[0].k1 == "a\nb\n") << "k1 was: " << result[0].k1;
       expect(result[0].k2 == "c") << "k2 was: " << result[0].k2;
+   };
+
+   "block_scalar_sibling_key_in_sequence_generic"_test = [] {
+      std::string yaml = R"(- k1: |
+    a
+    b
+  k2: c)";
+      glz::generic parsed;
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 1u);
+      auto& obj = std::get<glz::generic::object_t>(arr[0].data);
+      expect(obj.count("k1") == 1u);
+      expect(obj.count("k2") == 1u);
+      expect(std::get<std::string>(obj.at("k1").data) == "a\nb\n") << "k1 was: " << std::get<std::string>(obj.at("k1").data);
+      expect(std::get<std::string>(obj.at("k2").data) == "c") << "k2 was: " << std::get<std::string>(obj.at("k2").data);
    };
 
    "block_scalar_sibling_key_simple"_test = [] {

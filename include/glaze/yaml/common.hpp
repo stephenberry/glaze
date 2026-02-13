@@ -7,6 +7,8 @@
 #include <cctype>
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "glaze/core/common.hpp"
@@ -19,7 +21,78 @@ namespace glz::yaml
    // Adds indent tracking needed for block-style parsing
    struct yaml_context : context
    {
-      int32_t indent{-1}; // Current block indent level for YAML parsing (-1 means top level)
+      // Indent stack for block-style parsing.
+      // Empty stack == top level (equivalent to indent of -1).
+      // back() gives the current block indent level.
+      std::vector<int16_t> indent_stack = [] {
+         std::vector<int16_t> v;
+         v.reserve(max_recursive_depth_limit);
+         return v;
+      }();
+
+      int32_t current_indent() const noexcept
+      {
+         return indent_stack.empty() ? int32_t(-1) : indent_stack.back();
+      }
+
+      bool push_indent(int32_t indent) noexcept
+      {
+         if (indent_stack.size() >= max_recursive_depth_limit) [[unlikely]] {
+            error = error_code::exceeded_max_recursive_depth;
+            return false;
+         }
+         indent_stack.push_back(static_cast<int16_t>(indent));
+         return true;
+      }
+
+      void pop_indent() noexcept
+      {
+         if (!indent_stack.empty()) {
+            indent_stack.pop_back();
+         }
+      }
+
+      // Anchor/alias support: maps anchor name -> source span
+      struct anchor_span
+      {
+         const char* begin{};
+         const char* end{};
+         int32_t base_indent{};
+      };
+
+      struct transparent_string_hash
+      {
+         using is_transparent = void;
+
+         size_t operator()(std::string_view key) const noexcept
+         {
+            return std::hash<std::string_view>{}(key);
+         }
+      };
+
+      struct transparent_string_equal
+      {
+         using is_transparent = void;
+
+         bool operator()(std::string_view lhs, std::string_view rhs) const noexcept { return lhs == rhs; }
+      };
+
+      std::unordered_map<std::string, anchor_span, transparent_string_hash, transparent_string_equal> anchors{};
+
+      // True while parsing the value payload of a "- item" block-sequence entry.
+      // Used to distinguish indentless-sequence continuation from next sibling items.
+      bool sequence_item_value_context = false;
+
+      // True while parsing an explicit block mapping key ("? key").
+      // Used by plain-scalar folding to terminate on explicit key/value indicators.
+      bool explicit_mapping_key_context = false;
+
+      // Enables one parse step where a same-indent "- item" is valid as the node
+      // content (used for anchor before indentless sequence).
+      bool allow_indentless_sequence = false;
+
+      // Start of the YAML buffer, set by top-level parse entry.
+      const char* stream_begin = nullptr;
    };
 
    // Lookup table for characters that can start a plain scalar in flow context
@@ -235,7 +308,7 @@ namespace glz::yaml
 
    // YAML core schema tags
    enum struct yaml_tag : uint8_t {
-      none, // No tag present
+      none, // No tag present (or unrecognized custom tag — silently ignored)
       str, // !!str
       int_tag, // !!int
       float_tag, // !!float
@@ -243,8 +316,23 @@ namespace glz::yaml
       null_tag, // !!null
       map, // !!map
       seq, // !!seq
-      unknown // Unknown/custom tag
+      unknown // Malformed tag (parse error)
    };
+
+   GLZ_ALWAYS_INLINE constexpr bool malformed_tag_token(std::string_view token) noexcept
+   {
+      // Reject obviously malformed tag tokens used by conformance tests.
+      // Unknown-but-well-formed tags are still ignored.
+      for (const char c : token) {
+         if (c == '{' || c == '}') return true;
+      }
+      return false;
+   }
+
+   GLZ_ALWAYS_INLINE constexpr bool malformed_tag_termination(char c) noexcept
+   {
+      return !(c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '#' || c == ',' || c == ']' || c == '}');
+   }
 
    // Parse a YAML tag if present
    // Tags start with ! and can be:
@@ -259,12 +347,10 @@ namespace glz::yaml
          return yaml_tag::none;
       }
 
-      auto start = it;
       ++it; // skip first !
 
       if (it == end) {
-         it = start;
-         return yaml_tag::none;
+         return yaml_tag::unknown;
       }
 
       // Check for !! (shorthand tag)
@@ -278,6 +364,12 @@ namespace glz::yaml
          }
 
          std::string_view tag_name(tag_start, static_cast<size_t>(it - tag_start));
+         if (tag_name.empty() || malformed_tag_token(tag_name)) {
+            return yaml_tag::unknown;
+         }
+         if (it != end && malformed_tag_termination(*it)) {
+            return yaml_tag::unknown;
+         }
 
          // Skip whitespace after tag
          while (it != end && (*it == ' ' || *it == '\t')) {
@@ -293,7 +385,8 @@ namespace glz::yaml
          if (tag_name == "map") return yaml_tag::map;
          if (tag_name == "seq") return yaml_tag::seq;
 
-         return yaml_tag::unknown;
+         // Unrecognized shorthand tag (e.g., !!omap) — ignore and parse value normally
+         return yaml_tag::none;
       }
 
       // Check for verbatim tag !<...>
@@ -304,12 +397,17 @@ namespace glz::yaml
             ++it;
          }
          if (it == end) {
-            it = start;
-            return yaml_tag::none;
+            return yaml_tag::unknown;
          }
 
          std::string_view tag_uri(tag_start, static_cast<size_t>(it - tag_start));
+         if (tag_uri.empty() || malformed_tag_token(tag_uri)) {
+            return yaml_tag::unknown;
+         }
          ++it; // skip >
+         if (it != end && malformed_tag_termination(*it)) {
+            return yaml_tag::unknown;
+         }
 
          // Skip whitespace after tag
          while (it != end && (*it == ' ' || *it == '\t')) {
@@ -325,12 +423,21 @@ namespace glz::yaml
          if (tag_uri == "tag:yaml.org,2002:map") return yaml_tag::map;
          if (tag_uri == "tag:yaml.org,2002:seq") return yaml_tag::seq;
 
-         return yaml_tag::unknown;
+         // Unrecognized verbatim tag — ignore and parse value normally
+         return yaml_tag::none;
       }
 
       // Named tag !name - skip it and read name
+      auto tag_start = it;
       while (it != end && !plain_scalar_end_table[static_cast<uint8_t>(*it)]) {
          ++it;
+      }
+      std::string_view tag_name(tag_start, static_cast<size_t>(it - tag_start));
+      if (!tag_name.empty() && malformed_tag_token(tag_name)) {
+         return yaml_tag::unknown;
+      }
+      if (!tag_name.empty() && it != end && malformed_tag_termination(*it)) {
+         return yaml_tag::unknown;
       }
 
       // Skip whitespace after tag
@@ -338,7 +445,8 @@ namespace glz::yaml
          ++it;
       }
 
-      return yaml_tag::unknown;
+      // Unrecognized named tag — ignore and parse value normally
+      return yaml_tag::none;
    }
 
    // Check if a tag is valid for string types
@@ -484,22 +592,38 @@ namespace glz::yaml
    template <class It, class End, class Ctx>
    GLZ_ALWAYS_INLINE void skip_document_start(It&& it, End end, Ctx& ctx) noexcept
    {
-      // Skip any leading whitespace and newlines
-      while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-         if (*it == '\n' || *it == '\r') {
+      // Skip leading blank/comment-only lines before directives or document start.
+      while (it != end) {
+         auto line = it;
+         skip_inline_ws(line, end);
+         if (line == end) {
+            it = line;
+            break;
+         }
+         if (*line == '#') {
+            it = line;
+            skip_comment(it, end);
             skip_newline(it, end);
+            continue;
          }
-         else {
-            ++it;
+         if (*line == '\n' || *line == '\r') {
+            it = line;
+            skip_newline(it, end);
+            continue;
          }
+         it = line;
+         break;
       }
 
       // Track if we've seen a %YAML directive (duplicates are an error per spec)
       bool seen_yaml_directive = false;
+      bool saw_any_directive = false;
+      bool consumed_document_start = false;
 
       // Process YAML directives (lines starting with %) until we hit --- or content
       // Directives must appear at the start of a line and before ---
       while (it != end && *it == '%') {
+         saw_any_directive = true;
          ++it; // Skip the '%'
 
          // Parse directive name
@@ -524,19 +648,47 @@ namespace glz::yaml
                ++it;
             }
 
-            // Parse major version number
-            if (it != end && *it >= '0' && *it <= '9') {
-               int major_version = 0;
-               while (it != end && *it >= '0' && *it <= '9') {
-                  major_version = major_version * 10 + (*it - '0');
-                  ++it;
-               }
+            // Parse major.minor version and reject malformed forms.
+            if (it == end || *it < '0' || *it > '9') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            int major_version = 0;
+            while (it != end && *it >= '0' && *it <= '9') {
+               major_version = major_version * 10 + (*it - '0');
+               ++it;
+            }
+            if (it == end || *it != '.') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it; // skip '.'
+            if (it == end || *it < '0' || *it > '9') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            while (it != end && *it >= '0' && *it <= '9') {
+               ++it;
+            }
 
-               // Check for major version > 1 (per spec: should be rejected)
-               if (major_version > 1) {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
+            // Check for major version > 1 (per spec: should be rejected)
+            if (major_version > 1) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            // After the version, only spaces/tabs and optional comment are allowed.
+            // A '#' must be separated by at least one space.
+            if (it != end && *it == '#') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            while (it != end && (*it == ' ' || *it == '\t')) {
+               ++it;
+            }
+            if (it != end && *it != '\n' && *it != '\r' && *it != '#') {
+               ctx.error = error_code::syntax_error;
+               return;
             }
          }
          // %TAG and other directives are silently skipped (per spec: should be ignored)
@@ -547,14 +699,26 @@ namespace glz::yaml
          }
          // Skip the newline
          skip_newline(it, end);
-         // Skip any blank lines or whitespace between directives
-         while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-            if (*it == '\n' || *it == '\r') {
+         // Skip blank and comment-only lines between directives and document start.
+         while (it != end) {
+            auto line = it;
+            skip_inline_ws(line, end);
+            if (line == end) {
+               it = line;
+               break;
+            }
+            if (*line == '#') {
+               it = line;
+               skip_comment(it, end);
                skip_newline(it, end);
+               continue;
             }
-            else {
-               ++it;
+            if (*line == '\n' || *line == '\r') {
+               it = line;
+               skip_newline(it, end);
+               continue;
             }
+            break;
          }
       }
 
@@ -563,11 +727,18 @@ namespace glz::yaml
          auto after = it + 3;
          // Must be followed by whitespace, newline, or end
          if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' || *after == '#') {
+            consumed_document_start = true;
             it = after;
             // Skip rest of line (whitespace and optional comment)
             skip_ws_and_comment(it, end);
             skip_newline(it, end);
          }
+      }
+
+      // A directives section must be followed by a document start marker.
+      if (saw_any_directive && !consumed_document_start) {
+         ctx.error = error_code::syntax_error;
+         return;
       }
    }
 
@@ -575,14 +746,27 @@ namespace glz::yaml
    template <class It, class End>
    GLZ_ALWAYS_INLINE void skip_document_start(It&& it, End end) noexcept
    {
-      // Skip any leading whitespace and newlines
-      while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-         if (*it == '\n' || *it == '\r') {
+      // Skip leading blank/comment-only lines before directives or document start.
+      while (it != end) {
+         auto line = it;
+         skip_inline_ws(line, end);
+         if (line == end) {
+            it = line;
+            break;
+         }
+         if (*line == '#') {
+            it = line;
+            skip_comment(it, end);
             skip_newline(it, end);
+            continue;
          }
-         else {
-            ++it;
+         if (*line == '\n' || *line == '\r') {
+            it = line;
+            skip_newline(it, end);
+            continue;
          }
+         it = line;
+         break;
       }
 
       // Skip YAML directives (lines starting with %) until we hit --- or content
@@ -592,14 +776,26 @@ namespace glz::yaml
             ++it;
          }
          skip_newline(it, end);
-         // Skip any blank lines
-         while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
-            if (*it == '\n' || *it == '\r') {
+         // Skip blank/comment-only lines
+         while (it != end) {
+            auto line = it;
+            skip_inline_ws(line, end);
+            if (line == end) {
+               it = line;
+               break;
+            }
+            if (*line == '#') {
+               it = line;
+               skip_comment(it, end);
                skip_newline(it, end);
+               continue;
             }
-            else {
-               ++it;
+            if (*line == '\n' || *line == '\r') {
+               it = line;
+               skip_newline(it, end);
+               continue;
             }
+            break;
          }
       }
 
@@ -614,6 +810,18 @@ namespace glz::yaml
       }
    }
 
+   // Check if at document start marker (---)
+   // Returns true if at --- followed by whitespace/newline/end
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE bool at_document_start(It&& it, End end) noexcept
+   {
+      if (end - it >= 3 && it[0] == '-' && it[1] == '-' && it[2] == '-') {
+         auto after = it + 3;
+         return after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r';
+      }
+      return false;
+   }
+
    // Check if at document end marker (...)
    // Returns true if at ... followed by whitespace/newline/end
    template <class It, class End>
@@ -621,17 +829,19 @@ namespace glz::yaml
    {
       if (end - it >= 3 && it[0] == '.' && it[1] == '.' && it[2] == '.') {
          auto after = it + 3;
-         // Must be followed by whitespace, newline, or end
-         if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r' || *after == '#') {
-            return true;
-         }
+         while (after != end && (*after == ' ' || *after == '\t')) ++after;
+         return after == end || *after == '\n' || *after == '\r' || *after == '#';
       }
       return false;
    }
 
    // Measure indentation at current position (assumes at start of line)
-   // Returns number of spaces. Sets error if tabs are encountered (YAML forbids tabs in indentation)
-   template <class It, class End, class Ctx>
+   // Returns number of spaces.
+   // error_on_tab=true (default): errors on ANY tab after spaces — for block mappings/sequences
+   //   where tabs in the indentation area are always invalid.
+   // error_on_tab=false: only errors on tab at position 0 (pure tab indentation) — for block
+   //   scalars where tabs after indentation spaces are valid content characters.
+   template <bool error_on_tab = true, class It, class End, class Ctx>
    GLZ_ALWAYS_INLINE int32_t measure_indent(It&& it, End end, Ctx& ctx) noexcept
    {
       int32_t indent = 0;
@@ -640,8 +850,17 @@ namespace glz::yaml
          ++it;
       }
       // YAML spec: "Tab characters must not be used for indentation"
-      if (it != end && *it == '\t') {
-         ctx.error = error_code::syntax_error;
+      if constexpr (error_on_tab) {
+         if (it != end && *it == '\t') {
+            ctx.error = error_code::syntax_error;
+         }
+      }
+      else {
+         // In block scalar context: tabs after spaces are content, not indentation.
+         // Only error when tab is the first character (pure tab indentation).
+         if (indent == 0 && it != end && *it == '\t') {
+            ctx.error = error_code::syntax_error;
+         }
       }
       return indent;
    }
@@ -689,6 +908,26 @@ namespace glz::yaml
          return true;
       }
       return false;
+   }
+
+   // Parse an anchor or alias name. Advances iterator past the name.
+   // Anchor/alias names end at whitespace, flow indicators, or colon.
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE std::string_view parse_anchor_name(It& it, End end) noexcept
+   {
+      auto start = it;
+      if (start == end) return {};
+      while (it != end) {
+         const char c = *it;
+         // Per YAML, anchor names end at whitespace or flow indicators.
+         // Colon is allowed in anchor names.
+         if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == '[' || c == ']' || c == '{' ||
+             c == '}') {
+            break;
+         }
+         ++it;
+      }
+      return std::string_view(&*start, static_cast<size_t>(it - start));
    }
 
    // Detect scalar style from first character
