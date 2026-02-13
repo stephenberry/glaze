@@ -2783,6 +2783,18 @@ name: test)";
       expect(obj.x == 42);
    };
 
+   "document_start_inline_first_key"_test = [] {
+      std::string yaml = R"(--- key: value
+next: item)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(obj.at("key").data) == "value");
+      expect(std::get<std::string>(obj.at("next").data) == "item");
+   };
+
    "document_end_marker"_test = [] {
       std::string yaml = R"(x: 42
 y: 3.14
@@ -5362,6 +5374,32 @@ suite yaml_map_parsing_tests = [] {
       expect(parsed.size() == 2u);
       expect(parsed["first"] == 100);
       expect(parsed["second"] == 200);
+   };
+
+   "map_inline_plain_mapping_value_rejected"_test = [] {
+      std::string yaml = "outer: inner: value";
+      std::map<std::string, std::string> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(bool(rec)) << "Expected error for inline plain mapping indicator in block value";
+   };
+
+   "map_inline_plain_mapping_value_quoted_allowed"_test = [] {
+      std::string yaml = R"(outer: "inner: value")";
+      std::map<std::string, std::string> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 1u);
+      expect(parsed["outer"] == "inner: value");
+   };
+
+   "map_inline_plain_mapping_value_flow_allowed"_test = [] {
+      std::string yaml = R"(outer: {inner: value})";
+      std::map<std::string, std::map<std::string, std::string>> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 1u);
+      expect(parsed["outer"].size() == 1u);
+      expect(parsed["outer"]["inner"] == "value");
    };
 };
 

@@ -2506,6 +2506,49 @@ namespace glz
          }
       }
 
+      // Detects a plain "key: value" mapping indicator in an inline block-map
+      // value segment, while ignoring quoted strings and nested flow collections.
+      template <class It, class End>
+      GLZ_ALWAYS_INLINE bool inline_value_has_plain_mapping_indicator(It pos, End end) noexcept
+      {
+         int flow_depth = 0;
+         while (pos != end) {
+            const char c = *pos;
+            if (c == '\n' || c == '\r' || c == '#') return false;
+            if (c == '"' || c == '\'') {
+               const char quote = c;
+               ++pos;
+               while (pos != end && *pos != quote) {
+                  if (*pos == '\\' && quote == '"') {
+                     ++pos;
+                     if (pos != end) ++pos;
+                  }
+                  else {
+                     ++pos;
+                  }
+               }
+               if (pos != end) ++pos;
+               continue;
+            }
+            if (c == '[' || c == '{') {
+               ++flow_depth;
+               ++pos;
+               continue;
+            }
+            if ((c == ']' || c == '}') && flow_depth > 0) {
+               --flow_depth;
+               ++pos;
+               continue;
+            }
+            if (c == ':' && flow_depth == 0) {
+               const auto next = pos + 1;
+               return (next == end) || *next == ' ' || *next == '\t' || *next == '\n' || *next == '\r';
+            }
+            ++pos;
+         }
+         return false;
+      }
+
       // Parse block sequence
       // - item1
       // - item2
@@ -3066,7 +3109,7 @@ namespace glz
             bool established_mapping_indent_this_line = false;
             if (mapping_indent < 0) {
                mapping_indent = line_indent;
-                established_mapping_indent_this_line = true;
+               established_mapping_indent_this_line = true;
                discovered_first_key_visual_indent = line_indent;
                if constexpr (std::is_pointer_v<std::decay_t<It>>) {
                   if (ctx.stream_begin && line_start > ctx.stream_begin) {
@@ -4322,74 +4365,35 @@ namespace glz
                         // plain "key: value" pair on the same line (e.g. "a: b: c").
                         // Such constructs are malformed unless wrapped in flow
                         // delimiters ({...} / [...]) or quoted.
-                        if (ctx.stream_begin) {
-                           auto begin = static_cast<decltype(it)>(ctx.stream_begin);
-                           auto is_line_content_start = [&](auto pos) {
-                              auto line = pos;
-                              while (line != begin) {
-                                 auto prev = line - 1;
-                                 if (*prev == '\n' || *prev == '\r') break;
-                                 line = prev;
-                              }
-                              for (auto p = line; p != pos; ++p) {
-                                 if (*p != ' ' && *p != '\t') return false;
-                              }
-                              return true;
-                           };
+                        if constexpr (std::is_pointer_v<std::decay_t<decltype(it)>>) {
+                           if (ctx.stream_begin) {
+                              const auto begin = static_cast<std::remove_cvref_t<decltype(it)>>(ctx.stream_begin);
+                              auto is_line_content_start = [&](auto pos) {
+                                 auto line = pos;
+                                 while (line != begin) {
+                                    auto prev = line - 1;
+                                    if (*prev == '\n' || *prev == '\r') break;
+                                    line = prev;
+                                 }
+                                 for (auto p = line; p != pos; ++p) {
+                                    if (*p != ' ' && *p != '\t') return false;
+                                 }
+                                 return true;
+                              };
 
-                           auto inline_value_has_plain_mapping_indicator = [&](auto pos) {
-                              int flow_depth = 0;
-                              while (pos != end) {
-                                 const char c = *pos;
-                                 if (c == '\n' || c == '\r' || c == '#') return false;
-                                 if (c == '"' || c == '\'') {
-                                    const char quote = c;
-                                    ++pos;
-                                    while (pos != end && *pos != quote) {
-                                       if (*pos == '\\' && quote == '"') {
-                                          ++pos;
-                                          if (pos != end) ++pos;
-                                       }
-                                       else {
-                                          ++pos;
-                                       }
-                                    }
-                                    if (pos != end) ++pos;
-                                    continue;
+                              auto line_has_explicit_value_indicator = [&](auto pos) {
+                                 auto line = pos;
+                                 while (line != begin) {
+                                    auto prev = line - 1;
+                                    if (*prev == '\n' || *prev == '\r') break;
+                                    line = prev;
                                  }
-                                 if (c == '[' || c == '{') {
-                                    ++flow_depth;
-                                    ++pos;
-                                    continue;
-                                 }
-                                 if ((c == ']' || c == '}') && flow_depth > 0) {
-                                    --flow_depth;
-                                    ++pos;
-                                    continue;
-                                 }
-                                 if (c == ':' && flow_depth == 0) {
-                                    auto next = pos + 1;
-                                    return (next == end) || *next == ' ' || *next == '\t' || *next == '\n' ||
-                                           *next == '\r';
-                                 }
-                                 ++pos;
-                              }
-                              return false;
-                           };
+                                 while (line != end && (*line == ' ' || *line == '\t')) ++line;
+                                 return line != end && *line == ':';
+                              };
 
-                           auto line_has_explicit_value_indicator = [&](auto pos) {
-                              auto line = pos;
-                              while (line != begin) {
-                                 auto prev = line - 1;
-                                 if (*prev == '\n' || *prev == '\r') break;
-                                 line = prev;
-                              }
-                              while (line != end && (*line == ' ' || *line == '\t')) ++line;
-                              return line != end && *line == ':';
-                           };
-
-                           if (!is_line_content_start(it) && inline_value_has_plain_mapping_indicator(it)) {
-                              if (!line_has_explicit_value_indicator(it)) {
+                              if (!is_line_content_start(it) && yaml::inline_value_has_plain_mapping_indicator(it, end) &&
+                                  !line_has_explicit_value_indicator(it)) {
                                  ctx.error = error_code::syntax_error;
                                  return false;
                               }
