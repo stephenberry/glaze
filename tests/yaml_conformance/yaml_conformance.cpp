@@ -1193,7 +1193,6 @@ double: "text"
          expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
       }
    };
-
 };
 
 suite yaml_conformance_pass_2 = [] {
@@ -2381,7 +2380,6 @@ string"
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
    };
-
 };
 
 suite yaml_conformance_pass_3 = [] {
@@ -3356,7 +3354,6 @@ Sammy Sosa: {
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(bool(ec));
    };
-
 };
 
 // ============================================================================
@@ -3591,7 +3588,8 @@ Reuse anchor: *anchor
          std::string actual;
          (void)glz::write_json(parsed, actual);
          // Keys sorted alphabetically by std::map
-         std::string expected = R"({"First occurrence":"Foo","Override anchor":"Bar","Reuse anchor":"Bar","Second occurrence":"Foo"})";
+         std::string expected =
+            R"({"First occurrence":"Foo","Override anchor":"Bar","Reuse anchor":"Bar","Second occurrence":"Foo"})";
          expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
       }
    };
@@ -4615,7 +4613,6 @@ key ends with two colons::: value
          expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
       }
    };
-
 };
 
 suite yaml_conformance_pass_5 = [] {
@@ -4972,7 +4969,8 @@ value11
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml([[{"YAML":"separate"}],[{"JSON like":"adjacent"}],[{"{\"JSON\":\"like\"}":"adjacent"}]]
+         std::string expected_json =
+            R"yaml([[{"YAML":"separate"}],[{"JSON like":"adjacent"}],[{"{\"JSON\":\"like\"}":"adjacent"}]]
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -5826,7 +5824,6 @@ e
          expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
       }
    };
-
 };
 
 suite yaml_conformance_pass_6 = [] {
@@ -6137,7 +6134,8 @@ block:	|
       if (!ec) {
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         std::string expected = R"({"block":"void main() {\n\tprintf(\"Hello, world!\\n\");\n}\n","quoted":"Quoted \t"})";
+         std::string expected =
+            R"({"block":"void main() {\n\tprintf(\"Hello, world!\\n\");\n}\n","quoted":"Quoted \t"})";
          expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
       }
    };
@@ -7073,7 +7071,6 @@ bar:
          expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
       }
    };
-
 };
 
 suite yaml_conformance_pass_7 = [] {
@@ -8195,7 +8192,6 @@ a: 1
          expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
       }
    };
-
 };
 
 int main() { return 0; }

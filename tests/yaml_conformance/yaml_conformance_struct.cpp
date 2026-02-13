@@ -1194,7 +1194,6 @@ folded: !foo >1
 )json";
       expect_yaml_matches_json_case<folded_literal_t>(yaml, expected_json);
    };
-
 };
 
 suite yaml_conformance_struct_failures = [] {

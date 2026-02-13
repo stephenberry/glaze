@@ -30,10 +30,7 @@ namespace glz::yaml
          return v;
       }();
 
-      int32_t current_indent() const noexcept
-      {
-         return indent_stack.empty() ? int32_t(-1) : indent_stack.back();
-      }
+      int32_t current_indent() const noexcept { return indent_stack.empty() ? int32_t(-1) : indent_stack.back(); }
 
       bool push_indent(int32_t indent) noexcept
       {
@@ -64,10 +61,7 @@ namespace glz::yaml
       {
          using is_transparent = void;
 
-         size_t operator()(std::string_view key) const noexcept
-         {
-            return std::hash<std::string_view>{}(key);
-         }
+         size_t operator()(std::string_view key) const noexcept { return std::hash<std::string_view>{}(key); }
       };
 
       struct transparent_string_equal

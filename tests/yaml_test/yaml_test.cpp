@@ -3294,7 +3294,8 @@ ship-to: *id001)";
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       auto json = glz::write_json(parsed).value_or("WRITE_ERR");
-      std::string expected = R"({"bill-to":{"family":"Dumars","given":"Chris"},"ship-to":{"family":"Dumars","given":"Chris"}})";
+      std::string expected =
+         R"({"bill-to":{"family":"Dumars","given":"Chris"},"ship-to":{"family":"Dumars","given":"Chris"}})";
       expect(json == expected) << json;
    };
 };
@@ -6735,7 +6736,8 @@ suite yaml_block_scalar_sibling_tests = [] {
       auto& obj = std::get<glz::generic::object_t>(arr[0].data);
       expect(obj.count("k1") == 1u);
       expect(obj.count("k2") == 1u);
-      expect(std::get<std::string>(obj.at("k1").data) == "a\nb\n") << "k1 was: " << std::get<std::string>(obj.at("k1").data);
+      expect(std::get<std::string>(obj.at("k1").data) == "a\nb\n")
+         << "k1 was: " << std::get<std::string>(obj.at("k1").data);
       expect(std::get<std::string>(obj.at("k2").data) == "c") << "k2 was: " << std::get<std::string>(obj.at("k2").data);
    };
 

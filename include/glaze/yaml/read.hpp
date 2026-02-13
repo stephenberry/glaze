@@ -99,15 +99,14 @@ namespace glz
                      // trailing mapping content after a completed root node.
                      const char first = *line;
                      const bool explicit_or_structural_start =
-                        (first == ':' || first == '?' || first == '!' || first == '&' || first == '*' ||
-                         first == '[' || first == '{' || first == '"' || first == '\'' || first == '-');
+                        (first == ':' || first == '?' || first == '!' || first == '&' || first == '*' || first == '[' ||
+                         first == '{' || first == '"' || first == '\'' || first == '-');
                      if (!explicit_or_structural_start) {
                         auto scan = line;
                         while (scan != end && *scan != '\n' && *scan != '\r') {
                            if (*scan == ':') {
                               auto after = scan + 1;
-                              if (after == end || *after == ' ' || *after == '\t' || *after == '\n' ||
-                                  *after == '\r') {
+                              if (after == end || *after == ' ' || *after == '\t' || *after == '\n' || *after == '\r') {
                                  ctx.error = error_code::syntax_error;
                                  return;
                               }
@@ -254,8 +253,10 @@ namespace glz
 
       // Parse alias/anchor node properties shared across YAML value parsers.
       // Returns true when caller should stop (alias consumed, tolerated empty anchor, or syntax/error).
-      template <auto Opts, node_property_policy Policy = node_property_policy{}, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE bool parse_node_properties(T&& value, Ctx& ctx, It& it, End end, node_property_state& state) noexcept
+      template <auto Opts, node_property_policy Policy = node_property_policy{}, class T, class Ctx, class It,
+                class End>
+      GLZ_ALWAYS_INLINE bool parse_node_properties(T&& value, Ctx& ctx, It& it, End end,
+                                                   node_property_state& state) noexcept
       {
          state.has_anchor = false;
          state.anchor_name.clear();
@@ -749,7 +750,8 @@ namespace glz
          const char c = *it;
          // After a flow collection closes, the next character must be a structural
          // separator or whitespace/comment. Adjacent plain content is malformed.
-         if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '#' || c == ',' || c == ']' || c == '}' || c == ':') {
+         if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '#' || c == ',' || c == ']' || c == '}' ||
+             c == ':') {
             return;
          }
          ctx.error = error_code::syntax_error;
@@ -996,7 +998,8 @@ namespace glz
 
                   // In a "- item" value context, an anchor/tag/alias at the start
                   // of a continuation candidate starts a new node, not scalar content.
-                  if (ctx.sequence_item_value_context && (*lookahead == '&' || *lookahead == '*' || *lookahead == '!')) {
+                  if (ctx.sequence_item_value_context &&
+                      (*lookahead == '&' || *lookahead == '*' || *lookahead == '!')) {
                      return;
                   }
 
@@ -1551,8 +1554,8 @@ namespace glz
          }
 
          yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, false, false, true}>(
-                value, ctx, it, end, node_props))
+         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, false, false, true}>(value, ctx, it,
+                                                                                                     end, node_props))
             return;
 
          std::string str;
@@ -1705,9 +1708,7 @@ namespace glz
          yaml::node_property_state node_props{};
          if (yaml::parse_node_properties<Opts>(value, ctx, it, end, node_props)) return;
 
-         auto finalize = [&] {
-            yaml::finalize_node_anchor(node_props, ctx, it);
-         };
+         auto finalize = [&] { yaml::finalize_node_anchor(node_props, ctx, it); };
 
          // Check for special float values
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
@@ -2143,7 +2144,6 @@ namespace glz
                skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-
 
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
@@ -2750,7 +2750,8 @@ namespace glz
                   // This allows nested block mappings to continue parsing keys at the content indent
                   // For "- key: val", if dash is at column 0, content is at column 2
                   // We set parent indent to 1 so keys at column 2 pass the "indent > parent" check
-                  if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return;
+                  if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
+                     return;
                   const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
                   ctx.sequence_item_value_context = true;
                   from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
@@ -2777,7 +2778,8 @@ namespace glz
                      // Save and set indent for nested parsing
                      // Set parent indent to one less than content indent so items at
                      // content indent pass the "indent > parent" check and continue parsing
-                     if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return;
+                     if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
+                        return;
                      const bool prev_sequence_item_value_context = ctx.sequence_item_value_context;
                      ctx.sequence_item_value_context = true;
                      from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
@@ -2789,7 +2791,8 @@ namespace glz
 
                if (has_pending_item_anchor && !bool(ctx.error)) {
                   const char* element_end = (it != end) ? &*it : element_start;
-                  ctx.anchors[std::move(pending_item_anchor_name)] = {element_start, element_end, pending_item_anchor_indent};
+                  ctx.anchors[std::move(pending_item_anchor_name)] = {element_start, element_end,
+                                                                      pending_item_anchor_indent};
                   has_pending_item_anchor = false;
                }
             };
@@ -2914,7 +2917,8 @@ namespace glz
 
          // Measure indent of the content line
          int32_t content_indent = measure_indent<false>(peek, end, ctx);
-         if (bool(ctx.error)) [[unlikely]] return -1;
+         if (bool(ctx.error)) [[unlikely]]
+            return -1;
 
          // Tabs in indentation-like positions are only allowed when they are plain
          // scalar content. Structural lines (mapping keys/entries) remain errors.
@@ -2923,7 +2927,8 @@ namespace glz
             while (probe != end && (*probe == ' ' || *probe == '\t')) ++probe;
             if (probe != end && *probe != '\n' && *probe != '\r' && *probe != '#') {
                const bool looks_sequence_entry =
-                  (*probe == '-') && ((probe + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(probe + 1))]);
+                  (*probe == '-') &&
+                  ((probe + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(probe + 1))]);
                const bool looks_explicit_entry =
                   (*probe == '?' || *probe == ':') &&
                   ((probe + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(probe + 1))]);
@@ -3006,9 +3011,7 @@ namespace glz
       // mapping_indent >= 0: caller knows the key indent (struct case, first key may be mid-line)
       // mapping_indent < 0: discover from first key (map case)
       template <auto Opts, class Ctx, class It, class End, class ProcessEntry>
-      void parse_block_mapping_loop(Ctx& ctx, It& it, End end,
-                                    int32_t mapping_indent,
-                                    ProcessEntry&& process_entry)
+      void parse_block_mapping_loop(Ctx& ctx, It& it, End end, int32_t mapping_indent, ProcessEntry&& process_entry)
       {
          const int32_t parent_indent = ctx.current_indent();
          const bool discover_indent = (mapping_indent < 0);
@@ -3135,7 +3138,8 @@ namespace glz
 
             // In discovered-indent block mappings, sibling keys must stay at the same
             // indent level, except when the first key started mid-line (e.g. "--- k: v").
-            if (discover_indent && mapping_indent >= 0 && !established_mapping_indent_this_line && !discovered_first_key_mid_line) {
+            if (discover_indent && mapping_indent >= 0 && !established_mapping_indent_this_line &&
+                !discovered_first_key_mid_line) {
                if (mapping_indent == 0 && discovered_first_key_visual_indent > 0) {
                   if (line_indent > discovered_first_key_visual_indent) {
                      ctx.error = error_code::syntax_error;
@@ -3156,7 +3160,8 @@ namespace glz
 
             // Sequence indicator check (struct case only - map parser lets key parsing
             // handle '- ' which produces appropriate errors for misindented items)
-            if (!discover_indent && *it == '-' && ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n')) {
+            if (!discover_indent && *it == '-' &&
+                ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n')) {
                it = line_start;
                return;
             }
@@ -3240,8 +3245,8 @@ namespace glz
          // Clamp to >= 0 so the shared loop uses struct mode (discover_indent = false)
          if (mapping_indent < 0) mapping_indent = 0;
 
-         parse_block_mapping_loop<Opts>(ctx, it, end, mapping_indent,
-            [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
+         parse_block_mapping_loop<Opts>(
+            ctx, it, end, mapping_indent, [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
                // Parse key using thread-local buffer to avoid allocation
                auto& key = string_buffer();
                key.clear();
@@ -3282,7 +3287,8 @@ namespace glz
 
                            // Check if value is on same line or next line
                            if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                              if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return false;
+                              if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
+                                 return false;
                               from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
                               ctx.pop_indent();
                            }
@@ -3291,10 +3297,12 @@ namespace glz
                               if (nested_indent >= 0) {
                                  skip_to_content(it, end);
                                  if constexpr (readable_map_t<member_type>) {
-                                    if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return false;
+                                    if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
+                                       return false;
                                  }
                                  else {
-                                    if (!ctx.push_indent(nested_indent)) [[unlikely]] return false;
+                                    if (!ctx.push_indent(nested_indent)) [[unlikely]]
+                                       return false;
                                  }
                                  from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
                                  ctx.pop_indent();
@@ -3507,7 +3515,8 @@ namespace glz
             // Check what follows
             if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                // Content on same line as dash
-               if (!ctx.push_indent(line_indent + 2)) [[unlikely]] return;
+               if (!ctx.push_indent(line_indent + 2)) [[unlikely]]
+                  return;
                from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
                ctx.pop_indent();
             }
@@ -3524,7 +3533,8 @@ namespace glz
                it = nested_start;
 
                if (nested_indent > line_indent) {
-                  if (!ctx.push_indent(nested_indent)) [[unlikely]] return;
+                  if (!ctx.push_indent(nested_indent)) [[unlikely]]
+                     return;
                   from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
                   ctx.pop_indent();
                }
@@ -4022,8 +4032,8 @@ namespace glz
          }
 
          yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, true, true, false}>(
-                value, ctx, it, end, node_props))
+         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, true, true, false}>(value, ctx, it, end,
+                                                                                                    node_props))
             return;
 
          if (*it == '{') {
@@ -4075,8 +4085,8 @@ namespace glz
          }
 
          yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, true, false, false}>(
-                value, ctx, it, end, node_props))
+         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, true, false, false}>(value, ctx, it,
+                                                                                                     end, node_props))
             return;
 
          using key_t = typename std::remove_cvref_t<T>::key_type;
@@ -4276,9 +4286,8 @@ namespace glz
                // require an explicit separator after ':' (spaces, line break, comment,
                // omitted value delimiter, or end). Adjacent values like ":bar" are
                // malformed in this layout.
-               if (saw_key_linebreak && it != end &&
-                   !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)] && *it != '#' && *it != ',' &&
-                   *it != '}') {
+               if (saw_key_linebreak && it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)] &&
+                   *it != '#' && *it != ',' && *it != '}') {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -4357,8 +4366,8 @@ namespace glz
          }
          else {
             // Block mapping - use shared loop with map-specific callback
-            yaml::parse_block_mapping_loop<Opts>(ctx, it, end, int32_t(-1),
-               [&](auto& ctx, auto& it, auto end, int32_t line_indent) -> bool {
+            yaml::parse_block_mapping_loop<Opts>(
+               ctx, it, end, int32_t(-1), [&](auto& ctx, auto& it, auto end, int32_t line_indent) -> bool {
                   auto parse_map_value = [&](val_t& val) -> bool {
                      if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                         // Inline mapping values in block context cannot start with a
@@ -4392,7 +4401,8 @@ namespace glz
                                  return line != end && *line == ':';
                               };
 
-                              if (!is_line_content_start(it) && yaml::inline_value_has_plain_mapping_indicator(it, end) &&
+                              if (!is_line_content_start(it) &&
+                                  yaml::inline_value_has_plain_mapping_indicator(it, end) &&
                                   !line_has_explicit_value_indicator(it)) {
                                  ctx.error = error_code::syntax_error;
                                  return false;
@@ -4400,7 +4410,8 @@ namespace glz
                            }
                         }
 
-                        if (!ctx.push_indent(line_indent + 1)) [[unlikely]] return false;
+                        if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
+                           return false;
                         from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
                         ctx.pop_indent();
                      }
@@ -4412,7 +4423,8 @@ namespace glz
                               ctx.error = error_code::syntax_error;
                               return false;
                            }
-                           if (!ctx.push_indent(nested_indent - 1)) [[unlikely]] return false;
+                           if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
+                              return false;
                            from<YAML, val_t>::template op<Opts>(val, ctx, it, end);
                            ctx.pop_indent();
                         }
@@ -4510,7 +4522,7 @@ namespace glz
                               glz::generic key_node{};
                               if (*content == '[' || *content == '{') {
                                  from<YAML, glz::generic>::template op<yaml::flow_context_on<Opts>()>(key_node, ctx,
-                                                                                                       key_node_it, end);
+                                                                                                      key_node_it, end);
                               }
                               else {
                                  from<YAML, glz::generic>::template op<Opts>(key_node, ctx, key_node_it, end);
@@ -5000,7 +5012,7 @@ namespace glz
    template <class Variant, auto Opts>
    GLZ_ALWAYS_INLINE void parse_block_mapping_or_string(auto&& value, auto&& ctx, auto&& it, auto end)
    {
-         if constexpr (yaml::check_flow_context(Opts)) {
+      if constexpr (yaml::check_flow_context(Opts)) {
          // In flow context, only treat plain content as an implicit "key: value"
          // when a mapping separator appears before the next top-level flow delimiter.
          auto could_be_implicit_flow_pair = [&](auto pos) {
@@ -5103,12 +5115,10 @@ namespace glz
                // a document marker token. Adjacent content (e.g. '---word') is
                // malformed and must not be treated as a plain scalar.
                if (ctx.current_indent() < 0 && (end - it >= 3)) {
-                  const bool malformed_doc_start =
-                     (it[0] == '-' && it[1] == '-' && it[2] == '-' && (end - it > 3) &&
-                      !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
-                  const bool malformed_doc_end =
-                     (it[0] == '.' && it[1] == '.' && it[2] == '.' && (end - it > 3) &&
-                      !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
+                  const bool malformed_doc_start = (it[0] == '-' && it[1] == '-' && it[2] == '-' && (end - it > 3) &&
+                                                    !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
+                  const bool malformed_doc_end = (it[0] == '.' && it[1] == '.' && it[2] == '.' && (end - it > 3) &&
+                                                  !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
                   if (malformed_doc_start || malformed_doc_end) {
                      ctx.error = error_code::syntax_error;
                      return;
@@ -5239,7 +5249,8 @@ namespace glz
                            const bool indentless_sequence =
                               (!ctx.sequence_item_value_context) && (next_indent == ctx.current_indent()) &&
                               (*peek == '-') &&
-                              ((peek + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(peek + 1))]);
+                              ((peek + 1) == end ||
+                               yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(peek + 1))]);
                            value_is_indentless_sequence = indentless_sequence;
                            const bool same_indent_property_node =
                               (next_indent == ctx.current_indent()) &&
