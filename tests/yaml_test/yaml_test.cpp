@@ -6445,6 +6445,72 @@ scope: source.python)";
       auto& contexts = std::get<glz::generic::object_t>(root.at("contexts").data);
       expect(contexts.contains("prototype"));
       expect(contexts.contains("main"));
+
+      auto& prototype_entries = std::get<glz::generic::array_t>(contexts.at("prototype").data);
+      expect(prototype_entries.size() == 1u);
+      auto& prototype_entry = std::get<glz::generic::object_t>(prototype_entries[0].data);
+      expect(std::get<std::string>(prototype_entry.at("include").data) == "scope:source.shell.bash#prototype");
+
+      auto& main_entries = std::get<glz::generic::array_t>(contexts.at("main").data);
+      expect(main_entries.size() == 1u);
+      auto& main_entry = std::get<glz::generic::object_t>(main_entries[0].data);
+      expect(std::get<std::string>(main_entry.at("include").data) == "scope:source.shell.bash");
+   };
+
+   "sublime_shell_unix_generic_roundtrip"_test = [] {
+      std::string yaml = R"(---
+name: Shell-Unix-Generic
+hidden: true
+scope: source.shell
+contexts:
+  prototype:
+    - include: scope:source.shell.bash#prototype
+  main:
+    - include: scope:source.shell.bash)";
+
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      glz::generic reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+
+      auto& root = std::get<glz::generic::object_t>(reparsed.data);
+      expect(std::get<std::string>(root.at("name").data) == "Shell-Unix-Generic");
+      expect(std::get<bool>(root.at("hidden").data) == true);
+      expect(std::get<std::string>(root.at("scope").data) == "source.shell");
+
+      auto& contexts = std::get<glz::generic::object_t>(root.at("contexts").data);
+      auto& prototype_entries = std::get<glz::generic::array_t>(contexts.at("prototype").data);
+      auto& prototype_entry = std::get<glz::generic::object_t>(prototype_entries[0].data);
+      expect(std::get<std::string>(prototype_entry.at("include").data) == "scope:source.shell.bash#prototype");
+   };
+
+   "sublime_hash_separator_after_block_scalar"_test = [] {
+      std::string yaml = R"(variables:
+  magic_variables: |-
+    (?x: __(?:
+    | class
+    )__\b )
+
+##############################################################################
+
+contexts:
+  main:
+    - match: '')";
+
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      expect(root.contains("variables"));
+      expect(root.contains("contexts"));
    };
 };
 

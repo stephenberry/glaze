@@ -3212,7 +3212,7 @@ namespace glz
                   if constexpr (std::is_pointer_v<std::decay_t<It>>) {
                      if (it > line_start) {
                         const char prev = *(it - 1);
-                        if (prev != ' ' && prev != '\t') {
+                        if (prev != ' ' && prev != '\t' && prev != '\n' && prev != '\r') {
                            ctx.error = error_code::syntax_error;
                            return;
                         }
