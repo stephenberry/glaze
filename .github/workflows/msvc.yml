@@ -23,7 +23,7 @@ env:
 jobs:
   build:
     runs-on: windows-2025-vs2026
-    timeout-minutes: 30
+    timeout-minutes: 25
 
     strategy:
       matrix:
