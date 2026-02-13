@@ -1,0 +1,81 @@
+name: gcc-p2996-reflection
+
+# C++26 P2996 Reflection Testing with GCC
+# This workflow tests Glaze with GCC 16 which has P2996 reflection support
+# Uses Ubuntu devel (Resolute/26.04) container with GCC 16 from Ubuntu Toolchain PPA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  test-gcc-p2996:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:devel
+    name: GCC P2996 Reflection Tests
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          software-properties-common \
+          cmake \
+          make \
+          git \
+          python3
+        update-ca-certificates
+
+    - name: Install GCC 16 from Ubuntu Toolchain PPA
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        add-apt-repository -y ppa:ubuntu-toolchain-r/test
+        apt-get update
+        apt-get install -y gcc-16 g++-16
+
+    - uses: actions/checkout@v4
+
+    - name: Verify GCC version and reflection support
+      run: |
+        g++-16 --version
+        echo "Checking for reflection support..."
+        echo 'int main() { return 0; }' | g++-16 -std=c++26 -freflection -x c++ -c - -o /dev/null
+
+    - name: Debug paths
+      run: |
+        echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+        ls -la "$GITHUB_WORKSPACE"
+        ls -la "$GITHUB_WORKSPACE/tests/p2996_test/" || echo "p2996_test dir not found"
+
+    - name: Test P2996 reflection (direct compile)
+      run: |
+        g++-16 -std=c++26 -freflection \
+          -I"$GITHUB_WORKSPACE/include" -DGLZ_REFLECTION26=1 \
+          -o /tmp/p2996_test "$GITHUB_WORKSPACE/tests/p2996_test/p2996_test.cpp"
+        /tmp/p2996_test
+
+    - name: Build and run tests with CMake
+      run: |
+        cmake -B "$GITHUB_WORKSPACE/build" -S "$GITHUB_WORKSPACE" \
+          -DCMAKE_C_COMPILER=gcc-16 \
+          -DCMAKE_CXX_COMPILER=g++-16 \
+          -DCMAKE_CXX_FLAGS='-std=c++26 -freflection' \
+          -DCMAKE_BUILD_TYPE=Release \
+          -Dglaze_DEVELOPER_MODE=ON \
+          -Dglaze_ENABLE_REFLECTION26=ON \
+          -Dglaze_BUILD_NETWORKING_TESTS=OFF \
+          -Dglaze_ENABLE_SANITIZERS=OFF \
+          -Dglaze_ENABLE_FUZZING=OFF
+        cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
+        ctest --test-dir "$GITHUB_WORKSPACE/build" --output-on-failure -j $(nproc)

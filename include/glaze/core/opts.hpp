@@ -8,6 +8,7 @@
 
 #include "glaze/core/context.hpp"
 #include "glaze/core/optimization_level.hpp"
+#include "glaze/core/traits.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
@@ -208,6 +209,20 @@ namespace glz
    // Controls speed vs binary size tradeoff. See glaze/core/optimization_level.hpp for details.
    // Levels: size, normal (default)
    // Use preset struct: glz::opts_size
+
+   // ---
+   // bool reflect_enums = false;
+   // When true and GLZ_REFLECTION26 is enabled, automatically reflects all enum types
+   // using C++26 P2996 reflection, serializing them as strings instead of integers.
+   // This allows enum string serialization without explicit glz::meta specializations.
+
+   // ---
+   // bool qualified_type_names = false;
+   // When true and GLZ_REFLECTION26 is enabled, type_name_for_opts and name_for_opts return
+   // fully-qualified type names with namespace prefixes (e.g., "mylib::MyType" instead of "MyType").
+   // This uses P2996's std::meta::qualified_name_of instead of display_string_of.
+   // Useful for avoiding name collisions when types in different namespaces share the same name.
+   // Note: Only affects P2996 reflection. Traditional reflection always returns qualified names.
 
    // ---
    // size_t max_string_length = 0;
@@ -701,6 +716,26 @@ namespace glz
    }
 
    consteval bool is_size_optimized(auto&& Opts) { return check_optimization_level(Opts) == optimization_level::size; }
+
+   consteval bool check_reflect_enums(auto&& Opts)
+   {
+      if constexpr (requires { Opts.reflect_enums; }) {
+         return Opts.reflect_enums;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_qualified_type_names(auto&& Opts)
+   {
+      if constexpr (requires { Opts.qualified_type_names; }) {
+         return Opts.qualified_type_names;
+      }
+      else {
+         return false;
+      }
+   }
 
    // Check if raw pointer allocation is possible (either compile-time or runtime option available)
    template <auto Opts, class Ctx>
@@ -1340,6 +1375,8 @@ namespace glz
 
    template <uint32_t Format = INVALID, class T = void>
    struct from;
+
+   // Note: specified and is_specified are defined in glaze/core/traits.hpp
 
    template <uint32_t Format = INVALID, class T = void>
    struct to_partial;

@@ -2,6 +2,8 @@
 
 Glaze supports pure reflection for [aggregate initializable](https://en.cppreference.com/w/cpp/language/aggregate_initialization) structs in Clang, MSVC, and GCC.
 
+> With C++26 compilers, Glaze can use [P2996 Reflection](p2996-reflection.md) as the underlying mechanism, removing the 128-member limit and providing cleaner implementation.
+
 > Aggregate initializable means:
 >
 > - no user-declared constructors

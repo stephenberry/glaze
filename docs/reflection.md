@@ -2,6 +2,8 @@
 
 Glaze provides compile time reflection utilities for C++.
 
+> For C++26 P2996 reflection support, see [P2996 Reflection](p2996-reflection.md).
+
 Most aggregate structs require no metadata at all, but if you later decide a couple of keys should be
 renamed or exposed under additional aliases you can layer those tweaks on with
 [`glz::meta<T>::modify`](modify-reflection.md). Pure reflection continues to handle the untouched members while
