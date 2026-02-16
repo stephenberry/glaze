@@ -372,14 +372,16 @@ namespace glz
          // Pass 2: Copy and process escapes and line folding
          auto src = start;
          const auto* const src_end = &*it;
+         // Track position past which we should not trim. Escape-produced characters
+         // (even whitespace like \t) are content and must not be trimmed by line folding.
+         auto* last_non_trimmable = dst;
 
          while (src < src_end) {
             // Check for newline - needs line folding
             if (*src == '\n' || *src == '\r') {
-               // Trim trailing whitespace from output before processing newline
-               while (dst > dst_start && (*(dst - 1) == ' ' || *(dst - 1) == '\t')) {
-                  --dst;
-               }
+               // Trim trailing LITERAL whitespace from output before processing newline.
+               // Escape-produced whitespace (e.g. from \t) is preserved.
+               dst = (std::max)(last_non_trimmable, dst_start);
 
                // Skip the newline
                if (*src == '\r' && (src + 1) < src_end && *(src + 1) == '\n') {
@@ -412,6 +414,7 @@ namespace glz
                   // Single newline - fold to space
                   *dst++ = ' ';
                }
+               last_non_trimmable = dst;
                continue;
             }
 
@@ -437,6 +440,7 @@ namespace glz
 
                   if (!skip_folded_line_indent(src, src_end)) return;
                   // No output - this is line continuation without space
+                  last_non_trimmable = dst;
                   continue;
                }
 
@@ -534,9 +538,16 @@ namespace glz
                   *dst++ = static_cast<char>(esc);
                   ++src;
                }
+               // All escape-produced characters are content, not trimmable
+               last_non_trimmable = dst;
             }
             else {
-               *dst++ = *src++;
+               const char ch = *src++;
+               *dst++ = ch;
+               // Only update non-trimmable for non-whitespace literal characters
+               if (ch != ' ' && ch != '\t') {
+                  last_non_trimmable = dst;
+               }
             }
          }
 
@@ -1146,6 +1157,7 @@ namespace glz
          int32_t leading_blank_indent_max = -1;
          bool first_line = true;
          bool previous_line_starts_with_tab = false;
+         bool previous_line_more_indented = false;
          std::string trailing_newlines;
 
          while (it != end) {
@@ -1156,12 +1168,23 @@ namespace glz
 
             // Check for blank line
             if (it == end || *it == '\n' || *it == '\r') {
-               if (content_indent < 0) {
-                  leading_blank_indent_max = (std::max)(leading_blank_indent_max, line_indent);
+               // In literal mode, a line with more spaces than content_indent
+               // has whitespace content that must be preserved.
+               if (content_indent >= 0 && line_indent > content_indent && indicator == '|') {
+                  it = line_start;
+                  for (int32_t i = 0; i < content_indent && it != end && *it == ' '; ++i) {
+                     ++it;
+                  }
+                  // Fall through to content processing below
                }
-               trailing_newlines.push_back('\n');
-               skip_newline(it, end);
-               continue;
+               else {
+                  if (content_indent < 0) {
+                     leading_blank_indent_max = (std::max)(leading_blank_indent_max, line_indent);
+                  }
+                  trailing_newlines.push_back('\n');
+                  skip_newline(it, end);
+                  continue;
+               }
             }
 
             // Top-level zero-indented block scalars must stop at document boundary markers.
@@ -1202,23 +1225,35 @@ namespace glz
             }
 
             const bool current_line_starts_with_tab = (it != end && *it == '\t');
+            const bool current_line_more_indented = (line_indent > content_indent);
 
-            // Add previous newlines (unless this is the first line)
-            if (!first_line) {
+            // Add previous newlines
+            if (first_line) {
+               // Leading blank lines are part of block scalar content
+               value += trailing_newlines;
+            }
+            else {
                if (indicator == '|') {
                   // Literal: preserve newlines
                   value += trailing_newlines;
                }
                else {
                   // Folded: single newline becomes space, paragraph breaks keep one newline.
-                  // When a paragraph break is adjacent to a tab-leading line, preserve it fully.
+                  // Folding does not apply adjacent to "more indented" or tab-leading lines.
                   const size_t break_count = trailing_newlines.size();
+                  const bool adjacent_special =
+                     previous_line_starts_with_tab || current_line_starts_with_tab ||
+                     previous_line_more_indented || current_line_more_indented;
                   if (break_count == 1) {
-                     value.push_back(' ');
+                     if (adjacent_special) {
+                        value.push_back('\n');
+                     }
+                     else {
+                        value.push_back(' ');
+                     }
                   }
                   else if (break_count > 1) {
-                     const bool preserve_all = previous_line_starts_with_tab || current_line_starts_with_tab;
-                     const size_t preserve_count = preserve_all ? break_count : (break_count - 1);
+                     const size_t preserve_count = adjacent_special ? break_count : (break_count - 1);
                      value.append(preserve_count, '\n');
                   }
                }
@@ -1226,6 +1261,7 @@ namespace glz
             trailing_newlines.clear();
             first_line = false;
             previous_line_starts_with_tab = current_line_starts_with_tab;
+            previous_line_more_indented = current_line_more_indented;
 
             // Read line content
             while (it != end && *it != '\n' && *it != '\r') {
@@ -1247,7 +1283,7 @@ namespace glz
          }
          else {
             // Clip: single trailing newline
-            if (!value.empty() || !trailing_newlines.empty()) {
+            if (!value.empty()) {
                value.push_back('\n');
             }
          }
@@ -2184,15 +2220,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (saw_line_break_before_separator && it != end && *it == ',') {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-
                if (it != end && *it == ':') {
+                  // In flow sequences, implicit key-value pairs must be on a single line.
                   if (saw_line_break_before_separator) {
                      ctx.error = error_code::syntax_error;
-
                      return;
                   }
                   if constexpr (std::same_as<std::remove_cvref_t<value_type>, glz::generic>) {
@@ -2304,15 +2335,9 @@ namespace glz
                   return;
 
                ++i;
-               bool saw_line_break_before_separator = false;
-               skip_flow_ws_and_newlines(ctx, it, end, &saw_line_break_before_separator);
+               skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-
-               if (saw_line_break_before_separator && it != end && *it == ',') {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
 
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
@@ -2406,24 +2431,10 @@ namespace glz
             }
 
             // Separation between flow key and ':' may include comments/newlines.
-            // A bare line break without a comment between key and ':' is invalid.
-            bool saw_key_comment = false;
-            while (it != end) {
-               skip_inline_ws(it, end);
-               if (it != end && *it == '#') {
-                  skip_comment(it, end);
-                  saw_key_comment = true;
-               }
-               if (it != end && (*it == '\n' || *it == '\r')) {
-                  if (!saw_key_comment) {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-                  skip_newline(it, end);
-                  continue;
-               }
-               break;
-            }
+            // In flow context, newlines are allowed between key and ':'.
+            skip_flow_ws_and_newlines(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             // Expect colon
             if (it == end || *it != ':') {
@@ -3400,15 +3411,9 @@ namespace glz
 
             value.emplace(std::move(element));
 
-            bool saw_line_break_before_separator = false;
-            skip_flow_ws_and_newlines(ctx, it, end, &saw_line_break_before_separator);
+            skip_flow_ws_and_newlines(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-
-            if (saw_line_break_before_separator && it != end && *it == ',') {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
 
             if (it == end) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
@@ -4133,8 +4138,6 @@ namespace glz
                         return;
                   }
                }
-               bool key_allows_linebreak_before_colon = explicit_flow_key;
-
                // Parse key
                key_t key{};
                if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
@@ -4149,12 +4152,8 @@ namespace glz
                      // Plain/quoted/alias keys stay on parse_yaml_key() for compatibility.
                      bool parse_complex_flow_key = false;
                      if (key_probe != end) {
-                        if (*key_probe == '"' || *key_probe == '\'') {
-                           key_allows_linebreak_before_colon = true;
-                        }
                         if (*key_probe == '[' || *key_probe == '{') {
                            parse_complex_flow_key = true;
-                           key_allows_linebreak_before_colon = true;
                         }
                         else if (*key_probe == '&') {
                            ++key_probe;
@@ -4162,7 +4161,6 @@ namespace glz
                            yaml::skip_inline_ws(key_probe, end);
                            if (key_probe != end && (*key_probe == '[' || *key_probe == '{')) {
                               parse_complex_flow_key = true;
-                              key_allows_linebreak_before_colon = true;
                            }
                         }
                      }
@@ -4202,41 +4200,10 @@ namespace glz
                }
 
                // Separation between flow key and ':' may include comments/newlines.
-               // A bare line break without a comment between key and ':' is invalid.
-               bool saw_key_comment = false;
-               bool saw_key_linebreak = false;
-               while (it != end) {
-                  yaml::skip_inline_ws(it, end);
-                  if (it != end && *it == '#') {
-                     yaml::skip_comment(it, end);
-                     saw_key_comment = true;
-                  }
-                  if (it != end && (*it == '\n' || *it == '\r')) {
-                     if (!saw_key_comment) {
-                        if (!key_allows_linebreak_before_colon) {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
-                        // Without an intervening comment, only allow line-break
-                        // separation if the next line is an indented ':' marker.
-                        auto look = it;
-                        yaml::skip_newline(look, end);
-                        int indent = 0;
-                        while (look != end && (*look == ' ' || *look == '\t')) {
-                           ++indent;
-                           ++look;
-                        }
-                        if (look == end || *look != ':' || indent == 0) {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
-                     }
-                     saw_key_linebreak = true;
-                     yaml::skip_newline(it, end);
-                     continue;
-                  }
-                  break;
-               }
+               // In flow context, newlines are allowed between key and ':'.
+               yaml::skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
 
                auto parse_implicit_null = [&](val_t& val) -> bool {
                   if constexpr (nullable_like<std::remove_cvref_t<val_t>>) {
@@ -4281,16 +4248,6 @@ namespace glz
                   return;
                }
                ++it;
-
-               // If the key/value indicator was reached only after a line break,
-               // require an explicit separator after ':' (spaces, line break, comment,
-               // omitted value delimiter, or end). Adjacent values like ":bar" are
-               // malformed in this layout.
-               if (saw_key_linebreak && it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)] &&
-                   *it != '#' && *it != ',' && *it != '}') {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
 
                yaml::skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -5110,21 +5067,6 @@ namespace glz
             using V = std::remove_cvref_t<T>;
             using counts = yaml_variant_type_count<V>;
             const char c = *it;
-            if constexpr (!yaml::check_flow_context(Opts)) {
-               // At document root, a line beginning with '---' / '...' must be
-               // a document marker token. Adjacent content (e.g. '---word') is
-               // malformed and must not be treated as a plain scalar.
-               if (ctx.current_indent() < 0 && (end - it >= 3)) {
-                  const bool malformed_doc_start = (it[0] == '-' && it[1] == '-' && it[2] == '-' && (end - it > 3) &&
-                                                    !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
-                  const bool malformed_doc_end = (it[0] == '.' && it[1] == '.' && it[2] == '.' && (end - it > 3) &&
-                                                  !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
-                  if (malformed_doc_start || malformed_doc_end) {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-               }
-            }
             auto is_plain_scalar_boundary = [](const char ch) {
                switch (ch) {
                case ' ':

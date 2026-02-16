@@ -1095,7 +1095,7 @@ text: |
       std::string expected_json = R"json({
   "foo": 1,
   "bar": 2,
-  "text": "a\n\nb\n\nc\n\nd\n"
+  "text": "a\n  \nb\n\nc\n\nd\n"
 }
 )json";
       expect_yaml_matches_json_case<foo_bar_text_t>(yaml, expected_json);
@@ -1447,25 +1447,28 @@ key2: &b *a
       expect_yaml_error_case(yaml);
    };
 
-   "4MUZ_00_struct_fail"_test = [] {
+   "4MUZ_00_struct"_test = [] {
       std::string yaml = R"yaml({"foo"
 : "bar"}
 )yaml";
-      expect_yaml_error_case(yaml);
+      std::string expected_json = R"json({"foo":"bar"})json";
+      expect_yaml_matches_json_case<foo_bar_t>(yaml, expected_json);
    };
 
-   "4MUZ_01_struct_fail"_test = [] {
+   "4MUZ_01_struct"_test = [] {
       std::string yaml = R"yaml({"foo"
 : bar}
 )yaml";
-      expect_yaml_error_case(yaml);
+      std::string expected_json = R"json({"foo":"bar"})json";
+      expect_yaml_matches_json_case<foo_bar_t>(yaml, expected_json);
    };
 
-   "4MUZ_02_struct_fail"_test = [] {
+   "4MUZ_02_struct"_test = [] {
       std::string yaml = R"yaml({foo
 : bar}
 )yaml";
-      expect_yaml_error_case(yaml);
+      std::string expected_json = R"json({"foo":"bar"})json";
+      expect_yaml_matches_json_case<foo_bar_t>(yaml, expected_json);
    };
 
    "55WF_struct_fail"_test = [] {
@@ -1485,12 +1488,13 @@ key2: &b *a
       expect_yaml_error_case(yaml);
    };
 
-   "5MUD_struct_fail"_test = [] {
+   "5MUD_struct"_test = [] {
       std::string yaml = R"yaml(---
 { "foo"
   :bar }
 )yaml";
-      expect_yaml_error_case(yaml);
+      std::string expected_json = R"json({"foo":"bar"})json";
+      expect_yaml_matches_json_case<foo_bar_t>(yaml, expected_json);
    };
 
    "62EZ_struct_fail"_test = [] {
