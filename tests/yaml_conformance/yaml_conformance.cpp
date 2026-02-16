@@ -3638,7 +3638,7 @@ k:#foo
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("2 leading \\\ttab"
+         std::string expected_json = R"yaml("2 leading \ttab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -3656,7 +3656,7 @@ k:#foo
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("5 leading \\\t  tab"
+         std::string expected_json = R"yaml("5 leading \t  tab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -3722,8 +3722,14 @@ omitted value:,
 : "bar"}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 4MUZ_01: Flow mapping colon on line after key
@@ -3732,8 +3738,14 @@ omitted value:,
 : bar}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 4MUZ_02: Flow mapping colon on line after key
@@ -3742,8 +3754,14 @@ omitted value:,
 : bar}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 4QFQ: Spec Example 8.2. Block Indentation Indicator [1.3]
@@ -3763,7 +3781,7 @@ omitted value:,
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml(["detected\n","# detected\n"," explicit\n","detected\n"]
+         std::string expected_json = R"yaml(["detected\n","\n\n# detected\n"," explicit\n","detected\n"]
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -3952,8 +3970,14 @@ mapping: !!map
   :bar }
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 5TRB: Invalid document-start marker in doublequoted tring
@@ -4117,7 +4141,7 @@ x: { y: z }in: valid
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("ab\n\n\n"
+         std::string expected_json = R"yaml("ab\n\n \n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -4254,7 +4278,7 @@ b: *anchor
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json =
-            R"yaml("Sammy Sosa completed another fine season with great stats.\n  63 Home Runs   0.288 Batting Average\nWhat a year!\n"
+            R"yaml("Sammy Sosa completed another fine season with great stats.\n\n  63 Home Runs\n  0.288 Batting Average\n\nWhat a year!\n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -4478,7 +4502,7 @@ rbi:
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("folded line\nnext line   * bullet\n  * list   * lines\nlast line\n"
+         std::string expected_json = R"yaml("\nfolded line\nnext line\n  * bullet\n\n  * list\n  * lines\n\nlast line\n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -4495,8 +4519,14 @@ rbi:
 , word2]
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"(["word1","word2"])";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 7W2P: Block Mapping with Missing Values
@@ -4565,8 +4595,14 @@ key2: {}
 word2
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"("---word1 word2")";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 87E4: Spec Example 7.8. Single Quoted Implicit Keys
@@ -5505,7 +5541,7 @@ alias: *anchor
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("1 trailing tab"
+         std::string expected_json = R"yaml("1 trailing\t tab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -5514,16 +5550,14 @@ alias: *anchor
       }
    };
 
-   // DE56_01: Trailing tabs in double quoted
+   // DE56_01: Trailing tabs in double quoted (escape \t followed by literal trailing spaces)
    "DE56_01"_test = [] {
-      std::string yaml = R"yaml("2 trailing\t  
-    tab"
-)yaml";
+      std::string yaml = "\"2 trailing\\t  \n    tab\"\n";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("2 trailing tab"
+         std::string expected_json = R"yaml("2 trailing\t tab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -5539,8 +5573,7 @@ alias: *anchor
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("3 trailing\\ tab"
-)yaml";
+         std::string expected_json = "\"3 trailing\\t tab\"";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
@@ -5555,8 +5588,7 @@ alias: *anchor
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("4 trailing\\ tab"
-)yaml";
+         std::string expected_json = "\"4 trailing\\t tab\"";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
@@ -5729,7 +5761,7 @@ bar: 2
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("literal\n\n\ntext\n"
+         std::string expected_json = R"yaml("\n\nliteral\n \n\ntext\n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -5834,8 +5866,14 @@ suite yaml_conformance_pass_6 = [] {
 word2
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"("---word1 word2")";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // F2C7: Anchors and Tags
@@ -5880,8 +5918,8 @@ b: >2
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "a": " more indented regular\n",
-  "b": " more indented regular\n"
+  "a": " more indented\nregular\n",
+  "b": "\n\n more indented\nregular\n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
@@ -6032,7 +6070,7 @@ text: |
          std::string expected_json = R"yaml({
   "foo": 1,
   "bar": 2,
-  "text": "a\n\nb\n\nc\n\nd\n"
+  "text": "a\n  \nb\n\nc\n\nd\n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
@@ -6265,8 +6303,14 @@ Second occurrence: *anchor
   :bar }
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // K858: Spec Example 8.6. Empty Scalar Chomping
@@ -6284,7 +6328,7 @@ keep: |+
       if (!ec) {
          std::string expected_json = R"yaml({
   "strip": "",
-  "clip": "\n",
+  "clip": "",
   "keep": "\n"
 }
 )yaml";
@@ -6303,7 +6347,7 @@ keep: |+
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("2 inline\\\ttab"
+         std::string expected_json = R"yaml("2 inline\ttab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -6327,16 +6371,13 @@ invalid item
 
    // L24T_00: Trailing line of spaces
    "L24T_00"_test = [] {
-      std::string yaml = R"yaml(foo: |
-  x
-   
-)yaml";
+      std::string yaml = "foo: |\n  x\n   \n";
       glz::generic parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "foo": "x\n"
+  "foo": "x\n \n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
@@ -6356,7 +6397,7 @@ invalid item
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "foo": "x\n"
+  "foo": "x\n \n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
@@ -6991,9 +7032,9 @@ foo: bar
       if (!ec) {
          std::string expected_json = R"yaml([
   "detected\n",
-  "# detected\n",
+  "\n\n# detected\n",
   " explicit\n",
-  "\t detected\n"
+  "\t\ndetected\n"
 ]
 )yaml";
          auto expected = normalize_json(expected_json);
@@ -7351,7 +7392,7 @@ seq:
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("literal\n\n\ntext\n"
+         std::string expected_json = R"yaml("\n\nliteral\n \n\ntext\n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
@@ -7735,8 +7776,14 @@ comments:
  }
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"k":{"k":"v"}})";
+         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // W42U: Spec Example 8.15. Block Sequence Entry Types

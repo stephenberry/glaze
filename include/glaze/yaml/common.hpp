@@ -180,6 +180,7 @@ namespace glz::yaml
       t['a'] = '\a'; // bell
       t['b'] = '\b'; // backspace
       t['t'] = '\t'; // tab
+      t['\t'] = '\t'; // YAML spec: backslash + literal tab (0x09) also produces tab
       t['n'] = '\n'; // newline
       t['v'] = '\v'; // vertical tab
       t['f'] = '\f'; // form feed
@@ -202,6 +203,7 @@ namespace glz::yaml
       t['a'] = true;
       t['b'] = true;
       t['t'] = true;
+      t['\t'] = true; // backslash + literal tab character
       t['n'] = true;
       t['v'] = true;
       t['f'] = true;
