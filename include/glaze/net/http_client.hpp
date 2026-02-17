@@ -73,7 +73,7 @@ namespace glz
    // SSL error codes for detailed error reporting
    enum class ssl_error {
       success = 0,
-      ssl_not_supported,  // HTTPS requested but SSL support not compiled in
+      ssl_not_supported, // HTTPS requested but SSL support not compiled in
       sni_hostname_failed // Failed to set SNI hostname (SSL_set_tlsext_host_name)
       // Note: Handshake and certificate errors propagate as native ASIO/OpenSSL error codes
       // for more detailed error information
@@ -164,12 +164,7 @@ namespace glz
          return true;
       }
 
-      enum class ssl_ca_source {
-         explicit_file,
-         env_ssl_cert_file,
-         env_ssl_cert_dir,
-         default_verify_paths
-      };
+      enum class ssl_ca_source { explicit_file, env_ssl_cert_file, env_ssl_cert_dir, default_verify_paths };
 
       inline std::optional<std::string_view> non_empty_path(std::optional<std::string_view> value)
       {
@@ -205,8 +200,8 @@ namespace glz
       {
          std::optional<std::error_code> last_error{};
 
-         const auto try_file = [&](std::optional<std::string_view> path, ssl_ca_source source)
-            -> std::optional<ssl_ca_source> {
+         const auto try_file = [&](std::optional<std::string_view> path,
+                                   ssl_ca_source source) -> std::optional<ssl_ca_source> {
             if (auto non_empty = non_empty_path(path)) {
                if (const std::error_code ec = load_file(*non_empty); ec) {
                   last_error = ec;
@@ -384,12 +379,12 @@ namespace glz
          }
       };
 
-      mutable std::mutex pool_mtx;  // Protects available_connections
+      mutable std::mutex pool_mtx; // Protects available_connections
       std::unordered_map<connection_key, std::vector<socket_variant>, connection_key_hash> available_connections;
       asio::any_io_executor io_executor;
       std::atomic<bool> graceful_ssl_shutdown_{true}; // Whether to perform SSL shutdown when closing connections
 #ifdef GLZ_ENABLE_SSL
-      mutable std::shared_mutex ssl_mtx;  // Protects ssl_context - shared for reads, exclusive for writes
+      mutable std::shared_mutex ssl_mtx; // Protects ssl_context - shared for reads, exclusive for writes
       std::shared_ptr<asio::ssl::context> ssl_context;
 #endif
 
@@ -491,8 +486,8 @@ namespace glz
       // 2) SSL_CERT_FILE environment variable
       // 3) SSL_CERT_DIR environment variable
       // 4) OpenSSL default verify paths
-      std::expected<void, std::error_code>
-         configure_system_ca_certificates(std::optional<std::string_view> cert_bundle_file = std::nullopt)
+      std::expected<void, std::error_code> configure_system_ca_certificates(
+         std::optional<std::string_view> cert_bundle_file = std::nullopt)
       {
          std::unique_lock<std::shared_mutex> lock(ssl_mtx);
 
@@ -677,8 +672,8 @@ namespace glz
       }
 
       // Configure CA trust roots with explicit/env/default fallback order.
-      std::expected<void, std::error_code>
-         configure_system_ca_certificates(std::optional<std::string_view> cert_bundle_file = std::nullopt)
+      std::expected<void, std::error_code> configure_system_ca_certificates(
+         std::optional<std::string_view> cert_bundle_file = std::nullopt)
       {
          return connection_pool->configure_system_ca_certificates(cert_bundle_file);
       }
@@ -1040,9 +1035,9 @@ namespace glz
 
 #ifdef GLZ_ENABLE_SSL
                               if (use_https) {
-                                 perform_stream_ssl_handshake(url, method, body, headers, connection, std::move(on_data),
-                                                              std::move(on_error), std::move(on_connect),
-                                                              std::move(internal_on_disconnect));
+                                 perform_stream_ssl_handshake(url, method, body, headers, connection,
+                                                              std::move(on_data), std::move(on_error),
+                                                              std::move(on_connect), std::move(internal_on_disconnect));
                               }
                               else
 #endif
@@ -1077,10 +1072,9 @@ namespace glz
          }
 
          ssl_sock->async_handshake(
-            asio::ssl::stream_base::client,
-            [this, url, method, body, headers, connection, on_data = std::move(on_data), on_error = std::move(on_error),
-             on_connect = std::move(on_connect),
-             on_disconnect = std::move(on_disconnect)](asio::error_code ec) mutable {
+            asio::ssl::stream_base::client, [this, url, method, body, headers, connection, on_data = std::move(on_data),
+                                             on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                             on_disconnect = std::move(on_disconnect)](asio::error_code ec) mutable {
                if (ec || connection->should_stop) {
                   on_error(ec);
                   on_disconnect();
@@ -1132,20 +1126,19 @@ namespace glz
 
          std::visit(
             [&, this](auto& sock) {
-               asio::async_write(
-                  *sock, asio::buffer(*request_buffer),
-                  [this, connection, request_buffer, on_data = std::move(on_data), on_error = std::move(on_error),
-                   on_connect = std::move(on_connect),
-                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
-                     if (ec || connection->should_stop) {
-                        on_error(ec);
-                        if (on_disconnect) on_disconnect();
-                        return;
-                     }
+               asio::async_write(*sock, asio::buffer(*request_buffer),
+                                 [this, connection, request_buffer, on_data = std::move(on_data),
+                                  on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                  on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
+                                    if (ec || connection->should_stop) {
+                                       on_error(ec);
+                                       if (on_disconnect) on_disconnect();
+                                       return;
+                                    }
 
-                     read_stream_response(connection, std::move(on_data), std::move(on_error), std::move(on_connect),
-                                          std::move(on_disconnect));
-                  });
+                                    read_stream_response(connection, std::move(on_data), std::move(on_error),
+                                                         std::move(on_connect), std::move(on_disconnect));
+                                 });
             },
             *connection->socket);
       }
@@ -1160,97 +1153,100 @@ namespace glz
                asio::async_read_until(
                   *sock, *connection->buffer, "\r\n\r\n",
                   [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
-                   on_connect = std::move(on_connect),
-                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t bytes_transferred) mutable {
-               if (ec || connection->should_stop) {
-                  on_error(ec);
-                  if (on_disconnect) on_disconnect();
-                  return;
-               }
+                   on_connect = std::move(on_connect), on_disconnect = std::move(on_disconnect)](
+                     asio::error_code ec, std::size_t bytes_transferred) mutable {
+                     if (ec || connection->should_stop) {
+                        on_error(ec);
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
 
-               // Create a zero-copy string_view of the received headers
-               std::string_view header_data{static_cast<const char*>(connection->buffer->data().data()),
-                                            bytes_transferred};
+                     // Create a zero-copy string_view of the received headers
+                     std::string_view header_data{static_cast<const char*>(connection->buffer->data().data()),
+                                                  bytes_transferred};
 
-               // Parse status line
-               auto line_end = header_data.find("\r\n");
-               if (line_end == std::string_view::npos) {
-                  on_error(std::make_error_code(std::errc::protocol_error));
-                  if (on_disconnect) on_disconnect();
-                  return;
-               }
-               std::string_view status_line = header_data.substr(0, line_end);
-               header_data.remove_prefix(line_end + 2);
+                     // Parse status line
+                     auto line_end = header_data.find("\r\n");
+                     if (line_end == std::string_view::npos) {
+                        on_error(std::make_error_code(std::errc::protocol_error));
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
+                     std::string_view status_line = header_data.substr(0, line_end);
+                     header_data.remove_prefix(line_end + 2);
 
-               auto parsed_status = parse_http_status_line(status_line);
-               if (!parsed_status) {
-                  on_error(parsed_status.error());
-                  if (on_disconnect) on_disconnect();
-                  return;
-               }
+                     auto parsed_status = parse_http_status_line(status_line);
+                     if (!parsed_status) {
+                        on_error(parsed_status.error());
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
 
-               response response_headers;
-               response_headers.status_code = parsed_status->status_code;
+                     response response_headers;
+                     response_headers.status_code = parsed_status->status_code;
 
-               // Parse header fields
-               while (!header_data.starts_with("\r\n")) {
-                  line_end = header_data.find("\r\n");
-                  if (line_end == std::string_view::npos) {
-                     on_error(std::make_error_code(std::errc::protocol_error));
-                     if (on_disconnect) on_disconnect();
-                     return;
-                  }
+                     // Parse header fields
+                     while (!header_data.starts_with("\r\n")) {
+                        line_end = header_data.find("\r\n");
+                        if (line_end == std::string_view::npos) {
+                           on_error(std::make_error_code(std::errc::protocol_error));
+                           if (on_disconnect) on_disconnect();
+                           return;
+                        }
 
-                  std::string_view header_line = header_data.substr(0, line_end);
-                  header_data.remove_prefix(line_end + 2);
+                        std::string_view header_line = header_data.substr(0, line_end);
+                        header_data.remove_prefix(line_end + 2);
 
-                  auto colon_pos = header_line.find(':');
-                  if (colon_pos != std::string::npos) {
-                     std::string_view name = header_line.substr(0, colon_pos);
-                     // Skip past ':' and any whitespace
-                     size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
-                     std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
+                        auto colon_pos = header_line.find(':');
+                        if (colon_pos != std::string::npos) {
+                           std::string_view name = header_line.substr(0, colon_pos);
+                           // Skip past ':' and any whitespace
+                           size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
+                           std::string_view value =
+                              (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
-                     // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-                     response_headers.response_headers[to_lower_case(name)] = std::string(value);
-                  }
-               }
+                           // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
+                           response_headers.response_headers[to_lower_case(name)] = std::string(value);
+                        }
+                     }
 
-               // Consume all processed header data from the streambuf
-               connection->buffer->consume(bytes_transferred);
+                     // Consume all processed header data from the streambuf
+                     connection->buffer->consume(bytes_transferred);
 
-               connection->is_connected = true;
-               connection->timer->cancel();
+                     connection->is_connected = true;
+                     connection->timer->cancel();
 
-               if (on_connect) {
-                  on_connect(response_headers);
-               }
+                     if (on_connect) {
+                        on_connect(response_headers);
+                     }
 
-               const bool status_is_error = connection->status_is_error
-                                               ? connection->status_is_error(parsed_status->status_code)
-                                               : parsed_status->status_code >= 400;
+                     const bool status_is_error = connection->status_is_error
+                                                     ? connection->status_is_error(parsed_status->status_code)
+                                                     : parsed_status->status_code >= 400;
 
-               if (status_is_error) {
-                  // Propagate the precise HTTP status via a dedicated error category.
-                  on_error(make_http_status_error(parsed_status->status_code));
-                  if (on_disconnect) on_disconnect();
-                  return;
-               }
+                     if (status_is_error) {
+                        // Propagate the precise HTTP status via a dedicated error category.
+                        on_error(make_http_status_error(parsed_status->status_code));
+                        if (on_disconnect) on_disconnect();
+                        return;
+                     }
 
-               bool is_chunked = false;
-               auto it = response_headers.response_headers.find("transfer-encoding");
-               if (it != response_headers.response_headers.end()) {
-                  if (it->second.find("chunked") != std::string::npos) {
-                     is_chunked = true;
-                  }
-               }
+                     bool is_chunked = false;
+                     auto it = response_headers.response_headers.find("transfer-encoding");
+                     if (it != response_headers.response_headers.end()) {
+                        if (it->second.find("chunked") != std::string::npos) {
+                           is_chunked = true;
+                        }
+                     }
 
-               if (is_chunked) {
-                  start_chunked_reading(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
-               }
-               else {
-                  start_stream_reading(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
-               }
+                     if (is_chunked) {
+                        start_chunked_reading(connection, std::move(on_data), std::move(on_error),
+                                              std::move(on_disconnect));
+                     }
+                     else {
+                        start_stream_reading(connection, std::move(on_data), std::move(on_error),
+                                             std::move(on_disconnect));
+                     }
                   });
             },
             *connection->socket);
@@ -1272,7 +1268,8 @@ namespace glz
                asio::async_read_until(
                   *sock, *connection->buffer, "\r\n",
                   [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
-                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t bytes_transferred) mutable {
+                   on_disconnect = std::move(on_disconnect)](asio::error_code ec,
+                                                             std::size_t bytes_transferred) mutable {
                      if (ec || connection->should_stop) {
                         if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
                            on_error(ec);
@@ -1399,21 +1396,21 @@ namespace glz
          // Use async_read with transfer_at_least(1) - may read more data for efficiency
          std::visit(
             [&, this](auto& sock) {
-               asio::async_read(
-                  *sock, *connection->buffer, asio::transfer_at_least(1),
-                  [this, connection, on_data, on_error, on_disconnect](asio::error_code ec,
-                                                                       std::size_t /*bytes_transferred*/) {
-                     if (ec || connection->should_stop) {
-                        if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
-                           on_error(ec);
-                        }
-                        if (on_disconnect) on_disconnect();
-                        return;
-                     }
+               asio::async_read(*sock, *connection->buffer, asio::transfer_at_least(1),
+                                [this, connection, on_data, on_error, on_disconnect](
+                                   asio::error_code ec, std::size_t /*bytes_transferred*/) {
+                                   if (ec || connection->should_stop) {
+                                      if (ec != asio::error::eof && ec != asio::error::operation_aborted &&
+                                          !connection->should_stop) {
+                                         on_error(ec);
+                                      }
+                                      if (on_disconnect) on_disconnect();
+                                      return;
+                                   }
 
-                     // Recurse to process the new data
-                     start_stream_reading_bulk(connection, on_data, on_error, on_disconnect);
-                  });
+                                   // Recurse to process the new data
+                                   start_stream_reading_bulk(connection, on_data, on_error, on_disconnect);
+                                });
             },
             *connection->socket);
       }
@@ -1438,27 +1435,28 @@ namespace glz
          constexpr size_t read_size = 8192;
          std::visit(
             [&, this](auto& sock) {
-               sock->async_read_some(
-                  connection->buffer->prepare(read_size),
-                  [this, connection, on_data, on_error, on_disconnect](asio::error_code ec, std::size_t bytes_transferred) {
-                     if (ec || connection->should_stop) {
-                        if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
-                           on_error(ec);
-                        }
-                        if (on_disconnect) on_disconnect();
-                        return;
+               sock->async_read_some(connection->buffer->prepare(read_size), [this, connection, on_data, on_error,
+                                                                              on_disconnect](
+                                                                                asio::error_code ec,
+                                                                                std::size_t bytes_transferred) {
+                  if (ec || connection->should_stop) {
+                     if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
+                        on_error(ec);
                      }
+                     if (on_disconnect) on_disconnect();
+                     return;
+                  }
 
-                     // Commit the received data and deliver immediately
-                     connection->buffer->commit(bytes_transferred);
+                  // Commit the received data and deliver immediately
+                  connection->buffer->commit(bytes_transferred);
 
-                     std::string_view data{static_cast<const char*>(connection->buffer->data().data()), bytes_transferred};
-                     on_data(data);
-                     connection->buffer->consume(bytes_transferred);
+                  std::string_view data{static_cast<const char*>(connection->buffer->data().data()), bytes_transferred};
+                  on_data(data);
+                  connection->buffer->consume(bytes_transferred);
 
-                     // Continue reading
-                     start_stream_reading_immediate(connection, on_data, on_error, on_disconnect);
-                  });
+                  // Continue reading
+                  start_stream_reading_immediate(connection, on_data, on_error, on_disconnect);
+               });
             },
             *connection->socket);
       }
@@ -1667,25 +1665,26 @@ namespace glz
          }
 #endif
 
-         auto socket_var = std::make_shared<socket_variant>(connection_pool->get_connection(url.host, url.port, use_https));
+         auto socket_var =
+            std::make_shared<socket_variant>(connection_pool->get_connection(url.host, url.port, use_https));
 
          if (detail::socket_is_open(*socket_var)) {
             send_request(socket_var, method, url, body, headers, use_https, std::forward<CompletionHandler>(handler));
          }
          else {
             auto resolver = std::make_shared<asio::ip::tcp::resolver>(io_executor);
-            resolver->async_resolve(
-               url.host, std::to_string(url.port),
-               [this, socket_var, resolver, method, url, body, headers, use_https,
-                handler = std::forward<CompletionHandler>(handler)](
-                  asio::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
-                  if (ec) {
-                     handler(std::unexpected(ec));
-                     return;
-                  }
+            resolver->async_resolve(url.host, std::to_string(url.port),
+                                    [this, socket_var, resolver, method, url, body, headers, use_https,
+                                     handler = std::forward<CompletionHandler>(handler)](
+                                       asio::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
+                                       if (ec) {
+                                          handler(std::unexpected(ec));
+                                          return;
+                                       }
 
-                  connect_and_send(socket_var, results, method, url, body, headers, use_https, std::move(handler));
-               });
+                                       connect_and_send(socket_var, results, method, url, body, headers, use_https,
+                                                        std::move(handler));
+                                    });
          }
       }
 
@@ -1747,17 +1746,16 @@ namespace glz
             return;
          }
 
-         ssl_sock->async_handshake(
-            asio::ssl::stream_base::client,
-            [this, socket_var, method, url, body, headers,
-             handler = std::forward<CompletionHandler>(handler)](asio::error_code ec) mutable {
-               if (ec) {
-                  handler(std::unexpected(ec));
-                  return;
-               }
+         ssl_sock->async_handshake(asio::ssl::stream_base::client,
+                                   [this, socket_var, method, url, body, headers,
+                                    handler = std::forward<CompletionHandler>(handler)](asio::error_code ec) mutable {
+                                      if (ec) {
+                                         handler(std::unexpected(ec));
+                                         return;
+                                      }
 
-               send_request(socket_var, method, url, body, headers, true, std::move(handler));
-            });
+                                      send_request(socket_var, method, url, body, headers, true, std::move(handler));
+                                   });
       }
 #endif
 
@@ -1823,9 +1821,8 @@ namespace glz
             [&, this](auto& sock) {
                asio::async_read_until(
                   *sock, *buffer, "\r\n\r\n",
-                  [this, socket_var, buffer, url, use_https,
-                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
-                                                                       std::size_t bytes_transferred) mutable {
+                  [this, socket_var, buffer, url, use_https, handler = std::forward<CompletionHandler>(handler)](
+                     asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec) {
                         handler(std::unexpected(ec));
                         return;

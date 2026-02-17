@@ -5,12 +5,11 @@
 #undef GLZ_ENABLE_SSL
 #endif
 
-#include "glaze/net/http_client.hpp"
-
 #include <chrono>
 #include <future>
 #include <thread>
 
+#include "glaze/net/http_client.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -23,9 +22,9 @@ suite http_client_no_ssl_executor_tests = [] {
       auto promise = std::make_shared<std::promise<std::expected<glz::response, std::error_code>>>();
       auto future = promise->get_future();
 
-      client.get_async(
-         "https://example.com", {},
-         [promise](std::expected<glz::response, std::error_code> result) { promise->set_value(std::move(result)); });
+      client.get_async("https://example.com", {}, [promise](std::expected<glz::response, std::error_code> result) {
+         promise->set_value(std::move(result));
+      });
 
       std::thread io_thread([&io]() { io.run(); });
 

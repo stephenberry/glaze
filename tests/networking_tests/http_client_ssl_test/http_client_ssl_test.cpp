@@ -3,8 +3,8 @@
 
 #include <atomic>
 #include <chrono>
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <future>
 #include <iostream>
@@ -150,9 +150,8 @@ class CertificateGenerator
          X509V3_set_ctx_nodb(&ctx);
          X509V3_set_ctx(&ctx, x509, x509, nullptr, nullptr, 0);
 
-         X509_EXTENSION* ext =
-            X509V3_EXT_conf_nid(nullptr, &ctx, NID_subject_alt_name,
-                                const_cast<char*>("DNS:localhost,DNS:*.localhost"));
+         X509_EXTENSION* ext = X509V3_EXT_conf_nid(nullptr, &ctx, NID_subject_alt_name,
+                                                   const_cast<char*>("DNS:localhost,DNS:*.localhost"));
          if (ext) {
             X509_add_ext(x509, ext, -1);
             X509_EXTENSION_free(ext);
@@ -209,8 +208,9 @@ class CertificateGenerator
 
       bool cert_written = write_pem_file(cert_file, [&](BIO* bio) { return PEM_write_bio_X509(bio, cert.get()); });
 
-      bool key_written = write_pem_file(
-         key_file, [&](BIO* bio) { return PEM_write_bio_PrivateKey(bio, pkey.get(), nullptr, nullptr, 0, nullptr, nullptr); });
+      bool key_written = write_pem_file(key_file, [&](BIO* bio) {
+         return PEM_write_bio_PrivateKey(bio, pkey.get(), nullptr, nullptr, 0, nullptr, nullptr);
+      });
 
 #ifndef _WIN32
       chmod(key_file.c_str(), 0600);
@@ -645,8 +645,7 @@ suite https_client_tests = [] {
       glz::http_client client;
 
       // Configure context using thread-safe method
-      client.configure_ssl_context(
-         [](asio::ssl::context& ctx) { ctx.set_verify_mode(asio::ssl::verify_none); });
+      client.configure_ssl_context([](asio::ssl::context& ctx) { ctx.set_verify_mode(asio::ssl::verify_none); });
 
       // Make request after configuration
       auto result = client.get(g_server.base_url() + "/health");
@@ -685,9 +684,7 @@ suite https_client_tests = [] {
             loaded_env = true;
             return std::make_error_code(std::errc::no_such_file_or_directory);
          },
-         [&](std::string_view) -> std::error_code {
-            return std::make_error_code(std::errc::permission_denied);
-         },
+         [&](std::string_view) -> std::error_code { return std::make_error_code(std::errc::permission_denied); },
          [&]() -> std::error_code {
             used_default = true;
             return {};
@@ -797,8 +794,7 @@ suite https_client_tests = [] {
          total_success += f.get();
       }
 
-      expect(total_success == num_threads * requests_per_thread)
-         << "All concurrent requests should succeed";
+      expect(total_success == num_threads * requests_per_thread) << "All concurrent requests should succeed";
    };
 
    // ==================== Default Port Tests ====================
