@@ -169,7 +169,7 @@ namespace glz
          std::visit(
             [graceful_shutdown](auto& sock) {
                if (!sock) return;
-               std::error_code ec;
+               asio::error_code ec;
                if constexpr (requires { sock->next_layer(); }) {
                   // SSL socket - perform graceful shutdown if requested
                   if (graceful_shutdown && sock->next_layer().is_open()) {
@@ -440,7 +440,7 @@ namespace glz
          bool expected = false;
          if (should_stop.compare_exchange_strong(expected, true)) {
             if (socket && detail::socket_is_open(*socket)) {
-               std::error_code ec;
+               asio::error_code ec;
                // This cancels pending async operations on the socket, triggering their handlers
                // with asio::error::operation_aborted.
                std::visit(
@@ -846,7 +846,7 @@ namespace glz
 
          // Set connection timeout
          connection->timer->expires_after(timeout);
-         connection->timer->async_wait([connection, on_error, internal_on_disconnect](std::error_code ec) {
+         connection->timer->async_wait([connection, on_error, internal_on_disconnect](asio::error_code ec) {
             if (!ec && !connection->is_connected && !connection->should_stop) {
                // Mark for stop to prevent race conditions
                connection->disconnect();
@@ -873,7 +873,7 @@ namespace glz
                [this, url, method, body, headers, connection, resolver, use_https, on_data = std::move(on_data),
                 on_error = std::move(on_error), on_connect = std::move(on_connect),
                 internal_on_disconnect = std::move(internal_on_disconnect)](
-                  std::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
+                  asio::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
                   if (ec || connection->should_stop) {
                      on_error(ec);
                      internal_on_disconnect(); // Ensure cleanup on resolve error
@@ -896,7 +896,7 @@ namespace glz
                            [this, url, method, body, headers, connection, use_https, on_data = std::move(on_data),
                             on_error = std::move(on_error), on_connect = std::move(on_connect),
                             internal_on_disconnect = std::move(internal_on_disconnect)](
-                              std::error_code ec, const asio::ip::tcp::endpoint&) mutable {
+                              asio::error_code ec, const asio::ip::tcp::endpoint&) mutable {
                               if (ec || connection->should_stop) {
                                  on_error(ec);
                                  internal_on_disconnect(); // Ensure cleanup on connect error
@@ -949,7 +949,7 @@ namespace glz
             asio::ssl::stream_base::client,
             [this, url, method, body, headers, connection, on_data = std::move(on_data), on_error = std::move(on_error),
              on_connect = std::move(on_connect),
-             on_disconnect = std::move(on_disconnect)](std::error_code ec) mutable {
+             on_disconnect = std::move(on_disconnect)](asio::error_code ec) mutable {
                if (ec || connection->should_stop) {
                   on_error(ec);
                   on_disconnect();
@@ -1005,7 +1005,7 @@ namespace glz
                   *sock, asio::buffer(*request_buffer),
                   [this, connection, request_buffer, on_data = std::move(on_data), on_error = std::move(on_error),
                    on_connect = std::move(on_connect),
-                   on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
                      if (ec || connection->should_stop) {
                         on_error(ec);
                         if (on_disconnect) on_disconnect();
@@ -1030,7 +1030,7 @@ namespace glz
                   *sock, *connection->buffer, "\r\n\r\n",
                   [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
                    on_connect = std::move(on_connect),
-                   on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t bytes_transferred) mutable {
+                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t bytes_transferred) mutable {
                if (ec || connection->should_stop) {
                   on_error(ec);
                   if (on_disconnect) on_disconnect();
@@ -1141,7 +1141,7 @@ namespace glz
                asio::async_read_until(
                   *sock, *connection->buffer, "\r\n",
                   [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
-                   on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t bytes_transferred) mutable {
+                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec || connection->should_stop) {
                         if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
                            on_error(ec);
@@ -1216,7 +1216,7 @@ namespace glz
                asio::async_read(
                   *sock, *connection->buffer, asio::transfer_exactly(total_to_read - connection->buffer->size()),
                   [this, connection, chunk_size, on_data = std::move(on_data), on_error = std::move(on_error),
-                   on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+                   on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
                      if (ec || connection->should_stop) {
                         if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
                            on_error(ec);
@@ -1270,7 +1270,7 @@ namespace glz
             [&, this](auto& sock) {
                asio::async_read(
                   *sock, *connection->buffer, asio::transfer_at_least(1),
-                  [this, connection, on_data, on_error, on_disconnect](std::error_code ec,
+                  [this, connection, on_data, on_error, on_disconnect](asio::error_code ec,
                                                                        std::size_t /*bytes_transferred*/) {
                      if (ec || connection->should_stop) {
                         if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
@@ -1309,7 +1309,7 @@ namespace glz
             [&, this](auto& sock) {
                sock->async_read_some(
                   connection->buffer->prepare(read_size),
-                  [this, connection, on_data, on_error, on_disconnect](std::error_code ec, std::size_t bytes_transferred) {
+                  [this, connection, on_data, on_error, on_disconnect](asio::error_code ec, std::size_t bytes_transferred) {
                      if (ec || connection->should_stop) {
                         if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
                            on_error(ec);
@@ -1376,7 +1376,7 @@ namespace glz
                   }
 
                   // Perform the SSL handshake
-                  std::error_code handshake_ec;
+                  asio::error_code handshake_ec;
                   ssl_sock->handshake(asio::ssl::stream_base::client, handshake_ec);
                   if (handshake_ec) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
@@ -1418,7 +1418,7 @@ namespace glz
 
             // Read response headers synchronously
             asio::streambuf response_buffer;
-            std::error_code ec;
+            asio::error_code ec;
             size_t header_bytes = std::visit(
                [&](auto& sock) { return asio::read_until(*sock, response_buffer, "\r\n\r\n", ec); }, socket_var);
             if (ec) {
@@ -1482,7 +1482,7 @@ namespace glz
             size_t body_in_buffer = response_buffer.size();
             if (content_length > body_in_buffer) {
                size_t remaining_to_read = content_length - body_in_buffer;
-               std::error_code read_ec;
+               asio::error_code read_ec;
                std::visit(
                   [&](auto& sock) {
                      asio::read(*sock, response_buffer, asio::transfer_exactly(remaining_to_read), read_ec);
@@ -1510,7 +1510,7 @@ namespace glz
 
             return resp;
          }
-         catch (const std::system_error& e) {
+         catch (const asio::system_error& e) {
             detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
             return std::unexpected(e.code());
          }
@@ -1547,7 +1547,7 @@ namespace glz
                url.host, std::to_string(url.port),
                [this, socket_var, resolver, method, url, body, headers, use_https,
                 handler = std::forward<CompletionHandler>(handler)](
-                  std::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
+                  asio::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
                   if (ec) {
                      handler(std::unexpected(ec));
                      return;
@@ -1578,7 +1578,7 @@ namespace glz
                asio::async_connect(
                   *tcp_sock, results,
                   [this, socket_var, method, url, body, headers, use_https,
-                   handler = std::forward<CompletionHandler>(handler)](std::error_code ec,
+                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
                                                                        const asio::ip::tcp::endpoint&) mutable {
                      if (ec) {
                         handler(std::unexpected(ec));
@@ -1619,7 +1619,7 @@ namespace glz
          ssl_sock->async_handshake(
             asio::ssl::stream_base::client,
             [this, socket_var, method, url, body, headers,
-             handler = std::forward<CompletionHandler>(handler)](std::error_code ec) mutable {
+             handler = std::forward<CompletionHandler>(handler)](asio::error_code ec) mutable {
                if (ec) {
                   handler(std::unexpected(ec));
                   return;
@@ -1670,7 +1670,7 @@ namespace glz
                asio::async_write(
                   *sock, asio::buffer(*request_str_ptr),
                   [this, socket_var, request_str_ptr, url, use_https,
-                   handler = std::forward<CompletionHandler>(handler)](std::error_code ec, std::size_t) mutable {
+                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
                      if (ec) {
                         handler(std::unexpected(ec));
                         return;
@@ -1693,7 +1693,7 @@ namespace glz
                asio::async_read_until(
                   *sock, *buffer, "\r\n\r\n",
                   [this, socket_var, buffer, url, use_https,
-                   handler = std::forward<CompletionHandler>(handler)](std::error_code ec,
+                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
                                                                        std::size_t bytes_transferred) mutable {
                      if (ec) {
                         handler(std::unexpected(ec));
@@ -1772,7 +1772,7 @@ namespace glz
                   *sock, *buffer, asio::transfer_exactly(remaining_to_read),
                   [this, socket_var, buffer, url, use_https, status_code = parsed_status->status_code,
                    response_headers = std::move(response_headers),
-                   handler = std::forward<CompletionHandler>(handler)](std::error_code ec, std::size_t) mutable {
+                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
                      // EOF is expected if the server closes the connection.
                      if (ec && ec != asio::error::eof) {
                         handler(std::unexpected(ec));
