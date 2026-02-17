@@ -263,9 +263,9 @@ namespace glz
          int base = 10;
 
         public:
-         constexpr void inform_base(int base) noexcept { this->base = base; }
+         constexpr void inform_base(int b) noexcept { base = b; }
 
-         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, this->base); }
+         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, base); }
 
          template <std::unsigned_integral T>
          constexpr bool try_accumulate(T& v, int digit) const noexcept
@@ -280,7 +280,7 @@ namespace glz
                return false;
             }
 
-            v = v * this->base + digit;
+            v = static_cast<T>(v * this->base + digit);
 
             return true;
          }
@@ -295,9 +295,9 @@ namespace glz
         public:
          constexpr void inform_negated() noexcept { this->negated = true; }
 
-         constexpr void inform_base(int base) noexcept { this->base = base; }
+         constexpr void inform_base(int b) noexcept { base = b; }
 
-         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, this->base); }
+         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, base); }
 
          template <std::signed_integral T>
          constexpr bool try_accumulate(T& v, int digit) const noexcept
@@ -313,7 +313,7 @@ namespace glz
                   return false;
                }
 
-               v = v * this->base - digit;
+               v = static_cast<T>(v * this->base - digit);
 
                return true;
             }
@@ -324,7 +324,7 @@ namespace glz
                return false;
             }
 
-            v = v * this->base + digit;
+            v = static_cast<T>(v * this->base + digit);
 
             return true;
          }
@@ -1509,10 +1509,11 @@ namespace glz
                   ctx.error = error_code::unknown_key;
                   return;
                }
-
-               skip_value<TOML>::template op<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
+               else { // else used to fix MSVC unreachable code warning
+                  skip_value<TOML>::template op<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                }
             }
 
@@ -1598,9 +1599,10 @@ namespace glz
                ctx.error = error_code::unknown_key;
                return false;
             }
-
-            skip_value<TOML>::template op<Opts>(ctx, it, end);
-            return !bool(ctx.error);
+            else { // else used to fix MSVC unreachable code warning
+               skip_value<TOML>::template op<Opts>(ctx, it, end);
+               return !bool(ctx.error);
+            }
          }
          return !bool(ctx.error);
       }
@@ -1684,10 +1686,11 @@ namespace glz
                ctx.error = error_code::unknown_key;
                return false;
             }
-
-            // Skip unknown key's content
-            skip_value<TOML>::template op<Opts>(ctx, it, end);
-            return !bool(ctx.error);
+            else { // else used to fix MSVC unreachable code warning
+               // Skip unknown key's content
+               skip_value<TOML>::template op<Opts>(ctx, it, end);
+               return !bool(ctx.error);
+            }
          }
       }
    }
@@ -1938,6 +1941,10 @@ namespace glz
       }
    } // namespace detail
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
    template <class T>
       requires(readable_map_t<T> && not glaze_object_t<T> && not reflectable<T> && not custom_read<T>)
    struct from<TOML, T>
@@ -2035,6 +2042,9 @@ namespace glz
             }
          }
       }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
    };
 
    template <class T>

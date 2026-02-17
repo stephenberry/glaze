@@ -45,6 +45,7 @@ jobs:
           echo "PATH=/usr/lib/llvm-${{ matrix.compiler.version }}/bin:$PATH" >> $GITHUB_ENV
 
       - name: Install Boost
+        id: install-boost
         uses: MarkusJx/install-boost@v2
         with:
           boost_version: ${{ matrix.boost_version }}
@@ -61,7 +62,10 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_STANDARD=23 \
             -DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS" \
-            -DCMAKE_EXE_LINKER_FLAGS="$CMAKE_EXE_LINKER_FLAGS"
+            -DCMAKE_EXE_LINKER_FLAGS="$CMAKE_EXE_LINKER_FLAGS" \
+            -Dglaze_USE_BUNDLED_ASIO=OFF
+        env:
+          Boost_ROOT: ${{ steps.install-boost.outputs.BOOST_ROOT }}
 
       - name: Build
         # Only build networking tests that actually use Asio

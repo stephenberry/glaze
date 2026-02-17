@@ -28,7 +28,9 @@ struct glz::meta<MyJson>
       else if constexpr (std::same_as<V, int>) {
          return key == "age" && value == 12;
       }
-      return false;
+      else {
+         return false; // else used to fix MSVC unreachable code warning
+      }
    }
 };
 
@@ -98,7 +100,9 @@ struct glz::meta<CombinedSkip>
       if constexpr (std::same_as<V, int>) {
          return key == "count" && value == 0;
       }
-      return false;
+      else {
+         return false; // else used to fix MSVC unreachable code warning
+      }
    }
 };
 

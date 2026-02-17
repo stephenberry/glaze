@@ -143,6 +143,8 @@ add_subdirectory(threading_test)
 add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
 add_subdirectory(yaml_test)
+
+add_subdirectory(yaml_conformance)
 add_subdirectory(msgpack_test)
 add_subdirectory(ostream_buffer_test)
 add_subdirectory(istream_buffer_test)

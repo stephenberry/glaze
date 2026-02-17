@@ -6651,6 +6651,44 @@ suite mimics_string_key_tests = [] {
       static_assert(glz::mimics_str_t<mimics_string_key>);
       expect(true);
    };
+
+   // Test for issue #2285: mimic = std::string doesn't work in std::vector<std::pair<...>>
+   "mimics<T, std::string> in vector<pair> write"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> v{{{"key1"}, {"value1"}}, {{"key2"}, {"value2"}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(v, buffer));
+      expect(buffer == R"({"key1":"value1","key2":"value2"})") << buffer;
+   };
+
+   "mimics<T, std::string> in vector<pair> read"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> v;
+      std::string json = R"({"key1":"value1","key2":"value2"})";
+
+      expect(not glz::read_json(v, json));
+      expect(v.size() == 2);
+      expect(v[0].first.value == "key1");
+      expect(v[0].second.value == "value1");
+      expect(v[1].first.value == "key2");
+      expect(v[1].second.value == "value2");
+   };
+
+   "mimics<T, std::string> in vector<pair> roundtrip"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> original{{{"key1"}, {"value1"}},
+                                                                            {{"key2"}, {"value2"}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(original, buffer));
+
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> parsed;
+      expect(not glz::read_json(parsed, buffer));
+
+      expect(parsed.size() == original.size());
+      for (size_t i = 0; i < original.size(); ++i) {
+         expect(parsed[i].first.value == original[i].first.value);
+         expect(parsed[i].second.value == original[i].second.value);
+      }
+   };
 };
 
 suite char_array = [] {
@@ -11111,7 +11149,7 @@ struct glz::meta<mixed_member_format_t>
 struct scientific_format_t
 {
    double large{1234567.89};
-   double small{0.000123456};
+   double small_val{0.000123456}; // "small" is a macro on Windows (rpcndr.h)
 };
 
 template <>
@@ -11119,7 +11157,7 @@ struct glz::meta<scientific_format_t>
 {
    using T = scientific_format_t;
    static constexpr auto value =
-      glz::object("large", glz::float_format<&T::large, "{:.2e}">, "small", glz::float_format<&T::small, "{:.3E}">);
+      glz::object("large", glz::float_format<&T::large, "{:.2e}">, "small", glz::float_format<&T::small_val, "{:.3E}">);
 };
 
 suite float_format_wrapper_tests = [] {
@@ -11184,7 +11222,7 @@ suite float_format_wrapper_tests = [] {
       std::string input = R"({"large":1e6,"small":1e-6})";
       expect(!glz::read_json(obj, input));
       expect(obj.large == 1e6);
-      expect(obj.small == 1e-6);
+      expect(obj.small_val == 1e-6);
    };
 
    "float_format_wrapper_negative_values"_test = [] {
@@ -11661,6 +11699,65 @@ suite error_on_missing_keys_symbols_tests = [] {
                           },
                           single_symbol_info_js>(result, payload);
       expect(not ec);
+   };
+};
+
+// Test for https://github.com/stephenberry/glaze/issues/2279
+// error_on_missing_keys should not require fields that are skipped via meta::skip
+struct skip_on_parse_t
+{
+   std::string name{};
+   int skipped_field{};
+   int normal_field{};
+};
+
+template <>
+struct glz::meta<skip_on_parse_t>
+{
+   using T = skip_on_parse_t;
+   static constexpr auto value = object(&T::name, &T::skipped_field, &T::normal_field);
+
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return key == "skipped_field" && ctx.op == glz::operation::parse;
+   }
+};
+
+suite error_on_missing_keys_with_skip_tests = [] {
+   "error_on_missing_keys with meta::skip - skipped field missing from JSON"_test = [] {
+      // When a field is skipped via meta::skip for parse, it should not be required
+      // even when error_on_missing_keys is set
+      skip_on_parse_t obj;
+      obj.skipped_field = 42;
+      std::string json = R"({"name":"test","normal_field":100})"; // skipped_field not in JSON
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      auto ec = glz::read<opts>(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.name == "test");
+      expect(obj.skipped_field == 42); // Unchanged, field was skipped
+      expect(obj.normal_field == 100);
+   };
+
+   "error_on_missing_keys with meta::skip - required field missing"_test = [] {
+      // Ensure that non-skipped fields are still required
+      skip_on_parse_t obj;
+      std::string json = R"({"name":"test"})"; // normal_field missing
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      auto ec = glz::read<opts>(obj, json);
+      expect(ec == glz::error_code::missing_key);
+   };
+
+   "error_on_missing_keys with meta::skip - skipped field present in JSON"_test = [] {
+      // When skipped field is present, it should be skipped (not parsed)
+      skip_on_parse_t obj;
+      obj.skipped_field = 42;
+      std::string json = R"({"name":"test","skipped_field":999,"normal_field":100})";
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      auto ec = glz::read<opts>(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.name == "test");
+      expect(obj.skipped_field == 42); // Unchanged because field is skipped during parse
+      expect(obj.normal_field == 100);
    };
 };
 
@@ -12634,7 +12731,7 @@ struct glz::meta<cast_obj>
 
 struct cast_nullable_obj
 {
-   std::optional<int> a;
+   std::optional<double> a;
    std::string b;
 };
 
@@ -12642,7 +12739,7 @@ template <>
 struct glz::meta<cast_nullable_obj>
 {
    using T = cast_nullable_obj;
-   static constexpr auto value = object("a", cast<&T::a, std::optional<double>>, "b", &T::b);
+   static constexpr auto value = object("a", cast<&T::a, std::optional<int>>, "b", &T::b);
 };
 
 suite cast_tests = [] {
@@ -12683,11 +12780,11 @@ suite cast_tests = [] {
       expect(obj.b == "hello");
 
       // Test with value present
-      data = R"({"a":42.5,"b":"world"})";
+      data = R"({"a":42,"b":"world"})";
       ec = glz::read<opts>(obj, data);
       expect(!ec) << glz::format_error(ec, data);
       expect(obj.a.has_value());
-      expect(obj.a.value() == 42);
+      expect(obj.a.value() == 42.0);
       expect(obj.b == "world");
 
       // Test missing required field

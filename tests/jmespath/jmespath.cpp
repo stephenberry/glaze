@@ -217,8 +217,7 @@ suite fuzz_findings_tests = [] {
 
    "unterminated_object_member"_test = [] {
       Person child{};
-      const std::vector<char> path{char(0x00), char(0x43), char(0x7c), char(0x94),
-                                   char(0x7c), char(0x00), char(0x2b), char(0x7f)};
+      const std::vector<char> path{'\x00', '\x43', '\x7c', '\x94', '\x7c', '\x00', '\x2b', '\x7f'};
       const std::vector<char> buffer{char(0x7b), char(0x22), char(0x00), char(0x22),
                                      char(0x22), char(0x22), char(0x2c)};
       static constexpr glz::opts options{.null_terminated = false};

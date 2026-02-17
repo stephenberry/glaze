@@ -6,12 +6,18 @@
 #if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
 #include <asio/signal_set.hpp>
+#ifdef GLZ_ENABLE_SSL
+#include <asio/ssl.hpp>
+#endif
 #elif __has_include(<boost/asio.hpp>)
 #ifndef GLZ_USING_BOOST_ASIO
 #define GLZ_USING_BOOST_ASIO
 #endif
 #include <boost/asio.hpp>
 #include <boost/asio/signal_set.hpp>
+#ifdef GLZ_ENABLE_SSL
+#include <boost/asio/ssl.hpp>
+#endif
 #else
 static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
 #endif
@@ -711,6 +717,7 @@ namespace glz
                   thread.join();
                }
             }
+            delete ptr;
          });
 
          threads->reserve(concurrency - uint32_t(run_on_main_thread));

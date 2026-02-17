@@ -93,7 +93,7 @@ namespace glz::yaml
       while (it != end) {
          // Measure indent of current line
          auto line_start = it;
-         int32_t line_indent = measure_indent(it, end, ctx);
+         int32_t line_indent = measure_indent<false>(it, end, ctx);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -248,13 +248,22 @@ namespace glz::yaml
          return;
       }
 
-      const char c = *it;
+      // Handle anchor: skip name, then continue to skip the actual value
+      if (*it == '&') {
+         ++it;
+         parse_anchor_name(it, end);
+         skip_inline_ws(it, end);
+         if (it == end) return;
+      }
 
-      // Anchors and aliases are not supported
-      if (c == '&' || c == '*') {
-         ctx.error = error_code::feature_not_supported;
+      // Handle alias: skip name and we're done (alias is a leaf reference)
+      if (*it == '*') {
+         ++it;
+         parse_anchor_name(it, end);
          return;
       }
+
+      const char c = *it;
 
       // Double-quoted string
       if (c == '"') {

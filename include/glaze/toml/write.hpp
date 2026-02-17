@@ -903,7 +903,9 @@ namespace glz
                   return !bool(get_member(value, element()));
             }
          }
-         return false;
+         else { // else used to fix MSVC unreachable code warning
+            return false;
+         }
       };
 
       // Helper lambda to write a scalar key-value pair

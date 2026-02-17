@@ -1306,6 +1306,10 @@ namespace glz
       }
    };
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
    // Glaze objects (structs with reflection)
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)
@@ -1334,6 +1338,9 @@ namespace glz
          }
 
          static constexpr auto N = reflect<T>::size;
+         if constexpr (N == 0) {
+            (void)value;
+         }
 
          uint64_t n_keys;
          if (additional_info == info::indefinite) {
@@ -1448,6 +1455,9 @@ namespace glz
          }
       }
    };
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
    // Tuples
    template <class T>

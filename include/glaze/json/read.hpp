@@ -2378,7 +2378,8 @@ namespace glz
             using V = std::decay_t<decltype(item)>;
 
             if constexpr (str_t<typename V::first_type> ||
-                          (std::is_enum_v<typename V::first_type> && glaze_t<typename V::first_type>)) {
+                          (std::is_enum_v<typename V::first_type> && glaze_t<typename V::first_type>) ||
+                          mimics_str_t<typename V::first_type>) {
                parse<JSON>::op<Opts>(item.first, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2773,7 +2774,7 @@ namespace glz
          }
 
          using first_type = typename T::first_type;
-         if constexpr (str_t<first_type> || is_named_enum<first_type>) {
+         if constexpr (str_t<first_type> || is_named_enum<first_type> || mimics_str_t<first_type>) {
             parse<JSON>::op<Opts>(value.first, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -3769,11 +3770,12 @@ namespace glz
                                  constexpr auto variant_size = std::variant_size_v<T>;
                                  if constexpr (ids_size < variant_size) {
                                     // Use the first unlabeled type as the default
-                                    const auto type_index = ids_size;
+                                    const auto default_type_index = ids_size;
 
                                     it = start; // we restart our object parsing now that we know the target type
-                                    tag_specified_index = type_index; // Store the default type index
-                                    if (value.index() != type_index) emplace_runtime_variant(value, type_index);
+                                    tag_specified_index = default_type_index; // Store the default type index
+                                    if (value.index() != default_type_index)
+                                       emplace_runtime_variant(value, default_type_index);
                                     std::visit(
                                        [&](auto&& v) {
                                           using V = std::decay_t<decltype(v)>;

@@ -119,6 +119,22 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 32 + write_padding_bytes)) [[unlikely]] {
             return;
          }
+         // YAML supports .inf, -.inf, and .nan for special float values
+         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+            if (std::isnan(value)) {
+               dump(".nan", b, ix);
+               return;
+            }
+            else if (std::isinf(value)) {
+               if (value < 0) {
+                  dump("-.inf", b, ix);
+               }
+               else {
+                  dump(".inf", b, ix);
+               }
+               return;
+            }
+         }
          write_chars::op<Opts>(value, ctx, b, ix);
       }
    };
@@ -211,13 +227,20 @@ namespace glz
       // Write a literal block scalar (|)
       template <class B>
       GLZ_ALWAYS_INLINE void write_literal_block(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level, uint8_t indent_width)
+                                                 int32_t indent_level, uint8_t indent_width, char chomping)
       {
          if (!ensure_space(ctx, b, ix + str.size() + 64 + write_padding_bytes)) [[unlikely]] {
             return;
          }
 
-         dump("|\n", b, ix);
+         if (chomping == '-' || chomping == '+') {
+            dump('|', b, ix);
+            dump(chomping, b, ix);
+            dump('\n', b, ix);
+         }
+         else {
+            dump("|\n", b, ix);
+         }
 
          // Write each line with proper indentation
          size_t pos = 0;
@@ -257,9 +280,32 @@ namespace glz
       {
          constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
-         // Check if literal block style is appropriate (multiline strings)
-         if (str.find('\n') != std::string_view::npos && str.size() > 40) {
-            write_literal_block(str, ctx, b, ix, indent_level, indent_width);
+         // Use literal block style for multiline strings
+         if (str.find('\n') != std::string_view::npos) {
+            // Block scalars are not valid inside flow collections ({...}, [...]).
+            // Emit double-quoted escaped form in flow context.
+            if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
+               write_double_quoted_string(str, ctx, b, ix);
+               return;
+            }
+
+            size_t trailing_newlines = 0;
+            for (size_t i = str.size(); i > 0; --i) {
+               if (str[i - 1] == '\n') {
+                  ++trailing_newlines;
+               }
+               else {
+                  break;
+               }
+            }
+            char chomping = '\0';
+            if (trailing_newlines == 0) {
+               chomping = '-';
+            }
+            else if (trailing_newlines > 1) {
+               chomping = '+';
+            }
+            write_literal_block(str, ctx, b, ix, indent_level, indent_width, chomping);
             return;
          }
 
@@ -329,12 +375,55 @@ namespace glz
 
    namespace yaml
    {
+      // Forward declaration for nested object helper used in block sequences
+      template <auto Opts, class T, class B>
+      GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
+                                                        int32_t indent_level);
+
       // Helper to check if a type is "simple" (writes on same line)
       template <class T>
       consteval bool is_simple_type()
       {
          using V = std::remove_cvref_t<T>;
-         return bool_t<V> || num_t<V> || str_t<V> || char_t<V> || std::is_enum_v<V>;
+         return bool_t<V> || num_t<V> || str_t<V> || char_t<V> || std::is_enum_v<V> || std::same_as<V, std::nullptr_t>;
+      }
+
+      // Runtime check if a variant currently holds a simple type
+      template <class T>
+      GLZ_ALWAYS_INLINE bool variant_holds_simple_type([[maybe_unused]] const T& value)
+      {
+         if constexpr (is_variant<T>) {
+            return std::visit(
+               [](const auto& v) {
+                  using V = std::remove_cvref_t<decltype(v)>;
+                  return is_simple_type<V>();
+               },
+               value);
+         }
+         else if constexpr (glaze_value_t<T>) {
+            // Unwrap glaze_value types (like glz::generic) to check the inner variant
+            decltype(auto) inner = get_member(value, meta_wrapper_v<T>);
+            return variant_holds_simple_type(inner);
+         }
+         else {
+            return is_simple_type<T>();
+         }
+      }
+
+      // Compile-time check if a type is or wraps a variant
+      template <class T>
+      consteval bool is_or_wraps_variant()
+      {
+         if constexpr (is_variant<T>) {
+            return true;
+         }
+         else if constexpr (glaze_value_t<T>) {
+            using inner_t = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
+            return is_or_wraps_variant<inner_t>();
+         }
+         else {
+            return false;
+         }
       }
 
       // Write block-style sequence
@@ -343,6 +432,32 @@ namespace glz
                                                   int32_t indent_level)
       {
          constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+
+         bool is_empty = false;
+         if constexpr (requires { value.empty(); }) {
+            is_empty = value.empty();
+         }
+         else if constexpr (requires {
+                               value.begin();
+                               value.end();
+                            }) {
+            is_empty = (value.begin() == value.end());
+         }
+
+         if (is_empty) {
+            const int32_t spaces = indent_level * indent_width;
+            if (!ensure_space(ctx, b, ix + spaces + 8)) [[unlikely]] {
+               return;
+            }
+            for (int32_t i = 0; i < spaces; ++i) {
+               b[ix++] = ' ';
+            }
+            dump("[]", b, ix);
+            if (indent_level > 0) {
+               dump('\n', b, ix);
+            }
+            return;
+         }
 
          bool first = true;
          for (auto&& element : value) {
@@ -370,10 +485,25 @@ namespace glz
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }
+            else if constexpr (is_or_wraps_variant<element_t>()) {
+               // For variants, check at runtime if they hold a simple type
+               if (variant_holds_simple_type(element)) {
+                  serialize<YAML>::op<Opts>(element, ctx, b, ix);
+                  dump('\n', b, ix);
+               }
+               else {
+                  // Complex variant content (maps/arrays) uses flow style ({...}, [...]) rather than
+                  // block style. This is a pragmatic choice: proper block-style output would require
+                  // tracking indentation context through the variant visitor, which adds significant
+                  // complexity. Flow style produces valid, parseable YAML that round-trips correctly.
+                  serialize<YAML>::op<flow_context_on<Opts>()>(element, ctx, b, ix);
+                  dump('\n', b, ix);
+               }
+            }
             else {
                // Complex type - write on next line with increased indent
                dump('\n', b, ix);
-               serialize<YAML>::op<Opts>(element, ctx, b, ix);
+               write_block_mapping_nested<Opts>(element, ctx, b, ix, indent_level + 1);
             }
          }
       }
@@ -632,10 +762,19 @@ namespace glz
             using val_t = field_t<V, I>;
             static constexpr sv key = get<I>(reflect<V>::keys);
 
+            // Get member value (supports both glaze_object_t and reflectable)
+            auto&& member = [&]() -> decltype(auto) {
+               if constexpr (glaze_object_t<V>) {
+                  return get_member(value, get<I>(reflect<V>::values));
+               }
+               else {
+                  return get<I>(to_tie(value));
+               }
+            }();
+
             // Skip null members if configured
             if constexpr (nullable_like<val_t>) {
                if constexpr (Opts.skip_null_members) {
-                  auto&& member = get_member(value, get<I>(reflect<V>::values));
                   if (!member) {
                      return;
                   }
@@ -655,14 +794,35 @@ namespace glz
             dump(key, b, ix);
             dump(':', b, ix);
 
-            // Get member value
-            decltype(auto) member = get_member(value, get<I>(reflect<V>::values));
-
             if constexpr (is_simple_type<val_t>() || nullable_like<val_t>) {
                // Simple types go on same line
                dump(' ', b, ix);
-               serialize<YAML>::op<Opts>(member, ctx, b, ix);
+               if constexpr (str_t<val_t>) {
+                  yaml::write_yaml_string<Opts>(sv{member}, ctx, b, ix, indent_level);
+               }
+               else {
+                  serialize<YAML>::op<Opts>(member, ctx, b, ix);
+               }
                dump('\n', b, ix);
+            }
+            else if constexpr (is_or_wraps_variant<val_t>()) {
+               // Variants and variant-wrappers (e.g., glz::generic) may hold simple values
+               if (variant_holds_simple_type(member)) {
+                  dump(' ', b, ix);
+                  serialize<YAML>::op<Opts>(member, ctx, b, ix);
+                  dump('\n', b, ix);
+               }
+               else {
+                  dump('\n', b, ix);
+                  if constexpr (requires { ctx.indent_level; }) {
+                     auto nested_ctx = ctx;
+                     nested_ctx.indent_level = indent_level + 1;
+                     serialize<YAML>::op<Opts>(member, nested_ctx, b, ix);
+                  }
+                  else {
+                     write_block_mapping_nested<Opts>(member, ctx, b, ix, indent_level + 1);
+                  }
+               }
             }
             else {
                // Complex types go on next line with increased indent
@@ -692,6 +852,14 @@ namespace glz
 
          if constexpr (glaze_object_t<V> || reflectable<V>) {
             write_block_mapping<Opts>(value, ctx, b, ix, indent_level);
+         }
+         else if constexpr (glaze_value_t<V>) {
+            // Unwrap glaze_value_t types (like glz::generic) and recurse
+            write_block_mapping_nested<Opts>(get_member(value, meta_wrapper_v<V>), ctx, b, ix, indent_level);
+         }
+         else if constexpr (is_variant<V>) {
+            // Handle variants by visiting and recursing with the same indent level
+            std::visit([&](auto&& inner) { write_block_mapping_nested<Opts>(inner, ctx, b, ix, indent_level); }, value);
          }
          else if constexpr (writable_array_t<V>) {
             write_block_sequence<Opts>(value, ctx, b, ix, indent_level);
@@ -729,6 +897,19 @@ namespace glz
                   serialize<YAML>::op<Opts>(v, ctx, b, ix);
                   dump('\n', b, ix);
                }
+               else if constexpr (is_or_wraps_variant<val_t>()) {
+                  // For variants and types wrapping variants (like glz::generic),
+                  // check at runtime if they hold a simple type
+                  if (variant_holds_simple_type(v)) {
+                     dump(' ', b, ix);
+                     serialize<YAML>::op<Opts>(v, ctx, b, ix);
+                     dump('\n', b, ix);
+                  }
+                  else {
+                     dump('\n', b, ix);
+                     write_block_mapping_nested<Opts>(v, ctx, b, ix, indent_level + 1);
+                  }
+               }
                else {
                   dump('\n', b, ix);
                   write_block_mapping_nested<Opts>(v, ctx, b, ix, indent_level + 1);
@@ -736,8 +917,13 @@ namespace glz
             }
          }
          else {
-            // Fallback for other types
+            // Fallback for types not explicitly handled above.
+            // Note: Variants with complex content are handled in the map value loop above
+            // (lines 785-796), so they don't reach here. This fallback handles edge cases
+            // like custom types. The newline is safe because serialize<YAML>::op for simple
+            // types doesn't add trailing newlines.
             serialize<YAML>::op<Opts>(value, ctx, b, ix);
+            dump('\n', b, ix);
          }
       }
 
@@ -761,10 +947,19 @@ namespace glz
             using val_t = field_t<V, I>;
             static constexpr sv key = get<I>(reflect<V>::keys);
 
+            // Get member value (supports both glaze_object_t and reflectable)
+            auto&& member = [&]() -> decltype(auto) {
+               if constexpr (glaze_object_t<V>) {
+                  return get_member(value, get<I>(reflect<V>::values));
+               }
+               else {
+                  return get<I>(to_tie(value));
+               }
+            }();
+
             // Skip null members if configured
             if constexpr (nullable_like<val_t>) {
                if constexpr (Opts.skip_null_members) {
-                  auto&& member = get_member(value, get<I>(reflect<V>::values));
                   if (!member) {
                      return;
                   }
@@ -782,7 +977,6 @@ namespace glz
             dump(key, b, ix);
             dump(": ", b, ix);
 
-            decltype(auto) member = get_member(value, get<I>(reflect<V>::values));
             serialize<YAML>::op<flow_context_on<Opts>()>(member, ctx, b, ix);
          });
 
