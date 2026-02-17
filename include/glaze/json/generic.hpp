@@ -677,9 +677,9 @@ namespace glz
 
 namespace glz
 {
-   // Specialization for glz::generic
-   template <>
-   struct seek_op<glz::generic>
+   // Specialization for glz::generic_json in all number handling modes
+   template <glz::num_mode Mode>
+   struct seek_op<glz::generic_json<Mode>>
    {
       template <class F>
       static bool op(F&& func, auto&& value, sv json_ptr)
@@ -741,8 +741,8 @@ namespace glz
       }
    };
 
-   // Helper function to navigate to a specific location in a glz::generic using a JSON pointer
-   // Returns a pointer to the generic at that location, or nullptr if not found
+   // Helper function to navigate to a specific location in a glz::generic_json using a JSON pointer
+   // Returns a pointer to the generic_json at that location, or nullptr if not found
    // Template implementation to handle both const and non-const cases
    template <class GenericPtr>
    inline auto navigate_to_impl(GenericPtr root, sv json_ptr) noexcept -> GenericPtr
@@ -829,10 +829,15 @@ namespace glz
    }
 
    // Non-const version
-   inline generic* navigate_to(generic* root, sv json_ptr) noexcept { return navigate_to_impl(root, json_ptr); }
+   template <num_mode Mode>
+   inline generic_json<Mode>* navigate_to(generic_json<Mode>* root, sv json_ptr) noexcept
+   {
+      return navigate_to_impl(root, json_ptr);
+   }
 
    // Const version
-   inline const generic* navigate_to(const generic* root, sv json_ptr) noexcept
+   template <num_mode Mode>
+   inline const generic_json<Mode>* navigate_to(const generic_json<Mode>* root, sv json_ptr) noexcept
    {
       return navigate_to_impl(root, json_ptr);
    }
@@ -1080,15 +1085,15 @@ namespace glz
    template <class V>
    concept needs_container_deserialization = needs_container_deserialization_for<V, generic>;
 
-   // Overload of get for glz::generic that deserializes containers
+   // Overload of get for glz::generic_json that deserializes containers
    // This overload is only selected for container types that need deserialization
    // Uses direct traversal instead of JSON serialization for better performance
-   template <class V>
-      requires needs_container_deserialization<V>
-   expected<V, error_ctx> get(generic& root, sv json_ptr)
+   template <class V, num_mode Mode>
+      requires needs_container_deserialization_for<V, generic_json<Mode>>
+   expected<V, error_ctx> get(generic_json<Mode>& root, sv json_ptr)
    {
       // Navigate to the target location
-      generic* target = navigate_to(&root, json_ptr);
+      generic_json<Mode>* target = navigate_to(&root, json_ptr);
       if (!target) {
          return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
@@ -1103,11 +1108,11 @@ namespace glz
    }
 
    // Const version
-   template <class V>
-      requires needs_container_deserialization<V>
-   expected<V, error_ctx> get(const generic& root, sv json_ptr)
+   template <class V, num_mode Mode>
+      requires needs_container_deserialization_for<V, generic_json<Mode>>
+   expected<V, error_ctx> get(const generic_json<Mode>& root, sv json_ptr)
    {
-      const generic* target = navigate_to(&root, json_ptr);
+      const generic_json<Mode>* target = navigate_to(&root, json_ptr);
       if (!target) {
          return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
