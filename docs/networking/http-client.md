@@ -38,6 +38,44 @@ int main() {
 - **Thread-Safe**: Multiple threads can safely use the same client instance
 - **Error Handling**: Uses `std::expected` for clean error handling
 
+## HTTPS Trust Store Configuration
+
+When using HTTPS, certificate verification depends on your OpenSSL trust store configuration.
+To simplify setup, `http_client` provides:
+
+```cpp
+std::expected<void, std::error_code> configure_system_ca_certificates(
+    std::optional<std::string_view> cert_bundle_file = std::nullopt
+);
+```
+
+Fallback order:
+
+1. Explicit `cert_bundle_file` argument (if provided)
+2. `SSL_CERT_FILE` environment variable
+3. `SSL_CERT_DIR` environment variable
+4. OpenSSL default verify paths (`set_default_verify_paths`)
+
+Example:
+
+```cpp
+glz::http_client client;
+
+if (auto ec = client.configure_system_ca_certificates("/path/to/cert.pem"); !ec) {
+    std::cerr << "Failed to configure CA trust roots: " << ec.error().message() << '\n';
+    return;
+}
+
+auto response = client.get("https://example.com");
+```
+
+Notes:
+
+- On macOS with Homebrew OpenSSL, you may need to point `SSL_CERT_FILE` at Homebrew's CA bundle
+  (commonly `/opt/homebrew/etc/ca-certificates/cert.pem`).
+- OpenSSL certificate lookup behavior is platform/package-manager dependent; explicit configuration is recommended
+  for reproducible deployments.
+
 ## Synchronous Methods
 
 ### GET Request

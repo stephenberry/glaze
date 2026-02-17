@@ -5,6 +5,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <concepts>
+#include <cstdlib>
 #include <expected>
 #include <functional>
 #include <future>
@@ -12,6 +14,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <source_location>
 #include <thread>
@@ -159,6 +162,87 @@ namespace glz
 
          sock.set_verify_callback(asio::ssl::host_name_verification(host));
          return true;
+      }
+
+      enum class ssl_ca_source {
+         explicit_file,
+         env_ssl_cert_file,
+         env_ssl_cert_dir,
+         default_verify_paths
+      };
+
+      inline std::optional<std::string_view> non_empty_path(std::optional<std::string_view> value)
+      {
+         if (value && !value->empty()) {
+            return value;
+         }
+         return std::nullopt;
+      }
+
+      inline std::optional<std::string_view> env_path(const char* name)
+      {
+         if (const char* value = std::getenv(name); value && *value) {
+            return std::string_view{value};
+         }
+         return std::nullopt;
+      }
+
+      template <typename Loader>
+      concept ssl_ca_path_loader = requires(Loader&& loader, std::string_view path) {
+         { std::forward<Loader>(loader)(path) } -> std::convertible_to<std::error_code>;
+      };
+
+      template <typename Loader>
+      concept ssl_ca_default_loader = requires(Loader&& loader) {
+         { std::forward<Loader>(loader)() } -> std::convertible_to<std::error_code>;
+      };
+
+      template <ssl_ca_path_loader LoadFile, ssl_ca_path_loader LoadDir, ssl_ca_default_loader LoadDefault>
+      inline std::expected<ssl_ca_source, std::error_code> configure_ssl_ca_fallback(
+         std::optional<std::string_view> explicit_file, std::optional<std::string_view> env_cert_file,
+         std::optional<std::string_view> env_cert_dir, LoadFile&& load_file, LoadDir&& load_dir,
+         LoadDefault&& load_default)
+      {
+         std::optional<std::error_code> last_error{};
+
+         const auto try_file = [&](std::optional<std::string_view> path, ssl_ca_source source)
+            -> std::optional<ssl_ca_source> {
+            if (auto non_empty = non_empty_path(path)) {
+               if (const std::error_code ec = load_file(*non_empty); ec) {
+                  last_error = ec;
+               }
+               else {
+                  return source;
+               }
+            }
+            return std::nullopt;
+         };
+
+         if (auto source = try_file(explicit_file, ssl_ca_source::explicit_file)) {
+            return *source;
+         }
+
+         if (auto source = try_file(env_cert_file, ssl_ca_source::env_ssl_cert_file)) {
+            return *source;
+         }
+
+         if (auto non_empty = non_empty_path(env_cert_dir)) {
+            if (const std::error_code ec = load_dir(*non_empty); ec) {
+               last_error = ec;
+            }
+            else {
+               return ssl_ca_source::env_ssl_cert_dir;
+            }
+         }
+
+         if (const std::error_code ec = load_default(); ec) {
+            if (last_error) {
+               return std::unexpected(*last_error);
+            }
+            return std::unexpected(ec);
+         }
+
+         return ssl_ca_source::default_verify_paths;
       }
 #endif
 
@@ -315,7 +399,10 @@ namespace glz
          // Use tls_client to allow negotiation of TLS 1.2/1.3 (highest mutually supported version)
          // This automatically disables insecure protocols (SSLv3, TLS 1.0, TLS 1.1)
          ssl_context = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
-         ssl_context->set_default_verify_paths();
+         // Best effort: if default trust paths are not available on this platform,
+         // callers can still configure explicit trust roots later.
+         asio::error_code ec;
+         ssl_context->set_default_verify_paths(ec);
          ssl_context->set_verify_mode(asio::ssl::verify_peer);
 #endif
       }
@@ -396,6 +483,43 @@ namespace glz
       {
          std::unique_lock<std::shared_mutex> lock(ssl_mtx);
          func(*ssl_context);
+      }
+
+      // Configure CA trust roots for server certificate verification.
+      // Fallback order:
+      // 1) explicit cert bundle path (if provided)
+      // 2) SSL_CERT_FILE environment variable
+      // 3) SSL_CERT_DIR environment variable
+      // 4) OpenSSL default verify paths
+      std::expected<void, std::error_code>
+         configure_system_ca_certificates(std::optional<std::string_view> cert_bundle_file = std::nullopt)
+      {
+         std::unique_lock<std::shared_mutex> lock(ssl_mtx);
+
+         auto result = detail::configure_ssl_ca_fallback(
+            cert_bundle_file, detail::env_path("SSL_CERT_FILE"), detail::env_path("SSL_CERT_DIR"),
+            [&](std::string_view path) -> std::error_code {
+               asio::error_code ec;
+               ssl_context->load_verify_file(std::string(path), ec);
+               return ec;
+            },
+            [&](std::string_view path) -> std::error_code {
+               asio::error_code ec;
+               ssl_context->add_verify_path(std::string(path), ec);
+               return ec;
+            },
+            [&]() -> std::error_code {
+               asio::error_code ec;
+               ssl_context->set_default_verify_paths(ec);
+               return ec;
+            });
+
+         if (!result) {
+            return std::unexpected(result.error());
+         }
+
+         ssl_context->set_verify_mode(asio::ssl::verify_peer);
+         return {};
       }
 
       // Direct access to SSL context (NOT thread-safe)
@@ -550,6 +674,13 @@ namespace glz
       void configure_ssl_context(Func&& func)
       {
          connection_pool->configure_ssl_context(std::forward<Func>(func));
+      }
+
+      // Configure CA trust roots with explicit/env/default fallback order.
+      std::expected<void, std::error_code>
+         configure_system_ca_certificates(std::optional<std::string_view> cert_bundle_file = std::nullopt)
+      {
+         return connection_pool->configure_system_ca_certificates(cert_bundle_file);
       }
 
       // Direct access to SSL context (NOT thread-safe)

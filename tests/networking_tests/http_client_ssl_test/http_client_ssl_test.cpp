@@ -3,11 +3,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <cstdio>
 #include <fstream>
 #include <future>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <thread>
 
 #include "glaze/glaze.hpp"
@@ -40,6 +42,52 @@ namespace asio
 #endif
 
 using namespace ut;
+
+namespace
+{
+   struct env_var_guard
+   {
+      std::string name;
+      std::optional<std::string> original;
+
+      explicit env_var_guard(std::string var_name) : name(std::move(var_name))
+      {
+         if (const char* value = std::getenv(name.c_str()); value) {
+            original = value;
+         }
+      }
+
+      ~env_var_guard() { restore(); }
+
+      void set(std::string_view value)
+      {
+#ifdef _WIN32
+         _putenv_s(name.c_str(), std::string(value).c_str());
+#else
+         setenv(name.c_str(), std::string(value).c_str(), 1);
+#endif
+      }
+
+      void unset()
+      {
+#ifdef _WIN32
+         _putenv_s(name.c_str(), "");
+#else
+         unsetenv(name.c_str());
+#endif
+      }
+
+      void restore()
+      {
+         if (original) {
+            set(*original);
+         }
+         else {
+            unset();
+         }
+      }
+   };
+}
 
 // Certificate generation class
 class CertificateGenerator
@@ -603,6 +651,118 @@ suite https_client_tests = [] {
       // Make request after configuration
       auto result = client.get(g_server.base_url() + "/health");
       expect(result.has_value()) << "Request should succeed after configure_ssl_context";
+      if (result.has_value()) {
+         expect(result->status_code == 200);
+      }
+   };
+
+   "configure_system_ca_certificates_allows_verified_https"_test = [] {
+      if (!g_server.is_initialized()) return;
+
+      glz::http_client client;
+      auto configured = client.configure_system_ca_certificates("client_test_cert.pem");
+      expect(configured.has_value()) << "Explicit CA bundle configuration should succeed";
+
+      auto result = client.get("https://localhost:" + std::to_string(g_server.port()) + "/health");
+      expect(result.has_value()) << "Verified HTTPS request should succeed with configured CA bundle";
+      if (result.has_value()) {
+         expect(result->status_code == 200);
+      }
+   };
+
+   "configure_system_ca_certificates_fallback_order_prefers_explicit"_test = [] {
+      bool loaded_explicit = false;
+      bool loaded_env = false;
+      bool used_default = false;
+
+      auto configured = glz::detail::configure_ssl_ca_fallback(
+         "explicit.pem", "env.pem", "env_dir",
+         [&](std::string_view path) -> std::error_code {
+            if (path == "explicit.pem") {
+               loaded_explicit = true;
+               return {};
+            }
+            loaded_env = true;
+            return std::make_error_code(std::errc::no_such_file_or_directory);
+         },
+         [&](std::string_view) -> std::error_code {
+            return std::make_error_code(std::errc::permission_denied);
+         },
+         [&]() -> std::error_code {
+            used_default = true;
+            return {};
+         });
+
+      expect(configured.has_value());
+      if (configured.has_value()) {
+         expect(*configured == glz::detail::ssl_ca_source::explicit_file);
+      }
+      expect(loaded_explicit == true);
+      expect(loaded_env == false);
+      expect(used_default == false);
+   };
+
+   "configure_system_ca_certificates_fallback_order_uses_env_then_default"_test = [] {
+      int file_attempts = 0;
+      bool dir_attempted = false;
+      bool default_used = false;
+
+      auto configured = glz::detail::configure_ssl_ca_fallback(
+         "missing.pem", "env.pem", "env_dir",
+         [&](std::string_view path) -> std::error_code {
+            ++file_attempts;
+            if (path == "env.pem") {
+               return {};
+            }
+            return std::make_error_code(std::errc::no_such_file_or_directory);
+         },
+         [&](std::string_view) -> std::error_code {
+            dir_attempted = true;
+            return std::make_error_code(std::errc::permission_denied);
+         },
+         [&]() -> std::error_code {
+            default_used = true;
+            return {};
+         });
+
+      expect(configured.has_value());
+      if (configured.has_value()) {
+         expect(*configured == glz::detail::ssl_ca_source::env_ssl_cert_file);
+      }
+      expect(file_attempts == 2);
+      expect(dir_attempted == false);
+      expect(default_used == false);
+   };
+
+   "configure_system_ca_certificates_fallback_order_returns_error_when_all_fail"_test = [] {
+      auto configured = glz::detail::configure_ssl_ca_fallback(
+         "missing.pem", std::nullopt, std::nullopt,
+         [&](std::string_view) -> std::error_code {
+            return std::make_error_code(std::errc::no_such_file_or_directory);
+         },
+         [&](std::string_view) -> std::error_code { return std::make_error_code(std::errc::permission_denied); },
+         [&]() -> std::error_code { return std::make_error_code(std::errc::io_error); });
+
+      expect(!configured.has_value());
+      if (!configured.has_value()) {
+         expect(configured.error() == std::make_error_code(std::errc::no_such_file_or_directory));
+      }
+   };
+
+   "configure_system_ca_certificates_env_fallback_integration"_test = [] {
+      if (!g_server.is_initialized()) return;
+
+      env_var_guard cert_file{"SSL_CERT_FILE"};
+      env_var_guard cert_dir{"SSL_CERT_DIR"};
+      cert_file.set("client_test_cert.pem");
+      cert_dir.unset();
+
+      glz::http_client client;
+      auto configured = client.configure_system_ca_certificates("definitely_missing_bundle.pem");
+      expect(configured.has_value()) << "Configuration should fall back to SSL_CERT_FILE";
+
+      auto result = client.get("https://localhost:" + std::to_string(g_server.port()) + "/health");
+      expect(result.has_value()) << "Verified HTTPS request should succeed via env fallback";
       if (result.has_value()) {
          expect(result->status_code == 200);
       }
