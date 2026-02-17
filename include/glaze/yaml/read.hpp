@@ -1241,9 +1241,8 @@ namespace glz
                   // Folded: single newline becomes space, paragraph breaks keep one newline.
                   // Folding does not apply adjacent to "more indented" or tab-leading lines.
                   const size_t break_count = trailing_newlines.size();
-                  const bool adjacent_special =
-                     previous_line_starts_with_tab || current_line_starts_with_tab ||
-                     previous_line_more_indented || current_line_more_indented;
+                  const bool adjacent_special = previous_line_starts_with_tab || current_line_starts_with_tab ||
+                                                previous_line_more_indented || current_line_more_indented;
                   if (break_count == 1) {
                      if (adjacent_special) {
                         value.push_back('\n');
