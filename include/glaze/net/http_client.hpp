@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <asio.hpp>
 #include <atomic>
 #include <chrono>
 #include <expected>
@@ -19,11 +18,11 @@
 #include <unordered_map>
 #include <vector>
 
+#include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/http_router.hpp"
 #include "glaze/util/key_transformers.hpp"
 
 #ifdef GLZ_ENABLE_SSL
-#include <asio/ssl.hpp>
 #include <openssl/ssl.h> // For SSL_set_tlsext_host_name
 #endif
 
@@ -149,6 +148,19 @@ namespace glz
             },
             v);
       }
+
+#ifdef GLZ_ENABLE_SSL
+      // Configure SNI and hostname verification for client TLS connections.
+      inline bool configure_ssl_client_hostname(ssl_socket& sock, const std::string& host)
+      {
+         if (!SSL_set_tlsext_host_name(sock.native_handle(), host.c_str())) {
+            return false;
+         }
+
+         sock.set_verify_callback(asio::ssl::host_name_verification(host));
+         return true;
+      }
+#endif
 
       // Helper to close a socket variant with optional SSL shutdown
       // graceful_shutdown: if true, performs SSL shutdown before closing (recommended for proper TLS termination)
@@ -801,7 +813,7 @@ namespace glz
 
 #ifndef GLZ_ENABLE_SSL
          if (use_https) {
-            asio::post(*async_io_context,
+            asio::post(io_executor,
                        [on_error = std::move(on_error)]() { on_error(make_error_code(ssl_error::ssl_not_supported)); });
             return nullptr;
          }
@@ -891,6 +903,10 @@ namespace glz
                                  return;
                               }
 
+#ifndef GLZ_ENABLE_SSL
+                              (void)use_https;
+#endif
+
 #ifdef GLZ_ENABLE_SSL
                               if (use_https) {
                                  perform_stream_ssl_handshake(url, method, body, headers, connection, std::move(on_data),
@@ -923,7 +939,7 @@ namespace glz
          auto& ssl_sock = std::get<std::shared_ptr<ssl_socket>>(*connection->socket);
 
          // Set SNI hostname for virtual hosting support
-         if (!SSL_set_tlsext_host_name(ssl_sock->native_handle(), url.host.c_str())) {
+         if (!detail::configure_ssl_client_hostname(*ssl_sock, url.host)) {
             on_error(make_error_code(ssl_error::sni_hostname_failed));
             on_disconnect();
             return;
@@ -1354,7 +1370,7 @@ namespace glz
                   auto& ssl_sock = std::get<std::shared_ptr<ssl_socket>>(socket_var);
 
                   // Set SNI hostname for virtual hosting support
-                  if (!SSL_set_tlsext_host_name(ssl_sock->native_handle(), url.host.c_str())) {
+                  if (!detail::configure_ssl_client_hostname(*ssl_sock, url.host)) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
                      return std::unexpected(make_error_code(ssl_error::sni_hostname_failed));
                   }
@@ -1513,7 +1529,7 @@ namespace glz
 
 #ifndef GLZ_ENABLE_SSL
          if (use_https) {
-            asio::post(*async_io_context, [handler = std::forward<CompletionHandler>(handler)]() mutable {
+            asio::post(io_executor, [handler = std::forward<CompletionHandler>(handler)]() mutable {
                handler(std::unexpected(make_error_code(ssl_error::ssl_not_supported)));
             });
             return;
@@ -1593,8 +1609,8 @@ namespace glz
          auto& ssl_sock = std::get<std::shared_ptr<ssl_socket>>(*socket_var);
 
          // Set SNI hostname for virtual hosting support
-         if (!SSL_set_tlsext_host_name(ssl_sock->native_handle(), url.host.c_str())) {
-            asio::post(*async_io_context, [handler = std::forward<CompletionHandler>(handler)]() mutable {
+         if (!detail::configure_ssl_client_hostname(*ssl_sock, url.host)) {
+            asio::post(io_executor, [handler = std::forward<CompletionHandler>(handler)]() mutable {
                handler(std::unexpected(make_error_code(ssl_error::sni_hostname_failed)));
             });
             return;

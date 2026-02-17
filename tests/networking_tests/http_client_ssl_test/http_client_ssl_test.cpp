@@ -29,8 +29,15 @@
 #undef DELETE
 #endif
 
-#include <asio.hpp>
-#include <asio/ssl.hpp>
+#include "glaze/ext/glaze_asio.hpp"
+
+#if defined(GLZ_USING_BOOST_ASIO)
+namespace asio
+{
+   using namespace boost::asio;
+   using error_code = boost::system::error_code;
+}
+#endif
 
 using namespace ut;
 
@@ -97,7 +104,7 @@ class CertificateGenerator
 
          X509_EXTENSION* ext =
             X509V3_EXT_conf_nid(nullptr, &ctx, NID_subject_alt_name,
-                                const_cast<char*>("DNS:localhost,DNS:*.localhost,IP:127.0.0.1,IP:::1"));
+                                const_cast<char*>("DNS:localhost,DNS:*.localhost"));
          if (ext) {
             X509_add_ext(x509, ext, -1);
             X509_EXTENSION_free(ext);
@@ -209,11 +216,9 @@ class TestHTTPSServer
   public:
    TestHTTPSServer(uint16_t port = 9443) : port_(port)
    {
-      // Generate certificates if needed
-      if (!CertificateGenerator::certificates_exist()) {
-         if (!CertificateGenerator::generate_certificates()) {
-            return;
-         }
+      // Always regenerate certificates so test expectations stay deterministic.
+      if (!CertificateGenerator::generate_certificates()) {
+         return;
       }
 
       server_.on_error([](std::error_code ec, std::source_location) {
@@ -453,6 +458,17 @@ suite https_client_tests = [] {
 
       auto result = client.get("https://");
       expect(!result.has_value()) << "Invalid URL should fail";
+   };
+
+   "https_hostname_mismatch_fails_with_default_verify"_test = [] {
+      if (!g_server.is_initialized()) return;
+
+      glz::http_client client;
+      client.configure_ssl_context([](asio::ssl::context& ctx) { ctx.load_verify_file("client_test_cert.pem"); });
+
+      // Certificate SAN is DNS-only (localhost), so this IP host must fail hostname verification.
+      auto result = client.get(g_server.base_url() + "/health");
+      expect(!result.has_value()) << "Hostname mismatch should fail with default verify mode";
    };
 
    "protocol_detection"_test = [] {
