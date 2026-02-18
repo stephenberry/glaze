@@ -15,6 +15,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(bencher)
 
+# Fetch tsl::ordered_map
+FetchContent_Declare(
+  ordered_map_tsl
+  GIT_REPOSITORY https://github.com/Tessil/ordered-map.git
+  GIT_TAG master
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(ordered_map_tsl)
+
 # Glaze - use parent directory as header-only library
 add_library(glaze INTERFACE)
 target_include_directories(glaze INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
@@ -70,6 +79,29 @@ target_link_libraries(string_write_benchmark PRIVATE
   string_write_no_simd
 )
 target_compile_options(string_write_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
+# Binary search benchmark (std::lower_bound vs branchless)
+add_executable(binary_search_benchmark binary_search_benchmark.cpp)
+target_link_libraries(binary_search_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(binary_search_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
+# Ordered map benchmark (glz::ordered_map vs tsl::ordered_map)
+add_executable(ordered_map_benchmark ordered_map_benchmark.cpp)
+target_link_libraries(ordered_map_benchmark PRIVATE
+  glaze
+  bencher::bencher
+  tsl::ordered_map
+)
+target_compile_options(ordered_map_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
