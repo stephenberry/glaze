@@ -124,14 +124,14 @@ namespace glz
             if (url.protocol == "wss") {
 #ifdef GLZ_ENABLE_SSL
                if (!ssl_ctx_) {
-                  ssl_ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tlsv12_client);
+                  ssl_ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
                   ssl_ctx_->set_default_verify_paths();
                   ssl_ctx_->set_verify_mode(ssl_verify_mode_);
                }
                ssl_socket_ = std::make_shared<asio::ssl::stream<asio::ip::tcp::socket>>(*ctx, *ssl_ctx_);
 
-               if (!SSL_set_tlsext_host_name(ssl_socket_->native_handle(), url.host.c_str())) {
-                  if (on_error && *on_error) (*on_error)(std::make_error_code(std::errc::address_not_available));
+               if (!detail::configure_ssl_client_hostname(*ssl_socket_, url.host)) {
+                  if (on_error && *on_error) (*on_error)(make_error_code(ssl_error::sni_hostname_failed));
                   return;
                }
 #else
@@ -281,13 +281,15 @@ namespace glz
 
                                             while (!value.empty() && (value.front() == ' ' || value.front() == '\t'))
                                                value.erase(0, 1);
+                                            while (!value.empty() && (value.back() == ' ' || value.back() == '\t'))
+                                               value.pop_back();
 
                                             if (strncasecmp(name.c_str(), "Upgrade", 7) == 0 &&
-                                                strncasecmp(value.c_str(), "websocket", 9) == 0) {
+                                                ws_util::header_contains(value, "websocket")) {
                                                upgrade_websocket = true;
                                             }
                                             else if (strncasecmp(name.c_str(), "Connection", 10) == 0 &&
-                                                     strncasecmp(value.c_str(), "Upgrade", 7) == 0) {
+                                                     ws_util::header_contains(value, "upgrade")) {
                                                connection_upgrade = true;
                                             }
                                             else if (strncasecmp(name.c_str(), "Sec-WebSocket-Accept", 20) == 0) {
