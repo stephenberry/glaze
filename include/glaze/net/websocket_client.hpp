@@ -7,8 +7,8 @@
 #include <memory>
 #include <mutex>
 #include <random>
-#include <vector>
 #include <variant>
+#include <vector>
 
 #include "glaze/net/http_client.hpp"
 #include "glaze/net/websocket_connection.hpp"
@@ -17,8 +17,7 @@ namespace glz
 {
    struct websocket_client
    {
-      enum class header_validation_error : uint8_t
-      {
+      enum class header_validation_error : uint8_t {
          none,
          empty_name,
          reserved_name,
@@ -568,10 +567,7 @@ namespace glz
       // Clear all additional handshake headers previously set via set_header().
       void clear_headers() { impl_->clear_request_headers(); }
 
-      [[nodiscard]] header_validation_error last_header_error() const
-      {
-         return impl_->last_header_validation_error();
-      }
+      [[nodiscard]] header_validation_error last_header_error() const { return impl_->last_header_validation_error(); }
 
       std::shared_ptr<asio::io_context>& context() { return impl_->ctx; }
 

@@ -1043,7 +1043,8 @@ suite websocket_client_tests = [] {
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
-      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
       expect(open_called.load()) << "Client should connect when required Authorization header is provided";
       expect(!error_called.load()) << "No error expected when Authorization header is valid";
 
@@ -1096,7 +1097,8 @@ suite websocket_client_tests = [] {
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
-      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
       expect(!open_called.load()) << "Client should fail when required header has been cleared";
       expect(error_called.load()) << "Missing auth header should fail the handshake";
 
@@ -1150,7 +1152,8 @@ suite websocket_client_tests = [] {
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
-      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
       expect(open_called.load()) << "Rejected non-ASCII header name should not affect valid Authorization header";
       expect(!error_called.load()) << "No error expected when non-ASCII override is rejected";
 
@@ -1196,7 +1199,8 @@ suite websocket_client_tests = [] {
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
-      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
       expect(open_called.load()) << "Latest header value should replace prior value case-insensitively";
       expect(!error_called.load()) << "No error expected when replacement header value is valid";
 
@@ -1242,7 +1246,8 @@ suite websocket_client_tests = [] {
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
-      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
       expect(!open_called.load()) << "Invalid header value should be rejected";
       expect(error_called.load()) << "Rejected header should result in handshake failure";
 
@@ -1291,7 +1296,8 @@ suite websocket_client_tests = [] {
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
-      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
       expect(open_called.load()) << "Reserved handshake header names should be ignored, not override handshake";
       expect(!error_called.load()) << "No error expected when reserved header overrides are rejected";
 
@@ -1339,9 +1345,11 @@ suite websocket_client_tests = [] {
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
-      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
       expect(open_called.load()) << "Client should still connect with the valid Authorization header";
-      expect(!error_called.load()) << "Invalid header name should be rejected before handshake, not break valid headers";
+      expect(!error_called.load())
+         << "Invalid header name should be rejected before handshake, not break valid headers";
 
       if (!client.context()->stopped()) client.context()->stop();
       if (client_thread.joinable()) client_thread.join();
@@ -1387,7 +1395,8 @@ suite websocket_client_tests = [] {
       client.connect(client_url);
       std::thread client_thread([&client]() { client.context()->run(); });
 
-      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
       expect(open_called.load()) << "Reserved Sec-WebSocket-* rejection should not affect valid auth header";
       expect(!error_called.load()) << "No error expected when reserved mixed-case override is rejected";
 
