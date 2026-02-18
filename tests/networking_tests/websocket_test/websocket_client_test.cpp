@@ -970,7 +970,6 @@ suite websocket_client_tests = [] {
       stop_server = true;
       server_thread.join();
    };
-
 };
 
 // =============================================================================
