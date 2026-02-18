@@ -650,6 +650,9 @@ namespace glz
            io_executor(executor ? executor : async_io_context->get_executor()),
            connection_pool(std::make_shared<http_connection_pool>(io_executor))
       {
+         if (async_io_context) {
+            work_guard.emplace(asio::make_work_guard(*async_io_context));
+         }
          start_workers();
       }
 
@@ -886,7 +889,8 @@ namespace glz
       asio::any_io_executor io_executor;
       std::shared_ptr<http_connection_pool> connection_pool;
       std::vector<std::thread> worker_threads;
-      std::atomic<bool> running{true};
+      // Engaged only when we own async_io_context; disengaged for external executors.
+      std::optional<asio::executor_work_guard<asio::io_context::executor_type>> work_guard;
 
       void start_workers()
       {
@@ -898,13 +902,10 @@ namespace glz
 
          for (size_t i = 0; i < num_threads; ++i) {
             worker_threads.emplace_back([this]() {
-               while (running) {
+               while (true) {
                   try {
                      async_io_context->run();
-                     // Reset context to allow it to be run again after being stopped
-                     if (async_io_context->stopped()) {
-                        async_io_context->restart();
-                     }
+                     break;
                   }
                   catch (const std::exception& e) {
                      std::cerr << "HTTP client worker error: " << e.what() << std::endl;
@@ -919,7 +920,7 @@ namespace glz
          // don't stop worker threads when an io_executor was provided
          if (!async_io_context) return;
 
-         running = false;
+         work_guard.reset();
          async_io_context->stop();
 
          for (auto& thread : worker_threads) {
