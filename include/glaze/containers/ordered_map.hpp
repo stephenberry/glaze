@@ -27,6 +27,7 @@
 // - Preserves insertion order for iteration
 // - Uses linear search for small maps (≤8 entries)
 // - Lazily builds a sorted index for larger maps (O(log n) lookup, 8 bytes per entry)
+// - Bloom filter on insert: skips duplicate check when key is definitely new
 
 namespace glz
 {
@@ -53,11 +54,20 @@ namespace glz
          uint32_t index;
       };
 
+      // Bloom filter: 1024 bits (128 bytes) with 2 hash functions.
+      // False positive rate at n entries: (1 - e^(-2n/1024))^2
+      //   n=32: ~4%   n=64: ~13%   n=128: ~40%   n=256: ~74%
+      static constexpr size_t bloom_bytes = 128;
+      static constexpr uint32_t bloom_bits = bloom_bytes * 8; // 1024
+      static constexpr uint32_t bloom_mask = bloom_bits - 1; // 0x3FF
+
       // Heap-allocated index block: [index_header][hash_index_entry × capacity]
+      // The bloom filter is embedded in the header.
       struct index_header
       {
-         uint32_t size; // number of valid entries (data_ elements covered)
-         uint32_t capacity; // allocated slots
+         uint32_t size; // number of data_ elements covered by the sorted index (0 = fully invalid)
+         uint32_t capacity; // allocated index entry slots
+         uint8_t bloom[bloom_bytes]; // bloom filter for fast insert rejection
       };
 
       std::vector<value_type> data_; // 24 bytes
@@ -65,8 +75,29 @@ namespace glz
       // Total: 32 bytes
 
       static constexpr size_type linear_search_threshold = 8;
+      static constexpr size_type bloom_threshold = 128; // disable bloom filter above this size
 
       static uint32_t hash_key(std::string_view key) noexcept { return sweethash::sweet32(key); }
+
+      // --- Bloom filter ---
+
+      void bloom_set(uint32_t h) const noexcept
+      {
+         const uint32_t a = h & bloom_mask;
+         const uint32_t b = (h >> 10) & bloom_mask;
+         index_->bloom[a >> 3] |= uint8_t(1) << (a & 7);
+         index_->bloom[b >> 3] |= uint8_t(1) << (b & 7);
+      }
+
+      bool bloom_maybe_contains(uint32_t h) const noexcept
+      {
+         const uint32_t a = h & bloom_mask;
+         const uint32_t b = (h >> 10) & bloom_mask;
+         return (index_->bloom[a >> 3] & (uint8_t(1) << (a & 7))) &&
+                (index_->bloom[b >> 3] & (uint8_t(1) << (b & 7)));
+      }
+
+      void bloom_clear() const noexcept { std::memset(index_->bloom, 0, bloom_bytes); }
 
       // --- Index memory management ---
 
@@ -96,40 +127,35 @@ namespace glz
          auto* block =
             static_cast<index_header*>(std::realloc(index_, sizeof(index_header) + cap * sizeof(hash_index_entry)));
          if (!block) GLZ_THROW_OR_ABORT(std::bad_alloc{});
-         if (!index_) block->size = 0; // first allocation
+         if (!index_) {
+            block->size = 0;
+            std::memset(block->bloom, 0, bloom_bytes);
+         }
          block->capacity = cap;
          index_ = block;
       }
 
-      // Insert an entry into the sorted index at a known position via memmove
-      void index_insert_entry(size_t pos, hash_index_entry entry) const
-      {
-         const uint32_t n = index_->size;
-         ensure_index_capacity(n + 1);
-         auto* entries = index_entries();
-         if (pos < n) {
-            std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
-         }
-         entries[pos] = entry;
-         index_->size = static_cast<uint32_t>(data_.size());
-      }
-
       // --- Index construction ---
 
+      // Full rebuild: rehash all keys, sort, and repopulate bloom filter.
       void rebuild_index() const
       {
          const auto n = static_cast<uint32_t>(data_.size());
          ensure_index_capacity(n);
+         bloom_clear();
          auto* entries = index_entries();
          for (uint32_t i = 0; i < n; ++i) {
-            entries[i] = {hash_key(data_[i].first), i};
+            const uint32_t h = hash_key(data_[i].first);
+            entries[i] = {h, i};
+            bloom_set(h);
          }
          std::sort(entries, entries + n, [](const auto& a, const auto& b) { return a.hash < b.hash; });
          index_->size = n;
       }
 
-      // Bring the index up to date. If the index covers some elements,
-      // incrementally insert-sort only the new ones. If fully invalid, rebuild.
+      // Bring the index up to date.
+      // If fully invalid (after erase) or many entries are stale (bloom deferred), do a full rebuild.
+      // If only a few entries are stale (incremental inserts above bloom_threshold), insert-sort them.
       void ensure_index() const
       {
          if (data_.size() <= linear_search_threshold) return;
@@ -137,25 +163,27 @@ namespace glz
          const auto current = index_size();
          if (current == n) return; // fully current
 
-         if (current == 0) {
-            rebuild_index(); // full rebuild after erase or first time
+         if (current == 0 || (n - current) > linear_search_threshold) {
+            rebuild_index(); // full rebuild
             return;
          }
 
-         // Incrementally insert the new entries
+         // Incrementally insert-sort the few new entries
          for (uint32_t i = current; i < n; ++i) {
             const hash_index_entry entry{hash_key(data_[i].first), i};
             const auto* base = index_entries();
             const auto* p = branchless_lower_bound(base, index_->size, entry.hash);
             auto pos = static_cast<size_t>(p - base);
-            index_insert_entry(pos, entry);
-         }
-      }
 
-      // Insert into the sorted index at a known position and update bookkeeping
-      void index_insert_at(size_t pos, uint32_t h, uint32_t data_idx) const
-      {
-         index_insert_entry(pos, {h, data_idx});
+            const uint32_t m = index_->size;
+            ensure_index_capacity(m + 1);
+            auto* entries = index_entries();
+            if (pos < m) {
+               std::memmove(entries + pos + 1, entries + pos, (m - pos) * sizeof(hash_index_entry));
+            }
+            entries[pos] = entry;
+            index_->size = i + 1;
+         }
       }
 
       // Result of a combined find + insertion-point search
@@ -169,11 +197,10 @@ namespace glz
       // Single binary search that returns both the lookup result and
       // the index insertion position, avoiding a redundant second search.
       template <class K>
-      index_find_result index_find_or_pos(const K& key)
+      index_find_result index_find_or_pos(const K& key, uint32_t h)
       {
          ensure_index();
 
-         const uint32_t h = hash_key(key);
          const auto* base = index_entries();
          const auto* idx_end = base + index_->size;
          const auto* p = branchless_lower_bound(base, index_->size, h);
@@ -225,7 +252,26 @@ namespace glz
       // Binary search using hash index
       // On hash match, scans adjacent entries to handle collisions
       template <class K>
-      iterator index_find(const K& key)
+      iterator index_find(const K& key) const
+      {
+         ensure_index();
+
+         const uint32_t h = hash_key(key);
+         const auto* base = index_entries();
+         const auto* idx_end = base + index_->size;
+         const auto* p = branchless_lower_bound(base, index_->size, h);
+
+         for (; p != idx_end && p->hash == h; ++p) {
+            if (data_[p->index].first == key) {
+               // const_cast needed: data_ iterators are non-const from mutable find
+               return const_cast<std::vector<value_type>&>(data_).begin() + p->index;
+            }
+         }
+         return const_cast<std::vector<value_type>&>(data_).end();
+      }
+
+      template <class K>
+      const_iterator const_index_find(const K& key) const
       {
          ensure_index();
 
@@ -242,22 +288,46 @@ namespace glz
          return data_.end();
       }
 
-      template <class K>
-      const_iterator index_find(const K& key) const
+      // --- Insert helpers ---
+
+      // Try the bloom filter fast path for insert.
+      // Returns true if the key is definitely new and was appended (caller is done).
+      // Returns false if the bloom says "maybe present" (caller must do full search).
+      template <class F>
+      bool try_bloom_insert(uint32_t h, F&& append_fn)
       {
-         ensure_index();
-
-         const uint32_t h = hash_key(key);
-         const auto* base = index_entries();
-         const auto* idx_end = base + index_->size;
-         const auto* p = branchless_lower_bound(base, index_->size, h);
-
-         for (; p != idx_end && p->hash == h; ++p) {
-            if (data_[p->index].first == key) {
-               return data_.begin() + p->index;
-            }
+         if (index_ && data_.size() <= bloom_threshold && !bloom_maybe_contains(h)) {
+            // Definitely not present — skip the search
+            append_fn();
+            bloom_set(h);
+            // Index is now stale (index_->size < data_.size()), will rebuild on next lookup or false positive
+            return true;
          }
-         return data_.end();
+         return false;
+      }
+
+      // Full insert path: ensure index, search for duplicate, insert if new.
+      // Returns iterator to existing or newly inserted element, and whether insertion happened.
+      template <class F>
+      std::pair<iterator, bool> indexed_insert(const key_type& key, uint32_t h, F&& append_fn)
+      {
+         auto [it, pos, _] = index_find_or_pos(key, h);
+         if (it != end()) return {it, false};
+         append_fn();
+         bloom_set(h);
+         // After ensure_index in index_find_or_pos, index is current for all entries before this one.
+         // Insert the new entry into the sorted index to keep it current.
+         if (index_size() > 0) {
+            const uint32_t n = index_->size;
+            ensure_index_capacity(n + 1);
+            auto* entries = index_entries();
+            if (pos < n) {
+               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
+            }
+            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
+            index_->size = static_cast<uint32_t>(data_.size());
+         }
+         return {data_.end() - 1, true};
       }
 
      public:
@@ -347,36 +417,34 @@ namespace glz
 
       std::pair<iterator, bool> insert(const value_type& value)
       {
+         const uint32_t h = hash_key(value.first);
          if (data_.size() <= linear_search_threshold) {
             auto it = linear_find(value.first);
             if (it != end()) return {it, false};
             data_.push_back(value);
             return {data_.end() - 1, true};
          }
-         auto [it, pos, h] = index_find_or_pos(value.first);
-         if (it != end()) return {it, false};
-         data_.push_back(value);
-         if (index_size() > 0) {
-            index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
+         if (try_bloom_insert(h, [&] { data_.push_back(value); })) {
+            return {data_.end() - 1, true};
          }
-         return {data_.end() - 1, true};
+         return indexed_insert(value.first, h, [&] { data_.push_back(value); });
       }
 
       std::pair<iterator, bool> insert(value_type&& value)
       {
+         const uint32_t h = hash_key(value.first);
          if (data_.size() <= linear_search_threshold) {
             auto it = linear_find(value.first);
             if (it != end()) return {it, false};
             data_.push_back(std::move(value));
             return {data_.end() - 1, true};
          }
-         auto [it, pos, h] = index_find_or_pos(value.first);
-         if (it != end()) return {it, false};
-         data_.push_back(std::move(value));
-         if (index_size() > 0) {
-            index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
+         // Must capture key before potential move
+         const auto& key = value.first;
+         if (try_bloom_insert(h, [&] { data_.push_back(std::move(value)); })) {
+            return {data_.end() - 1, true};
          }
-         return {data_.end() - 1, true};
+         return indexed_insert(key, h, [&] { data_.push_back(std::move(value)); });
       }
 
       template <class InputIt>
@@ -392,19 +460,18 @@ namespace glz
       template <class K, class... Args>
       std::pair<iterator, bool> emplace(K&& key, Args&&... args)
       {
+         const uint32_t h = hash_key(key);
          if (data_.size() <= linear_search_threshold) {
             auto it = linear_find(key);
             if (it != end()) return {it, false};
             data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...));
             return {data_.end() - 1, true};
          }
-         auto [it, pos, h] = index_find_or_pos(key);
-         if (it != end()) return {it, false};
-         data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...));
-         if (index_size() > 0) {
-            index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
+         if (try_bloom_insert(h, [&] { data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...)); })) {
+            return {data_.end() - 1, true};
          }
-         return {data_.end() - 1, true};
+         return indexed_insert(key, h,
+                               [&] { data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...)); });
       }
 
       iterator erase(const_iterator pos)
@@ -446,7 +513,7 @@ namespace glz
          if (data_.size() <= linear_search_threshold) {
             return linear_find(key);
          }
-         return index_find(key);
+         return const_index_find(key);
       }
 
       template <class K>
@@ -464,34 +531,59 @@ namespace glz
       // Element access
       mapped_type& operator[](const key_type& key)
       {
+         const uint32_t h = hash_key(key);
          if (data_.size() <= linear_search_threshold) {
             auto it = linear_find(key);
             if (it != end()) return it->second;
             data_.emplace_back(key, mapped_type{});
             return data_.back().second;
          }
-         auto [it, pos, h] = index_find_or_pos(key);
+         if (try_bloom_insert(h, [&] { data_.emplace_back(key, mapped_type{}); })) {
+            return data_.back().second;
+         }
+         auto [it, pos, _] = index_find_or_pos(key, h);
          if (it != end()) return it->second;
          data_.emplace_back(key, mapped_type{});
+         bloom_set(h);
          if (index_size() > 0) {
-            index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
+            const uint32_t n = index_->size;
+            ensure_index_capacity(n + 1);
+            auto* entries = index_entries();
+            if (pos < n) {
+               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
+            }
+            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
+            index_->size = static_cast<uint32_t>(data_.size());
          }
          return data_.back().second;
       }
 
       mapped_type& operator[](key_type&& key)
       {
+         const uint32_t h = hash_key(key);
          if (data_.size() <= linear_search_threshold) {
             auto it = linear_find(key);
             if (it != end()) return it->second;
             data_.emplace_back(std::move(key), mapped_type{});
             return data_.back().second;
          }
-         auto [it, pos, h] = index_find_or_pos(key);
+         if (try_bloom_insert(h, [&] { data_.emplace_back(std::move(key), mapped_type{}); })) {
+            return data_.back().second;
+         }
+         // key may have been moved — but try_bloom_insert returned false, so the lambda didn't execute
+         auto [it, pos, _] = index_find_or_pos(key, h);
          if (it != end()) return it->second;
          data_.emplace_back(std::move(key), mapped_type{});
+         bloom_set(h);
          if (index_size() > 0) {
-            index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
+            const uint32_t n = index_->size;
+            ensure_index_capacity(n + 1);
+            auto* entries = index_entries();
+            if (pos < n) {
+               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
+            }
+            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
+            index_->size = static_cast<uint32_t>(data_.size());
          }
          return data_.back().second;
       }
@@ -503,17 +595,30 @@ namespace glz
                   !std::same_as<std::decay_t<K>, key_type>)
       mapped_type& operator[](K&& key)
       {
+         const uint32_t h = hash_key(key);
          if (data_.size() <= linear_search_threshold) {
             auto it = linear_find(key);
             if (it != end()) return it->second;
             data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{});
             return data_.back().second;
          }
-         auto [it, pos, h] = index_find_or_pos(key);
+         if (try_bloom_insert(h,
+                              [&] { data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{}); })) {
+            return data_.back().second;
+         }
+         auto [it, pos, _] = index_find_or_pos(key, h);
          if (it != end()) return it->second;
          data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{});
+         bloom_set(h);
          if (index_size() > 0) {
-            index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
+            const uint32_t n = index_->size;
+            ensure_index_capacity(n + 1);
+            auto* entries = index_entries();
+            if (pos < n) {
+               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
+            }
+            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
+            index_->size = static_cast<uint32_t>(data_.size());
          }
          return data_.back().second;
       }
