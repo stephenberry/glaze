@@ -105,3 +105,14 @@ target_compile_options(ordered_map_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
+
+# Ordered map memory comparison
+add_executable(ordered_map_memory ordered_map_memory.cpp)
+target_link_libraries(ordered_map_memory PRIVATE
+  glaze
+  tsl::ordered_map
+)
+target_compile_options(ordered_map_memory PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)

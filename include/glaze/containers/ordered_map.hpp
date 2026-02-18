@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <concepts>
+#include <cstdlib>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -50,34 +52,80 @@ namespace glz
          uint32_t hash;
          uint32_t index;
       };
-      std::vector<value_type> data_;
 
-      // Sorted index for fast lookup on large maps
-      // Stores (hash, index) pairs sorted by hash - 8 bytes per entry
-      // Colliding hashes are adjacent; lookup scans neighbors and compares actual keys
-      // Maintained incrementally: new entries are insert-sorted into position.
-      mutable std::vector<hash_index_entry> index_;
-      mutable uint32_t index_size_ = 0; // number of data_ elements covered by the index (0 = fully invalid)
+      // Heap-allocated index block: [index_header][hash_index_entry × capacity]
+      struct index_header
+      {
+         uint32_t size; // number of valid entries (data_ elements covered)
+         uint32_t capacity; // allocated slots
+      };
+
+      std::vector<value_type> data_; // 24 bytes
+      mutable index_header* index_ = nullptr; // 8 bytes
+      // Total: 32 bytes
 
       static constexpr size_type linear_search_threshold = 8;
 
       static uint32_t hash_key(std::string_view key) noexcept { return sweethash::sweet32(key); }
 
-      // Full invalidation - used by erase (indices shift) and clear
-      void invalidate_index() noexcept { index_size_ = 0; }
+      // --- Index memory management ---
+
+      hash_index_entry* index_entries() const noexcept
+      {
+         return reinterpret_cast<hash_index_entry*>(index_ + 1);
+      }
+
+      uint32_t index_size() const noexcept { return index_ ? index_->size : 0; }
+
+      void invalidate_index() noexcept
+      {
+         if (index_) index_->size = 0;
+      }
+
+      void free_index() noexcept
+      {
+         std::free(index_);
+         index_ = nullptr;
+      }
+
+      void ensure_index_capacity(uint32_t needed) const
+      {
+         if (index_ && index_->capacity >= needed) return;
+         uint32_t cap = index_ ? index_->capacity : 0;
+         while (cap < needed) cap = cap ? cap * 2 : 16;
+         auto* block =
+            static_cast<index_header*>(std::realloc(index_, sizeof(index_header) + cap * sizeof(hash_index_entry)));
+         if (!block) GLZ_THROW_OR_ABORT(std::bad_alloc{});
+         if (!index_) block->size = 0; // first allocation
+         block->capacity = cap;
+         index_ = block;
+      }
+
+      // Insert an entry into the sorted index at a known position via memmove
+      void index_insert_entry(size_t pos, hash_index_entry entry) const
+      {
+         const uint32_t n = index_->size;
+         ensure_index_capacity(n + 1);
+         auto* entries = index_entries();
+         if (pos < n) {
+            std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
+         }
+         entries[pos] = entry;
+         index_->size = static_cast<uint32_t>(data_.size());
+      }
+
+      // --- Index construction ---
 
       void rebuild_index() const
       {
-         index_.clear();
-         index_.reserve(data_.size());
-         for (uint32_t i = 0; i < static_cast<uint32_t>(data_.size()); ++i) {
-            index_.push_back({hash_key(data_[i].first), i});
+         const auto n = static_cast<uint32_t>(data_.size());
+         ensure_index_capacity(n);
+         auto* entries = index_entries();
+         for (uint32_t i = 0; i < n; ++i) {
+            entries[i] = {hash_key(data_[i].first), i};
          }
-
-         std::sort(index_.begin(), index_.end(),
-                   [](const auto& a, const auto& b) { return a.hash < b.hash; });
-
-         index_size_ = static_cast<uint32_t>(data_.size());
+         std::sort(entries, entries + n, [](const auto& a, const auto& b) { return a.hash < b.hash; });
+         index_->size = n;
       }
 
       // Bring the index up to date. If the index covers some elements,
@@ -86,29 +134,28 @@ namespace glz
       {
          if (data_.size() <= linear_search_threshold) return;
          const auto n = static_cast<uint32_t>(data_.size());
-         if (index_size_ == n) return; // fully current
+         const auto current = index_size();
+         if (current == n) return; // fully current
 
-         if (index_size_ == 0) {
+         if (current == 0) {
             rebuild_index(); // full rebuild after erase or first time
             return;
          }
 
          // Incrementally insert the new entries
-         for (uint32_t i = index_size_; i < n; ++i) {
+         for (uint32_t i = current; i < n; ++i) {
             const hash_index_entry entry{hash_key(data_[i].first), i};
-            const auto* base = index_.data();
-            const auto* p = branchless_lower_bound(base, index_.size(), entry.hash);
+            const auto* base = index_entries();
+            const auto* p = branchless_lower_bound(base, index_->size, entry.hash);
             auto pos = static_cast<size_t>(p - base);
-            index_.insert(index_.begin() + pos, entry);
+            index_insert_entry(pos, entry);
          }
-         index_size_ = n;
       }
 
       // Insert into the sorted index at a known position and update bookkeeping
       void index_insert_at(size_t pos, uint32_t h, uint32_t data_idx) const
       {
-         index_.insert(index_.begin() + pos, {h, data_idx});
-         index_size_ = static_cast<uint32_t>(data_.size());
+         index_insert_entry(pos, {h, data_idx});
       }
 
       // Result of a combined find + insertion-point search
@@ -127,9 +174,9 @@ namespace glz
          ensure_index();
 
          const uint32_t h = hash_key(key);
-         const auto* base = index_.data();
-         const auto* idx_end = base + index_.size();
-         const auto* p = branchless_lower_bound(base, index_.size(), h);
+         const auto* base = index_entries();
+         const auto* idx_end = base + index_->size;
+         const auto* p = branchless_lower_bound(base, index_->size, h);
          const size_t pos = static_cast<size_t>(p - base);
 
          // Scan adjacent entries with matching hash
@@ -183,9 +230,9 @@ namespace glz
          ensure_index();
 
          const uint32_t h = hash_key(key);
-         const auto* base = index_.data();
-         const auto* idx_end = base + index_.size();
-         const auto* p = branchless_lower_bound(base, index_.size(), h);
+         const auto* base = index_entries();
+         const auto* idx_end = base + index_->size;
+         const auto* p = branchless_lower_bound(base, index_->size, h);
 
          for (; p != idx_end && p->hash == h; ++p) {
             if (data_[p->index].first == key) {
@@ -201,9 +248,9 @@ namespace glz
          ensure_index();
 
          const uint32_t h = hash_key(key);
-         const auto* base = index_.data();
-         const auto* idx_end = base + index_.size();
-         const auto* p = branchless_lower_bound(base, index_.size(), h);
+         const auto* base = index_entries();
+         const auto* idx_end = base + index_->size;
+         const auto* p = branchless_lower_bound(base, index_->size, h);
 
          for (; p != idx_end && p->hash == h; ++p) {
             if (data_[p->index].first == key) {
@@ -216,6 +263,8 @@ namespace glz
      public:
       // Constructors
       ordered_map() = default;
+
+      ~ordered_map() { free_index(); }
 
       ordered_map(std::initializer_list<value_type> init)
       {
@@ -237,20 +286,19 @@ namespace glz
 
       ordered_map(const ordered_map& other) : data_(other.data_)
       {
-         // Don't copy index - it will be rebuilt lazily with correct string_views
+         // Don't copy index - it will be rebuilt lazily
       }
 
-      ordered_map(ordered_map&& other) noexcept : data_(std::move(other.data_))
+      ordered_map(ordered_map&& other) noexcept : data_(std::move(other.data_)), index_(other.index_)
       {
-         // Don't move index - string_views would point to moved-from strings
-         other.invalidate_index();
+         other.index_ = nullptr;
       }
 
       ordered_map& operator=(const ordered_map& other)
       {
          if (this != &other) {
             data_ = other.data_;
-            invalidate_index();
+            free_index();
          }
          return *this;
       }
@@ -259,8 +307,9 @@ namespace glz
       {
          if (this != &other) {
             data_ = std::move(other.data_);
-            invalidate_index();
-            other.invalidate_index();
+            free_index();
+            index_ = other.index_;
+            other.index_ = nullptr;
          }
          return *this;
       }
@@ -293,8 +342,7 @@ namespace glz
       void clear() noexcept
       {
          data_.clear();
-         index_.clear();
-         index_size_ = 0;
+         free_index();
       }
 
       std::pair<iterator, bool> insert(const value_type& value)
@@ -308,7 +356,7 @@ namespace glz
          auto [it, pos, h] = index_find_or_pos(value.first);
          if (it != end()) return {it, false};
          data_.push_back(value);
-         if (index_size_ > 0) {
+         if (index_size() > 0) {
             index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
          }
          return {data_.end() - 1, true};
@@ -325,7 +373,7 @@ namespace glz
          auto [it, pos, h] = index_find_or_pos(value.first);
          if (it != end()) return {it, false};
          data_.push_back(std::move(value));
-         if (index_size_ > 0) {
+         if (index_size() > 0) {
             index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
          }
          return {data_.end() - 1, true};
@@ -353,7 +401,7 @@ namespace glz
          auto [it, pos, h] = index_find_or_pos(key);
          if (it != end()) return {it, false};
          data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...));
-         if (index_size_ > 0) {
+         if (index_size() > 0) {
             index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
          }
          return {data_.end() - 1, true};
@@ -425,7 +473,7 @@ namespace glz
          auto [it, pos, h] = index_find_or_pos(key);
          if (it != end()) return it->second;
          data_.emplace_back(key, mapped_type{});
-         if (index_size_ > 0) {
+         if (index_size() > 0) {
             index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
          }
          return data_.back().second;
@@ -442,7 +490,7 @@ namespace glz
          auto [it, pos, h] = index_find_or_pos(key);
          if (it != end()) return it->second;
          data_.emplace_back(std::move(key), mapped_type{});
-         if (index_size_ > 0) {
+         if (index_size() > 0) {
             index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
          }
          return data_.back().second;
@@ -464,7 +512,7 @@ namespace glz
          auto [it, pos, h] = index_find_or_pos(key);
          if (it != end()) return it->second;
          data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{});
-         if (index_size_ > 0) {
+         if (index_size() > 0) {
             index_insert_at(pos, h, static_cast<uint32_t>(data_.size() - 1));
          }
          return data_.back().second;
