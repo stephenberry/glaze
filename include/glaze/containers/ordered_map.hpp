@@ -23,7 +23,7 @@
 
 // An ordered_map optimized for JSON objects with string keys.
 // - Preserves insertion order for iteration
-// - Uses linear search for small maps (≤16 entries)
+// - Uses linear search for small maps (≤8 entries)
 // - Lazily builds a sorted index for larger maps (O(log n) lookup, 8 bytes per entry)
 
 namespace glz
@@ -44,13 +44,19 @@ namespace glz
       using const_reverse_iterator = typename std::vector<value_type>::const_reverse_iterator;
 
      private:
+      // Compact index entry: maps a hash to a position in the data vector
+      struct hash_index_entry
+      {
+         uint32_t hash;
+         uint32_t index;
+      };
       std::vector<value_type> data_;
 
       // Sorted index for fast lookup on large maps
       // Stores (hash, index) pairs sorted by hash - 8 bytes per entry
       // Colliding hashes are adjacent; lookup scans neighbors and compares actual keys
       // Maintained incrementally: new entries are insert-sorted into position.
-      mutable std::vector<std::pair<uint32_t, uint32_t>> index_;
+      mutable std::vector<hash_index_entry> index_;
       mutable uint32_t index_size_ = 0; // number of data_ elements covered by the index (0 = fully invalid)
 
       static constexpr size_type linear_search_threshold = 8;
@@ -65,11 +71,11 @@ namespace glz
          index_.clear();
          index_.reserve(data_.size());
          for (uint32_t i = 0; i < static_cast<uint32_t>(data_.size()); ++i) {
-            index_.emplace_back(hash_key(data_[i].first), i);
+            index_.push_back({hash_key(data_[i].first), i});
          }
 
          std::sort(index_.begin(), index_.end(),
-                   [](const auto& a, const auto& b) { return a.first < b.first; });
+                   [](const auto& a, const auto& b) { return a.hash < b.hash; });
 
          index_size_ = static_cast<uint32_t>(data_.size());
       }
@@ -89,9 +95,9 @@ namespace glz
 
          // Incrementally insert the new entries
          for (uint32_t i = index_size_; i < n; ++i) {
-            const auto entry = std::pair{hash_key(data_[i].first), i};
+            const hash_index_entry entry{hash_key(data_[i].first), i};
             const auto* base = index_.data();
-            const auto* p = branchless_lower_bound(base, index_.size(), entry.first);
+            const auto* p = branchless_lower_bound(base, index_.size(), entry.hash);
             auto pos = static_cast<size_t>(p - base);
             index_.insert(index_.begin() + pos, entry);
          }
@@ -99,9 +105,9 @@ namespace glz
       }
 
       // Insert into the sorted index at a known position and update bookkeeping
-      void index_insert_at(size_t pos, uint32_t hash, uint32_t data_idx) const
+      void index_insert_at(size_t pos, uint32_t h, uint32_t data_idx) const
       {
-         index_.insert(index_.begin() + pos, {hash, data_idx});
+         index_.insert(index_.begin() + pos, {h, data_idx});
          index_size_ = static_cast<uint32_t>(data_.size());
       }
 
@@ -127,9 +133,9 @@ namespace glz
          const size_t pos = static_cast<size_t>(p - base);
 
          // Scan adjacent entries with matching hash
-         for (auto* scan = p; scan != idx_end && scan->first == h; ++scan) {
-            if (data_[scan->second].first == key) {
-               return {data_.begin() + scan->second, pos, h};
+         for (auto* scan = p; scan != idx_end && scan->hash == h; ++scan) {
+            if (data_[scan->index].first == key) {
+               return {data_.begin() + scan->index, pos, h};
             }
          }
 
@@ -156,16 +162,16 @@ namespace glz
       }
 
       // Branchless binary search - compiles to cmov instead of conditional branches
-      static const std::pair<uint32_t, uint32_t>* branchless_lower_bound(
-         const std::pair<uint32_t, uint32_t>* p, size_t len, uint32_t target) noexcept
+      static const hash_index_entry* branchless_lower_bound(const hash_index_entry* p, size_t len,
+                                                             uint32_t target) noexcept
       {
          while (len > 1) {
             size_t half = len / 2;
-            p += (p[half - 1].first < target) * half;
+            p += (p[half - 1].hash < target) * half;
             len -= half;
          }
          // Final element check: advance past it if it's less than target
-         p += (len == 1 && p->first < target);
+         p += (len == 1 && p->hash < target);
          return p;
       }
 
@@ -181,9 +187,9 @@ namespace glz
          const auto* idx_end = base + index_.size();
          const auto* p = branchless_lower_bound(base, index_.size(), h);
 
-         for (; p != idx_end && p->first == h; ++p) {
-            if (data_[p->second].first == key) {
-               return data_.begin() + p->second;
+         for (; p != idx_end && p->hash == h; ++p) {
+            if (data_[p->index].first == key) {
+               return data_.begin() + p->index;
             }
          }
          return data_.end();
@@ -199,9 +205,9 @@ namespace glz
          const auto* idx_end = base + index_.size();
          const auto* p = branchless_lower_bound(base, index_.size(), h);
 
-         for (; p != idx_end && p->first == h; ++p) {
-            if (data_[p->second].first == key) {
-               return data_.begin() + p->second;
+         for (; p != idx_end && p->hash == h; ++p) {
+            if (data_[p->index].first == key) {
+               return data_.begin() + p->index;
             }
          }
          return data_.end();
