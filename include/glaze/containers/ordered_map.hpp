@@ -72,7 +72,7 @@ namespace glz
 
       hash_index_entry* index_entries() const noexcept
       {
-         return reinterpret_cast<hash_index_entry*>(index_ + 1);
+         return static_cast<hash_index_entry*>(static_cast<void*>(index_ + 1));
       }
 
       uint32_t index_size() const noexcept { return index_ ? index_->size : 0; }
