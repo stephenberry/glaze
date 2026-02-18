@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <random>
 #include <string>
 #include <vector>
@@ -35,8 +36,58 @@ std::vector<std::string> generate_keys(size_t n)
    return keys;
 }
 
+struct bench_row
+{
+   size_t n;
+   double glz_lookup;
+   double tsl_lookup;
+   double glz_insert;
+   double tsl_insert;
+   double glz_iteration;
+   double tsl_iteration;
+};
+
+void write_markdown(const std::vector<bench_row>& rows, const char* path)
+{
+   FILE* f = std::fopen(path, "w");
+   if (!f) return;
+
+   std::fprintf(f, "# glz::ordered_map vs tsl::ordered_map\n\n");
+
+   // Lookup table
+   std::fprintf(f, "## Lookup (MB/s)\n\n");
+   std::fprintf(f, "| n | glz | tsl | winner |\n");
+   std::fprintf(f, "|--:|----:|----:|--------|\n");
+   for (const auto& r : rows) {
+      const char* winner = r.glz_lookup >= r.tsl_lookup ? "glz" : "tsl";
+      std::fprintf(f, "| %zu | %.0f | %.0f | %s |\n", r.n, r.glz_lookup, r.tsl_lookup, winner);
+   }
+
+   // Insert table
+   std::fprintf(f, "\n## Insert (MB/s)\n\n");
+   std::fprintf(f, "| n | glz | tsl | winner |\n");
+   std::fprintf(f, "|--:|----:|----:|--------|\n");
+   for (const auto& r : rows) {
+      const char* winner = r.glz_insert >= r.tsl_insert ? "glz" : "tsl";
+      std::fprintf(f, "| %zu | %.0f | %.0f | %s |\n", r.n, r.glz_insert, r.tsl_insert, winner);
+   }
+
+   // Iteration table
+   std::fprintf(f, "\n## Iteration (MB/s)\n\n");
+   std::fprintf(f, "| n | glz | tsl | winner |\n");
+   std::fprintf(f, "|--:|----:|----:|--------|\n");
+   for (const auto& r : rows) {
+      const char* winner = r.glz_iteration >= r.tsl_iteration ? "glz" : "tsl";
+      std::fprintf(f, "| %zu | %.0f | %.0f | %s |\n", r.n, r.glz_iteration, r.tsl_iteration, winner);
+   }
+
+   std::fclose(f);
+}
+
 int main()
 {
+   std::vector<bench_row> rows;
+
    for (size_t n : {8, 16, 32, 64, 128, 256}) {
       auto keys = generate_keys(n);
       const size_t num_lookups = 10000;
@@ -57,6 +108,9 @@ int main()
          glz_map[keys[i]] = static_cast<int>(i);
          tsl_map[keys[i]] = static_cast<int>(i);
       }
+
+      bench_row row{};
+      row.n = n;
 
       // --- Lookup benchmark ---
       {
@@ -86,6 +140,8 @@ int main()
          });
 
          bencher::print_results(stage);
+         row.glz_lookup = stage.results[0].throughput_mb_per_sec;
+         row.tsl_lookup = stage.results[1].throughput_mb_per_sec;
       }
 
       // --- Insert benchmark (into fresh map each iteration) ---
@@ -114,6 +170,8 @@ int main()
          });
 
          bencher::print_results(stage);
+         row.glz_insert = stage.results[0].throughput_mb_per_sec;
+         row.tsl_insert = stage.results[1].throughput_mb_per_sec;
       }
 
       // --- Iteration benchmark ---
@@ -142,8 +200,15 @@ int main()
          });
 
          bencher::print_results(stage);
+         row.glz_iteration = stage.results[0].throughput_mb_per_sec;
+         row.tsl_iteration = stage.results[1].throughput_mb_per_sec;
       }
+
+      rows.push_back(row);
    }
+
+   write_markdown(rows, "ordered_map_results.md");
+   std::printf("\nResults written to ordered_map_results.md\n");
 
    return 0;
 }
