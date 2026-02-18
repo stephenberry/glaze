@@ -1,6 +1,8 @@
 #include "glaze/net/websocket_client.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -16,6 +18,14 @@
 
 using namespace ut;
 using namespace glz;
+
+inline bool case_insensitive_equal(std::string_view lhs, std::string_view rhs)
+{
+   if (lhs.size() != rhs.size()) return false;
+   return std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) {
+      return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+   });
+}
 
 template <typename Predicate>
 bool wait_for_condition(Predicate pred, std::chrono::milliseconds timeout = std::chrono::milliseconds(5000))
@@ -151,6 +161,70 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
    }
    catch (const std::exception& e) {
       std::cerr << "Server Exception: " << e.what() << "\n";
+      server_ready = true;
+   }
+}
+
+// Helper to run a server that returns a load-balancer-style connection header
+void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                                    std::atomic<uint16_t>& selected_port)
+{
+   try {
+      asio::io_context io_ctx;
+      asio::ip::tcp::acceptor acceptor(io_ctx, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), 0));
+      selected_port = acceptor.local_endpoint().port();
+      server_ready = true;
+
+      asio::ip::tcp::socket socket(io_ctx);
+      acceptor.accept(socket);
+
+      asio::streambuf request_buf;
+      asio::error_code ec;
+      asio::read_until(socket, request_buf, "\r\n\r\n", ec);
+      if (ec) return;
+
+      std::istream request_stream(&request_buf);
+      std::string request_line;
+      std::getline(request_stream, request_line);
+
+      std::string websocket_key;
+      std::string header;
+      while (std::getline(request_stream, header) && header != "\r") {
+         if (!header.empty() && header.back() == '\r') header.pop_back();
+
+         auto colon = header.find(':');
+         if (colon == std::string::npos) continue;
+
+         std::string name = header.substr(0, colon);
+         std::string value = header.substr(colon + 1);
+         while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
+         while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) value.pop_back();
+
+         if (case_insensitive_equal(name, "Sec-WebSocket-Key")) {
+            websocket_key = std::move(value);
+         }
+      }
+
+      if (websocket_key.empty()) return;
+
+      const std::string accept_key = ws_util::generate_accept_key(websocket_key);
+      const std::string response =
+         "HTTP/1.1 101 Switching Protocols\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: keep-alive, Upgrade\r\n"
+         "Sec-WebSocket-Accept: " +
+         accept_key + "\r\n\r\n";
+
+      asio::write(socket, asio::buffer(response), ec);
+      if (ec) return;
+
+      auto stop_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+      while (!should_stop && std::chrono::steady_clock::now() < stop_at) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+   }
+   catch (const std::exception& e) {
+      std::cerr << "[lb_header_server] Exception: " << e.what() << "\n";
       server_ready = true;
    }
 }
@@ -845,6 +919,58 @@ suite websocket_client_tests = [] {
       stop_server = true;
       server_thread.join();
    };
+
+   "lb_connection_header_handshake_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_lb_header_handshake_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port));
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> protocol_error{false};
+
+      client.on_open([&]() {
+         open_called = true;
+         client.context()->stop();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+
+      client.on_close([](ws_close_code, std::string_view) {});
+
+      client.on_error([&](std::error_code ec) {
+         if (ec == std::make_error_code(std::errc::protocol_error)) {
+            protocol_error = true;
+         }
+         client.context()->stop();
+      });
+
+      std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || protocol_error.load(); }))
+         << "Handshake did not complete";
+      expect(open_called.load()) << "Client should accept load-balancer-style Connection header";
+      expect(!protocol_error.load()) << "Handshake should not fail with protocol_error";
+
+      if (!client.context()->stopped()) {
+         client.context()->stop();
+      }
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
 };
 
 // =============================================================================
