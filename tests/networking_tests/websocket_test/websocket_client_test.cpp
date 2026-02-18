@@ -179,7 +179,7 @@ void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic
       acceptor.accept(socket);
 
       asio::streambuf request_buf;
-      std::error_code ec;
+      asio::error_code ec;
       asio::read_until(socket, request_buf, "\r\n\r\n", ec);
       if (ec) return;
 
