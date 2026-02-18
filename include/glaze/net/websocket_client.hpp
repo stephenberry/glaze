@@ -1,8 +1,13 @@
 #pragma once
 
+#include <algorithm>
+#include <atomic>
+#include <cctype>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <random>
+#include <vector>
 #include <variant>
 
 #include "glaze/net/http_client.hpp"
@@ -12,6 +17,15 @@ namespace glz
 {
    struct websocket_client
    {
+      enum class header_validation_error : uint8_t
+      {
+         none,
+         empty_name,
+         reserved_name,
+         invalid_name,
+         invalid_value,
+      };
+
       using message_handler_t = std::function<void(std::string_view, ws_opcode)>;
       using open_handler_t = std::function<void()>;
       using close_handler_t = std::function<void(ws_close_code, std::string_view)>;
@@ -47,6 +61,9 @@ namespace glz
          std::shared_ptr<asio::ssl::context> ssl_ctx_;
          std::shared_ptr<ssl_socket> ssl_socket_;
 #endif
+         mutable std::mutex request_headers_mutex_;
+         std::vector<std::pair<std::string, std::string>> request_headers_;
+         std::atomic<header_validation_error> last_header_validation_error_{header_validation_error::none};
 
          size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
 #ifdef GLZ_ENABLE_SSL
@@ -54,6 +71,128 @@ namespace glz
 #endif
 
          explicit impl(std::shared_ptr<asio::io_context> context) : ctx(std::move(context)) {}
+
+         static bool header_name_equal(std::string_view lhs, std::string_view rhs)
+         {
+            if (lhs.size() != rhs.size()) return false;
+            return std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) {
+               return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+            });
+         }
+
+         static bool header_name_starts_with(std::string_view value, std::string_view prefix)
+         {
+            if (value.size() < prefix.size()) return false;
+            return std::equal(prefix.begin(), prefix.end(), value.begin(), [](char a, char b) {
+               return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+            });
+         }
+
+         static bool is_tchar(unsigned char c)
+         {
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) return true;
+
+            switch (c) {
+            case '!':
+            case '#':
+            case '$':
+            case '%':
+            case '&':
+            case '\'':
+            case '*':
+            case '+':
+            case '-':
+            case '.':
+            case '^':
+            case '_':
+            case '`':
+            case '|':
+            case '~':
+               return true;
+            default:
+               return false;
+            }
+         }
+
+         static bool is_reserved_handshake_header(std::string_view name)
+         {
+            return header_name_equal(name, "Host") || header_name_equal(name, "Upgrade") ||
+                   header_name_equal(name, "Connection") || header_name_starts_with(name, "Sec-WebSocket-");
+         }
+
+         static bool validate_header_name(std::string_view name, header_validation_error& error)
+         {
+            if (name.empty()) {
+               error = header_validation_error::empty_name;
+               return false;
+            }
+
+            if (is_reserved_handshake_header(name)) {
+               error = header_validation_error::reserved_name;
+               return false;
+            }
+
+            for (const unsigned char c : name) {
+               if (!is_tchar(c)) {
+                  error = header_validation_error::invalid_name;
+                  return false;
+               }
+            }
+            return true;
+         }
+
+         static bool validate_header_value(std::string_view value, header_validation_error& error)
+         {
+            for (const unsigned char c : value) {
+               if (c == '\r' || c == '\n' || c == 127) {
+                  error = header_validation_error::invalid_value;
+                  return false;
+               }
+               if (c < 32 && c != '\t') {
+                  error = header_validation_error::invalid_value;
+                  return false;
+               }
+            }
+            return true;
+         }
+
+         std::vector<std::pair<std::string, std::string>> request_headers_snapshot() const
+         {
+            std::lock_guard<std::mutex> lock(request_headers_mutex_);
+            return request_headers_;
+         }
+
+         bool set_request_header(std::string_view name, std::string_view value)
+         {
+            header_validation_error error = header_validation_error::none;
+            if (!validate_header_name(name, error) || !validate_header_value(value, error)) {
+               last_header_validation_error_.store(error, std::memory_order_relaxed);
+               return false;
+            }
+
+            std::lock_guard<std::mutex> lock(request_headers_mutex_);
+            for (auto& [existing_name, existing_value] : request_headers_) {
+               if (header_name_equal(existing_name, name)) {
+                  existing_value = std::string(value);
+                  last_header_validation_error_.store(header_validation_error::none, std::memory_order_relaxed);
+                  return true;
+               }
+            }
+            request_headers_.emplace_back(std::string(name), std::string(value));
+            last_header_validation_error_.store(header_validation_error::none, std::memory_order_relaxed);
+            return true;
+         }
+
+         void clear_request_headers()
+         {
+            std::lock_guard<std::mutex> lock(request_headers_mutex_);
+            request_headers_.clear();
+         }
+
+         header_validation_error last_header_validation_error() const
+         {
+            return last_header_validation_error_.load(std::memory_order_relaxed);
+         }
 
          void cancel_all()
          {
@@ -214,7 +353,12 @@ namespace glz
 
             std::string handshake = "GET " + url.path + " HTTP/1.1\r\n" + "Host: " + url.host + "\r\n" +
                                     "Upgrade: websocket\r\n" + "Connection: Upgrade\r\n" + "Sec-WebSocket-Key: " + key +
-                                    "\r\n" + "Sec-WebSocket-Version: 13\r\n\r\n";
+                                    "\r\n" + "Sec-WebSocket-Version: 13\r\n";
+
+            for (const auto& [name, value] : request_headers_snapshot()) {
+               handshake += name + ": " + value + "\r\n";
+            }
+            handshake += "\r\n";
 
             auto req_buf = std::make_shared<std::string>(std::move(handshake));
             std::weak_ptr<impl> weak_self = weak_from_this();
@@ -412,6 +556,22 @@ namespace glz
       // (useful for self-signed certificates in testing)
       void set_ssl_verify_mode(asio::ssl::verify_mode mode) { impl_->ssl_verify_mode_ = mode; }
 #endif
+
+      // Set an additional HTTP header for the opening WebSocket handshake.
+      // Reserved handshake headers (Host, Upgrade, Connection, Sec-WebSocket-*) cannot be overridden.
+      // Returns false if the name/value fails validation.
+      [[nodiscard]] bool set_header(std::string_view name, std::string_view value)
+      {
+         return impl_->set_request_header(name, value);
+      }
+
+      // Clear all additional handshake headers previously set via set_header().
+      void clear_headers() { impl_->clear_request_headers(); }
+
+      [[nodiscard]] header_validation_error last_header_error() const
+      {
+         return impl_->last_header_validation_error();
+      }
 
       std::shared_ptr<asio::io_context>& context() { return impl_->ctx; }
 

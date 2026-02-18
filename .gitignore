@@ -9,6 +9,7 @@ out/
 CMakeUserPresets.json
 **/CMakeFiles/
 **/CMakeCache.txt
+**/Testing/
 
 # IDE files
 .idea/

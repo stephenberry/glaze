@@ -229,6 +229,46 @@ void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic
    }
 }
 
+// Helper to run a server that requires an Authorization header in the WebSocket handshake
+void run_auth_websocket_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                               std::atomic<uint16_t>& selected_port, const std::string& expected_auth)
+{
+   http_server server;
+   auto ws_server = std::make_shared<websocket_server>();
+
+   ws_server->on_validate([expected_auth](const request& req) {
+      auto it = req.headers.find("authorization");
+      return it != req.headers.end() && it->second == expected_auth;
+   });
+
+   ws_server->on_open([](auto /*conn*/, const request&) {});
+   ws_server->on_message([](auto conn, std::string_view message, ws_opcode opcode) {
+      if (opcode == ws_opcode::text) {
+         conn->send_text(std::string(message));
+      }
+   });
+   ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/, std::string_view /*reason*/) {});
+   ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
+
+   server.websocket("/ws", ws_server);
+
+   try {
+      server.bind("127.0.0.1", 0);
+      selected_port = server.port();
+      server.start();
+      server_ready = true;
+
+      while (!should_stop) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+      server.stop();
+   }
+   catch (const std::exception& e) {
+      std::cerr << "[auth_server] Exception: " << e.what() << "\n";
+      server_ready = true;
+   }
+}
+
 struct TestMessage
 {
    std::string type;
@@ -966,6 +1006,451 @@ suite websocket_client_tests = [] {
       if (client_thread.joinable()) {
          client_thread.join();
       }
+
+      stop_server = true;
+      server_thread.join();
+   };
+   "custom_handshake_header_auth_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_auth_websocket_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::string{"Bearer test-token"});
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      expect(client.set_header("Authorization", "Bearer test-token"))
+         << "Valid Authorization header should be accepted";
+
+      client.on_open([&]() {
+         open_called = true;
+         client.close();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(open_called.load()) << "Client should connect when required Authorization header is provided";
+      expect(!error_called.load()) << "No error expected when Authorization header is valid";
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "custom_handshake_header_empty_name_rejected_test"_test = [] {
+      websocket_client client;
+
+      expect(!client.set_header("", "Bearer test-token")) << "Empty header name must be rejected";
+      expect(client.last_header_error() == websocket_client::header_validation_error::empty_name)
+         << "Empty header-name rejection should be diagnosable";
+   };
+
+   "custom_handshake_header_clear_headers_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_auth_websocket_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::string{"Bearer test-token"});
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      expect(client.set_header("Authorization", "Bearer test-token"))
+         << "Valid Authorization header should be accepted";
+      client.clear_headers();
+
+      client.on_open([&]() {
+         open_called = true;
+         client.context()->stop();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([](ws_close_code, std::string_view) {});
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(!open_called.load()) << "Client should fail when required header has been cleared";
+      expect(error_called.load()) << "Missing auth header should fail the handshake";
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "custom_handshake_header_non_ascii_name_rejected_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_auth_websocket_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::string{"Bearer test-token"});
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      expect(client.set_header("Authorization", "Bearer test-token"))
+         << "Valid Authorization header should be accepted";
+
+      std::string non_ascii_name{"Authorizati"};
+      non_ascii_name.push_back(static_cast<char>(0xC3));
+      non_ascii_name.push_back(static_cast<char>(0xB6));
+      non_ascii_name += 'n';
+
+      expect(!client.set_header(non_ascii_name, "Bearer injected-token"))
+         << "Non-ASCII header-name bytes must be rejected";
+      expect(client.last_header_error() == websocket_client::header_validation_error::invalid_name)
+         << "Non-ASCII header-name rejection should be diagnosable";
+
+      client.on_open([&]() {
+         open_called = true;
+         client.close();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(open_called.load()) << "Rejected non-ASCII header name should not affect valid Authorization header";
+      expect(!error_called.load()) << "No error expected when non-ASCII override is rejected";
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "custom_handshake_header_replaces_existing_value_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_auth_websocket_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::string{"Bearer replacement-token"});
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      expect(client.set_header("Authorization", "Bearer stale-token"))
+         << "Initial Authorization header should be accepted";
+      expect(client.set_header("authorization", "Bearer replacement-token"))
+         << "Replacement Authorization header should be accepted";
+
+      client.on_open([&]() {
+         open_called = true;
+         client.close();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(open_called.load()) << "Latest header value should replace prior value case-insensitively";
+      expect(!error_called.load()) << "No error expected when replacement header value is valid";
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "custom_handshake_header_invalid_value_rejected_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_auth_websocket_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::string{"Bearer test-token"});
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      expect(!client.set_header("Authorization", "Bearer test-token\r\nX-Injected: 1"))
+         << "CRLF-injected header value must be rejected";
+      expect(client.last_header_error() == websocket_client::header_validation_error::invalid_value)
+         << "Invalid header value rejection should be diagnosable";
+
+      client.on_open([&]() {
+         open_called = true;
+         client.context()->stop();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([](ws_close_code, std::string_view) {});
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(!open_called.load()) << "Invalid header value should be rejected";
+      expect(error_called.load()) << "Rejected header should result in handshake failure";
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "custom_handshake_header_reserved_name_rejected_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_auth_websocket_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::string{"Bearer test-token"});
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      expect(client.set_header("Authorization", "Bearer test-token"))
+         << "Valid Authorization header should be accepted";
+      expect(!client.set_header("Host", "malicious.example")) << "Reserved Host header should be rejected";
+      expect(!client.set_header("Sec-WebSocket-Key", "bad-key"))
+         << "Reserved Sec-WebSocket-Key header should be rejected";
+      expect(client.last_header_error() == websocket_client::header_validation_error::reserved_name)
+         << "Reserved header rejection should be diagnosable";
+
+      client.on_open([&]() {
+         open_called = true;
+         client.close();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(open_called.load()) << "Reserved handshake header names should be ignored, not override handshake";
+      expect(!error_called.load()) << "No error expected when reserved header overrides are rejected";
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "custom_handshake_header_invalid_name_rejected_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_auth_websocket_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::string{"Bearer test-token"});
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      expect(client.set_header("Authorization", "Bearer test-token"))
+         << "Valid Authorization header should be accepted";
+      expect(!client.set_header("Authorization:", "Bearer injected-token"))
+         << "Invalid header-name token should be rejected";
+      expect(client.last_header_error() == websocket_client::header_validation_error::invalid_name)
+         << "Invalid header-name rejection should be diagnosable";
+
+      client.on_open([&]() {
+         open_called = true;
+         client.close();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(open_called.load()) << "Client should still connect with the valid Authorization header";
+      expect(!error_called.load()) << "Invalid header name should be rejected before handshake, not break valid headers";
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "custom_handshake_header_reserved_prefix_mixed_case_rejected_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_auth_websocket_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::string{"Bearer test-token"});
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      expect(client.set_header("Authorization", "Bearer test-token"))
+         << "Valid Authorization header should be accepted";
+      expect(!client.set_header("sEc-WeBsOcKeT-Extensions", "permessage-deflate"))
+         << "Mixed-case reserved Sec-WebSocket-* prefix should be rejected";
+      expect(client.last_header_error() == websocket_client::header_validation_error::reserved_name)
+         << "Reserved prefix rejection should be diagnosable";
+
+      client.on_open([&]() {
+         open_called = true;
+         client.close();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); })) << "Handshake did not complete";
+      expect(open_called.load()) << "Reserved Sec-WebSocket-* rejection should not affect valid auth header";
+      expect(!error_called.load()) << "No error expected when reserved mixed-case override is rejected";
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   "custom_handshake_header_persists_across_connect_calls_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_auth_websocket_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), std::string{"Bearer test-token"});
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<int> open_count{0};
+      std::atomic<int> close_count{0};
+      std::atomic<bool> error_called{false};
+
+      expect(client.set_header("Authorization", "Bearer test-token"))
+         << "Valid Authorization header should be accepted";
+
+      client.on_open([&]() {
+         ++open_count;
+         client.close();
+      });
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([&](ws_close_code, std::string_view) {
+         ++close_count;
+         client.context()->stop();
+      });
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+
+      client.connect(client_url);
+      std::thread first_run_thread([&client]() { client.context()->run(); });
+      expect(wait_for_condition([&] {
+         return error_called.load() || (open_count.load() >= 1 && close_count.load() >= 1);
+      })) << "First handshake did not complete";
+      if (!client.context()->stopped()) client.context()->stop();
+      if (first_run_thread.joinable()) first_run_thread.join();
+
+      client.context()->restart();
+      client.connect(client_url);
+      std::thread second_run_thread([&client]() { client.context()->run(); });
+      expect(wait_for_condition([&] {
+         return error_called.load() || (open_count.load() >= 2 && close_count.load() >= 2);
+      })) << "Second handshake did not complete";
+      if (!client.context()->stopped()) client.context()->stop();
+      if (second_run_thread.joinable()) second_run_thread.join();
+
+      expect(!error_called.load()) << "No error expected when reconnecting with persistent headers";
+      expect(open_count.load() == 2) << "Authorization header should persist across sequential connect() calls";
 
       stop_server = true;
       server_thread.join();
