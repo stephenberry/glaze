@@ -146,6 +146,13 @@ add_subdirectory(yaml_test)
 
 add_subdirectory(yaml_conformance)
 add_subdirectory(msgpack_test)
+
+# ZMEM format requires little-endian architecture (uses zero-copy memory access)
+# Skip on big-endian platforms (e.g., s390x)
+option(glaze_BUILD_ZMEM_TESTS "Build ZMEM format tests (requires little-endian)" ON)
+if(glaze_BUILD_ZMEM_TESTS)
+    add_subdirectory(zmem_test)
+endif()
 add_subdirectory(ostream_buffer_test)
 add_subdirectory(istream_buffer_test)
 
