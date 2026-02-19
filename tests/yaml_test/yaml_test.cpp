@@ -2788,11 +2788,7 @@ name: test)";
 next: item)";
       glz::generic parsed{};
       auto ec = glz::read_yaml(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
-      auto& obj = std::get<glz::generic::object_t>(parsed.data);
-      expect(std::get<std::string>(obj.at("key").data) == "value");
-      expect(std::get<std::string>(obj.at("next").data) == "item");
+      expect(bool(ec));
    };
 
    "document_end_marker"_test = [] {
@@ -6739,6 +6735,22 @@ suite yaml_block_scalar_sibling_tests = [] {
       expect(std::get<std::string>(obj.at("k1").data) == "a\nb\n")
          << "k1 was: " << std::get<std::string>(obj.at("k1").data);
       expect(std::get<std::string>(obj.at("k2").data) == "c") << "k2 was: " << std::get<std::string>(obj.at("k2").data);
+   };
+
+   // yaml-test-suite 4WA9: explicit block-scalar indentation in a sequence mapping.
+   "block_scalar_explicit_indent_sibling_key_4WA9"_test = [] {
+      std::string yaml = R"(- aaa: |2
+    xxx
+  bbb: |
+    xxx
+)";
+      glz::generic parsed;
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+
+      std::string json;
+      (void)glz::write_json(parsed, json);
+      expect(json == R"([{"aaa":"xxx\n","bbb":"xxx\n"}])") << "json was: " << json;
    };
 
    "block_scalar_sibling_key_simple"_test = [] {

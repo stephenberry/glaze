@@ -557,8 +557,7 @@ keep: |+
 )yaml";
       one_a_t parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      expect(parsed.a == "b");
+      expect(bool(ec));
    };
 
    "D88J_struct"_test = [] {
@@ -697,9 +696,7 @@ alias: *anchor
 )yaml";
       key1_key2_t parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      expect(parsed.key1 == "value1");
-      expect(parsed.key2 == "value2");
+      expect(bool(ec));
    };
 
    "U9NS_struct"_test = [] {
@@ -1005,11 +1002,7 @@ c: d
 --- !prefix!C
 e: f
 )yaml";
-      std::string expected_json = R"json({
-  "a": "b"
-}
-)json";
-      expect_yaml_matches_json_case<one_a_t>(yaml, expected_json);
+      expect_yaml_error_case<one_a_t>(yaml);
    };
 
    "565N_struct"_test = [] {
