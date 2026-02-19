@@ -5,8 +5,8 @@
 
 #include "bencher/bencher.hpp"
 #include "bencher/diagnostics.hpp"
-#include "glaze/containers/ordered_dict.hpp"
 #include "glaze/containers/ordered_map.hpp"
+#include "glaze/containers/ordered_small_map.hpp"
 #include "tsl/ordered_map.h"
 
 // Generate realistic JSON-like keys: "id", "name", "email", "address_0", etc.
@@ -40,14 +40,14 @@ std::vector<std::string> generate_keys(size_t n)
 struct bench_row
 {
    size_t n;
+   double glz_small_map_lookup;
    double glz_map_lookup;
-   double glz_dict_lookup;
    double tsl_lookup;
+   double glz_small_map_insert;
    double glz_map_insert;
-   double glz_dict_insert;
    double tsl_insert;
+   double glz_small_map_iteration;
    double glz_map_iteration;
-   double glz_dict_iteration;
    double tsl_iteration;
 };
 
@@ -63,37 +63,37 @@ void write_markdown(const std::vector<bench_row>& rows, const char* path)
    FILE* f = std::fopen(path, "w");
    if (!f) return;
 
-   std::fprintf(f, "# glz::ordered_map vs glz::ordered_dict vs tsl::ordered_map\n\n");
+   std::fprintf(f, "# glz::ordered_small_map vs glz::ordered_map vs tsl::ordered_map\n\n");
 
    // Lookup table
    std::fprintf(f, "## Lookup (MB/s)\n\n");
-   std::fprintf(f, "| n | glz::ordered_map | glz::ordered_dict | tsl::ordered_map | winner |\n");
-   std::fprintf(f, "|--:|-----------------:|-------------------:|-----------------:|--------|\n");
+   std::fprintf(f, "| n | glz::ordered_small_map | glz::ordered_map | tsl::ordered_map | winner |\n");
+   std::fprintf(f, "|--:|----------------------:|-----------------:|-----------------:|--------|\n");
    for (const auto& r : rows) {
-      const char* w = pick_winner(r.glz_map_lookup, r.glz_dict_lookup, r.tsl_lookup, "glz_map", "glz_dict", "tsl");
-      std::fprintf(f, "| %zu | %.0f | %.0f | %.0f | %s |\n", r.n, r.glz_map_lookup, r.glz_dict_lookup, r.tsl_lookup,
+      const char* w = pick_winner(r.glz_small_map_lookup, r.glz_map_lookup, r.tsl_lookup, "glz_small_map", "glz_map", "tsl");
+      std::fprintf(f, "| %zu | %.0f | %.0f | %.0f | %s |\n", r.n, r.glz_small_map_lookup, r.glz_map_lookup, r.tsl_lookup,
                    w);
    }
 
    // Insert table
    std::fprintf(f, "\n## Insert (MB/s)\n\n");
-   std::fprintf(f, "| n | glz::ordered_map | glz::ordered_dict | tsl::ordered_map | winner |\n");
-   std::fprintf(f, "|--:|-----------------:|-------------------:|-----------------:|--------|\n");
+   std::fprintf(f, "| n | glz::ordered_small_map | glz::ordered_map | tsl::ordered_map | winner |\n");
+   std::fprintf(f, "|--:|----------------------:|-----------------:|-----------------:|--------|\n");
    for (const auto& r : rows) {
       const char* w =
-         pick_winner(r.glz_map_insert, r.glz_dict_insert, r.tsl_insert, "glz_map", "glz_dict", "tsl");
-      std::fprintf(f, "| %zu | %.0f | %.0f | %.0f | %s |\n", r.n, r.glz_map_insert, r.glz_dict_insert,
+         pick_winner(r.glz_small_map_insert, r.glz_map_insert, r.tsl_insert, "glz_small_map", "glz_map", "tsl");
+      std::fprintf(f, "| %zu | %.0f | %.0f | %.0f | %s |\n", r.n, r.glz_small_map_insert, r.glz_map_insert,
                    r.tsl_insert, w);
    }
 
    // Iteration table
    std::fprintf(f, "\n## Iteration (MB/s)\n\n");
-   std::fprintf(f, "| n | glz::ordered_map | glz::ordered_dict | tsl::ordered_map | winner |\n");
-   std::fprintf(f, "|--:|-----------------:|-------------------:|-----------------:|--------|\n");
+   std::fprintf(f, "| n | glz::ordered_small_map | glz::ordered_map | tsl::ordered_map | winner |\n");
+   std::fprintf(f, "|--:|----------------------:|-----------------:|-----------------:|--------|\n");
    for (const auto& r : rows) {
-      const char* w = pick_winner(r.glz_map_iteration, r.glz_dict_iteration, r.tsl_iteration, "glz_map", "glz_dict",
+      const char* w = pick_winner(r.glz_small_map_iteration, r.glz_map_iteration, r.tsl_iteration, "glz_small_map", "glz_map",
                                   "tsl");
-      std::fprintf(f, "| %zu | %.0f | %.0f | %.0f | %s |\n", r.n, r.glz_map_iteration, r.glz_dict_iteration,
+      std::fprintf(f, "| %zu | %.0f | %.0f | %.0f | %s |\n", r.n, r.glz_small_map_iteration, r.glz_map_iteration,
                    r.tsl_iteration, w);
    }
 
@@ -118,12 +118,12 @@ int main()
       }
 
       // Pre-build all three maps
-      glz::ordered_map<int> glz_map;
-      glz::ordered_dict<std::string, int> glz_dict;
+      glz::ordered_small_map<int> glz_small_map;
+      glz::ordered_map<std::string, int> glz_map;
       tsl::ordered_map<std::string, int> tsl_map;
       for (size_t i = 0; i < n; ++i) {
+         glz_small_map[keys[i]] = static_cast<int>(i);
          glz_map[keys[i]] = static_cast<int>(i);
-         glz_dict[keys[i]] = static_cast<int>(i);
          tsl_map[keys[i]] = static_cast<int>(i);
       }
 
@@ -137,20 +137,20 @@ int main()
          stage.min_execution_count = 100;
          stage.cold_cache = false;
 
-         stage.run("glz::ordered_map", [&] {
+         stage.run("glz::ordered_small_map", [&] {
             uint64_t sum = 0;
             for (const auto& k : lookup_keys) {
-               auto it = glz_map.find(k);
+               auto it = glz_small_map.find(k);
                sum += it->second;
             }
             bencher::do_not_optimize(sum);
             return num_lookups * sizeof(int);
          });
 
-         stage.run("glz::ordered_dict", [&] {
+         stage.run("glz::ordered_map", [&] {
             uint64_t sum = 0;
             for (const auto& k : lookup_keys) {
-               auto it = glz_dict.find(k);
+               auto it = glz_map.find(k);
                sum += it->second;
             }
             bencher::do_not_optimize(sum);
@@ -168,8 +168,8 @@ int main()
          });
 
          bencher::print_results(stage);
-         row.glz_map_lookup = stage.results[0].throughput_mb_per_sec;
-         row.glz_dict_lookup = stage.results[1].throughput_mb_per_sec;
+         row.glz_small_map_lookup = stage.results[0].throughput_mb_per_sec;
+         row.glz_map_lookup = stage.results[1].throughput_mb_per_sec;
          row.tsl_lookup = stage.results[2].throughput_mb_per_sec;
       }
 
@@ -180,8 +180,8 @@ int main()
          stage.min_execution_count = 100;
          stage.cold_cache = false;
 
-         stage.run("glz::ordered_map", [&] {
-            glz::ordered_map<int> m;
+         stage.run("glz::ordered_small_map", [&] {
+            glz::ordered_small_map<int> m;
             for (size_t i = 0; i < n; ++i) {
                m[keys[i]] = static_cast<int>(i);
             }
@@ -189,8 +189,8 @@ int main()
             return n * sizeof(int);
          });
 
-         stage.run("glz::ordered_dict", [&] {
-            glz::ordered_dict<std::string, int> m;
+         stage.run("glz::ordered_map", [&] {
+            glz::ordered_map<std::string, int> m;
             for (size_t i = 0; i < n; ++i) {
                m[keys[i]] = static_cast<int>(i);
             }
@@ -208,8 +208,8 @@ int main()
          });
 
          bencher::print_results(stage);
-         row.glz_map_insert = stage.results[0].throughput_mb_per_sec;
-         row.glz_dict_insert = stage.results[1].throughput_mb_per_sec;
+         row.glz_small_map_insert = stage.results[0].throughput_mb_per_sec;
+         row.glz_map_insert = stage.results[1].throughput_mb_per_sec;
          row.tsl_insert = stage.results[2].throughput_mb_per_sec;
       }
 
@@ -220,18 +220,18 @@ int main()
          stage.min_execution_count = 100;
          stage.cold_cache = false;
 
-         stage.run("glz::ordered_map", [&] {
+         stage.run("glz::ordered_small_map", [&] {
             uint64_t sum = 0;
-            for (const auto& [key, value] : glz_map) {
+            for (const auto& [key, value] : glz_small_map) {
                sum += value;
             }
             bencher::do_not_optimize(sum);
             return n * (sizeof(std::string) + sizeof(int));
          });
 
-         stage.run("glz::ordered_dict", [&] {
+         stage.run("glz::ordered_map", [&] {
             uint64_t sum = 0;
-            for (const auto& [key, value] : glz_dict) {
+            for (const auto& [key, value] : glz_map) {
                sum += value;
             }
             bencher::do_not_optimize(sum);
@@ -248,8 +248,8 @@ int main()
          });
 
          bencher::print_results(stage);
-         row.glz_map_iteration = stage.results[0].throughput_mb_per_sec;
-         row.glz_dict_iteration = stage.results[1].throughput_mb_per_sec;
+         row.glz_small_map_iteration = stage.results[0].throughput_mb_per_sec;
+         row.glz_map_iteration = stage.results[1].throughput_mb_per_sec;
          row.tsl_iteration = stage.results[2].throughput_mb_per_sec;
       }
 

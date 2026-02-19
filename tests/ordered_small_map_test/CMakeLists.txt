@@ -1,4 +1,4 @@
-project(ordered_dict_test)
+project(ordered_small_map_test)
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 

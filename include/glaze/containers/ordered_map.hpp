@@ -5,15 +5,16 @@
 
 #include <algorithm>
 #include <concepts>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
+#include <initializer_list>
+#include <limits>
 #include <stdexcept>
-#include <string>
-#include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
-
-#include "glaze/hash/sweethash.hpp"
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -23,359 +24,332 @@
 #endif
 #endif
 
-// An ordered_map optimized for JSON objects with string keys.
-// Designed for objects with few keys (typically <256), where preserving
-// insertion order matters and memory efficiency is important.
-// Uses 32 bytes on the stack and ~40 bytes per entry on the heap
-// (32 for the key-value pair + 8 for the hash index) —
-// significantly less than hash table alternatives.
+// A generic ordered dictionary using robin hood hashing with open addressing.
+// Preserves insertion order via a contiguous std::vector of key-value pairs.
+// Provides O(1) average lookup, insert, and unordered erase.
+// Ordered erase is O(n) because it shifts elements to maintain order.
 //
-// Design:
-// - Preserves insertion order (backed by a contiguous vector)
-// - Linear search for small maps (≤8 entries) — no heap overhead
-// - Lazily builds a sorted hash index for larger maps (O(log n) lookup)
-// - Bloom filter accelerates inserts by skipping duplicate checks for new keys
+// Matches the tsl::ordered_map API: insert, insert_or_assign, try_emplace,
+// emplace, erase, unordered_erase, find, at, operator[], count, contains,
+// equal_range, front, back, nth, rehash, reserve, load_factor, etc.
 
 namespace glz
 {
-   template <class T>
+   namespace detail
+   {
+      template <class H, class E>
+      concept transparent_lookup = requires {
+         typename H::is_transparent;
+         typename E::is_transparent;
+      };
+   }
+
+   template <class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>,
+             class Allocator = std::allocator<std::pair<Key, T>>>
    struct ordered_map
    {
-      using key_type = std::string;
+      using key_type = Key;
       using mapped_type = T;
-      using value_type = std::pair<std::string, T>;
+      using value_type = std::pair<Key, T>;
       using size_type = std::size_t;
       using difference_type = std::ptrdiff_t;
+      using hasher = Hash;
+      using key_equal = KeyEqual;
+      using allocator_type = Allocator;
       using reference = value_type&;
       using const_reference = const value_type&;
-      using iterator = typename std::vector<value_type>::iterator;
-      using const_iterator = typename std::vector<value_type>::const_iterator;
-      using reverse_iterator = typename std::vector<value_type>::reverse_iterator;
-      using const_reverse_iterator = typename std::vector<value_type>::const_reverse_iterator;
+      using pointer = value_type*;
+      using const_pointer = const value_type*;
+
+      using values_container_type = std::vector<value_type, Allocator>;
+      using iterator = typename values_container_type::iterator;
+      using const_iterator = typename values_container_type::const_iterator;
+      using reverse_iterator = typename values_container_type::reverse_iterator;
+      using const_reverse_iterator = typename values_container_type::const_reverse_iterator;
 
      private:
-      // Compact index entry: maps a hash to a position in the data vector
-      struct hash_index_entry
+      struct bucket_entry
       {
-         uint32_t hash;
          uint32_t index;
+         uint32_t stored_hash;
       };
 
-      // Bloom filter: 1024 bits (128 bytes) with 2 hash functions.
-      // False positive rate at n entries: (1 - e^(-2n/1024))^2
-      //   n=32: ~4%   n=64: ~13%   n=128: ~40%   n=256: ~74%
-      static constexpr size_t bloom_bytes = 128;
-      static constexpr uint32_t bloom_bits = bloom_bytes * 8; // 1024
-      static constexpr uint32_t bloom_mask = bloom_bits - 1; // 0x3FF
+      static constexpr uint32_t empty_marker = std::numeric_limits<uint32_t>::max();
+      static constexpr uint32_t min_bucket_count = 8;
+      static constexpr float default_max_load_factor = 0.75f;
 
-      // Heap-allocated index block: [index_header][hash_index_entry × capacity]
-      // The bloom filter is embedded in the header.
-      struct index_header
+      values_container_type values_;
+      bucket_entry* buckets_ = nullptr;
+      uint32_t bucket_count_ = 0;
+      uint32_t bucket_mask_ = 0;
+      uint32_t load_threshold_ = 0;
+      float max_load_factor_ = default_max_load_factor;
+
+      [[no_unique_address]] Hash hash_;
+      [[no_unique_address]] KeyEqual equal_;
+
+      // --- Hash helpers ---
+
+      static uint32_t to_stored_hash(size_t h) noexcept { return static_cast<uint32_t>(h); }
+
+      uint32_t bucket_for_hash(uint32_t stored) const noexcept { return stored & bucket_mask_; }
+
+      uint32_t distance_from_ideal(uint32_t actual, uint32_t stored) const noexcept
       {
-         uint32_t size; // number of data_ elements covered by the sorted index (0 = fully invalid)
-         uint32_t capacity; // allocated index entry slots
-         uint8_t bloom[bloom_bytes]; // bloom filter for fast insert rejection
+         return (actual - bucket_for_hash(stored)) & bucket_mask_;
+      }
+
+      static uint32_t round_up_pow2(uint32_t v) noexcept
+      {
+         if (v == 0) return 0;
+         --v;
+         v |= v >> 1;
+         v |= v >> 2;
+         v |= v >> 4;
+         v |= v >> 8;
+         v |= v >> 16;
+         return v + 1;
+      }
+
+      // --- Bucket memory ---
+
+      void allocate_buckets()
+      {
+         if (bucket_count_ == 0) return;
+         buckets_ = static_cast<bucket_entry*>(std::malloc(bucket_count_ * sizeof(bucket_entry)));
+         if (!buckets_) GLZ_THROW_OR_ABORT(std::bad_alloc{});
+         clear_buckets();
+      }
+
+      void deallocate_buckets() noexcept
+      {
+         std::free(buckets_);
+         buckets_ = nullptr;
+      }
+
+      // Sets all bucket indices to empty_marker (0xFF bytes = 0xFFFFFFFF for each uint32_t)
+      void clear_buckets() noexcept { std::memset(buckets_, 0xFF, bucket_count_ * sizeof(bucket_entry)); }
+
+      // --- Core robin hood operations ---
+
+      // Insert a bucket entry without checking for duplicates (used during rehash)
+      void insert_into_buckets(bucket_entry entry) noexcept
+      {
+         uint32_t idx = bucket_for_hash(entry.stored_hash);
+         uint32_t dist = 0;
+
+         while (true) {
+            auto& b = buckets_[idx];
+            if (b.index == empty_marker) {
+               b = entry;
+               return;
+            }
+            uint32_t existing_dist = distance_from_ideal(idx, b.stored_hash);
+            if (existing_dist < dist) {
+               std::swap(b, entry);
+               dist = existing_dist;
+            }
+            idx = (idx + 1) & bucket_mask_;
+            ++dist;
+         }
+      }
+
+      // Find the bucket index for a given key. Returns bucket_count_ if not found.
+      template <class K>
+      uint32_t find_bucket(const K& key) const noexcept
+      {
+         if (bucket_count_ == 0) return bucket_count_;
+
+         const size_t h = hash_(key);
+         const uint32_t stored = to_stored_hash(h);
+         uint32_t idx = bucket_for_hash(stored);
+         uint32_t dist = 0;
+
+         while (true) {
+            const auto& b = buckets_[idx];
+            if (b.index == empty_marker) return bucket_count_;
+            uint32_t existing_dist = distance_from_ideal(idx, b.stored_hash);
+            if (existing_dist < dist) return bucket_count_;
+            if (b.stored_hash == stored && equal_(values_[b.index].first, key)) {
+               return idx;
+            }
+            idx = (idx + 1) & bucket_mask_;
+            ++dist;
+         }
+      }
+
+      // Find the bucket that stores a particular value index
+      uint32_t find_bucket_by_value_index(uint32_t value_index) const noexcept
+      {
+         const auto& key = values_[value_index].first;
+         const size_t h = hash_(key);
+         const uint32_t stored = to_stored_hash(h);
+         uint32_t idx = bucket_for_hash(stored);
+
+         while (true) {
+            if (buckets_[idx].index == value_index) return idx;
+            idx = (idx + 1) & bucket_mask_;
+         }
+      }
+
+      // Backward shift deletion: remove the bucket at bucket_idx and shift subsequent entries back
+      void erase_from_buckets(uint32_t bucket_idx) noexcept
+      {
+         uint32_t prev = bucket_idx;
+         uint32_t curr = (bucket_idx + 1) & bucket_mask_;
+
+         while (true) {
+            auto& cb = buckets_[curr];
+            if (cb.index == empty_marker || distance_from_ideal(curr, cb.stored_hash) == 0) {
+               buckets_[prev] = {empty_marker, 0};
+               return;
+            }
+            buckets_[prev] = cb;
+            prev = curr;
+            curr = (curr + 1) & bucket_mask_;
+         }
+      }
+
+      void grow_and_rehash()
+      {
+         uint32_t new_count = bucket_count_ == 0 ? min_bucket_count : bucket_count_ * 2;
+         rehash_impl(new_count);
+      }
+
+      void rehash_impl(uint32_t new_count)
+      {
+         deallocate_buckets();
+         bucket_count_ = new_count;
+         bucket_mask_ = bucket_count_ - 1;
+         load_threshold_ = static_cast<uint32_t>(static_cast<float>(bucket_count_) * max_load_factor_);
+         allocate_buckets();
+
+         for (uint32_t i = 0; i < static_cast<uint32_t>(values_.size()); ++i) {
+            const size_t h = hash_(values_[i].first);
+            insert_into_buckets({i, to_stored_hash(h)});
+         }
+      }
+
+      // Insert implementation that handles grow, duplicate check, and robin hood placement.
+      // Returns {bucket_idx, stored_hash, found} where found=true means duplicate was found.
+      struct insert_result
+      {
+         uint32_t bucket_idx;
+         uint32_t stored_hash;
+         bool found;
       };
 
-      std::vector<value_type> data_; // 24 bytes
-      mutable index_header* index_ = nullptr; // 8 bytes
-      // Total: 32 bytes
-
-      static constexpr size_type linear_search_threshold = 8;
-      static constexpr size_type bloom_threshold = 128; // disable bloom filter above this size
-
-      static uint32_t hash_key(std::string_view key) noexcept { return sweethash::sweet32(key); }
-
-      // --- Bloom filter ---
-
-      void bloom_set(uint32_t h) const noexcept
-      {
-         const uint32_t a = h & bloom_mask;
-         const uint32_t b = (h >> 10) & bloom_mask;
-         index_->bloom[a >> 3] |= uint8_t(1) << (a & 7);
-         index_->bloom[b >> 3] |= uint8_t(1) << (b & 7);
-      }
-
-      bool bloom_maybe_contains(uint32_t h) const noexcept
-      {
-         const uint32_t a = h & bloom_mask;
-         const uint32_t b = (h >> 10) & bloom_mask;
-         return (index_->bloom[a >> 3] & (uint8_t(1) << (a & 7))) &&
-                (index_->bloom[b >> 3] & (uint8_t(1) << (b & 7)));
-      }
-
-      void bloom_clear() const noexcept { std::memset(index_->bloom, 0, bloom_bytes); }
-
-      // --- Index memory management ---
-
-      hash_index_entry* index_entries() const noexcept
-      {
-         return static_cast<hash_index_entry*>(static_cast<void*>(index_ + 1));
-      }
-
-      uint32_t index_size() const noexcept { return index_ ? index_->size : 0; }
-
-      void invalidate_index() noexcept
-      {
-         if (index_) index_->size = 0;
-      }
-
-      void free_index() noexcept
-      {
-         std::free(index_);
-         index_ = nullptr;
-      }
-
-      void ensure_index_capacity(uint32_t needed) const
-      {
-         if (index_ && index_->capacity >= needed) return;
-         uint32_t cap = index_ ? index_->capacity : 0;
-         while (cap < needed) cap = cap ? cap * 2 : 16;
-         auto* block =
-            static_cast<index_header*>(std::realloc(index_, sizeof(index_header) + cap * sizeof(hash_index_entry)));
-         if (!block) GLZ_THROW_OR_ABORT(std::bad_alloc{});
-         if (!index_) {
-            block->size = 0;
-            std::memset(block->bloom, 0, bloom_bytes);
-         }
-         block->capacity = cap;
-         index_ = block;
-      }
-
-      // --- Index construction ---
-
-      // Full rebuild: rehash all keys, sort, and repopulate bloom filter.
-      void rebuild_index() const
-      {
-         const auto n = static_cast<uint32_t>(data_.size());
-         ensure_index_capacity(n);
-         bloom_clear();
-         auto* entries = index_entries();
-         for (uint32_t i = 0; i < n; ++i) {
-            const uint32_t h = hash_key(data_[i].first);
-            entries[i] = {h, i};
-            bloom_set(h);
-         }
-         std::sort(entries, entries + n, [](const auto& a, const auto& b) { return a.hash < b.hash; });
-         index_->size = n;
-      }
-
-      // Bring the index up to date.
-      // If fully invalid (after erase) or many entries are stale (bloom deferred), do a full rebuild.
-      // If only a few entries are stale (incremental inserts above bloom_threshold), insert-sort them.
-      void ensure_index() const
-      {
-         if (data_.size() <= linear_search_threshold) return;
-         const auto n = static_cast<uint32_t>(data_.size());
-         const auto current = index_size();
-         if (current == n) return; // fully current
-
-         if (current == 0 || (n - current) > linear_search_threshold) {
-            rebuild_index(); // full rebuild
-            return;
-         }
-
-         // Incrementally insert-sort the few new entries
-         for (uint32_t i = current; i < n; ++i) {
-            const hash_index_entry entry{hash_key(data_[i].first), i};
-            const auto* base = index_entries();
-            const auto* p = branchless_lower_bound(base, index_->size, entry.hash);
-            auto pos = static_cast<size_t>(p - base);
-
-            const uint32_t m = index_->size;
-            ensure_index_capacity(m + 1);
-            auto* entries = index_entries();
-            if (pos < m) {
-               std::memmove(entries + pos + 1, entries + pos, (m - pos) * sizeof(hash_index_entry));
-            }
-            entries[pos] = entry;
-            index_->size = i + 1;
-         }
-      }
-
-      // Result of a combined find + insertion-point search
-      struct index_find_result
-      {
-         iterator it; // found iterator, or end() if not found
-         size_t insert_pos; // index position for insertion (valid only when it == end())
-         uint32_t hash; // precomputed hash of the key
-      };
-
-      // Single binary search that returns both the lookup result and
-      // the index insertion position, avoiding a redundant second search.
       template <class K>
-      index_find_result index_find_or_pos(const K& key, uint32_t h)
+      insert_result insert_to_buckets(const K& key)
       {
-         ensure_index();
+         if (values_.size() >= load_threshold_) {
+            grow_and_rehash();
+         }
 
-         const auto* base = index_entries();
-         const auto* idx_end = base + index_->size;
-         const auto* p = branchless_lower_bound(base, index_->size, h);
-         const size_t pos = static_cast<size_t>(p - base);
+         const size_t h = hash_(key);
+         const uint32_t stored = to_stored_hash(h);
+         const uint32_t new_index = static_cast<uint32_t>(values_.size());
+         uint32_t idx = bucket_for_hash(stored);
+         uint32_t dist = 0;
 
-         // Scan adjacent entries with matching hash
-         for (auto* scan = p; scan != idx_end && scan->hash == h; ++scan) {
-            if (data_[scan->index].first == key) {
-               return {data_.begin() + scan->index, pos, h};
+         bucket_entry entry_to_place = {new_index, stored};
+         bool checking_dup = true;
+
+         while (true) {
+            auto& b = buckets_[idx];
+            if (b.index == empty_marker) {
+               b = entry_to_place;
+               return {idx, stored, false};
             }
-         }
 
-         return {data_.end(), pos, h};
-      }
-
-      // Linear search - used for small maps
-      template <class K>
-      iterator linear_find(const K& key)
-      {
-         for (auto it = data_.begin(); it != data_.end(); ++it) {
-            if (it->first == key) return it;
-         }
-         return data_.end();
-      }
-
-      template <class K>
-      const_iterator linear_find(const K& key) const
-      {
-         for (auto it = data_.begin(); it != data_.end(); ++it) {
-            if (it->first == key) return it;
-         }
-         return data_.end();
-      }
-
-      // Branchless binary search - compiles to cmov instead of conditional branches
-      static const hash_index_entry* branchless_lower_bound(const hash_index_entry* p, size_t len,
-                                                             uint32_t target) noexcept
-      {
-         while (len > 1) {
-            size_t half = len / 2;
-            p += (p[half - 1].hash < target) * half;
-            len -= half;
-         }
-         // Final element check: advance past it if it's less than target
-         p += (len == 1 && p->hash < target);
-         return p;
-      }
-
-      // Binary search using hash index
-      // On hash match, scans adjacent entries to handle collisions
-      template <class K>
-      iterator index_find(const K& key) const
-      {
-         ensure_index();
-
-         const uint32_t h = hash_key(key);
-         const auto* base = index_entries();
-         const auto* idx_end = base + index_->size;
-         const auto* p = branchless_lower_bound(base, index_->size, h);
-
-         for (; p != idx_end && p->hash == h; ++p) {
-            if (data_[p->index].first == key) {
-               // const_cast needed: data_ iterators are non-const from mutable find
-               return const_cast<std::vector<value_type>&>(data_).begin() + p->index;
+            if (checking_dup && b.stored_hash == stored && equal_(values_[b.index].first, key)) {
+               return {idx, stored, true}; // duplicate
             }
-         }
-         return const_cast<std::vector<value_type>&>(data_).end();
-      }
 
-      template <class K>
-      const_iterator const_index_find(const K& key) const
-      {
-         ensure_index();
-
-         const uint32_t h = hash_key(key);
-         const auto* base = index_entries();
-         const auto* idx_end = base + index_->size;
-         const auto* p = branchless_lower_bound(base, index_->size, h);
-
-         for (; p != idx_end && p->hash == h; ++p) {
-            if (data_[p->index].first == key) {
-               return data_.begin() + p->index;
+            uint32_t existing_dist = distance_from_ideal(idx, b.stored_hash);
+            if (existing_dist < dist) {
+               std::swap(b, entry_to_place);
+               dist = existing_dist;
+               checking_dup = false; // displaced entries are already in the table
             }
-         }
-         return data_.end();
-      }
 
-      // --- Insert helpers ---
-
-      // Try the bloom filter fast path for insert.
-      // Returns true if the key is definitely new and was appended (caller is done).
-      // Returns false if the bloom says "maybe present" (caller must do full search).
-      template <class F>
-      bool try_bloom_insert(uint32_t h, F&& append_fn)
-      {
-         if (index_ && data_.size() <= bloom_threshold && !bloom_maybe_contains(h)) {
-            // Definitely not present — skip the search
-            append_fn();
-            bloom_set(h);
-            // Index is now stale (index_->size < data_.size()), will rebuild on next lookup or false positive
-            return true;
+            idx = (idx + 1) & bucket_mask_;
+            ++dist;
          }
-         return false;
-      }
-
-      // Full insert path: ensure index, search for duplicate, insert if new.
-      // Returns iterator to existing or newly inserted element, and whether insertion happened.
-      template <class F>
-      std::pair<iterator, bool> indexed_insert(const key_type& key, uint32_t h, F&& append_fn)
-      {
-         auto [it, pos, _] = index_find_or_pos(key, h);
-         if (it != end()) return {it, false};
-         append_fn();
-         bloom_set(h);
-         // After ensure_index in index_find_or_pos, index is current for all entries before this one.
-         // Insert the new entry into the sorted index to keep it current.
-         if (index_size() > 0) {
-            const uint32_t n = index_->size;
-            ensure_index_capacity(n + 1);
-            auto* entries = index_entries();
-            if (pos < n) {
-               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
-            }
-            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
-            index_->size = static_cast<uint32_t>(data_.size());
-         }
-         return {data_.end() - 1, true};
       }
 
      public:
-      // Constructors
+      // --- Constructors ---
+
       ordered_map() = default;
 
-      ~ordered_map() { free_index(); }
-
-      ordered_map(std::initializer_list<value_type> init)
+      explicit ordered_map(size_type bucket_count, const Hash& hash = Hash(), const KeyEqual& equal = KeyEqual(),
+                            const Allocator& alloc = Allocator())
+         : values_(alloc), max_load_factor_(default_max_load_factor), hash_(hash), equal_(equal)
       {
-         data_.reserve(init.size());
-         for (const auto& pair : init) {
-            if (linear_find(pair.first) == data_.end()) {
-               data_.push_back(pair);
-            }
+         if (bucket_count > 0) {
+            auto bc = round_up_pow2(static_cast<uint32_t>(std::max(bucket_count, size_type(min_bucket_count))));
+            bucket_count_ = bc;
+            bucket_mask_ = bc - 1;
+            load_threshold_ = static_cast<uint32_t>(static_cast<float>(bc) * max_load_factor_);
+            allocate_buckets();
          }
       }
 
       template <class InputIt>
-      ordered_map(InputIt first, InputIt last)
+      ordered_map(InputIt first, InputIt last, size_type bucket_count = 0, const Hash& hash = Hash(),
+                   const KeyEqual& equal = KeyEqual(), const Allocator& alloc = Allocator())
+         : ordered_map(bucket_count, hash, equal, alloc)
       {
-         for (; first != last; ++first) {
-            insert(*first);
+         insert(first, last);
+      }
+
+      ordered_map(std::initializer_list<value_type> init, size_type bucket_count = 0, const Hash& hash = Hash(),
+                   const KeyEqual& equal = KeyEqual(), const Allocator& alloc = Allocator())
+         : ordered_map(bucket_count, hash, equal, alloc)
+      {
+         insert(init.begin(), init.end());
+      }
+
+      ordered_map(const ordered_map& other) : values_(other.values_), hash_(other.hash_), equal_(other.equal_)
+      {
+         if (!values_.empty()) {
+            auto bc = round_up_pow2(
+               static_cast<uint32_t>(std::max(size_type(min_bucket_count),
+                                              static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
+            bucket_count_ = bc;
+            bucket_mask_ = bc - 1;
+            load_threshold_ = static_cast<uint32_t>(static_cast<float>(bc) * max_load_factor_);
+            allocate_buckets();
+            for (uint32_t i = 0; i < static_cast<uint32_t>(values_.size()); ++i) {
+               insert_into_buckets({i, to_stored_hash(hash_(values_[i].first))});
+            }
          }
       }
 
-      ordered_map(const ordered_map& other) : data_(other.data_)
+      ordered_map(ordered_map&& other) noexcept
+         : values_(std::move(other.values_)),
+           buckets_(other.buckets_),
+           bucket_count_(other.bucket_count_),
+           bucket_mask_(other.bucket_mask_),
+           load_threshold_(other.load_threshold_),
+           max_load_factor_(other.max_load_factor_),
+           hash_(std::move(other.hash_)),
+           equal_(std::move(other.equal_))
       {
-         // Don't copy index - it will be rebuilt lazily
+         other.buckets_ = nullptr;
+         other.bucket_count_ = 0;
+         other.bucket_mask_ = 0;
+         other.load_threshold_ = 0;
       }
 
-      ordered_map(ordered_map&& other) noexcept : data_(std::move(other.data_)), index_(other.index_)
-      {
-         other.index_ = nullptr;
-      }
+      ~ordered_map() { deallocate_buckets(); }
 
       ordered_map& operator=(const ordered_map& other)
       {
          if (this != &other) {
-            data_ = other.data_;
-            free_index();
+            ordered_map tmp(other);
+            swap(tmp);
          }
          return *this;
       }
@@ -383,74 +357,95 @@ namespace glz
       ordered_map& operator=(ordered_map&& other) noexcept
       {
          if (this != &other) {
-            data_ = std::move(other.data_);
-            free_index();
-            index_ = other.index_;
-            other.index_ = nullptr;
+            deallocate_buckets();
+            values_ = std::move(other.values_);
+            buckets_ = other.buckets_;
+            bucket_count_ = other.bucket_count_;
+            bucket_mask_ = other.bucket_mask_;
+            load_threshold_ = other.load_threshold_;
+            max_load_factor_ = other.max_load_factor_;
+            hash_ = std::move(other.hash_);
+            equal_ = std::move(other.equal_);
+            other.buckets_ = nullptr;
+            other.bucket_count_ = 0;
+            other.bucket_mask_ = 0;
+            other.load_threshold_ = 0;
          }
          return *this;
       }
 
-      // Iterators (follow insertion order)
-      iterator begin() noexcept { return data_.begin(); }
-      const_iterator begin() const noexcept { return data_.begin(); }
-      const_iterator cbegin() const noexcept { return data_.cbegin(); }
+      ordered_map& operator=(std::initializer_list<value_type> ilist)
+      {
+         clear();
+         insert(ilist.begin(), ilist.end());
+         return *this;
+      }
 
-      iterator end() noexcept { return data_.end(); }
-      const_iterator end() const noexcept { return data_.end(); }
-      const_iterator cend() const noexcept { return data_.cend(); }
+      // --- Iterators ---
 
-      reverse_iterator rbegin() noexcept { return data_.rbegin(); }
-      const_reverse_iterator rbegin() const noexcept { return data_.rbegin(); }
-      const_reverse_iterator crbegin() const noexcept { return data_.crbegin(); }
+      iterator begin() noexcept { return values_.begin(); }
+      const_iterator begin() const noexcept { return values_.begin(); }
+      const_iterator cbegin() const noexcept { return values_.cbegin(); }
 
-      reverse_iterator rend() noexcept { return data_.rend(); }
-      const_reverse_iterator rend() const noexcept { return data_.rend(); }
-      const_reverse_iterator crend() const noexcept { return data_.crend(); }
+      iterator end() noexcept { return values_.end(); }
+      const_iterator end() const noexcept { return values_.end(); }
+      const_iterator cend() const noexcept { return values_.cend(); }
 
-      // Capacity
-      [[nodiscard]] bool empty() const noexcept { return data_.empty(); }
-      size_type size() const noexcept { return data_.size(); }
-      size_type capacity() const noexcept { return data_.capacity(); }
-      void reserve(size_type new_cap) { data_.reserve(new_cap); }
-      void shrink_to_fit() { data_.shrink_to_fit(); }
+      reverse_iterator rbegin() noexcept { return values_.rbegin(); }
+      const_reverse_iterator rbegin() const noexcept { return values_.rbegin(); }
+      const_reverse_iterator crbegin() const noexcept { return values_.crbegin(); }
 
-      // Modifiers
+      reverse_iterator rend() noexcept { return values_.rend(); }
+      const_reverse_iterator rend() const noexcept { return values_.rend(); }
+      const_reverse_iterator crend() const noexcept { return values_.crend(); }
+
+      // --- Capacity ---
+
+      [[nodiscard]] bool empty() const noexcept { return values_.empty(); }
+      size_type size() const noexcept { return values_.size(); }
+      size_type max_size() const noexcept { return empty_marker - 1; }
+      size_type capacity() const noexcept { return values_.capacity(); }
+
+      void shrink_to_fit()
+      {
+         values_.shrink_to_fit();
+         // Optionally rehash to minimal bucket count
+         if (bucket_count_ > 0) {
+            auto needed = round_up_pow2(
+               static_cast<uint32_t>(std::max(size_type(min_bucket_count),
+                                              static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
+            if (needed < bucket_count_) {
+               rehash_impl(needed);
+            }
+         }
+      }
+
+      // --- Modifiers ---
+
       void clear() noexcept
       {
-         data_.clear();
-         free_index();
+         values_.clear();
+         if (buckets_) clear_buckets();
       }
 
       std::pair<iterator, bool> insert(const value_type& value)
       {
-         const uint32_t h = hash_key(value.first);
-         if (data_.size() <= linear_search_threshold) {
-            auto it = linear_find(value.first);
-            if (it != end()) return {it, false};
-            data_.push_back(value);
-            return {data_.end() - 1, true};
+         auto [bucket_idx, stored, found] = insert_to_buckets(value.first);
+         if (found) {
+            return {values_.begin() + buckets_[bucket_idx].index, false};
          }
-         if (try_bloom_insert(h, [&] { data_.push_back(value); })) {
-            return {data_.end() - 1, true};
-         }
-         return indexed_insert(value.first, h, [&] { data_.push_back(value); });
+         values_.push_back(value);
+         return {values_.end() - 1, true};
       }
 
       std::pair<iterator, bool> insert(value_type&& value)
       {
-         const uint32_t h = hash_key(value.first);
-         if (data_.size() <= linear_search_threshold) {
-            auto it = linear_find(value.first);
-            if (it != end()) return {it, false};
-            data_.push_back(std::move(value));
-            return {data_.end() - 1, true};
+         auto [bucket_idx, stored, found] = insert_to_buckets(value.first);
+         if (found) {
+            return {values_.begin() + buckets_[bucket_idx].index, false};
          }
-         if (try_bloom_insert(h, [&] { data_.push_back(std::move(value)); })) {
-            return {data_.end() - 1, true};
-         }
-         // try_bloom_insert returned false without calling the lambda, so value is still valid
-         return indexed_insert(value.first, h, [&] { data_.push_back(std::move(value)); });
+         values_.push_back(std::move(value));
+         return {values_.end() - 1, true};
       }
 
       template <class InputIt>
@@ -463,173 +458,249 @@ namespace glz
 
       void insert(std::initializer_list<value_type> ilist) { insert(ilist.begin(), ilist.end()); }
 
-      template <class K, class... Args>
-      std::pair<iterator, bool> emplace(K&& key, Args&&... args)
+      template <class M>
+      std::pair<iterator, bool> insert_or_assign(const key_type& key, M&& obj)
       {
-         const uint32_t h = hash_key(key);
-         if (data_.size() <= linear_search_threshold) {
-            auto it = linear_find(key);
-            if (it != end()) return {it, false};
-            data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...));
-            return {data_.end() - 1, true};
+         auto [bucket_idx, stored, found] = insert_to_buckets(key);
+         if (found) {
+            auto it = values_.begin() + buckets_[bucket_idx].index;
+            it->second = std::forward<M>(obj);
+            return {it, false};
          }
-         if (try_bloom_insert(h, [&] { data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...)); })) {
-            return {data_.end() - 1, true};
-         }
-         return indexed_insert(key, h,
-                               [&] { data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...)); });
+         values_.emplace_back(key, std::forward<M>(obj));
+         return {values_.end() - 1, true};
       }
 
+      template <class M>
+      std::pair<iterator, bool> insert_or_assign(key_type&& key, M&& obj)
+      {
+         auto [bucket_idx, stored, found] = insert_to_buckets(key);
+         if (found) {
+            auto it = values_.begin() + buckets_[bucket_idx].index;
+            it->second = std::forward<M>(obj);
+            return {it, false};
+         }
+         values_.emplace_back(std::move(key), std::forward<M>(obj));
+         return {values_.end() - 1, true};
+      }
+
+      template <class... Args>
+      std::pair<iterator, bool> try_emplace(const key_type& key, Args&&... args)
+      {
+         auto [bucket_idx, stored, found] = insert_to_buckets(key);
+         if (found) {
+            return {values_.begin() + buckets_[bucket_idx].index, false};
+         }
+         values_.emplace_back(std::piecewise_construct, std::forward_as_tuple(key),
+                              std::forward_as_tuple(std::forward<Args>(args)...));
+         return {values_.end() - 1, true};
+      }
+
+      template <class... Args>
+      std::pair<iterator, bool> try_emplace(key_type&& key, Args&&... args)
+      {
+         auto [bucket_idx, stored, found] = insert_to_buckets(key);
+         if (found) {
+            return {values_.begin() + buckets_[bucket_idx].index, false};
+         }
+         // key may have been used for hashing but insert_to_buckets doesn't move it
+         values_.emplace_back(std::piecewise_construct, std::forward_as_tuple(std::move(key)),
+                              std::forward_as_tuple(std::forward<Args>(args)...));
+         return {values_.end() - 1, true};
+      }
+
+      template <class... Args>
+      std::pair<iterator, bool> emplace(Args&&... args)
+      {
+         value_type value(std::forward<Args>(args)...);
+         return insert(std::move(value));
+      }
+
+      // Ordered erase: preserves insertion order. O(n) because it shifts elements.
       iterator erase(const_iterator pos)
       {
-         invalidate_index();
-         return data_.erase(pos);
+         const auto erased_idx = static_cast<uint32_t>(pos - values_.cbegin());
+
+         // Remove from bucket array
+         uint32_t bi = find_bucket_by_value_index(erased_idx);
+         erase_from_buckets(bi);
+
+         // Erase from values vector
+         values_.erase(values_.begin() + erased_idx);
+
+         // Update all bucket indices > erased_idx (they shifted down by 1)
+         for (uint32_t i = 0; i < bucket_count_; ++i) {
+            if (buckets_[i].index != empty_marker && buckets_[i].index > erased_idx) {
+               --buckets_[i].index;
+            }
+         }
+
+         return values_.begin() + erased_idx;
       }
 
       iterator erase(const_iterator first, const_iterator last)
       {
-         invalidate_index();
-         return data_.erase(first, last);
+         if (first == last) return values_.begin() + (first - values_.cbegin());
+
+         // Erase from back to front to avoid invalidation issues
+         auto start_idx = static_cast<size_t>(first - values_.cbegin());
+         auto end_idx = static_cast<size_t>(last - values_.cbegin());
+         auto count = end_idx - start_idx;
+
+         // Remove all affected entries from buckets
+         for (auto i = start_idx; i < end_idx; ++i) {
+            uint32_t bi = find_bucket_by_value_index(static_cast<uint32_t>(i));
+            erase_from_buckets(bi);
+         }
+
+         // Erase from values
+         values_.erase(values_.begin() + start_idx, values_.begin() + end_idx);
+
+         // Update all bucket indices that pointed past the erased range
+         for (uint32_t i = 0; i < bucket_count_; ++i) {
+            if (buckets_[i].index != empty_marker && buckets_[i].index >= end_idx) {
+               buckets_[i].index -= static_cast<uint32_t>(count);
+            }
+         }
+
+         return values_.begin() + start_idx;
       }
 
-      size_type erase(std::string_view key)
+      size_type erase(const key_type& key)
       {
          auto it = find(key);
          if (it != end()) {
-            invalidate_index();
-            data_.erase(it);
+            erase(it);
             return 1;
          }
          return 0;
       }
 
-      // Lookup
       template <class K>
+         requires(detail::transparent_lookup<Hash, KeyEqual> && !std::convertible_to<K, iterator> &&
+                  !std::convertible_to<K, const_iterator>)
+      size_type erase(const K& key)
+      {
+         auto it = find(key);
+         if (it != end()) {
+            erase(it);
+            return 1;
+         }
+         return 0;
+      }
+
+      // Unordered erase: O(1) amortized. Swaps erased element with last, does NOT preserve insertion order.
+      iterator unordered_erase(const_iterator pos)
+      {
+         const auto erased_idx = static_cast<uint32_t>(pos - values_.cbegin());
+         const auto last_idx = static_cast<uint32_t>(values_.size() - 1);
+
+         // Remove erased entry from buckets
+         uint32_t bi = find_bucket_by_value_index(erased_idx);
+         erase_from_buckets(bi);
+
+         if (erased_idx != last_idx) {
+            // Update bucket for the last element to point to erased_idx
+            uint32_t last_bi = find_bucket_by_value_index(last_idx);
+            buckets_[last_bi].index = erased_idx;
+
+            // Move last element into erased position
+            values_[erased_idx] = std::move(values_[last_idx]);
+         }
+
+         values_.pop_back();
+         return values_.begin() + erased_idx;
+      }
+
+      size_type unordered_erase(const key_type& key)
+      {
+         auto it = find(key);
+         if (it != end()) {
+            unordered_erase(it);
+            return 1;
+         }
+         return 0;
+      }
+
+      template <class K>
+         requires(detail::transparent_lookup<Hash, KeyEqual> && !std::convertible_to<K, iterator> &&
+                  !std::convertible_to<K, const_iterator>)
+      size_type unordered_erase(const K& key)
+      {
+         auto it = find(key);
+         if (it != end()) {
+            unordered_erase(it);
+            return 1;
+         }
+         return 0;
+      }
+
+      void swap(ordered_map& other) noexcept
+      {
+         values_.swap(other.values_);
+         std::swap(buckets_, other.buckets_);
+         std::swap(bucket_count_, other.bucket_count_);
+         std::swap(bucket_mask_, other.bucket_mask_);
+         std::swap(load_threshold_, other.load_threshold_);
+         std::swap(max_load_factor_, other.max_load_factor_);
+         std::swap(hash_, other.hash_);
+         std::swap(equal_, other.equal_);
+      }
+
+      // --- Lookup ---
+
+      iterator find(const key_type& key)
+      {
+         uint32_t bi = find_bucket(key);
+         if (bi == bucket_count_) return values_.end();
+         return values_.begin() + buckets_[bi].index;
+      }
+
+      const_iterator find(const key_type& key) const
+      {
+         uint32_t bi = find_bucket(key);
+         if (bi == bucket_count_) return values_.end();
+         return values_.begin() + buckets_[bi].index;
+      }
+
+      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       iterator find(const K& key)
       {
-         if (data_.size() <= linear_search_threshold) {
-            return linear_find(key);
-         }
-         return index_find(key);
+         uint32_t bi = find_bucket(key);
+         if (bi == bucket_count_) return values_.end();
+         return values_.begin() + buckets_[bi].index;
       }
 
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       const_iterator find(const K& key) const
       {
-         if (data_.size() <= linear_search_threshold) {
-            return linear_find(key);
+         uint32_t bi = find_bucket(key);
+         if (bi == bucket_count_) return values_.end();
+         return values_.begin() + buckets_[bi].index;
+      }
+
+      mapped_type& at(const key_type& key)
+      {
+         auto it = find(key);
+         if (it == end()) {
+            GLZ_THROW_OR_ABORT(std::out_of_range("ordered_map::at: key not found"));
          }
-         return const_index_find(key);
+         return it->second;
+      }
+
+      const mapped_type& at(const key_type& key) const
+      {
+         auto it = find(key);
+         if (it == end()) {
+            GLZ_THROW_OR_ABORT(std::out_of_range("ordered_map::at: key not found"));
+         }
+         return it->second;
       }
 
       template <class K>
-      bool contains(const K& key) const
-      {
-         return find(key) != end();
-      }
-
-      template <class K>
-      size_type count(const K& key) const
-      {
-         return contains(key) ? 1 : 0;
-      }
-
-      // Element access
-      mapped_type& operator[](const key_type& key)
-      {
-         const uint32_t h = hash_key(key);
-         if (data_.size() <= linear_search_threshold) {
-            auto it = linear_find(key);
-            if (it != end()) return it->second;
-            data_.emplace_back(key, mapped_type{});
-            return data_.back().second;
-         }
-         if (try_bloom_insert(h, [&] { data_.emplace_back(key, mapped_type{}); })) {
-            return data_.back().second;
-         }
-         auto [it, pos, _] = index_find_or_pos(key, h);
-         if (it != end()) return it->second;
-         data_.emplace_back(key, mapped_type{});
-         bloom_set(h);
-         if (index_size() > 0) {
-            const uint32_t n = index_->size;
-            ensure_index_capacity(n + 1);
-            auto* entries = index_entries();
-            if (pos < n) {
-               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
-            }
-            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
-            index_->size = static_cast<uint32_t>(data_.size());
-         }
-         return data_.back().second;
-      }
-
-      mapped_type& operator[](key_type&& key)
-      {
-         const uint32_t h = hash_key(key);
-         if (data_.size() <= linear_search_threshold) {
-            auto it = linear_find(key);
-            if (it != end()) return it->second;
-            data_.emplace_back(std::move(key), mapped_type{});
-            return data_.back().second;
-         }
-         if (try_bloom_insert(h, [&] { data_.emplace_back(std::move(key), mapped_type{}); })) {
-            return data_.back().second;
-         }
-         // key may have been moved — but try_bloom_insert returned false, so the lambda didn't execute
-         auto [it, pos, _] = index_find_or_pos(key, h);
-         if (it != end()) return it->second;
-         data_.emplace_back(std::move(key), mapped_type{});
-         bloom_set(h);
-         if (index_size() > 0) {
-            const uint32_t n = index_->size;
-            ensure_index_capacity(n + 1);
-            auto* entries = index_entries();
-            if (pos < n) {
-               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
-            }
-            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
-            index_->size = static_cast<uint32_t>(data_.size());
-         }
-         return data_.back().second;
-      }
-
-      // Heterogeneous lookup version for operator[]
-      // Only participates when K is convertible to string_view but not string
-      template <class K>
-         requires(std::convertible_to<K, std::string_view> && !std::same_as<std::decay_t<K>, std::string> &&
-                  !std::same_as<std::decay_t<K>, key_type>)
-      mapped_type& operator[](K&& key)
-      {
-         const uint32_t h = hash_key(key);
-         if (data_.size() <= linear_search_threshold) {
-            auto it = linear_find(key);
-            if (it != end()) return it->second;
-            data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{});
-            return data_.back().second;
-         }
-         if (try_bloom_insert(h,
-                              [&] { data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{}); })) {
-            return data_.back().second;
-         }
-         auto [it, pos, _] = index_find_or_pos(key, h);
-         if (it != end()) return it->second;
-         data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{});
-         bloom_set(h);
-         if (index_size() > 0) {
-            const uint32_t n = index_->size;
-            ensure_index_capacity(n + 1);
-            auto* entries = index_entries();
-            if (pos < n) {
-               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
-            }
-            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
-            index_->size = static_cast<uint32_t>(data_.size());
-         }
-         return data_.back().second;
-      }
-
-      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       mapped_type& at(const K& key)
       {
          auto it = find(key);
@@ -640,6 +711,7 @@ namespace glz
       }
 
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       const mapped_type& at(const K& key) const
       {
          auto it = find(key);
@@ -649,12 +721,145 @@ namespace glz
          return it->second;
       }
 
-      // Direct access to underlying data
-      value_type* data() noexcept { return data_.data(); }
-      const value_type* data() const noexcept { return data_.data(); }
+      mapped_type& operator[](const key_type& key)
+      {
+         auto [bucket_idx, stored, found] = insert_to_buckets(key);
+         if (found) {
+            return values_[buckets_[bucket_idx].index].second;
+         }
+         values_.emplace_back(key, mapped_type{});
+         return values_.back().second;
+      }
 
-      // Comparison
-      bool operator==(const ordered_map& other) const { return data_ == other.data_; }
-      bool operator!=(const ordered_map& other) const { return data_ != other.data_; }
+      mapped_type& operator[](key_type&& key)
+      {
+         auto [bucket_idx, stored, found] = insert_to_buckets(key);
+         if (found) {
+            return values_[buckets_[bucket_idx].index].second;
+         }
+         values_.emplace_back(std::move(key), mapped_type{});
+         return values_.back().second;
+      }
+
+      size_type count(const key_type& key) const { return find(key) != end() ? 1 : 0; }
+
+      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
+      size_type count(const K& key) const
+      {
+         return find(key) != end() ? 1 : 0;
+      }
+
+      bool contains(const key_type& key) const { return find(key) != end(); }
+
+      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
+      bool contains(const K& key) const
+      {
+         return find(key) != end();
+      }
+
+      std::pair<iterator, iterator> equal_range(const key_type& key)
+      {
+         auto it = find(key);
+         if (it == end()) return {it, it};
+         return {it, std::next(it)};
+      }
+
+      std::pair<const_iterator, const_iterator> equal_range(const key_type& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return {it, it};
+         return {it, std::next(it)};
+      }
+
+      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
+      std::pair<iterator, iterator> equal_range(const K& key)
+      {
+         auto it = find(key);
+         if (it == end()) return {it, it};
+         return {it, std::next(it)};
+      }
+
+      template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
+      std::pair<const_iterator, const_iterator> equal_range(const K& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return {it, it};
+         return {it, std::next(it)};
+      }
+
+      // --- Ordered access ---
+
+      reference front() { return values_.front(); }
+      const_reference front() const { return values_.front(); }
+
+      reference back() { return values_.back(); }
+      const_reference back() const { return values_.back(); }
+
+      iterator nth(size_type n) { return values_.begin() + n; }
+      const_iterator nth(size_type n) const { return values_.begin() + n; }
+
+      value_type* data() noexcept { return values_.data(); }
+      const value_type* data() const noexcept { return values_.data(); }
+
+      const values_container_type& values() const noexcept { return values_; }
+
+      // --- Hash policy ---
+
+      float load_factor() const noexcept
+      {
+         if (bucket_count_ == 0) return 0.0f;
+         return static_cast<float>(values_.size()) / static_cast<float>(bucket_count_);
+      }
+
+      float max_load_factor() const noexcept { return max_load_factor_; }
+
+      void max_load_factor(float ml)
+      {
+         max_load_factor_ = std::clamp(ml, 0.1f, 0.95f);
+         load_threshold_ = static_cast<uint32_t>(static_cast<float>(bucket_count_) * max_load_factor_);
+      }
+
+      void rehash(size_type count)
+      {
+         auto needed = static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1;
+         count = std::max(count, needed);
+         auto bc = round_up_pow2(static_cast<uint32_t>(std::max(count, size_type(min_bucket_count))));
+         if (bc != bucket_count_) {
+            rehash_impl(bc);
+         }
+      }
+
+      void reserve(size_type count)
+      {
+         values_.reserve(count);
+         auto needed = static_cast<size_type>(static_cast<float>(count) / max_load_factor_) + 1;
+         auto bc = round_up_pow2(static_cast<uint32_t>(std::max(needed, size_type(min_bucket_count))));
+         if (bc > bucket_count_) {
+            rehash_impl(bc);
+         }
+      }
+
+      size_type bucket_count() const noexcept { return bucket_count_; }
+
+      // --- Observers ---
+
+      hasher hash_function() const { return hash_; }
+      key_equal key_eq() const { return equal_; }
+
+      // --- Comparison ---
+
+      bool operator==(const ordered_map& other) const { return values_ == other.values_; }
+      bool operator!=(const ordered_map& other) const { return values_ != other.values_; }
    };
+
+   template <class Key, class T, class Hash, class KeyEqual, class Allocator>
+   void swap(ordered_map<Key, T, Hash, KeyEqual, Allocator>& lhs,
+             ordered_map<Key, T, Hash, KeyEqual, Allocator>& rhs) noexcept
+   {
+      lhs.swap(rhs);
+   }
 }

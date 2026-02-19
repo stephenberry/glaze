@@ -1,8 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include <iostream>
 #include <string>
+#include <vector>
 
 #include "glaze/containers/ordered_map.hpp"
 #include "ut/ut.hpp"
@@ -11,314 +11,658 @@ using namespace ut;
 
 suite ordered_map_tests = [] {
    "insertion_order_preserved"_test = [] {
-      glz::ordered_map<int> map;
-
-      map["zebra"] = 1;
-      map["apple"] = 2;
-      map["mango"] = 3;
-      map["banana"] = 4;
+      glz::ordered_map<std::string, int> d;
+      d["zebra"] = 1;
+      d["apple"] = 2;
+      d["mango"] = 3;
+      d["banana"] = 4;
 
       std::vector<std::string> keys;
-      for (const auto& [key, value] : map) {
+      for (const auto& [key, value] : d) {
          keys.push_back(key);
       }
 
-      // Should be in insertion order, not sorted order
+      expect(keys.size() == 4);
       expect(keys[0] == "zebra");
       expect(keys[1] == "apple");
       expect(keys[2] == "mango");
       expect(keys[3] == "banana");
    };
 
-   "lookup_works"_test = [] {
-      glz::ordered_map<int> map;
-      map["one"] = 1;
-      map["two"] = 2;
-      map["three"] = 3;
+   "basic_insert_and_find"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      auto [it1, inserted1] = d.insert({"one", 1});
+      expect(inserted1);
+      expect(it1->first == "one");
+      expect(it1->second == 1);
 
-      expect(map["one"] == 1);
-      expect(map["two"] == 2);
-      expect(map["three"] == 3);
-      expect(map.at("two") == 2);
+      auto [it2, inserted2] = d.insert({"one", 99});
+      expect(!inserted2);
+      expect(it2->second == 1); // not overwritten
+
+      expect(d.size() == 1);
+   };
+
+   "operator_bracket"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 10;
+      d["b"] = 20;
+      d["c"] = 30;
+
+      expect(d["a"] == 10);
+      expect(d["b"] == 20);
+      expect(d["c"] == 30);
+      expect(d.size() == 3);
+
+      d["a"] = 100;
+      expect(d["a"] == 100);
+      expect(d.size() == 3);
+   };
+
+   "at_works"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["exists"] = 42;
+
+      expect(d.at("exists") == 42);
    };
 
    "find_works"_test = [] {
-      glz::ordered_map<int> map;
-      map["exists"] = 42;
+      glz::ordered_map<std::string, int> d;
+      d["key"] = 42;
 
-      auto it = map.find("exists");
-      expect(it != map.end());
+      auto it = d.find("key");
+      expect(it != d.end());
       expect(it->second == 42);
 
-      auto it2 = map.find("not_exists");
-      expect(it2 == map.end());
+      auto it2 = d.find("missing");
+      expect(it2 == d.end());
    };
 
-   "contains_works"_test = [] {
-      glz::ordered_map<int> map;
-      map["key"] = 1;
+   "contains_and_count"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
 
-      expect(map.contains("key"));
-      expect(!map.contains("missing"));
+      expect(d.contains("a"));
+      expect(!d.contains("c"));
+      expect(d.count("b") == 1);
+      expect(d.count("z") == 0);
    };
 
-   "erase_works"_test = [] {
-      glz::ordered_map<int> map;
-      map["a"] = 1;
-      map["b"] = 2;
-      map["c"] = 3;
+   "ordered_erase_by_iterator"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+      d["c"] = 3;
+      d["d"] = 4;
 
-      expect(map.size() == 3);
+      // Erase "b"
+      auto it = d.find("b");
+      d.erase(it);
 
-      map.erase("b");
+      expect(d.size() == 3);
+      expect(!d.contains("b"));
 
-      expect(map.size() == 2);
-      expect(!map.contains("b"));
-
-      // Order should still be preserved for remaining elements
+      // Order preserved: a, c, d
       std::vector<std::string> keys;
-      for (const auto& [key, value] : map) {
-         keys.push_back(key);
-      }
+      for (const auto& [k, v] : d) keys.push_back(k);
       expect(keys[0] == "a");
       expect(keys[1] == "c");
+      expect(keys[2] == "d");
+
+      // Remaining elements still findable
+      expect(d.at("a") == 1);
+      expect(d.at("c") == 3);
+      expect(d.at("d") == 4);
    };
 
-   "duplicate_insert_fails"_test = [] {
-      glz::ordered_map<int> map;
+   "ordered_erase_by_key"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["x"] = 10;
+      d["y"] = 20;
+      d["z"] = 30;
 
-      auto [it1, inserted1] = map.insert({"key", 1});
-      expect(inserted1);
+      expect(d.erase("y") == 1);
+      expect(d.erase("missing") == 0);
+      expect(d.size() == 2);
+      expect(!d.contains("y"));
+      expect(d.at("x") == 10);
+      expect(d.at("z") == 30);
+   };
 
-      auto [it2, inserted2] = map.insert({"key", 2});
-      expect(!inserted2);
-      expect(it2->second == 1); // Original value unchanged
+   "ordered_erase_range"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+      d["c"] = 3;
+      d["d"] = 4;
+      d["e"] = 5;
+
+      // Erase b, c, d (indices 1..4)
+      auto first = d.nth(1);
+      auto last = d.nth(4);
+      d.erase(first, last);
+
+      expect(d.size() == 2);
+      expect(d.at("a") == 1);
+      expect(d.at("e") == 5);
+   };
+
+   "unordered_erase"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+      d["c"] = 3;
+
+      d.unordered_erase(d.find("a"));
+
+      expect(d.size() == 2);
+      expect(!d.contains("a"));
+      // "c" was moved to position 0 (swapped with last), "b" stays at position 1
+      expect(d.contains("b"));
+      expect(d.contains("c"));
+      expect(d.at("b") == 2);
+      expect(d.at("c") == 3);
+   };
+
+   "unordered_erase_by_key"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["x"] = 10;
+      d["y"] = 20;
+      d["z"] = 30;
+
+      expect(d.unordered_erase("y") == 1);
+      expect(d.unordered_erase("missing") == 0);
+      expect(d.size() == 2);
+      expect(d.contains("x"));
+      expect(d.contains("z"));
+   };
+
+   "insert_or_assign"_test = [] {
+      glz::ordered_map<std::string, int> d;
+
+      auto [it1, ins1] = d.insert_or_assign("key", 10);
+      expect(ins1);
+      expect(it1->second == 10);
+
+      auto [it2, ins2] = d.insert_or_assign("key", 20);
+      expect(!ins2);
+      expect(it2->second == 20);
+
+      expect(d.size() == 1);
+      expect(d.at("key") == 20);
+   };
+
+   "try_emplace"_test = [] {
+      glz::ordered_map<std::string, int> d;
+
+      auto [it1, ins1] = d.try_emplace("key", 10);
+      expect(ins1);
+      expect(it1->second == 10);
+
+      auto [it2, ins2] = d.try_emplace("key", 99);
+      expect(!ins2);
+      expect(it2->second == 10); // not overwritten
+
+      expect(d.size() == 1);
+   };
+
+   "emplace"_test = [] {
+      glz::ordered_map<std::string, int> d;
+
+      auto [it, ins] = d.emplace("hello", 42);
+      expect(ins);
+      expect(it->first == "hello");
+      expect(it->second == 42);
+
+      auto [it2, ins2] = d.emplace("hello", 99);
+      expect(!ins2);
+      expect(it2->second == 42);
    };
 
    "copy_constructor"_test = [] {
-      glz::ordered_map<int> map1;
-      map1["a"] = 1;
-      map1["b"] = 2;
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+      d["c"] = 3;
 
-      glz::ordered_map<int> map2 = map1;
+      glz::ordered_map<std::string, int> d2(d);
 
-      expect(map2.size() == 2);
-      expect(map2["a"] == 1);
-      expect(map2["b"] == 2);
+      expect(d2.size() == 3);
+      expect(d2.at("a") == 1);
+      expect(d2.at("b") == 2);
+      expect(d2.at("c") == 3);
 
-      // Verify order is preserved in copy
-      std::vector<std::string> keys;
-      for (const auto& [key, value] : map2) {
-         keys.push_back(key);
-      }
-      expect(keys[0] == "a");
-      expect(keys[1] == "b");
+      // Verify order preserved
+      auto it = d2.begin();
+      expect(it->first == "a");
+      ++it;
+      expect(it->first == "b");
+      ++it;
+      expect(it->first == "c");
    };
 
    "move_constructor"_test = [] {
-      glz::ordered_map<int> map1;
-      map1["x"] = 10;
-      map1["y"] = 20;
+      glz::ordered_map<std::string, int> d;
+      d["x"] = 10;
+      d["y"] = 20;
 
-      glz::ordered_map<int> map2 = std::move(map1);
+      glz::ordered_map<std::string, int> d2(std::move(d));
 
-      expect(map2.size() == 2);
-      expect(map2["x"] == 10);
-      expect(map2["y"] == 20);
-      expect(map1.empty());
+      expect(d2.size() == 2);
+      expect(d2.at("x") == 10);
+      expect(d2.at("y") == 20);
+      expect(d.empty()); // NOLINT: moved-from state
    };
 
-   "initializer_list"_test = [] {
-      glz::ordered_map<int> map = {{"first", 1}, {"second", 2}, {"third", 3}};
+   "copy_assignment"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
 
-      expect(map.size() == 3);
+      glz::ordered_map<std::string, int> d2;
+      d2["z"] = 99;
+      d2 = d;
+
+      expect(d2.size() == 1);
+      expect(d2.at("a") == 1);
+      expect(!d2.contains("z"));
+   };
+
+   "move_assignment"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+
+      glz::ordered_map<std::string, int> d2;
+      d2 = std::move(d);
+
+      expect(d2.size() == 1);
+      expect(d2.at("a") == 1);
+   };
+
+   "initializer_list_constructor"_test = [] {
+      glz::ordered_map<std::string, int> d{{"a", 1}, {"b", 2}, {"c", 3}};
+
+      expect(d.size() == 3);
+      expect(d.at("a") == 1);
+      expect(d.at("b") == 2);
+      expect(d.at("c") == 3);
+
+      // Duplicates in initializer list should be ignored
+      glz::ordered_map<std::string, int> d2{{"x", 1}, {"x", 2}, {"y", 3}};
+      expect(d2.size() == 2);
+      expect(d2.at("x") == 1);
+      expect(d2.at("y") == 3);
+   };
+
+   "initializer_list_assignment"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["old"] = 99;
+      d = {{"a", 1}, {"b", 2}};
+
+      expect(d.size() == 2);
+      expect(!d.contains("old"));
+      expect(d.at("a") == 1);
+      expect(d.at("b") == 2);
+   };
+
+   "range_constructor"_test = [] {
+      std::vector<std::pair<std::string, int>> vec{{"a", 1}, {"b", 2}, {"c", 3}};
+      glz::ordered_map<std::string, int> d(vec.begin(), vec.end());
+
+      expect(d.size() == 3);
+      expect(d.at("a") == 1);
+      expect(d.at("c") == 3);
+   };
+
+   "clear"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+
+      d.clear();
+      expect(d.empty());
+      expect(d.size() == 0);
+
+      // Should be able to insert again
+      d["c"] = 3;
+      expect(d.size() == 1);
+      expect(d.at("c") == 3);
+   };
+
+   "front_and_back"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["first"] = 1;
+      d["second"] = 2;
+      d["third"] = 3;
+
+      expect(d.front().first == "first");
+      expect(d.front().second == 1);
+      expect(d.back().first == "third");
+      expect(d.back().second == 3);
+   };
+
+   "nth"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+      d["c"] = 3;
+
+      expect(d.nth(0)->first == "a");
+      expect(d.nth(1)->first == "b");
+      expect(d.nth(2)->first == "c");
+      expect(d.nth(3) == d.end());
+   };
+
+   "equal_range"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["key"] = 42;
+
+      auto [first, last] = d.equal_range("key");
+      expect(first != d.end());
+      expect(std::distance(first, last) == 1);
+      expect(first->second == 42);
+
+      auto [f2, l2] = d.equal_range("missing");
+      expect(f2 == d.end());
+      expect(l2 == d.end());
+   };
+
+   "reverse_iterators"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+      d["c"] = 3;
 
       std::vector<std::string> keys;
-      for (const auto& [key, value] : map) {
-         keys.push_back(key);
+      for (auto it = d.rbegin(); it != d.rend(); ++it) {
+         keys.push_back(it->first);
       }
-      expect(keys[0] == "first");
-      expect(keys[1] == "second");
-      expect(keys[2] == "third");
+      expect(keys[0] == "c");
+      expect(keys[1] == "b");
+      expect(keys[2] == "a");
    };
 
-   "clear_works"_test = [] {
-      glz::ordered_map<int> map;
-      map["a"] = 1;
-      map["b"] = 2;
+   "rehash_and_reserve"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d.reserve(100);
 
-      map.clear();
+      expect(d.bucket_count() >= 100);
 
-      expect(map.empty());
-      expect(map.size() == 0);
+      for (int i = 0; i < 100; ++i) {
+         d[std::to_string(i)] = i;
+      }
+
+      expect(d.size() == 100);
+      for (int i = 0; i < 100; ++i) {
+         expect(d.at(std::to_string(i)) == i);
+      }
    };
 
+   "load_factor"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      expect(d.load_factor() == 0.0f);
+      expect(d.max_load_factor() == 0.75f);
+
+      d["a"] = 1;
+      expect(d.load_factor() > 0.0f);
+
+      d.max_load_factor(0.5f);
+      expect(d.max_load_factor() == 0.5f);
+   };
+
+   "swap"_test = [] {
+      glz::ordered_map<std::string, int> d1{{"a", 1}};
+      glz::ordered_map<std::string, int> d2{{"b", 2}, {"c", 3}};
+
+      d1.swap(d2);
+
+      expect(d1.size() == 2);
+      expect(d1.contains("b"));
+      expect(d2.size() == 1);
+      expect(d2.contains("a"));
+   };
+
+   "observers"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      [[maybe_unused]] auto h = d.hash_function();
+      [[maybe_unused]] auto eq = d.key_eq();
+   };
+
+   "comparison"_test = [] {
+      glz::ordered_map<std::string, int> d1{{"a", 1}, {"b", 2}};
+      glz::ordered_map<std::string, int> d2{{"a", 1}, {"b", 2}};
+      glz::ordered_map<std::string, int> d3{{"b", 2}, {"a", 1}};
+
+      expect(d1 == d2);
+      expect(d1 != d3); // different order
+   };
+
+   "integer_keys"_test = [] {
+      glz::ordered_map<int, std::string> d;
+      d[42] = "answer";
+      d[7] = "lucky";
+      d[13] = "unlucky";
+
+      expect(d.size() == 3);
+      expect(d.at(42) == "answer");
+      expect(d.at(7) == "lucky");
+
+      // Order preserved
+      expect(d.front().first == 42);
+      expect(d.back().first == 13);
+   };
+
+   "large_map_stress"_test = [] {
+      glz::ordered_map<int, int> d;
+      constexpr int N = 10000;
+
+      for (int i = 0; i < N; ++i) {
+         d[i] = i * 2;
+      }
+
+      expect(d.size() == N);
+
+      // All elements findable
+      for (int i = 0; i < N; ++i) {
+         expect(d.at(i) == i * 2);
+      }
+
+      // Order preserved
+      int idx = 0;
+      for (const auto& [k, v] : d) {
+         expect(k == idx);
+         expect(v == idx * 2);
+         ++idx;
+      }
+
+      // Erase half (unordered, for speed)
+      for (int i = 0; i < N; i += 2) {
+         d.unordered_erase(i);
+      }
+
+      expect(d.size() == N / 2);
+
+      // Remaining odd elements still findable
+      for (int i = 1; i < N; i += 2) {
+         expect(d.contains(i));
+         expect(d.at(i) == i * 2);
+      }
+   };
+
+   "erase_all_and_reinsert"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+      d["c"] = 3;
+
+      d.erase(d.begin(), d.end());
+      expect(d.empty());
+
+      d["d"] = 4;
+      expect(d.size() == 1);
+      expect(d.at("d") == 4);
+   };
+
+   "data_pointer"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+
+      auto* ptr = d.data();
+      expect(ptr[0].first == "a");
+      expect(ptr[0].second == 1);
+      expect(ptr[1].first == "b");
+      expect(ptr[1].second == 2);
+   };
+
+   "empty_operations"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      expect(d.empty());
+      expect(d.size() == 0);
+      expect(d.find("x") == d.end());
+      expect(!d.contains("x"));
+      expect(d.count("x") == 0);
+      expect(d.erase("x") == 0);
+      expect(d.begin() == d.end());
+   };
+
+   "insert_move_semantics"_test = [] {
+      glz::ordered_map<std::string, std::string> d;
+      std::string key = "key";
+      std::string val = "value";
+
+      d.insert({std::move(key), std::move(val)});
+      expect(d.at("key") == "value");
+   };
+
+   "many_collisions"_test = [] {
+      // Use a hash that always returns the same value to force maximum collisions
+      struct bad_hash
+      {
+         size_t operator()(int) const { return 42; }
+      };
+
+      glz::ordered_map<int, int, bad_hash> d;
+      for (int i = 0; i < 50; ++i) {
+         d[i] = i;
+      }
+
+      expect(d.size() == 50);
+      for (int i = 0; i < 50; ++i) {
+         expect(d.at(i) == i);
+      }
+
+      // Erase some
+      for (int i = 0; i < 50; i += 3) {
+         d.erase(d.find(i));
+      }
+
+      // Remaining elements still correct
+      for (int i = 0; i < 50; ++i) {
+         if (i % 3 == 0) {
+            expect(!d.contains(i));
+         }
+         else {
+            expect(d.at(i) == i);
+         }
+      }
+   };
+
+   "shrink_to_fit"_test = [] {
+      glz::ordered_map<int, int> d;
+      d.reserve(1000);
+      auto bc_before = d.bucket_count();
+
+      d[1] = 1;
+      d[2] = 2;
+
+      d.shrink_to_fit();
+      expect(d.bucket_count() <= bc_before);
+      expect(d.at(1) == 1);
+      expect(d.at(2) == 2);
+   };
+
+   "max_size"_test = [] {
+      glz::ordered_map<int, int> d;
+      expect(d.max_size() > 0);
+   };
+
+   "capacity"_test = [] {
+      glz::ordered_map<int, int> d;
+      d.reserve(100);
+      expect(d.capacity() >= 100);
+   };
+
+   "values_container"_test = [] {
+      glz::ordered_map<std::string, int> d;
+      d["a"] = 1;
+      d["b"] = 2;
+
+      const auto& vals = d.values();
+      expect(vals.size() == 2);
+      expect(vals[0].first == "a");
+      expect(vals[1].first == "b");
+   };
    "heterogeneous_lookup"_test = [] {
-      glz::ordered_map<int> map;
-      map["test"] = 42;
+      // Transparent hash and comparator for string_view lookup without allocation
+      struct string_hash
+      {
+         using is_transparent = void;
+         size_t operator()(std::string_view sv) const { return std::hash<std::string_view>{}(sv); }
+      };
 
-      // Should work with string_view
-      std::string_view sv = "test";
-      expect(map.contains(sv));
-      expect(map.find(sv) != map.end());
+      struct string_equal
+      {
+         using is_transparent = void;
+         bool operator()(std::string_view a, std::string_view b) const { return a == b; }
+      };
+
+      glz::ordered_map<std::string, int, string_hash, string_equal> d;
+      d["alpha"] = 1;
+      d["beta"] = 2;
+      d["gamma"] = 3;
+
+      // Lookup with string_view (no allocation)
+      std::string_view sv = "beta";
+      auto it = d.find(sv);
+      expect(it != d.end());
+      expect(it->second == 2);
+
+      expect(d.contains(sv));
+      expect(d.count(sv) == 1);
+      expect(d.at(sv) == 2);
+
+      // equal_range with string_view
+      auto [first, last] = d.equal_range(sv);
+      expect(first != d.end());
+      expect(first->second == 2);
+
+      // Erase with string_view
+      expect(d.erase(sv) == 1);
+      expect(!d.contains(sv));
+      expect(d.size() == 2);
+
+      // Unordered erase with string_view
+      std::string_view sv2 = "alpha";
+      expect(d.unordered_erase(sv2) == 1);
+      expect(!d.contains(sv2));
+      expect(d.size() == 1);
+
+      // Lookup with const char* (also goes through string_view)
+      expect(d.contains("gamma"));
+      expect(d.at("gamma") == 3);
    };
 
-   "small_map_linear_search"_test = [] {
-      // Test with <= 16 entries (should use linear search)
-      glz::ordered_map<int> map;
+   "non_transparent_no_implicit_conversion"_test = [] {
+      // Default hash/equal (non-transparent): find(key_type&) is used,
+      // string_view would require implicit conversion to string
+      glz::ordered_map<std::string, int> d;
+      d["hello"] = 42;
 
-      for (int i = 0; i < 16; ++i) {
-         map[std::to_string(i)] = i;
-      }
-
-      expect(map.size() == 16);
-
-      // Verify all values and insertion order
-      int expected = 0;
-      for (const auto& [key, value] : map) {
-         expect(key == std::to_string(expected));
-         expect(value == expected);
-         ++expected;
-      }
-
-      // Verify lookup works
-      for (int i = 0; i < 16; ++i) {
-         expect(map[std::to_string(i)] == i);
-      }
-   };
-
-   "large_map_index_lookup"_test = [] {
-      // Test with > 16 entries (should build and use index)
-      glz::ordered_map<int> map;
-
-      for (int i = 0; i < 100; ++i) {
-         map[std::to_string(i)] = i * 2;
-      }
-
-      expect(map.size() == 100);
-
-      // Verify all values via lookup (this triggers index building)
-      for (int i = 0; i < 100; ++i) {
-         expect(map[std::to_string(i)] == i * 2);
-      }
-
-      // Verify insertion order is preserved
-      int expected = 0;
-      for (const auto& [key, value] : map) {
-         expect(key == std::to_string(expected));
-         expect(value == expected * 2);
-         ++expected;
-      }
-   };
-
-   "index_invalidation_on_insert"_test = [] {
-      glz::ordered_map<int> map;
-
-      // Build up to threshold
-      for (int i = 0; i < 20; ++i) {
-         map[std::to_string(i)] = i;
-      }
-
-      // Force index build by doing a lookup
-      expect(map.contains("5"));
-
-      // Insert more entries (should invalidate index)
-      map["new_key"] = 999;
-
-      // Lookup should still work (index rebuilt lazily)
-      expect(map["new_key"] == 999);
-      expect(map.contains("5"));
-
-      // Verify order
-      std::vector<std::string> keys;
-      for (const auto& [key, value] : map) {
-         keys.push_back(key);
-      }
-      expect(keys.back() == "new_key");
-   };
-
-   "index_invalidation_on_erase"_test = [] {
-      glz::ordered_map<int> map;
-
-      for (int i = 0; i < 20; ++i) {
-         map[std::to_string(i)] = i;
-      }
-
-      // Force index build
-      expect(map.contains("10"));
-
-      // Erase an entry
-      map.erase("10");
-
-      // Lookup should still work
-      expect(!map.contains("10"));
-      expect(map.contains("5"));
-      expect(map.contains("15"));
-   };
-
-   "reserve_preserves_index"_test = [] {
-      glz::ordered_map<int> map;
-
-      // Insert enough to build index
-      for (int i = 0; i < 20; ++i) {
-         map[std::to_string(i)] = i;
-      }
-
-      // Force index build
-      expect(map.contains("5"));
-
-      // Reserve should NOT invalidate index (hashes and indices remain valid)
-      map.reserve(1000);
-
-      // Lookups should still work
-      expect(map.contains("5"));
-      expect(map.contains("10"));
-      expect(map.contains("19"));
-      expect(!map.contains("999"));
-   };
-
-   "hash_collision_fallback"_test = [] {
-      // This test verifies that even if hash collisions occur,
-      // the map still functions correctly (falls back to linear search)
-      glz::ordered_map<int> map;
-
-      // Insert many entries - statistically unlikely to have collisions with FNV-1a
-      // but the fallback mechanism should handle it if they occur
-      for (int i = 0; i < 100; ++i) {
-         map["key_" + std::to_string(i)] = i;
-      }
-
-      // Verify all lookups work regardless of whether index or linear search is used
-      for (int i = 0; i < 100; ++i) {
-         expect(map.contains("key_" + std::to_string(i)));
-         expect(map["key_" + std::to_string(i)] == i);
-      }
-
-      expect(!map.contains("nonexistent"));
-   };
-
-
-   "many_insertions"_test = [] {
-      glz::ordered_map<int> map;
-
-      // Insert enough to trigger multiple index rebuilds
-      for (int i = 0; i < 1000; ++i) {
-         map[std::to_string(i)] = i * 2;
-      }
-
-      expect(map.size() == 1000);
-
-      // Verify all values
-      for (int i = 0; i < 1000; ++i) {
-         expect(map[std::to_string(i)] == i * 2);
-      }
-
-      // Verify insertion order
-      int expected = 0;
-      for (const auto& [key, value] : map) {
-         expect(key == std::to_string(expected));
-         ++expected;
-      }
+      // This uses the const key_type& overload (implicit conversion from literal to std::string)
+      expect(d.find("hello") != d.end());
+      expect(d.contains("hello"));
+      expect(d.at("hello") == 42);
    };
 };
 

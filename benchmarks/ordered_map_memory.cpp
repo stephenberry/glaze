@@ -35,7 +35,7 @@ void operator delete(void* p, std::size_t) noexcept
    }
 }
 
-#include "glaze/containers/ordered_map.hpp"
+#include "glaze/containers/ordered_small_map.hpp"
 #include "tsl/ordered_map.h"
 
 std::vector<std::string> generate_keys(size_t n)
@@ -67,7 +67,7 @@ std::vector<std::string> generate_keys(size_t n)
 int main()
 {
    std::cout << "sizeof(std::string) = " << sizeof(std::string) << "\n";
-   std::cout << "sizeof(glz::ordered_map<int>) = " << sizeof(glz::ordered_map<int>) << "\n";
+   std::cout << "sizeof(glz::ordered_small_map<int>) = " << sizeof(glz::ordered_small_map<int>) << "\n";
    std::cout << "sizeof(tsl::ordered_map<std::string, int>) = " << sizeof(tsl::ordered_map<std::string, int>) << "\n";
    std::cout << "\n";
 
@@ -84,9 +84,9 @@ int main()
    for (size_t n : {8, 16, 32, 64, 128, 256}) {
       const auto& keys = all_keys[idx++];
 
-      // Measure glz::ordered_map
+      // Measure glz::ordered_small_map
       int64_t before = g_allocated.load();
-      auto* glz_map = new glz::ordered_map<int>();
+      auto* glz_map = new glz::ordered_small_map<int>();
       for (size_t i = 0; i < n; ++i) {
          (*glz_map)[keys[i]] = static_cast<int>(i);
       }
