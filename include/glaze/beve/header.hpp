@@ -3,17 +3,22 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <array>
 #include <bit>
 #include <concepts>
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#endif
 
 #include "glaze/core/context.hpp"
 #include "glaze/util/inline.hpp"
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    GLZ_ALWAYS_INLINE bool invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
    {
@@ -57,7 +62,7 @@ namespace glz
    }
 }
 
-namespace glz::tag
+GLAZE_EXPORT namespace glz::tag
 {
    constexpr uint8_t null = 0;
    constexpr uint8_t boolean = 0b00001'000;
@@ -94,7 +99,7 @@ namespace glz::tag
    constexpr uint8_t f128 = 0b100'00'001;
 }
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    template <class T>
    constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);

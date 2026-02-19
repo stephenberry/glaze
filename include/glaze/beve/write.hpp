@@ -3,7 +3,12 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <utility>
+#endif
 
 #include "glaze/beve/header.hpp"
 #include "glaze/beve/key_traits.hpp"
@@ -17,7 +22,7 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/variant.hpp"
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    template <>
    struct serialize<BEVE>

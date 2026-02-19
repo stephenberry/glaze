@@ -3,6 +3,12 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
+#endif
+
 #include "glaze/beve/header.hpp"
 #include "glaze/beve/key_traits.hpp"
 #include "glaze/core/opts.hpp"
@@ -11,7 +17,7 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/variant.hpp"
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    // Calculate the number of bytes needed to store a compressed integer
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t compressed_int_size(uint64_t i) noexcept

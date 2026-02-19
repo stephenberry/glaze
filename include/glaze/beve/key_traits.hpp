@@ -3,10 +3,16 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
+#endif
+
 #include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    template <class Member, bool = is_cast<std::remove_cvref_t<Member>>>
    struct beve_member_resolver

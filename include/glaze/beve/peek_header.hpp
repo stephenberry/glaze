@@ -3,6 +3,12 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
+#endif
+
 #include "glaze/beve/header.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/util/expected.hpp"
@@ -10,7 +16,7 @@
 namespace glz
 {
    // Extension subtypes for beve_header
-   namespace extension
+   GLAZE_EXPORT namespace extension
    {
       constexpr uint8_t delimiter = 0; // Data delimiter (tag = 0x06)
       constexpr uint8_t variant = 1; // Variant type (tag = 0x0E), count = variant index
@@ -20,7 +26,7 @@ namespace glz
    }
 
    // Information extracted from a BEVE header without full deserialization
-   struct beve_header
+   GLAZE_EXPORT struct beve_header
    {
       uint8_t tag{}; // The raw tag byte
       uint8_t type{}; // Base type: null(0), number(1), string(2), object(3), typed_array(4), generic_array(5),
@@ -100,7 +106,7 @@ namespace glz
    // - Making decisions about how to process incoming data
    //
    // Returns the header information on success, or an error_ctx on failure.
-   template <class Buffer>
+   GLAZE_EXPORT template <class Buffer>
    [[nodiscard]] expected<beve_header, error_ctx> beve_peek_header(const Buffer& buffer) noexcept
    {
       const auto* data = reinterpret_cast<const uint8_t*>(buffer.data());
@@ -249,7 +255,7 @@ namespace glz
    }
 
    // Convenience overload for C-style arrays and raw pointers with size
-   [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header(const void* data, size_t size) noexcept
+   GLAZE_EXPORT [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header(const void* data, size_t size) noexcept
    {
       return beve_peek_header(std::string_view{reinterpret_cast<const char*>(data), size});
    }
@@ -270,7 +276,7 @@ namespace glz
    //
    // Returns the header information on success, or an error_ctx on failure.
    // The header_size in the result is relative to the offset position.
-   template <class Buffer>
+   GLAZE_EXPORT template <class Buffer>
    [[nodiscard]] expected<beve_header, error_ctx> beve_peek_header_at(const Buffer& buffer, size_t offset) noexcept
    {
       const size_t size = buffer.size();
@@ -285,7 +291,7 @@ namespace glz
    }
 
    // Convenience overload for raw pointers with size and offset
-   [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header_at(const void* data, size_t size,
+   GLAZE_EXPORT [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header_at(const void* data, size_t size,
                                                                              size_t offset) noexcept
    {
       if (offset >= size) [[unlikely]] {

@@ -3,6 +3,12 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
+#endif
+
 #include "glaze/beve/header.hpp"
 #include "glaze/json/write.hpp"
 
@@ -607,7 +613,7 @@ namespace glz
       }
    }
 
-   template <auto Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
+   GLAZE_EXPORT template <auto Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx beve_to_json(const BEVEBuffer& beve, JSONBuffer& out)
    {
       size_t ix{}; // write index

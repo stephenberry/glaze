@@ -3,11 +3,17 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
+#endif
+
 #include "glaze/beve/read.hpp"
 #include "glaze/beve/write.hpp"
 #include "glaze/core/ptr.hpp"
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    template <class T, class B>
    bool read_as_binary(T&& root_value, const sv json_ptr, B&& buffer)

@@ -3,6 +3,12 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
+#endif
+
 #include "glaze/beve/header.hpp"
 #include "glaze/beve/key_traits.hpp"
 #include "glaze/beve/skip.hpp"
@@ -17,7 +23,7 @@
 // If we know the first function called has an end check, we don't need a guard at the top of the function
 // Also, after almost every function call we need to check if an error was produced
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    template <>
    struct parse<BEVE>
