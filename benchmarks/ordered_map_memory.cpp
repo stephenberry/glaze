@@ -35,8 +35,8 @@ void operator delete(void* p, std::size_t) noexcept
    }
 }
 
+#include "glaze/containers/ordered_map.hpp"
 #include "glaze/containers/ordered_small_map.hpp"
-#include "tsl/ordered_map.h"
 
 std::vector<std::string> generate_keys(size_t n)
 {
@@ -68,7 +68,7 @@ int main()
 {
    std::cout << "sizeof(std::string) = " << sizeof(std::string) << "\n";
    std::cout << "sizeof(glz::ordered_small_map<int>) = " << sizeof(glz::ordered_small_map<int>) << "\n";
-   std::cout << "sizeof(tsl::ordered_map<std::string, int>) = " << sizeof(tsl::ordered_map<std::string, int>) << "\n";
+   std::cout << "sizeof(glz::ordered_map<std::string, int>) = " << sizeof(glz::ordered_map<std::string, int>) << "\n";
    std::cout << "\n";
 
    // Pre-generate keys outside measurement
@@ -77,8 +77,8 @@ int main()
       all_keys.push_back(generate_keys(n));
    }
 
-   std::cout << "  n  | glz bytes | glz/entry | tsl bytes | tsl/entry | ratio (tsl/glz)\n";
-   std::cout << "-----|-----------|-----------|-----------|-----------|----------------\n";
+   std::cout << "  n  | small_map bytes | small_map/entry | map bytes | map/entry | ratio (map/small_map)\n";
+   std::cout << "-----|-----------------|-----------------|-----------|-----------|----------------------\n";
 
    size_t idx = 0;
    for (size_t n : {8, 16, 32, 64, 128, 256}) {
@@ -86,29 +86,29 @@ int main()
 
       // Measure glz::ordered_small_map
       int64_t before = g_allocated.load();
-      auto* glz_map = new glz::ordered_small_map<int>();
+      auto* small_map = new glz::ordered_small_map<int>();
       for (size_t i = 0; i < n; ++i) {
-         (*glz_map)[keys[i]] = static_cast<int>(i);
+         (*small_map)[keys[i]] = static_cast<int>(i);
       }
       // Force index build for maps > threshold
-      glz_map->find("__nonexistent__");
-      int64_t glz_bytes = g_allocated.load() - before;
-      delete glz_map;
+      small_map->find("__nonexistent__");
+      int64_t small_map_bytes = g_allocated.load() - before;
+      delete small_map;
 
-      // Measure tsl::ordered_map
+      // Measure glz::ordered_map
       before = g_allocated.load();
-      auto* tsl_map = new tsl::ordered_map<std::string, int>();
+      auto* map = new glz::ordered_map<std::string, int>();
       for (size_t i = 0; i < n; ++i) {
-         (*tsl_map)[keys[i]] = static_cast<int>(i);
+         (*map)[keys[i]] = static_cast<int>(i);
       }
-      int64_t tsl_bytes = g_allocated.load() - before;
-      delete tsl_map;
+      int64_t map_bytes = g_allocated.load() - before;
+      delete map;
 
-      double glz_per = static_cast<double>(glz_bytes) / n;
-      double tsl_per = static_cast<double>(tsl_bytes) / n;
-      double ratio = static_cast<double>(tsl_bytes) / glz_bytes;
+      double small_per = static_cast<double>(small_map_bytes) / n;
+      double map_per = static_cast<double>(map_bytes) / n;
+      double ratio = static_cast<double>(map_bytes) / small_map_bytes;
 
-      printf("%4zu | %9lld | %9.1f | %9lld | %9.1f | %14.2fx\n", n, glz_bytes, glz_per, tsl_bytes, tsl_per, ratio);
+      printf("%4zu | %15lld | %15.1f | %9lld | %9.1f | %20.2fx\n", n, small_map_bytes, small_per, map_bytes, map_per, ratio);
    }
 
    return 0;
