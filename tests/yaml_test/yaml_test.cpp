@@ -6548,6 +6548,42 @@ suite yaml_multiline_plain_scalar_tests = [] {
       expect(std::get<std::string>(arr[2].data) == "test");
    };
 
+   // Continuation lines with "- " deeper than the sequence dash column are scalar content.
+   // This should hold for all items, not just the first one.
+   "sequence_dash_continuation_applies_to_all_items"_test = [] {
+      std::string yaml = R"(- one
+  - keep
+- two
+  - keep2
+)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 2);
+      expect(std::get<std::string>(arr[0].data) == "one - keep");
+      expect(std::get<std::string>(arr[1].data) == "two - keep2");
+   };
+
+   "sequence_dash_continuation_in_mapping_value"_test = [] {
+      std::string yaml = R"(k:
+  - one
+    - keep
+  - two
+    - keep2
+)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      auto& arr = std::get<glz::generic::array_t>(root.at("k").data);
+      expect(arr.size() == 2);
+      expect(std::get<std::string>(arr[0].data) == "one - keep");
+      expect(std::get<std::string>(arr[1].data) == "two - keep2");
+   };
+
    // Test that mapping keys at same indent don't get folded
    "mapping_keys_not_folded"_test = [] {
       std::string yaml = R"(key1: value1
@@ -6575,6 +6611,28 @@ key2: value2)";
       auto& root = std::get<glz::generic::object_t>(parsed.data);
       expect(root.contains("key"));
       expect(std::get<std::string>(root.at("key").data) == "line one line two line three");
+   };
+};
+
+suite yaml_explicit_key_indent_tests = [] {
+   // Explicit-key value indicators must be at the key entry indentation.
+   "explicit_key_value_indicator_cannot_be_deeper_indented"_test = [] {
+      std::string yaml = R"(? key
+  : value
+)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(bool(rec));
+   };
+
+   // Same rule for anchor-only explicit keys ("? &a").
+   "explicit_anchor_key_value_indicator_cannot_be_deeper_indented"_test = [] {
+      std::string yaml = R"(? &a
+  : value
+)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(bool(rec));
    };
 };
 

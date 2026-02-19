@@ -2798,15 +2798,6 @@ namespace glz
                               line_indent = (std::max)(line_indent, leading_ws);
                            }
                         }
-                        // Compute actual column of '-' for sequence_dash_indent
-                        if (ctx.stream_begin) {
-                           auto p = &*it;
-                           dash_col = 0;
-                           while (p > ctx.stream_begin && *(p - 1) != '\n' && *(p - 1) != '\r') {
-                              --p;
-                              ++dash_col;
-                           }
-                        }
                      }
                   }
                   break;
@@ -2861,6 +2852,21 @@ namespace glz
             if (*it != '-') {
                it = line_start;
                return;
+            }
+
+            // Compute the actual column of this sequence dash.
+            // This is needed by plain-scalar multiline folding to distinguish
+            // sibling "- item" entries from deeper "- " continuation content.
+            dash_col = line_indent;
+            if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+               if (ctx.stream_begin) {
+                  auto p = &*it;
+                  dash_col = 0;
+                  while (p > ctx.stream_begin && *(p - 1) != '\n' && *(p - 1) != '\r') {
+                     --p;
+                     ++dash_col;
+                  }
+               }
             }
 
             ++it; // Skip '-'
@@ -3343,7 +3349,9 @@ namespace glz
             // Keep same-line ': x' on the first key-node line valid.
             if (ctx.explicit_mapping_key_context && !established_mapping_indent_this_line && *it == ':') {
                const auto after_colon = it + 1;
-               if (after_colon == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_colon)]) {
+               const int32_t explicit_value_indicator_indent = (parent_indent < 0) ? 0 : (parent_indent + 1);
+               if ((after_colon == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_colon)]) &&
+                   line_indent == explicit_value_indicator_indent) {
                   it = line_start;
                   return;
                }
@@ -4588,6 +4596,8 @@ namespace glz
                      ++it; // skip '?'
                      yaml::skip_inline_ws(it, end);
 
+                     const int32_t explicit_value_indicator_indent = (ctx.current_indent() < 0) ? 0 : (ctx.current_indent() + 1);
+
                      key_t key{};
                      if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
                         auto to_string_key = [&](glz::generic& key_node) {
@@ -4638,11 +4648,19 @@ namespace glz
                                     int32_t value_indent = yaml::measure_indent(value_line, end, ctx);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return false;
-                                    if (value_line != end && *value_line == ':' && value_indent >= line_indent) {
+                                    if (value_line != end && *value_line == ':' &&
+                                        value_indent == explicit_value_indicator_indent) {
                                        key.clear();
                                        ctx.anchors[std::string(anchor_name)] = {content, content, ctx.current_indent()};
                                        it = value_line;
                                        handled_anchor_only_empty_key = true;
+                                    }
+                                    else if (value_line != end && *value_line == ':') {
+                                       // In explicit-key form ("? &a"), a following ':'
+                                       // starts the outer value indicator only at the same
+                                       // indentation. A deeper-indented ': value' is malformed.
+                                       ctx.error = error_code::syntax_error;
+                                       return false;
                                     }
                                  }
                               }
@@ -4741,7 +4759,7 @@ namespace glz
                               probe = value_line;
                               continue; // comment-only line
                            }
-                           if (*value_line == ':' && value_indent >= line_indent) {
+                           if (*value_line == ':' && value_indent == explicit_value_indicator_indent) {
                               it = value_line;
                               found_value_indicator = true;
                            }
