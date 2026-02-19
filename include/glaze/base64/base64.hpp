@@ -3,12 +3,17 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <array>
 #include <string>
 #include <string_view>
 #include <vector>
+#endif
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    inline constexpr std::string_view base64_chars =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
