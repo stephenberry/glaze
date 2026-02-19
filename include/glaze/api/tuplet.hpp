@@ -3,10 +3,16 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
+#endif
+
 #include "glaze/core/meta.hpp"
 #include "glaze/tuplet/tuple.hpp"
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    template <class... T>
    struct meta<glz::tuple<T...>>

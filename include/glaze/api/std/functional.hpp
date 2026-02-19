@@ -3,7 +3,12 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <functional>
+#endif
 
 #include "glaze/core/common.hpp"
 #include "glaze/core/meta.hpp"
@@ -36,10 +41,10 @@ namespace glz
       constexpr std::string_view expander_v = expander<Str, Tuple>::value;
    }
 
-   template <class T>
+   GLAZE_EXPORT template <class T>
    concept function = is_specialization_v<T, std::function>;
 
-   template <function T>
+   GLAZE_EXPORT template <function T>
    struct meta<T>
    {
       static constexpr auto impl() noexcept

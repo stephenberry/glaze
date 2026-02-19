@@ -3,7 +3,12 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <array>
+#endif
 
 #include "glaze/core/meta.hpp"
 
@@ -26,11 +31,11 @@ namespace glz
       {};
    }
 
-   template <unsigned num>
+   GLAZE_EXPORT template <unsigned num>
    struct num_to_string : detail::explode<num>
    {};
 
-   template <class T, size_t N>
+   GLAZE_EXPORT template <class T, size_t N>
    struct meta<std::array<T, N>>
    {
       static constexpr std::string_view name =

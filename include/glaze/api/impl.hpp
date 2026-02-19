@@ -3,6 +3,12 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
+#endif
+
 #include "glaze/api/api.hpp"
 #include "glaze/api/std/array.hpp"
 #include "glaze/api/std/deque.hpp"
@@ -25,7 +31,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    template <class UserType>
    struct impl : api

@@ -3,11 +3,16 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <functional>
 #include <map>
 #include <memory>
 #include <span>
 #include <stdexcept>
+#endif
 
 #include "glaze/api/std/string.hpp"
 #include "glaze/api/trait.hpp"
@@ -15,7 +20,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/util/expected.hpp"
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
    inline namespace v0_0_3
    {

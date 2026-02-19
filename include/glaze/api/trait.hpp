@@ -3,7 +3,12 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <array>
+#endif
 
 #include "glaze/api/hash.hpp"
 #include "glaze/core/common.hpp"
@@ -13,7 +18,7 @@
 
 namespace glz
 {
-   template <class T>
+   GLAZE_EXPORT template <class T>
    struct trait
    {
       using sv = std::string_view;
@@ -133,8 +138,8 @@ namespace glz
       }
    }
 
-   using hash_t = std::array<uint64_t, 2>;
-   template <class T>
+   GLAZE_EXPORT using hash_t = std::array<uint64_t, 2>;
+   GLAZE_EXPORT template <class T>
    consteval hash_t hash()
    {
       return detail::uint_array_from_sv<uint64_t, 2>(trait<T>::hash);

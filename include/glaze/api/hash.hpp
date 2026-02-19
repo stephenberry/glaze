@@ -3,9 +3,15 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <climits>
 
 #include "glaze/api/xxh64.hpp"
+#endif
+
 #include "glaze/core/meta.hpp"
 
 // Collision calculations done with the formula: e^((-k * (k - 1)/(2 * N)))
@@ -22,7 +28,7 @@
 
 namespace glz
 {
-   template <class T, T Value>
+   GLAZE_EXPORT template <class T, T Value>
    consteval auto make_array()
    {
       return []<size_t... I>(std::index_sequence<I...>) {
@@ -79,23 +85,23 @@ namespace glz
       };
    }
 
-   template <class T, T Value>
+   GLAZE_EXPORT template <class T, T Value>
    struct int_to_sv
    {
       static constexpr auto arr = make_array<T, Value>();
       static consteval std::string_view get() { return {arr.data(), arr.size()}; }
    };
 
-   template <class T, T Value>
+   GLAZE_EXPORT template <class T, T Value>
    inline constexpr std::string_view int_to_sv_v = int_to_sv<T, Value>{}.get();
 
-   template <uint64_t I>
+   GLAZE_EXPORT template <uint64_t I>
    inline consteval auto to_sv()
    {
       return detail::numeric_string<I>::get();
    }
 
-   template <size_t I>
+   GLAZE_EXPORT template <size_t I>
    struct hash128_i
    {
       static constexpr sv str = to_sv<I>();
@@ -104,10 +110,10 @@ namespace glz
       static constexpr sv value = join_v<h0, h1>;
    };
 
-   template <size_t I>
+   GLAZE_EXPORT template <size_t I>
    inline constexpr std::string_view hash128_i_v = hash128_i<I>::value;
 
-   template <const std::string_view& Str>
+   GLAZE_EXPORT template <const std::string_view& Str>
    struct hash128
    {
       static constexpr sv h0 = int_to_sv_v<uint64_t, xxh64::hash(Str.data(), Str.size(), 0)>;
@@ -115,6 +121,6 @@ namespace glz
       static constexpr sv value = join_v<h0, h1>;
    };
 
-   template <const std::string_view& Str>
+   GLAZE_EXPORT template <const std::string_view& Str>
    constexpr std::string_view hash128_v = hash128<Str>::value;
 }

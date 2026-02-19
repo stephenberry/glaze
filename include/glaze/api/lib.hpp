@@ -3,9 +3,14 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <filesystem>
 #include <map>
 #include <string_view>
+#endif
 
 #include "glaze/api/api.hpp"
 
@@ -15,6 +20,7 @@
 #endif
 #endif
 
+#if !defined(GLAZE_CXX_MODULE)
 #ifdef GLAZE_API_ON_WINDOWS
 #ifdef NOMINMAX
 #include <windows.h>
@@ -33,6 +39,7 @@
 #include <dlfcn.h>
 #define SHARED_LIBRARY_EXTENSION ".so"
 #define SHARED_LIBRARY_PREFIX "lib"
+#endif
 #endif
 
 namespace glz

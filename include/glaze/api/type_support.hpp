@@ -3,13 +3,18 @@
 
 #pragma once
 
+#if defined(GLAZE_CXX_MODULE)
+#define GLAZE_EXPORT export
+#else
+#define GLAZE_EXPORT
 #include <cstdint>
 #include <string_view>
+#endif
 
 #include "glaze/core/meta.hpp"
 #include "glaze/util/for_each.hpp"
 
-namespace glz
+GLAZE_EXPORT namespace glz
 {
 #define specialize(type)                              \
    template <>                                        \
