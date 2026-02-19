@@ -446,12 +446,11 @@ namespace glz
             data_.push_back(std::move(value));
             return {data_.end() - 1, true};
          }
-         // Must capture key before potential move
-         const auto& key = value.first;
          if (try_bloom_insert(h, [&] { data_.push_back(std::move(value)); })) {
             return {data_.end() - 1, true};
          }
-         return indexed_insert(key, h, [&] { data_.push_back(std::move(value)); });
+         // try_bloom_insert returned false without calling the lambda, so value is still valid
+         return indexed_insert(value.first, h, [&] { data_.push_back(std::move(value)); });
       }
 
       template <class InputIt>
