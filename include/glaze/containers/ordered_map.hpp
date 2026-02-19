@@ -24,10 +24,17 @@
 #endif
 
 // An ordered_map optimized for JSON objects with string keys.
-// - Preserves insertion order for iteration
-// - Uses linear search for small maps (≤8 entries)
-// - Lazily builds a sorted index for larger maps (O(log n) lookup, 8 bytes per entry)
-// - Bloom filter on insert: skips duplicate check when key is definitely new
+// Designed for objects with few keys (typically <256), where preserving
+// insertion order matters and memory efficiency is important.
+// Uses 32 bytes on the stack and ~40 bytes per entry on the heap
+// (32 for the key-value pair + 8 for the hash index) —
+// significantly less than hash table alternatives.
+//
+// Design:
+// - Preserves insertion order (backed by a contiguous vector)
+// - Linear search for small maps (≤8 entries) — no heap overhead
+// - Lazily builds a sorted hash index for larger maps (O(log n) lookup)
+// - Bloom filter accelerates inserts by skipping duplicate checks for new keys
 
 namespace glz
 {
