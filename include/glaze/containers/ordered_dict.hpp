@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -34,6 +35,15 @@
 
 namespace glz
 {
+   namespace detail
+   {
+      template <class H, class E>
+      concept transparent_lookup = requires {
+         typename H::is_transparent;
+         typename E::is_transparent;
+      };
+   }
+
    template <class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>,
              class Allocator = std::allocator<std::pair<Key, T>>>
    struct ordered_dict
@@ -566,6 +576,19 @@ namespace glz
          return 0;
       }
 
+      template <class K>
+         requires(detail::transparent_lookup<Hash, KeyEqual> && !std::convertible_to<K, iterator> &&
+                  !std::convertible_to<K, const_iterator>)
+      size_type erase(const K& key)
+      {
+         auto it = find(key);
+         if (it != end()) {
+            erase(it);
+            return 1;
+         }
+         return 0;
+      }
+
       // Unordered erase: O(1) amortized. Swaps erased element with last, does NOT preserve insertion order.
       iterator unordered_erase(const_iterator pos)
       {
@@ -599,6 +622,19 @@ namespace glz
          return 0;
       }
 
+      template <class K>
+         requires(detail::transparent_lookup<Hash, KeyEqual> && !std::convertible_to<K, iterator> &&
+                  !std::convertible_to<K, const_iterator>)
+      size_type unordered_erase(const K& key)
+      {
+         auto it = find(key);
+         if (it != end()) {
+            unordered_erase(it);
+            return 1;
+         }
+         return 0;
+      }
+
       void swap(ordered_dict& other) noexcept
       {
          values_.swap(other.values_);
@@ -613,7 +649,22 @@ namespace glz
 
       // --- Lookup ---
 
+      iterator find(const key_type& key)
+      {
+         uint32_t bi = find_bucket(key);
+         if (bi == bucket_count_) return values_.end();
+         return values_.begin() + buckets_[bi].index;
+      }
+
+      const_iterator find(const key_type& key) const
+      {
+         uint32_t bi = find_bucket(key);
+         if (bi == bucket_count_) return values_.end();
+         return values_.begin() + buckets_[bi].index;
+      }
+
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       iterator find(const K& key)
       {
          uint32_t bi = find_bucket(key);
@@ -622,6 +673,7 @@ namespace glz
       }
 
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       const_iterator find(const K& key) const
       {
          uint32_t bi = find_bucket(key);
@@ -629,7 +681,26 @@ namespace glz
          return values_.begin() + buckets_[bi].index;
       }
 
+      mapped_type& at(const key_type& key)
+      {
+         auto it = find(key);
+         if (it == end()) {
+            GLZ_THROW_OR_ABORT(std::out_of_range("ordered_dict::at: key not found"));
+         }
+         return it->second;
+      }
+
+      const mapped_type& at(const key_type& key) const
+      {
+         auto it = find(key);
+         if (it == end()) {
+            GLZ_THROW_OR_ABORT(std::out_of_range("ordered_dict::at: key not found"));
+         }
+         return it->second;
+      }
+
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       mapped_type& at(const K& key)
       {
          auto it = find(key);
@@ -640,6 +711,7 @@ namespace glz
       }
 
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       const mapped_type& at(const K& key) const
       {
          auto it = find(key);
@@ -669,19 +741,40 @@ namespace glz
          return values_.back().second;
       }
 
+      size_type count(const key_type& key) const { return find(key) != end() ? 1 : 0; }
+
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       size_type count(const K& key) const
       {
          return find(key) != end() ? 1 : 0;
       }
 
+      bool contains(const key_type& key) const { return find(key) != end(); }
+
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       bool contains(const K& key) const
       {
          return find(key) != end();
       }
 
+      std::pair<iterator, iterator> equal_range(const key_type& key)
+      {
+         auto it = find(key);
+         if (it == end()) return {it, it};
+         return {it, std::next(it)};
+      }
+
+      std::pair<const_iterator, const_iterator> equal_range(const key_type& key) const
+      {
+         auto it = find(key);
+         if (it == end()) return {it, it};
+         return {it, std::next(it)};
+      }
+
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       std::pair<iterator, iterator> equal_range(const K& key)
       {
          auto it = find(key);
@@ -690,6 +783,7 @@ namespace glz
       }
 
       template <class K>
+         requires detail::transparent_lookup<Hash, KeyEqual>
       std::pair<const_iterator, const_iterator> equal_range(const K& key) const
       {
          auto it = find(key);

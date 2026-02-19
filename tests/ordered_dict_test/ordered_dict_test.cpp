@@ -603,6 +603,67 @@ suite ordered_dict_tests = [] {
       expect(vals[0].first == "a");
       expect(vals[1].first == "b");
    };
+   "heterogeneous_lookup"_test = [] {
+      // Transparent hash and comparator for string_view lookup without allocation
+      struct string_hash
+      {
+         using is_transparent = void;
+         size_t operator()(std::string_view sv) const { return std::hash<std::string_view>{}(sv); }
+      };
+
+      struct string_equal
+      {
+         using is_transparent = void;
+         bool operator()(std::string_view a, std::string_view b) const { return a == b; }
+      };
+
+      glz::ordered_dict<std::string, int, string_hash, string_equal> d;
+      d["alpha"] = 1;
+      d["beta"] = 2;
+      d["gamma"] = 3;
+
+      // Lookup with string_view (no allocation)
+      std::string_view sv = "beta";
+      auto it = d.find(sv);
+      expect(it != d.end());
+      expect(it->second == 2);
+
+      expect(d.contains(sv));
+      expect(d.count(sv) == 1);
+      expect(d.at(sv) == 2);
+
+      // equal_range with string_view
+      auto [first, last] = d.equal_range(sv);
+      expect(first != d.end());
+      expect(first->second == 2);
+
+      // Erase with string_view
+      expect(d.erase(sv) == 1);
+      expect(!d.contains(sv));
+      expect(d.size() == 2);
+
+      // Unordered erase with string_view
+      std::string_view sv2 = "alpha";
+      expect(d.unordered_erase(sv2) == 1);
+      expect(!d.contains(sv2));
+      expect(d.size() == 1);
+
+      // Lookup with const char* (also goes through string_view)
+      expect(d.contains("gamma"));
+      expect(d.at("gamma") == 3);
+   };
+
+   "non_transparent_no_implicit_conversion"_test = [] {
+      // Default hash/equal (non-transparent): find(key_type&) is used,
+      // string_view would require implicit conversion to string
+      glz::ordered_dict<std::string, int> d;
+      d["hello"] = 42;
+
+      // This uses the const key_type& overload (implicit conversion from literal to std::string)
+      expect(d.find("hello") != d.end());
+      expect(d.contains("hello"));
+      expect(d.at("hello") == 42);
+   };
 };
 
 int main() { return 0; }
