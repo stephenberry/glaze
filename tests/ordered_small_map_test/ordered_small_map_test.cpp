@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "glaze/containers/ordered_small_map.hpp"
 #include "ut/ut.hpp"
