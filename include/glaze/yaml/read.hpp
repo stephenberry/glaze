@@ -273,6 +273,12 @@ namespace glz
          bool disallow_anchor_on_alias = false;
       };
 
+      struct node_preamble_state
+      {
+         yaml_tag tag = yaml_tag::none;
+         node_property_state node_props{};
+      };
+
       // Parse alias/anchor node properties shared across YAML value parsers.
       // Returns true when caller should stop (alias consumed, tolerated empty anchor, or syntax/error).
       template <auto Opts, node_property_policy Policy = node_property_policy{}, class T, class Ctx, class It,
@@ -330,6 +336,46 @@ namespace glz
          if (state.has_anchor && !bool(ctx.error)) {
             ctx.anchors[std::move(state.anchor_name)] = {state.anchor_start, &*it, state.anchor_indent};
          }
+      }
+
+      template <auto Opts, node_property_policy PropertyPolicy = node_property_policy{}, bool AllowEmptyInput = false,
+                class T, class Ctx, class It, class End, class TagValidator>
+      GLZ_ALWAYS_INLINE bool parse_node_preamble(T&& value, Ctx& ctx, It& it, End end, node_preamble_state& preamble,
+                                                 TagValidator&& tag_validator) noexcept
+      {
+         skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            if constexpr (!AllowEmptyInput) {
+               ctx.error = error_code::unexpected_end;
+            }
+            return true;
+         }
+
+         preamble.tag = parse_yaml_tag(it, end, ctx);
+         if (preamble.tag == yaml_tag::unknown) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return true;
+         }
+         if (!tag_validator(preamble.tag)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return true;
+         }
+
+         skip_inline_ws(it, end);
+
+         if (it == end) [[unlikely]] {
+            if constexpr (!AllowEmptyInput) {
+               ctx.error = error_code::unexpected_end;
+            }
+            return true;
+         }
+
+         if (parse_node_properties<Opts, PropertyPolicy>(std::forward<T>(value), ctx, it, end, preamble.node_props)) {
+            return true;
+         }
+
+         return false;
       }
 
       // SWAR-optimized double-quoted string parsing
@@ -1650,34 +1696,9 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         // Check for tag
-         const auto tag = yaml::parse_yaml_tag(it, end, ctx);
-         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if (!yaml::tag_valid_for_string(tag)) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, false, false, true}>(value, ctx, it,
-                                                                                                     end, node_props))
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts, yaml::node_property_policy{true, false, false, true}>(
+                value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_string(tag); }))
             return;
 
          std::string str;
@@ -1718,7 +1739,7 @@ namespace glz
 
          if (!bool(ctx.error)) {
             value = std::move(str);
-            yaml::finalize_node_anchor(node_props, ctx, it);
+            yaml::finalize_node_anchor(preamble.node_props, ctx, it);
          }
       }
    };
@@ -1733,33 +1754,10 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(value, ctx, it, end, preamble,
+                                             [](yaml::yaml_tag tag) { return yaml::tag_valid_for_bool(tag); }))
             return;
-         }
-
-         // Check for tag
-         const auto tag = yaml::parse_yaml_tag(it, end, ctx);
-         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if (!yaml::tag_valid_for_bool(tag)) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts>(value, ctx, it, end, node_props)) return;
 
          // Parse as plain scalar first
          std::string str;
@@ -1777,7 +1775,7 @@ namespace glz
             ctx.error = error_code::expected_true_or_false;
          }
 
-         yaml::finalize_node_anchor(node_props, ctx, it);
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
    };
 
@@ -1791,46 +1789,20 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(
+                value, ctx, it, end, preamble,
+                [](yaml::yaml_tag tag) {
+                   if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+                      return yaml::tag_valid_for_float(tag);
+                   }
+                   else {
+                      return yaml::tag_valid_for_int(tag);
+                   }
+                }))
             return;
-         }
 
-         // Check for tag
-         const auto tag = yaml::parse_yaml_tag(it, end, ctx);
-         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         // Validate tag for numeric types
-         if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-            if (!yaml::tag_valid_for_float(tag)) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-         }
-         else {
-            // Integer types
-            if (!yaml::tag_valid_for_int(tag)) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-         }
-
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts>(value, ctx, it, end, node_props)) return;
-
-         auto finalize = [&] { yaml::finalize_node_anchor(node_props, ctx, it); };
+         auto finalize = [&] { yaml::finalize_node_anchor(preamble.node_props, ctx, it); };
 
          // Check for special float values
          if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
@@ -2188,33 +2160,10 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(value, ctx, it, end, preamble,
+                                             [](yaml::yaml_tag tag) { return yaml::tag_valid_for_string(tag); }))
             return;
-         }
-
-         // Check for tag - named enums are read as strings
-         const auto tag = yaml::parse_yaml_tag(it, end, ctx);
-         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if (!yaml::tag_valid_for_string(tag)) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts>(value, ctx, it, end, node_props)) return;
 
          // Parse as string (quoted or plain)
          std::string str;
@@ -2267,7 +2216,7 @@ namespace glz
                index);
          }
 
-         yaml::finalize_node_anchor(node_props, ctx, it);
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
    };
 
@@ -3774,34 +3723,9 @@ namespace glz
 
          // Peek ahead to check for tag (don't consume indentation for block sequences)
          auto peek = it;
-         yaml::skip_inline_ws(peek, end);
-
-         if (peek == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         // Check for tag
-         const auto tag = yaml::parse_yaml_tag(peek, end, ctx);
-         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if (!yaml::tag_valid_for_seq(tag)) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         // After tag, check what follows
-         yaml::skip_inline_ws(peek, end);
-
-         if (peek == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts>(value, ctx, peek, end, node_props)) {
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(value, ctx, peek, end, preamble,
+                                             [](yaml::yaml_tag tag) { return yaml::tag_valid_for_seq(tag); })) {
             it = peek;
             return;
          }
@@ -3813,7 +3737,7 @@ namespace glz
          }
          else if (*peek == '-') {
             // Block sequence
-            if (tag != yaml::yaml_tag::none || node_props.has_anchor) {
+            if (preamble.tag != yaml::yaml_tag::none || preamble.node_props.has_anchor) {
                it = peek;
             }
             int32_t seq_indent = ctx.current_indent();
@@ -3827,7 +3751,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
          }
 
-         yaml::finalize_node_anchor(node_props, ctx, it);
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
    };
 
@@ -3844,34 +3768,9 @@ namespace glz
 
          // Peek ahead to check for tag (don't consume indentation for block sequences)
          auto peek = it;
-         yaml::skip_inline_ws(peek, end);
-
-         if (peek == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         // Check for tag
-         const auto tag = yaml::parse_yaml_tag(peek, end, ctx);
-         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if (!yaml::tag_valid_for_seq(tag)) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         // After tag, check what follows
-         yaml::skip_inline_ws(peek, end);
-
-         if (peek == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts>(value, ctx, peek, end, node_props)) {
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts>(value, ctx, peek, end, preamble,
+                                             [](yaml::yaml_tag tag) { return yaml::tag_valid_for_seq(tag); })) {
             it = peek;
             return;
          }
@@ -3884,7 +3783,7 @@ namespace glz
          else if (*peek == '-') {
             // Block sequence - don't consume leading whitespace, let parse_block_sequence handle it
             // But if there was a tag, we need to advance past it
-            if (tag != yaml::yaml_tag::none || node_props.has_anchor) {
+            if (preamble.tag != yaml::yaml_tag::none || preamble.node_props.has_anchor) {
                it = peek;
             }
             int32_t seq_indent = ctx.current_indent();
@@ -3898,7 +3797,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
          }
 
-         yaml::finalize_node_anchor(node_props, ctx, it);
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
    };
 
@@ -4219,32 +4118,9 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) {
-            return; // Empty input - keep default values
-         }
-
-         // Check for tag
-         const auto tag = yaml::parse_yaml_tag(it, end, ctx);
-         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if (!yaml::tag_valid_for_map(tag)) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) {
-            return; // Empty input - keep default values
-         }
-
-         yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, true, true, false}>(value, ctx, it, end,
-                                                                                                    node_props))
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts, yaml::node_property_policy{true, true, true, false}, true>(
+                value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_map(tag); }))
             return;
 
          if (*it == '{') {
@@ -4256,7 +4132,7 @@ namespace glz
             yaml::parse_block_mapping<Opts>(value, ctx, it, end, ctx.current_indent());
          }
 
-         yaml::finalize_node_anchor(node_props, ctx, it);
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
    };
 
@@ -4270,34 +4146,9 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         // Check for tag
-         const auto tag = yaml::parse_yaml_tag(it, end, ctx);
-         if (tag == yaml::yaml_tag::unknown) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if (!yaml::tag_valid_for_map(tag)) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         yaml::skip_inline_ws(it, end);
-
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         yaml::node_property_state node_props{};
-         if (yaml::parse_node_properties<Opts, yaml::node_property_policy{true, true, false, false}>(value, ctx, it,
-                                                                                                     end, node_props))
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts, yaml::node_property_policy{true, true, false, false}>(
+                value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_map(tag); }))
             return;
 
          using key_t = typename std::remove_cvref_t<T>::key_type;
@@ -4317,7 +4168,7 @@ namespace glz
                yaml::validate_flow_node_adjacent_tail(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               yaml::finalize_node_anchor(node_props, ctx, it);
+               yaml::finalize_node_anchor(preamble.node_props, ctx, it);
                return;
             }
 
@@ -4882,7 +4733,7 @@ namespace glz
                });
          }
 
-         yaml::finalize_node_anchor(node_props, ctx, it);
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
       }
    };
 
