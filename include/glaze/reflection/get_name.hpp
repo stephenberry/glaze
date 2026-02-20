@@ -282,6 +282,35 @@ namespace glz
 #elif defined(_MSC_VER)
 #endif
 
+   consteval std::string_view normalize_extracted_name(std::string_view str)
+   {
+      while (!str.empty() && (str.front() == ' ' || str.front() == '(')) {
+         str.remove_prefix(1);
+      }
+      while (!str.empty() && (str.back() == ' ' || str.back() == ')')) {
+         str.remove_suffix(1);
+      }
+      if (const auto scope_pos = str.rfind("::"); scope_pos != std::string_view::npos) {
+         return str.substr(scope_pos + 2);
+      }
+      return str;
+   }
+
+#if !defined(_MSC_VER) || defined(__clang__)
+   consteval std::string_view parse_name_from_pretty_function(std::string_view str)
+   {
+      const auto amp_pos = str.find("&");
+      if (amp_pos != std::string_view::npos) {
+         str.remove_prefix(amp_pos + 1);
+      }
+      const auto tail_pos = str.find(pretty_function_tail);
+      if (tail_pos != std::string_view::npos) {
+         str = str.substr(0, tail_pos);
+      }
+      return normalize_extracted_name(str);
+   }
+#endif
+
    template <auto P>
       requires(std::is_member_pointer_v<decltype(P)>)
    consteval std::string_view get_name()
@@ -299,10 +328,32 @@ namespace glz
 #else
       // TODO: Use std::source_location when deprecating clang 14
       // std::string_view str = std::source_location::current().function_name();
+      return parse_name_from_pretty_function(GLZ_PRETTY_FUNCTION);
+#endif
+   }
+
+   template <auto P>
+      requires(std::is_pointer_v<decltype(P)> && std::is_object_v<std::remove_pointer_t<decltype(P)>>)
+   consteval std::string_view get_name()
+   {
+#if defined(_MSC_VER) && !defined(__clang__)
+      // Example: `... glz::get_name<&T::static_value>(void)`
       std::string_view str = GLZ_PRETTY_FUNCTION;
-      str = str.substr(str.find("&") + 1);
-      str = str.substr(0, str.find(pretty_function_tail));
-      return str.substr(str.rfind("::") + 2);
+      const auto arg_start = str.rfind('<');
+      if (arg_start != std::string_view::npos) {
+         str.remove_prefix(arg_start + 1);
+      }
+      const auto arg_end = str.rfind('>');
+      if (arg_end != std::string_view::npos) {
+         str = str.substr(0, arg_end);
+      }
+      const auto amp_pos = str.find('&');
+      if (amp_pos != std::string_view::npos) {
+         str.remove_prefix(amp_pos + 1);
+      }
+      return normalize_extracted_name(str);
+#else
+      return parse_name_from_pretty_function(GLZ_PRETTY_FUNCTION);
 #endif
    }
 
