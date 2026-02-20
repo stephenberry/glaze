@@ -3083,7 +3083,7 @@ alias: *m)";
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       auto json = glz::write_json(parsed).value_or("ERROR");
-      expect(json == R"({"alias":{"key1":"val1","key2":"val2"},"root":{"key1":"val1","key2":"val2"}})") << json;
+      expect(json == R"({"root":{"key1":"val1","key2":"val2"},"alias":{"key1":"val1","key2":"val2"}})") << json;
    };
 
    "anchor_on_flow_sequence"_test = [] {
@@ -3093,7 +3093,7 @@ alias: *s)";
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       auto json = glz::write_json(parsed).value_or("ERROR");
-      expect(json == R"({"alias":[1,2,3],"root":[1,2,3]})") << json;
+      expect(json == R"({"root":[1,2,3],"alias":[1,2,3]})") << json;
    };
 
    "multiple_anchors"_test = [] {
@@ -3295,7 +3295,7 @@ ship-to: *id001)";
       expect(!ec) << glz::format_error(ec, yaml);
       auto json = glz::write_json(parsed).value_or("WRITE_ERR");
       std::string expected =
-         R"({"bill-to":{"family":"Dumars","given":"Chris"},"ship-to":{"family":"Dumars","given":"Chris"}})";
+         R"({"bill-to":{"given":"Chris","family":"Dumars"},"ship-to":{"given":"Chris","family":"Dumars"}})";
       expect(json == expected) << json;
    };
 };
