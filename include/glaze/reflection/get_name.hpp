@@ -284,12 +284,12 @@ namespace glz
 
    consteval std::string_view normalize_extracted_name(std::string_view str)
    {
-      while (!str.empty() && (str.front() == ' ' || str.front() == '(')) {
-         str.remove_prefix(1);
+      const auto first = str.find_first_not_of(" (");
+      if (first == std::string_view::npos) {
+         return {};
       }
-      while (!str.empty() && (str.back() == ' ' || str.back() == ')')) {
-         str.remove_suffix(1);
-      }
+      const auto last = str.find_last_not_of(" )");
+      str = str.substr(first, last - first + 1);
       if (const auto scope_pos = str.rfind("::"); scope_pos != std::string_view::npos) {
          return str.substr(scope_pos + 2);
       }
