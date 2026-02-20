@@ -96,7 +96,7 @@ namespace glz
       requires generic_map_type<MapType>
    struct generic_json
    {
-      virtual ~generic_json() {}
+      ~generic_json() = default;
 
       using array_t = std::vector<generic_json<Mode, MapType>>;
       using object_t = MapType<generic_json<Mode, MapType>>;

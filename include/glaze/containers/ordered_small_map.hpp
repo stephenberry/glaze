@@ -7,11 +7,12 @@
 #include <concepts>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include "glaze/hash/sweethash.hpp"
 
@@ -26,12 +27,12 @@
 // An ordered_small_map optimized for JSON objects with string keys.
 // Designed for objects with few keys (typically <256), where preserving
 // insertion order matters and memory efficiency is important.
-// Uses 32 bytes on the stack and ~40 bytes per entry on the heap
+// Uses 24 bytes on the stack and ~40 bytes per entry on the heap
 // (32 for the key-value pair + 8 for the hash index) —
 // significantly less than hash table alternatives.
 //
 // Design:
-// - Preserves insertion order (backed by a contiguous vector)
+// - Preserves insertion order (backed by a contiguous array)
 // - Linear search for small maps (≤8 entries) — no heap overhead
 // - Lazily builds a sorted hash index for larger maps (O(log n) lookup)
 // - Bloom filter accelerates inserts by skipping duplicate checks for new keys
@@ -48,13 +49,13 @@ namespace glz
       using difference_type = std::ptrdiff_t;
       using reference = value_type&;
       using const_reference = const value_type&;
-      using iterator = typename std::vector<value_type>::iterator;
-      using const_iterator = typename std::vector<value_type>::const_iterator;
-      using reverse_iterator = typename std::vector<value_type>::reverse_iterator;
-      using const_reverse_iterator = typename std::vector<value_type>::const_reverse_iterator;
+      using iterator = value_type*;
+      using const_iterator = const value_type*;
+      using reverse_iterator = std::reverse_iterator<iterator>;
+      using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
      private:
-      // Compact index entry: maps a hash to a position in the data vector
+      // Compact index entry: maps a hash to a position in the data array
       struct hash_index_entry
       {
          uint32_t hash;
@@ -72,19 +73,79 @@ namespace glz
       // The bloom filter is embedded in the header.
       struct index_header
       {
-         uint32_t size; // number of data_ elements covered by the sorted index (0 = fully invalid)
+         uint32_t size; // number of data elements covered by the sorted index (0 = fully invalid)
          uint32_t capacity; // allocated index entry slots
          uint8_t bloom[bloom_bytes]; // bloom filter for fast insert rejection
       };
 
-      std::vector<value_type> data_; // 24 bytes
+      // Compact data storage: pointer + uint32 size/capacity = 16 bytes
+      // Combined with index_ pointer (8 bytes) = 24 bytes total
+      value_type* data_ = nullptr; // 8 bytes
+      uint32_t size_ = 0; // 4 bytes
+      uint32_t capacity_ = 0; // 4 bytes
       mutable index_header* index_ = nullptr; // 8 bytes
-      // Total: 32 bytes
+      // Total: 24 bytes
 
       static constexpr size_type linear_search_threshold = 8;
       static constexpr size_type bloom_threshold = 128; // disable bloom filter above this size
 
       static uint32_t hash_key(std::string_view key) noexcept { return sweethash::sweet32(key); }
+
+      // --- Data array management ---
+
+      void grow_if_needed()
+      {
+         if (size_ == capacity_) {
+            const uint32_t new_cap = capacity_ ? capacity_ * 2 : 4;
+            auto* new_data = static_cast<value_type*>(::operator new(new_cap * sizeof(value_type)));
+            // Move existing elements
+            for (uint32_t i = 0; i < size_; ++i) {
+               std::construct_at(new_data + i, std::move(data_[i]));
+               std::destroy_at(data_ + i);
+            }
+            ::operator delete(data_);
+            data_ = new_data;
+            capacity_ = new_cap;
+         }
+      }
+
+      void push_back_impl(const value_type& val)
+      {
+         grow_if_needed();
+         std::construct_at(data_ + size_, val);
+         ++size_;
+      }
+
+      void push_back_impl(value_type&& val)
+      {
+         grow_if_needed();
+         std::construct_at(data_ + size_, std::move(val));
+         ++size_;
+      }
+
+      template <class... Args>
+      void emplace_back_impl(Args&&... args)
+      {
+         grow_if_needed();
+         std::construct_at(data_ + size_, std::forward<Args>(args)...);
+         ++size_;
+      }
+
+      void destroy_all() noexcept
+      {
+         for (uint32_t i = 0; i < size_; ++i) {
+            std::destroy_at(data_ + i);
+         }
+      }
+
+      void free_data() noexcept
+      {
+         destroy_all();
+         ::operator delete(data_);
+         data_ = nullptr;
+         size_ = 0;
+         capacity_ = 0;
+      }
 
       // --- Bloom filter ---
 
@@ -147,17 +208,16 @@ namespace glz
       // Full rebuild: rehash all keys, sort, and repopulate bloom filter.
       void rebuild_index() const
       {
-         const auto n = static_cast<uint32_t>(data_.size());
-         ensure_index_capacity(n);
+         ensure_index_capacity(size_);
          bloom_clear();
          auto* entries = index_entries();
-         for (uint32_t i = 0; i < n; ++i) {
+         for (uint32_t i = 0; i < size_; ++i) {
             const uint32_t h = hash_key(data_[i].first);
             entries[i] = {h, i};
             bloom_set(h);
          }
-         std::sort(entries, entries + n, [](const auto& a, const auto& b) { return a.hash < b.hash; });
-         index_->size = n;
+         std::sort(entries, entries + size_, [](const auto& a, const auto& b) { return a.hash < b.hash; });
+         index_->size = size_;
       }
 
       // Bring the index up to date.
@@ -165,18 +225,17 @@ namespace glz
       // If only a few entries are stale (incremental inserts above bloom_threshold), insert-sort them.
       void ensure_index() const
       {
-         if (data_.size() <= linear_search_threshold) return;
-         const auto n = static_cast<uint32_t>(data_.size());
+         if (size_ <= linear_search_threshold) return;
          const auto current = index_size();
-         if (current == n) return; // fully current
+         if (current == size_) return; // fully current
 
-         if (current == 0 || (n - current) > linear_search_threshold) {
+         if (current == 0 || (size_ - current) > linear_search_threshold) {
             rebuild_index(); // full rebuild
             return;
          }
 
          // Incrementally insert-sort the few new entries
-         for (uint32_t i = current; i < n; ++i) {
+         for (uint32_t i = current; i < size_; ++i) {
             const hash_index_entry entry{hash_key(data_[i].first), i};
             const auto* base = index_entries();
             const auto* p = branchless_lower_bound(base, index_->size, entry.hash);
@@ -216,30 +275,30 @@ namespace glz
          // Scan adjacent entries with matching hash
          for (auto* scan = p; scan != idx_end && scan->hash == h; ++scan) {
             if (data_[scan->index].first == key) {
-               return {data_.begin() + scan->index, pos, h};
+               return {data_ + scan->index, pos, h};
             }
          }
 
-         return {data_.end(), pos, h};
+         return {data_ + size_, pos, h};
       }
 
       // Linear search - used for small maps
       template <class K>
       iterator linear_find(const K& key)
       {
-         for (auto it = data_.begin(); it != data_.end(); ++it) {
-            if (it->first == key) return it;
+         for (uint32_t i = 0; i < size_; ++i) {
+            if (data_[i].first == key) return data_ + i;
          }
-         return data_.end();
+         return data_ + size_;
       }
 
       template <class K>
       const_iterator linear_find(const K& key) const
       {
-         for (auto it = data_.begin(); it != data_.end(); ++it) {
-            if (it->first == key) return it;
+         for (uint32_t i = 0; i < size_; ++i) {
+            if (data_[i].first == key) return data_ + i;
          }
-         return data_.end();
+         return data_ + size_;
       }
 
       // Branchless binary search - compiles to cmov instead of conditional branches
@@ -270,11 +329,10 @@ namespace glz
 
          for (; p != idx_end && p->hash == h; ++p) {
             if (data_[p->index].first == key) {
-               // const_cast needed: data_ iterators are non-const from mutable find
-               return const_cast<std::vector<value_type>&>(data_).begin() + p->index;
+               return data_ + p->index;
             }
          }
-         return const_cast<std::vector<value_type>&>(data_).end();
+         return data_ + size_;
       }
 
       template <class K>
@@ -289,10 +347,10 @@ namespace glz
 
          for (; p != idx_end && p->hash == h; ++p) {
             if (data_[p->index].first == key) {
-               return data_.begin() + p->index;
+               return data_ + p->index;
             }
          }
-         return data_.end();
+         return data_ + size_;
       }
 
       // --- Insert helpers ---
@@ -303,11 +361,11 @@ namespace glz
       template <class F>
       bool try_bloom_insert(uint32_t h, F&& append_fn)
       {
-         if (index_ && data_.size() <= bloom_threshold && !bloom_maybe_contains(h)) {
+         if (index_ && size_ <= bloom_threshold && !bloom_maybe_contains(h)) {
             // Definitely not present — skip the search
             append_fn();
             bloom_set(h);
-            // Index is now stale (index_->size < data_.size()), will rebuild on next lookup or false positive
+            // Index is now stale (index_->size < size_), will rebuild on next lookup or false positive
             return true;
          }
          return false;
@@ -331,24 +389,28 @@ namespace glz
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
             }
-            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
-            index_->size = static_cast<uint32_t>(data_.size());
+            entries[pos] = {h, static_cast<uint32_t>(size_ - 1)};
+            index_->size = size_;
          }
-         return {data_.end() - 1, true};
+         return {data_ + size_ - 1, true};
       }
 
      public:
       // Constructors
       ordered_small_map() = default;
 
-      ~ordered_small_map() { free_index(); }
+      ~ordered_small_map()
+      {
+         free_data();
+         free_index();
+      }
 
       ordered_small_map(std::initializer_list<value_type> init)
       {
-         data_.reserve(init.size());
+         reserve(init.size());
          for (const auto& pair : init) {
-            if (linear_find(pair.first) == data_.end()) {
-               data_.push_back(pair);
+            if (linear_find(pair.first) == end()) {
+               push_back_impl(pair);
             }
          }
       }
@@ -361,21 +423,41 @@ namespace glz
          }
       }
 
-      ordered_small_map(const ordered_small_map& other) : data_(other.data_)
+      ordered_small_map(const ordered_small_map& other)
       {
+         if (other.size_ > 0) {
+            data_ = static_cast<value_type*>(::operator new(other.size_ * sizeof(value_type)));
+            capacity_ = other.size_;
+            for (uint32_t i = 0; i < other.size_; ++i) {
+               std::construct_at(data_ + i, other.data_[i]);
+            }
+            size_ = other.size_;
+         }
          // Don't copy index - it will be rebuilt lazily
       }
 
-      ordered_small_map(ordered_small_map&& other) noexcept : data_(std::move(other.data_)), index_(other.index_)
+      ordered_small_map(ordered_small_map&& other) noexcept
+         : data_(other.data_), size_(other.size_), capacity_(other.capacity_), index_(other.index_)
       {
+         other.data_ = nullptr;
+         other.size_ = 0;
+         other.capacity_ = 0;
          other.index_ = nullptr;
       }
 
       ordered_small_map& operator=(const ordered_small_map& other)
       {
          if (this != &other) {
-            data_ = other.data_;
+            free_data();
             free_index();
+            if (other.size_ > 0) {
+               data_ = static_cast<value_type*>(::operator new(other.size_ * sizeof(value_type)));
+               capacity_ = other.size_;
+               for (uint32_t i = 0; i < other.size_; ++i) {
+                  std::construct_at(data_ + i, other.data_[i]);
+               }
+               size_ = other.size_;
+            }
          }
          return *this;
       }
@@ -383,74 +465,111 @@ namespace glz
       ordered_small_map& operator=(ordered_small_map&& other) noexcept
       {
          if (this != &other) {
-            data_ = std::move(other.data_);
+            free_data();
             free_index();
+            data_ = other.data_;
+            size_ = other.size_;
+            capacity_ = other.capacity_;
             index_ = other.index_;
+            other.data_ = nullptr;
+            other.size_ = 0;
+            other.capacity_ = 0;
             other.index_ = nullptr;
          }
          return *this;
       }
 
       // Iterators (follow insertion order)
-      iterator begin() noexcept { return data_.begin(); }
-      const_iterator begin() const noexcept { return data_.begin(); }
-      const_iterator cbegin() const noexcept { return data_.cbegin(); }
+      iterator begin() noexcept { return data_; }
+      const_iterator begin() const noexcept { return data_; }
+      const_iterator cbegin() const noexcept { return data_; }
 
-      iterator end() noexcept { return data_.end(); }
-      const_iterator end() const noexcept { return data_.end(); }
-      const_iterator cend() const noexcept { return data_.cend(); }
+      iterator end() noexcept { return data_ + size_; }
+      const_iterator end() const noexcept { return data_ + size_; }
+      const_iterator cend() const noexcept { return data_ + size_; }
 
-      reverse_iterator rbegin() noexcept { return data_.rbegin(); }
-      const_reverse_iterator rbegin() const noexcept { return data_.rbegin(); }
-      const_reverse_iterator crbegin() const noexcept { return data_.crbegin(); }
+      reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
+      const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(end()); }
+      const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(cend()); }
 
-      reverse_iterator rend() noexcept { return data_.rend(); }
-      const_reverse_iterator rend() const noexcept { return data_.rend(); }
-      const_reverse_iterator crend() const noexcept { return data_.crend(); }
+      reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
+      const_reverse_iterator rend() const noexcept { return const_reverse_iterator(begin()); }
+      const_reverse_iterator crend() const noexcept { return const_reverse_iterator(cbegin()); }
 
       // Capacity
-      [[nodiscard]] bool empty() const noexcept { return data_.empty(); }
-      size_type size() const noexcept { return data_.size(); }
-      size_type capacity() const noexcept { return data_.capacity(); }
-      void reserve(size_type new_cap) { data_.reserve(new_cap); }
-      void shrink_to_fit() { data_.shrink_to_fit(); }
+      [[nodiscard]] bool empty() const noexcept { return size_ == 0; }
+      size_type size() const noexcept { return size_; }
+      size_type capacity() const noexcept { return capacity_; }
+
+      void reserve(size_type new_cap)
+      {
+         if (new_cap <= capacity_) return;
+         auto* new_data = static_cast<value_type*>(::operator new(new_cap * sizeof(value_type)));
+         for (uint32_t i = 0; i < size_; ++i) {
+            std::construct_at(new_data + i, std::move(data_[i]));
+            std::destroy_at(data_ + i);
+         }
+         ::operator delete(data_);
+         data_ = new_data;
+         capacity_ = static_cast<uint32_t>(new_cap);
+      }
+
+      void shrink_to_fit()
+      {
+         if (size_ == capacity_) return;
+         if (size_ == 0) {
+            ::operator delete(data_);
+            data_ = nullptr;
+            capacity_ = 0;
+            return;
+         }
+         auto* new_data = static_cast<value_type*>(::operator new(size_ * sizeof(value_type)));
+         for (uint32_t i = 0; i < size_; ++i) {
+            std::construct_at(new_data + i, std::move(data_[i]));
+            std::destroy_at(data_ + i);
+         }
+         ::operator delete(data_);
+         data_ = new_data;
+         capacity_ = size_;
+      }
 
       // Modifiers
       void clear() noexcept
       {
-         data_.clear();
+         destroy_all();
+         size_ = 0;
          free_index();
       }
 
       std::pair<iterator, bool> insert(const value_type& value)
       {
-         const uint32_t h = hash_key(value.first);
-         if (data_.size() <= linear_search_threshold) {
+         if (size_ <= linear_search_threshold) {
             auto it = linear_find(value.first);
             if (it != end()) return {it, false};
-            data_.push_back(value);
-            return {data_.end() - 1, true};
+            push_back_impl(value);
+            return {data_ + size_ - 1, true};
          }
-         if (try_bloom_insert(h, [&] { data_.push_back(value); })) {
-            return {data_.end() - 1, true};
+         const uint32_t h = hash_key(value.first);
+         if (try_bloom_insert(h, [&] { push_back_impl(value); })) {
+            return {data_ + size_ - 1, true};
          }
-         return indexed_insert(value.first, h, [&] { data_.push_back(value); });
+         return indexed_insert(value.first, h, [&] { push_back_impl(value); });
       }
 
       std::pair<iterator, bool> insert(value_type&& value)
       {
-         const uint32_t h = hash_key(value.first);
-         if (data_.size() <= linear_search_threshold) {
+         if (size_ <= linear_search_threshold) {
             auto it = linear_find(value.first);
             if (it != end()) return {it, false};
-            data_.push_back(std::move(value));
-            return {data_.end() - 1, true};
+            push_back_impl(std::move(value));
+            return {data_ + size_ - 1, true};
          }
-         if (try_bloom_insert(h, [&] { data_.push_back(std::move(value)); })) {
-            return {data_.end() - 1, true};
+         const uint32_t h = hash_key(value.first);
+         if (try_bloom_insert(h, [&] { push_back_impl(std::move(value)); })) {
+            return {data_ + size_ - 1, true};
          }
          // try_bloom_insert returned false without calling the lambda, so value is still valid
-         return indexed_insert(value.first, h, [&] { data_.push_back(std::move(value)); });
+         return indexed_insert(value.first, h, [&] { push_back_impl(std::move(value)); });
       }
 
       template <class InputIt>
@@ -466,38 +585,59 @@ namespace glz
       template <class K, class... Args>
       std::pair<iterator, bool> emplace(K&& key, Args&&... args)
       {
-         const uint32_t h = hash_key(key);
-         if (data_.size() <= linear_search_threshold) {
+         if (size_ <= linear_search_threshold) {
             auto it = linear_find(key);
             if (it != end()) return {it, false};
-            data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...));
-            return {data_.end() - 1, true};
+            emplace_back_impl(std::forward<K>(key), T(std::forward<Args>(args)...));
+            return {data_ + size_ - 1, true};
          }
-         if (try_bloom_insert(h, [&] { data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...)); })) {
-            return {data_.end() - 1, true};
+         const uint32_t h = hash_key(key);
+         if (try_bloom_insert(h, [&] { emplace_back_impl(std::forward<K>(key), T(std::forward<Args>(args)...)); })) {
+            return {data_ + size_ - 1, true};
          }
          return indexed_insert(key, h,
-                               [&] { data_.emplace_back(std::forward<K>(key), T(std::forward<Args>(args)...)); });
+                               [&] { emplace_back_impl(std::forward<K>(key), T(std::forward<Args>(args)...)); });
       }
 
       iterator erase(const_iterator pos)
       {
          invalidate_index();
-         return data_.erase(pos);
+         auto* mutable_pos = data_ + (pos - data_);
+         std::destroy_at(mutable_pos);
+         // Shift remaining elements left
+         for (auto* p = mutable_pos; p + 1 < data_ + size_; ++p) {
+            std::construct_at(p, std::move(*(p + 1)));
+            std::destroy_at(p + 1);
+         }
+         --size_;
+         return mutable_pos;
       }
 
       iterator erase(const_iterator first, const_iterator last)
       {
+         if (first == last) return data_ + (first - data_);
          invalidate_index();
-         return data_.erase(first, last);
+         auto* mfirst = data_ + (first - data_);
+         auto* mlast = data_ + (last - data_);
+         const auto count = static_cast<uint32_t>(mlast - mfirst);
+         // Destroy erased elements
+         for (auto* p = mfirst; p < mlast; ++p) {
+            std::destroy_at(p);
+         }
+         // Shift remaining elements left
+         for (auto* dst = mfirst; mlast < data_ + size_; ++dst, ++mlast) {
+            std::construct_at(dst, std::move(*mlast));
+            std::destroy_at(mlast);
+         }
+         size_ -= count;
+         return mfirst;
       }
 
       size_type erase(std::string_view key)
       {
          auto it = find(key);
          if (it != end()) {
-            invalidate_index();
-            data_.erase(it);
+            erase(it);
             return 1;
          }
          return 0;
@@ -507,7 +647,7 @@ namespace glz
       template <class K>
       iterator find(const K& key)
       {
-         if (data_.size() <= linear_search_threshold) {
+         if (size_ <= linear_search_threshold) {
             return linear_find(key);
          }
          return index_find(key);
@@ -516,7 +656,7 @@ namespace glz
       template <class K>
       const_iterator find(const K& key) const
       {
-         if (data_.size() <= linear_search_threshold) {
+         if (size_ <= linear_search_threshold) {
             return linear_find(key);
          }
          return const_index_find(key);
@@ -537,19 +677,19 @@ namespace glz
       // Element access
       mapped_type& operator[](const key_type& key)
       {
-         const uint32_t h = hash_key(key);
-         if (data_.size() <= linear_search_threshold) {
+         if (size_ <= linear_search_threshold) {
             auto it = linear_find(key);
             if (it != end()) return it->second;
-            data_.emplace_back(key, mapped_type{});
-            return data_.back().second;
+            emplace_back_impl(key, mapped_type{});
+            return data_[size_ - 1].second;
          }
-         if (try_bloom_insert(h, [&] { data_.emplace_back(key, mapped_type{}); })) {
-            return data_.back().second;
+         const uint32_t h = hash_key(key);
+         if (try_bloom_insert(h, [&] { emplace_back_impl(key, mapped_type{}); })) {
+            return data_[size_ - 1].second;
          }
          auto [it, pos, _] = index_find_or_pos(key, h);
          if (it != end()) return it->second;
-         data_.emplace_back(key, mapped_type{});
+         emplace_back_impl(key, mapped_type{});
          bloom_set(h);
          if (index_size() > 0) {
             const uint32_t n = index_->size;
@@ -558,28 +698,28 @@ namespace glz
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
             }
-            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
-            index_->size = static_cast<uint32_t>(data_.size());
+            entries[pos] = {h, size_ - 1};
+            index_->size = size_;
          }
-         return data_.back().second;
+         return data_[size_ - 1].second;
       }
 
       mapped_type& operator[](key_type&& key)
       {
-         const uint32_t h = hash_key(key);
-         if (data_.size() <= linear_search_threshold) {
+         if (size_ <= linear_search_threshold) {
             auto it = linear_find(key);
             if (it != end()) return it->second;
-            data_.emplace_back(std::move(key), mapped_type{});
-            return data_.back().second;
+            emplace_back_impl(std::move(key), mapped_type{});
+            return data_[size_ - 1].second;
          }
-         if (try_bloom_insert(h, [&] { data_.emplace_back(std::move(key), mapped_type{}); })) {
-            return data_.back().second;
+         const uint32_t h = hash_key(key);
+         if (try_bloom_insert(h, [&] { emplace_back_impl(std::move(key), mapped_type{}); })) {
+            return data_[size_ - 1].second;
          }
          // key may have been moved — but try_bloom_insert returned false, so the lambda didn't execute
          auto [it, pos, _] = index_find_or_pos(key, h);
          if (it != end()) return it->second;
-         data_.emplace_back(std::move(key), mapped_type{});
+         emplace_back_impl(std::move(key), mapped_type{});
          bloom_set(h);
          if (index_size() > 0) {
             const uint32_t n = index_->size;
@@ -588,10 +728,10 @@ namespace glz
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
             }
-            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
-            index_->size = static_cast<uint32_t>(data_.size());
+            entries[pos] = {h, size_ - 1};
+            index_->size = size_;
          }
-         return data_.back().second;
+         return data_[size_ - 1].second;
       }
 
       // Heterogeneous lookup version for operator[]
@@ -601,20 +741,20 @@ namespace glz
                   !std::same_as<std::decay_t<K>, key_type>)
       mapped_type& operator[](K&& key)
       {
-         const uint32_t h = hash_key(key);
-         if (data_.size() <= linear_search_threshold) {
+         if (size_ <= linear_search_threshold) {
             auto it = linear_find(key);
             if (it != end()) return it->second;
-            data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{});
-            return data_.back().second;
+            emplace_back_impl(std::string(std::forward<K>(key)), mapped_type{});
+            return data_[size_ - 1].second;
          }
+         const uint32_t h = hash_key(key);
          if (try_bloom_insert(h,
-                              [&] { data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{}); })) {
-            return data_.back().second;
+                              [&] { emplace_back_impl(std::string(std::forward<K>(key)), mapped_type{}); })) {
+            return data_[size_ - 1].second;
          }
          auto [it, pos, _] = index_find_or_pos(key, h);
          if (it != end()) return it->second;
-         data_.emplace_back(std::string(std::forward<K>(key)), mapped_type{});
+         emplace_back_impl(std::string(std::forward<K>(key)), mapped_type{});
          bloom_set(h);
          if (index_size() > 0) {
             const uint32_t n = index_->size;
@@ -623,10 +763,10 @@ namespace glz
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
             }
-            entries[pos] = {h, static_cast<uint32_t>(data_.size() - 1)};
-            index_->size = static_cast<uint32_t>(data_.size());
+            entries[pos] = {h, size_ - 1};
+            index_->size = size_;
          }
-         return data_.back().second;
+         return data_[size_ - 1].second;
       }
 
       template <class K>
@@ -650,11 +790,19 @@ namespace glz
       }
 
       // Direct access to underlying data
-      value_type* data() noexcept { return data_.data(); }
-      const value_type* data() const noexcept { return data_.data(); }
+      value_type* data() noexcept { return data_; }
+      const value_type* data() const noexcept { return data_; }
 
       // Comparison
-      bool operator==(const ordered_small_map& other) const { return data_ == other.data_; }
-      bool operator!=(const ordered_small_map& other) const { return data_ != other.data_; }
+      bool operator==(const ordered_small_map& other) const
+      {
+         if (size_ != other.size_) return false;
+         for (uint32_t i = 0; i < size_; ++i) {
+            if (data_[i] != other.data_[i]) return false;
+         }
+         return true;
+      }
+
+      bool operator!=(const ordered_small_map& other) const { return !(*this == other); }
    };
 }

@@ -194,6 +194,42 @@ int main()
    }
 
    // ========================================================================
+   // Benchmark: write_json (small, reused buffer)
+   // ========================================================================
+   {
+      generic_default json_default{};
+      glz::read_json(json_default, small_json);
+      generic_std_map json_stdmap{};
+      glz::read_json(json_stdmap, small_json);
+
+      std::string out_default, out_stdmap;
+      out_default.reserve(512);
+      out_stdmap.reserve(512);
+
+      bencher::stage stage;
+      stage.name = "write_json (small, 8 keys, reused buffer)";
+      stage.cold_cache = false;
+
+      stage.run("ordered_small_map", [&] {
+         out_default.clear();
+         auto ec = glz::write_json(json_default, out_default);
+         if (ec) std::abort();
+         bencher::do_not_optimize(out_default);
+         return out_default.size();
+      });
+
+      stage.run("std::map", [&] {
+         out_stdmap.clear();
+         auto ec = glz::write_json(json_stdmap, out_stdmap);
+         if (ec) std::abort();
+         bencher::do_not_optimize(out_stdmap);
+         return out_stdmap.size();
+      });
+
+      bencher::print_results(stage);
+   }
+
+   // ========================================================================
    // Benchmark: write_json (medium object)
    // ========================================================================
    {
@@ -219,6 +255,42 @@ int main()
          if (ec) std::abort();
          bencher::do_not_optimize(out);
          return out.size();
+      });
+
+      bencher::print_results(stage);
+   }
+
+   // ========================================================================
+   // Benchmark: write_json (medium, reused buffer)
+   // ========================================================================
+   {
+      generic_default json_default{};
+      glz::read_json(json_default, medium_json);
+      generic_std_map json_stdmap{};
+      glz::read_json(json_stdmap, medium_json);
+
+      std::string out_default, out_stdmap;
+      out_default.reserve(512);
+      out_stdmap.reserve(512);
+
+      bencher::stage stage;
+      stage.name = "write_json (medium, nested, reused buffer)";
+      stage.cold_cache = false;
+
+      stage.run("ordered_small_map", [&] {
+         out_default.clear();
+         auto ec = glz::write_json(json_default, out_default);
+         if (ec) std::abort();
+         bencher::do_not_optimize(out_default);
+         return out_default.size();
+      });
+
+      stage.run("std::map", [&] {
+         out_stdmap.clear();
+         auto ec = glz::write_json(json_stdmap, out_stdmap);
+         if (ec) std::abort();
+         bencher::do_not_optimize(out_stdmap);
+         return out_stdmap.size();
       });
 
       bencher::print_results(stage);
