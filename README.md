@@ -20,13 +20,12 @@ Formats Supported:
 
 > [!IMPORTANT]
 >
-> **Breaking Change v7.1.0: `glz::generic` now preserves order of JSON keys.** The underlying map for `glz::generic` switched from `std::map` to `glz::ordered_small_map`, which preserves the order of fields as they are read. Previously keys were lexicographically sorted, so serialization output order may differ. If you need the prior sorted-key behavior, create your own generic specialization using `std::map`:
+> **Breaking Change v7.1.0: `glz::generic` now preserves order of JSON keys.** The underlying map for `glz::generic` switched from `std::map` to `glz::ordered_small_map`, which preserves the order of fields as they are read. Previously keys were lexicographically sorted, so serialization output order may differ. If you need the prior sorted-key behavior, use:
 >
 > ```cpp
-> template <class T>
-> using sorted_map = std::map<std::string, T, std::less<>>;
-> 
-> using sorted_generic = glz::generic_json<glz::num_mode::f64, sorted_map>;
+> glz::generic_sorted json{};
+> glz::generic_sorted_i64 json_i64{};
+> glz::generic_sorted_u64 json_u64{};
 > ```
 > - This change also improves performance for `glz::generic`, offering faster lookup and iteration for typical JSON sized objects.
 

@@ -161,11 +161,10 @@ By default, `glz::generic` uses `ordered_small_map` for JSON objects. You can su
 // Default: insertion-order preservation with ordered_small_map
 glz::generic json{};
 
-// Lexicographically sorted keys with std::map
-template <class T>
-using sorted_map = std::map<std::string, T, std::less<>>;
-
-using sorted_generic = glz::generic_json<glz::num_mode::f64, sorted_map>;
+// Built-in sorted-key aliases (legacy lexicographic ordering)
+glz::generic_sorted sorted_json{};
+glz::generic_sorted_i64 sorted_json_i64{};
+glz::generic_sorted_u64 sorted_json_u64{};
 
 // Robin Hood hashing with ordered_map
 template <class T>
