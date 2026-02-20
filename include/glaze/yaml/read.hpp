@@ -1311,14 +1311,21 @@ namespace glz
             return false;
          }
 
+         auto validate_key_tag = [&](const yaml_tag tag) {
+            if (tag == yaml_tag::unknown) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            if (!tag_valid_for_string(tag)) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            return true;
+         };
+
          // Tags on keys (e.g. "!!str : value")
-         const auto tag = parse_yaml_tag(it, end, ctx);
-         if (tag == yaml_tag::unknown) {
-            ctx.error = error_code::syntax_error;
-            return false;
-         }
-         if (!tag_valid_for_string(tag)) {
-            ctx.error = error_code::syntax_error;
+         auto key_tag = parse_yaml_tag(it, end, ctx);
+         if (!validate_key_tag(key_tag)) {
             return false;
          }
          skip_inline_ws(it, end);
@@ -1454,6 +1461,24 @@ namespace glz
             }
             has_key_anchor = true;
             key_anchor_name = std::string(name);
+         }
+
+         // Allow node-property order "&anchor !!str key: value" for mapping keys.
+         if (*it == '!') {
+            if (key_tag != yaml_tag::none) {
+               // Duplicate tag properties on the same key node are malformed.
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            key_tag = parse_yaml_tag(it, end, ctx);
+            if (!validate_key_tag(key_tag)) {
+               return false;
+            }
+            skip_inline_ws(it, end);
+            if (it == end) {
+               ctx.error = error_code::unexpected_end;
+               return false;
+            }
          }
 
          const char* key_start = &*it;
@@ -5438,8 +5463,27 @@ namespace glz
                   // Only when the anchor and key are on the SAME line — if the value was on the
                   // next line, the anchor applies to the entire next-line content.
                   if (anchor_on_same_line && yaml::line_could_be_block_mapping(it, end)) {
+                     auto key_start = it;
+                     if (*key_start == '!') {
+                        const auto key_tag = yaml::parse_yaml_tag(key_start, end, ctx);
+                        if (key_tag == yaml::yaml_tag::unknown || !yaml::tag_valid_for_string(key_tag)) {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                        yaml::skip_inline_ws(key_start, end);
+                        if (key_start == end) {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                        if (*key_start == '\n' || *key_start == '\r') {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+
                      // Find the key span by scanning to the key-value separator
-                     auto key_scan = it;
+                     auto key_scan = key_start;
+                     auto key_end = key_start;
                      if (*key_scan == '"' || *key_scan == '\'') {
                         // Quoted key: skip to closing quote
                         const char quote = *key_scan;
@@ -5453,7 +5497,13 @@ namespace glz
                               ++key_scan;
                            }
                         }
-                        if (key_scan != end) ++key_scan; // past closing quote
+                        if (key_scan == end) {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                        ++key_scan; // past closing quote
+                        key_end = key_scan;
+                        yaml::skip_inline_ws(key_scan, end);
                      }
                      else {
                         // Plain key: scan to ':'
@@ -5466,9 +5516,18 @@ namespace glz
                            }
                            ++key_scan;
                         }
+                        key_end = key_scan;
+                        while (key_end != key_start && (*(key_end - 1) == ' ' || *(key_end - 1) == '\t')) {
+                           --key_end;
+                        }
+                     }
+                     if (key_scan == end || *key_scan != ':') {
+                        ctx.error = error_code::syntax_error;
+                        return;
                      }
                      // Store anchor with just the key text span
-                     ctx.anchors[std::string(aname)] = {anchor_start, &*key_scan, anchor_indent};
+                     ctx.anchors[std::string(aname)] = {&*key_start, &*key_end, anchor_indent};
+                     it = key_start;
                      // Parse as an object alternative so complex keys (e.g. flow collections) stay in mapping context.
                      if constexpr (counts::n_object > 0) {
                         process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx, it,

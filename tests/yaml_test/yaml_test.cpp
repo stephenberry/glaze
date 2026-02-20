@@ -3281,6 +3281,16 @@ b: *anchor)";
       expect(json == R"({"a":"b","b":"a"})") << json;
    };
 
+   "anchor_on_tagged_key"_test = [] {
+      std::string yaml = R"(&a5 !!str key5: value4
+other: *a5)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"key5":"value4","other":"key5"})") << json;
+   };
+
    "anchor_block_mapping_replay"_test = [] {
       std::string yaml = R"(bill-to: &id001
     given: Chris
