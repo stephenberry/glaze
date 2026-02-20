@@ -318,6 +318,27 @@ namespace glz
       return false;
    }
 
+   consteval std::string_view strip_unmatched_trailing_parens(std::string_view str)
+   {
+      size_t open_count{};
+      size_t close_count{};
+      for (const auto c : str) {
+         if (c == '(') {
+            ++open_count;
+         }
+         else if (c == ')') {
+            ++close_count;
+         }
+      }
+
+      while (close_count > open_count && !str.empty() && str.back() == ')') {
+         str.remove_suffix(1);
+         --close_count;
+      }
+
+      return str;
+   }
+
    consteval std::string_view normalize_extracted_name(std::string_view str)
    {
       str = trim_ascii_space(str);
@@ -327,6 +348,8 @@ namespace glz
          str.remove_suffix(1);
          str = trim_ascii_space(str);
       }
+
+      str = strip_unmatched_trailing_parens(str);
 
       if (const auto scope_pos = str.rfind("::"); scope_pos != std::string_view::npos) {
          return str.substr(scope_pos + 2);
@@ -339,7 +362,16 @@ namespace glz
    {
       const auto amp_pos = str.find("&");
       if (amp_pos != std::string_view::npos) {
-         str.remove_prefix(amp_pos + 1);
+         size_t prefix = amp_pos;
+         while (prefix > 0 && str[prefix - 1] == ' ') {
+            --prefix;
+         }
+         if (prefix > 0 && str[prefix - 1] == '(') {
+            str.remove_prefix(prefix - 1);
+         }
+         else {
+            str.remove_prefix(amp_pos + 1);
+         }
       }
       const auto tail_pos = str.find(pretty_function_tail);
       if (tail_pos != std::string_view::npos) {
