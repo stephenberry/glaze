@@ -2788,11 +2788,7 @@ name: test)";
 next: item)";
       glz::generic parsed{};
       auto ec = glz::read_yaml(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      expect(std::holds_alternative<glz::generic::object_t>(parsed.data));
-      auto& obj = std::get<glz::generic::object_t>(parsed.data);
-      expect(std::get<std::string>(obj.at("key").data) == "value");
-      expect(std::get<std::string>(obj.at("next").data) == "item");
+      expect(bool(ec));
    };
 
    "document_end_marker"_test = [] {
@@ -3283,6 +3279,36 @@ b: *anchor)";
       expect(!ec) << glz::format_error(ec, yaml);
       auto json = glz::write_json(parsed).value_or("WRITE_ERR");
       expect(json == R"({"a":"b","b":"a"})") << json;
+   };
+
+   "anchor_on_tagged_key"_test = [] {
+      std::string yaml = R"(&a5 !!str key5: value4
+other: *a5)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"key5":"value4","other":"key5"})") << json;
+   };
+
+   "tag_then_anchor_on_key"_test = [] {
+      std::string yaml = R"(!!str &a key: value
+other: *a)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"key":"value","other":"key"})") << json;
+   };
+
+   "anchor_on_quoted_key_with_space_before_colon"_test = [] {
+      std::string yaml = R"(&a 'key' : value
+other: *a)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"({"key":"value","other":"key"})") << json;
    };
 
    "anchor_block_mapping_replay"_test = [] {
@@ -6552,6 +6578,42 @@ suite yaml_multiline_plain_scalar_tests = [] {
       expect(std::get<std::string>(arr[2].data) == "test");
    };
 
+   // Continuation lines with "- " deeper than the sequence dash column are scalar content.
+   // This should hold for all items, not just the first one.
+   "sequence_dash_continuation_applies_to_all_items"_test = [] {
+      std::string yaml = R"(- one
+  - keep
+- two
+  - keep2
+)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& arr = std::get<glz::generic::array_t>(parsed.data);
+      expect(arr.size() == 2);
+      expect(std::get<std::string>(arr[0].data) == "one - keep");
+      expect(std::get<std::string>(arr[1].data) == "two - keep2");
+   };
+
+   "sequence_dash_continuation_in_mapping_value"_test = [] {
+      std::string yaml = R"(k:
+  - one
+    - keep
+  - two
+    - keep2
+)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      auto& arr = std::get<glz::generic::array_t>(root.at("k").data);
+      expect(arr.size() == 2);
+      expect(std::get<std::string>(arr[0].data) == "one - keep");
+      expect(std::get<std::string>(arr[1].data) == "two - keep2");
+   };
+
    // Test that mapping keys at same indent don't get folded
    "mapping_keys_not_folded"_test = [] {
       std::string yaml = R"(key1: value1
@@ -6579,6 +6641,48 @@ key2: value2)";
       auto& root = std::get<glz::generic::object_t>(parsed.data);
       expect(root.contains("key"));
       expect(std::get<std::string>(root.at("key").data) == "line one line two line three");
+   };
+};
+
+suite yaml_explicit_key_indent_tests = [] {
+   // Explicit-key value indicators must be at the key entry indentation.
+   "explicit_key_value_indicator_cannot_be_deeper_indented"_test = [] {
+      std::string yaml = R"(? key
+  : value
+)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(bool(rec));
+   };
+
+   // Same rule for anchor-only explicit keys ("? &a").
+   "explicit_anchor_key_value_indicator_cannot_be_deeper_indented"_test = [] {
+      std::string yaml = R"(? &a
+  : value
+)";
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(bool(rec));
+   };
+
+   // yaml-test-suite M2N8-00
+   "explicit_key_inline_colon_is_mapping_key_node"_test = [] {
+      std::string yaml = R"(- ? : x)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"([{"{\"\":\"x\"}":null}])") << json;
+   };
+
+   // yaml-test-suite SM9W-00
+   "single_dash_stream_is_sequence_with_null_item"_test = [] {
+      std::string yaml = R"(-)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"([null])") << json;
    };
 };
 
@@ -6739,6 +6843,22 @@ suite yaml_block_scalar_sibling_tests = [] {
       expect(std::get<std::string>(obj.at("k1").data) == "a\nb\n")
          << "k1 was: " << std::get<std::string>(obj.at("k1").data);
       expect(std::get<std::string>(obj.at("k2").data) == "c") << "k2 was: " << std::get<std::string>(obj.at("k2").data);
+   };
+
+   // yaml-test-suite 4WA9: explicit block-scalar indentation in a sequence mapping.
+   "block_scalar_explicit_indent_sibling_key_4WA9"_test = [] {
+      std::string yaml = R"(- aaa: |2
+    xxx
+  bbb: |
+    xxx
+)";
+      glz::generic parsed;
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+
+      std::string json;
+      (void)glz::write_json(parsed, json);
+      expect(json == R"([{"aaa":"xxx\n","bbb":"xxx\n"}])") << "json was: " << json;
    };
 
    "block_scalar_sibling_key_simple"_test = [] {
