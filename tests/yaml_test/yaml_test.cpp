@@ -6664,6 +6664,26 @@ suite yaml_explicit_key_indent_tests = [] {
       auto rec = glz::read_yaml(parsed, yaml);
       expect(bool(rec));
    };
+
+   // yaml-test-suite M2N8-00
+   "explicit_key_inline_colon_is_mapping_key_node"_test = [] {
+      std::string yaml = R"(- ? : x)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"([{"{\"\":\"x\"}":null}])") << json;
+   };
+
+   // yaml-test-suite SM9W-00
+   "single_dash_stream_is_sequence_with_null_item"_test = [] {
+      std::string yaml = R"(-)";
+      glz::generic parsed{};
+      auto ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      auto json = glz::write_json(parsed).value_or("WRITE_ERR");
+      expect(json == R"([null])") << json;
+   };
 };
 
 // Tests for boolean-like string values (issue #2291)

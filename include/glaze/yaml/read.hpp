@@ -4692,10 +4692,19 @@ namespace glz
                            }
                         }
 
+                        const bool key_content_spans_lines = [&] {
+                           auto scan = key_it;
+                           while (scan != content && scan != end) {
+                              if (*scan == '\n' || *scan == '\r') return true;
+                              ++scan;
+                           }
+                           return false;
+                        }();
+
                         if (handled_anchor_only_empty_key) {
                            // 'it' already points to the explicit value indicator ':'
                         }
-                        else if (content == end || *content == ':') {
+                        else if (content == end || (*content == ':' && key_content_spans_lines)) {
                            key.clear();
                            it = content;
                         }
@@ -5967,7 +5976,7 @@ namespace glz
                break; // Fall through to try other types
             case '-':
                // Could be negative number or block sequence indicator
-               if ((end - it >= 2) && (it[1] == ' ' || it[1] == '\t' || it[1] == '\n' || it[1] == '\r')) {
+               if (((it + 1) == end) || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[1])]) {
                   // Block sequence indicator "- "
                   if constexpr (counts::n_array > 0) {
                      process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx, it,

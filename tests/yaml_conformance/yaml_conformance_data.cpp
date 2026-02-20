@@ -1,14 +1,17 @@
 // Data-driven YAML conformance test.
-// Iterates over yaml-test-suite case directories at runtime,
+// Supports both yaml-test-suite layouts:
+// - data branch: one directory per case (in.yaml, in.json, out.yaml, etc.)
+// - main branch: src/*.yaml test definitions
 // comparing glaze output against expected JSON / YAML / error results.
 //
-// Requires YAML_TEST_SUITE_DIR to be defined at compile time,
-// pointing to the yaml-test-suite data directory.
+// Requires YAML_TEST_SUITE_DIR to be defined at compile time.
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -57,6 +60,16 @@ namespace
       bool passed{};
       bool skipped{};
       std::string detail{};
+   };
+
+   struct suite_case
+   {
+      std::string id{};
+      std::string in_yaml{};
+      bool expect_error{};
+      std::string expected_event{};
+      std::string expected_json{};
+      std::string expected_yaml{};
    };
 
    enum class event_compare_status : uint8_t
@@ -822,6 +835,397 @@ namespace
       }
       return result;
    }
+
+   bool is_case_id_name(std::string_view name) noexcept
+   {
+      if (name.size() != 4) return false;
+      return std::all_of(name.begin(), name.end(), [](char c) {
+         const unsigned char uc = static_cast<unsigned char>(c);
+         return std::isdigit(uc) || (uc >= 'A' && uc <= 'Z');
+      });
+   }
+
+   bool should_skip_case(const std::string& id)
+   {
+      if (skip_cases.count(id)) return true;
+      if (id.size() > 5 && id[4] == '-' && skip_cases.count(id.substr(0, 4))) return true;
+      return false;
+   }
+
+   enum class yaml_text_field_state : uint8_t
+   {
+      absent,
+      string_value,
+      null_value,
+      type_error,
+   };
+
+   const glz::generic* find_object_field(const glz::generic::object_t& obj, std::string_view key)
+   {
+      auto it = obj.find(std::string(key));
+      if (it == obj.end()) return nullptr;
+      return &it->second;
+   }
+
+   bool object_has_field(const glz::generic::object_t& obj, std::string_view key)
+   {
+      return find_object_field(obj, key) != nullptr;
+   }
+
+   yaml_text_field_state read_object_text_field(const glz::generic::object_t& obj, std::string_view key, std::string& out)
+   {
+      const auto* field = find_object_field(obj, key);
+      if (!field) return yaml_text_field_state::absent;
+
+      if (const auto* s = field->get_if<std::string>()) {
+         out = *s;
+         return yaml_text_field_state::string_value;
+      }
+      if (std::holds_alternative<std::nullptr_t>(field->data)) {
+         return yaml_text_field_state::null_value;
+      }
+      return yaml_text_field_state::type_error;
+   }
+
+   std::string unescape_suite_text(std::string text)
+   {
+      constexpr std::string_view visible_space = "\xE2\x90\xA3"; // U+2423
+      constexpr std::string_view em_dash = "\xE2\x80\x94";       // U+2014
+      constexpr std::string_view tab_marker = "\xC2\xBB";        // U+00BB
+      constexpr std::string_view carriage_return = "\xE2\x86\x90"; // U+2190
+      constexpr std::string_view bom_marker = "\xE2\x87\x94";      // U+21D4
+      constexpr std::string_view trailing_newline_marker = "\xE2\x86\xB5"; // U+21B5
+      constexpr std::string_view no_final_newline_marker = "\xE2\x88\x8E"; // U+220E
+      constexpr std::string_view bom = "\xEF\xBB\xBF"; // UTF-8 BOM
+
+      std::string out{};
+      out.reserve(text.size());
+
+      for (size_t i = 0; i < text.size();) {
+         if (i + visible_space.size() <= text.size() &&
+             text.compare(i, visible_space.size(), visible_space) == 0) {
+            out.push_back(' ');
+            i += visible_space.size();
+            continue;
+         }
+
+         if (i + carriage_return.size() <= text.size() &&
+             text.compare(i, carriage_return.size(), carriage_return) == 0) {
+            out.push_back('\r');
+            i += carriage_return.size();
+            continue;
+         }
+
+         if (i + bom_marker.size() <= text.size() &&
+             text.compare(i, bom_marker.size(), bom_marker) == 0) {
+            out.append(bom);
+            i += bom_marker.size();
+            continue;
+         }
+
+         if (i + trailing_newline_marker.size() <= text.size() &&
+             text.compare(i, trailing_newline_marker.size(), trailing_newline_marker) == 0) {
+            i += trailing_newline_marker.size();
+            continue;
+         }
+
+         if (i + tab_marker.size() <= text.size() &&
+             text.compare(i, tab_marker.size(), tab_marker) == 0) {
+            out.push_back('\t');
+            i += tab_marker.size();
+            continue;
+         }
+
+         if (i + em_dash.size() <= text.size() &&
+             text.compare(i, em_dash.size(), em_dash) == 0) {
+            size_t j = i;
+            while (j + em_dash.size() <= text.size() &&
+                   text.compare(j, em_dash.size(), em_dash) == 0) {
+               j += em_dash.size();
+            }
+            if (j + tab_marker.size() <= text.size() &&
+                text.compare(j, tab_marker.size(), tab_marker) == 0) {
+               out.push_back('\t');
+               i = j + tab_marker.size();
+               continue;
+            }
+         }
+
+         out.push_back(text[i]);
+         ++i;
+      }
+
+      if (out.size() >= (no_final_newline_marker.size() + 1) && out.back() == '\n' &&
+          out.compare(out.size() - no_final_newline_marker.size() - 1, no_final_newline_marker.size(),
+                      no_final_newline_marker) == 0) {
+         out.erase(out.size() - no_final_newline_marker.size() - 1, no_final_newline_marker.size() + 1);
+      }
+      else if (out.size() >= no_final_newline_marker.size() &&
+               out.compare(out.size() - no_final_newline_marker.size(), no_final_newline_marker.size(),
+                           no_final_newline_marker) == 0) {
+         out.erase(out.size() - no_final_newline_marker.size());
+      }
+
+      return out;
+   }
+
+   std::string normalize_main_tree_text(std::string text)
+   {
+      // The source tree field keeps indentation for YAML readability.
+      // data/test.event stores it left-trimmed per line and newline-terminated.
+      std::string normalized{};
+      normalized.reserve(text.size());
+
+      size_t i = 0;
+      while (i < text.size()) {
+         while (i < text.size() && (text[i] == ' ' || text[i] == '\t')) {
+            ++i;
+         }
+         while (i < text.size() && text[i] != '\n') {
+            normalized.push_back(text[i]);
+            ++i;
+         }
+         if (i < text.size() && text[i] == '\n') {
+            normalized.push_back('\n');
+            ++i;
+         }
+      }
+
+      while (!normalized.empty() && normalized.back() == '\n') {
+         normalized.pop_back();
+      }
+      normalized.push_back('\n');
+
+      return unescape_suite_text(std::move(normalized));
+   }
+
+   bool add_data_case_from_dir(const std::string& id, const fs::path& case_dir, std::vector<suite_case>& cases)
+   {
+      const auto in_yaml_path = case_dir / "in.yaml";
+      if (!fs::exists(in_yaml_path)) return false;
+
+      suite_case c{};
+      c.id = id;
+      c.in_yaml = read_file(in_yaml_path);
+      c.expect_error = fs::exists(case_dir / "error");
+
+      const auto event_path = case_dir / "test.event";
+      if (fs::exists(event_path)) {
+         c.expected_event = read_file(event_path);
+      }
+
+      const auto json_path = case_dir / "in.json";
+      if (fs::exists(json_path)) {
+         c.expected_json = read_file(json_path);
+      }
+
+      const auto out_yaml_path = case_dir / "out.yaml";
+      if (fs::exists(out_yaml_path)) {
+         c.expected_yaml = read_file(out_yaml_path);
+      }
+
+      cases.emplace_back(std::move(c));
+      return true;
+   }
+
+   bool load_data_layout_cases(const fs::path& suite_dir, std::vector<suite_case>& cases)
+   {
+      std::vector<fs::path> top_case_dirs{};
+      for (const auto& entry : fs::directory_iterator(suite_dir)) {
+         if (!entry.is_directory()) continue;
+         const auto name = entry.path().filename().string();
+         if (is_case_id_name(name)) {
+            top_case_dirs.push_back(entry.path());
+         }
+      }
+      std::sort(top_case_dirs.begin(), top_case_dirs.end());
+
+      for (const auto& top_dir : top_case_dirs) {
+         const auto id = top_dir.filename().string();
+         if (add_data_case_from_dir(id, top_dir, cases)) {
+            continue;
+         }
+
+         std::vector<fs::path> sub_case_dirs{};
+         for (const auto& child : fs::directory_iterator(top_dir)) {
+            if (child.is_directory() && fs::exists(child.path() / "in.yaml")) {
+               sub_case_dirs.push_back(child.path());
+            }
+         }
+         std::sort(sub_case_dirs.begin(), sub_case_dirs.end());
+
+         for (const auto& sub_dir : sub_case_dirs) {
+            const auto sub_name = sub_dir.filename().string();
+            (void)add_data_case_from_dir(id + "-" + sub_name, sub_dir, cases);
+         }
+      }
+
+      return !cases.empty();
+   }
+
+   bool load_main_layout_cases(const fs::path& suite_dir, std::vector<suite_case>& cases, std::string& error)
+   {
+      const auto src_dir = suite_dir / "src";
+      if (!fs::exists(src_dir) || !fs::is_directory(src_dir)) return false;
+
+      std::vector<fs::path> case_files{};
+      for (const auto& entry : fs::directory_iterator(src_dir)) {
+         if (!entry.is_regular_file()) continue;
+         if (entry.path().extension() != ".yaml") continue;
+         const auto stem = entry.path().stem().string();
+         if (is_case_id_name(stem)) {
+            case_files.push_back(entry.path());
+         }
+      }
+      std::sort(case_files.begin(), case_files.end());
+
+      struct case_cache
+      {
+         std::optional<std::string> yaml{};
+         std::optional<std::string> tree{};
+         std::optional<std::string> json{};
+         std::optional<std::string> dump{};
+      };
+
+      for (const auto& case_file : case_files) {
+         const auto base_id = case_file.stem().string();
+         const auto raw = read_file(case_file);
+
+         glz::generic parsed{};
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, raw);
+         if (bool(ec)) {
+            error = "failed to parse source case file " + case_file.string() + ": " + glz::format_error(ec, raw);
+            return false;
+         }
+
+         const auto* tests = parsed.get_if<glz::generic::array_t>();
+         if (!tests) {
+            error = "source case file is not a YAML sequence: " + case_file.string();
+            return false;
+         }
+         if (tests->empty()) {
+            continue;
+         }
+
+         const auto* first = (*tests)[0].get_if<glz::generic::object_t>();
+         if (!first) {
+            error = "source case entry is not a mapping in " + case_file.string();
+            return false;
+         }
+         if (object_has_field(*first, "skip")) {
+            continue;
+         }
+
+         const bool multi = tests->size() > 1;
+         const size_t width = multi ? (std::to_string(tests->size() - 1).size() + 1) : 0;
+         case_cache cache{};
+
+         for (size_t i = 0; i < tests->size(); ++i) {
+            const auto* test_obj = (*tests)[i].get_if<glz::generic::object_t>();
+            if (!test_obj) {
+               error = "source case entry is not a mapping in " + case_file.string();
+               return false;
+            }
+
+            auto read_optional_text = [&](std::string_view key, std::optional<std::string>& cache_field,
+                                          std::optional<std::string>& out_field) -> bool {
+               std::string v{};
+               const auto state = read_object_text_field(*test_obj, key, v);
+               if (state == yaml_text_field_state::type_error) {
+                  error = "field '" + std::string(key) + "' is not a string/null in " + case_file.string();
+                  return false;
+               }
+               if (state == yaml_text_field_state::string_value) {
+                  cache_field = std::move(v);
+                  out_field = cache_field;
+                  return true;
+               }
+               if (state == yaml_text_field_state::null_value) {
+                  cache_field.reset();
+                  out_field.reset();
+                  return true;
+               }
+               if (cache_field) {
+                  out_field = cache_field;
+               }
+               else {
+                  out_field.reset();
+               }
+               return true;
+            };
+
+            std::optional<std::string> yaml_text{};
+            std::optional<std::string> tree_text{};
+            std::optional<std::string> json_text{};
+            std::optional<std::string> dump_text{};
+
+            if (!read_optional_text("yaml", cache.yaml, yaml_text)) return false;
+            if (!read_optional_text("tree", cache.tree, tree_text)) return false;
+            if (!read_optional_text("json", cache.json, json_text)) return false;
+            if (!read_optional_text("dump", cache.dump, dump_text)) return false;
+
+            if (!yaml_text) {
+               error = "missing 'yaml' field in " + case_file.string();
+               return false;
+            }
+
+            suite_case c{};
+            if (multi) {
+               auto suffix = std::to_string(i);
+               if (suffix.size() < width) {
+                  suffix.insert(0, width - suffix.size(), '0');
+               }
+               c.id = base_id + "-" + suffix;
+            }
+            else {
+               c.id = base_id;
+            }
+
+            c.in_yaml = unescape_suite_text(std::move(*yaml_text));
+            c.expect_error = object_has_field(*test_obj, "fail");
+
+            if (tree_text) {
+               c.expected_event = normalize_main_tree_text(std::move(*tree_text));
+            }
+            if (json_text) {
+               c.expected_json = unescape_suite_text(std::move(*json_text));
+            }
+            if (dump_text) {
+               c.expected_yaml = unescape_suite_text(std::move(*dump_text));
+            }
+
+            cases.emplace_back(std::move(c));
+         }
+      }
+
+      return !cases.empty();
+   }
+
+   bool has_main_layout(const fs::path& suite_dir)
+   {
+      const auto src_dir = suite_dir / "src";
+      if (!fs::exists(src_dir) || !fs::is_directory(src_dir)) return false;
+
+      for (const auto& entry : fs::directory_iterator(src_dir)) {
+         if (!entry.is_regular_file()) continue;
+         if (entry.path().extension() != ".yaml") continue;
+         if (is_case_id_name(entry.path().stem().string())) {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   bool has_data_layout(const fs::path& suite_dir)
+   {
+      for (const auto& entry : fs::directory_iterator(suite_dir)) {
+         if (!entry.is_directory()) continue;
+         if (is_case_id_name(entry.path().filename().string())) {
+            return true;
+         }
+      }
+      return false;
+   }
 }
 
 suite yaml_conformance_data_tests = [] {
@@ -830,7 +1234,10 @@ suite yaml_conformance_data_tests = [] {
       expect(false) << "YAML_TEST_SUITE_DIR not defined";
       return;
 #else
-      const fs::path suite_dir{YAML_TEST_SUITE_DIR};
+      fs::path suite_dir{YAML_TEST_SUITE_DIR};
+      if (const char* override_dir = std::getenv("YAML_TEST_SUITE_DIR_OVERRIDE"); override_dir && *override_dir) {
+         suite_dir = fs::path{override_dir};
+      }
       expect(fs::exists(suite_dir)) << "yaml-test-suite directory not found: " << suite_dir.string();
       if (!fs::exists(suite_dir)) return;
 
@@ -849,63 +1256,64 @@ suite yaml_conformance_data_tests = [] {
       int event_fail = 0;
       int event_skip = 0;
 
-      // Collect and sort case directories
-      std::vector<fs::path> case_dirs;
-      for (const auto& entry : fs::directory_iterator(suite_dir)) {
-         if (entry.is_directory()) {
-            const auto name = entry.path().filename().string();
-            // yaml-test-suite case IDs are 4 alphanumeric characters
-            if (name.size() == 4) {
-               case_dirs.push_back(entry.path());
-            }
+      std::vector<suite_case> cases{};
+      std::string layout_name{};
+      std::string load_error{};
+      if (has_main_layout(suite_dir)) {
+         layout_name = "main/src";
+         if (!load_main_layout_cases(suite_dir, cases, load_error)) {
+            expect(false) << "failed to load yaml-test-suite main/src layout: " << load_error;
+            return;
          }
       }
-      std::sort(case_dirs.begin(), case_dirs.end());
+      else if (has_data_layout(suite_dir)) {
+         layout_name = "data";
+         if (!load_data_layout_cases(suite_dir, cases)) {
+            expect(false) << "failed to load yaml-test-suite data layout from " << suite_dir.string();
+            return;
+         }
+      }
+      else {
+         expect(false) << "unknown yaml-test-suite layout in " << suite_dir.string();
+         return;
+      }
 
-      for (const auto& case_dir : case_dirs) {
-         const auto id = case_dir.filename().string();
-         const auto in_yaml_path = case_dir / "in.yaml";
-
-         if (!fs::exists(in_yaml_path)) continue;
+      for (const auto& c : cases) {
          ++total;
 
-         if (skip_cases.count(id)) {
+         if (should_skip_case(c.id)) {
             ++skipped;
-            results.push_back({id, false, true, "skipped"});
+            results.push_back({c.id, false, true, "skipped"});
             continue;
          }
 
-         const bool expect_error = fs::exists(case_dir / "error");
-         const auto in_yaml = read_file(in_yaml_path);
-
          glz::generic parsed{};
-         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, in_yaml);
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, c.in_yaml);
          const bool parse_failed = bool(ec);
 
-         if (expect_error) {
+         if (c.expect_error) {
             if (parse_failed) {
                ++passed;
                ++error_pass;
-               results.push_back({id, true, false, "correctly rejected"});
+               results.push_back({c.id, true, false, "correctly rejected"});
             }
             else {
                ++failed;
                ++error_fail;
-               results.push_back({id, false, false, "should have failed but parsed successfully"});
+               results.push_back({c.id, false, false, "should have failed but parsed successfully"});
             }
             continue;
          }
 
          if (parse_failed) {
             ++failed;
-            results.push_back({id, false, false, "parse error: " + glz::format_error(ec, in_yaml)});
+            results.push_back({c.id, false, false, "parse error: " + glz::format_error(ec, c.in_yaml)});
             continue;
          }
 
          // Compare against the yaml-test-suite event stream.
-         const auto event_path = case_dir / "test.event";
-         if (fs::exists(event_path)) {
-            auto event_result = compare_with_test_event(in_yaml, parsed, read_file(event_path));
+         if (!c.expected_event.empty()) {
+            auto event_result = compare_with_test_event(c.in_yaml, parsed, c.expected_event);
             if (event_result.status == event_compare_status::matched) {
                ++event_pass;
             }
@@ -915,20 +1323,18 @@ suite yaml_conformance_data_tests = [] {
             else {
                ++failed;
                ++event_fail;
-               results.push_back({id, false, false, "event check failed: " + event_result.detail});
+               results.push_back({c.id, false, false, "event check failed: " + event_result.detail});
                continue;
             }
          }
 
          // Compare against expected JSON if available
-         const auto in_json_path = case_dir / "in.json";
-         if (fs::exists(in_json_path)) {
-            const auto expected_json_raw = read_file(in_json_path);
-            const auto expected_json = normalize_json(expected_json_raw);
+         if (!c.expected_json.empty()) {
+            const auto expected_json = normalize_json(c.expected_json);
             if (expected_json.empty()) {
                // Can't normalize expected JSON — count as parsed but not a JSON match
                ++passed;
-               results.push_back({id, true, false, "parsed (expected JSON couldn't be normalized)"});
+               results.push_back({c.id, true, false, "parsed (expected JSON couldn't be normalized)"});
                continue;
             }
 
@@ -938,24 +1344,21 @@ suite yaml_conformance_data_tests = [] {
             if (actual_json == expected_json) {
                ++passed;
                ++json_pass;
-               results.push_back({id, true, false, "JSON match"});
+               results.push_back({c.id, true, false, "JSON match"});
             }
             else {
                ++failed;
                ++json_fail;
-               results.push_back(
-                  {id, false, false, "JSON mismatch\n  actual:   " + actual_json + "\n  expected: " + expected_json});
+               results.push_back({c.id, false, false,
+                                  "JSON mismatch\n  actual:   " + actual_json + "\n  expected: " + expected_json});
             }
             continue;
          }
 
          // Compare via YAML roundtrip if out.yaml is available
-         const auto out_yaml_path = case_dir / "out.yaml";
-         if (fs::exists(out_yaml_path)) {
-            const auto expected_yaml = read_file(out_yaml_path);
-
+         if (!c.expected_yaml.empty()) {
             glz::generic expected_parsed{};
-            auto ec2 = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(expected_parsed, expected_yaml);
+            auto ec2 = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(expected_parsed, c.expected_yaml);
 
             std::string actual_yaml;
             (void)glz::write_yaml(parsed, actual_yaml);
@@ -966,15 +1369,15 @@ suite yaml_conformance_data_tests = [] {
             if (actual_yaml == expected_yaml_normalized) {
                ++passed;
                ++yaml_pass;
-               results.push_back({id, true, false, "YAML roundtrip match"});
+               results.push_back({c.id, true, false, "YAML roundtrip match"});
             }
             else {
                ++failed;
                ++yaml_fail;
-               results.push_back({id, false, false,
+               results.push_back({c.id, false, false,
                                   "YAML roundtrip mismatch\n  actual:\n" + actual_yaml +
                                      "\n  expected:\n" + expected_yaml_normalized +
-                                     (bool(ec2) ? "\n  (out.yaml parse error: " + glz::format_error(ec2, expected_yaml) +
+                                     (bool(ec2) ? "\n  (out.yaml parse error: " + glz::format_error(ec2, c.expected_yaml) +
                                                      ")"
                                                 : "")});
             }
@@ -983,11 +1386,12 @@ suite yaml_conformance_data_tests = [] {
 
          // No expected output to compare — just verify it parsed
          ++passed;
-         results.push_back({id, true, false, "parsed (no expected output to compare)"});
+         results.push_back({c.id, true, false, "parsed (no expected output to compare)"});
       }
 
       // Print summary
       std::string summary = "\n=== YAML Test Suite Conformance ===\n";
+      summary += "Layout: " + layout_name + "\n";
       summary += "Total: " + std::to_string(total) + "\n";
       summary += "Passed: " + std::to_string(passed) + "\n";
       summary += "Failed: " + std::to_string(failed) + "\n";
