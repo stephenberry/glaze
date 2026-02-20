@@ -2241,6 +2241,35 @@ namespace glz
       GLZ_ALWAYS_INLINE void parse_flow_sequence(T&& value, Ctx& ctx, It& it, End end)
       {
          using V = std::remove_cvref_t<T>;
+         using value_type = typename V::value_type;
+
+         struct sequence_container_adapter
+         {
+            size_t index = 0;
+
+            GLZ_ALWAYS_INLINE bool fixed_capacity_reached(const V& container) const noexcept
+            {
+               if constexpr (!resizable<V>) {
+                  return index >= container.size();
+               }
+               else {
+                  (void)container;
+                  return false;
+               }
+            }
+
+            GLZ_ALWAYS_INLINE void commit_fixed_slot() noexcept { ++index; }
+
+            GLZ_ALWAYS_INLINE void append(V& container, value_type&& element) noexcept
+            {
+               if constexpr (emplace_backable<V>) {
+                  container.emplace_back(std::move(element));
+               }
+               else if constexpr (emplaceable<V>) {
+                  container.emplace(std::move(element));
+               }
+            }
+         };
 
          if (it == end || *it != '[') [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -2267,11 +2296,11 @@ namespace glz
             return;
          }
 
-         using value_type = typename V::value_type;
          bool just_saw_comma = false;
+         sequence_container_adapter adapter{};
 
-         if constexpr (emplace_backable<V>) {
-            // Resizable containers (vector, deque, list)
+         if constexpr (emplace_backable<V> || emplaceable<V>) {
+            // Dynamic containers append items (vector-like and set-like)
             while (it != end) {
                skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -2305,7 +2334,7 @@ namespace glz
                }
                just_saw_comma = false;
 
-               auto& element = value.emplace_back();
+               value_type element{};
                from<YAML, value_type>::template op<flow_context_on<Opts>()>(element, ctx, it, end);
 
                if (bool(ctx.error)) [[unlikely]]
@@ -2357,6 +2386,8 @@ namespace glz
                   }
                }
 
+               adapter.append(value, std::move(element));
+
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
@@ -2389,10 +2420,7 @@ namespace glz
          }
          else if constexpr (!resizable<V>) {
             // Fixed-size containers (std::array)
-            const auto n = value.size();
-            size_t i = 0;
-
-            while (it != end && i < n) {
+            while (it != end && !adapter.fixed_capacity_reached(value)) {
                skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2425,12 +2453,12 @@ namespace glz
                }
                just_saw_comma = false;
 
-               from<YAML, value_type>::template op<flow_context_on<Opts>()>(value[i], ctx, it, end);
+               from<YAML, value_type>::template op<flow_context_on<Opts>()>(value[adapter.index], ctx, it, end);
 
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               ++i;
+               adapter.commit_fixed_slot();
                skip_flow_ws_and_newlines(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2465,8 +2493,8 @@ namespace glz
                }
             }
 
-            // If we exited because i >= n but haven't seen ']', skip to the closing bracket
-            // This handles the case where YAML has more elements than the fixed-size array
+            // If we exited because the fixed-size container is full but haven't seen ']',
+            // skip to the closing bracket to consume overflow elements.
             int bracket_depth = 1;
             while (it != end && bracket_depth > 0) {
                if (*it == '[') {
@@ -2665,15 +2693,35 @@ namespace glz
          using V = std::remove_cvref_t<T>;
          using value_type = typename V::value_type;
 
-         [[maybe_unused]] size_t index = 0;
-         [[maybe_unused]] const size_t max_size = []() {
-            if constexpr (!resizable<V>) {
-               return std::tuple_size_v<V>;
+         struct sequence_container_adapter
+         {
+            size_t index = 0;
+
+            GLZ_ALWAYS_INLINE bool fixed_capacity_reached(const V& container) const noexcept
+            {
+               if constexpr (!resizable<V>) {
+                  return index >= container.size();
+               }
+               else {
+                  (void)container;
+                  return false;
+               }
             }
-            else {
-               return size_t(0); // unused for resizable containers
+
+            GLZ_ALWAYS_INLINE void commit_fixed_slot() noexcept { ++index; }
+
+            GLZ_ALWAYS_INLINE void append(V& container, value_type&& element) noexcept
+            {
+               if constexpr (emplace_backable<V>) {
+                  container.emplace_back(std::move(element));
+               }
+               else if constexpr (emplaceable<V>) {
+                  container.emplace(std::move(element));
+               }
             }
-         }();
+         };
+
+         sequence_container_adapter adapter{};
 
          // Track if this is the first item (for handling whitespace-consumed case)
          bool first_item = true;
@@ -2684,7 +2732,7 @@ namespace glz
          while (it != end) {
             // For fixed-size arrays, stop when we've filled all elements
             if constexpr (!resizable<V>) {
-               if (index >= max_size) {
+               if (adapter.fixed_capacity_reached(value)) {
                   return;
                }
             }
@@ -2933,9 +2981,16 @@ namespace glz
                auto& element = value.emplace_back();
                parse_element(element);
             }
+            else if constexpr (emplaceable<V>) {
+               value_type element{};
+               parse_element(element);
+               if (!bool(ctx.error)) {
+                  adapter.append(value, std::move(element));
+               }
+            }
             else if constexpr (!resizable<V>) {
-               parse_element(value[index]);
-               ++index;
+               parse_element(value[adapter.index]);
+               adapter.commit_fixed_slot();
             }
             else {
                ctx.error = error_code::syntax_error;
@@ -3490,224 +3545,6 @@ namespace glz
             });
       }
 
-      // Parse flow sequence into set types [item, item, ...]
-      template <auto Opts, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_flow_sequence_set(T&& value, Ctx& ctx, It& it, End end)
-      {
-         using V = std::remove_cvref_t<T>;
-         using value_type = typename V::value_type;
-
-         if (it == end || *it != '[') [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         ++it; // Skip '['
-         // Skip whitespace and newlines after opening bracket (YAML allows multi-line flow sequences)
-         skip_ws_and_newlines(it, end);
-
-         // Handle empty array
-         if (it != end && *it == ']') {
-            ++it;
-            validate_flow_node_adjacent_tail(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            if constexpr (!yaml::check_flow_context(Opts)) {
-               if (ctx.current_indent() < 0) {
-                  validate_root_flow_tail_after_close(ctx, it, end);
-               }
-            }
-            return;
-         }
-
-         bool just_saw_comma = false;
-         while (it != end) {
-            skip_ws_and_newlines(it, end);
-
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-
-            if (*it == ']') {
-               if (just_saw_comma) {
-                  ++it;
-                  validate_flow_node_adjacent_tail(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  if constexpr (!yaml::check_flow_context(Opts)) {
-                     if (ctx.current_indent() < 0) {
-                        validate_root_flow_tail_after_close(ctx, it, end);
-                     }
-                  }
-                  return;
-               }
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-
-            if (*it == ',' || *it == '#') {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            just_saw_comma = false;
-
-            value_type element{};
-            from<YAML, value_type>::template op<flow_context_on<Opts>()>(element, ctx, it, end);
-
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            value.emplace(std::move(element));
-
-            skip_flow_ws_and_newlines(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-
-            if (*it == ']') {
-               ++it;
-               validate_flow_node_adjacent_tail(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               if constexpr (!yaml::check_flow_context(Opts)) {
-                  if (ctx.current_indent() < 0) {
-                     validate_root_flow_tail_after_close(ctx, it, end);
-                  }
-               }
-               return;
-            }
-            else if (*it == ',') {
-               ++it;
-               just_saw_comma = true;
-               skip_ws_and_newlines(it, end);
-            }
-            else {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-         }
-      }
-
-      // Parse block sequence into set types
-      // - item1
-      // - item2
-      template <auto Opts, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_block_sequence_set(T&& value, Ctx& ctx, It& it, End end, int32_t sequence_indent)
-      {
-         using V = std::remove_cvref_t<T>;
-         using value_type = typename V::value_type;
-
-         while (it != end) {
-            // Skip blank lines and comments, track indent
-            int32_t line_indent = 0;
-            auto line_start = it;
-
-            while (it != end) {
-               if (*it == '#') {
-                  skip_comment(it, end);
-                  skip_newline(it, end);
-                  line_start = it;
-                  line_indent = 0;
-               }
-               else if (*it == '\n' || *it == '\r') {
-                  skip_newline(it, end);
-                  line_start = it;
-                  line_indent = 0;
-               }
-               else if (*it == ' ') {
-                  line_start = it;
-                  line_indent = measure_indent(it, end, ctx);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  if (it == end || *it == '\n' || *it == '\r') {
-                     // Blank line - continue to next line
-                     continue;
-                  }
-                  break; // Found content
-               }
-               else {
-                  break; // At content (no leading space on this line)
-               }
-            }
-
-            if (it == end) break;
-
-            // Check for document end marker
-            if (at_document_end(it, end)) break;
-
-            // Check for dedent
-            if (line_indent < sequence_indent) {
-               it = line_start;
-               return;
-            }
-
-            // Expect dash for sequence item
-            if (*it != '-') {
-               it = line_start;
-               return;
-            }
-
-            ++it; // Skip '-'
-
-            // Check for valid sequence item indicator (- followed by space or newline)
-            if (it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)]) {
-               // Not a sequence item (could be a number like -5)
-               it = line_start;
-               return;
-            }
-
-            skip_inline_ws(it, end);
-
-            value_type element{};
-
-            // Check what follows
-            if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-               // Content on same line as dash
-               if (!ctx.push_indent(line_indent + 2)) [[unlikely]]
-                  return;
-               const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
-               ctx.sequence_dash_indent = line_indent;
-               from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
-               ctx.sequence_dash_indent = prev_sequence_dash_indent;
-               ctx.pop_indent();
-            }
-            else {
-               // Value on next line - nested block
-               skip_ws_and_comment(it, end);
-               skip_newline(it, end);
-
-               // Get indent of nested content
-               auto nested_start = it;
-               int32_t nested_indent = measure_indent(it, end, ctx);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               it = nested_start;
-
-               if (nested_indent > line_indent) {
-                  if (!ctx.push_indent(nested_indent)) [[unlikely]]
-                     return;
-                  const int32_t prev_sequence_dash_indent = ctx.sequence_dash_indent;
-                  ctx.sequence_dash_indent = line_indent;
-                  from<YAML, value_type>::template op<Opts>(element, ctx, it, end);
-                  ctx.sequence_dash_indent = prev_sequence_dash_indent;
-                  ctx.pop_indent();
-               }
-               // else: empty element (default constructed)
-            }
-
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            value.emplace(std::move(element));
-         }
-      }
-
    } // namespace yaml
 
    // Set types (std::set, std::unordered_set, etc.)
@@ -3733,7 +3570,7 @@ namespace glz
          if (*peek == '[') {
             // Flow sequence
             it = peek;
-            yaml::parse_flow_sequence_set<Opts>(value, ctx, it, end);
+            yaml::parse_flow_sequence<Opts>(value, ctx, it, end);
          }
          else if (*peek == '-') {
             // Block sequence
@@ -3745,7 +3582,7 @@ namespace glz
                seq_indent = ctx.allow_indentless_sequence ? (ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : 0)
                                                           : (ctx.current_indent() + 1);
             }
-            yaml::parse_block_sequence_set<Opts>(value, ctx, it, end, seq_indent);
+            yaml::parse_block_sequence<Opts>(value, ctx, it, end, seq_indent);
          }
          else {
             ctx.error = error_code::syntax_error;
