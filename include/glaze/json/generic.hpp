@@ -26,12 +26,12 @@ namespace glz
 }
 
 #include <cstddef>
-#include <map>
 #include <variant>
 #include <vector>
 
 #include "glaze/api/std/string.hpp"
 #include "glaze/api/std/variant.hpp"
+#include "glaze/containers/ordered_small_map.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/util/expected.hpp"
@@ -73,15 +73,33 @@ namespace glz
       using type = std::variant<null_t, uint64_t, int64_t, double, std::string, bool, array_t, object_t>;
    };
 
+   // Concept for map types usable with generic_json.
+   // MapType must be a template taking a single type parameter (the mapped value type),
+   // with std::string keys and support for heterogeneous lookup via std::string_view.
+   template <template <class> class MapType>
+   concept generic_map_type =
+      requires(MapType<int>& m, const MapType<int>& cm, std::string_view sv, std::pair<std::string, int> p) {
+         { m.find(sv) };
+         { cm.find(sv) };
+         { m.insert(std::move(p)) };
+         { cm.empty() } -> std::convertible_to<bool>;
+         { cm.size() } -> std::convertible_to<std::size_t>;
+         { m.begin() };
+         { m.end() };
+      };
+
    // Generic json type.
-   // Template parameter controls number storage mode for precise integer handling
-   template <num_mode Mode = num_mode::f64>
+   // First template parameter controls number storage mode for precise integer handling.
+   // Second template parameter controls the map type used for JSON objects.
+   // MapType must satisfy generic_map_type (heterogeneous find with std::string_view).
+   template <num_mode Mode = num_mode::f64, template <class> class MapType = ordered_small_map>
+      requires generic_map_type<MapType>
    struct generic_json
    {
-      virtual ~generic_json() {}
+      ~generic_json() = default;
 
-      using array_t = std::vector<generic_json<Mode>>;
-      using object_t = std::map<std::string, generic_json<Mode>, std::less<>>;
+      using array_t = std::vector<generic_json<Mode, MapType>>;
+      using object_t = MapType<generic_json<Mode, MapType>>;
       using null_t = std::nullptr_t;
 
       // Variant type depends on Mode:
@@ -175,7 +193,6 @@ namespace glz
 
       generic_json& operator[](std::convertible_to<std::string_view> auto&& key)
       {
-         //[] operator for maps does not support heterogeneous lookups yet
          if (holds<null_t>()) data = object_t{};
          auto& object = std::get<object_t>(data);
          auto iter = object.find(key);
@@ -187,7 +204,6 @@ namespace glz
 
       const generic_json& operator[](std::convertible_to<std::string_view> auto&& key) const
       {
-         //[] operator for maps does not support heterogeneous lookups yet
          auto& object = std::get<object_t>(data);
          auto iter = object.find(key);
          if (iter == object.end()) {
@@ -539,48 +555,48 @@ namespace glz
    // Backwards compatibility alias
    using json_t [[deprecated("glz::json_t is deprecated, use glz::generic instead")]] = generic;
 
-   template <num_mode Mode>
-   [[nodiscard]] inline bool is_array(const generic_json<Mode>& value) noexcept
+   template <num_mode Mode, template <class> class MapType>
+   [[nodiscard]] inline bool is_array(const generic_json<Mode, MapType>& value) noexcept
    {
       return value.is_array();
    }
 
-   template <num_mode Mode>
-   [[nodiscard]] inline bool is_object(const generic_json<Mode>& value) noexcept
+   template <num_mode Mode, template <class> class MapType>
+   [[nodiscard]] inline bool is_object(const generic_json<Mode, MapType>& value) noexcept
    {
       return value.is_object();
    }
 
-   template <num_mode Mode>
-   [[nodiscard]] inline bool is_number(const generic_json<Mode>& value) noexcept
+   template <num_mode Mode, template <class> class MapType>
+   [[nodiscard]] inline bool is_number(const generic_json<Mode, MapType>& value) noexcept
    {
       return value.is_number();
    }
 
-   template <num_mode Mode>
-   [[nodiscard]] inline bool is_string(const generic_json<Mode>& value) noexcept
+   template <num_mode Mode, template <class> class MapType>
+   [[nodiscard]] inline bool is_string(const generic_json<Mode, MapType>& value) noexcept
    {
       return value.is_string();
    }
 
-   template <num_mode Mode>
-   [[nodiscard]] inline bool is_boolean(const generic_json<Mode>& value) noexcept
+   template <num_mode Mode, template <class> class MapType>
+   [[nodiscard]] inline bool is_boolean(const generic_json<Mode, MapType>& value) noexcept
    {
       return value.is_boolean();
    }
 
-   template <num_mode Mode>
-   [[nodiscard]] inline bool is_null(const generic_json<Mode>& value) noexcept
+   template <num_mode Mode, template <class> class MapType>
+   [[nodiscard]] inline bool is_null(const generic_json<Mode, MapType>& value) noexcept
    {
       return value.is_null();
    }
 }
 
-template <glz::num_mode Mode>
-struct glz::meta<glz::generic_json<Mode>>
+template <glz::num_mode Mode, template <class> class MapType>
+struct glz::meta<glz::generic_json<Mode, MapType>>
 {
    static constexpr std::string_view name = "glz::generic";
-   using T = glz::generic_json<Mode>;
+   using T = glz::generic_json<Mode, MapType>;
    static constexpr auto value = &T::data;
 };
 
@@ -596,17 +612,17 @@ namespace glz
    // These functions allow a generic value to be read/written to a C++ struct
 
    // Optimized overload for types that support direct conversion
-   template <auto Opts, class T>
+   template <auto Opts, class T, num_mode Mode, template <class> class MapType>
       requires read_supported<T, Opts.format> && directly_convertible_from_generic<T>
-   [[nodiscard]] error_ctx read(T& value, const generic& source)
+   [[nodiscard]] error_ctx read(T& value, const generic_json<Mode, MapType>& source)
    {
       return convert_from_generic(value, source);
    }
 
    // General overload for complex types (structs, etc.) that need JSON round-trip
-   template <auto Opts, class T>
+   template <auto Opts, class T, num_mode Mode, template <class> class MapType>
       requires read_supported<T, Opts.format> && (!directly_convertible_from_generic<T>)
-   [[nodiscard]] error_ctx read(T& value, const generic& source)
+   [[nodiscard]] error_ctx read(T& value, const generic_json<Mode, MapType>& source)
    {
       auto buffer = source.dump();
       if (buffer) {
@@ -619,17 +635,17 @@ namespace glz
    }
 
    // Optimized overload for types that support direct conversion
-   template <read_supported<JSON> T>
+   template <read_supported<JSON> T, num_mode Mode, template <class> class MapType>
       requires directly_convertible_from_generic<T>
-   [[nodiscard]] error_ctx read_json(T& value, const generic& source)
+   [[nodiscard]] error_ctx read_json(T& value, const generic_json<Mode, MapType>& source)
    {
       return convert_from_generic(value, source);
    }
 
    // General overload for complex types (structs, etc.) that need JSON round-trip
-   template <read_supported<JSON> T>
+   template <read_supported<JSON> T, num_mode Mode, template <class> class MapType>
       requires(!directly_convertible_from_generic<T>)
-   [[nodiscard]] error_ctx read_json(T& value, const generic& source)
+   [[nodiscard]] error_ctx read_json(T& value, const generic_json<Mode, MapType>& source)
    {
       auto buffer = source.dump();
       if (buffer) {
@@ -641,9 +657,9 @@ namespace glz
    }
 
    // Optimized overload for types that support direct conversion
-   template <read_supported<JSON> T>
+   template <read_supported<JSON> T, num_mode Mode, template <class> class MapType>
       requires directly_convertible_from_generic<T>
-   [[nodiscard]] expected<T, error_ctx> read_json(const generic& source)
+   [[nodiscard]] expected<T, error_ctx> read_json(const generic_json<Mode, MapType>& source)
    {
       T result;
       auto ec = convert_from_generic(result, source);
@@ -654,9 +670,9 @@ namespace glz
    }
 
    // General overload for complex types (structs, etc.) that need JSON round-trip
-   template <read_supported<JSON> T>
+   template <read_supported<JSON> T, num_mode Mode, template <class> class MapType>
       requires(!directly_convertible_from_generic<T>)
-   [[nodiscard]] expected<T, error_ctx> read_json(const generic& source)
+   [[nodiscard]] expected<T, error_ctx> read_json(const generic_json<Mode, MapType>& source)
    {
       auto buffer = source.dump();
       if (buffer) {
@@ -677,9 +693,9 @@ namespace glz
 
 namespace glz
 {
-   // Specialization for glz::generic_json in all number handling modes
-   template <glz::num_mode Mode>
-   struct seek_op<glz::generic_json<Mode>>
+   // Specialization for glz::generic_json in all number handling modes and map types
+   template <glz::num_mode Mode, template <class> class MapType>
+   struct seek_op<glz::generic_json<Mode, MapType>>
    {
       template <class F>
       static bool op(F&& func, auto&& value, sv json_ptr)
@@ -829,15 +845,15 @@ namespace glz
    }
 
    // Non-const version
-   template <num_mode Mode>
-   inline generic_json<Mode>* navigate_to(generic_json<Mode>* root, sv json_ptr) noexcept
+   template <num_mode Mode, template <class> class MapType>
+   inline generic_json<Mode, MapType>* navigate_to(generic_json<Mode, MapType>* root, sv json_ptr) noexcept
    {
       return navigate_to_impl(root, json_ptr);
    }
 
    // Const version
-   template <num_mode Mode>
-   inline const generic_json<Mode>* navigate_to(const generic_json<Mode>* root, sv json_ptr) noexcept
+   template <num_mode Mode, template <class> class MapType>
+   inline const generic_json<Mode, MapType>* navigate_to(const generic_json<Mode, MapType>* root, sv json_ptr) noexcept
    {
       return navigate_to_impl(root, json_ptr);
    }
@@ -846,12 +862,12 @@ namespace glz
    // Takes result by reference to allow memory reuse and avoid extra moves
 
    // Forward declaration for recursive conversion
-   template <class T, num_mode Mode>
-   error_ctx convert_from_generic(T& result, const generic_json<Mode>& source);
+   template <class T, num_mode Mode, template <class> class MapType>
+   error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source);
 
    // Specialization for bool
-   template <num_mode Mode>
-   inline error_ctx convert_from_generic(bool& result, const generic_json<Mode>& source)
+   template <num_mode Mode, template <class> class MapType>
+   inline error_ctx convert_from_generic(bool& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_boolean()) {
          return error_ctx{0, error_code::syntax_error};
@@ -861,8 +877,8 @@ namespace glz
    }
 
    // Specialization for double
-   template <num_mode Mode>
-   inline error_ctx convert_from_generic(double& result, const generic_json<Mode>& source)
+   template <num_mode Mode, template <class> class MapType>
+   inline error_ctx convert_from_generic(double& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_number()) {
          return error_ctx{0, error_code::syntax_error};
@@ -893,9 +909,9 @@ namespace glz
    }
 
    // Specialization for uint64_t (only in u64 mode)
-   template <num_mode Mode>
+   template <num_mode Mode, template <class> class MapType>
       requires(Mode == num_mode::u64)
-   inline error_ctx convert_from_generic(uint64_t& result, const generic_json<Mode>& source)
+   inline error_ctx convert_from_generic(uint64_t& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_number()) {
          return error_ctx{0, error_code::syntax_error};
@@ -913,9 +929,9 @@ namespace glz
    }
 
    // Specialization for int64_t (in i64 and u64 modes)
-   template <num_mode Mode>
+   template <num_mode Mode, template <class> class MapType>
       requires(Mode != num_mode::f64)
-   inline error_ctx convert_from_generic(int64_t& result, const generic_json<Mode>& source)
+   inline error_ctx convert_from_generic(int64_t& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_number()) {
          return error_ctx{0, error_code::syntax_error};
@@ -943,8 +959,8 @@ namespace glz
    }
 
    // Specialization for string
-   template <num_mode Mode>
-   inline error_ctx convert_from_generic(std::string& result, const generic_json<Mode>& source)
+   template <num_mode Mode, template <class> class MapType>
+   inline error_ctx convert_from_generic(std::string& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_string()) {
          return error_ctx{0, error_code::syntax_error};
@@ -954,9 +970,9 @@ namespace glz
    }
 
    // Specialization for integer types (convert from integer types or double)
-   template <class T, num_mode Mode>
+   template <class T, num_mode Mode, template <class> class MapType>
       requires(std::integral<T> && !std::same_as<T, bool> && !std::same_as<T, int64_t> && !std::same_as<T, uint64_t>)
-   error_ctx convert_from_generic(T& result, const generic_json<Mode>& source)
+   error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_number()) {
          return error_ctx{0, error_code::syntax_error};
@@ -987,9 +1003,9 @@ namespace glz
    }
 
    // Specialization for array-like containers
-   template <class T, num_mode Mode>
+   template <class T, num_mode Mode, template <class> class MapType>
       requires(readable_array_t<T> && !std::same_as<T, std::string>)
-   error_ctx convert_from_generic(T& result, const generic_json<Mode>& source)
+   error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_array()) {
          return error_ctx{0, error_code::syntax_error};
@@ -1039,9 +1055,9 @@ namespace glz
    }
 
    // Specialization for map-like containers
-   template <class T, num_mode Mode>
+   template <class T, num_mode Mode, template <class> class MapType>
       requires readable_map_t<T>
-   error_ctx convert_from_generic(T& result, const generic_json<Mode>& source)
+   error_ctx convert_from_generic(T& result, const generic_json<Mode, MapType>& source)
    {
       if (!source.is_object()) {
          return error_ctx{0, error_code::syntax_error};
@@ -1088,12 +1104,12 @@ namespace glz
    // Overload of get for glz::generic_json that deserializes containers
    // This overload is only selected for container types that need deserialization
    // Uses direct traversal instead of JSON serialization for better performance
-   template <class V, num_mode Mode>
-      requires needs_container_deserialization_for<V, generic_json<Mode>>
-   expected<V, error_ctx> get(generic_json<Mode>& root, sv json_ptr)
+   template <class V, num_mode Mode, template <class> class MapType>
+      requires needs_container_deserialization_for<V, generic_json<Mode, MapType>>
+   expected<V, error_ctx> get(generic_json<Mode, MapType>& root, sv json_ptr)
    {
       // Navigate to the target location
-      generic_json<Mode>* target = navigate_to(&root, json_ptr);
+      generic_json<Mode, MapType>* target = navigate_to(&root, json_ptr);
       if (!target) {
          return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
@@ -1108,11 +1124,11 @@ namespace glz
    }
 
    // Const version
-   template <class V, num_mode Mode>
-      requires needs_container_deserialization_for<V, generic_json<Mode>>
-   expected<V, error_ctx> get(const generic_json<Mode>& root, sv json_ptr)
+   template <class V, num_mode Mode, template <class> class MapType>
+      requires needs_container_deserialization_for<V, generic_json<Mode, MapType>>
+   expected<V, error_ctx> get(const generic_json<Mode, MapType>& root, sv json_ptr)
    {
-      const generic_json<Mode>* target = navigate_to(&root, json_ptr);
+      const generic_json<Mode, MapType>* target = navigate_to(&root, json_ptr);
       if (!target) {
          return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
