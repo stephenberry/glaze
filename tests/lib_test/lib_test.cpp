@@ -7,6 +7,7 @@
 #include <tuple>
 
 #include "glaze/api/api.hpp"
+#include "glaze/api/std/unordered_map.hpp"
 #include "interface.hpp"
 #include "ut/ut.hpp"
 
