@@ -599,6 +599,12 @@ namespace glz
                                [&] { emplace_back_impl(std::forward<K>(key), T(std::forward<Args>(args)...)); });
       }
 
+      template <class K, class... Args>
+      std::pair<iterator, bool> try_emplace(K&& key, Args&&... args)
+      {
+         return emplace(std::forward<K>(key), std::forward<Args>(args)...);
+      }
+
       iterator erase(const_iterator pos)
       {
          invalidate_index();
