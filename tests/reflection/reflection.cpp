@@ -15,9 +15,15 @@ struct test_type
    int64_t int2{};
 };
 
+struct callable_reflection_regression
+{
+   void operator()() {}
+};
+
 suite reflect_test_type = [] {
    static_assert(glz::reflect<test_type>::size == 2);
    static_assert(glz::reflect<test_type>::keys[0] == "int1");
+   static_assert(glz::get_name<&callable_reflection_regression::operator()>() == std::string_view{"operator()"});
 
    "for_each_field"_test = [] {
       test_type var{42, 43};

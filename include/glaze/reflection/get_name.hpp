@@ -282,14 +282,52 @@ namespace glz
 #elif defined(_MSC_VER)
 #endif
 
-   consteval std::string_view normalize_extracted_name(std::string_view str)
+   consteval std::string_view trim_ascii_space(std::string_view str)
    {
-      const auto first = str.find_first_not_of(" (");
+      const auto first = str.find_first_not_of(" \t");
       if (first == std::string_view::npos) {
          return {};
       }
-      const auto last = str.find_last_not_of(" )");
-      str = str.substr(first, last - first + 1);
+      const auto last = str.find_last_not_of(" \t");
+      return str.substr(first, last - first + 1);
+   }
+
+   consteval bool has_wrapping_parens(std::string_view str)
+   {
+      if (str.size() < 2 || str.front() != '(' || str.back() != ')') {
+         return false;
+      }
+
+      size_t depth{};
+      for (size_t i = 0; i < str.size(); ++i) {
+         const auto c = str[i];
+         if (c == '(') {
+            ++depth;
+         }
+         else if (c == ')') {
+            if (depth == 0) {
+               return false;
+            }
+            --depth;
+            if (depth == 0) {
+               return i + 1 == str.size();
+            }
+         }
+      }
+
+      return false;
+   }
+
+   consteval std::string_view normalize_extracted_name(std::string_view str)
+   {
+      str = trim_ascii_space(str);
+
+      while (has_wrapping_parens(str)) {
+         str.remove_prefix(1);
+         str.remove_suffix(1);
+         str = trim_ascii_space(str);
+      }
+
       if (const auto scope_pos = str.rfind("::"); scope_pos != std::string_view::npos) {
          return str.substr(scope_pos + 2);
       }
