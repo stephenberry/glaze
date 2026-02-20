@@ -7242,7 +7242,7 @@ seq:
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("-"
+         std::string expected_json = R"yaml([null]
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
