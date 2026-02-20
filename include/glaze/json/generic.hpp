@@ -6,9 +6,15 @@
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
 #define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
-#define GLZ_NOEXCEPT noexcept(false)
 #else
 #define GLZ_THROW_OR_ABORT(EXC) (std::abort())
+#endif
+#endif
+
+#ifndef GLZ_NOEXCEPT
+#if __cpp_exceptions
+#define GLZ_NOEXCEPT noexcept(false)
+#else
 #define GLZ_NOEXCEPT noexcept(true)
 #endif
 #endif
