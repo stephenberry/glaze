@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "glaze/glaze.hpp"
+#include "glaze/json/patch.hpp"
 #include "glaze/yaml.hpp"
 #include "ut/ut.hpp"
 
@@ -34,18 +35,6 @@ namespace
       std::ostringstream ss;
       ss << f.rdbuf();
       return ss.str();
-   }
-
-   // Normalize JSON by parsing and re-serializing through glaze.
-   std::string normalize_json(const std::string& json)
-   {
-      glz::generic val{};
-      if (auto ec = glz::read_json(val, json); bool(ec)) {
-         return {};
-      }
-      std::string out;
-      (void)glz::write_json(val, out);
-      return out;
    }
 
    // Cases where glaze is known to not yet conform.
@@ -1229,6 +1218,14 @@ namespace
 }
 
 suite yaml_conformance_data_tests = [] {
+   "json_semantic_compare_ignores_object_key_order"_test = [] {
+      glz::generic lhs{};
+      glz::generic rhs{};
+      expect(!bool(glz::read_json(lhs, R"({"a":4.2,"d":23})")));
+      expect(!bool(glz::read_json(rhs, R"({"d":23,"a":4.2})")));
+      expect(glz::equal(lhs, rhs)) << "JSON object key order should not affect semantic equality";
+   };
+
    "yaml_test_suite_data_driven"_test = [] {
 #ifndef YAML_TEST_SUITE_DIR
       expect(false) << "YAML_TEST_SUITE_DIR not defined";
@@ -1330,18 +1327,23 @@ suite yaml_conformance_data_tests = [] {
 
          // Compare against expected JSON if available
          if (!c.expected_json.empty()) {
-            const auto expected_json = normalize_json(c.expected_json);
-            if (expected_json.empty()) {
+            glz::generic expected_json_value{};
+            auto expected_ec = glz::read_json(expected_json_value, c.expected_json);
+            if (bool(expected_ec)) {
                // Can't normalize expected JSON — count as parsed but not a JSON match
                ++passed;
-               results.push_back({c.id, true, false, "parsed (expected JSON couldn't be normalized)"});
+               results.push_back({c.id, true, false,
+                                  "parsed (expected JSON couldn't be parsed: " +
+                                     glz::format_error(expected_ec, c.expected_json) + ")"});
                continue;
             }
 
             std::string actual_json;
+            std::string expected_json;
             (void)glz::write_json(parsed, actual_json);
+            (void)glz::write_json(expected_json_value, expected_json);
 
-            if (actual_json == expected_json) {
+            if (glz::equal(parsed, expected_json_value)) {
                ++passed;
                ++json_pass;
                results.push_back({c.id, true, false, "JSON match"});
