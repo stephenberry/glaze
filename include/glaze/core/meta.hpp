@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "glaze/core/opts.hpp"
 #include "glaze/reflection/get_name.hpp"
 #include "glaze/reflection/requires_key.hpp"
 #include "glaze/reflection/to_tuple.hpp"
@@ -582,6 +583,47 @@ namespace glz
          return type_name<T>;
       }
    }();
+
+   // Opts-aware type name: returns qualified or unqualified based on qualified_type_names option.
+   // For traditional: always returns qualified names (existing behavior).
+   // For P2996: currently always returns unqualified names (display_string_of).
+   //            qualified_name_of is not yet available in Bloomberg clang-p2996.
+   template <class T, auto Opts>
+   consteval auto type_name_for_opts()
+   {
+#if GLZ_REFLECTION26
+      // TODO: When Bloomberg clang-p2996 adds qualified_name_of, enable this:
+      // if constexpr (check_qualified_type_names(Opts)) {
+      //    return qualified_type_name<T>;
+      // }
+      return type_name<T>;
+#else
+      // Traditional reflection always returns qualified names
+      // (qualified_type_names option has no effect)
+      return type_name<T>;
+#endif
+   }
+
+   // Opts-aware name: like name_v but respects qualified_type_names option for the fallback.
+   // Priority: meta<T>::name > T::glaze::name > type_name_for_opts
+   template <class T, auto Opts>
+   consteval auto name_for_opts()
+   {
+      if constexpr (named<T>) {
+         if constexpr (requires { T::glaze::name; }) {
+            return std::string_view{T::glaze::name};
+         }
+         else {
+            return std::string_view{meta<T>::name};
+         }
+      }
+      else if constexpr (std::is_void_v<T>) {
+         return std::string_view{"void"};
+      }
+      else {
+         return type_name_for_opts<T, Opts>();
+      }
+   }
 
    template <class T>
    concept tagged = requires { meta<std::decay_t<T>>::tag; } || requires { std::decay_t<T>::glaze::tag; };

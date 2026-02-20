@@ -121,7 +121,12 @@ int main()
    std::string json1 = glz::write_json(obj1).value_or("error");
    std::cout << json1 << '\n';
 
-   bool test1_pass = (json1 == R"({"num":42,"mylib::MyEnum":"Second","mylib::MyFlag":"Yes"})");
+   // P2996 reflection type name format varies by compiler:
+   // - Bloomberg Clang: unqualified names (MyEnum)
+   // - GCC: qualified names (mylib::MyEnum)
+   // - Traditional: qualified names (mylib::MyEnum)
+   bool test1_pass = (json1 == R"({"num":42,"MyEnum":"Second","MyFlag":"Yes"})") ||
+                     (json1 == R"({"num":42,"mylib::MyEnum":"Second","mylib::MyFlag":"Yes"})");
    std::cout << (test1_pass ? "✓ PASS" : "✗ FAIL") << "\n\n";
 
    std::cout << "=== Test 2: Enum type names (short) ===\n";

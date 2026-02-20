@@ -27,7 +27,9 @@ namespace glz
       static constexpr sv revision = hash128_i_v<version_v<T>.patch>; // must hash for consistent length
 
 #define std_trait(x) static constexpr sv x = to_sv<std::x##_v<T>>()
-      std_trait(is_trivial);
+      // is_trivial_v is deprecated in C++26, use the recommended replacement
+      static constexpr sv is_trivial =
+         to_sv<std::is_trivially_copyable_v<T> && std::is_trivially_default_constructible_v<T>>();
       std_trait(is_standard_layout);
 
       std_trait(is_default_constructible);

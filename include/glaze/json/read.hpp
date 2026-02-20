@@ -1993,6 +1993,8 @@ namespace glz
       }
    };
 
+   // Fallback handler for enums without explicit glz::meta
+   // Reads as underlying integer unless reflect_enums option is enabled (P2996)
    template <class T>
       requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
    struct from<JSON, T>
@@ -2000,10 +2002,52 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
-         // TODO: use std::bit_cast???
-         std::underlying_type_t<std::decay_t<T>> x{};
-         parse<JSON>::op<Opts>(x, ctx, it, end);
-         value = static_cast<std::decay_t<T>>(x);
+#if GLZ_REFLECTION26
+         if constexpr (check_reflect_enums(Opts)) {
+            // P2996 reflection using reflect_constant_array and expansion statements
+            if constexpr (!check_ws_handled(Opts)) {
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
+            }
+
+            if (*it != '"') [[unlikely]] {
+               ctx.error = error_code::expected_quote;
+               return;
+            }
+            ++it;
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
+
+            // Extract the string key
+            const auto start = it;
+            while (*it != '"' && it != end) {
+               ++it;
+            }
+            const sv key{start, static_cast<size_t>(it - start)};
+            ++it; // skip closing quote
+
+            using V = std::decay_t<T>;
+            auto result = string_to_enum<V>(key);
+            if (result) {
+               value = *result;
+            }
+            else [[unlikely]] {
+               ctx.error = error_code::unexpected_enum;
+            }
+         }
+         else
+#endif
+         {
+            // Fallback: read as underlying integer
+            std::underlying_type_t<std::decay_t<T>> x{};
+            parse<JSON>::op<Opts>(x, ctx, it, end);
+            value = static_cast<std::decay_t<T>>(x);
+         }
       }
    };
 

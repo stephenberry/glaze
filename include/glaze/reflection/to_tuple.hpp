@@ -9,14 +9,67 @@
 #include <type_traits>
 #include <utility>
 
+#include "glaze/core/feature_test.hpp"
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
+
+#if GLZ_REFLECTION26
+#include <meta>
+#endif
 
 namespace glz
 {
    namespace detail
    {
+#if GLZ_REFLECTION26
+      // C++26 P2996 Reflection Implementation
+      // Uses std::meta::nonstatic_data_members_of for true compile-time reflection
+      // Supports inheritance - automatically includes base class members
+
+      // Helper to get access context for reflection
+      inline consteval auto reflection_access_ctx()
+      {
+         return std::meta::access_context::unchecked();
+      }
+
+      // Count members using P2996 reflection
+      // Works for any class type, including non-aggregates (classes with custom constructors)
+      // Note: Currently reflects direct members only. For inherited members, use glz::meta.
+      template <class T>
+         requires(std::is_class_v<std::remove_cvref_t<T>>)
+      inline constexpr size_t count_members =
+         std::meta::nonstatic_data_members_of(^^std::remove_cvref_t<T>, reflection_access_ctx()).size();
+
+      // Helper struct to get member info at a specific index
+      template <class T, size_t I>
+      struct member_info_at
+      {
+         static consteval auto info()
+         {
+            auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
+            return members[I];
+         }
+      };
+
+      // Access member by index using reflection splice
+      template <size_t I, class T>
+      GLZ_ALWAYS_INLINE constexpr auto& get_member_ref(T& obj)
+      {
+         constexpr auto member = member_info_at<std::remove_cvref_t<T>, I>::info();
+         return obj.[:member:];
+      }
+
+      template <size_t I, class T>
+      GLZ_ALWAYS_INLINE constexpr const auto& get_member_ref(const T& obj)
+      {
+         constexpr auto member = member_info_at<std::remove_cvref_t<T>, I>::info();
+         return obj.[:member:];
+      }
+
+#else
+      // Traditional structured-bindings implementation (pre-C++26)
+
       struct any_t final
       {
 #if defined(__clang__)
@@ -55,8 +108,32 @@ namespace glz
       }();
 
       constexpr size_t max_pure_reflection_count = 128;
+#endif
    }
 
+#if GLZ_REFLECTION26
+   // P2996 implementation of to_tie - works for any number of members
+   namespace detail
+   {
+      template <class T, size_t... Is>
+      GLZ_ALWAYS_INLINE constexpr auto to_tie_p2996_impl(T& t, std::index_sequence<Is...>)
+      {
+         return glz::tie(get_member_ref<Is>(t)...);
+      }
+   }
+
+   template <class T, size_t N = detail::count_members<T>>
+   GLZ_ALWAYS_INLINE constexpr decltype(auto) to_tie(T&& t)
+   {
+      if constexpr (N == 0) {
+         return tuple{};
+      }
+      else {
+         return detail::to_tie_p2996_impl(t, std::make_index_sequence<N>{});
+      }
+   }
+#else
+   // Traditional structured-bindings implementation
    template <class T, size_t N = detail::count_members<T>>
       requires(N <= detail::max_pure_reflection_count)
    GLZ_ALWAYS_INLINE constexpr decltype(auto) to_tie(T&& t)
@@ -1265,6 +1342,7 @@ namespace glz
                          p113, p114, p115, p116, p117, p118, p119, p120, p121, p122, p123, p124, p125, p126, p127);
       }
    }
+#endif // GLZ_REFLECTION26
 
    namespace detail
    {

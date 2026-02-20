@@ -13,11 +13,182 @@
 #include "glaze/reflection/to_tuple.hpp"
 #include "glaze/util/string_literal.hpp"
 
+#if GLZ_REFLECTION26
+#include <meta>
+#endif
+
 #if defined(__clang__) || defined(__GNUC__)
 #define GLZ_PRETTY_FUNCTION __PRETTY_FUNCTION__
 #elif defined(_MSC_VER)
 #define GLZ_PRETTY_FUNCTION __FUNCSIG__
 #endif
+
+#if GLZ_REFLECTION26
+// ============================================================================
+// C++26 P2996 Reflection Implementation for member names
+// ============================================================================
+namespace glz::detail
+{
+   // Get member name using P2996 reflection
+   template <class T, size_t I>
+   consteval std::string_view get_member_name_p2996()
+   {
+      auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
+      return std::meta::identifier_of(members[I]);
+   }
+}
+
+namespace glz
+{
+   // P2996 implementation of member_nameof
+   template <auto N, class T>
+   inline constexpr std::string_view member_nameof = detail::get_member_name_p2996<std::remove_cvref_t<T>, N>();
+
+   // P2996 type_name using display_string_of
+   // Note: Bloomberg Clang returns unqualified names, GCC returns qualified names
+   template <class T>
+   constexpr auto type_name = std::meta::display_string_of(^^T);
+
+   // Note: P2996 qualified_name_of is not yet available in Bloomberg clang-p2996.
+   // When it becomes available, add:
+   // template <class T>
+   // constexpr auto qualified_type_name = std::meta::qualified_name_of(^^T);
+   //
+   // For now, qualified_type_names option has no effect with P2996.
+
+   // P2996 implementation of member_names_impl (base version)
+   template <class T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array<sv, sizeof...(I)>{member_nameof<I, T>...};
+      }
+   }
+}
+
+// P2996 enum reflection helpers
+// Standard C++26 uses std::define_static_array (P3491) which returns a span
+// Bloomberg Clang uses reflect_constant_array which returns a std::meta::info to be spliced
+namespace glz::detail
+{
+   using namespace std::meta;
+
+   // Get enum name at index using P2996 reflection
+   template <class T, size_t I>
+   consteval std::string_view get_enum_name_p2996()
+   {
+#if defined(__clang__)
+      // Bloomberg Clang: reflect_constant_array returns info, splice to get array
+      constexpr info Enums = reflect_constant_array(enumerators_of(^^T));
+      return identifier_of([:Enums:][I]);
+#else
+      // Standard C++26: define_static_array returns span directly
+      constexpr auto Enums = std::define_static_array(enumerators_of(^^T));
+      return identifier_of(Enums[I]);
+#endif
+   }
+
+   // Get number of enumerators
+   template <class T>
+   consteval size_t enum_count_p2996()
+   {
+#if defined(__clang__)
+      constexpr info Enums = reflect_constant_array(enumerators_of(^^T));
+      return [:Enums:].size();
+#else
+      constexpr auto Enums = std::define_static_array(enumerators_of(^^T));
+      return Enums.size();
+#endif
+   }
+
+#if !defined(__clang__)
+   // GCC: Build a lookup table at compile time for runtime use
+   template <class E>
+   consteval auto make_enum_to_string_table()
+   {
+      static constexpr auto Enums = std::define_static_array(enumerators_of(^^E));
+      constexpr size_t N = Enums.size();
+      std::array<std::pair<E, std::string_view>, N> table{};
+      size_t i = 0;
+      template for (constexpr info I : Enums) {
+         table[i] = {[:I:], identifier_of(I)};
+         ++i;
+      }
+      return table;
+   }
+#endif
+}
+
+namespace glz
+{
+   // P2996 enum name at index
+   template <class T, size_t I>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   inline constexpr std::string_view enum_nameof = detail::get_enum_name_p2996<std::remove_cvref_t<T>, I>();
+
+   // P2996 enum count
+   template <class T>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   inline constexpr size_t enum_count = detail::enum_count_p2996<std::remove_cvref_t<T>>();
+
+   // P2996 enum to string using expansion statements
+   template <class E, bool B = std::meta::is_enumerable_type(^^E)>
+      requires std::is_enum_v<std::remove_cvref_t<E>>
+   constexpr std::string_view enum_to_string(E e)
+   {
+      if constexpr (B) {
+#if defined(__clang__)
+         // Bloomberg Clang: reflect_constant_array returns info, splice to get array
+         constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
+         template for (constexpr std::meta::info I : [:Enums:])
+            if (e == [:I:])
+               return std::meta::identifier_of(I);
+#else
+         // GCC: Use lookup table to avoid consteval promotion
+         static constexpr auto table = detail::make_enum_to_string_table<E>();
+         for (const auto& [value, name] : table) {
+            if (e == value) {
+               return name;
+            }
+         }
+#endif
+      }
+      return {};
+   }
+
+   // P2996 string to enum using expansion statements
+   template <class E, bool B = std::meta::is_enumerable_type(^^E)>
+      requires std::is_enum_v<std::remove_cvref_t<E>>
+   constexpr std::optional<E> string_to_enum(std::string_view s)
+   {
+      if constexpr (B) {
+#if defined(__clang__)
+         // Bloomberg Clang: reflect_constant_array returns info, splice to get array
+         constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
+         template for (constexpr std::meta::info I : [:Enums:])
+            if (s == std::meta::identifier_of(I))
+               return [:I:];
+#else
+         // GCC: Use lookup table to avoid consteval promotion
+         static constexpr auto table = detail::make_enum_to_string_table<E>();
+         for (const auto& [value, name] : table) {
+            if (s == name) {
+               return value;
+            }
+         }
+#endif
+      }
+      return std::nullopt;
+   }
+}
+
+#else
+// ============================================================================
+// Traditional __PRETTY_FUNCTION__ implementation (pre-C++26)
+// ============================================================================
 
 // For struct fields
 namespace glz::detail
@@ -121,7 +292,14 @@ namespace glz
          return std::array{member_nameof<I, T>...};
       }
    }
+}
+#endif // GLZ_REFLECTION26
 
+// ============================================================================
+// Common code (works with both P2996 and traditional reflection)
+// ============================================================================
+namespace glz
+{
    template <class T>
    struct meta;
 
@@ -162,6 +340,33 @@ namespace glz
          return arr;
       }();
    };
+
+#if GLZ_REFLECTION26
+   // Helper to compute renamed enum key size at compile time
+   template <class T, size_t I>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   consteval size_t renamed_enum_key_size()
+   {
+      return meta<std::remove_cvref_t<T>>::rename_key(enum_nameof<T, I>).size();
+   }
+
+   // Storage for renamed enum key with exact size determined at compile time
+   template <class T, size_t I, size_t N = renamed_enum_key_size<T, I>()>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   struct renamed_enum_key_storage
+   {
+      static constexpr auto value = [] {
+         std::array<char, N + 1> arr{};
+         auto str = meta<std::remove_cvref_t<T>>::rename_key(enum_nameof<T, I>);
+         for (size_t i = 0; i < N; ++i) {
+            arr[i] = str[i];
+         }
+         arr[N] = '\0';
+         return arr;
+      }();
+   };
+
+#endif
 
    template <meta_has_rename_key_string T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)

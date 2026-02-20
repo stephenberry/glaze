@@ -7,7 +7,12 @@
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"
+#include "glaze/reflection/get_name.hpp"
 #include "glaze/util/primes_64.hpp"
+
+#if GLZ_REFLECTION26
+#include <meta>
+#endif
 
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
@@ -308,6 +313,14 @@ namespace glz
       template <size_t I>
       using type = member_t<V, decltype(get<I>(values))>;
    };
+
+   // Note: is_reflect_enum<T> types do NOT get a reflect<T> specialization here.
+   // P2996 reflection must be done inline in the handlers (to<JSON, T>, from<JSON, T>)
+   // because P2996 operations like std::meta::enumerators_of require a consteval context
+   // that is not available during template class instantiation.
+
+   // Note: is_reflect_enum handlers use the existing enum_nameof and enum_count
+   // from get_name.hpp. The enum values are obtained using P2996 splicing inline.
 
    template <class T>
       requires(is_memory_object<T>)
@@ -1039,6 +1052,7 @@ namespace glz
    // ============================================================================
 
    // get a std::string_view from an enum value
+   // Note: is_reflect_enum types are handled separately because P2996 requires inline consteval context
    template <class T>
       requires(glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
    constexpr auto get_enum_name(T&& enum_value)

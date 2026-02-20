@@ -1040,6 +1040,8 @@ namespace glz
       }
    };
 
+   // Fallback handler for enums without explicit glz::meta
+   // Serializes as underlying integer unless reflect_enums option is enabled (P2996)
    template <class T>
       requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
    struct to<JSON, T>
@@ -1049,9 +1051,31 @@ namespace glz
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
-         // serialize as underlying number
-         serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
-                                   std::forward<Args>(args)...);
+#if GLZ_REFLECTION26
+         if constexpr (check_reflect_enums(Opts)) {
+            // P2996 reflection using reflect_constant_array and expansion statements
+            const sv name = enum_to_string(value);
+            if (!name.empty()) {
+               if constexpr (not check_unquoted(Opts)) {
+                  dump('"', args...);
+               }
+               dump_maybe_empty(name, args...);
+               if constexpr (not check_unquoted(Opts)) {
+                  dump('"', args...);
+               }
+            }
+            else [[unlikely]] {
+               serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+                                         std::forward<Args>(args)...);
+            }
+         }
+         else
+#endif
+         {
+            // Fallback: serialize as underlying number
+            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+                                      std::forward<Args>(args)...);
+         }
       }
    };
 
