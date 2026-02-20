@@ -2,11 +2,26 @@
 // For the license information refer to glaze.hpp
 
 #include <charconv> // for std::from_chars
+#include <map>
 
 #include "glaze/json.hpp"
+#include "glaze/containers/ordered_map.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
+
+// User-defined map aliases for testing bring-your-own-map with generic_json
+template <class T>
+using custom_std_map = std::map<std::string, T, std::less<>>;
+
+struct transparent_string_hash
+{
+   using is_transparent = void;
+   size_t operator()(std::string_view sv) const noexcept { return std::hash<std::string_view>{}(sv); }
+};
+
+template <class T>
+using custom_ordered_map = glz::ordered_map<std::string, T, transparent_string_hash, std::equal_to<>>;
 
 // Structs for testing custom readers with glz::generic
 struct generic_optional
@@ -108,7 +123,7 @@ suite generic_json_tests = [] {
       expect(not glz::write_json(json, buffer));
       expect(
          buffer ==
-         R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Niels","nothing":null,"object":{"currency":"USD","value":42.99},"pi":3.141})")
+         R"({"pi":3.141,"happy":true,"name":"Niels","nothing":null,"answer":{"everything":42},"list":[1,0,2],"object":{"currency":"USD","value":42.99}})")
          << buffer;
    };
 
@@ -161,7 +176,7 @@ suite generic_json_tests = [] {
       expect(json["name"].as<std::string_view>() == "Niels");
       expect(
          json.dump().value() ==
-         R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Niels","nothing":null,"object":{"currency":"USD","value":42.99},"pi":3.141})")
+         R"({"pi":3.141,"happy":true,"name":"Niels","nothing":null,"answer":{"everything":42},"list":[1,0,2],"object":{"currency":"USD","value":42.99}})")
          << json.dump().value();
    };
 
@@ -173,7 +188,7 @@ suite generic_json_tests = [] {
                                                   }}};
       std::string buffer{};
       expect(not glz::write_json(messageSchema, buffer));
-      expect(buffer == R"({"fields":[{"field":"branch","type":"string"}],"type":"struct"})") << buffer;
+      expect(buffer == R"({"type":"struct","fields":[{"field":"branch","type":"string"}]})") << buffer;
    };
 
    "generic_contains"_test = [] {
@@ -1159,6 +1174,84 @@ suite fuzz_tests = [] {
       glz::generic json{};
       auto ec = glz::read_json(json, buffer);
       expect(bool(ec));
+   };
+};
+
+// Tests for configurable map types
+suite map_type_tests = [] {
+   "generic_json with ordered_small_map (default)"_test = [] {
+      glz::generic_json<> json{};
+      std::string buffer = R"({"name":"Alice","age":30,"active":true})";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+      expect(json["name"].get<std::string>() == "Alice");
+      expect(json["age"].get<double>() == 30.0);
+      expect(json["active"].get<bool>() == true);
+
+      std::string out{};
+      expect(not glz::write_json(json, out));
+      // ordered_small_map preserves insertion order
+      expect(out == R"({"name":"Alice","age":30,"active":true})") << out;
+   };
+
+   "generic_json with ordered_map"_test = [] {
+      using json_t = glz::generic_json<glz::num_mode::f64, custom_ordered_map>;
+      json_t json{};
+      std::string buffer = R"({"name":"Alice","age":30,"active":true})";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+      expect(json["name"].get<std::string>() == "Alice");
+      expect(json["age"].get<double>() == 30.0);
+      expect(json["active"].get<bool>() == true);
+
+      std::string out{};
+      expect(not glz::write_json(json, out));
+      // ordered_map preserves insertion order
+      expect(out == R"({"name":"Alice","age":30,"active":true})") << out;
+   };
+
+   "generic_json with custom std::map"_test = [] {
+      // Users can bring their own map type as long as it satisfies generic_map_type
+      using json_t = glz::generic_json<glz::num_mode::f64, custom_std_map>;
+      json_t json{};
+      std::string buffer = R"({"name":"Alice","age":30,"active":true})";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+      expect(json["name"].get<std::string>() == "Alice");
+      expect(json["age"].get<double>() == 30.0);
+      expect(json["active"].get<bool>() == true);
+
+      std::string out{};
+      expect(not glz::write_json(json, out));
+      // std::map sorts keys alphabetically
+      expect(out == R"({"active":true,"age":30,"name":"Alice"})") << out;
+   };
+
+   "generic_json with ordered_map string_view lookup"_test = [] {
+      using json_t = glz::generic_json<glz::num_mode::f64, custom_ordered_map>;
+      json_t json{};
+      std::string buffer = R"({"name":"Alice","age":30})";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+      // Explicitly use string_view for heterogeneous lookup
+      std::string_view key = "name";
+      expect(json[key].get<std::string>() == "Alice");
+      expect(json.contains(key));
+      expect(!json.contains(std::string_view("missing")));
+   };
+
+   "generic_json with nested objects across map types"_test = [] {
+      using json_t = glz::generic_json<glz::num_mode::f64, custom_ordered_map>;
+      json_t json{};
+      std::string buffer = R"({"user":{"name":"Bob","scores":[1,2,3]},"count":42})";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+      expect(json["user"]["name"].get<std::string>() == "Bob");
+      expect(json["user"]["scores"][0].get<double>() == 1.0);
+      expect(json["count"].get<double>() == 42.0);
+   };
+
+   "generic_json i64 mode with ordered_map"_test = [] {
+      using json_t = glz::generic_json<glz::num_mode::i64, custom_ordered_map>;
+      json_t json{};
+      std::string buffer = R"({"val":9007199254740993})";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+      expect(json["val"].template get<int64_t>() == 9007199254740993LL);
    };
 };
 
