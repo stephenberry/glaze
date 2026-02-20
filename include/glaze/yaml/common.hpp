@@ -364,8 +364,7 @@ namespace glz::yaml
    // - Named: !mytag
    // Returns the tag type and advances iterator past the tag
    template <class It, class End>
-   GLZ_ALWAYS_INLINE yaml_tag parse_yaml_tag(It& it, End end,
-                                             const bool allow_core_schema_secondary_handle) noexcept
+   GLZ_ALWAYS_INLINE yaml_tag parse_yaml_tag(It& it, End end, const bool allow_core_schema_secondary_handle) noexcept
    {
       if (it == end || *it != '!') {
          return yaml_tag::none;

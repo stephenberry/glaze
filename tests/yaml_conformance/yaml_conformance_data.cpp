@@ -61,8 +61,7 @@ namespace
       std::string expected_yaml{};
    };
 
-   enum class event_compare_status : uint8_t
-   {
+   enum class event_compare_status : uint8_t {
       matched,
       mismatched,
       skipped,
@@ -123,8 +122,8 @@ namespace
       return s.size() >= prefix.size() && s.substr(0, prefix.size()) == prefix;
    }
 
-   bool parse_event_properties(std::string_view& rest, std::string* anchor, std::string* tag, bool allow_collection_style,
-                               std::string& error, std::string_view context)
+   bool parse_event_properties(std::string_view& rest, std::string* anchor, std::string* tag,
+                               bool allow_collection_style, std::string& error, std::string_view context)
    {
       while (!rest.empty()) {
          rest = ltrim(rest);
@@ -175,9 +174,8 @@ namespace
       // Plain scalars containing whitespace are not single-token implicit scalars.
       // Avoid normalizing them, because parsing a standalone scalar token can
       // otherwise accept prefixes (e.g. "null d" -> null).
-      if (std::any_of(payload.begin(), payload.end(), [](char c) {
-             return std::isspace(static_cast<unsigned char>(c));
-          })) {
+      if (std::any_of(payload.begin(), payload.end(),
+                      [](char c) { return std::isspace(static_cast<unsigned char>(c)); })) {
          return false;
       }
 
@@ -205,7 +203,8 @@ namespace
       return false;
    }
 
-   bool parse_event_scalar_line(std::string_view line, glz::generic& out, std::string& error, std::string* anchor = nullptr)
+   bool parse_event_scalar_line(std::string_view line, glz::generic& out, std::string& error,
+                                std::string* anchor = nullptr)
    {
       if (!starts_with(line, "=VAL")) {
          error = "event scalar line does not start with =VAL";
@@ -742,8 +741,8 @@ namespace
          }
          else {
             result.status = event_compare_status::mismatched;
-            result.detail = "event stream expected no documents, but YAML stream produced " +
-                            std::to_string(actual_docs.size());
+            result.detail =
+               "event stream expected no documents, but YAML stream produced " + std::to_string(actual_docs.size());
          }
          return result;
       }
@@ -841,8 +840,7 @@ namespace
       return false;
    }
 
-   enum class yaml_text_field_state : uint8_t
-   {
+   enum class yaml_text_field_state : uint8_t {
       absent,
       string_value,
       null_value,
@@ -861,7 +859,8 @@ namespace
       return find_object_field(obj, key) != nullptr;
    }
 
-   yaml_text_field_state read_object_text_field(const glz::generic::object_t& obj, std::string_view key, std::string& out)
+   yaml_text_field_state read_object_text_field(const glz::generic::object_t& obj, std::string_view key,
+                                                std::string& out)
    {
       const auto* field = find_object_field(obj, key);
       if (!field) return yaml_text_field_state::absent;
@@ -879,10 +878,10 @@ namespace
    std::string unescape_suite_text(std::string text)
    {
       constexpr std::string_view visible_space = "\xE2\x90\xA3"; // U+2423
-      constexpr std::string_view em_dash = "\xE2\x80\x94";       // U+2014
-      constexpr std::string_view tab_marker = "\xC2\xBB";        // U+00BB
+      constexpr std::string_view em_dash = "\xE2\x80\x94"; // U+2014
+      constexpr std::string_view tab_marker = "\xC2\xBB"; // U+00BB
       constexpr std::string_view carriage_return = "\xE2\x86\x90"; // U+2190
-      constexpr std::string_view bom_marker = "\xE2\x87\x94";      // U+21D4
+      constexpr std::string_view bom_marker = "\xE2\x87\x94"; // U+21D4
       constexpr std::string_view trailing_newline_marker = "\xE2\x86\xB5"; // U+21B5
       constexpr std::string_view no_final_newline_marker = "\xE2\x88\x8E"; // U+220E
       constexpr std::string_view bom = "\xEF\xBB\xBF"; // UTF-8 BOM
@@ -891,8 +890,7 @@ namespace
       out.reserve(text.size());
 
       for (size_t i = 0; i < text.size();) {
-         if (i + visible_space.size() <= text.size() &&
-             text.compare(i, visible_space.size(), visible_space) == 0) {
+         if (i + visible_space.size() <= text.size() && text.compare(i, visible_space.size(), visible_space) == 0) {
             out.push_back(' ');
             i += visible_space.size();
             continue;
@@ -905,8 +903,7 @@ namespace
             continue;
          }
 
-         if (i + bom_marker.size() <= text.size() &&
-             text.compare(i, bom_marker.size(), bom_marker) == 0) {
+         if (i + bom_marker.size() <= text.size() && text.compare(i, bom_marker.size(), bom_marker) == 0) {
             out.append(bom);
             i += bom_marker.size();
             continue;
@@ -918,22 +915,18 @@ namespace
             continue;
          }
 
-         if (i + tab_marker.size() <= text.size() &&
-             text.compare(i, tab_marker.size(), tab_marker) == 0) {
+         if (i + tab_marker.size() <= text.size() && text.compare(i, tab_marker.size(), tab_marker) == 0) {
             out.push_back('\t');
             i += tab_marker.size();
             continue;
          }
 
-         if (i + em_dash.size() <= text.size() &&
-             text.compare(i, em_dash.size(), em_dash) == 0) {
+         if (i + em_dash.size() <= text.size() && text.compare(i, em_dash.size(), em_dash) == 0) {
             size_t j = i;
-            while (j + em_dash.size() <= text.size() &&
-                   text.compare(j, em_dash.size(), em_dash) == 0) {
+            while (j + em_dash.size() <= text.size() && text.compare(j, em_dash.size(), em_dash) == 0) {
                j += em_dash.size();
             }
-            if (j + tab_marker.size() <= text.size() &&
-                text.compare(j, tab_marker.size(), tab_marker) == 0) {
+            if (j + tab_marker.size() <= text.size() && text.compare(j, tab_marker.size(), tab_marker) == 0) {
                out.push_back('\t');
                i = j + tab_marker.size();
                continue;
@@ -1351,8 +1344,8 @@ suite yaml_conformance_data_tests = [] {
             else {
                ++failed;
                ++json_fail;
-               results.push_back({c.id, false, false,
-                                  "JSON mismatch\n  actual:   " + actual_json + "\n  expected: " + expected_json});
+               results.push_back(
+                  {c.id, false, false, "JSON mismatch\n  actual:   " + actual_json + "\n  expected: " + expected_json});
             }
             continue;
          }
@@ -1376,12 +1369,11 @@ suite yaml_conformance_data_tests = [] {
             else {
                ++failed;
                ++yaml_fail;
-               results.push_back({c.id, false, false,
-                                  "YAML roundtrip mismatch\n  actual:\n" + actual_yaml +
-                                     "\n  expected:\n" + expected_yaml_normalized +
-                                     (bool(ec2) ? "\n  (out.yaml parse error: " + glz::format_error(ec2, c.expected_yaml) +
-                                                     ")"
-                                                : "")});
+               results.push_back(
+                  {c.id, false, false,
+                   "YAML roundtrip mismatch\n  actual:\n" + actual_yaml + "\n  expected:\n" + expected_yaml_normalized +
+                      (bool(ec2) ? "\n  (out.yaml parse error: " + glz::format_error(ec2, c.expected_yaml) + ")"
+                                 : "")});
             }
             continue;
          }
@@ -1402,8 +1394,8 @@ suite yaml_conformance_data_tests = [] {
       summary += "  Error cases: " + std::to_string(error_pass) + " pass, " + std::to_string(error_fail) + " fail\n";
       summary += "  JSON match:  " + std::to_string(json_pass) + " pass, " + std::to_string(json_fail) + " fail\n";
       summary += "  YAML match:  " + std::to_string(yaml_pass) + " pass, " + std::to_string(yaml_fail) + " fail\n";
-      summary += "  Event check: " + std::to_string(event_pass) + " pass, " + std::to_string(event_fail) +
-                 " fail, " + std::to_string(event_skip) + " skipped\n";
+      summary += "  Event check: " + std::to_string(event_pass) + " pass, " + std::to_string(event_fail) + " fail, " +
+                 std::to_string(event_skip) + " skipped\n";
 
       // Print failures
       bool has_failures = false;

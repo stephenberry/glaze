@@ -1462,8 +1462,8 @@ namespace glz
                   if (parse_structured_alias_key) {
                      glz::generic key_node{};
                      auto temp_ctx = ctx.make_speculative();
-                     from<YAML, glz::generic>::template op<opts{.error_on_unknown_keys = false}>(
-                        key_node, temp_ctx, replay_it, replay_end);
+                     from<YAML, glz::generic>::template op<opts{.error_on_unknown_keys = false}>(key_node, temp_ctx,
+                                                                                                 replay_it, replay_end);
                      if (bool(temp_ctx.error)) [[unlikely]] {
                         ctx.error = temp_ctx.error;
                         return false;
@@ -1790,16 +1790,14 @@ namespace glz
             return;
 
          yaml::node_preamble_state preamble{};
-         if (yaml::parse_node_preamble<Opts>(
-                value, ctx, it, end, preamble,
-                [](yaml::yaml_tag tag) {
-                   if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
-                      return yaml::tag_valid_for_float(tag);
-                   }
-                   else {
-                      return yaml::tag_valid_for_int(tag);
-                   }
-                }))
+         if (yaml::parse_node_preamble<Opts>(value, ctx, it, end, preamble, [](yaml::yaml_tag tag) {
+                if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
+                   return yaml::tag_valid_for_float(tag);
+                }
+                else {
+                   return yaml::tag_valid_for_int(tag);
+                }
+             }))
             return;
 
          auto finalize = [&] { yaml::finalize_node_anchor(preamble.node_props, ctx, it); };
@@ -4268,8 +4266,7 @@ namespace glz
                         }
 
                         if (*it == '-' &&
-                            ((it + 1) == end ||
-                             yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]) &&
+                            ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]) &&
                             !line_starts_with_explicit_value_indicator) {
                            // "key: - item" is not valid block sequence syntax.
                            ctx.error = error_code::syntax_error;
@@ -4309,7 +4306,8 @@ namespace glz
                      ++it; // skip '?'
                      yaml::skip_inline_ws(it, end);
 
-                     const int32_t explicit_value_indicator_indent = (ctx.current_indent() < 0) ? 0 : (ctx.current_indent() + 1);
+                     const int32_t explicit_value_indicator_indent =
+                        (ctx.current_indent() < 0) ? 0 : (ctx.current_indent() + 1);
 
                      key_t key{};
                      if constexpr (std::same_as<std::remove_cvref_t<key_t>, std::string>) {
@@ -5083,8 +5081,7 @@ namespace glz
                         }
                         if (peek != end && *peek != '\n' && *peek != '\r') {
                            const bool indentless_sequence =
-                              (!ctx.sequence_item_value_context) &&
-                              (*peek == '-') &&
+                              (!ctx.sequence_item_value_context) && (*peek == '-') &&
                               ((peek + 1) == end ||
                                yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(peek + 1))]) &&
                               (next_indent == ctx.current_indent() ||
@@ -5118,8 +5115,7 @@ namespace glz
 
                if constexpr (!yaml::check_flow_context(Opts)) {
                   if (anchor_on_same_line && *it == '-' &&
-                      ((it + 1) == end ||
-                       yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))])) {
+                      ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))])) {
                      // "&anchor - item" is malformed in block context.
                      ctx.error = error_code::syntax_error;
                      return;
@@ -5304,9 +5300,8 @@ namespace glz
                         }
                      }
 
-                     consume_following_content =
-                        (ctx.current_indent() < 0) || (content_indent > ctx.current_indent()) ||
-                        tagged_indentless_sequence;
+                     consume_following_content = (ctx.current_indent() < 0) ||
+                                                 (content_indent > ctx.current_indent()) || tagged_indentless_sequence;
                   }
 
                   if (consume_following_content) {
@@ -5471,18 +5466,17 @@ namespace glz
                            ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
                         if (starts_block_sequence_entry) {
                            process_yaml_variant_alternatives<V, is_yaml_variant_array>::template op<Opts>(value, ctx,
-                                                                                                           it, end);
+                                                                                                          it, end);
                            return;
                         }
                      }
                      if constexpr (counts::n_object > 0) {
                         const bool starts_explicit_mapping_indicator =
                            (it != end && (*it == '?' || *it == ':')) &&
-                           ((it + 1) == end ||
-                            yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
+                           ((it + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
                         if (starts_explicit_mapping_indicator) {
                            process_yaml_variant_alternatives<V, is_yaml_variant_object>::template op<Opts>(value, ctx,
-                                                                                                            it, end);
+                                                                                                           it, end);
                            return;
                         }
                         if (yaml::line_could_be_block_mapping(it, end)) {

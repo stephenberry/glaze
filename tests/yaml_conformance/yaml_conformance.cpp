@@ -7182,7 +7182,7 @@ Stack:
    };
 
    // S9E8: Spec Example 5.3. Block Structure Indicators
-  "S9E8"_test = [] {
+   "S9E8"_test = [] {
       std::string yaml = R"yaml(sequence:
 - one
 - two
