@@ -16,3 +16,27 @@ add_test(NAME ${PROJECT_NAME}_struct COMMAND ${PROJECT_NAME}_struct)
 
 target_code_coverage(${PROJECT_NAME} AUTO ALL)
 target_code_coverage(${PROJECT_NAME}_struct AUTO ALL)
+
+# Data-driven test that iterates over the yaml-test-suite case directories.
+# Off by default to avoid pulling an external repository during normal builds.
+option(glaze_YAML_CONFORMANCE_DATA "Build data-driven yaml-test-suite conformance test (fetches external repo)" OFF)
+if (glaze_YAML_CONFORMANCE_DATA)
+    include(FetchContent)
+    FetchContent_Declare(
+        yaml_test_suite
+        GIT_REPOSITORY https://github.com/yaml/yaml-test-suite.git
+        GIT_TAG 6ad3d2c62885d82fc349026c136ef560838fdf3d # data branch, pinned 2026-02-18
+    )
+    FetchContent_MakeAvailable(yaml_test_suite)
+
+    add_executable(${PROJECT_NAME}_data ${PROJECT_NAME}_data.cpp)
+    target_link_libraries(${PROJECT_NAME}_data PRIVATE glz_test_common)
+    target_compile_definitions(${PROJECT_NAME}_data PRIVATE
+        YAML_TEST_SUITE_DIR="${yaml_test_suite_SOURCE_DIR}"
+    )
+    if (MINGW)
+        target_compile_options(${PROJECT_NAME}_data PRIVATE "-Wa,-mbig-obj")
+    endif ()
+    add_test(NAME ${PROJECT_NAME}_data COMMAND ${PROJECT_NAME}_data)
+    target_code_coverage(${PROJECT_NAME}_data AUTO ALL)
+endif ()

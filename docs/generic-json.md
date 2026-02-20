@@ -4,24 +4,26 @@ While Glaze is focused on strongly typed data, there is basic support for comple
 
 If nothing is known about the JSON structure, then [glz::generic](https://github.com/stephenberry/glaze/blob/main/include/glaze/json/generic.hpp) may be helpful, but it comes at a performance cost due to the use of dynamic memory allocations. The previous `glz::json_t` name remains as an alias for backwards compatibility.
 
-> **Note:** `glz::generic` preserves the insertion order of JSON keys. When you parse a JSON object and re-serialize it, the keys will appear in the same order as the original document. If you need lexicographically sorted keys, you can use `std::map` as the map backend:
+> **Note:** `glz::generic` preserves the insertion order of JSON keys. When you parse a JSON object and re-serialize it, the keys will appear in the same order as the original document. If you need lexicographically sorted keys, use the sorted aliases:
 >
 > ```cpp
-> template <class T>
-> using sorted_map = std::map<std::string, T, std::less<>>;
->
-> using sorted_generic = glz::generic_json<glz::num_mode::f64, sorted_map>;
+> glz::generic_sorted json{};
+> glz::generic_sorted_i64 json_i64{};
+> glz::generic_sorted_u64 json_u64{};
 > ```
 
 ## Generic Type Variants
 
-Glaze provides three generic JSON types with different number storage strategies:
+Glaze provides insertion-order and sorted-key generic JSON types with different number storage strategies:
 
 | Type | Number Storage | Use Case |
 |------|---------------|----------|
 | `glz::generic` | `double` | Fast, JavaScript-compatible (default) |
 | `glz::generic_i64` | `int64_t` then `double` | Signed integer precision |
 | `glz::generic_u64` | `uint64_t` then `int64_t` then `double` | Full integer range |
+| `glz::generic_sorted` | `double` | Lexicographically sorted object keys |
+| `glz::generic_sorted_i64` | `int64_t` then `double` | Sorted keys + signed integer precision |
+| `glz::generic_sorted_u64` | `uint64_t` then `int64_t` then `double` | Sorted keys + full integer range |
 
 ### glz::generic (Default)
 
@@ -85,6 +87,7 @@ assert(json["pi"].get<double>() == 3.14);
 - **`glz::generic`**: Use when performance matters most and you don't need large integer precision, or when interoperating with JavaScript.
 - **`glz::generic_i64`**: Use when dealing with signed 64-bit IDs, timestamps, or APIs that return large signed integers.
 - **`glz::generic_u64`**: Use when handling database IDs, blockchain values, or any unsigned 64-bit integers.
+- **`glz::generic_sorted*`**: Use when you specifically need lexicographically sorted object keys for deterministic output compatibility.
 
 ## Basic Usage
 

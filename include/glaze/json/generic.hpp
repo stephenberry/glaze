@@ -6,9 +6,15 @@
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
 #define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
-#define GLZ_NOEXCEPT noexcept(false)
 #else
 #define GLZ_THROW_OR_ABORT(EXC) (std::abort())
+#endif
+#endif
+
+#ifndef GLZ_NOEXCEPT
+#if __cpp_exceptions
+#define GLZ_NOEXCEPT noexcept(false)
+#else
 #define GLZ_NOEXCEPT noexcept(true)
 #endif
 #endif
@@ -26,6 +32,7 @@ namespace glz
 }
 
 #include <cstddef>
+#include <map>
 #include <variant>
 #include <vector>
 
@@ -551,6 +558,15 @@ namespace glz
    using generic = generic_json<num_mode::f64>; // double only - fast, JavaScript-compatible
    using generic_i64 = generic_json<num_mode::i64>; // int64_t → double - signed integer precision
    using generic_u64 = generic_json<num_mode::u64>; // uint64_t → int64_t → double - full integer range
+
+   // Sorted-key map backend (lexicographic) for compatibility with legacy generic ordering.
+   template <class T>
+   using generic_sorted_map = std::map<std::string, T, std::less<>>;
+
+   // Sorted-key generic aliases for legacy deterministic lexicographic object ordering.
+   using generic_sorted = generic_json<num_mode::f64, generic_sorted_map>;
+   using generic_sorted_i64 = generic_json<num_mode::i64, generic_sorted_map>;
+   using generic_sorted_u64 = generic_json<num_mode::u64, generic_sorted_map>;
 
    // Backwards compatibility alias
    using json_t [[deprecated("glz::json_t is deprecated, use glz::generic instead")]] = generic;
