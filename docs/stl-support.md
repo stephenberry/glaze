@@ -21,6 +21,10 @@ Array types logically convert to JSON array values. Concepts are used to allow v
 - `glz::object` (compile time mixed types)
 - `std::map`
 - `std::unordered_map`
+- `glz::ordered_small_map` (insertion-order, string keys, compact)
+- `glz::ordered_map` (insertion-order, generic keys, Robin Hood hashing)
+
+See [Ordered Maps](./ordered-maps.md) for detailed comparison and usage.
 
 ## Variants
 
