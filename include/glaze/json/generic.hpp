@@ -77,16 +77,16 @@ namespace glz
    // MapType must be a template taking a single type parameter (the mapped value type),
    // with std::string keys and support for heterogeneous lookup via std::string_view.
    template <template <class> class MapType>
-   concept generic_map_type = requires(MapType<int>& m, const MapType<int>& cm,
-                                       std::string_view sv, std::pair<std::string, int> p) {
-      { m.find(sv) };
-      { cm.find(sv) };
-      { m.insert(std::move(p)) };
-      { cm.empty() } -> std::convertible_to<bool>;
-      { cm.size() } -> std::convertible_to<std::size_t>;
-      { m.begin() };
-      { m.end() };
-   };
+   concept generic_map_type =
+      requires(MapType<int>& m, const MapType<int>& cm, std::string_view sv, std::pair<std::string, int> p) {
+         { m.find(sv) };
+         { cm.find(sv) };
+         { m.insert(std::move(p)) };
+         { cm.empty() } -> std::convertible_to<bool>;
+         { cm.size() } -> std::convertible_to<std::size_t>;
+         { m.begin() };
+         { m.end() };
+      };
 
    // Generic json type.
    // First template parameter controls number storage mode for precise integer handling.
@@ -853,8 +853,7 @@ namespace glz
 
    // Const version
    template <num_mode Mode, template <class> class MapType>
-   inline const generic_json<Mode, MapType>* navigate_to(const generic_json<Mode, MapType>* root,
-                                                          sv json_ptr) noexcept
+   inline const generic_json<Mode, MapType>* navigate_to(const generic_json<Mode, MapType>* root, sv json_ptr) noexcept
    {
       return navigate_to_impl(root, json_ptr);
    }

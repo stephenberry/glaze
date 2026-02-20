@@ -284,7 +284,7 @@ namespace glz
       ordered_map() = default;
 
       explicit ordered_map(size_type bucket_count, const Hash& hash = Hash(), const KeyEqual& equal = KeyEqual(),
-                            const Allocator& alloc = Allocator())
+                           const Allocator& alloc = Allocator())
          : values_(alloc), max_load_factor_(default_max_load_factor), hash_(hash), equal_(equal)
       {
          if (bucket_count > 0) {
@@ -298,14 +298,14 @@ namespace glz
 
       template <class InputIt>
       ordered_map(InputIt first, InputIt last, size_type bucket_count = 0, const Hash& hash = Hash(),
-                   const KeyEqual& equal = KeyEqual(), const Allocator& alloc = Allocator())
+                  const KeyEqual& equal = KeyEqual(), const Allocator& alloc = Allocator())
          : ordered_map(bucket_count, hash, equal, alloc)
       {
          insert(first, last);
       }
 
       ordered_map(std::initializer_list<value_type> init, size_type bucket_count = 0, const Hash& hash = Hash(),
-                   const KeyEqual& equal = KeyEqual(), const Allocator& alloc = Allocator())
+                  const KeyEqual& equal = KeyEqual(), const Allocator& alloc = Allocator())
          : ordered_map(bucket_count, hash, equal, alloc)
       {
          insert(init.begin(), init.end());
@@ -314,9 +314,9 @@ namespace glz
       ordered_map(const ordered_map& other) : values_(other.values_), hash_(other.hash_), equal_(other.equal_)
       {
          if (!values_.empty()) {
-            auto bc = round_up_pow2(
-               static_cast<uint32_t>(std::max(size_type(min_bucket_count),
-                                              static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
+            auto bc = round_up_pow2(static_cast<uint32_t>(
+               std::max(size_type(min_bucket_count),
+                        static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
             bucket_count_ = bc;
             bucket_mask_ = bc - 1;
             load_threshold_ = static_cast<uint32_t>(static_cast<float>(bc) * max_load_factor_);
@@ -411,9 +411,9 @@ namespace glz
          values_.shrink_to_fit();
          // Optionally rehash to minimal bucket count
          if (bucket_count_ > 0) {
-            auto needed = round_up_pow2(
-               static_cast<uint32_t>(std::max(size_type(min_bucket_count),
-                                              static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
+            auto needed = round_up_pow2(static_cast<uint32_t>(
+               std::max(size_type(min_bucket_count),
+                        static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
             if (needed < bucket_count_) {
                rehash_impl(needed);
             }

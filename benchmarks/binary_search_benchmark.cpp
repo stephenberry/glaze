@@ -9,8 +9,8 @@
 
 // Branchless binary search on a sorted array of (hash, index) pairs.
 // Returns pointer to the matching element, or end if not found.
-inline const std::pair<uint32_t, uint32_t>* branchless_lower_bound(
-   const std::pair<uint32_t, uint32_t>* data, size_t n, uint32_t target) noexcept
+inline const std::pair<uint32_t, uint32_t>* branchless_lower_bound(const std::pair<uint32_t, uint32_t>* data, size_t n,
+                                                                   uint32_t target) noexcept
 {
    const std::pair<uint32_t, uint32_t>* p = data;
    size_t len = n;
@@ -43,8 +43,7 @@ bench_data generate_data(size_t n, size_t num_lookups = 10000)
    }
 
    // Sort by hash (mimics ordered_map's index)
-   std::sort(bd.index.begin(), bd.index.end(),
-             [](const auto& a, const auto& b) { return a.first < b.first; });
+   std::sort(bd.index.begin(), bd.index.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 
    // Generate lookup targets (random existing hashes)
    std::mt19937 rng(42);

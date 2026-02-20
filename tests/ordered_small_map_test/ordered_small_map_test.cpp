@@ -1,11 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/containers/ordered_small_map.hpp"
+
 #include <iostream>
 #include <string>
 #include <vector>
 
-#include "glaze/containers/ordered_small_map.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -297,7 +298,6 @@ suite ordered_small_map_tests = [] {
 
       expect(!map.contains("nonexistent"));
    };
-
 
    "many_insertions"_test = [] {
       glz::ordered_small_map<int> map;

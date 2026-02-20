@@ -12,16 +12,14 @@
 std::vector<std::string> generate_keys(size_t n)
 {
    // Start with common short JSON keys, then generate longer ones
-   std::vector<std::string> base = {"id",        "name",    "email",   "age",       "active",  "role",
-                                     "created",   "updated", "type",    "status",    "title",   "body",
-                                     "url",       "path",    "method",  "headers",   "params",  "query",
-                                     "page",      "limit",   "offset",  "total",     "count",   "data",
-                                     "error",     "message", "code",    "timestamp", "version", "format",
-                                     "encoding",  "length",  "width",   "height",    "color",   "font",
-                                     "size",      "weight",  "opacity", "visible",   "enabled", "locked",
-                                     "readonly",  "required","optional","default",   "min",     "max",
-                                     "pattern",   "prefix",  "suffix",  "separator", "locale",  "timezone",
-                                     "currency",  "country", "region",  "city",      "street",  "zip"};
+   std::vector<std::string> base = {
+      "id",        "name",    "email",   "age",      "active",  "role",   "created",   "updated",  "type",
+      "status",    "title",   "body",    "url",      "path",    "method", "headers",   "params",   "query",
+      "page",      "limit",   "offset",  "total",    "count",   "data",   "error",     "message",  "code",
+      "timestamp", "version", "format",  "encoding", "length",  "width",  "height",    "color",    "font",
+      "size",      "weight",  "opacity", "visible",  "enabled", "locked", "readonly",  "required", "optional",
+      "default",   "min",     "max",     "pattern",  "prefix",  "suffix", "separator", "locale",   "timezone",
+      "currency",  "country", "region",  "city",     "street",  "zip"};
 
    std::vector<std::string> keys;
    keys.reserve(n);

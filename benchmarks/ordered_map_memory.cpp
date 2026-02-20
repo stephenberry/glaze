@@ -1,3 +1,5 @@
+#include <malloc/malloc.h> // macOS malloc_size
+
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
@@ -5,8 +7,6 @@
 #include <new>
 #include <string>
 #include <vector>
-
-#include <malloc/malloc.h> // macOS malloc_size
 
 // Global allocation tracker
 static std::atomic<int64_t> g_allocated{0};
@@ -40,16 +40,14 @@ void operator delete(void* p, std::size_t) noexcept
 
 std::vector<std::string> generate_keys(size_t n)
 {
-   std::vector<std::string> base = {"id",        "name",    "email",   "age",       "active",  "role",
-                                     "created",   "updated", "type",    "status",    "title",   "body",
-                                     "url",       "path",    "method",  "headers",   "params",  "query",
-                                     "page",      "limit",   "offset",  "total",     "count",   "data",
-                                     "error",     "message", "code",    "timestamp", "version", "format",
-                                     "encoding",  "length",  "width",   "height",    "color",   "font",
-                                     "size",      "weight",  "opacity", "visible",   "enabled", "locked",
-                                     "readonly",  "required","optional","default",   "min",     "max",
-                                     "pattern",   "prefix",  "suffix",  "separator", "locale",  "timezone",
-                                     "currency",  "country", "region",  "city",      "street",  "zip"};
+   std::vector<std::string> base = {
+      "id",        "name",    "email",   "age",      "active",  "role",   "created",   "updated",  "type",
+      "status",    "title",   "body",    "url",      "path",    "method", "headers",   "params",   "query",
+      "page",      "limit",   "offset",  "total",    "count",   "data",   "error",     "message",  "code",
+      "timestamp", "version", "format",  "encoding", "length",  "width",  "height",    "color",    "font",
+      "size",      "weight",  "opacity", "visible",  "enabled", "locked", "readonly",  "required", "optional",
+      "default",   "min",     "max",     "pattern",  "prefix",  "suffix", "separator", "locale",   "timezone",
+      "currency",  "country", "region",  "city",     "street",  "zip"};
 
    std::vector<std::string> keys;
    keys.reserve(n);
@@ -108,7 +106,8 @@ int main()
       double map_per = static_cast<double>(map_bytes) / n;
       double ratio = static_cast<double>(map_bytes) / small_map_bytes;
 
-      printf("%4zu | %15lld | %15.1f | %9lld | %9.1f | %20.2fx\n", n, small_map_bytes, small_per, map_bytes, map_per, ratio);
+      printf("%4zu | %15lld | %15.1f | %9lld | %9.1f | %20.2fx\n", n, small_map_bytes, small_per, map_bytes, map_per,
+             ratio);
    }
 
    return 0;

@@ -161,8 +161,7 @@ namespace glz
       {
          const uint32_t a = h & bloom_mask;
          const uint32_t b = (h >> 10) & bloom_mask;
-         return (index_->bloom[a >> 3] & (uint8_t(1) << (a & 7))) &&
-                (index_->bloom[b >> 3] & (uint8_t(1) << (b & 7)));
+         return (index_->bloom[a >> 3] & (uint8_t(1) << (a & 7))) && (index_->bloom[b >> 3] & (uint8_t(1) << (b & 7)));
       }
 
       void bloom_clear() const noexcept { std::memset(index_->bloom, 0, bloom_bytes); }
@@ -303,7 +302,7 @@ namespace glz
 
       // Branchless binary search - compiles to cmov instead of conditional branches
       static const hash_index_entry* branchless_lower_bound(const hash_index_entry* p, size_t len,
-                                                             uint32_t target) noexcept
+                                                            uint32_t target) noexcept
       {
          while (len > 1) {
             size_t half = len / 2;
@@ -754,8 +753,7 @@ namespace glz
             return data_[size_ - 1].second;
          }
          const uint32_t h = hash_key(key);
-         if (try_bloom_insert(h,
-                              [&] { emplace_back_impl(std::string(std::forward<K>(key)), mapped_type{}); })) {
+         if (try_bloom_insert(h, [&] { emplace_back_impl(std::string(std::forward<K>(key)), mapped_type{}); })) {
             return data_[size_ - 1].second;
          }
          auto [it, pos, _] = index_find_or_pos(key, h);
