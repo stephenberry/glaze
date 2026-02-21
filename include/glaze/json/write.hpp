@@ -756,6 +756,79 @@ namespace glz
       }
    };
 
+   // Helper function for writing strings to bounded streaming buffers
+   // Extracted to avoid deep nesting in the main string writer
+   template <auto Opts, class B>
+   GLZ_ALWAYS_INLINE void write_string_bounded_streaming(const sv str, is_context auto&& ctx, B&& b, auto& ix)
+   {
+      using buffer_t = std::remove_cvref_t<B>;
+      constexpr size_t max_escape_size = check_escape_control_characters(Opts) ? 6 : 2;
+      constexpr size_t min_chunk_space = 2 + max_escape_size;
+
+      auto ensure_and_flush = [&](size_t needed) -> bool {
+         if (ix + needed > buffer_traits<buffer_t>::capacity(b)) {
+            buffer_traits<buffer_t>::flush(b, ix, ctx);
+            if (bool(ctx.error)) [[unlikely]] {
+               return false;
+            }
+            if (ix + needed > buffer_traits<buffer_t>::capacity(b)) {
+               ctx.error = error_code::buffer_overflow;
+               return false;
+            }
+         }
+         return true;
+      };
+
+      if (!ensure_and_flush(min_chunk_space)) [[unlikely]] {
+         return;
+      }
+
+      if constexpr (not check_raw_string(Opts)) {
+         b[ix] = '"';
+         ++ix;
+      }
+
+      const auto* c = str.data();
+      const auto* const e = c + str.size();
+
+      for (; c < e; ++c) {
+         if (!ensure_and_flush(max_escape_size + 1)) [[unlikely]] {
+            return;
+         }
+
+         if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
+            std::memcpy(&b[ix], &escaped, 2);
+            ix += 2;
+         }
+         else if constexpr (check_escape_control_characters(Opts)) {
+            if (uint8_t(*c) < 0x20) {
+               char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+               constexpr char hex_digits[] = "0123456789ABCDEF";
+               unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
+               unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
+               std::memcpy(&b[ix], unicode_escape, 6);
+               ix += 6;
+            }
+            else {
+               b[ix] = *c;
+               ++ix;
+            }
+         }
+         else {
+            b[ix] = *c;
+            ++ix;
+         }
+      }
+
+      if constexpr (not check_raw_string(Opts)) {
+         if (!ensure_and_flush(1)) [[unlikely]] {
+            return;
+         }
+         b[ix] = '"';
+         ++ix;
+      }
+   }
+
    template <class T>
       requires str_t<T> || char_t<T>
    struct to<JSON, T>
@@ -875,6 +948,12 @@ namespace glz
                   }
                }();
                const auto n = str.size();
+
+               // For bounded streaming buffers, write incrementally with flushing
+               if constexpr (is_bounded_output_streaming<B>) {
+                  write_string_bounded_streaming<Opts>(str, ctx, b, ix);
+                  return;
+               }
 
                // In the case n == 0 we need two characters for quotes.
                // For each individual character we need room for two characters to handle escapes.

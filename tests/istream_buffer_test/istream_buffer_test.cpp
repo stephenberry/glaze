@@ -3966,4 +3966,247 @@ suite additional_edge_cases = [] {
    };
 };
 
+// ============================================================================
+// STREAMING STRING PARSING TESTS
+// ============================================================================
+
+suite streaming_string_tests = [] {
+   "string larger than buffer"_test = [] {
+      // 2KB string in 512-byte buffer
+      std::string large_string(2000, 'x');
+      std::string json = "\"" + large_string + "\"";
+
+      slow_stringbuf sbuf(json, 64); // 64 bytes per read
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      std::string result;
+      auto ec = glz::read_json(result, buffer);
+
+      expect(!ec) << "Should parse large string successfully";
+      expect(result == large_string) << "String content should match";
+   };
+
+   "string with simple escapes spanning buffer"_test = [] {
+      // Create string with many escape sequences
+      std::string content;
+      for (int i = 0; i < 200; ++i) {
+         content += "a\\nb\\tc\\\"d\\\\e";
+      }
+      std::string json = "\"" + content + "\"";
+
+      slow_stringbuf sbuf(json, 32); // Small chunks
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      std::string result;
+      auto ec = glz::read_json(result, buffer);
+
+      expect(!ec) << "Should parse escaped string successfully";
+
+      // Verify escapes were decoded
+      std::string expected;
+      for (int i = 0; i < 200; ++i) {
+         expected += "a\nb\tc\"d\\e";
+      }
+      expect(result == expected) << "Escapes should be decoded correctly";
+   };
+
+   "unicode escape at buffer boundary"_test = [] {
+      // Test \uXXXX escapes at various positions relative to buffer boundary
+      for (size_t chunk_size = 3; chunk_size <= 16; ++chunk_size) {
+         // Create string with unicode escapes
+         std::string json = R"("Hello \u0041\u0042\u0043 World")"; // \u0041 = 'A', etc.
+
+         slow_stringbuf sbuf(json, chunk_size);
+         std::istream slow_stream(&sbuf);
+         glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+         std::string result;
+         auto ec = glz::read_json(result, buffer);
+
+         expect(!ec) << "Chunk size " << chunk_size << " should work";
+         expect(result == "Hello ABC World") << "Unicode should decode correctly";
+      }
+   };
+
+   "surrogate pair spanning buffer"_test = [] {
+      // Surrogate pair for emoji: U+1F600 (grinning face) = \uD83D\uDE00
+      for (size_t chunk_size = 4; chunk_size <= 20; ++chunk_size) {
+         std::string json = R"("Test \uD83D\uDE00 emoji")";
+
+         slow_stringbuf sbuf(json, chunk_size);
+         std::istream slow_stream(&sbuf);
+         glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+         std::string result;
+         auto ec = glz::read_json(result, buffer);
+
+         expect(!ec) << "Chunk size " << chunk_size << " should work";
+         // U+1F600 in UTF-8 is F0 9F 98 80
+         expect(result == "Test \xF0\x9F\x98\x80 emoji") << "Surrogate pair should decode correctly";
+      }
+   };
+
+   "multiple surrogate pairs in large string"_test = [] {
+      // Multiple emojis in a string larger than buffer
+      std::string json = "\"";
+      std::string expected;
+      for (int i = 0; i < 100; ++i) {
+         json += "text\\uD83D\\uDE00"; // Add escaped emoji
+         expected += "text\xF0\x9F\x98\x80"; // Expected UTF-8
+      }
+      json += "\"";
+
+      slow_stringbuf sbuf(json, 48);
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      std::string result;
+      auto ec = glz::read_json(result, buffer);
+
+      expect(!ec) << "Should parse multiple surrogates";
+      expect(result == expected) << "All surrogates should decode correctly";
+   };
+
+   "backslash at exact buffer boundary"_test = [] {
+      // Test backslash at every position relative to buffer size
+      for (size_t padding = 0; padding < 20; ++padding) {
+         std::string filler(padding, 'a');
+         std::string json = "\"" + filler + "\\n" + "rest\"";
+
+         slow_stringbuf sbuf(json, padding + 2); // Force split at backslash
+         std::istream slow_stream(&sbuf);
+         glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+         std::string result;
+         auto ec = glz::read_json(result, buffer);
+
+         expect(!ec) << "Padding " << padding << " should work";
+         expect(result == filler + "\n" + "rest") << "Newline should decode correctly";
+      }
+   };
+
+   "object with large string field"_test = [] {
+      std::string large_value(3000, 'y');
+      std::string json = R"({"id":42,"name":")" + large_value + R"("})";
+
+      slow_stringbuf sbuf(json, 100);
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      Record r;
+      auto ec = glz::read_json(r, buffer);
+
+      expect(!ec) << "Should parse object with large string";
+      expect(r.id == 42);
+      expect(r.name == large_value);
+   };
+
+   "array of large strings"_test = [] {
+      std::vector<std::string> original;
+      std::string json = "[";
+      for (int i = 0; i < 10; ++i) {
+         if (i > 0) json += ",";
+         std::string s(500 + i * 100, 'a' + i);
+         json += "\"" + s + "\"";
+         original.push_back(s);
+      }
+      json += "]";
+
+      slow_stringbuf sbuf(json, 128);
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      std::vector<std::string> result;
+      auto ec = glz::read_json(result, buffer);
+
+      expect(!ec) << "Should parse array of large strings";
+      expect(result.size() == 10u);
+      expect(result == original);
+   };
+
+   "empty string with slow streaming"_test = [] {
+      std::string json = R"("")";
+
+      slow_stringbuf sbuf(json, 1); // Byte by byte
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      std::string result = "initial";
+      auto ec = glz::read_json(result, buffer);
+
+      expect(!ec) << "Should parse empty string";
+      expect(result.empty()) << "Result should be empty";
+   };
+
+   "string with all escape types"_test = [] {
+      // All JSON escape sequences
+      std::string json = R"("quote:\" backslash:\\ slash:\/ backspace:\b formfeed:\f newline:\n return:\r tab:\t unicode:\u0048\u0069")";
+
+      slow_stringbuf sbuf(json, 10);
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      std::string result;
+      auto ec = glz::read_json(result, buffer);
+
+      expect(!ec) << "Should parse all escape types";
+      expect(result == "quote:\" backslash:\\ slash:/ backspace:\b formfeed:\f newline:\n return:\r tab:\t unicode:Hi");
+   };
+
+   "byte-by-byte streaming large string"_test = [] {
+      std::string large(1500, 'z');
+      std::string json = "\"" + large + "\"";
+
+      slow_stringbuf sbuf(json, 1); // Extreme: 1 byte at a time
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      std::string result;
+      auto ec = glz::read_json(result, buffer);
+
+      expect(!ec) << "Should handle byte-by-byte streaming";
+      expect(result == large);
+   };
+
+   "unicode BMP characters"_test = [] {
+      // Various BMP (Basic Multilingual Plane) characters
+      std::string json = R"("\u00E9\u00F1\u00FC\u4E2D\u6587")"; // é ñ ü 中 文
+
+      slow_stringbuf sbuf(json, 8);
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      std::string result;
+      auto ec = glz::read_json(result, buffer);
+
+      expect(!ec);
+      // UTF-8: é=C3A9, ñ=C3B1, ü=C3BC, 中=E4B8AD, 文=E69687
+      expect(result == "\xC3\xA9\xC3\xB1\xC3\xBC\xE4\xB8\xAD\xE6\x96\x87");
+   };
+
+   "round trip large string"_test = [] {
+      // Write a large string, then read it back with streaming
+      std::string original(5000, 'q');
+      for (size_t i = 0; i < original.size(); i += 100) {
+         original[i] = '\n'; // Add some escapes
+      }
+
+      std::string json;
+      auto wec = glz::write_json(original, json);
+      expect(!wec);
+
+      slow_stringbuf sbuf(json, 200);
+      std::istream slow_stream(&sbuf);
+      glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
+
+      std::string result;
+      auto rec = glz::read_json(result, buffer);
+
+      expect(!rec) << "Should read back large string";
+      expect(result == original) << "Round trip should preserve content";
+   };
+};
+
 int main() { return 0; }
