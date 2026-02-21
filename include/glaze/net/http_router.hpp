@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <source_location>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -518,28 +519,70 @@ namespace glz
        * @param handle The handler function to call when this route matches
        * @param spec Optional spec for the route.
        * @return Reference to this router for method chaining
-       * @throws std::runtime_error if there's a route conflict
+       * @throws std::runtime_error if there's a route conflict (exceptions-enabled builds)
        */
       inline basic_http_router& route(http_method method, std::string_view path, handler handle,
                                       const route_spec& spec = {})
       {
-         std::string path_str(path);
-         try {
-            // Store in the routes map
-            auto& entry = routes[path_str][method];
-            entry.handle = std::move(handle);
-            entry.spec = spec;
-
-            // Also add to the radix tree
-            add_route(method, path, entry.handle, spec.constraints);
-         }
-         catch (const std::exception& e) {
-            // Log the error instead of propagating it
-            std::fprintf(stderr, "Error adding route '%.*s': %s\n", static_cast<int>(path.length()), path.data(),
-                         e.what());
+         std::string route_error{};
+         if (!try_route(method, path, std::move(handle), spec, &route_error)) {
+#if __cpp_exceptions
+            throw std::runtime_error(route_error.empty() ? "Route registration failed" : route_error);
+#endif
          }
          return *this;
       }
+
+      /**
+       * @brief Register a route and report errors without exceptions
+       *
+       * @param method The HTTP method (GET, POST, etc.)
+       * @param path The route path, can include parameters (":param") and wildcards ("*param")
+       * @param handle The handler function to call when this route matches
+       * @param spec Optional spec for the route
+       * @param error_message Optional output for route registration failures
+       * @return true if registration succeeded, false otherwise
+       */
+      [[nodiscard]] inline bool try_route(http_method method, std::string_view path, handler handle,
+                                          const route_spec& spec = {}, std::string* error_message = nullptr)
+      {
+         last_route_error.clear();
+         std::string path_str(path);
+
+         // Store in the routes map first (used for compatibility with mount functionality).
+         auto& entry = routes[path_str][method];
+         entry.handle = std::move(handle);
+         entry.spec = spec;
+
+         std::string route_error{};
+         if (!add_route(method, path, entry.handle, spec.constraints, &route_error)) {
+            // Keep map/tree consistent on failure.
+            auto it = routes.find(path_str);
+            if (it != routes.end()) {
+               it->second.erase(method);
+               if (it->second.empty()) {
+                  routes.erase(it);
+               }
+            }
+
+            last_route_error = route_error;
+            if (error_message) {
+               *error_message = route_error;
+            }
+            return false;
+         }
+
+         if (error_message) {
+            error_message->clear();
+         }
+         return true;
+      }
+
+      [[nodiscard]] bool has_route_error() const noexcept { return !last_route_error.empty(); }
+
+      [[nodiscard]] std::string_view route_error() const noexcept { return last_route_error; }
+
+      void clear_route_error() noexcept { last_route_error.clear(); }
 
       /**
        * @brief Register a GET route
@@ -723,6 +766,7 @@ namespace glz
        * @brief Direct lookup table for non-parameterized routes (optimization)
        */
       std::unordered_map<std::string, std::unordered_map<http_method, handler>> direct_routes;
+      std::string last_route_error{};
 
       /**
        * @brief Add a route to the radix tree
@@ -731,25 +775,34 @@ namespace glz
        * @param path Path pattern for the route
        * @param handle Handler function for the route
        * @param constraints Optional parameter constraints
-       * @throws std::runtime_error if there's a route conflict
+       * @param error_message Optional output message for route registration failures
+       * @return true if the route was added, false if route registration failed
        */
-      void add_route(http_method method, std::string_view path, handler handle,
-                     const std::unordered_map<std::string, param_constraint>& constraints = {})
+      [[nodiscard]] bool add_route(http_method method, std::string_view path, handler handle,
+                                   const std::unordered_map<std::string, param_constraint>& constraints = {},
+                                   std::string* error_message = nullptr)
       {
          std::string path_str(path);
+
+         auto fail = [&](std::string message) -> bool {
+            if (error_message) {
+               *error_message = std::move(message);
+            }
+            return false;
+         };
 
          // Optimization: for non-parameterized routes, store them directly
          if (path_str.find(':') == std::string::npos && path_str.find('*') == std::string::npos) {
             // Check for conflicts first
             auto& method_handlers = direct_routes[path_str];
             if (method_handlers.find(method) != method_handlers.end()) {
-               throw std::runtime_error("Route conflict: handler already exists for " + std::string(to_string(method)) +
-                                        " " + path_str);
+               return fail("Route conflict: handler already exists for " + std::string(to_string(method)) + " " +
+                           path_str);
             }
 
             // Store the route directly
             method_handlers[method] = handle;
-            return;
+            return true;
          }
 
          // For parameterized routes, use the radix tree
@@ -779,8 +832,8 @@ namespace glz
                }
                else if (current->parameter_child->parameter_name != param_name) {
                   // Parameter name conflict
-                  throw std::runtime_error("Route conflict: different parameter names at same position: :" +
-                                           current->parameter_child->parameter_name + " vs :" + param_name);
+                  return fail("Route conflict: different parameter names at same position: :" +
+                              current->parameter_child->parameter_name + " vs :" + param_name);
                }
 
                current = current->parameter_child.get();
@@ -791,7 +844,7 @@ namespace glz
 
                // Wildcards must be at the end of the route
                if (i != segments.size() - 1) {
-                  throw std::runtime_error("Wildcard must be the last segment in route: " + path_str);
+                  return fail("Wildcard must be the last segment in route: " + path_str);
                }
 
                if (!current->wildcard_child) {
@@ -805,8 +858,8 @@ namespace glz
                }
                else if (current->wildcard_child->parameter_name != wildcard_name) {
                   // Wildcard name conflict
-                  throw std::runtime_error("Route conflict: different wildcard names at same position: *" +
-                                           current->wildcard_child->parameter_name + " vs *" + wildcard_name);
+                  return fail("Route conflict: different wildcard names at same position: *" +
+                              current->wildcard_child->parameter_name + " vs *" + wildcard_name);
                }
 
                current = current->wildcard_child.get();
@@ -828,8 +881,8 @@ namespace glz
 
          // Check for route conflict
          if (current->is_endpoint && current->handlers.find(method) != current->handlers.end()) {
-            throw std::runtime_error("Route conflict: handler already exists for " + std::string(to_string(method)) +
-                                     " " + path_str);
+            return fail("Route conflict: handler already exists for " + std::string(to_string(method)) + " " +
+                        path_str);
          }
 
          // Mark as endpoint and set handler
@@ -840,6 +893,8 @@ namespace glz
          if (!constraints.empty()) {
             current->constraints[method] = constraints;
          }
+
+         return true;
       }
 
       /**
