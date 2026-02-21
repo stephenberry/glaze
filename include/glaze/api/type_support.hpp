@@ -79,4 +79,11 @@ namespace glz
       static constexpr std::string_view name =
          join_v<name_v<Ret>, chars<" (">, name_v<Obj>, chars<"::*)(">, name_v<Args>..., chars<")">>;
    };
+
+   template <class Ret, class Obj, class... Args>
+   struct meta<Ret (Obj::*)(Args...) volatile>
+   {
+      static constexpr std::string_view name =
+         join_v<type_name<Ret>, chars<" (">, name_v<Obj>, chars<"::*)(">, name_v<Args>..., chars<") volatile">>;
+   };
 }
