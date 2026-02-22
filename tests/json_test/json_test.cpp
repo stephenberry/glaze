@@ -3496,6 +3496,20 @@ suite thread_pool = [] {
 
       expect(numbers.size() == 1000);
    };
+
+   "thread pool zero threads fallback"_test = [] {
+      glz::pool pool(0);
+
+      std::atomic<int> x = 0;
+
+      for (auto i = 0; i < 1000; ++i) {
+         pool.emplace_back([&] { ++x; });
+      }
+
+      pool.wait();
+
+      expect(x == 1000);
+   };
 };
 
 struct local_meta
@@ -7028,6 +7042,20 @@ struct glz::meta<cx_values>
    static constexpr auto value{glz::object("info", &T::info, "index", &T::index, "value", &T::value)};
 };
 
+struct cx_values_implicit_static_key
+{
+   static constexpr std::string_view other_type{"http://www.github.io"};
+   std::string type{"http://www.github.io"};
+   int status{};
+};
+
+template <>
+struct glz::meta<cx_values_implicit_static_key>
+{
+   using T = cx_values_implicit_static_key;
+   static constexpr auto value{glz::object(&T::other_type, &T::type, &T::status)};
+};
+
 struct direct_cx_value_conversion
 {
    static constexpr std::uint64_t const_v{42};
@@ -7138,6 +7166,20 @@ suite constexpr_values_test = [] {
       expect(obj.info == "information");
       expect(obj.index == 42);
       expect(obj.value == "special");
+   };
+
+   "constexpr_values_implicit_static_key"_test = [] {
+      cx_values_implicit_static_key obj{};
+      obj.status = 100;
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"other_type":"http://www.github.io","type":"http://www.github.io","status":100})") << s;
+
+      s = R"({"other_type":"something_else","type":"updated","status":200})";
+      expect(!glz::read_json(obj, s));
+      expect(cx_values_implicit_static_key::other_type == "http://www.github.io");
+      expect(obj.type == "updated");
+      expect(obj.status == 200);
    };
 
    using const_only_variant =

@@ -282,6 +282,141 @@ namespace glz
 #elif defined(_MSC_VER)
 #endif
 
+   consteval std::string_view trim_ascii_space(std::string_view str)
+   {
+      const auto first = str.find_first_not_of(" \t");
+      if (first == std::string_view::npos) {
+         return {};
+      }
+      const auto last = str.find_last_not_of(" \t");
+      return str.substr(first, last - first + 1);
+   }
+
+   consteval bool has_wrapping_parens(std::string_view str)
+   {
+      if (str.size() < 2 || str.front() != '(' || str.back() != ')') {
+         return false;
+      }
+
+      size_t depth{};
+      for (size_t i = 0; i < str.size(); ++i) {
+         const auto c = str[i];
+         if (c == '(') {
+            ++depth;
+         }
+         else if (c == ')') {
+            if (depth == 0) {
+               return false;
+            }
+            --depth;
+            if (depth == 0) {
+               return i + 1 == str.size();
+            }
+         }
+      }
+
+      return false;
+   }
+
+   consteval std::string_view strip_unmatched_trailing_parens(std::string_view str)
+   {
+      size_t open_count{};
+      size_t close_count{};
+      for (const auto c : str) {
+         if (c == '(') {
+            ++open_count;
+         }
+         else if (c == ')') {
+            ++close_count;
+         }
+      }
+
+      while (close_count > open_count && !str.empty() && str.back() == ')') {
+         str.remove_suffix(1);
+         --close_count;
+      }
+
+      return str;
+   }
+
+   consteval std::string_view normalize_extracted_name(std::string_view str)
+   {
+      str = trim_ascii_space(str);
+
+      while (has_wrapping_parens(str)) {
+         str.remove_prefix(1);
+         str.remove_suffix(1);
+         str = trim_ascii_space(str);
+      }
+
+      str = strip_unmatched_trailing_parens(str);
+
+      if (const auto scope_pos = str.rfind("::"); scope_pos != std::string_view::npos) {
+         return str.substr(scope_pos + 2);
+      }
+      return str;
+   }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+   consteval std::string_view extract_template_argument(std::string_view str)
+   {
+      const auto arg_start = str.rfind('<');
+      if (arg_start != std::string_view::npos) {
+         str.remove_prefix(arg_start + 1);
+      }
+      const auto arg_end = str.rfind('>');
+      if (arg_end != std::string_view::npos) {
+         str = str.substr(0, arg_end);
+      }
+      return trim_ascii_space(str);
+   }
+
+   consteval std::string_view strip_leading_decl_keywords(std::string_view str)
+   {
+      str = trim_ascii_space(str);
+      while (true) {
+         if (str.starts_with("enum ")) {
+            str.remove_prefix(5);
+         }
+         else if (str.starts_with("struct ")) {
+            str.remove_prefix(7);
+         }
+         else if (str.starts_with("class ")) {
+            str.remove_prefix(6);
+         }
+         else {
+            break;
+         }
+         str = trim_ascii_space(str);
+      }
+      return str;
+   }
+#endif
+
+#if !defined(_MSC_VER) || defined(__clang__)
+   consteval std::string_view parse_name_from_pretty_function(std::string_view str)
+   {
+      const auto amp_pos = str.find("&");
+      if (amp_pos != std::string_view::npos) {
+         size_t prefix = amp_pos;
+         while (prefix > 0 && str[prefix - 1] == ' ') {
+            --prefix;
+         }
+         if (prefix > 0 && str[prefix - 1] == '(') {
+            str.remove_prefix(prefix - 1);
+         }
+         else {
+            str.remove_prefix(amp_pos + 1);
+         }
+      }
+      const auto tail_pos = str.find(pretty_function_tail);
+      if (tail_pos != std::string_view::npos) {
+         str = str.substr(0, tail_pos);
+      }
+      return normalize_extracted_name(str);
+   }
+#endif
+
    template <auto P>
       requires(std::is_member_pointer_v<decltype(P)>)
    consteval std::string_view get_name()
@@ -299,10 +434,32 @@ namespace glz
 #else
       // TODO: Use std::source_location when deprecating clang 14
       // std::string_view str = std::source_location::current().function_name();
+      return parse_name_from_pretty_function(GLZ_PRETTY_FUNCTION);
+#endif
+   }
+
+   template <auto P>
+      requires(std::is_pointer_v<decltype(P)> && std::is_object_v<std::remove_pointer_t<decltype(P)>>)
+   consteval std::string_view get_name()
+   {
+#if defined(_MSC_VER) && !defined(__clang__)
+      // Example: `... glz::get_name<&T::static_value>(void)`
       std::string_view str = GLZ_PRETTY_FUNCTION;
-      str = str.substr(str.find("&") + 1);
-      str = str.substr(0, str.find(pretty_function_tail));
-      return str.substr(str.rfind("::") + 2);
+      const auto arg_start = str.rfind('<');
+      if (arg_start != std::string_view::npos) {
+         str.remove_prefix(arg_start + 1);
+      }
+      const auto arg_end = str.rfind('>');
+      if (arg_end != std::string_view::npos) {
+         str = str.substr(0, arg_end);
+      }
+      const auto amp_pos = str.find('&');
+      if (amp_pos != std::string_view::npos) {
+         str.remove_prefix(amp_pos + 1);
+      }
+      return normalize_extracted_name(str);
+#else
+      return parse_name_from_pretty_function(GLZ_PRETTY_FUNCTION);
 #endif
    }
 
@@ -311,9 +468,8 @@ namespace glz
    consteval auto get_name()
    {
 #if defined(_MSC_VER) && !defined(__clang__)
-      std::string_view str = GLZ_PRETTY_FUNCTION;
-      str = str.substr(str.rfind("::") + 2);
-      return str.substr(0, str.find('>'));
+      std::string_view str = extract_template_argument(GLZ_PRETTY_FUNCTION);
+      return normalize_extracted_name(strip_leading_decl_keywords(str));
 #else
       std::string_view str = GLZ_PRETTY_FUNCTION;
       str = str.substr(str.rfind("::") + 2);
@@ -326,9 +482,11 @@ namespace glz
    consteval auto get_name()
    {
 #if defined(_MSC_VER) && !defined(__clang__)
-      std::string_view str = GLZ_PRETTY_FUNCTION;
-      str = str.substr(str.rfind("= ") + 2);
-      return str.substr(0, str.find('>'));
+      std::string_view str = extract_template_argument(GLZ_PRETTY_FUNCTION);
+      if (const auto eq_pos = str.rfind("= "); eq_pos != std::string_view::npos) {
+         str.remove_prefix(eq_pos + 2);
+      }
+      return normalize_extracted_name(strip_leading_decl_keywords(str));
 #else
       std::string_view str = GLZ_PRETTY_FUNCTION;
       str = str.substr(str.rfind("= ") + 2);
