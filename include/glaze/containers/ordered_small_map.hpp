@@ -93,19 +93,73 @@ namespace glz
 
       // --- Data array management ---
 
+      static void destroy_range(value_type* data, uint32_t count) noexcept
+      {
+         for (uint32_t i = 0; i < count; ++i) {
+            std::destroy_at(data + i);
+         }
+      }
+
+      value_type* allocate_and_relocate(uint32_t new_cap)
+      {
+         auto* new_data = static_cast<value_type*>(::operator new(static_cast<size_t>(new_cap) * sizeof(value_type)));
+#if __cpp_exceptions
+         uint32_t constructed = 0;
+         try {
+            for (; constructed < size_; ++constructed) {
+               std::construct_at(new_data + constructed, std::move_if_noexcept(data_[constructed]));
+            }
+         }
+         catch (...) {
+            destroy_range(new_data, constructed);
+            ::operator delete(new_data);
+            throw;
+         }
+#else
+         for (uint32_t i = 0; i < size_; ++i) {
+            std::construct_at(new_data + i, std::move_if_noexcept(data_[i]));
+         }
+#endif
+         return new_data;
+      }
+
+      static value_type* allocate_and_copy(const value_type* source, uint32_t count)
+      {
+         auto* new_data = static_cast<value_type*>(::operator new(static_cast<size_t>(count) * sizeof(value_type)));
+#if __cpp_exceptions
+         uint32_t constructed = 0;
+         try {
+            for (; constructed < count; ++constructed) {
+               std::construct_at(new_data + constructed, source[constructed]);
+            }
+         }
+         catch (...) {
+            destroy_range(new_data, constructed);
+            ::operator delete(new_data);
+            throw;
+         }
+#else
+         for (uint32_t i = 0; i < count; ++i) {
+            std::construct_at(new_data + i, source[i]);
+         }
+#endif
+         return new_data;
+      }
+
+      void reallocate_data(uint32_t new_cap)
+      {
+         auto* new_data = allocate_and_relocate(new_cap);
+         destroy_all();
+         ::operator delete(data_);
+         data_ = new_data;
+         capacity_ = new_cap;
+      }
+
       void grow_if_needed()
       {
          if (size_ == capacity_) {
             const uint32_t new_cap = capacity_ ? capacity_ * 2 : 4;
-            auto* new_data = static_cast<value_type*>(::operator new(new_cap * sizeof(value_type)));
-            // Move existing elements
-            for (uint32_t i = 0; i < size_; ++i) {
-               std::construct_at(new_data + i, std::move(data_[i]));
-               std::destroy_at(data_ + i);
-            }
-            ::operator delete(data_);
-            data_ = new_data;
-            capacity_ = new_cap;
+            reallocate_data(new_cap);
          }
       }
 
@@ -425,12 +479,9 @@ namespace glz
       ordered_small_map(const ordered_small_map& other)
       {
          if (other.size_ > 0) {
-            data_ = static_cast<value_type*>(::operator new(other.size_ * sizeof(value_type)));
-            capacity_ = other.size_;
-            for (uint32_t i = 0; i < other.size_; ++i) {
-               std::construct_at(data_ + i, other.data_[i]);
-            }
+            data_ = allocate_and_copy(other.data_, other.size_);
             size_ = other.size_;
+            capacity_ = other.size_;
          }
          // Don't copy index - it will be rebuilt lazily
       }
@@ -447,16 +498,8 @@ namespace glz
       ordered_small_map& operator=(const ordered_small_map& other)
       {
          if (this != &other) {
-            free_data();
-            free_index();
-            if (other.size_ > 0) {
-               data_ = static_cast<value_type*>(::operator new(other.size_ * sizeof(value_type)));
-               capacity_ = other.size_;
-               for (uint32_t i = 0; i < other.size_; ++i) {
-                  std::construct_at(data_ + i, other.data_[i]);
-               }
-               size_ = other.size_;
-            }
+            ordered_small_map copy(other);
+            swap(copy);
          }
          return *this;
       }
@@ -500,17 +543,21 @@ namespace glz
       size_type size() const noexcept { return size_; }
       size_type capacity() const noexcept { return capacity_; }
 
+      void swap(ordered_small_map& other) noexcept
+      {
+         using std::swap;
+         swap(data_, other.data_);
+         swap(size_, other.size_);
+         swap(capacity_, other.capacity_);
+         swap(index_, other.index_);
+      }
+
+      friend void swap(ordered_small_map& lhs, ordered_small_map& rhs) noexcept { lhs.swap(rhs); }
+
       void reserve(size_type new_cap)
       {
          if (new_cap <= capacity_) return;
-         auto* new_data = static_cast<value_type*>(::operator new(new_cap * sizeof(value_type)));
-         for (uint32_t i = 0; i < size_; ++i) {
-            std::construct_at(new_data + i, std::move(data_[i]));
-            std::destroy_at(data_ + i);
-         }
-         ::operator delete(data_);
-         data_ = new_data;
-         capacity_ = static_cast<uint32_t>(new_cap);
+         reallocate_data(static_cast<uint32_t>(new_cap));
       }
 
       void shrink_to_fit()
@@ -522,14 +569,7 @@ namespace glz
             capacity_ = 0;
             return;
          }
-         auto* new_data = static_cast<value_type*>(::operator new(size_ * sizeof(value_type)));
-         for (uint32_t i = 0; i < size_; ++i) {
-            std::construct_at(new_data + i, std::move(data_[i]));
-            std::destroy_at(data_ + i);
-         }
-         ::operator delete(data_);
-         data_ = new_data;
-         capacity_ = size_;
+         reallocate_data(size_);
       }
 
       // Modifiers

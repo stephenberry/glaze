@@ -4,12 +4,76 @@
 #include "glaze/containers/ordered_small_map.hpp"
 
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "ut/ut.hpp"
 
 using namespace ut;
+
+#if __cpp_exceptions
+namespace
+{
+   struct throwing_value
+   {
+      int value = 0;
+
+      static inline int alive = 0;
+      static inline int copy_attempts = 0;
+      static inline int move_attempts = 0;
+      static inline int throw_on_copy = -1;
+      static inline int throw_on_move = -1;
+
+      throwing_value() { ++alive; }
+      explicit throwing_value(int v) : value(v) { ++alive; }
+
+      throwing_value(const throwing_value& other) : value(other.value)
+      {
+         if (throw_on_copy >= 0 && copy_attempts++ == throw_on_copy) {
+            throw std::runtime_error("throwing_value copy");
+         }
+         ++alive;
+      }
+
+      throwing_value(throwing_value&& other) noexcept(false) : value(other.value)
+      {
+         if (throw_on_move >= 0 && move_attempts++ == throw_on_move) {
+            throw std::runtime_error("throwing_value move");
+         }
+         other.value = -1;
+         ++alive;
+      }
+
+      throwing_value& operator=(const throwing_value& other)
+      {
+         value = other.value;
+         return *this;
+      }
+
+      throwing_value& operator=(throwing_value&& other) noexcept(false)
+      {
+         if (this != &other) {
+            if (throw_on_move >= 0 && move_attempts++ == throw_on_move) {
+               throw std::runtime_error("throwing_value move assign");
+            }
+            other.value = -1;
+         }
+         return *this;
+      }
+
+      ~throwing_value() { --alive; }
+
+      static void reset_throw_controls()
+      {
+         copy_attempts = 0;
+         move_attempts = 0;
+         throw_on_copy = -1;
+         throw_on_move = -1;
+      }
+   };
+}
+#endif
 
 suite ordered_small_map_tests = [] {
    "insertion_order_preserved"_test = [] {
@@ -116,6 +180,45 @@ suite ordered_small_map_tests = [] {
       expect(keys[0] == "a");
       expect(keys[1] == "b");
    };
+
+#if __cpp_exceptions
+   "grow_if_needed_exception_safety"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> map;
+         for (int i = 0; i < 4; ++i) {
+            map.emplace(std::to_string(i), i);
+         }
+
+         expect(map.size() == 4);
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_copy = 0;
+
+         bool threw = false;
+         try {
+            map.emplace("4", 4); // triggers grow_if_needed reallocation
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(map.size() == 4);
+         expect(!map.contains("4"));
+         for (int i = 0; i < 4; ++i) {
+            expect(map.contains(std::to_string(i)));
+            expect(map.at(std::to_string(i)).value == i);
+         }
+         expect(throwing_value::alive == static_cast<int>(map.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+#endif
 
    "move_constructor"_test = [] {
       glz::ordered_small_map<int> map1;
@@ -278,6 +381,156 @@ suite ordered_small_map_tests = [] {
       expect(map.contains("19"));
       expect(!map.contains("999"));
    };
+
+#if __cpp_exceptions
+   "reserve_exception_safety"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> map;
+         for (int i = 0; i < 6; ++i) {
+            map.emplace(std::to_string(i), i);
+         }
+
+         const auto old_capacity = map.capacity();
+         expect(old_capacity >= map.size());
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_copy = 0;
+
+         bool threw = false;
+         try {
+            map.reserve(old_capacity + 16);
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(map.capacity() == old_capacity);
+         expect(map.size() == 6);
+         for (int i = 0; i < 6; ++i) {
+            expect(map.at(std::to_string(i)).value == i);
+         }
+         expect(throwing_value::alive == static_cast<int>(map.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+
+   "shrink_to_fit_exception_safety"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> map;
+         for (int i = 0; i < 6; ++i) {
+            map.emplace(std::to_string(i), i);
+         }
+         map.reserve(64);
+
+         const auto old_capacity = map.capacity();
+         expect(old_capacity > map.size());
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_copy = 0;
+
+         bool threw = false;
+         try {
+            map.shrink_to_fit();
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(map.capacity() == old_capacity);
+         expect(map.size() == 6);
+         for (int i = 0; i < 6; ++i) {
+            expect(map.at(std::to_string(i)).value == i);
+         }
+         expect(throwing_value::alive == static_cast<int>(map.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+
+   "copy_constructor_exception_safety"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> src;
+         for (int i = 0; i < 5; ++i) {
+            src.emplace(std::to_string(i), i);
+         }
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_copy = 0;
+
+         bool threw = false;
+         try {
+            glz::ordered_small_map<throwing_value> copy(src);
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(src.size() == 5);
+         for (int i = 0; i < 5; ++i) {
+            expect(src.at(std::to_string(i)).value == i);
+         }
+         expect(throwing_value::alive == static_cast<int>(src.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+
+   "copy_assignment_exception_safety"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> src;
+         for (int i = 0; i < 5; ++i) {
+            src.emplace("src_" + std::to_string(i), i);
+         }
+
+         glz::ordered_small_map<throwing_value> dst;
+         dst.emplace("dst_a", 100);
+         dst.emplace("dst_b", 200);
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_copy = 0;
+
+         bool threw = false;
+         try {
+            dst = src;
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(dst.size() == 2);
+         expect(dst.at("dst_a").value == 100);
+         expect(dst.at("dst_b").value == 200);
+         expect(src.size() == 5);
+         for (int i = 0; i < 5; ++i) {
+            expect(src.at("src_" + std::to_string(i)).value == i);
+         }
+         expect(throwing_value::alive == static_cast<int>(src.size() + dst.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+#endif
 
    "hash_collision_fallback"_test = [] {
       // This test verifies that even if hash collisions occur,
