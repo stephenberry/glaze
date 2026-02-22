@@ -75,6 +75,38 @@ namespace
 }
 #endif
 
+namespace
+{
+   struct tracked_try_emplace_value
+   {
+      int value = 0;
+
+      static inline int direct_ctor = 0;
+      static inline int copy_ctor = 0;
+      static inline int move_ctor = 0;
+
+      tracked_try_emplace_value() = delete;
+      explicit tracked_try_emplace_value(int v) : value(v) { ++direct_ctor; }
+
+      tracked_try_emplace_value(const tracked_try_emplace_value& other) : value(other.value) { ++copy_ctor; }
+      tracked_try_emplace_value(tracked_try_emplace_value&& other) noexcept : value(other.value)
+      {
+         ++move_ctor;
+         other.value = -1;
+      }
+
+      tracked_try_emplace_value& operator=(const tracked_try_emplace_value&) = default;
+      tracked_try_emplace_value& operator=(tracked_try_emplace_value&&) noexcept = default;
+
+      static void reset_counts()
+      {
+         direct_ctor = 0;
+         copy_ctor = 0;
+         move_ctor = 0;
+      }
+   };
+}
+
 suite ordered_small_map_tests = [] {
    "insertion_order_preserved"_test = [] {
       glz::ordered_small_map<int> map;
@@ -159,6 +191,108 @@ suite ordered_small_map_tests = [] {
       auto [it2, inserted2] = map.insert({"key", 2});
       expect(!inserted2);
       expect(it2->second == 1); // Original value unchanged
+   };
+
+   "insert_or_assign_works"_test = [] {
+      glz::ordered_small_map<int> map;
+
+      auto [it1, inserted1] = map.insert_or_assign("key", 1);
+      expect(inserted1);
+      expect(it1->second == 1);
+      expect(map.size() == 1);
+
+      auto [it2, inserted2] = map.insert_or_assign("key", 2);
+      expect(!inserted2);
+      expect(it2->second == 2);
+      expect(map.size() == 1);
+   };
+
+   "insert_or_assign_preserves_order_on_assign"_test = [] {
+      glz::ordered_small_map<int> map;
+      map["first"] = 1;
+      map["second"] = 2;
+
+      auto [it, inserted] = map.insert_or_assign("first", 10);
+      expect(!inserted);
+      expect(it->second == 10);
+
+      std::vector<std::string> keys;
+      for (const auto& [key, value] : map) {
+         keys.push_back(key);
+      }
+
+      expect(keys.size() == 2);
+      expect(keys[0] == "first");
+      expect(keys[1] == "second");
+   };
+
+   "insert_or_assign_indexed_path"_test = [] {
+      glz::ordered_small_map<int> map;
+      for (int i = 0; i < 32; ++i) {
+         auto [it, inserted] = map.insert_or_assign("k" + std::to_string(i), i);
+         expect(inserted);
+         expect(it->second == i);
+      }
+
+      expect(map.contains("k10"));
+      const auto original_size = map.size();
+
+      auto [existing, inserted_existing] = map.insert_or_assign("k10", 999);
+      expect(!inserted_existing);
+      expect(existing->second == 999);
+      expect(map.size() == original_size);
+
+      auto [added, inserted_new] = map.insert_or_assign("k_new", 4242);
+      expect(inserted_new);
+      expect(added->second == 4242);
+      expect(map.size() == original_size + 1);
+
+      std::vector<std::string> keys;
+      for (const auto& [key, value] : map) {
+         keys.push_back(key);
+      }
+      expect(keys.back() == "k_new");
+   };
+
+   "try_emplace_constructs_mapped_in_place"_test = [] {
+      tracked_try_emplace_value::reset_counts();
+
+      {
+         glz::ordered_small_map<tracked_try_emplace_value> map;
+
+         auto [it1, inserted1] = map.try_emplace("alpha", 7);
+         expect(inserted1);
+         expect(it1->second.value == 7);
+         expect(tracked_try_emplace_value::direct_ctor == 1);
+         expect(tracked_try_emplace_value::move_ctor == 0);
+         expect(tracked_try_emplace_value::copy_ctor == 0);
+
+         auto [it2, inserted2] = map.try_emplace("alpha", 22);
+         expect(!inserted2);
+         expect(it2->second.value == 7);
+         expect(tracked_try_emplace_value::direct_ctor == 1);
+         expect(tracked_try_emplace_value::move_ctor == 0);
+         expect(tracked_try_emplace_value::copy_ctor == 0);
+      }
+
+      tracked_try_emplace_value::reset_counts();
+   };
+
+   "try_emplace_indexed_path"_test = [] {
+      glz::ordered_small_map<int> map;
+      for (int i = 0; i < 32; ++i) {
+         auto [it, inserted] = map.try_emplace("i" + std::to_string(i), i);
+         expect(inserted);
+         expect(it->second == i);
+      }
+
+      auto [existing, inserted_existing] = map.try_emplace("i12", 777);
+      expect(!inserted_existing);
+      expect(existing->second == 12);
+
+      auto [added, inserted_new] = map.try_emplace("i_new", 888);
+      expect(inserted_new);
+      expect(added->second == 888);
    };
 
    "copy_constructor"_test = [] {

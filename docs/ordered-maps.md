@@ -28,6 +28,7 @@ for (auto& [key, value] : m) {
 - **Lookup (>8 entries)**: Sorted hash index with binary search, O(log n)
 - **Heterogeneous lookup**: Supports `std::string_view` and types convertible to it
 - **Bloom filter**: For maps with 9–128 entries, a 128-byte bloom filter accelerates duplicate detection during insertion
+- **Lazy mapped construction**: `try_emplace` only constructs `T` when insertion succeeds
 
 ### API
 
@@ -39,6 +40,7 @@ m["key"] = value;
 m.emplace("key", value);
 m.try_emplace("key", args...);
 m.insert({"key", value});
+m.insert_or_assign("key", value);
 
 // Lookup
 auto it = m.find("key");       // accepts string_view

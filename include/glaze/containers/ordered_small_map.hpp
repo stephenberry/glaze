@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 #include "glaze/hash/sweethash.hpp"
@@ -240,6 +241,15 @@ namespace glz
       {
          grow_if_needed();
          std::construct_at(data_ + size_, std::forward<Args>(args)...);
+         ++size_;
+      }
+
+      template <class K, class... Args>
+      void emplace_back_kv(K&& key, Args&&... args)
+      {
+         grow_if_needed();
+         std::construct_at(data_ + size_, std::piecewise_construct, std::forward_as_tuple(std::forward<K>(key)),
+                           std::forward_as_tuple(std::forward<Args>(args)...));
          ++size_;
       }
 
@@ -691,24 +701,110 @@ namespace glz
       template <class K, class... Args>
       std::pair<iterator, bool> emplace(K&& key, Args&&... args)
       {
-         if (size_ <= linear_search_threshold) {
-            auto it = linear_find(key);
-            if (it != end()) return {it, false};
-            emplace_back_impl(std::forward<K>(key), T(std::forward<Args>(args)...));
-            return {data_ + size_ - 1, true};
-         }
-         const uint32_t h = hash_key(key);
-         if (try_bloom_insert(h, [&] { emplace_back_impl(std::forward<K>(key), T(std::forward<Args>(args)...)); })) {
-            return {data_ + size_ - 1, true};
-         }
-         return indexed_insert(key, h,
-                               [&] { emplace_back_impl(std::forward<K>(key), T(std::forward<Args>(args)...)); });
+         return try_emplace(std::forward<K>(key), std::forward<Args>(args)...);
       }
 
       template <class K, class... Args>
       std::pair<iterator, bool> try_emplace(K&& key, Args&&... args)
       {
-         return emplace(std::forward<K>(key), std::forward<Args>(args)...);
+         if (size_ <= linear_search_threshold) {
+            auto it = linear_find(key);
+            if (it != end()) return {it, false};
+            emplace_back_kv(std::forward<K>(key), std::forward<Args>(args)...);
+            return {data_ + size_ - 1, true};
+         }
+         const uint32_t h = hash_key(key);
+         if (try_bloom_insert(h, [&] { emplace_back_kv(std::forward<K>(key), std::forward<Args>(args)...); })) {
+            return {data_ + size_ - 1, true};
+         }
+         auto [it, pos, _] = index_find_or_pos(key, h);
+         if (it != end()) return {it, false};
+         emplace_back_kv(std::forward<K>(key), std::forward<Args>(args)...);
+         bloom_set(h);
+         if (index_size() > 0) {
+            const uint32_t n = index_->size;
+            ensure_index_capacity(static_cast<size_type>(n) + 1);
+            auto* entries = index_entries();
+            if (pos < n) {
+               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
+            }
+            entries[pos] = {h, static_cast<uint32_t>(size_ - 1)};
+            index_->size = size_;
+         }
+         return {data_ + size_ - 1, true};
+      }
+
+      template <class M>
+      std::pair<iterator, bool> insert_or_assign(const key_type& key, M&& obj)
+      {
+         if (size_ <= linear_search_threshold) {
+            auto it = linear_find(key);
+            if (it != end()) {
+               it->second = std::forward<M>(obj);
+               return {it, false};
+            }
+            emplace_back_kv(key, std::forward<M>(obj));
+            return {data_ + size_ - 1, true};
+         }
+         const uint32_t h = hash_key(key);
+         if (try_bloom_insert(h, [&] { emplace_back_kv(key, std::forward<M>(obj)); })) {
+            return {data_ + size_ - 1, true};
+         }
+         auto [it, pos, _] = index_find_or_pos(key, h);
+         if (it != end()) {
+            it->second = std::forward<M>(obj);
+            return {it, false};
+         }
+         emplace_back_kv(key, std::forward<M>(obj));
+         bloom_set(h);
+         if (index_size() > 0) {
+            const uint32_t n = index_->size;
+            ensure_index_capacity(static_cast<size_type>(n) + 1);
+            auto* entries = index_entries();
+            if (pos < n) {
+               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
+            }
+            entries[pos] = {h, static_cast<uint32_t>(size_ - 1)};
+            index_->size = size_;
+         }
+         return {data_ + size_ - 1, true};
+      }
+
+      template <class M>
+      std::pair<iterator, bool> insert_or_assign(key_type&& key, M&& obj)
+      {
+         if (size_ <= linear_search_threshold) {
+            auto it = linear_find(key);
+            if (it != end()) {
+               it->second = std::forward<M>(obj);
+               return {it, false};
+            }
+            emplace_back_kv(std::move(key), std::forward<M>(obj));
+            return {data_ + size_ - 1, true};
+         }
+         const uint32_t h = hash_key(key);
+         if (try_bloom_insert(h, [&] { emplace_back_kv(std::move(key), std::forward<M>(obj)); })) {
+            return {data_ + size_ - 1, true};
+         }
+         // key may have been moved — but try_bloom_insert returned false, so the lambda didn't execute
+         auto [it, pos, _] = index_find_or_pos(key, h);
+         if (it != end()) {
+            it->second = std::forward<M>(obj);
+            return {it, false};
+         }
+         emplace_back_kv(std::move(key), std::forward<M>(obj));
+         bloom_set(h);
+         if (index_size() > 0) {
+            const uint32_t n = index_->size;
+            ensure_index_capacity(static_cast<size_type>(n) + 1);
+            auto* entries = index_entries();
+            if (pos < n) {
+               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
+            }
+            entries[pos] = {h, static_cast<uint32_t>(size_ - 1)};
+            index_->size = size_;
+         }
+         return {data_ + size_ - 1, true};
       }
 
       iterator erase(const_iterator pos)
