@@ -56,6 +56,30 @@ struct glz::meta<nested_struct>
    static constexpr auto value = object("title", &T::title, "data", &T::data, "numbers", &T::numbers);
 };
 
+struct nested_generic_member
+{
+   glz::generic c{};
+};
+
+template <>
+struct glz::meta<nested_generic_member>
+{
+   using T = nested_generic_member;
+   static constexpr auto value = object("c", &T::c);
+};
+
+struct struct_with_nested_generic
+{
+   nested_generic_member b{};
+};
+
+template <>
+struct glz::meta<struct_with_nested_generic>
+{
+   using T = struct_with_nested_generic;
+   static constexpr auto value = object("b", &T::b);
+};
+
 struct optional_struct
 {
    std::string name{};
@@ -4678,6 +4702,84 @@ city: NYC)";
       auto& person = std::get<glz::generic::object_t>(obj.at("person").data);
       expect(std::get<std::string>(person.at("name").data) == "Bob");
       expect(std::get<double>(person.at("age").data) == 25.0);
+   };
+
+   // Nested glz::generic member should preserve sibling keys in a nested block mapping.
+   "nested_generic_struct_member_keeps_all_nested_mapping_keys"_test = [] {
+      std::string yaml = R"(---
+b:
+  c:
+    d: 1
+    e: 2
+)";
+
+      struct_with_nested_generic parsed{};
+      auto rec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string out;
+      auto wec = glz::write_yaml(parsed, out);
+      expect(!wec);
+
+      auto* obj = parsed.b.c.get_if<glz::generic::object_t>();
+      expect(obj != nullptr);
+      if (obj != nullptr) {
+         expect(obj->size() == 2u) << out;
+         expect(obj->count("d") == 1u);
+         expect(obj->count("e") == 1u) << out;
+         expect(std::get<double>(obj->at("d").data) == 1.0);
+         expect(std::get<double>(obj->at("e").data) == 2.0);
+      }
+   };
+
+   // Deep block mappings inside nested glz::generic members should preserve sibling keys at each depth.
+   "nested_generic_struct_member_keeps_deep_nested_mapping_keys"_test = [] {
+      std::string yaml = R"(---
+b:
+  c:
+    level1:
+      level2:
+        d: 1
+        e: 2
+      sibling2: keep2
+    sibling1: keep1
+)";
+
+      struct_with_nested_generic parsed{};
+      auto rec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string out;
+      auto wec = glz::write_yaml(parsed, out);
+      expect(!wec);
+
+      auto* root = parsed.b.c.get_if<glz::generic::object_t>();
+      expect(root != nullptr);
+      if (root != nullptr) {
+         expect(root->size() == 2u) << out;
+         expect(root->count("level1") == 1u);
+         expect(root->count("sibling1") == 1u) << out;
+         expect(std::get<std::string>(root->at("sibling1").data) == "keep1");
+
+         auto* level1 = root->at("level1").get_if<glz::generic::object_t>();
+         expect(level1 != nullptr);
+         if (level1 != nullptr) {
+            expect(level1->size() == 2u) << out;
+            expect(level1->count("level2") == 1u);
+            expect(level1->count("sibling2") == 1u) << out;
+            expect(std::get<std::string>(level1->at("sibling2").data) == "keep2");
+
+            auto* level2 = level1->at("level2").get_if<glz::generic::object_t>();
+            expect(level2 != nullptr);
+            if (level2 != nullptr) {
+               expect(level2->size() == 2u) << out;
+               expect(level2->count("d") == 1u);
+               expect(level2->count("e") == 1u) << out;
+               expect(std::get<double>(level2->at("d").data) == 1.0);
+               expect(std::get<double>(level2->at("e").data) == 2.0);
+            }
+         }
+      }
    };
 
    // First verify simple two-key block mapping works

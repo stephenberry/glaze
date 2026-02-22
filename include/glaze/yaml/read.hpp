@@ -3509,7 +3509,22 @@ namespace glz
                               int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
                               if (nested_indent >= 0) {
                                  skip_to_content(it, end);
-                                 if constexpr (readable_map_t<member_type>) {
+                                 constexpr bool uses_discovered_block_mapping_indent = [] {
+                                    if constexpr (readable_map_t<member_type> || is_variant<member_type>) {
+                                       return true;
+                                    }
+                                    else if constexpr (glaze_value_t<member_type>) {
+                                       using unwrapped_member_type = std::decay_t<decltype(get_member(
+                                          std::declval<member_type&>(), meta_wrapper_v<member_type>))>;
+                                       return readable_map_t<unwrapped_member_type> ||
+                                              is_variant<unwrapped_member_type>;
+                                    }
+                                    else {
+                                       return false;
+                                    }
+                                 }();
+
+                                 if constexpr (uses_discovered_block_mapping_indent) {
                                     if (!ctx.push_indent(nested_indent - 1)) [[unlikely]]
                                        return false;
                                  }
