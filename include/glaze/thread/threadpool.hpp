@@ -23,13 +23,14 @@ namespace glz
 
       void n_threads(const size_t n)
       {
+         const size_t n_workers = (n == 0) ? size_t{1} : n;
          finish_work(); // finish any active work
          std::lock_guard lock(mtx);
          closed = false;
 
          threads.clear();
-         threads.reserve(n);
-         for (size_t i = 0; i < n; ++i) {
+         threads.reserve(n_workers);
+         for (size_t i = 0; i < n_workers; ++i) {
             threads.emplace_back([this, thread_number = i] {
                while (true) {
                   std::unique_lock lock(mtx);
@@ -60,7 +61,11 @@ namespace glz
          }
       }
 
-      size_t concurrency() const noexcept { return std::thread::hardware_concurrency(); }
+      size_t concurrency() const noexcept
+      {
+         const size_t n = std::thread::hardware_concurrency();
+         return (n == 0) ? size_t{1} : n;
+      }
 
       using callable_t = std::function<void(const size_t)>;
 
@@ -154,8 +159,7 @@ namespace glz
       void wait()
       {
          std::unique_lock lock(mtx);
-         if (queue.empty() && (working == 0)) return;
-         done_cv.wait(lock);
+         done_cv.wait(lock, [this] { return queue.empty() && (working == 0); });
       }
 
       size_t size() const { return threads.size(); }

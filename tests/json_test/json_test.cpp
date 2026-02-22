@@ -3496,6 +3496,20 @@ suite thread_pool = [] {
 
       expect(numbers.size() == 1000);
    };
+
+   "thread pool zero threads fallback"_test = [] {
+      glz::pool pool(0);
+
+      std::atomic<int> x = 0;
+
+      for (auto i = 0; i < 1000; ++i) {
+         pool.emplace_back([&] { ++x; });
+      }
+
+      pool.wait();
+
+      expect(x == 1000);
+   };
 };
 
 struct local_meta
