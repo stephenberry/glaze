@@ -391,11 +391,16 @@ suite u8string_view_tests = [] {
    };
 
    "u8string_view unicode"_test = [] {
-      std::string json = R"("日本語テスト")";
+      constexpr std::u8string_view expected = u8"日本語テスト";
+      std::string json{};
+      json.reserve(expected.size() + 2);
+      json.push_back('"');
+      json.append(reinterpret_cast<const char*>(expected.data()), expected.size());
+      json.push_back('"');
       std::u8string_view value{};
       expect(not glz::read_json(value, json));
       // The view points into the json buffer (raw string, no escape processing)
-      expect(value == u8"日本語テスト");
+      expect(value == expected);
    };
 
    "u8string_view in struct"_test = [] {
