@@ -2,12 +2,15 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/glaze_exceptions.hpp"
+#include "glaze/containers/ordered_small_map.hpp"
 #include "glaze/thread/async.hpp"
 #include "glaze/thread/async_string.hpp"
 #include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/shared_async_vector.hpp"
 #include "glaze/thread/threadpool.hpp"
 #include "ut/ut.hpp"
+
+#include <limits>
 
 using namespace ut;
 
@@ -738,6 +741,14 @@ suite custom_tests = [] {
       catch (const std::exception& error) {
          expect(false) << error.what() << '\n';
       }
+   };
+};
+
+suite ordered_small_map_overflow_tests = [] {
+   "ordered_small_map reserve overflow throws"_test = [] {
+      glz::ordered_small_map<int> map;
+      const auto too_large = static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) + 1;
+      expect(throws([&] { map.reserve(too_large); }));
    };
 };
 

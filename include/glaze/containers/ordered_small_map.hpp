@@ -7,6 +7,7 @@
 #include <concepts>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <new>
 #include <stdexcept>
@@ -88,10 +89,61 @@ namespace glz
 
       static constexpr size_type linear_search_threshold = 8;
       static constexpr size_type bloom_threshold = 128; // disable bloom filter above this size
+      static constexpr uint32_t max_u32 = (std::numeric_limits<uint32_t>::max)();
 
       static uint32_t hash_key(std::string_view key) noexcept { return sweethash::sweet32(key); }
 
       // --- Data array management ---
+
+      [[noreturn]] static void throw_capacity_overflow()
+      {
+         GLZ_THROW_OR_ABORT(std::length_error("ordered_small_map capacity overflow"));
+      }
+
+      [[noreturn]] static void throw_index_overflow()
+      {
+         GLZ_THROW_OR_ABORT(std::length_error("ordered_small_map index capacity overflow"));
+      }
+
+      static uint32_t checked_u32(size_type value)
+      {
+         if (value > static_cast<size_type>(max_u32)) {
+            throw_capacity_overflow();
+         }
+         return static_cast<uint32_t>(value);
+      }
+
+      static uint32_t next_data_capacity(uint32_t current)
+      {
+         if (current == 0) return 4;
+         if (current > (max_u32 / 2)) return max_u32;
+         return current * 2;
+      }
+
+      static uint32_t next_index_capacity(uint32_t current)
+      {
+         if (current == 0) return 16;
+         if (current > (max_u32 / 2)) return max_u32;
+         return current * 2;
+      }
+
+      static size_t checked_data_allocation_bytes(uint32_t count)
+      {
+         if (count > ((std::numeric_limits<size_t>::max)() / sizeof(value_type))) {
+            GLZ_THROW_OR_ABORT(std::bad_alloc{});
+         }
+         return static_cast<size_t>(count) * sizeof(value_type);
+      }
+
+      static size_t checked_index_allocation_bytes(uint32_t count)
+      {
+         constexpr size_t header = sizeof(index_header);
+         constexpr size_t entry = sizeof(hash_index_entry);
+         if (count > (((std::numeric_limits<size_t>::max)() - header) / entry)) {
+            GLZ_THROW_OR_ABORT(std::bad_alloc{});
+         }
+         return header + static_cast<size_t>(count) * entry;
+      }
 
       static void destroy_range(value_type* data, uint32_t count) noexcept
       {
@@ -102,7 +154,7 @@ namespace glz
 
       value_type* allocate_and_relocate(uint32_t new_cap)
       {
-         auto* new_data = static_cast<value_type*>(::operator new(static_cast<size_t>(new_cap) * sizeof(value_type)));
+         auto* new_data = static_cast<value_type*>(::operator new(checked_data_allocation_bytes(new_cap)));
 #if __cpp_exceptions
          uint32_t constructed = 0;
          try {
@@ -125,7 +177,7 @@ namespace glz
 
       static value_type* allocate_and_copy(const value_type* source, uint32_t count)
       {
-         auto* new_data = static_cast<value_type*>(::operator new(static_cast<size_t>(count) * sizeof(value_type)));
+         auto* new_data = static_cast<value_type*>(::operator new(checked_data_allocation_bytes(count)));
 #if __cpp_exceptions
          uint32_t constructed = 0;
          try {
@@ -148,6 +200,9 @@ namespace glz
 
       void reallocate_data(uint32_t new_cap)
       {
+         if (new_cap < size_) {
+            throw_capacity_overflow();
+         }
          auto* new_data = allocate_and_relocate(new_cap);
          destroy_all();
          ::operator delete(data_);
@@ -158,7 +213,10 @@ namespace glz
       void grow_if_needed()
       {
          if (size_ == capacity_) {
-            const uint32_t new_cap = capacity_ ? capacity_ * 2 : 4;
+            if (size_ == max_u32) {
+               throw_capacity_overflow();
+            }
+            const uint32_t new_cap = next_data_capacity(capacity_);
             reallocate_data(new_cap);
          }
       }
@@ -240,13 +298,22 @@ namespace glz
          index_ = nullptr;
       }
 
-      void ensure_index_capacity(uint32_t needed) const
+      void ensure_index_capacity(size_type needed) const
       {
-         if (index_ && index_->capacity >= needed) return;
+         if (needed == 0) return;
+         if (needed > static_cast<size_type>(max_u32)) {
+            throw_index_overflow();
+         }
+         const auto needed_u32 = static_cast<uint32_t>(needed);
+         if (index_ && index_->capacity >= needed_u32) return;
          uint32_t cap = index_ ? index_->capacity : 0;
-         while (cap < needed) cap = cap ? cap * 2 : 16;
-         auto* block =
-            static_cast<index_header*>(std::realloc(index_, sizeof(index_header) + cap * sizeof(hash_index_entry)));
+         while (cap < needed_u32) {
+            cap = next_index_capacity(cap);
+            if (cap < needed_u32) {
+               throw_index_overflow();
+            }
+         }
+         auto* block = static_cast<index_header*>(std::realloc(index_, checked_index_allocation_bytes(cap)));
          if (!block) GLZ_THROW_OR_ABORT(std::bad_alloc{});
          if (!index_) {
             block->size = 0;
@@ -261,7 +328,7 @@ namespace glz
       // Full rebuild: rehash all keys, sort, and repopulate bloom filter.
       void rebuild_index() const
       {
-         ensure_index_capacity(size_);
+         ensure_index_capacity(static_cast<size_type>(size_));
          bloom_clear();
          auto* entries = index_entries();
          for (uint32_t i = 0; i < size_; ++i) {
@@ -295,7 +362,7 @@ namespace glz
             auto pos = static_cast<size_t>(p - base);
 
             const uint32_t m = index_->size;
-            ensure_index_capacity(m + 1);
+            ensure_index_capacity(static_cast<size_type>(m) + 1);
             auto* entries = index_entries();
             if (pos < m) {
                std::memmove(entries + pos + 1, entries + pos, (m - pos) * sizeof(hash_index_entry));
@@ -437,7 +504,7 @@ namespace glz
          // Insert the new entry into the sorted index to keep it current.
          if (index_size() > 0) {
             const uint32_t n = index_->size;
-            ensure_index_capacity(n + 1);
+            ensure_index_capacity(static_cast<size_type>(n) + 1);
             auto* entries = index_entries();
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
@@ -557,7 +624,7 @@ namespace glz
       void reserve(size_type new_cap)
       {
          if (new_cap <= capacity_) return;
-         reallocate_data(static_cast<uint32_t>(new_cap));
+         reallocate_data(checked_u32(new_cap));
       }
 
       void shrink_to_fit()
@@ -738,7 +805,7 @@ namespace glz
          bloom_set(h);
          if (index_size() > 0) {
             const uint32_t n = index_->size;
-            ensure_index_capacity(n + 1);
+            ensure_index_capacity(static_cast<size_type>(n) + 1);
             auto* entries = index_entries();
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
@@ -768,7 +835,7 @@ namespace glz
          bloom_set(h);
          if (index_size() > 0) {
             const uint32_t n = index_->size;
-            ensure_index_capacity(n + 1);
+            ensure_index_capacity(static_cast<size_type>(n) + 1);
             auto* entries = index_entries();
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
@@ -802,7 +869,7 @@ namespace glz
          bloom_set(h);
          if (index_size() > 0) {
             const uint32_t n = index_->size;
-            ensure_index_capacity(n + 1);
+            ensure_index_capacity(static_cast<size_type>(n) + 1);
             auto* entries = index_entries();
             if (pos < n) {
                std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
