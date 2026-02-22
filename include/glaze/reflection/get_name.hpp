@@ -434,7 +434,10 @@ namespace glz
 #else
       // TODO: Use std::source_location when deprecating clang 14
       // std::string_view str = std::source_location::current().function_name();
-      return parse_name_from_pretty_function(GLZ_PRETTY_FUNCTION);
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      str = str.substr(str.find("&") + 1);
+      str = str.substr(0, str.find(pretty_function_tail));
+      return str.substr(str.rfind("::") + 2);
 #endif
    }
 
