@@ -571,9 +571,16 @@ namespace glz
       ordered_small_map(std::initializer_list<value_type> init)
       {
          reserve(init.size());
-         for (const auto& pair : init) {
-            if (linear_find(pair.first) == end()) {
-               push_back_impl(pair);
+         if (init.size() <= linear_search_threshold) {
+            for (const auto& pair : init) {
+               if (linear_find(pair.first) == end()) {
+                  push_back_impl(pair);
+               }
+            }
+         }
+         else {
+            for (const auto& pair : init) {
+               insert(pair);
             }
          }
       }
