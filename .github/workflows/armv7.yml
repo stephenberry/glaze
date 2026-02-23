@@ -24,17 +24,20 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install cross-compiler
+    - name: Install cross-compiler and QEMU
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           gcc-13-arm-linux-gnueabihf \
           g++-13-arm-linux-gnueabihf \
-          libstdc++-13-dev-armhf-cross
+          libstdc++-13-dev-armhf-cross \
+          libc6-armhf-cross \
+          qemu-user-static
 
     - name: Verify compiler and NEON target macro
       run: |
         arm-linux-gnueabihf-g++-13 --version
+        qemu-arm-static --version
         arm-linux-gnueabihf-g++-13 -std=c++23 -march=armv7-a -mfpu=neon -mfloat-abi=hard -dM -E -x c++ /dev/null | grep "__ARM_NEON"
 
     - name: Create CMake toolchain file
@@ -51,6 +54,9 @@ jobs:
         set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
         set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 
+        # Use QEMU to run selected target binaries in smoke tests.
+        set(CMAKE_CROSSCOMPILING_EMULATOR qemu-arm-static;-L;/usr/arm-linux-gnueabihf)
+
         # We're cross-compiling; avoid running target executables during configure.
         set(CMAKE_CROSSCOMPILING TRUE)
         EOF
@@ -63,8 +69,19 @@ jobs:
           -DCMAKE_CXX_STANDARD=23 \
           -DCMAKE_C_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard" \
           -DCMAKE_CXX_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard" \
-          -DBUILD_TESTING=OFF \
+          -DBUILD_TESTING=ON \
+          -Dglaze_BUILD_NETWORKING_TESTS=OFF \
+          -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+          -Dglaze_BUILD_SSL_TESTS=OFF \
           -Dglaze_ENABLE_FUZZING=OFF
 
-    - name: Build
-      run: cmake --build "$GITHUB_WORKSPACE/build" -j "$(nproc)" --target glaze_ide
+    - name: Build (unit tests + library)
+      run: cmake --build "$GITHUB_WORKSPACE/build" -j "$(nproc)"
+
+    - name: Smoke test under QEMU
+      env:
+        QEMU_LD_PREFIX: /usr/arm-linux-gnueabihf
+      run: |
+        ctest --test-dir "$GITHUB_WORKSPACE/build" \
+          --output-on-failure \
+          -R "^(api_test|json_test|roundtrip_JSON)$"
