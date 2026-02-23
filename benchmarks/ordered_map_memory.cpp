@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <map>
 #include <new>
 #include <string>
 #include <vector>
@@ -67,6 +68,7 @@ int main()
    std::cout << "sizeof(std::string) = " << sizeof(std::string) << "\n";
    std::cout << "sizeof(glz::ordered_small_map<int>) = " << sizeof(glz::ordered_small_map<int>) << "\n";
    std::cout << "sizeof(glz::ordered_map<std::string, int>) = " << sizeof(glz::ordered_map<std::string, int>) << "\n";
+   std::cout << "sizeof(std::map<std::string, int>) = " << sizeof(std::map<std::string, int>) << "\n";
    std::cout << "\n";
 
    // Pre-generate keys outside measurement
@@ -75,8 +77,12 @@ int main()
       all_keys.push_back(generate_keys(n));
    }
 
-   std::cout << "  n  | small_map bytes | small_map/entry | map bytes | map/entry | ratio (map/small_map)\n";
-   std::cout << "-----|-----------------|-----------------|-----------|-----------|----------------------\n";
+   std::cout
+      << "  n  | small_map bytes | small/entry | ordered_map bytes | ordered/entry | std::map bytes | std/entry | "
+         "ordered/small | std/small\n";
+   std::cout
+      << "-----|-----------------|-------------|-------------------|---------------|----------------|-----------|---------------"
+         "|----------\n";
 
    size_t idx = 0;
    for (size_t n : {8, 16, 32, 64, 128, 256}) {
@@ -95,19 +101,30 @@ int main()
 
       // Measure glz::ordered_map
       before = g_allocated.load();
-      auto* map = new glz::ordered_map<std::string, int>();
+      auto* ordered_map = new glz::ordered_map<std::string, int>();
       for (size_t i = 0; i < n; ++i) {
-         (*map)[keys[i]] = static_cast<int>(i);
+         (*ordered_map)[keys[i]] = static_cast<int>(i);
       }
-      int64_t map_bytes = g_allocated.load() - before;
-      delete map;
+      int64_t ordered_map_bytes = g_allocated.load() - before;
+      delete ordered_map;
+
+      // Measure std::map
+      before = g_allocated.load();
+      auto* std_map = new std::map<std::string, int>();
+      for (size_t i = 0; i < n; ++i) {
+         (*std_map)[keys[i]] = static_cast<int>(i);
+      }
+      int64_t std_map_bytes = g_allocated.load() - before;
+      delete std_map;
 
       double small_per = static_cast<double>(small_map_bytes) / n;
-      double map_per = static_cast<double>(map_bytes) / n;
-      double ratio = static_cast<double>(map_bytes) / small_map_bytes;
+      double ordered_per = static_cast<double>(ordered_map_bytes) / n;
+      double std_per = static_cast<double>(std_map_bytes) / n;
+      double ordered_ratio = static_cast<double>(ordered_map_bytes) / small_map_bytes;
+      double std_ratio = static_cast<double>(std_map_bytes) / small_map_bytes;
 
-      printf("%4zu | %15lld | %15.1f | %9lld | %9.1f | %20.2fx\n", n, small_map_bytes, small_per, map_bytes, map_per,
-             ratio);
+      printf("%4zu | %15lld | %11.1f | %17lld | %13.1f | %14lld | %9.1f | %13.2fx | %8.2fx\n", n, small_map_bytes,
+             small_per, ordered_map_bytes, ordered_per, std_map_bytes, std_per, ordered_ratio, std_ratio);
    }
 
    return 0;

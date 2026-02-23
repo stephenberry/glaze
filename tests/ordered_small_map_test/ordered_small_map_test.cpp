@@ -126,6 +126,30 @@ namespace
          move_ctor = 0;
       }
    };
+
+   std::vector<std::string> ordered_small_map_benchmark_keys(size_t n)
+   {
+      static const std::vector<std::string> base = {
+         "id",        "name",    "email",   "age",      "active",  "role",   "created",   "updated",  "type",
+         "status",    "title",   "body",    "url",      "path",    "method", "headers",   "params",   "query",
+         "page",      "limit",   "offset",  "total",    "count",   "data",   "error",     "message",  "code",
+         "timestamp", "version", "format",  "encoding", "length",  "width",  "height",    "color",    "font",
+         "size",      "weight",  "opacity", "visible",  "enabled", "locked", "readonly",  "required", "optional",
+         "default",   "min",     "max",     "pattern",  "prefix",  "suffix", "separator", "locale",   "timezone",
+         "currency",  "country", "region",  "city",     "street",  "zip"};
+
+      std::vector<std::string> keys;
+      keys.reserve(n);
+      for (size_t i = 0; i < n; ++i) {
+         if (i < base.size()) {
+            keys.push_back(base[i]);
+         }
+         else {
+            keys.push_back("field_" + std::to_string(i));
+         }
+      }
+      return keys;
+   }
 }
 
 suite ordered_small_map_tests = [] {
@@ -628,6 +652,22 @@ suite ordered_small_map_tests = [] {
          expect(value == expected * 2);
          ++expected;
       }
+   };
+
+   "index_rebuild_handles_growth_to_256"_test = [] {
+      glz::ordered_small_map<int> map;
+      auto keys = ordered_small_map_benchmark_keys(256);
+
+      for (size_t i = 0; i < keys.size(); ++i) {
+         map[keys[i]] = static_cast<int>(i);
+      }
+
+      expect(map.size() == 256);
+      expect(map.find("__nonexistent__") == map.end());
+      expect(map.contains("id"));
+      expect(map.contains("field_255"));
+      expect(map["id"] == 0);
+      expect(map["field_255"] == 255);
    };
 
    "index_invalidation_on_insert"_test = [] {

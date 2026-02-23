@@ -318,10 +318,11 @@ namespace glz
          if (index_ && index_->capacity >= needed_u32) return;
          uint32_t cap = index_ ? index_->capacity : 0;
          while (cap < needed_u32) {
-            cap = next_index_capacity(cap);
-            if (cap < needed_u32) {
+            const uint32_t next = next_index_capacity(cap);
+            if (next <= cap) {
                throw_index_overflow();
             }
+            cap = next;
          }
          auto* block = static_cast<index_header*>(std::realloc(index_, checked_index_allocation_bytes(cap)));
          if (!block) GLZ_THROW_OR_ABORT(std::bad_alloc{});
