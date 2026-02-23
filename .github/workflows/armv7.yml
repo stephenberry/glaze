@@ -67,8 +67,8 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=toolchain-armv7.cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_STANDARD=23 \
-          -DCMAKE_C_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard" \
-          -DCMAKE_CXX_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard" \
+          -DCMAKE_C_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard -Wno-psabi" \
+          -DCMAKE_CXX_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard -Wno-psabi" \
           -DBUILD_TESTING=ON \
           -Dglaze_BUILD_NETWORKING_TESTS=OFF \
           -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \

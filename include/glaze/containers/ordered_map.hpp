@@ -565,6 +565,10 @@ namespace glz
       // Ordered erase: preserves insertion order. O(n) because it shifts elements.
       iterator erase(const_iterator pos)
       {
+         if (pos == values_.cend()) [[unlikely]] {
+            return values_.end();
+         }
+
          const auto erased_idx = static_cast<uint32_t>(pos - values_.cbegin());
 
          // Remove from bucket array
@@ -614,12 +618,12 @@ namespace glz
 
       size_type erase(const key_type& key)
       {
-         auto it = find(key);
-         if (it != end()) {
-            erase(it);
-            return 1;
+         const uint32_t bi = find_bucket(key);
+         if (bi == bucket_count_) {
+            return 0;
          }
-         return 0;
+         erase(values_.cbegin() + buckets_[bi].index);
+         return 1;
       }
 
       template <class K>
@@ -627,12 +631,12 @@ namespace glz
                   !std::convertible_to<K, const_iterator>)
       size_type erase(const K& key)
       {
-         auto it = find(key);
-         if (it != end()) {
-            erase(it);
-            return 1;
+         const uint32_t bi = find_bucket(key);
+         if (bi == bucket_count_) {
+            return 0;
          }
-         return 0;
+         erase(values_.cbegin() + buckets_[bi].index);
+         return 1;
       }
 
       // Unordered erase: O(1) amortized. Swaps erased element with last, does NOT preserve insertion order.
