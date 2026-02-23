@@ -1,0 +1,70 @@
+name: armv7
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  build-armv7:
+    runs-on: ubuntu-24.04
+    name: GCC armv7 (NEON, cross-compiled)
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install cross-compiler
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          gcc-13-arm-linux-gnueabihf \
+          g++-13-arm-linux-gnueabihf \
+          libstdc++-13-dev-armhf-cross
+
+    - name: Verify compiler and NEON target macro
+      run: |
+        arm-linux-gnueabihf-g++-13 --version
+        arm-linux-gnueabihf-g++-13 -std=c++23 -march=armv7-a -mfpu=neon -mfloat-abi=hard -dM -E -x c++ /dev/null | grep "__ARM_NEON"
+
+    - name: Create CMake toolchain file
+      run: |
+        cat > toolchain-armv7.cmake << 'EOF'
+        set(CMAKE_SYSTEM_NAME Linux)
+        set(CMAKE_SYSTEM_PROCESSOR armv7)
+
+        set(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc-13)
+        set(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++-13)
+
+        set(CMAKE_FIND_ROOT_PATH /usr/arm-linux-gnueabihf)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+        # We're cross-compiling; avoid running target executables during configure.
+        set(CMAKE_CROSSCOMPILING TRUE)
+        EOF
+
+    - name: Configure CMake
+      run: |
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_TOOLCHAIN_FILE=toolchain-armv7.cmake \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23 \
+          -DCMAKE_C_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard" \
+          -DCMAKE_CXX_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard" \
+          -DBUILD_TESTING=OFF \
+          -Dglaze_ENABLE_FUZZING=OFF
+
+    - name: Build
+      run: cmake --build "$GITHUB_WORKSPACE/build" -j "$(nproc)" --target glaze_ide
