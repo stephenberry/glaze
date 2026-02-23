@@ -4,11 +4,31 @@
 #include "glaze/containers/ordered_map.hpp"
 
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "ut/ut.hpp"
 
 using namespace ut;
+
+namespace
+{
+   struct emplace_counter_value
+   {
+      int value = 0;
+      static inline int constructions = 0;
+
+      emplace_counter_value() = delete;
+      explicit emplace_counter_value(int v) : value(v) { ++constructions; }
+      emplace_counter_value(const emplace_counter_value& other) : value(other.value) { ++constructions; }
+      emplace_counter_value(emplace_counter_value&& other) noexcept : value(other.value) { ++constructions; }
+
+      emplace_counter_value& operator=(const emplace_counter_value&) = default;
+      emplace_counter_value& operator=(emplace_counter_value&&) noexcept = default;
+
+      static void reset() { constructions = 0; }
+   };
+}
 
 suite ordered_map_tests = [] {
    "insertion_order_preserved"_test = [] {
@@ -219,6 +239,37 @@ suite ordered_map_tests = [] {
       auto [it2, ins2] = d.emplace("hello", 99);
       expect(!ins2);
       expect(it2->second == 42);
+   };
+
+   "emplace_key_path_skips_duplicate_mapped_construction"_test = [] {
+      emplace_counter_value::reset();
+
+      glz::ordered_map<std::string, emplace_counter_value> d;
+      auto [it, ins] = d.emplace("hello", 42);
+      expect(ins);
+      expect(it->second.value == 42);
+      expect(emplace_counter_value::constructions == 1);
+
+      const auto before_dup = emplace_counter_value::constructions;
+      auto [it2, ins2] = d.emplace("hello", 99);
+      expect(!ins2);
+      expect(it2->second.value == 42);
+      expect(emplace_counter_value::constructions == before_dup);
+   };
+
+   "emplace_piecewise_fallback"_test = [] {
+      glz::ordered_map<std::string, std::string> d;
+
+      auto [it, ins] =
+         d.emplace(std::piecewise_construct, std::forward_as_tuple("k"), std::forward_as_tuple(size_t{3}, 'x'));
+      expect(ins);
+      expect(it->first == "k");
+      expect(it->second == "xxx");
+
+      auto [it2, ins2] =
+         d.emplace(std::piecewise_construct, std::forward_as_tuple("k"), std::forward_as_tuple(size_t{5}, 'y'));
+      expect(!ins2);
+      expect(it2->second == "xxx");
    };
 
    "copy_constructor"_test = [] {
