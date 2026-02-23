@@ -20,13 +20,30 @@ namespace
       int value = 0;
 
       static inline int alive = 0;
+      static inline int default_attempts = 0;
+      static inline int direct_attempts = 0;
       static inline int copy_attempts = 0;
       static inline int move_attempts = 0;
+      static inline int throw_on_default = -1;
+      static inline int throw_on_direct = -1;
       static inline int throw_on_copy = -1;
       static inline int throw_on_move = -1;
 
-      throwing_value() { ++alive; }
-      explicit throwing_value(int v) : value(v) { ++alive; }
+      throwing_value()
+      {
+         if (throw_on_default >= 0 && default_attempts++ == throw_on_default) {
+            throw std::runtime_error("throwing_value default");
+         }
+         ++alive;
+      }
+
+      explicit throwing_value(int v) : value(v)
+      {
+         if (throw_on_direct >= 0 && direct_attempts++ == throw_on_direct) {
+            throw std::runtime_error("throwing_value direct");
+         }
+         ++alive;
+      }
 
       throwing_value(const throwing_value& other) : value(other.value)
       {
@@ -66,8 +83,12 @@ namespace
 
       static void reset_throw_controls()
       {
+         default_attempts = 0;
+         direct_attempts = 0;
          copy_attempts = 0;
          move_attempts = 0;
+         throw_on_default = -1;
+         throw_on_direct = -1;
          throw_on_copy = -1;
          throw_on_move = -1;
       }
@@ -295,6 +316,127 @@ suite ordered_small_map_tests = [] {
       expect(added->second == 888);
    };
 
+   "threshold_boundary_8_entries"_test = [] {
+      glz::ordered_small_map<int> map;
+      for (int i = 0; i < 8; ++i) {
+         auto [it, inserted] = map.try_emplace("k" + std::to_string(i), i);
+         expect(inserted);
+         expect(it->second == i);
+      }
+
+      expect(map.size() == 8);
+
+      auto [dup, inserted_dup] = map.try_emplace("k3", 303);
+      expect(!inserted_dup);
+      expect(dup->second == 3);
+      expect(map.size() == 8);
+
+      std::vector<std::string> keys;
+      for (const auto& [key, value] : map) {
+         keys.push_back(key);
+      }
+      expect(keys.size() == 8);
+      expect(keys.front() == "k0");
+      expect(keys.back() == "k7");
+
+      for (int i = 0; i < 8; ++i) {
+         expect(map.at("k" + std::to_string(i)) == i);
+      }
+   };
+
+   "threshold_boundary_9_entries"_test = [] {
+      glz::ordered_small_map<int> map;
+      for (int i = 0; i < 9; ++i) {
+         auto [it, inserted] = map.try_emplace("k" + std::to_string(i), i);
+         expect(inserted);
+         expect(it->second == i);
+      }
+
+      expect(map.size() == 9);
+      expect(map.contains("k4"));
+
+      auto [dup, inserted_dup] = map.try_emplace("k4", 404);
+      expect(!inserted_dup);
+      expect(dup->second == 4);
+      expect(map.size() == 9);
+
+      std::vector<std::string> keys;
+      for (const auto& [key, value] : map) {
+         keys.push_back(key);
+      }
+      expect(keys.size() == 9);
+      expect(keys.front() == "k0");
+      expect(keys.back() == "k8");
+
+      for (int i = 0; i < 9; ++i) {
+         expect(map.at("k" + std::to_string(i)) == i);
+      }
+   };
+
+   "threshold_crossing_with_post_insert"_test = [] {
+      glz::ordered_small_map<int> map;
+      for (int i = 0; i < 8; ++i) {
+         auto [it, inserted] = map.insert_or_assign("k" + std::to_string(i), i);
+         expect(inserted);
+         expect(it->second == i);
+      }
+      expect(map.size() == 8);
+
+      auto [ninth, inserted_ninth] = map.insert_or_assign("k8", 8);
+      expect(inserted_ninth);
+      expect(ninth->second == 8);
+      expect(map.size() == 9);
+
+      auto [existing, inserted_existing] = map.try_emplace("k8", 808);
+      expect(!inserted_existing);
+      expect(existing->second == 8);
+
+      auto [added, inserted_added] = map.try_emplace("k9", 9);
+      expect(inserted_added);
+      expect(added->second == 9);
+      expect(map.size() == 10);
+
+      std::vector<std::string> keys;
+      for (const auto& [key, value] : map) {
+         keys.push_back(key);
+      }
+      expect(keys.size() == 10);
+      expect(keys.front() == "k0");
+      expect(keys.back() == "k9");
+   };
+
+   "try_emplace_non_default_indexed_path"_test = [] {
+      tracked_try_emplace_value::reset_counts();
+
+      glz::ordered_small_map<tracked_try_emplace_value> map;
+      map.reserve(40);
+      for (int i = 0; i < 16; ++i) {
+         auto [it, inserted] = map.try_emplace("n" + std::to_string(i), i);
+         expect(inserted);
+         expect(it->second.value == i);
+      }
+      expect(map.size() == 16);
+      expect(map.contains("n5"));
+
+      tracked_try_emplace_value::reset_counts();
+
+      auto [dup, inserted_dup] = map.try_emplace("n5", 500);
+      expect(!inserted_dup);
+      expect(dup->second.value == 5);
+      expect(tracked_try_emplace_value::direct_ctor == 0);
+      expect(tracked_try_emplace_value::copy_ctor == 0);
+      expect(tracked_try_emplace_value::move_ctor == 0);
+
+      auto [added, inserted_added] = map.try_emplace("n_new", 700);
+      expect(inserted_added);
+      expect(added->second.value == 700);
+      expect(tracked_try_emplace_value::direct_ctor == 1);
+      expect(tracked_try_emplace_value::copy_ctor == 0);
+      expect(tracked_try_emplace_value::move_ctor == 0);
+
+      tracked_try_emplace_value::reset_counts();
+   };
+
    "copy_constructor"_test = [] {
       glz::ordered_small_map<int> map1;
       map1["a"] = 1;
@@ -381,6 +523,44 @@ suite ordered_small_map_tests = [] {
       expect(keys[2] == "third");
    };
 
+   "initializer_list_duplicates_small"_test = [] {
+      glz::ordered_small_map<int> map = {{"a", 1}, {"b", 2}, {"a", 9}, {"c", 3}, {"b", 7}};
+
+      expect(map.size() == 3);
+      expect(map.at("a") == 1);
+      expect(map.at("b") == 2);
+      expect(map.at("c") == 3);
+
+      std::vector<std::string> keys;
+      for (const auto& [key, value] : map) {
+         keys.push_back(key);
+      }
+      expect(keys.size() == 3);
+      expect(keys[0] == "a");
+      expect(keys[1] == "b");
+      expect(keys[2] == "c");
+   };
+
+   "initializer_list_duplicates_large"_test = [] {
+      glz::ordered_small_map<int> map = {{"k0", 0}, {"k1", 1}, {"k2", 2}, {"k3", 3}, {"k4", 4},
+                                         {"k5", 5}, {"k6", 6}, {"k7", 7}, {"k8", 8}, {"k9", 9},
+                                         {"k3", 300}, {"k7", 700}, {"k0", 1000}};
+
+      expect(map.size() == 10);
+      expect(map.at("k0") == 0);
+      expect(map.at("k3") == 3);
+      expect(map.at("k7") == 7);
+      expect(map.at("k9") == 9);
+
+      std::vector<std::string> keys;
+      for (const auto& [key, value] : map) {
+         keys.push_back(key);
+      }
+      expect(keys.size() == 10);
+      expect(keys.front() == "k0");
+      expect(keys.back() == "k9");
+   };
+
    "clear_works"_test = [] {
       glz::ordered_small_map<int> map;
       map["a"] = 1;
@@ -403,14 +583,14 @@ suite ordered_small_map_tests = [] {
    };
 
    "small_map_linear_search"_test = [] {
-      // Test with <= 16 entries (should use linear search)
+      // Test with <= 8 entries (should use linear search)
       glz::ordered_small_map<int> map;
 
-      for (int i = 0; i < 16; ++i) {
+      for (int i = 0; i < 8; ++i) {
          map[std::to_string(i)] = i;
       }
 
-      expect(map.size() == 16);
+      expect(map.size() == 8);
 
       // Verify all values and insertion order
       int expected = 0;
@@ -421,13 +601,13 @@ suite ordered_small_map_tests = [] {
       }
 
       // Verify lookup works
-      for (int i = 0; i < 16; ++i) {
+      for (int i = 0; i < 8; ++i) {
          expect(map[std::to_string(i)] == i);
       }
    };
 
    "large_map_index_lookup"_test = [] {
-      // Test with > 16 entries (should build and use index)
+      // Test with > 8 entries (should build and use index)
       glz::ordered_small_map<int> map;
 
       for (int i = 0; i < 100; ++i) {
@@ -659,6 +839,207 @@ suite ordered_small_map_tests = [] {
             expect(src.at("src_" + std::to_string(i)).value == i);
          }
          expect(throwing_value::alive == static_cast<int>(src.size() + dst.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+
+   "try_emplace_throwing_ctor_small_path"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> map;
+         map.try_emplace("a", 1);
+         map.try_emplace("b", 2);
+         expect(map.size() == 2);
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_direct = 0;
+
+         bool threw = false;
+         try {
+            map.try_emplace("c", 3);
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(map.size() == 2);
+         expect(!map.contains("c"));
+         expect(map.at("a").value == 1);
+         expect(map.at("b").value == 2);
+         expect(throwing_value::alive == static_cast<int>(map.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+
+   "try_emplace_throwing_ctor_indexed_path"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> map;
+         for (int i = 0; i < 16; ++i) {
+            map.try_emplace(std::to_string(i), i);
+         }
+         expect(map.size() == 16);
+         expect(map.contains("5")); // force index construction
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_direct = 0;
+
+         bool threw = false;
+         try {
+            map.try_emplace("new", 99);
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(map.size() == 16);
+         expect(!map.contains("new"));
+         expect(map.at("5").value == 5);
+         expect(throwing_value::alive == static_cast<int>(map.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+
+   "insert_or_assign_throwing_new_value_indexed_path"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> map;
+         for (int i = 0; i < 16; ++i) {
+            map.insert_or_assign(std::to_string(i), i);
+         }
+         expect(map.size() == 16);
+         expect(map.contains("5")); // force index construction
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_direct = 0;
+
+         bool threw = false;
+         try {
+            map.insert_or_assign("new", 111);
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(map.size() == 16);
+         expect(!map.contains("new"));
+         expect(map.at("5").value == 5);
+         expect(throwing_value::alive == static_cast<int>(map.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+
+   "insert_or_assign_throwing_new_value_small_path"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> map;
+         map.insert_or_assign("a", 1);
+         map.insert_or_assign("b", 2);
+         expect(map.size() == 2);
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_direct = 0;
+
+         bool threw = false;
+         try {
+            map.insert_or_assign("new", 111);
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(map.size() == 2);
+         expect(!map.contains("new"));
+         expect(map.at("a").value == 1);
+         expect(map.at("b").value == 2);
+         expect(throwing_value::alive == static_cast<int>(map.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+
+   "operator_subscript_throwing_default_ctor_small_path"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> map;
+         map.try_emplace("a", 1);
+         map.try_emplace("b", 2);
+         expect(map.size() == 2);
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_default = 0;
+
+         bool threw = false;
+         try {
+            [[maybe_unused]] auto& value = map["missing_small"];
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(map.size() == 2);
+         expect(!map.contains("missing_small"));
+         expect(map.at("a").value == 1);
+         expect(map.at("b").value == 2);
+         expect(throwing_value::alive == static_cast<int>(map.size()));
+      }
+
+      throwing_value::reset_throw_controls();
+      expect(throwing_value::alive == 0);
+   };
+
+   "operator_subscript_throwing_default_ctor_indexed_path"_test = [] {
+      expect(throwing_value::alive == 0);
+      throwing_value::reset_throw_controls();
+
+      {
+         glz::ordered_small_map<throwing_value> map;
+         for (int i = 0; i < 16; ++i) {
+            map.try_emplace(std::to_string(i), i);
+         }
+         expect(map.size() == 16);
+         expect(map.contains("5")); // force index construction
+
+         throwing_value::reset_throw_controls();
+         throwing_value::throw_on_default = 0;
+
+         bool threw = false;
+         try {
+            [[maybe_unused]] auto& value = map["missing_large"];
+         }
+         catch (const std::runtime_error&) {
+            threw = true;
+         }
+
+         expect(threw);
+         expect(map.size() == 16);
+         expect(!map.contains("missing_large"));
+         expect(map.at("5").value == 5);
+         expect(throwing_value::alive == static_cast<int>(map.size()));
       }
 
       throwing_value::reset_throw_controls();
