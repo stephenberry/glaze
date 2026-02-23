@@ -133,6 +133,20 @@ struct reflectable_config
    std::vector<int> servers{};
 };
 
+struct yaml_custom_read_struct
+{
+   int value{};
+
+   void read_value(const std::string& input) { value = std::stoi(input); }
+};
+
+template <>
+struct glz::meta<yaml_custom_read_struct>
+{
+   using T = yaml_custom_read_struct;
+   static constexpr auto value = object("value", custom<&T::read_value, &T::value>);
+};
+
 suite yaml_write_tests = [] {
    "write_simple_struct"_test = [] {
       simple_struct obj{42, 3.14, "test"};
@@ -234,6 +248,14 @@ name: test)";
       expect(obj.x == 42);
       expect(std::abs(obj.y - 3.14) < 0.001);
       expect(obj.name == "test");
+   };
+
+   "read_custom_meta_field"_test = [] {
+      std::string yaml = "value: '42'";
+      yaml_custom_read_struct obj{};
+      auto ec = glz::read_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.value == 42);
    };
 
    "read_flow_mapping"_test = [] {

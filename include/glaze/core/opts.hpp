@@ -388,6 +388,16 @@ namespace glz
       }
    }
 
+   consteval bool check_null_terminated(auto&& Opts)
+   {
+      if constexpr (requires { Opts.null_terminated; }) {
+         return Opts.null_terminated;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_partial_read(auto&& Opts)
    {
       if constexpr (requires { Opts.partial_read; }) {
