@@ -483,6 +483,39 @@ namespace glz
          return data_ + size_;
       }
 
+      template <class K, class F>
+      mapped_type& subscript_or_insert(const K& key, F&& append_fn)
+      {
+         if (size_ <= linear_search_threshold) {
+            auto it = linear_find(key);
+            if (it != end()) return it->second;
+            append_fn();
+            return data_[size_ - 1].second;
+         }
+
+         const uint32_t h = hash_key(key);
+         if (try_bloom_insert(h, append_fn)) {
+            return data_[size_ - 1].second;
+         }
+
+         auto [it, pos, _] = index_find_or_pos(key, h);
+         if (it != end()) return it->second;
+
+         append_fn();
+         bloom_set(h);
+         if (index_size() > 0) {
+            const uint32_t n = index_->size;
+            ensure_index_capacity(static_cast<size_type>(n) + 1);
+            auto* entries = index_entries();
+            if (pos < n) {
+               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
+            }
+            entries[pos] = {h, size_ - 1};
+            index_->size = size_;
+         }
+         return data_[size_ - 1].second;
+      }
+
       // --- Insert helpers ---
 
       // Try the bloom filter fast path for insert.
@@ -885,61 +918,13 @@ namespace glz
       // Element access
       mapped_type& operator[](const key_type& key)
       {
-         if (size_ <= linear_search_threshold) {
-            auto it = linear_find(key);
-            if (it != end()) return it->second;
-            emplace_back_impl(key, mapped_type{});
-            return data_[size_ - 1].second;
-         }
-         const uint32_t h = hash_key(key);
-         if (try_bloom_insert(h, [&] { emplace_back_impl(key, mapped_type{}); })) {
-            return data_[size_ - 1].second;
-         }
-         auto [it, pos, _] = index_find_or_pos(key, h);
-         if (it != end()) return it->second;
-         emplace_back_impl(key, mapped_type{});
-         bloom_set(h);
-         if (index_size() > 0) {
-            const uint32_t n = index_->size;
-            ensure_index_capacity(static_cast<size_type>(n) + 1);
-            auto* entries = index_entries();
-            if (pos < n) {
-               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
-            }
-            entries[pos] = {h, size_ - 1};
-            index_->size = size_;
-         }
-         return data_[size_ - 1].second;
+         return subscript_or_insert(key, [&] { emplace_back_impl(key, mapped_type{}); });
       }
 
       mapped_type& operator[](key_type&& key)
       {
-         if (size_ <= linear_search_threshold) {
-            auto it = linear_find(key);
-            if (it != end()) return it->second;
-            emplace_back_impl(std::move(key), mapped_type{});
-            return data_[size_ - 1].second;
-         }
-         const uint32_t h = hash_key(key);
-         if (try_bloom_insert(h, [&] { emplace_back_impl(std::move(key), mapped_type{}); })) {
-            return data_[size_ - 1].second;
-         }
-         // key may have been moved — but try_bloom_insert returned false, so the lambda didn't execute
-         auto [it, pos, _] = index_find_or_pos(key, h);
-         if (it != end()) return it->second;
-         emplace_back_impl(std::move(key), mapped_type{});
-         bloom_set(h);
-         if (index_size() > 0) {
-            const uint32_t n = index_->size;
-            ensure_index_capacity(static_cast<size_type>(n) + 1);
-            auto* entries = index_entries();
-            if (pos < n) {
-               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
-            }
-            entries[pos] = {h, size_ - 1};
-            index_->size = size_;
-         }
-         return data_[size_ - 1].second;
+         // key may have been moved — but only if insertion actually happens.
+         return subscript_or_insert(key, [&] { emplace_back_impl(std::move(key), mapped_type{}); });
       }
 
       // Heterogeneous lookup version for operator[]
@@ -949,31 +934,8 @@ namespace glz
                   !std::same_as<std::decay_t<K>, key_type>)
       mapped_type& operator[](K&& key)
       {
-         if (size_ <= linear_search_threshold) {
-            auto it = linear_find(key);
-            if (it != end()) return it->second;
-            emplace_back_impl(std::string(std::forward<K>(key)), mapped_type{});
-            return data_[size_ - 1].second;
-         }
-         const uint32_t h = hash_key(key);
-         if (try_bloom_insert(h, [&] { emplace_back_impl(std::string(std::forward<K>(key)), mapped_type{}); })) {
-            return data_[size_ - 1].second;
-         }
-         auto [it, pos, _] = index_find_or_pos(key, h);
-         if (it != end()) return it->second;
-         emplace_back_impl(std::string(std::forward<K>(key)), mapped_type{});
-         bloom_set(h);
-         if (index_size() > 0) {
-            const uint32_t n = index_->size;
-            ensure_index_capacity(static_cast<size_type>(n) + 1);
-            auto* entries = index_entries();
-            if (pos < n) {
-               std::memmove(entries + pos + 1, entries + pos, (n - pos) * sizeof(hash_index_entry));
-            }
-            entries[pos] = {h, size_ - 1};
-            index_->size = size_;
-         }
-         return data_[size_ - 1].second;
+         return subscript_or_insert(key,
+                                    [&] { emplace_back_impl(std::string(std::forward<K>(key)), mapped_type{}); });
       }
 
       template <class K>
