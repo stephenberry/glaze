@@ -6,6 +6,7 @@
 using namespace ut;
 
 #include <iostream>
+#include <future>
 #include <latch>
 #include <numeric>
 #include <thread>
@@ -22,13 +23,12 @@ struct notify_api
 
 void notify_test()
 {
-   static constexpr int16_t port = 8431;
    std::latch ready{1};
-   glz::asio_server server{.port = port, .concurrency = 4};
+   glz::asio_server server{.port = 0, .concurrency = 4};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async([&] {
+   std::future<void> server_thread = std::async(std::launch::async, [&] {
       try {
          notify_api api{};
          server.on(api);
@@ -40,6 +40,7 @@ void notify_test()
    });
 
    ready.wait();
+   const auto port = server.port;
 
    try {
       glz::asio_client client{"localhost", std::to_string(port)};
@@ -75,14 +76,13 @@ struct my_data
 
 void async_clients_test()
 {
-   static constexpr int16_t port = 8431;
    std::latch ready{1};
 
-   glz::asio_server server{.port = port, .concurrency = 4};
+   glz::asio_server server{.port = 0, .concurrency = 4};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async([&] {
+   std::future<void> server_thread = std::async(std::launch::async, [&] {
       try {
          my_data data{};
          server.on(data);
@@ -94,6 +94,7 @@ void async_clients_test()
    });
 
    ready.wait();
+   const auto port = server.port;
 
    try {
       glz::asio_client client{"localhost", std::to_string(port)};
@@ -138,14 +139,13 @@ struct api
 
 void asio_client_test()
 {
-   static constexpr int16_t port = 8431;
    std::latch ready{1};
 
-   glz::asio_server server{.port = port, .concurrency = 4};
+   glz::asio_server server{.port = 0, .concurrency = 4};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async([&] {
+   std::future<void> server_thread = std::async(std::launch::async, [&] {
       std::cout << "Server active...\n";
 
       try {
@@ -161,6 +161,7 @@ void asio_client_test()
    });
 
    ready.wait();
+   const auto port = server.port;
 
    try {
       constexpr auto N = 100;
@@ -175,7 +176,7 @@ void asio_client_test()
       }
 
       for (size_t i = 0; i < N; ++i) {
-         threads.emplace_back(std::async([&, i] {
+         threads.emplace_back(std::async(std::launch::async, [&, i] {
             auto& client = clients[i];
             if (auto ec = client.init(); bool(ec)) {
                std::cerr << "Error: " << glz::write_json(ec).value_or("error") << std::endl;
@@ -241,20 +242,20 @@ struct api2
 
 void async_calls()
 {
-   static constexpr int16_t port = 8765;
    std::latch ready{1};
 
-   glz::asio_server server{.port = port, .concurrency = 2};
+   glz::asio_server server{.port = 0, .concurrency = 2};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async([&] {
+   std::future<void> server_thread = std::async(std::launch::async, [&] {
       api2 methods{};
       server.on(methods);
       server.run();
    });
 
    ready.wait();
+   const auto port = server.port;
 
    try {
       glz::asio_client client{"localhost", std::to_string(port)};
@@ -262,14 +263,14 @@ void async_calls()
 
       std::vector<std::future<void>> threads;
 
-      threads.emplace_back(std::async([&] {
+      threads.emplace_back(std::async(std::launch::async, [&] {
          int ret{};
          glz::repe::message msg{};
          client.call({"/first/sum"}, msg, 25);
          glz::repe::decode_message(ret, msg);
       }));
 
-      threads.emplace_back(std::async([&] {
+      threads.emplace_back(std::async(std::launch::async, [&] {
          int ret{};
          glz::repe::message msg{};
          client.call({"/second/sum"}, msg, 5);
@@ -295,14 +296,13 @@ struct raw_json_api
 
 void raw_json_tests()
 {
-   static constexpr int16_t port = 8765;
    std::latch ready{1};
 
-   glz::asio_server server{.port = port, .concurrency = 2};
+   glz::asio_server server{.port = 0, .concurrency = 2};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async([&] {
+   std::future<void> server_thread = std::async(std::launch::async, [&] {
       api2 methods{};
       raw_json_api api{};
       server.on(api);
@@ -310,6 +310,7 @@ void raw_json_tests()
    });
 
    ready.wait();
+   const auto port = server.port;
 
    glz::raw_json results{};
 
@@ -323,6 +324,7 @@ void raw_json_tests()
    }
 
    server.stop();
+   server_thread.get();
 }
 
 struct async_api
@@ -332,14 +334,13 @@ struct async_api
 
 void async_server_test()
 {
-   static constexpr int16_t port = 8765;
-
-   glz::asio_server server{.port = port, .concurrency = 1, .reuse_address = true};
+   glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
 
    async_api api{};
    server.on(api);
 
    server.run_async();
+   const auto port = server.port;
 
    glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
@@ -359,15 +360,14 @@ struct error_api
 
 void server_error_test()
 {
-   static constexpr int16_t port = 8765;
-
-   glz::asio_server server{.port = port, .concurrency = 1, .reuse_address = true};
+   glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
    server.error_handler = [](const std::string& error) { expect(error == "func error"); };
 
    error_api api{};
    server.on(api);
 
    server.run_async();
+   const auto port = server.port;
 
    glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
@@ -388,14 +388,13 @@ struct some_object_t
 
 suite send_receive_api_tests = [] {
    "send"_test = [] {
-      static constexpr int16_t port = 8765;
-
-      glz::asio_server server{.port = port, .concurrency = 1, .reuse_address = true};
+      glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
 
       some_object_t obj{};
       server.on(obj);
 
       server.run_async();
+      const auto port = server.port;
 
       glz::asio_client client{"localhost", std::to_string(port)};
       (void)client.init();
@@ -440,9 +439,8 @@ struct keep_alive_api
 
 void server_keep_alive_test()
 {
-   static constexpr int16_t port = 8766;
-
-   glz::asio_server server{.port = port, .concurrency = 1};
+   glz::asio_server server{.port = 0, .concurrency = 1};
+   server.reuse_address = true;
    server.error_handler = [](const std::string& error) {
       if (error != "broken" && error != "unknown error") {
          expect(false) << "Unexpected error: " << error;
@@ -453,6 +451,7 @@ void server_keep_alive_test()
    server.on(api);
 
    server.run_async();
+   const auto port = server.port;
 
    glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
@@ -486,14 +485,14 @@ void server_keep_alive_test()
 
 void client_exception_test()
 {
-   static constexpr int16_t port = 8767;
-
-   glz::asio_server server{.port = port, .concurrency = 1};
+   glz::asio_server server{.port = 0, .concurrency = 1};
+   server.reuse_address = true;
 
    keep_alive_api api{};
    server.on(api);
 
    server.run_async();
+   const auto port = server.port;
 
    glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
@@ -524,9 +523,8 @@ struct custom_call_api
 
 void custom_call_handler_test()
 {
-   static constexpr int16_t port = 8768;
-
-   glz::asio_server server{.port = port, .concurrency = 1};
+   glz::asio_server server{.port = 0, .concurrency = 1};
+   server.reuse_address = true;
 
    custom_call_api api{};
    server.on(api);
@@ -558,6 +556,7 @@ void custom_call_handler_test()
    };
 
    server.run_async();
+   const auto port = server.port;
 
    glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
@@ -581,9 +580,8 @@ void custom_call_handler_test()
 
 void custom_call_middleware_test()
 {
-   static constexpr int16_t port = 8769;
-
-   glz::asio_server server{.port = port, .concurrency = 1};
+   glz::asio_server server{.port = 0, .concurrency = 1};
+   server.reuse_address = true;
 
    custom_call_api api{};
    server.on(api);
@@ -615,6 +613,7 @@ void custom_call_middleware_test()
    };
 
    server.run_async();
+   const auto port = server.port;
 
    glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
@@ -635,9 +634,8 @@ void custom_call_middleware_test()
 
 void custom_call_error_handling_test()
 {
-   static constexpr int16_t port = 8770;
-
-   glz::asio_server server{.port = port, .concurrency = 1};
+   glz::asio_server server{.port = 0, .concurrency = 1};
+   server.reuse_address = true;
 
    // Custom handler that returns an error for certain paths using zero-copy API
    server.call = [](std::span<const char> request, std::string& response_buffer) {
@@ -662,6 +660,7 @@ void custom_call_error_handling_test()
    };
 
    server.run_async();
+   const auto port = server.port;
 
    glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
@@ -689,13 +688,13 @@ suite connection_state_tests = [] {
    };
 
    "connected_after_init"_test = [] {
-      static constexpr int16_t port = 8771;
-
-      glz::asio_server server{.port = port, .concurrency = 1};
+      glz::asio_server server{.port = 0, .concurrency = 1};
+      server.reuse_address = true;
 
       some_object_t obj{};
       server.on(obj);
       server.run_async();
+      const auto port = server.port;
 
       glz::asio_client client{"localhost", std::to_string(port)};
       expect(not client.connected()) << "Client should not be connected before init()";
@@ -708,15 +707,15 @@ suite connection_state_tests = [] {
    };
 
    "connected_false_after_server_shutdown"_test = [] {
-      static constexpr int16_t port = 8772;
-
       auto server = std::make_unique<glz::asio_server<>>();
-      server->port = port;
+      server->port = 0;
       server->concurrency = 1;
+      server->reuse_address = true;
 
       some_object_t obj{};
       server->on(obj);
       server->run_async();
+      const auto port = server->port;
 
       glz::asio_client client{"localhost", std::to_string(port)};
       (void)client.init();
@@ -806,17 +805,16 @@ suite connection_state_tests = [] {
    };
 
    "reconnect_after_server_restart"_test = [] {
-      static constexpr int16_t port = 8773;
-
       // Start server
       auto server = std::make_unique<glz::asio_server<>>();
-      server->port = port;
+      server->port = 0;
       server->concurrency = 1;
       server->reuse_address = true;
 
       some_object_t obj{.age = 25};
       server->on(obj);
       server->run_async();
+      const auto port = server->port;
 
       glz::asio_client client{"localhost", std::to_string(port)};
       (void)client.init();
