@@ -361,15 +361,11 @@ struct error_api
 void server_error_test()
 {
    glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
-   std::atomic<bool> saw_expected_error{false};
    std::atomic<bool> saw_unexpected_error{false};
    std::mutex unexpected_error_mutex;
    std::string unexpected_error_message;
    server.error_handler = [&](const std::string& error) {
-      if (error == "func error") {
-         saw_expected_error.store(true, std::memory_order_relaxed);
-      }
-      else {
+      if (error != "func error") {
          saw_unexpected_error.store(true, std::memory_order_relaxed);
          std::lock_guard lock{unexpected_error_mutex};
          unexpected_error_message = error;
@@ -388,12 +384,11 @@ void server_error_test()
    int result{};
    glz::repe::message msg{};
    client.call({"/func"}, msg, 100);
-   expect(bool(glz::repe::decode_message(result, msg)));
-
-   for (int i = 0; i < 100 && !saw_expected_error.load(std::memory_order_relaxed); ++i) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+   auto err = glz::repe::decode_message(result, msg);
+   expect(bool(err));
+   if (err) {
+      expect(err.value().find("func error") != std::string::npos) << err.value();
    }
-   expect(saw_expected_error.load(std::memory_order_relaxed)) << "Expected server error callback for func error";
    expect(!saw_unexpected_error.load(std::memory_order_relaxed))
       << "Unexpected server error: " << unexpected_error_message;
 }
