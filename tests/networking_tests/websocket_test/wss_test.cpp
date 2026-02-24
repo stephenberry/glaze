@@ -24,6 +24,12 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
+#if defined(_MSC_VER) && !defined(OPENSSL_NO_APPLINK)
+extern "C" {
+#include <openssl/applink.c>
+}
+#endif
+
 #ifdef DELETE
 #undef DELETE
 #endif
