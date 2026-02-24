@@ -1,7 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <thread>
 
@@ -1642,15 +1644,13 @@ suite additional_async_vector_tests = [] {
          threads.emplace_back([&, t]() {
             for (int i = 0; i < 100 && !stop; ++i) {
                try {
-                  // Pick a random position
                   thread_local std::mt19937 rng(std::random_device{}());
-                  size_t upper = vec.size();
-                  std::uniform_int_distribution<size_t> pos_dist(0, upper);
-                  size_t pos = pos_dist(rng);
                   {
                      auto proxy = vec.write();
+                     std::uniform_int_distribution<size_t> pos_dist(0, proxy.size());
+                     size_t pos = pos_dist(rng);
                      auto insert_pos = proxy.begin();
-                     std::advance(insert_pos, (std::min)(pos, proxy.size()));
+                     std::advance(insert_pos, pos);
 
                      // Insert a new value
                      auto it = proxy.insert(insert_pos, t * 1000 + i);
@@ -1666,11 +1666,13 @@ suite additional_async_vector_tests = [] {
                   std::this_thread::sleep_for(std::chrono::microseconds(us_dist(rng)));
 
                   // Pick another random position for erasure
-                  if (vec.size() > 0) {
-                     size_t cur = vec.size();
-                     std::uniform_int_distribution<size_t> erase_dist(0, cur - 1);
-                     size_t erase_pos = erase_dist(rng);
+                  {
                      auto proxy = vec.write();
+                     if (proxy.empty()) {
+                        continue;
+                     }
+                     std::uniform_int_distribution<size_t> erase_dist(0, proxy.size() - 1);
+                     size_t erase_pos = erase_dist(rng);
                      auto erase_iter = proxy.begin();
                      std::advance(erase_iter, erase_pos);
                      proxy.erase(erase_iter);
@@ -1780,20 +1782,32 @@ suite additional_async_vector_tests = [] {
          threads.emplace_back([&, t]() {
             while (!stop) {
                try {
-                  // Get a const_iterator
                   auto proxy = vec.write();
-                  auto it1 = proxy.begin() + (t * 100 % proxy.size());
-                  int val1 = *it1;
+                  if (proxy.empty()) {
+                     continue;
+                  }
 
-                  // Use that iterator in an insert operation (potential deadlock scenario)
-                  auto new_it = proxy.insert(it1, val1 * 2);
+                  const size_t insert_index = static_cast<size_t>(t * 100) % proxy.size();
+                  const int val1 = proxy[insert_index];
+                  int insert_value = val1;
+                  if (val1 > std::numeric_limits<int>::max() / 2) {
+                     insert_value = std::numeric_limits<int>::max();
+                  }
+                  else if (val1 < std::numeric_limits<int>::min() / 2) {
+                     insert_value = std::numeric_limits<int>::min();
+                  }
+                  else {
+                     insert_value = val1 * 2;
+                  }
 
-                  // Now use the new iterator in another operation
+                  auto new_it = proxy.insert(proxy.begin() + insert_index, insert_value);
+                  const bool inserted_ok = (new_it != proxy.end()) && (*new_it == insert_value);
+
                   auto another_it = proxy.begin() + (proxy.size() / 2);
                   auto erased_it = proxy.erase(another_it);
+                  const bool erased_ok = (erased_it == proxy.end()) || (*erased_it >= 0);
 
-                  // Try to use all three iterators
-                  if (*it1 >= 0 && *new_it >= 0 && (erased_it == proxy.end() || *erased_it >= 0)) {
+                  if (inserted_ok && erased_ok) {
                      completed_operations++;
                   }
                }
@@ -1832,17 +1846,26 @@ suite additional_async_vector_tests = [] {
 
       // Thread that creates iterators and performs random jumps
       threads.emplace_back([&]() {
-         auto proxy = vec.write();
-         auto it = proxy.begin();
+         thread_local std::mt19937 rng(std::random_device{}());
+         size_t index = 0;
          while (!stop) {
             try {
-               thread_local std::mt19937 rng(std::random_device{}());
-               std::uniform_int_distribution<int> jump_dist(-10, 9);
-               int jump = jump_dist(rng); // Random jump forward or backward
-               if (it + jump >= proxy.begin() && it + jump < proxy.end()) {
-                  it += jump;
-                  it->access(); // Access the object to increment counter
+               auto proxy = vec.write();
+               if (proxy.empty()) {
+                  continue;
                }
+
+               std::uniform_int_distribution<int> jump_dist(-10, 9);
+               const int jump = jump_dist(rng);
+               if (jump < 0) {
+                  const size_t back = static_cast<size_t>(-jump);
+                  index = (back > index) ? 0 : (index - back);
+               }
+               else {
+                  index = (std::min)(index + static_cast<size_t>(jump), proxy.size() - 1);
+               }
+               index = (std::min)(index, proxy.size() - 1);
+               proxy[index].access(); // Access the object to increment counter
             }
             catch (const std::exception&) {
                errors++;
@@ -1855,23 +1878,27 @@ suite additional_async_vector_tests = [] {
          int counter = 0;
          while (!stop) {
             try {
-               if (counter % 3 == 0 && vec.size() > 0) {
+               if (counter % 3 == 0) {
                   // Remove from beginning
                   auto proxy = vec.write();
-                  proxy.erase(proxy.begin());
+                  if (!proxy.empty()) {
+                     proxy.erase(proxy.begin());
+                  }
                }
                else if (counter % 3 == 1) {
                   // Add to end
                   std::vector<double> values{static_cast<double>(counter)};
                   vec.emplace_back(1000 + counter, "New " + std::to_string(counter), values);
                }
-               else if (vec.size() > 0) {
+               else {
                   // Replace middle
-                  size_t mid = vec.size() / 2;
                   auto proxy = vec.write();
-                  auto mid_it = proxy.begin() + mid;
-                  std::vector<double> values{static_cast<double>(counter * 10)};
-                  *mid_it = ComplexObject(2000 + counter, "Replaced", values);
+                  if (!proxy.empty()) {
+                     const size_t mid = proxy.size() / 2;
+                     auto mid_it = proxy.begin() + mid;
+                     std::vector<double> values{static_cast<double>(counter * 10)};
+                     *mid_it = ComplexObject(2000 + counter, "Replaced", values);
+                  }
                }
                counter++;
                std::this_thread::sleep_for(std::chrono::microseconds(100));

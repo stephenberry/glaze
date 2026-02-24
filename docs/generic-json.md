@@ -4,15 +4,26 @@ While Glaze is focused on strongly typed data, there is basic support for comple
 
 If nothing is known about the JSON structure, then [glz::generic](https://github.com/stephenberry/glaze/blob/main/include/glaze/json/generic.hpp) may be helpful, but it comes at a performance cost due to the use of dynamic memory allocations. The previous `glz::json_t` name remains as an alias for backwards compatibility.
 
+> **Note:** `glz::generic` preserves the insertion order of JSON keys. When you parse a JSON object and re-serialize it, the keys will appear in the same order as the original document. If you need lexicographically sorted keys, use the sorted aliases:
+>
+> ```cpp
+> glz::generic_sorted json{};
+> glz::generic_sorted_i64 json_i64{};
+> glz::generic_sorted_u64 json_u64{};
+> ```
+
 ## Generic Type Variants
 
-Glaze provides three generic JSON types with different number storage strategies:
+Glaze provides insertion-order and sorted-key generic JSON types with different number storage strategies:
 
 | Type | Number Storage | Use Case |
 |------|---------------|----------|
 | `glz::generic` | `double` | Fast, JavaScript-compatible (default) |
 | `glz::generic_i64` | `int64_t` then `double` | Signed integer precision |
 | `glz::generic_u64` | `uint64_t` then `int64_t` then `double` | Full integer range |
+| `glz::generic_sorted` | `double` | Lexicographically sorted object keys |
+| `glz::generic_sorted_i64` | `int64_t` then `double` | Sorted keys + signed integer precision |
+| `glz::generic_sorted_u64` | `uint64_t` then `int64_t` then `double` | Sorted keys + full integer range |
 
 ### glz::generic (Default)
 
@@ -76,6 +87,7 @@ assert(json["pi"].get<double>() == 3.14);
 - **`glz::generic`**: Use when performance matters most and you don't need large integer precision, or when interoperating with JavaScript.
 - **`glz::generic_i64`**: Use when dealing with signed 64-bit IDs, timestamps, or APIs that return large signed integers.
 - **`glz::generic_u64`**: Use when handling database IDs, blockchain values, or any unsigned 64-bit integers.
+- **`glz::generic_sorted*`**: Use when you specifically need lexicographically sorted object keys for deterministic output compatibility.
 
 ## Basic Usage
 
@@ -104,7 +116,7 @@ glz::generic json = {
 };
 std::string buffer{};
 glz::write_json(json, buffer);
-expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Stephen","object":{"currency":"USD","value":42.99},"pi":3.141})");
+expect(buffer == R"({"pi":3.141,"happy":true,"name":"Stephen","nothing":null,"answer":{"everything":42},"list":[1,0,2],"object":{"currency":"USD","value":42.99}})");
 ```
 
 ## get() vs as()
@@ -289,7 +301,7 @@ auto names_list = glz::get<std::list<std::string>>(json, "/names");
 auto names_array = glz::get<std::array<std::string, 3>>(json, "/names");
 ```
 
-This works because `glz::generic` stores arrays as `std::vector<glz::generic>` and objects as `std::map<std::string, glz::generic>`. When you request a specific container type, Glaze deserializes the generic representation into your desired type.
+This works because `glz::generic` stores arrays as `std::vector<glz::generic>` and objects as `glz::ordered_small_map<glz::generic>`. When you request a specific container type, Glaze deserializes the generic representation into your desired type.
 
 ## See Also
 
@@ -297,3 +309,4 @@ This works because `glz::generic` stores arrays as `std::vector<glz::generic>` a
 - [JSON Patch (RFC 6902)](./json-patch.md) - Apply structured patches to `glz::generic` documents
 - [JSON Merge Patch (RFC 7386)](./json-merge-patch.md) - Apply partial updates to `glz::generic` documents
 - [JSON Pointer Syntax](./json-pointer-syntax.md) - Path syntax for navigating JSON documents
+- [Ordered Maps](./ordered-maps.md) - Details on `glz::ordered_small_map` and `glz::ordered_map`

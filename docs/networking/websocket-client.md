@@ -53,6 +53,7 @@ int main() {
 - **Message Masking**: Automatically masks outgoing messages in client mode (per RFC 6455)
 - **Secure Connections**: Built-in SSL/TLS support for WSS connections
 - **Configurable**: Adjustable max message size and other options
+- **Custom Handshake Headers**: Add headers such as `Authorization` for authenticated endpoints
 - **Shared io_context**: Can share an ASIO io_context with other network operations
 
 ## Constructor
@@ -179,6 +180,71 @@ Default is 16 MB (16 * 1024 * 1024 bytes).
 **Example:**
 ```cpp
 client.set_max_message_size(1024 * 1024 * 32); // 32 MB
+```
+
+### set_header()
+
+Sets an additional HTTP header for the opening WebSocket handshake.
+
+```cpp
+bool set_header(std::string_view name, std::string_view value);
+```
+
+Header names and values are validated to prevent malformed handshakes:
+- Header names must be valid HTTP token names
+- Header values cannot contain control characters such as CR/LF
+- Reserved handshake headers are rejected and cannot be overridden:
+  `Host`, `Upgrade`, `Connection`, and `Sec-WebSocket-*`
+- Setting the same header name again (case-insensitive) replaces the previous value
+- Returns `true` if the header is accepted and stored
+- Returns `false` if validation fails
+If validation fails, no header is changed.
+
+**Example:**
+```cpp
+if (!client.set_header("Authorization", "Bearer your-token")) {
+    std::cerr << "Invalid Authorization header" << std::endl;
+}
+client.set_header("X-API-Key", "your-key");
+```
+
+### last_header_error()
+
+Returns the validation status from the most recent `set_header()` call.
+
+```cpp
+websocket_client::header_validation_error last_header_error() const;
+```
+
+Possible values:
+- `none`
+- `empty_name`
+- `reserved_name`
+- `invalid_name`
+- `invalid_value`
+
+**Example:**
+```cpp
+if (!client.set_header("Sec-WebSocket-Key", "bad")) {
+    if (client.last_header_error() == glz::websocket_client::header_validation_error::reserved_name) {
+        std::cerr << "Reserved handshake header cannot be overridden" << std::endl;
+    }
+}
+```
+
+### clear_headers()
+
+Clears all additional handshake headers previously set via `set_header()`.
+Headers persist across `connect()` calls until cleared.
+This does not change `last_header_error()`, which only reflects the most recent `set_header()` call.
+
+```cpp
+void clear_headers();
+```
+
+**Example:**
+```cpp
+client.clear_headers();
 ```
 
 ## Event Handlers
@@ -392,6 +458,30 @@ int main() {
     client.run();
 
     return 0;
+}
+```
+
+### Authenticated WebSocket Client
+
+```cpp
+#include "glaze/net/websocket_client.hpp"
+#include <iostream>
+
+int main() {
+    glz::websocket_client client;
+
+    client.set_header("Authorization", "Bearer your-token");
+
+    client.on_open([]() {
+        std::cout << "Authenticated websocket connected" << std::endl;
+    });
+
+    client.on_error([](std::error_code ec) {
+        std::cerr << "Error: " << ec.message() << std::endl;
+    });
+
+    client.connect("wss://api.example.com/ws");
+    client.run();
 }
 ```
 

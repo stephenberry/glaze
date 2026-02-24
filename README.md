@@ -18,18 +18,16 @@ Formats Supported:
 >
 > Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
 
-> [!TIP]
->
-> **New: Streaming I/O Support** - Glaze now supports streaming serialization and deserialization for processing large files with bounded memory usage. Write JSON/BEVE directly to output streams with automatic flushing, or read from input streams with automatic refilling. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for details.
-
 > [!IMPORTANT]
 >
-> **Breaking Changes in v7.0.0:**
-> - Options `quoted_num`, `raw_string`, and `structs_as_arrays` moved out of `glz::opts` to [inheritable options](https://stephenberry.github.io/glaze/options/)
-> - `glz::raw` renamed to `glz::unquoted` (wrapper and option)
-> - `glz::number` renamed to `glz::string_as_number` (wrapper and option)
+> **Breaking Change v7.1.0: `glz::generic` now preserves order of JSON keys.** The underlying map for `glz::generic` switched from `std::map` to `glz::ordered_small_map`, which preserves the order of fields as they are read. Previously keys were lexicographically sorted, so serialization output order may differ. If you need the prior sorted-key behavior, use:
 >
-> Deprecated names remain available with compiler warnings. Custom opts structs using old names will produce static_assert errors with migration instructions.
+> ```cpp
+> glz::generic_sorted json{};
+> glz::generic_sorted_i64 json_i64{};
+> glz::generic_sorted_u64 json_u64{};
+> ```
+> - This change also improves performance for `glz::generic`, offering faster lookup and iteration for typical JSON sized objects.
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 

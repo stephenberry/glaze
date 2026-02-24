@@ -154,7 +154,9 @@ namespace glz
       // For streaming, we need null_terminated = false to track depth
       static constexpr auto StreamingOpts = [] {
          auto o = is_padded_off<Opts>();
-         o.null_terminated = false;
+         if constexpr (requires { o.null_terminated = false; }) {
+            o.null_terminated = false;
+         }
          return o;
       }();
 

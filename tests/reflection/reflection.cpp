@@ -18,6 +18,10 @@ struct test_type
 suite reflect_test_type = [] {
    static_assert(glz::reflect<test_type>::size == 2);
    static_assert(glz::reflect<test_type>::keys[0] == "int1");
+   static_assert(glz::normalize_extracted_name("callable_reflection_regression::operator()") ==
+                 std::string_view{"operator()"});
+   static_assert(glz::normalize_extracted_name("cx_values_implicit_static_key::other_type)") ==
+                 std::string_view{"other_type"});
 
    "for_each_field"_test = [] {
       test_type var{42, 43};

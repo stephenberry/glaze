@@ -73,3 +73,46 @@ target_compile_options(string_write_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
+
+# Binary search benchmark (std::lower_bound vs branchless)
+add_executable(binary_search_benchmark binary_search_benchmark.cpp)
+target_link_libraries(binary_search_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(binary_search_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
+# Ordered map benchmark (glz::ordered_small_map vs glz::ordered_map)
+add_executable(ordered_map_benchmark ordered_map_benchmark.cpp)
+target_link_libraries(ordered_map_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(ordered_map_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
+# Generic JSON map type benchmark (ordered_small_map vs std::map)
+add_executable(generic_benchmark generic_benchmark.cpp)
+target_link_libraries(generic_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(generic_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
+# Ordered map memory comparison
+add_executable(ordered_map_memory ordered_map_memory.cpp)
+target_link_libraries(ordered_map_memory PRIVATE
+  glaze
+)
+target_compile_options(ordered_map_memory PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
