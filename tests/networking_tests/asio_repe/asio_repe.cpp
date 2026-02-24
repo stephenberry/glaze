@@ -256,25 +256,43 @@ void async_calls()
 
    ready.wait();
    const auto port = server.port;
+   const auto port_string = std::to_string(port);
 
    try {
-      glz::asio_client client{"localhost", std::to_string(port)};
-      (void)client.init();
-
       std::vector<std::future<void>> threads;
 
-      threads.emplace_back(std::async(std::launch::async, [&] {
+      threads.emplace_back(std::async(std::launch::async, [port_string] {
+         glz::asio_client client{"localhost", port_string};
+         if (auto ec = client.init(); bool(ec)) {
+            throw std::runtime_error(glz::write_json(ec).value_or("error"));
+         }
          int ret{};
          glz::repe::message msg{};
          client.call({"/first/sum"}, msg, 25);
-         glz::repe::decode_message(ret, msg);
+         auto err = glz::repe::decode_message(ret, msg);
+         if (err) {
+            throw std::runtime_error(err.value());
+         }
+         if (ret != 25) {
+            throw std::runtime_error("unexpected /first/sum result");
+         }
       }));
 
-      threads.emplace_back(std::async(std::launch::async, [&] {
+      threads.emplace_back(std::async(std::launch::async, [port_string] {
+         glz::asio_client client{"localhost", port_string};
+         if (auto ec = client.init(); bool(ec)) {
+            throw std::runtime_error(glz::write_json(ec).value_or("error"));
+         }
          int ret{};
          glz::repe::message msg{};
          client.call({"/second/sum"}, msg, 5);
-         glz::repe::decode_message(ret, msg);
+         auto err = glz::repe::decode_message(ret, msg);
+         if (err) {
+            throw std::runtime_error(err.value());
+         }
+         if (ret != 5) {
+            throw std::runtime_error("unexpected /second/sum result");
+         }
       }));
 
       for (auto& t : threads) {
