@@ -845,10 +845,31 @@ namespace glz
       asio::awaitable<void> listener(asio::ip::tcp::acceptor acceptor)
       {
          auto executor = co_await asio::this_coro::executor;
-
-         while (true) {
-            auto socket = co_await acceptor.async_accept(asio::use_awaitable);
-            asio::co_spawn(executor, run_instance(std::move(socket)), asio::detached);
+         try {
+            while (true) {
+               auto socket = co_await acceptor.async_accept(asio::use_awaitable);
+               asio::co_spawn(executor, run_instance(std::move(socket)), asio::detached);
+            }
+         }
+         catch (const asio::system_error& e) {
+            // Expected during shutdown when accept is canceled.
+            if (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor) {
+               co_return;
+            }
+            if (error_handler) {
+               error_handler(e.what());
+            }
+            else {
+               std::fprintf(stderr, "glz::asio_server listener error: %s\n", e.what());
+            }
+         }
+         catch (const std::exception& e) {
+            if (error_handler) {
+               error_handler(e.what());
+            }
+            else {
+               std::fprintf(stderr, "glz::asio_server listener error: %s\n", e.what());
+            }
          }
       }
    };
