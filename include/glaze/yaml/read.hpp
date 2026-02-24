@@ -4873,6 +4873,10 @@ namespace glz
 
    // Try block mapping first, then fall back to string.
    // Common pattern in YAML variant parsing for ambiguous scalars.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
    template <class Variant, auto Opts>
    GLZ_ALWAYS_INLINE void parse_block_mapping_or_string(auto&& value, auto&& ctx, auto&& it, auto end)
    {
@@ -4941,11 +4945,6 @@ namespace glz
       }
       process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
    }
-
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4702) // unreachable code from if constexpr
-#endif
    // Variant support
    template <is_variant T>
    struct from<YAML, T>

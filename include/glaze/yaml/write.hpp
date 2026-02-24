@@ -274,6 +274,10 @@ namespace glz
       }
 
       // Write string with appropriate style
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE void write_yaml_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
                                                int32_t indent_level = 0)
@@ -327,6 +331,9 @@ namespace glz
             dump(str, b, ix);
          }
       }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
    } // namespace yaml
 
    // str_t (strings)
