@@ -29,6 +29,7 @@
 static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
 #endif
 
+#include <atomic>
 #include <cassert>
 #include <coroutine>
 #include <iostream>
@@ -675,6 +676,7 @@ namespace glz
       }
 
       bool initialized = false;
+      std::atomic<bool> stop_requested{false};
 
       void init()
       {
@@ -694,8 +696,15 @@ namespace glz
             init();
          }
 
+         stop_requested.store(false, std::memory_order_relaxed);
+
          // Setup signal handling to stop the server
-         signals->async_wait([&](auto, auto) { ctx->stop(); });
+         signals->async_wait([this](auto, auto) {
+            stop_requested.store(true, std::memory_order_relaxed);
+            if (ctx) {
+               ctx->stop();
+            }
+         });
 
          // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
          auto executor = ctx->get_executor();
@@ -745,6 +754,7 @@ namespace glz
       // stop the server
       void stop()
       {
+         stop_requested.store(true, std::memory_order_relaxed);
          if (ctx) {
             ctx->stop(); // Stop the server's io_context
          }
@@ -852,8 +862,12 @@ namespace glz
             }
          }
          catch (const asio::system_error& e) {
-            // Expected during shutdown when accept is canceled.
-            if (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor) {
+            // operation_aborted/bad_descriptor are expected while shutting down.
+            // If we are not shutting down, surface them through the normal error path.
+            const bool shutting_down =
+               stop_requested.load(std::memory_order_relaxed) || !ctx || ctx->stopped();
+            if (shutting_down &&
+                (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
                co_return;
             }
             if (error_handler) {
