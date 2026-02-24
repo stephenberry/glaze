@@ -3,6 +3,13 @@
 
 #pragma once
 
+#if defined(_WIN32) && !defined(_WIN32_WINNT) && !defined(_WIN32_WINDOWS)
+// ASIO requires a Windows target macro; if missing, it warns and assumes Windows 7.
+// Set that same default explicitly (0x0601 = Windows 7) only when the build has not
+// already provided _WIN32_WINNT/_WIN32_WINDOWS, so project-defined values still win.
+#define _WIN32_WINNT 0x0601
+#endif
+
 #if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
 #include <asio/signal_set.hpp>

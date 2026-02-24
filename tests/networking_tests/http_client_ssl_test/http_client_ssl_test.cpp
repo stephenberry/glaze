@@ -45,6 +45,26 @@ using namespace ut;
 
 namespace
 {
+   std::optional<std::string> getenv_copy(const char* name)
+   {
+#if defined(_MSC_VER) && !defined(__clang__)
+      char* value = nullptr;
+      size_t len = 0;
+      if (_dupenv_s(&value, &len, name) == 0 && value && *value) {
+         std::string out{value};
+         std::free(value);
+         return out;
+      }
+      std::free(value);
+      return std::nullopt;
+#else
+      if (const char* value = std::getenv(name); value && *value) {
+         return std::string{value};
+      }
+      return std::nullopt;
+#endif
+   }
+
    struct env_var_guard
    {
       std::string name;
@@ -52,8 +72,8 @@ namespace
 
       explicit env_var_guard(std::string var_name) : name(std::move(var_name))
       {
-         if (const char* value = std::getenv(name.c_str()); value) {
-            original = value;
+         if (auto value = getenv_copy(name.c_str())) {
+            original = std::move(*value);
          }
       }
 
