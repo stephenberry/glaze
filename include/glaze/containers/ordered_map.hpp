@@ -492,6 +492,7 @@ namespace glz
       void insert(std::initializer_list<value_type> ilist) { insert(ilist.begin(), ilist.end()); }
 
       template <class M>
+         requires(std::is_constructible_v<mapped_type, M&&> && std::is_assignable_v<mapped_type&, M&&>)
       std::pair<iterator, bool> insert_or_assign(const key_type& key, M&& obj)
       {
          auto [bucket_idx, stored, found] = insert_to_buckets(key);
@@ -505,6 +506,7 @@ namespace glz
       }
 
       template <class M>
+         requires(std::is_constructible_v<mapped_type, M&&> && std::is_assignable_v<mapped_type&, M&&>)
       std::pair<iterator, bool> insert_or_assign(key_type&& key, M&& obj)
       {
          auto [bucket_idx, stored, found] = insert_to_buckets(key);

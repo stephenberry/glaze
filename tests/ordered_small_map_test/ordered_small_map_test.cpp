@@ -959,7 +959,7 @@ suite ordered_small_map_tests = [] {
       {
          glz::ordered_small_map<throwing_value> map;
          for (int i = 0; i < 16; ++i) {
-            map.insert_or_assign(std::to_string(i), i);
+            map.insert_or_assign(std::to_string(i), throwing_value{i});
          }
          expect(map.size() == 16);
          expect(map.contains("5")); // force index construction
@@ -969,7 +969,7 @@ suite ordered_small_map_tests = [] {
 
          bool threw = false;
          try {
-            map.insert_or_assign("new", 111);
+            map.insert_or_assign("new", throwing_value{111});
          }
          catch (const std::runtime_error&) {
             threw = true;
@@ -992,8 +992,8 @@ suite ordered_small_map_tests = [] {
 
       {
          glz::ordered_small_map<throwing_value> map;
-         map.insert_or_assign("a", 1);
-         map.insert_or_assign("b", 2);
+         map.insert_or_assign("a", throwing_value{1});
+         map.insert_or_assign("b", throwing_value{2});
          expect(map.size() == 2);
 
          throwing_value::reset_throw_controls();
@@ -1001,7 +1001,7 @@ suite ordered_small_map_tests = [] {
 
          bool threw = false;
          try {
-            map.insert_or_assign("new", 111);
+            map.insert_or_assign("new", throwing_value{111});
          }
          catch (const std::runtime_error&) {
             threw = true;

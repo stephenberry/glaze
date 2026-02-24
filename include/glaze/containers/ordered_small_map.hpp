@@ -776,6 +776,8 @@ namespace glz
       }
 
       template <class M>
+         requires(std::is_constructible_v<mapped_type, M&&> &&
+                  std::is_assignable_v<mapped_type&, M&&>)
       std::pair<iterator, bool> insert_or_assign(const key_type& key, M&& obj)
       {
          if (size_ <= linear_search_threshold) {
@@ -812,6 +814,8 @@ namespace glz
       }
 
       template <class M>
+         requires(std::is_constructible_v<mapped_type, M&&> &&
+                  std::is_assignable_v<mapped_type&, M&&>)
       std::pair<iterator, bool> insert_or_assign(key_type&& key, M&& obj)
       {
          if (size_ <= linear_search_threshold) {
