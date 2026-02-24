@@ -352,9 +352,8 @@ struct async_api
 
 void async_server_test()
 {
-   glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
-
    async_api api{};
+   glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
    server.on(api);
 
    server.run_async();
@@ -378,10 +377,12 @@ struct error_api
 
 void server_error_test()
 {
-   glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
+   error_api api{};
    std::atomic<bool> saw_unexpected_error{false};
    std::mutex unexpected_error_mutex;
    std::string unexpected_error_message;
+
+   glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
    server.error_handler = [&](const std::string& error) {
       if (error != "func error") {
          saw_unexpected_error.store(true, std::memory_order_relaxed);
@@ -390,7 +391,6 @@ void server_error_test()
       }
    };
 
-   error_api api{};
    server.on(api);
 
    server.run_async();
@@ -421,9 +421,8 @@ struct some_object_t
 
 suite send_receive_api_tests = [] {
    "send"_test = [] {
-      glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
-
       some_object_t obj{};
+      glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
       server.on(obj);
 
       server.run_async();
@@ -472,11 +471,13 @@ struct keep_alive_api
 
 void server_keep_alive_test()
 {
-   glz::asio_server server{.port = 0, .concurrency = 1};
-   server.reuse_address = true;
+   keep_alive_api api{};
    std::atomic<bool> saw_unexpected_error{false};
    std::mutex unexpected_error_mutex;
    std::string unexpected_error_message;
+
+   glz::asio_server server{.port = 0, .concurrency = 1};
+   server.reuse_address = true;
    server.error_handler = [&](const std::string& error) {
       if (error != "broken" && error != "unknown error") {
          saw_unexpected_error.store(true, std::memory_order_relaxed);
@@ -485,7 +486,6 @@ void server_keep_alive_test()
       }
    };
 
-   keep_alive_api api{};
    server.on(api);
 
    server.run_async();
@@ -525,10 +525,9 @@ void server_keep_alive_test()
 
 void client_exception_test()
 {
+   keep_alive_api api{};
    glz::asio_server server{.port = 0, .concurrency = 1};
    server.reuse_address = true;
-
-   keep_alive_api api{};
    server.on(api);
 
    server.run_async();
@@ -563,14 +562,14 @@ struct custom_call_api
 
 void custom_call_handler_test()
 {
+   custom_call_api api{};
+   std::atomic<int> call_count{0};
+
    glz::asio_server server{.port = 0, .concurrency = 1};
    server.reuse_address = true;
-
-   custom_call_api api{};
    server.on(api);
 
    // Set custom call handler that intercepts all calls using zero-copy API
-   std::atomic<int> call_count{0};
    server.call = [&](std::span<const char> request, std::string& response_buffer) {
       ++call_count;
 
@@ -620,15 +619,15 @@ void custom_call_handler_test()
 
 void custom_call_middleware_test()
 {
+   custom_call_api api{};
+   std::vector<std::string> logged_queries;
+   std::mutex log_mutex;
+
    glz::asio_server server{.port = 0, .concurrency = 1};
    server.reuse_address = true;
-
-   custom_call_api api{};
    server.on(api);
 
    // Set middleware-style handler that logs and delegates using zero-copy API
-   std::vector<std::string> logged_queries;
-   std::mutex log_mutex;
 
    server.call = [&](std::span<const char> request, std::string& response_buffer) {
       // Zero-copy parse
@@ -728,10 +727,9 @@ suite connection_state_tests = [] {
    };
 
    "connected_after_init"_test = [] {
+      some_object_t obj{};
       glz::asio_server server{.port = 0, .concurrency = 1};
       server.reuse_address = true;
-
-      some_object_t obj{};
       server.on(obj);
       server.run_async();
       const auto port = server.port;
@@ -894,6 +892,7 @@ suite connection_state_tests = [] {
       expect(age == 99) << "Should get value from new server";
 
       server->stop();
+      server.reset();
    };
 };
 
