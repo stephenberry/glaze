@@ -407,8 +407,13 @@ void server_error_test()
    if (err) {
       expect(err.value().find("func error") != std::string::npos) << err.value();
    }
+   std::string unexpected_error_snapshot;
+   {
+      std::lock_guard lock{unexpected_error_mutex};
+      unexpected_error_snapshot = unexpected_error_message;
+   }
    expect(!saw_unexpected_error.load(std::memory_order_relaxed))
-      << "Unexpected server error: " << unexpected_error_message;
+      << "Unexpected server error: " << unexpected_error_snapshot;
 }
 
 struct some_object_t
@@ -519,8 +524,13 @@ void server_keep_alive_test()
    client.call({"/works"}, msg);
    expect(not glz::repe::decode_message(result, msg));
    expect(result == 42);
+   std::string unexpected_error_snapshot;
+   {
+      std::lock_guard lock{unexpected_error_mutex};
+      unexpected_error_snapshot = unexpected_error_message;
+   }
    expect(!saw_unexpected_error.load(std::memory_order_relaxed))
-      << "Unexpected server error: " << unexpected_error_message;
+      << "Unexpected server error: " << unexpected_error_snapshot;
 }
 
 void client_exception_test()
@@ -665,10 +675,18 @@ void custom_call_middleware_test()
    client.call({"/value"}, msg, 42);
    expect(not bool(msg.error()));
 
+   std::vector<std::string> logged_queries_snapshot;
+   {
+      std::lock_guard lock{log_mutex};
+      logged_queries_snapshot = logged_queries;
+   }
+
    // Verify logging happened
-   expect(logged_queries.size() == 2);
-   expect(logged_queries[0] == "/value");
-   expect(logged_queries[1] == "/value");
+   expect(logged_queries_snapshot.size() == 2);
+   if (logged_queries_snapshot.size() == 2) {
+      expect(logged_queries_snapshot[0] == "/value");
+      expect(logged_queries_snapshot[1] == "/value");
+   }
 }
 
 void custom_call_error_handling_test()
