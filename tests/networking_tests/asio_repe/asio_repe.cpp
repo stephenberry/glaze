@@ -74,7 +74,7 @@ void notify_test()
    const auto port = server.port;
 
    try {
-      glz::asio_client client{"localhost", std::to_string(port)};
+      glz::asio_client client{"127.0.0.1", std::to_string(port)};
 
       if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
@@ -128,7 +128,7 @@ void async_clients_test()
    const auto port = server.port;
 
    try {
-      glz::asio_client client{"localhost", std::to_string(port)};
+      glz::asio_client client{"127.0.0.1", std::to_string(port)};
 
       if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
@@ -203,7 +203,7 @@ void asio_client_test()
       threads.reserve(N);
 
       for (size_t i = 0; i < N; ++i) {
-         clients.emplace_back(glz::asio_client{"localhost", std::to_string(port)});
+         clients.emplace_back(glz::asio_client{"127.0.0.1", std::to_string(port)});
       }
 
       for (size_t i = 0; i < N; ++i) {
@@ -293,7 +293,7 @@ void async_calls()
       std::vector<std::future<void>> threads;
 
       threads.emplace_back(std::async(std::launch::async, [port_string] {
-         glz::asio_client client{"localhost", port_string};
+         glz::asio_client client{"127.0.0.1", port_string};
          if (auto ec = client.init(); bool(ec)) {
             throw std::runtime_error(glz::write_json(ec).value_or("error"));
          }
@@ -310,7 +310,7 @@ void async_calls()
       }));
 
       threads.emplace_back(std::async(std::launch::async, [port_string] {
-         glz::asio_client client{"localhost", port_string};
+         glz::asio_client client{"127.0.0.1", port_string};
          if (auto ec = client.init(); bool(ec)) {
             throw std::runtime_error(glz::write_json(ec).value_or("error"));
          }
@@ -363,7 +363,7 @@ void raw_json_tests()
 
    glz::raw_json results{};
 
-   glz::asio_client client{"localhost", std::to_string(port)};
+   glz::asio_client client{"127.0.0.1", std::to_string(port)};
    (void)client.init();
 
    glz::repe::message msg{};
@@ -390,7 +390,7 @@ void async_server_test()
    server.run_async();
    const auto port = server.port;
 
-   glz::asio_client client{"localhost", std::to_string(port)};
+   glz::asio_client client{"127.0.0.1", std::to_string(port)};
    (void)client.init();
 
    int result{};
@@ -427,7 +427,7 @@ void server_error_test()
    server.run_async();
    const auto port = server.port;
 
-   glz::asio_client client{"localhost", std::to_string(port)};
+   glz::asio_client client{"127.0.0.1", std::to_string(port)};
    (void)client.init();
 
    int result{};
@@ -465,7 +465,7 @@ suite send_receive_api_tests = [] {
          server.run_async();
          const auto port = server.port;
 
-         glz::asio_client client{"localhost", std::to_string(port)};
+         glz::asio_client client{"127.0.0.1", std::to_string(port)};
          (void)client.init();
 
          client.set("/age", 33);
@@ -529,7 +529,7 @@ void server_keep_alive_test()
    server.run_async();
    const auto port = server.port;
 
-   glz::asio_client client{"localhost", std::to_string(port)};
+   glz::asio_client client{"127.0.0.1", std::to_string(port)};
    (void)client.init();
 
    int result{};
@@ -576,7 +576,7 @@ void client_exception_test()
    server.run_async();
    const auto port = server.port;
 
-   glz::asio_client client{"localhost", std::to_string(port)};
+   glz::asio_client client{"127.0.0.1", std::to_string(port)};
    (void)client.init();
 
    try {
@@ -640,7 +640,7 @@ void custom_call_handler_test()
    server.run_async();
    const auto port = server.port;
 
-   glz::asio_client client{"localhost", std::to_string(port)};
+   glz::asio_client client{"127.0.0.1", std::to_string(port)};
    (void)client.init();
 
    glz::repe::message msg{};
@@ -697,7 +697,7 @@ void custom_call_middleware_test()
    server.run_async();
    const auto port = server.port;
 
-   glz::asio_client client{"localhost", std::to_string(port)};
+   glz::asio_client client{"127.0.0.1", std::to_string(port)};
    (void)client.init();
 
    glz::repe::message msg{};
@@ -752,7 +752,7 @@ void custom_call_error_handling_test()
    server.run_async();
    const auto port = server.port;
 
-   glz::asio_client client{"localhost", std::to_string(port)};
+   glz::asio_client client{"127.0.0.1", std::to_string(port)};
    (void)client.init();
 
    glz::repe::message msg{};
@@ -774,7 +774,7 @@ suite connection_state_tests = [] {
    if (group_enabled("minimal")) {
       "initial_connected_state"_test = [] {
          // Client should not be connected before init()
-         glz::asio_client client{"localhost", "9999"};
+         glz::asio_client client{"127.0.0.1", "9999"};
          expect(not client.connected()) << "Client should not be connected before init()";
       };
    }
@@ -788,7 +788,7 @@ suite connection_state_tests = [] {
          server.run_async();
          const auto port = server.port;
 
-         glz::asio_client client{"localhost", std::to_string(port)};
+         glz::asio_client client{"127.0.0.1", std::to_string(port)};
          expect(not client.connected()) << "Client should not be connected before init()";
 
          auto ec = client.init();
@@ -809,7 +809,7 @@ suite connection_state_tests = [] {
          server->run_async();
          const auto port = server->port;
 
-         glz::asio_client client{"localhost", std::to_string(port)};
+         glz::asio_client client{"127.0.0.1", std::to_string(port)};
          (void)client.init();
          expect(client.connected()) << "Client should be connected initially";
 
@@ -831,7 +831,7 @@ suite connection_state_tests = [] {
 
       "connected_false_when_init_fails"_test = [] {
          // Try to connect to a port where no server is running
-         glz::asio_client client{"localhost", "59999"};
+         glz::asio_client client{"127.0.0.1", "59999"};
          expect(not client.connected()) << "Client should not be connected before init()";
 
          auto ec = client.init();
@@ -840,7 +840,7 @@ suite connection_state_tests = [] {
       };
 
       "call_returns_error_when_not_connected"_test = [] {
-         glz::asio_client client{"localhost", "59999"};
+         glz::asio_client client{"127.0.0.1", "59999"};
 
          // Don't call init(), try to call directly
          glz::repe::message msg{};
@@ -850,7 +850,7 @@ suite connection_state_tests = [] {
       };
 
       "set_throws_when_not_connected"_test = [] {
-         glz::asio_client client{"localhost", "59999"};
+         glz::asio_client client{"127.0.0.1", "59999"};
 
          bool threw = false;
          try {
@@ -865,7 +865,7 @@ suite connection_state_tests = [] {
       };
 
       "get_throws_when_not_connected"_test = [] {
-         glz::asio_client client{"localhost", "59999"};
+         glz::asio_client client{"127.0.0.1", "59999"};
 
          bool threw = false;
          try {
@@ -881,7 +881,7 @@ suite connection_state_tests = [] {
       };
 
       "inout_throws_when_not_connected"_test = [] {
-         glz::asio_client client{"localhost", "59999"};
+         glz::asio_client client{"127.0.0.1", "59999"};
 
          bool threw = false;
          try {
@@ -908,7 +908,7 @@ suite connection_state_tests = [] {
          server->run_async();
          const auto port = server->port;
 
-         glz::asio_client client{"localhost", std::to_string(port)};
+         glz::asio_client client{"127.0.0.1", std::to_string(port)};
          (void)client.init();
          expect(client.connected());
 

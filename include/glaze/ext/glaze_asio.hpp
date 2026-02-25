@@ -717,7 +717,13 @@ namespace glz
          // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
          auto executor = ctx->get_executor();
          asio::ip::tcp::acceptor acceptor(executor);
+         // Windows CI can have unstable IPv6 loopback behavior in some environments.
+         // Use IPv4 loopback there; keep IPv6 elsewhere.
+#if defined(_WIN32)
+         asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v4(), port};
+#else
          asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v6(), port};
+#endif
          acceptor.open(endpoint.protocol());
          if (reuse_address) {
             acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
