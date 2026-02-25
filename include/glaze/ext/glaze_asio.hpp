@@ -685,7 +685,9 @@ namespace glz
                throw std::runtime_error("concurrency == 0");
             }
             ctx = std::make_shared<asio::io_context>(concurrency);
+#if !defined(_WIN32)
             signals = std::make_shared<asio::signal_set>(*ctx, SIGINT, SIGTERM);
+#endif
          }
          initialized = true;
       }
@@ -698,13 +700,19 @@ namespace glz
 
          stop_requested.store(false, std::memory_order_relaxed);
 
-         // Setup signal handling to stop the server
-         signals->async_wait([this](auto, auto) {
-            stop_requested.store(true, std::memory_order_relaxed);
-            if (ctx) {
-               ctx->stop();
-            }
-         });
+         // Setup signal handling to stop the server.
+         // On Windows, avoid async signal_set wiring because it has shown unstable
+         // teardown behavior in fast create/destroy test loops.
+#if !defined(_WIN32)
+         if (signals) {
+            signals->async_wait([this](auto, auto) {
+               stop_requested.store(true, std::memory_order_relaxed);
+               if (ctx) {
+                  ctx->stop();
+               }
+            });
+         }
+#endif
 
          // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
          auto executor = ctx->get_executor();
