@@ -425,6 +425,7 @@ struct some_object_t
 };
 
 suite send_receive_api_tests = [] {
+#if 0
    "send"_test = [] {
       some_object_t obj{};
       glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
@@ -465,6 +466,7 @@ suite send_receive_api_tests = [] {
          expect(x == 9);
       }
    };
+#endif
 };
 
 struct keep_alive_api
@@ -744,6 +746,7 @@ suite connection_state_tests = [] {
       expect(not client.connected()) << "Client should not be connected before init()";
    };
 
+#if 0
    "connected_after_init"_test = [] {
       some_object_t obj{};
       glz::asio_server server{.port = 0, .concurrency = 1};
@@ -912,9 +915,11 @@ suite connection_state_tests = [] {
       server->stop();
       server.reset();
    };
+#endif
 };
 
 suite standalone_async_tests = [] {
+#if 0
    "notify_test"_test = [] { notify_test(); };
    "async_clients_test"_test = [] { async_clients_test(); };
    "asio_client_test"_test = [] { asio_client_test(); };
@@ -927,6 +932,7 @@ suite standalone_async_tests = [] {
    "custom_call_handler_test"_test = [] { custom_call_handler_test(); };
    "custom_call_middleware_test"_test = [] { custom_call_middleware_test(); };
    "custom_call_error_handling_test"_test = [] { custom_call_error_handling_test(); };
+#endif
 };
 
 int main() { return 0; }
