@@ -652,6 +652,7 @@ namespace glz
          // Explicitly join threads before member destruction begins,
          // ensuring coroutines don't access destroyed members (like registry)
          threads.reset();
+         listener_acceptor.reset();
          // Tear down Asio state before other members are destroyed.
          // This avoids pending operation/coroutine cleanup touching members
          // that are already being torn down on some runtimes.
@@ -668,6 +669,7 @@ namespace glz
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<asio::signal_set> signals{};
       std::shared_ptr<std::vector<std::thread>> threads{};
+      std::shared_ptr<asio::ip::tcp::acceptor> listener_acceptor{};
 
       glz::registry<Opts> registry{};
 
@@ -721,7 +723,8 @@ namespace glz
 
          // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
          auto executor = ctx->get_executor();
-         asio::ip::tcp::acceptor acceptor(executor);
+         listener_acceptor = std::make_shared<asio::ip::tcp::acceptor>(executor);
+         auto& acceptor = *listener_acceptor;
          // Windows CI can have unstable IPv6 loopback behavior in some environments.
          // Use IPv4 loopback there; keep IPv6 elsewhere.
 #if defined(_WIN32)
@@ -742,7 +745,7 @@ namespace glz
          }
 
          // Start the listener coroutine
-         asio::co_spawn(*ctx, listener(std::move(acceptor)), asio::detached);
+         asio::co_spawn(*ctx, listener(listener_acceptor), asio::detached);
 
          // Run the io_context in multiple threads for concurrency
          threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
@@ -774,6 +777,17 @@ namespace glz
       void stop()
       {
          stop_requested.store(true, std::memory_order_relaxed);
+         if (listener_acceptor) {
+            asio::error_code ec{};
+            listener_acceptor->cancel(ec);
+            listener_acceptor->close(ec);
+         }
+#if !defined(_WIN32)
+         if (signals) {
+            asio::error_code ec{};
+            signals->cancel(ec);
+         }
+#endif
          if (ctx) {
             ctx->stop(); // Stop the server's io_context
          }
@@ -781,8 +795,15 @@ namespace glz
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
-         socket.set_option(asio::ip::tcp::no_delay(true));
-         socket.set_option(asio::socket_base::keep_alive(true));
+         asio::error_code ec{};
+         socket.set_option(asio::ip::tcp::no_delay(true), ec);
+         if (ec) {
+            co_return;
+         }
+         socket.set_option(asio::socket_base::keep_alive(true), ec);
+         if (ec) {
+            co_return;
+         }
 
          // Borrow buffers from pool - RAII ensures automatic return when coroutine ends
          auto request_buf = pool.borrow();
@@ -853,6 +874,10 @@ namespace glz
             if (e.code() == asio::error::eof) {
                co_return;
             }
+            if (stop_requested.load(std::memory_order_relaxed) &&
+                (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
+               co_return;
+            }
             if (error_handler) {
                error_handler(e.what());
             }
@@ -871,20 +896,22 @@ namespace glz
          // Buffers automatically returned to pool when scoped_buffers are destroyed
       }
 
-      asio::awaitable<void> listener(asio::ip::tcp::acceptor acceptor)
+      asio::awaitable<void> listener(std::shared_ptr<asio::ip::tcp::acceptor> acceptor)
       {
+         if (!acceptor) {
+            co_return;
+         }
          auto executor = co_await asio::this_coro::executor;
          try {
             while (true) {
-               auto socket = co_await acceptor.async_accept(asio::use_awaitable);
+               auto socket = co_await acceptor->async_accept(asio::use_awaitable);
                asio::co_spawn(executor, run_instance(std::move(socket)), asio::detached);
             }
          }
          catch (const asio::system_error& e) {
             // operation_aborted/bad_descriptor are expected while shutting down.
             // If we are not shutting down, surface them through the normal error path.
-            const bool shutting_down =
-               stop_requested.load(std::memory_order_relaxed) || !ctx || ctx->stopped();
+            const bool shutting_down = stop_requested.load(std::memory_order_relaxed);
             if (shutting_down &&
                 (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
                co_return;
