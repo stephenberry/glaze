@@ -652,6 +652,11 @@ namespace glz
          // Explicitly join threads before member destruction begins,
          // ensuring coroutines don't access destroyed members (like registry)
          threads.reset();
+         // Tear down Asio state before other members are destroyed.
+         // This avoids pending operation/coroutine cleanup touching members
+         // that are already being torn down on some runtimes.
+         signals.reset();
+         ctx.reset();
       }
 
       struct glaze
