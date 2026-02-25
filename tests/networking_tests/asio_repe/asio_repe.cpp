@@ -914,20 +914,19 @@ suite connection_state_tests = [] {
    };
 };
 
-int main()
-{
-   notify_test();
-   async_clients_test();
-   asio_client_test();
-   async_calls();
-   raw_json_tests();
-   async_server_test();
-   server_error_test();
-   server_keep_alive_test();
-   client_exception_test();
-   custom_call_handler_test();
-   custom_call_middleware_test();
-   custom_call_error_handling_test();
+suite standalone_async_tests = [] {
+   "notify_test"_test = [] { notify_test(); };
+   "async_clients_test"_test = [] { async_clients_test(); };
+   "asio_client_test"_test = [] { asio_client_test(); };
+   "async_calls_test"_test = [] { async_calls(); };
+   "raw_json_test"_test = [] { raw_json_tests(); };
+   "async_server_test"_test = [] { async_server_test(); };
+   "server_error_test"_test = [] { server_error_test(); };
+   "server_keep_alive_test"_test = [] { server_keep_alive_test(); };
+   "client_exception_test"_test = [] { client_exception_test(); };
+   "custom_call_handler_test"_test = [] { custom_call_handler_test(); };
+   "custom_call_middleware_test"_test = [] { custom_call_middleware_test(); };
+   "custom_call_error_handling_test"_test = [] { custom_call_error_handling_test(); };
+};
 
-   return 0;
-}
+int main() { return 0; }

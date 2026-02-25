@@ -30,6 +30,8 @@ endfunction()
 add_glz_json_test(${PROJECT_NAME} ${JSON_TEST_SOURCES})
 add_glz_json_test(json_variant_support_test ${JSON_VARIANT_SUPPORT_SOURCES})
 
+set_tests_properties(json_test json_test_non_null PROPERTIES TIMEOUT 60)
+
 ## glz::generic test
 
 add_executable(json_t_test generic_test.cpp)
@@ -157,4 +159,3 @@ add_executable(lazy_test lazy_test.cpp)
 target_link_libraries(lazy_test PRIVATE glz_test_common)
 
 add_test(NAME lazy_test COMMAND lazy_test)
-
