@@ -215,11 +215,23 @@ namespace glz
       std::string host{"localhost"}; // host name
       std::string service{""}; // often the port
       std::mutex mtx{};
+      std::shared_ptr<asio::io_context> ctx{};
       std::vector<std::shared_ptr<asio::ip::tcp::socket>> sockets{2};
       std::vector<size_t> available{0, 1}; // indices of available sockets
-
-      std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<std::atomic<bool>> is_connected = std::make_shared<std::atomic<bool>>(false);
+
+      ~socket_pool()
+      {
+         std::unique_lock lock{mtx};
+         for (auto& socket : sockets) {
+            if (!socket) continue;
+            asio::error_code ec{};
+            socket->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+            socket->close(ec);
+            socket.reset();
+         }
+         available.clear();
+      }
 
       // provides a pointer to a socket and an index
       std::tuple<std::shared_ptr<asio::ip::tcp::socket>, size_t, std::error_code> get()
