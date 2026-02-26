@@ -740,10 +740,7 @@ namespace glz
 #if !defined(_WIN32)
          if (signals) {
             signals->async_wait([this](auto, auto) {
-               stop_requested.store(true, std::memory_order_relaxed);
-               if (ctx) {
-                  ctx->stop();
-               }
+               stop();
             });
          }
 #endif
@@ -829,9 +826,6 @@ namespace glz
             signals->cancel(ec);
          }
 #endif
-         if (ctx) {
-            ctx->stop(); // Stop the server's io_context
-         }
       }
 
       asio::awaitable<void> run_instance(std::shared_ptr<asio::ip::tcp::socket> socket_ptr)
