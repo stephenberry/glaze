@@ -802,11 +802,44 @@ namespace glz
             if (on_listen) {
                on_listen();
             }
+            asio_repe_trace("server.run after on_listen");
+
+            auto local_error_handler = error_handler;
+            auto report_spawn_exception = [local_error_handler](const char* where, std::exception_ptr ep) {
+               if (!ep) {
+                  return;
+               }
+               try {
+                  std::rethrow_exception(ep);
+               }
+               catch (const std::exception& e) {
+                  if (local_error_handler) {
+                     local_error_handler(e.what());
+                  }
+                  else {
+                     std::fprintf(stderr, "glz::asio_server %s exception: %s\n", where, e.what());
+                  }
+               }
+               catch (...) {
+                  if (local_error_handler) {
+                     local_error_handler("unknown exception");
+                  }
+                  else {
+                     std::fprintf(stderr, "glz::asio_server %s exception: unknown exception\n", where);
+                  }
+               }
+            };
 
             // Start the listener coroutine
-            asio::co_spawn(*ctx, listener(listener_acceptor), asio::detached);
+            asio_repe_trace("server.run before listener co_spawn");
+            asio::co_spawn(*ctx, listener(listener_acceptor),
+                           [report_spawn_exception = std::move(report_spawn_exception)](std::exception_ptr ep) mutable {
+                              report_spawn_exception("listener", std::move(ep));
+                           });
+            asio_repe_trace("server.run after listener co_spawn");
 
             // Run the io_context in multiple threads for concurrency
+            asio_repe_trace("server.run before thread vector create");
             threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
                // Join all threads before exiting
                for (auto& thread : *ptr) {
@@ -816,15 +849,34 @@ namespace glz
                }
                delete ptr;
             });
+            asio_repe_trace("server.run after thread vector create");
 
             threads->reserve(concurrency - uint32_t(run_on_main_thread));
+            asio_repe_trace("server.run after reserve");
             for (uint32_t i = uint32_t(run_on_main_thread); i < concurrency; ++i) {
-               threads->emplace_back([this]() { ctx->run(); });
+               asio_repe_trace("server.run before worker emplace");
+               auto local_ctx = ctx;
+               threads->emplace_back([local_ctx]() {
+                  asio_repe_trace("server.worker begin");
+                  try {
+                     local_ctx->run();
+                     asio_repe_trace("server.worker end");
+                  }
+                  catch (const std::exception& e) {
+                     std::fprintf(stderr, "glz::asio_server worker exception: %s\n", e.what());
+                  }
+                  catch (...) {
+                     std::fprintf(stderr, "glz::asio_server worker exception: unknown exception\n");
+                  }
+               });
+               asio_repe_trace("server.run after worker emplace");
             }
 
             if (run_on_main_thread) {
                // Run in the main thread as well, which will block
+               asio_repe_trace("server.run main thread run begin");
                ctx->run();
+               asio_repe_trace("server.run main thread run end");
 
                threads.reset(); // join all threads
             }
@@ -892,27 +944,25 @@ namespace glz
             co_return;
          }
          auto& socket = *socket_ptr;
-         struct socket_cleanup
-         {
-            asio_server* self{};
-            std::shared_ptr<asio::ip::tcp::socket> socket{};
-            ~socket_cleanup()
-            {
-               if (self) {
-                  self->remove_active_socket(socket);
-               }
+         bool socket_removed = false;
+         auto remove_socket_once = [&]() {
+            if (!socket_removed) {
+               remove_active_socket(socket_ptr);
+               socket_removed = true;
             }
-         } cleanup{this, socket_ptr};
+         };
 
          asio::error_code ec{};
          socket.set_option(asio::ip::tcp::no_delay(true), ec);
          if (ec) {
             asio_repe_trace("run_instance no_delay failed");
+            remove_socket_once();
             co_return;
          }
          socket.set_option(asio::socket_base::keep_alive(true), ec);
          if (ec) {
             asio_repe_trace("run_instance keep_alive failed");
+            remove_socket_once();
             co_return;
          }
 
@@ -994,11 +1044,13 @@ namespace glz
          catch (const asio::system_error& e) {
             // EOF indicates normal client disconnect, not an error
             if (e.code() == asio::error::eof) {
+               remove_socket_once();
                co_return;
             }
             if (stop_requested.load(std::memory_order_relaxed) &&
                 (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
                asio_repe_trace("run_instance canceled during shutdown");
+               remove_socket_once();
                co_return;
             }
             if (error_handler) {
@@ -1016,6 +1068,7 @@ namespace glz
                std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
             }
          }
+         remove_socket_once();
          asio_repe_trace("run_instance end");
          // Buffers automatically returned to pool when scoped_buffers are destroyed
       }
@@ -1029,11 +1082,35 @@ namespace glz
          }
          auto executor = co_await asio::this_coro::executor;
          try {
+            auto local_error_handler = error_handler;
             while (true) {
                auto socket = std::make_shared<asio::ip::tcp::socket>(co_await acceptor->async_accept(asio::use_awaitable));
                asio_repe_trace("listener accepted socket");
                add_active_socket(socket);
-               asio::co_spawn(executor, run_instance(socket), asio::detached);
+               asio::co_spawn(executor, run_instance(socket), [local_error_handler](std::exception_ptr ep) {
+                  if (!ep) {
+                     return;
+                  }
+                  try {
+                     std::rethrow_exception(ep);
+                  }
+                  catch (const std::exception& e) {
+                     if (local_error_handler) {
+                        local_error_handler(e.what());
+                     }
+                     else {
+                        std::fprintf(stderr, "glz::asio_server run_instance exception: %s\n", e.what());
+                     }
+                  }
+                  catch (...) {
+                     if (local_error_handler) {
+                        local_error_handler("unknown exception");
+                     }
+                     else {
+                        std::fprintf(stderr, "glz::asio_server run_instance exception: unknown exception\n");
+                     }
+                  }
+               });
             }
          }
          catch (const asio::system_error& e) {
