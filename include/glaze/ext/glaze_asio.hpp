@@ -804,6 +804,12 @@ namespace glz
             }
             asio_repe_trace("server.run after on_listen");
 
+            // Start the listener
+#if defined(_WIN32)
+            asio_repe_trace("server.run before listener async_accept");
+            start_listener_windows();
+            asio_repe_trace("server.run after listener async_accept");
+#else
             auto local_error_handler = error_handler;
             auto report_spawn_exception = [local_error_handler](const char* where, std::exception_ptr ep) {
                if (!ep) {
@@ -829,14 +835,13 @@ namespace glz
                   }
                }
             };
-
-            // Start the listener coroutine
             asio_repe_trace("server.run before listener co_spawn");
             asio::co_spawn(*ctx, listener_impl(this, listener_acceptor),
                            [report_spawn_exception = std::move(report_spawn_exception)](std::exception_ptr ep) mutable {
                               report_spawn_exception("listener", std::move(ep));
                            });
             asio_repe_trace("server.run after listener co_spawn");
+#endif
 
             // Run the io_context in multiple threads for concurrency
             asio_repe_trace("server.run before thread vector create");
@@ -935,6 +940,268 @@ namespace glz
 #endif
          asio_repe_trace("server.stop end");
       }
+
+#if defined(_WIN32)
+      struct windows_session_state
+      {
+         asio_server* self{};
+         std::shared_ptr<asio::ip::tcp::socket> socket{};
+         std::string request{};
+         std::string response{};
+         uint64_t message_length{};
+      };
+
+      static void finish_windows_session(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self || !state->socket) {
+            return;
+         }
+         asio::error_code ec{};
+         state->socket->cancel(ec);
+         state->socket->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+         state->socket->close(ec);
+         state->self->remove_active_socket(state->socket);
+      }
+
+      static bool handle_windows_session_error(const std::shared_ptr<windows_session_state>& state, const asio::error_code& ec,
+                                               const char* context)
+      {
+         if (!state || !state->self) {
+            return true;
+         }
+         if (!ec) {
+            return false;
+         }
+
+         if (ec == asio::error::eof) {
+            finish_windows_session(state);
+            return true;
+         }
+
+         const bool shutting_down = state->self->stop_requested.load(std::memory_order_relaxed);
+         if (shutting_down &&
+             (ec == asio::error::operation_aborted || ec == asio::error::bad_descriptor)) {
+            asio_repe_trace("windows session canceled during shutdown");
+            finish_windows_session(state);
+            return true;
+         }
+
+         if (state->self->error_handler) {
+            state->self->error_handler(std::string{context} + ": " + ec.message());
+         }
+         else {
+            std::fprintf(stderr, "glz::asio_server %s: %s\n", context, ec.message().c_str());
+         }
+         finish_windows_session(state);
+         return true;
+      }
+
+      static void process_windows_request(const std::shared_ptr<windows_session_state>& state);
+
+      static void read_windows_message_body(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->socket) {
+            return;
+         }
+
+         const auto remaining = size_t(state->message_length - sizeof(state->message_length));
+         if (!remaining) {
+            process_windows_request(state);
+            return;
+         }
+
+         asio::async_read(*state->socket, asio::buffer(state->request.data() + sizeof(state->message_length), remaining),
+                          asio::transfer_exactly(remaining), [state](const asio::error_code& ec, size_t) {
+                             if (handle_windows_session_error(state, ec, "read body")) {
+                                return;
+                             }
+                             process_windows_request(state);
+                          });
+      }
+
+      static void read_windows_message_length(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self || !state->socket) {
+            return;
+         }
+         if (state->self->stop_requested.load(std::memory_order_relaxed)) {
+            finish_windows_session(state);
+            return;
+         }
+
+         state->request.clear();
+         state->response.clear();
+         state->message_length = 0;
+
+         asio::async_read(*state->socket, asio::buffer(&state->message_length, sizeof(state->message_length)),
+                          asio::transfer_exactly(sizeof(state->message_length)), [state](const asio::error_code& ec, size_t) {
+                             if (handle_windows_session_error(state, ec, "read length")) {
+                                return;
+                             }
+
+                             if (state->message_length < sizeof(repe::header)) {
+                                if (state->self->error_handler) {
+                                   state->self->error_handler("Invalid REPE message: length too small for header");
+                                }
+                                else {
+                                   std::fprintf(stderr, "glz::asio_server error: Invalid REPE message: length too small for header\n");
+                                }
+                                finish_windows_session(state);
+                                return;
+                             }
+                             if (state->self->max_message_size > 0 && state->message_length > state->self->max_message_size) {
+                                if (state->self->error_handler) {
+                                   state->self->error_handler("REPE message exceeds maximum allowed size");
+                                }
+                                else {
+                                   std::fprintf(stderr, "glz::asio_server error: REPE message exceeds maximum allowed size\n");
+                                }
+                                finish_windows_session(state);
+                                return;
+                             }
+
+                             state->request.resize(size_t(state->message_length));
+                             std::memcpy(state->request.data(), &state->message_length, sizeof(state->message_length));
+                             read_windows_message_body(state);
+                          });
+      }
+
+      static void write_windows_response(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->socket) {
+            return;
+         }
+         if (state->response.empty()) {
+            read_windows_message_length(state);
+            return;
+         }
+
+         asio::async_write(*state->socket, asio::buffer(state->response.data(), state->response.size()),
+                           asio::transfer_exactly(state->response.size()), [state](const asio::error_code& ec, size_t) {
+                              if (handle_windows_session_error(state, ec, "write response")) {
+                                 return;
+                              }
+                              read_windows_message_length(state);
+                           });
+      }
+
+      static void process_windows_request(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self) {
+            return;
+         }
+
+         uint16_t spec{};
+         uint8_t version{};
+         std::memcpy(&spec, state->request.data() + offsetof(repe::header, spec), sizeof(spec));
+         std::memcpy(&version, state->request.data() + offsetof(repe::header, version), sizeof(version));
+
+         if (spec != repe::repe_magic) {
+            if (state->self->error_handler) {
+               state->self->error_handler("Invalid REPE magic bytes");
+            }
+            else {
+               std::fprintf(stderr, "glz::asio_server error: Invalid REPE magic bytes\n");
+            }
+            finish_windows_session(state);
+            return;
+         }
+         if (version != 1) {
+            if (state->self->error_handler) {
+               state->self->error_handler("Unsupported REPE version");
+            }
+            else {
+               std::fprintf(stderr, "glz::asio_server error: Unsupported REPE version\n");
+            }
+            finish_windows_session(state);
+            return;
+         }
+
+         try {
+            if (state->self->call) {
+               state->self->call(std::span<const char>(state->request), state->response);
+            }
+            else {
+               state->self->registry.call(std::span<const char>(state->request), state->response);
+            }
+         }
+         catch (const std::exception& e) {
+            if (state->self->error_handler) {
+               state->self->error_handler(e.what());
+            }
+            auto id = repe::extract_id(state->request);
+            repe::encode_error_buffer(error_code::invalid_call, state->response, e.what(), id);
+         }
+         catch (...) {
+            if (state->self->error_handler) {
+               state->self->error_handler("unknown error");
+            }
+            auto id = repe::extract_id(state->request);
+            repe::encode_error_buffer(error_code::invalid_call, state->response, "unknown error", id);
+         }
+
+         write_windows_response(state);
+      }
+
+      void start_session_windows(const std::shared_ptr<asio::ip::tcp::socket>& socket_ptr)
+      {
+         if (!socket_ptr) {
+            return;
+         }
+
+         asio::error_code ec{};
+         socket_ptr->set_option(asio::ip::tcp::no_delay(true), ec);
+         if (ec) {
+            remove_active_socket(socket_ptr);
+            return;
+         }
+         socket_ptr->set_option(asio::socket_base::keep_alive(true), ec);
+         if (ec) {
+            remove_active_socket(socket_ptr);
+            return;
+         }
+
+         auto state = std::make_shared<windows_session_state>();
+         state->self = this;
+         state->socket = socket_ptr;
+         read_windows_message_length(state);
+      }
+
+      void start_listener_windows()
+      {
+         auto acceptor = listener_acceptor;
+         if (!acceptor) {
+            return;
+         }
+
+         acceptor->async_accept([this, acceptor](const asio::error_code& ec, asio::ip::tcp::socket socket) {
+            if (ec) {
+               const bool shutting_down = stop_requested.load(std::memory_order_relaxed);
+               if (shutting_down &&
+                   (ec == asio::error::operation_aborted || ec == asio::error::bad_descriptor)) {
+                  asio_repe_trace("listener canceled during shutdown");
+                  return;
+               }
+               if (error_handler) {
+                  error_handler(ec.message());
+               }
+               else {
+                  std::fprintf(stderr, "glz::asio_server listener error: %s\n", ec.message().c_str());
+               }
+            }
+            else {
+               auto socket_ptr = std::make_shared<asio::ip::tcp::socket>(std::move(socket));
+               asio_repe_trace("listener accepted socket");
+               add_active_socket(socket_ptr);
+               start_session_windows(socket_ptr);
+            }
+
+            if (!stop_requested.load(std::memory_order_relaxed) && acceptor->is_open()) {
+               start_listener_windows();
+            }
+         });
+      }
+#endif
 
       static asio::awaitable<void> run_instance_impl(asio_server* self, std::shared_ptr<asio::ip::tcp::socket> socket_ptr)
       {
