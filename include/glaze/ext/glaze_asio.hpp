@@ -832,7 +832,7 @@ namespace glz
 
             // Start the listener coroutine
             asio_repe_trace("server.run before listener co_spawn");
-            asio::co_spawn(*ctx, listener(listener_acceptor),
+            asio::co_spawn(*ctx, listener_impl(this, listener_acceptor),
                            [report_spawn_exception = std::move(report_spawn_exception)](std::exception_ptr ep) mutable {
                               report_spawn_exception("listener", std::move(ep));
                            });
@@ -936,10 +936,10 @@ namespace glz
          asio_repe_trace("server.stop end");
       }
 
-      asio::awaitable<void> run_instance(std::shared_ptr<asio::ip::tcp::socket> socket_ptr)
+      static asio::awaitable<void> run_instance_impl(asio_server* self, std::shared_ptr<asio::ip::tcp::socket> socket_ptr)
       {
          asio_repe_trace("run_instance begin");
-         if (!socket_ptr) {
+         if (!self || !socket_ptr) {
             asio_repe_trace("run_instance null socket");
             co_return;
          }
@@ -947,7 +947,7 @@ namespace glz
          bool socket_removed = false;
          auto remove_socket_once = [&]() {
             if (!socket_removed) {
-               remove_active_socket(socket_ptr);
+               self->remove_active_socket(socket_ptr);
                socket_removed = true;
             }
          };
@@ -975,31 +975,31 @@ namespace glz
          auto& response = response_storage;
 #else
          // Borrow buffers from pool - RAII ensures automatic return when coroutine ends.
-         auto request_buf = pool.borrow();
-         auto response_buf = pool.borrow();
+         auto request_buf = self->pool.borrow();
+         auto response_buf = self->pool.borrow();
          auto& request = request_buf.value();
          auto& response = response_buf.value();
 #endif
 
          try {
-            if (call) {
+            if (self->call) {
                // Custom call handler path with buffer pool
                while (true) {
-                  co_await co_receive_raw(socket, request, max_message_size);
+                  co_await co_receive_raw(socket, request, self->max_message_size);
 
                   try {
-                     call(std::span<const char>(request), response);
+                     self->call(std::span<const char>(request), response);
                   }
                   catch (const std::exception& e) {
-                     if (error_handler) {
-                        error_handler(e.what());
+                     if (self->error_handler) {
+                        self->error_handler(e.what());
                      }
                      auto id = repe::extract_id(request);
                      repe::encode_error_buffer(error_code::invalid_call, response, e.what(), id);
                   }
                   catch (...) {
-                     if (error_handler) {
-                        error_handler("unknown error");
+                     if (self->error_handler) {
+                        self->error_handler("unknown error");
                      }
                      auto id = repe::extract_id(request);
                      repe::encode_error_buffer(error_code::invalid_call, response, "unknown error", id);
@@ -1014,21 +1014,21 @@ namespace glz
             else {
                // Standard registry path with span-based call
                while (true) {
-                  co_await co_receive_raw(socket, request, max_message_size);
+                  co_await co_receive_raw(socket, request, self->max_message_size);
 
                   try {
-                     registry.call(std::span<const char>(request), response);
+                     self->registry.call(std::span<const char>(request), response);
                   }
                   catch (const std::exception& e) {
-                     if (error_handler) {
-                        error_handler(e.what());
+                     if (self->error_handler) {
+                        self->error_handler(e.what());
                      }
                      auto id = repe::extract_id(request);
                      repe::encode_error_buffer(error_code::invalid_call, response, e.what(), id);
                   }
                   catch (...) {
-                     if (error_handler) {
-                        error_handler("unknown error");
+                     if (self->error_handler) {
+                        self->error_handler("unknown error");
                      }
                      auto id = repe::extract_id(request);
                      repe::encode_error_buffer(error_code::invalid_call, response, "unknown error", id);
@@ -1047,22 +1047,22 @@ namespace glz
                remove_socket_once();
                co_return;
             }
-            if (stop_requested.load(std::memory_order_relaxed) &&
+            if (self->stop_requested.load(std::memory_order_relaxed) &&
                 (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
                asio_repe_trace("run_instance canceled during shutdown");
                remove_socket_once();
                co_return;
             }
-            if (error_handler) {
-               error_handler(e.what());
+            if (self->error_handler) {
+               self->error_handler(e.what());
             }
             else {
                std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
             }
          }
          catch (const std::exception& e) {
-            if (error_handler) {
-               error_handler(e.what());
+            if (self->error_handler) {
+               self->error_handler(e.what());
             }
             else {
                std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
@@ -1073,21 +1073,21 @@ namespace glz
          // Buffers automatically returned to pool when scoped_buffers are destroyed
       }
 
-      asio::awaitable<void> listener(std::shared_ptr<asio::ip::tcp::acceptor> acceptor)
+      static asio::awaitable<void> listener_impl(asio_server* self, std::shared_ptr<asio::ip::tcp::acceptor> acceptor)
       {
          asio_repe_trace("listener begin");
-         if (!acceptor) {
+         if (!self || !acceptor) {
             asio_repe_trace("listener null acceptor");
             co_return;
          }
          auto executor = co_await asio::this_coro::executor;
          try {
-            auto local_error_handler = error_handler;
+            auto local_error_handler = self->error_handler;
             while (true) {
                auto socket = std::make_shared<asio::ip::tcp::socket>(co_await acceptor->async_accept(asio::use_awaitable));
                asio_repe_trace("listener accepted socket");
-               add_active_socket(socket);
-               asio::co_spawn(executor, run_instance(socket), [local_error_handler](std::exception_ptr ep) {
+               self->add_active_socket(socket);
+               asio::co_spawn(executor, run_instance_impl(self, socket), [local_error_handler](std::exception_ptr ep) {
                   if (!ep) {
                      return;
                   }
@@ -1116,22 +1116,22 @@ namespace glz
          catch (const asio::system_error& e) {
             // operation_aborted/bad_descriptor are expected while shutting down.
             // If we are not shutting down, surface them through the normal error path.
-            const bool shutting_down = stop_requested.load(std::memory_order_relaxed);
+            const bool shutting_down = self->stop_requested.load(std::memory_order_relaxed);
             if (shutting_down &&
                 (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
                asio_repe_trace("listener canceled during shutdown");
                co_return;
             }
-            if (error_handler) {
-               error_handler(e.what());
+            if (self->error_handler) {
+               self->error_handler(e.what());
             }
             else {
                std::fprintf(stderr, "glz::asio_server listener error: %s\n", e.what());
             }
          }
          catch (const std::exception& e) {
-            if (error_handler) {
-               error_handler(e.what());
+            if (self->error_handler) {
+               self->error_handler(e.what());
             }
             else {
                std::fprintf(stderr, "glz::asio_server listener error: %s\n", e.what());
