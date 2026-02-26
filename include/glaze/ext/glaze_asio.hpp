@@ -856,66 +856,77 @@ namespace glz
             co_return;
          }
 
-         // Borrow buffers from pool - RAII ensures automatic return when coroutine ends
+#if defined(_WIN32)
+         // On Windows, keep per-connection buffers local to the coroutine frame.
+         // This avoids relying on cross-object pool lifetimes during asynchronous teardown.
+         std::string request_storage{};
+         std::string response_storage{};
+         auto& request = request_storage;
+         auto& response = response_storage;
+#else
+         // Borrow buffers from pool - RAII ensures automatic return when coroutine ends.
          auto request_buf = pool.borrow();
          auto response_buf = pool.borrow();
+         auto& request = request_buf.value();
+         auto& response = response_buf.value();
+#endif
 
          try {
             if (call) {
                // Custom call handler path with buffer pool
                while (true) {
-                  co_await co_receive_raw(socket, request_buf.value(), max_message_size);
+                  co_await co_receive_raw(socket, request, max_message_size);
 
                   try {
-                     call(std::span<const char>(request_buf.value()), response_buf.value());
+                     call(std::span<const char>(request), response);
                   }
                   catch (const std::exception& e) {
                      if (error_handler) {
                         error_handler(e.what());
                      }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), e.what(), id);
+                     auto id = repe::extract_id(request);
+                     repe::encode_error_buffer(error_code::invalid_call, response, e.what(), id);
                   }
                   catch (...) {
                      if (error_handler) {
                         error_handler("unknown error");
                      }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), "unknown error", id);
+                     auto id = repe::extract_id(request);
+                     repe::encode_error_buffer(error_code::invalid_call, response, "unknown error", id);
                   }
 
                   // Send response if buffer is not empty
-                  if (!response_buf.value().empty()) {
-                     co_await co_send_raw(socket, response_buf.value());
+                  if (!response.empty()) {
+                     co_await co_send_raw(socket, response);
                   }
                }
             }
             else {
                // Standard registry path with span-based call
                while (true) {
-                  co_await co_receive_raw(socket, request_buf.value(), max_message_size);
+                  co_await co_receive_raw(socket, request, max_message_size);
 
                   try {
-                     registry.call(std::span<const char>(request_buf.value()), response_buf.value());
+                     registry.call(std::span<const char>(request), response);
                   }
                   catch (const std::exception& e) {
                      if (error_handler) {
                         error_handler(e.what());
                      }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), e.what(), id);
+                     auto id = repe::extract_id(request);
+                     repe::encode_error_buffer(error_code::invalid_call, response, e.what(), id);
                   }
                   catch (...) {
                      if (error_handler) {
                         error_handler("unknown error");
                      }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), "unknown error", id);
+                     auto id = repe::extract_id(request);
+                     repe::encode_error_buffer(error_code::invalid_call, response, "unknown error", id);
                   }
 
                   // Send response if buffer is not empty
-                  if (!response_buf.value().empty()) {
-                     co_await co_send_raw(socket, response_buf.value());
+                  if (!response.empty()) {
+                     co_await co_send_raw(socket, response);
                   }
                }
             }
