@@ -45,6 +45,31 @@ namespace
       static const std::string filter = test_group_filter();
       return filter.empty() || filter == "all" || filter == group;
    }
+
+   template <class Client>
+   bool init_client_or_fail(Client& client, std::string_view context = {})
+   {
+      if (auto ec = client.init(); bool(ec)) {
+         const auto ec_json = glz::write_json(ec).value_or("error");
+         if (context.empty()) {
+            expect(false) << "client.init() failed: " << ec_json;
+         }
+         else {
+            expect(false) << context << " client.init() failed: " << ec_json;
+         }
+         return false;
+      }
+      if (!client.connected()) {
+         if (context.empty()) {
+            expect(false) << "client.init() returned success but client is not connected";
+         }
+         else {
+            expect(false) << context << " client.init() returned success but client is not connected";
+         }
+         return false;
+      }
+      return true;
+   }
 }
 
 struct notify_api
@@ -364,7 +389,11 @@ void raw_json_tests()
    glz::raw_json results{};
 
    glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   (void)client.init();
+   if (!init_client_or_fail(client, "raw_json_tests")) {
+      server.stop();
+      server_thread.get();
+      return;
+   }
 
    glz::repe::message msg{};
    client.call({"/do_nothing"}, msg);
@@ -391,7 +420,9 @@ void async_server_test()
    const auto port = server.port;
 
    glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   (void)client.init();
+   if (!init_client_or_fail(client, "async_server_test")) {
+      return;
+   }
 
    int result{};
    glz::repe::message msg{};
@@ -428,7 +459,9 @@ void server_error_test()
    const auto port = server.port;
 
    glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   (void)client.init();
+   if (!init_client_or_fail(client, "server_error_test")) {
+      return;
+   }
 
    int result{};
    glz::repe::message msg{};
@@ -466,35 +499,42 @@ suite send_receive_api_tests = [] {
          const auto port = server.port;
 
          glz::asio_client client{"127.0.0.1", std::to_string(port)};
-         (void)client.init();
-
-         client.set("/age", 33);
-         expect(bool(obj.age == 33));
-
-         {
-            int age{};
-            client.get("/age", age);
-            expect(age == 33);
+         if (!init_client_or_fail(client, "send_receive/send")) {
+            return;
          }
 
-         client.set("/name", "Ryan");
-         expect(bool(obj.name == "Ryan"));
+         try {
+            client.set("/age", 33);
+            expect(bool(obj.age == 33));
 
-         {
-            std::string name{};
-            client.get("/name", name);
-            expect(name == "Ryan");
+            {
+               int age{};
+               client.get("/age", age);
+               expect(age == 33);
+            }
+
+            client.set("/name", "Ryan");
+            expect(bool(obj.name == "Ryan"));
+
+            {
+               std::string name{};
+               client.get("/name", name);
+               expect(name == "Ryan");
+            }
+
+            client.set("/name", "Paul");
+            expect(bool(obj.name == "Paul"));
+
+            expect("Paul" == client.get<std::string>("/name"));
+
+            {
+               int x = 3;
+               client.inout("/square", x, x);
+               expect(x == 9);
+            }
          }
-
-         client.set("/name", "Paul");
-         expect(bool(obj.name == "Paul"));
-
-         expect("Paul" == client.get<std::string>("/name"));
-
-         {
-            int x = 3;
-            client.inout("/square", x, x);
-            expect(x == 9);
+         catch (const std::exception& e) {
+            expect(false) << e.what();
          }
       };
    }
@@ -530,7 +570,9 @@ void server_keep_alive_test()
    const auto port = server.port;
 
    glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   (void)client.init();
+   if (!init_client_or_fail(client, "server_keep_alive_test")) {
+      return;
+   }
 
    int result{};
    glz::repe::message msg{};
@@ -577,7 +619,9 @@ void client_exception_test()
    const auto port = server.port;
 
    glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   (void)client.init();
+   if (!init_client_or_fail(client, "client_exception_test")) {
+      return;
+   }
 
    try {
       int i{};
@@ -641,7 +685,9 @@ void custom_call_handler_test()
    const auto port = server.port;
 
    glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   (void)client.init();
+   if (!init_client_or_fail(client, "custom_call_handler_test")) {
+      return;
+   }
 
    glz::repe::message msg{};
 
@@ -698,7 +744,9 @@ void custom_call_middleware_test()
    const auto port = server.port;
 
    glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   (void)client.init();
+   if (!init_client_or_fail(client, "custom_call_middleware_test")) {
+      return;
+   }
 
    glz::repe::message msg{};
    client.call({"/value"}, msg);
@@ -753,7 +801,9 @@ void custom_call_error_handling_test()
    const auto port = server.port;
 
    glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   (void)client.init();
+   if (!init_client_or_fail(client, "custom_call_error_handling_test")) {
+      return;
+   }
 
    glz::repe::message msg{};
 
@@ -810,12 +860,23 @@ suite connection_state_tests = [] {
          const auto port = server->port;
 
          glz::asio_client client{"127.0.0.1", std::to_string(port)};
-         (void)client.init();
+         if (!init_client_or_fail(client, "connection_state/connected_false_after_server_shutdown")) {
+            return;
+         }
          expect(client.connected()) << "Client should be connected initially";
+         if (!client.connected()) {
+            return;
+         }
 
          // Verify connection works
          int age{};
-         client.get("/age", age);
+         try {
+            client.get("/age", age);
+         }
+         catch (const std::exception& e) {
+            expect(false) << e.what();
+            return;
+         }
 
          // Shutdown server - destructor joins threads so shutdown is complete after reset()
          server->stop();
@@ -909,12 +970,23 @@ suite connection_state_tests = [] {
          const auto port = server->port;
 
          glz::asio_client client{"127.0.0.1", std::to_string(port)};
-         (void)client.init();
+         if (!init_client_or_fail(client, "connection_state/reconnect_after_server_restart initial")) {
+            return;
+         }
          expect(client.connected());
+         if (!client.connected()) {
+            return;
+         }
 
          // Verify connection works
          int age{};
-         client.get("/age", age);
+         try {
+            client.get("/age", age);
+         }
+         catch (const std::exception& e) {
+            expect(false) << e.what();
+            return;
+         }
          expect(age == 25);
 
          // Shutdown server
@@ -937,12 +1009,22 @@ suite connection_state_tests = [] {
          server->run_async();
 
          // Re-init client
-         auto ec = client.init();
-         expect(not bool(ec)) << "Re-init should succeed";
+         if (!init_client_or_fail(client, "connection_state/reconnect_after_server_restart reinit")) {
+            return;
+         }
          expect(client.connected()) << "Should be connected after re-init";
+         if (!client.connected()) {
+            return;
+         }
 
          // Verify new connection works
-         client.get("/age", age);
+         try {
+            client.get("/age", age);
+         }
+         catch (const std::exception& e) {
+            expect(false) << e.what();
+            return;
+         }
          expect(age == 99) << "Should get value from new server";
 
          server->stop();

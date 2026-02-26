@@ -34,7 +34,9 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #include <cassert>
 #include <coroutine>
 #include <iostream>
+#include <optional>
 #include <span>
+#include <utility>
 
 #include "glaze/rpc/registry.hpp"
 #include "glaze/rpc/repe/buffer.hpp"
@@ -43,6 +45,16 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 
 namespace glz
 {
+#if defined(GLZ_ASIO_REPE_TRACE)
+   inline void asio_repe_trace(const char* message)
+   {
+      std::fprintf(stderr, "[glz::asio_repe] %s\n", message);
+      std::fflush(stderr);
+   }
+#else
+   inline void asio_repe_trace(const char*) {}
+#endif
+
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio
    {
@@ -665,6 +677,7 @@ namespace glz
          // Explicitly join threads before member destruction begins,
          // ensuring coroutines don't access destroyed members (like registry)
          threads.reset();
+         work_guard.reset();
          listener_acceptor.reset();
          // Tear down Asio state before other members are destroyed.
          // This avoids pending operation/coroutine cleanup touching members
@@ -683,6 +696,8 @@ namespace glz
       std::shared_ptr<asio::signal_set> signals{};
       std::shared_ptr<std::vector<std::thread>> threads{};
       std::shared_ptr<asio::ip::tcp::acceptor> listener_acceptor{};
+      using work_guard_t = decltype(asio::make_work_guard(std::declval<asio::io_context&>()));
+      std::optional<work_guard_t> work_guard{};
       std::mutex active_sockets_mutex{};
       std::vector<std::shared_ptr<asio::ip::tcp::socket>> active_sockets{};
 
@@ -728,70 +743,105 @@ namespace glz
 
       void run(bool run_on_main_thread = true)
       {
-         if (!initialized) {
-            init();
-         }
-
-         stop_requested.store(false, std::memory_order_relaxed);
-
-         // Setup signal handling to stop the server.
-         // On Windows, avoid async signal_set wiring because it has shown unstable
-         // teardown behavior in fast create/destroy test loops.
-#if !defined(_WIN32)
-         if (signals) {
-            signals->async_wait([this](auto, auto) {
-               stop();
-            });
-         }
-#endif
-
-         // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
-         auto executor = ctx->get_executor();
-         listener_acceptor = std::make_shared<asio::ip::tcp::acceptor>(executor);
-         auto& acceptor = *listener_acceptor;
-         // Windows CI can have unstable IPv6 loopback behavior in some environments.
-         // Use IPv4 loopback there; keep IPv6 elsewhere.
-#if defined(_WIN32)
-         asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v4(), port};
-#else
-         asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v6(), port};
-#endif
-         acceptor.open(endpoint.protocol());
-         if (reuse_address) {
-            acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
-         }
-         acceptor.bind(endpoint);
-         acceptor.listen();
-         port = acceptor.local_endpoint().port();
-
-         if (on_listen) {
-            on_listen();
-         }
-
-         // Start the listener coroutine
-         asio::co_spawn(*ctx, listener(listener_acceptor), asio::detached);
-
-         // Run the io_context in multiple threads for concurrency
-         threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
-            // Join all threads before exiting
-            for (auto& thread : *ptr) {
-               if (thread.joinable()) {
-                  thread.join();
-               }
+         asio_repe_trace("server.run begin");
+         try {
+            if (!initialized) {
+               init();
             }
-            delete ptr;
-         });
 
-         threads->reserve(concurrency - uint32_t(run_on_main_thread));
-         for (uint32_t i = uint32_t(run_on_main_thread); i < concurrency; ++i) {
-            threads->emplace_back([this]() { ctx->run(); });
+            stop_requested.store(false, std::memory_order_relaxed);
+            work_guard.emplace(asio::make_work_guard(*ctx));
+
+            // Setup signal handling to stop the server.
+            // On Windows, avoid async signal_set wiring because it has shown unstable
+            // teardown behavior in fast create/destroy test loops.
+#if !defined(_WIN32)
+            if (signals) {
+               signals->async_wait([this](auto, auto) {
+                  stop();
+               });
+            }
+#endif
+
+            // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
+            auto executor = ctx->get_executor();
+            listener_acceptor = std::make_shared<asio::ip::tcp::acceptor>(executor);
+            auto& acceptor = *listener_acceptor;
+            auto try_bind_loopback = [&](const asio::ip::tcp::endpoint& endpoint) {
+               asio::error_code ec{};
+               acceptor.close(ec);
+               acceptor.open(endpoint.protocol(), ec);
+               if (ec) {
+                  return ec;
+               }
+               if (reuse_address) {
+                  acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true), ec);
+                  if (ec) {
+                     return ec;
+                  }
+               }
+               acceptor.bind(endpoint, ec);
+               if (ec) {
+                  return ec;
+               }
+               acceptor.listen(asio::socket_base::max_listen_connections, ec);
+               return ec;
+            };
+
+            // Prefer IPv4 loopback bind for test/process isolation and CI compatibility.
+            // Clients in this test path connect to 127.0.0.1, so matching v4 avoids
+            // environment-specific IPv6 dual-stack behavior.
+            asio::error_code bind_ec{};
+            bind_ec = try_bind_loopback({asio::ip::address_v4::loopback(), port});
+            if (bind_ec) {
+               throw asio::system_error(bind_ec);
+            }
+            port = acceptor.local_endpoint().port();
+            asio_repe_trace("server.run listening");
+
+            if (on_listen) {
+               on_listen();
+            }
+
+            // Start the listener coroutine
+            asio::co_spawn(*ctx, listener(listener_acceptor), asio::detached);
+
+            // Run the io_context in multiple threads for concurrency
+            threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
+               // Join all threads before exiting
+               for (auto& thread : *ptr) {
+                  if (thread.joinable()) {
+                     thread.join();
+                  }
+               }
+               delete ptr;
+            });
+
+            threads->reserve(concurrency - uint32_t(run_on_main_thread));
+            for (uint32_t i = uint32_t(run_on_main_thread); i < concurrency; ++i) {
+               threads->emplace_back([this]() { ctx->run(); });
+            }
+
+            if (run_on_main_thread) {
+               // Run in the main thread as well, which will block
+               ctx->run();
+
+               threads.reset(); // join all threads
+            }
+            asio_repe_trace("server.run end");
          }
-
-         if (run_on_main_thread) {
-            // Run in the main thread as well, which will block
-            ctx->run();
-
-            threads.reset(); // join all threads
+         catch (const std::exception& e) {
+            stop_requested.store(true, std::memory_order_relaxed);
+            if (work_guard) {
+               work_guard->reset();
+               work_guard.reset();
+            }
+            if (error_handler) {
+               error_handler(e.what());
+            }
+            else {
+               std::fprintf(stderr, "glz::asio_server run error: %s\n", e.what());
+            }
          }
       }
 
@@ -800,6 +850,7 @@ namespace glz
       // stop the server
       void stop()
       {
+         asio_repe_trace("server.stop begin");
          stop_requested.store(true, std::memory_order_relaxed);
 
          std::vector<std::shared_ptr<asio::ip::tcp::socket>> sockets_to_close;
@@ -820,17 +871,24 @@ namespace glz
             listener_acceptor->cancel(ec);
             listener_acceptor->close(ec);
          }
+         if (work_guard) {
+            work_guard->reset();
+            work_guard.reset();
+         }
 #if !defined(_WIN32)
          if (signals) {
             asio::error_code ec{};
             signals->cancel(ec);
          }
 #endif
+         asio_repe_trace("server.stop end");
       }
 
       asio::awaitable<void> run_instance(std::shared_ptr<asio::ip::tcp::socket> socket_ptr)
       {
+         asio_repe_trace("run_instance begin");
          if (!socket_ptr) {
+            asio_repe_trace("run_instance null socket");
             co_return;
          }
          auto& socket = *socket_ptr;
@@ -849,10 +907,12 @@ namespace glz
          asio::error_code ec{};
          socket.set_option(asio::ip::tcp::no_delay(true), ec);
          if (ec) {
+            asio_repe_trace("run_instance no_delay failed");
             co_return;
          }
          socket.set_option(asio::socket_base::keep_alive(true), ec);
          if (ec) {
+            asio_repe_trace("run_instance keep_alive failed");
             co_return;
          }
 
@@ -938,6 +998,7 @@ namespace glz
             }
             if (stop_requested.load(std::memory_order_relaxed) &&
                 (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
+               asio_repe_trace("run_instance canceled during shutdown");
                co_return;
             }
             if (error_handler) {
@@ -955,18 +1016,22 @@ namespace glz
                std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
             }
          }
+         asio_repe_trace("run_instance end");
          // Buffers automatically returned to pool when scoped_buffers are destroyed
       }
 
       asio::awaitable<void> listener(std::shared_ptr<asio::ip::tcp::acceptor> acceptor)
       {
+         asio_repe_trace("listener begin");
          if (!acceptor) {
+            asio_repe_trace("listener null acceptor");
             co_return;
          }
          auto executor = co_await asio::this_coro::executor;
          try {
             while (true) {
                auto socket = std::make_shared<asio::ip::tcp::socket>(co_await acceptor->async_accept(asio::use_awaitable));
+               asio_repe_trace("listener accepted socket");
                add_active_socket(socket);
                asio::co_spawn(executor, run_instance(socket), asio::detached);
             }
@@ -977,6 +1042,7 @@ namespace glz
             const bool shutting_down = stop_requested.load(std::memory_order_relaxed);
             if (shutting_down &&
                 (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
+               asio_repe_trace("listener canceled during shutdown");
                co_return;
             }
             if (error_handler) {
@@ -994,6 +1060,7 @@ namespace glz
                std::fprintf(stderr, "glz::asio_server listener error: %s\n", e.what());
             }
          }
+         asio_repe_trace("listener end");
       }
    };
 }
