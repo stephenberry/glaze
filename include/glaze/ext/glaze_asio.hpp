@@ -30,6 +30,7 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #endif
 
 #include <atomic>
+#include <algorithm>
 #include <cassert>
 #include <coroutine>
 #include <iostream>
@@ -682,6 +683,8 @@ namespace glz
       std::shared_ptr<asio::signal_set> signals{};
       std::shared_ptr<std::vector<std::thread>> threads{};
       std::shared_ptr<asio::ip::tcp::acceptor> listener_acceptor{};
+      std::mutex active_sockets_mutex{};
+      std::vector<std::shared_ptr<asio::ip::tcp::socket>> active_sockets{};
 
       glz::registry<Opts> registry{};
 
@@ -696,6 +699,18 @@ namespace glz
 
       bool initialized = false;
       std::atomic<bool> stop_requested{false};
+
+      void add_active_socket(const std::shared_ptr<asio::ip::tcp::socket>& socket)
+      {
+         std::lock_guard lock{active_sockets_mutex};
+         active_sockets.push_back(socket);
+      }
+
+      void remove_active_socket(const std::shared_ptr<asio::ip::tcp::socket>& socket)
+      {
+         std::lock_guard lock{active_sockets_mutex};
+         std::erase_if(active_sockets, [&](const auto& current) { return current.get() == socket.get(); });
+      }
 
       void init()
       {
@@ -789,6 +804,20 @@ namespace glz
       void stop()
       {
          stop_requested.store(true, std::memory_order_relaxed);
+
+         std::vector<std::shared_ptr<asio::ip::tcp::socket>> sockets_to_close;
+         {
+            std::lock_guard lock{active_sockets_mutex};
+            sockets_to_close = active_sockets;
+         }
+         for (auto& socket : sockets_to_close) {
+            if (!socket) continue;
+            asio::error_code ec{};
+            socket->cancel(ec);
+            socket->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+            socket->close(ec);
+         }
+
          if (listener_acceptor) {
             asio::error_code ec{};
             listener_acceptor->cancel(ec);
@@ -805,8 +834,24 @@ namespace glz
          }
       }
 
-      asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
+      asio::awaitable<void> run_instance(std::shared_ptr<asio::ip::tcp::socket> socket_ptr)
       {
+         if (!socket_ptr) {
+            co_return;
+         }
+         auto& socket = *socket_ptr;
+         struct socket_cleanup
+         {
+            asio_server* self{};
+            std::shared_ptr<asio::ip::tcp::socket> socket{};
+            ~socket_cleanup()
+            {
+               if (self) {
+                  self->remove_active_socket(socket);
+               }
+            }
+         } cleanup{this, socket_ptr};
+
          asio::error_code ec{};
          socket.set_option(asio::ip::tcp::no_delay(true), ec);
          if (ec) {
@@ -916,8 +961,9 @@ namespace glz
          auto executor = co_await asio::this_coro::executor;
          try {
             while (true) {
-               auto socket = co_await acceptor->async_accept(asio::use_awaitable);
-               asio::co_spawn(executor, run_instance(std::move(socket)), asio::detached);
+               auto socket = std::make_shared<asio::ip::tcp::socket>(co_await acceptor->async_accept(asio::use_awaitable));
+               add_active_socket(socket);
+               asio::co_spawn(executor, run_instance(socket), asio::detached);
             }
          }
          catch (const asio::system_error& e) {
