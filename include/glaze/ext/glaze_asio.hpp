@@ -996,8 +996,6 @@ namespace glz
          return true;
       }
 
-      static void process_windows_request(const std::shared_ptr<windows_session_state>& state);
-
       static void read_windows_message_body(const std::shared_ptr<windows_session_state>& state)
       {
          if (!state || !state->socket) {
