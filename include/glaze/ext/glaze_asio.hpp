@@ -45,16 +45,6 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 
 namespace glz
 {
-#if defined(GLZ_ASIO_REPE_TRACE)
-   inline void asio_repe_trace(const char* message)
-   {
-      std::fprintf(stderr, "[glz::asio_repe] %s\n", message);
-      std::fflush(stderr);
-   }
-#else
-   inline void asio_repe_trace(const char*) {}
-#endif
-
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio
    {
@@ -743,7 +733,6 @@ namespace glz
 
       void run(bool run_on_main_thread = true)
       {
-         asio_repe_trace("server.run begin");
          try {
             if (!initialized) {
                init();
@@ -797,54 +786,19 @@ namespace glz
                throw asio::system_error(bind_ec);
             }
             port = acceptor.local_endpoint().port();
-            asio_repe_trace("server.run listening");
 
             if (on_listen) {
                on_listen();
             }
-            asio_repe_trace("server.run after on_listen");
 
             // Start the listener
 #if defined(_WIN32)
-            asio_repe_trace("server.run before listener async_accept");
             start_listener_windows();
-            asio_repe_trace("server.run after listener async_accept");
 #else
-            auto local_error_handler = error_handler;
-            auto report_spawn_exception = [local_error_handler](const char* where, std::exception_ptr ep) {
-               if (!ep) {
-                  return;
-               }
-               try {
-                  std::rethrow_exception(ep);
-               }
-               catch (const std::exception& e) {
-                  if (local_error_handler) {
-                     local_error_handler(e.what());
-                  }
-                  else {
-                     std::fprintf(stderr, "glz::asio_server %s exception: %s\n", where, e.what());
-                  }
-               }
-               catch (...) {
-                  if (local_error_handler) {
-                     local_error_handler("unknown exception");
-                  }
-                  else {
-                     std::fprintf(stderr, "glz::asio_server %s exception: unknown exception\n", where);
-                  }
-               }
-            };
-            asio_repe_trace("server.run before listener co_spawn");
-            asio::co_spawn(*ctx, listener_impl(this, listener_acceptor),
-                           [report_spawn_exception = std::move(report_spawn_exception)](std::exception_ptr ep) mutable {
-                              report_spawn_exception("listener", std::move(ep));
-                           });
-            asio_repe_trace("server.run after listener co_spawn");
+            asio::co_spawn(*ctx, listener_impl(this, listener_acceptor), asio::detached);
 #endif
 
             // Run the io_context in multiple threads for concurrency
-            asio_repe_trace("server.run before thread vector create");
             threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
                // Join all threads before exiting
                for (auto& thread : *ptr) {
@@ -854,38 +808,19 @@ namespace glz
                }
                delete ptr;
             });
-            asio_repe_trace("server.run after thread vector create");
 
             threads->reserve(concurrency - uint32_t(run_on_main_thread));
-            asio_repe_trace("server.run after reserve");
             for (uint32_t i = uint32_t(run_on_main_thread); i < concurrency; ++i) {
-               asio_repe_trace("server.run before worker emplace");
                auto local_ctx = ctx;
-               threads->emplace_back([local_ctx]() {
-                  asio_repe_trace("server.worker begin");
-                  try {
-                     local_ctx->run();
-                     asio_repe_trace("server.worker end");
-                  }
-                  catch (const std::exception& e) {
-                     std::fprintf(stderr, "glz::asio_server worker exception: %s\n", e.what());
-                  }
-                  catch (...) {
-                     std::fprintf(stderr, "glz::asio_server worker exception: unknown exception\n");
-                  }
-               });
-               asio_repe_trace("server.run after worker emplace");
+               threads->emplace_back([local_ctx]() { local_ctx->run(); });
             }
 
             if (run_on_main_thread) {
                // Run in the main thread as well, which will block
-               asio_repe_trace("server.run main thread run begin");
                ctx->run();
-               asio_repe_trace("server.run main thread run end");
 
                threads.reset(); // join all threads
             }
-            asio_repe_trace("server.run end");
          }
          catch (const std::exception& e) {
             stop_requested.store(true, std::memory_order_relaxed);
@@ -907,7 +842,6 @@ namespace glz
       // stop the server
       void stop()
       {
-         asio_repe_trace("server.stop begin");
          stop_requested.store(true, std::memory_order_relaxed);
 
          std::vector<std::shared_ptr<asio::ip::tcp::socket>> sockets_to_close;
@@ -938,7 +872,6 @@ namespace glz
             signals->cancel(ec);
          }
 #endif
-         asio_repe_trace("server.stop end");
       }
 
 #if defined(_WIN32)
@@ -981,7 +914,6 @@ namespace glz
          const bool shutting_down = state->self->stop_requested.load(std::memory_order_relaxed);
          if (shutting_down &&
              (ec == asio::error::operation_aborted || ec == asio::error::bad_descriptor)) {
-            asio_repe_trace("windows session canceled during shutdown");
             finish_windows_session(state);
             return true;
          }
@@ -1177,7 +1109,6 @@ namespace glz
                const bool shutting_down = stop_requested.load(std::memory_order_relaxed);
                if (shutting_down &&
                    (ec == asio::error::operation_aborted || ec == asio::error::bad_descriptor)) {
-                  asio_repe_trace("listener canceled during shutdown");
                   return;
                }
                if (error_handler) {
@@ -1189,7 +1120,6 @@ namespace glz
             }
             else {
                auto socket_ptr = std::make_shared<asio::ip::tcp::socket>(std::move(socket));
-               asio_repe_trace("listener accepted socket");
                add_active_socket(socket_ptr);
                start_session_windows(socket_ptr);
             }
@@ -1203,9 +1133,7 @@ namespace glz
 
       static asio::awaitable<void> run_instance_impl(asio_server* self, std::shared_ptr<asio::ip::tcp::socket> socket_ptr)
       {
-         asio_repe_trace("run_instance begin");
          if (!self || !socket_ptr) {
-            asio_repe_trace("run_instance null socket");
             co_return;
          }
          auto& socket = *socket_ptr;
@@ -1220,13 +1148,11 @@ namespace glz
          asio::error_code ec{};
          socket.set_option(asio::ip::tcp::no_delay(true), ec);
          if (ec) {
-            asio_repe_trace("run_instance no_delay failed");
             remove_socket_once();
             co_return;
          }
          socket.set_option(asio::socket_base::keep_alive(true), ec);
          if (ec) {
-            asio_repe_trace("run_instance keep_alive failed");
             remove_socket_once();
             co_return;
          }
@@ -1314,7 +1240,6 @@ namespace glz
             }
             if (self->stop_requested.load(std::memory_order_relaxed) &&
                 (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
-               asio_repe_trace("run_instance canceled during shutdown");
                remove_socket_once();
                co_return;
             }
@@ -1334,48 +1259,20 @@ namespace glz
             }
          }
          remove_socket_once();
-         asio_repe_trace("run_instance end");
          // Buffers automatically returned to pool when scoped_buffers are destroyed
       }
 
       static asio::awaitable<void> listener_impl(asio_server* self, std::shared_ptr<asio::ip::tcp::acceptor> acceptor)
       {
-         asio_repe_trace("listener begin");
          if (!self || !acceptor) {
-            asio_repe_trace("listener null acceptor");
             co_return;
          }
          auto executor = co_await asio::this_coro::executor;
          try {
-            auto local_error_handler = self->error_handler;
             while (true) {
                auto socket = std::make_shared<asio::ip::tcp::socket>(co_await acceptor->async_accept(asio::use_awaitable));
-               asio_repe_trace("listener accepted socket");
                self->add_active_socket(socket);
-               asio::co_spawn(executor, run_instance_impl(self, socket), [local_error_handler](std::exception_ptr ep) {
-                  if (!ep) {
-                     return;
-                  }
-                  try {
-                     std::rethrow_exception(ep);
-                  }
-                  catch (const std::exception& e) {
-                     if (local_error_handler) {
-                        local_error_handler(e.what());
-                     }
-                     else {
-                        std::fprintf(stderr, "glz::asio_server run_instance exception: %s\n", e.what());
-                     }
-                  }
-                  catch (...) {
-                     if (local_error_handler) {
-                        local_error_handler("unknown exception");
-                     }
-                     else {
-                        std::fprintf(stderr, "glz::asio_server run_instance exception: unknown exception\n");
-                     }
-                  }
-               });
+               asio::co_spawn(executor, run_instance_impl(self, socket), asio::detached);
             }
          }
          catch (const asio::system_error& e) {
@@ -1384,7 +1281,6 @@ namespace glz
             const bool shutting_down = self->stop_requested.load(std::memory_order_relaxed);
             if (shutting_down &&
                 (e.code() == asio::error::operation_aborted || e.code() == asio::error::bad_descriptor)) {
-               asio_repe_trace("listener canceled during shutdown");
                co_return;
             }
             if (self->error_handler) {
@@ -1402,7 +1298,6 @@ namespace glz
                std::fprintf(stderr, "glz::asio_server listener error: %s\n", e.what());
             }
          }
-         asio_repe_trace("listener end");
       }
    };
 }
