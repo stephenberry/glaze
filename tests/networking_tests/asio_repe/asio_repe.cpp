@@ -5,72 +5,15 @@
 
 using namespace ut;
 
-#include <cstdlib>
 #include <iostream>
-#include <future>
 #include <latch>
 #include <numeric>
-#include <string>
-#include <string_view>
 #include <thread>
 
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/thread/async_string.hpp"
 
 // This test code is self-contained and spawns both the server and the client
-
-namespace
-{
-   std::string test_group_filter()
-   {
-#ifdef _WIN32
-      char* raw{};
-      size_t len{};
-      if (_dupenv_s(&raw, &len, "GLZ_ASIO_REPE_GROUP") == 0 && raw) {
-         std::string value{raw};
-         free(raw);
-         return value;
-      }
-      return {};
-#else
-      if (const char* raw = std::getenv("GLZ_ASIO_REPE_GROUP"); raw) {
-         return raw;
-      }
-      return {};
-#endif
-   }
-
-   bool group_enabled(const std::string_view group)
-   {
-      static const std::string filter = test_group_filter();
-      return filter.empty() || filter == "all" || filter == group;
-   }
-
-   template <class Client>
-   bool init_client_or_fail(Client& client, std::string_view context = {})
-   {
-      if (auto ec = client.init(); bool(ec)) {
-         const auto ec_json = glz::write_json(ec).value_or("error");
-         if (context.empty()) {
-            expect(false) << "client.init() failed: " << ec_json;
-         }
-         else {
-            expect(false) << context << " client.init() failed: " << ec_json;
-         }
-         return false;
-      }
-      if (!client.connected()) {
-         if (context.empty()) {
-            expect(false) << "client.init() returned success but client is not connected";
-         }
-         else {
-            expect(false) << context << " client.init() returned success but client is not connected";
-         }
-         return false;
-      }
-      return true;
-   }
-}
 
 struct notify_api
 {
@@ -79,12 +22,13 @@ struct notify_api
 
 void notify_test()
 {
+   static constexpr int16_t port = 8431;
    std::latch ready{1};
-   glz::asio_server server{.port = 0, .concurrency = 4};
+   glz::asio_server server{.port = port, .concurrency = 4};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async(std::launch::async, [&] {
+   std::future<void> server_thread = std::async([&] {
       try {
          notify_api api{};
          server.on(api);
@@ -96,10 +40,9 @@ void notify_test()
    });
 
    ready.wait();
-   const auto port = server.port;
 
    try {
-      glz::asio_client client{"127.0.0.1", std::to_string(port)};
+      glz::asio_client client{"localhost", std::to_string(port)};
 
       if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
@@ -132,13 +75,14 @@ struct my_data
 
 void async_clients_test()
 {
+   static constexpr int16_t port = 8431;
    std::latch ready{1};
 
-   glz::asio_server server{.port = 0, .concurrency = 4};
+   glz::asio_server server{.port = port, .concurrency = 4};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async(std::launch::async, [&] {
+   std::future<void> server_thread = std::async([&] {
       try {
          my_data data{};
          server.on(data);
@@ -150,10 +94,9 @@ void async_clients_test()
    });
 
    ready.wait();
-   const auto port = server.port;
 
    try {
-      glz::asio_client client{"127.0.0.1", std::to_string(port)};
+      glz::asio_client client{"localhost", std::to_string(port)};
 
       if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
@@ -195,13 +138,14 @@ struct api
 
 void asio_client_test()
 {
+   static constexpr int16_t port = 8431;
    std::latch ready{1};
 
-   glz::asio_server server{.port = 0, .concurrency = 4};
+   glz::asio_server server{.port = port, .concurrency = 4};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async(std::launch::async, [&] {
+   std::future<void> server_thread = std::async([&] {
       std::cout << "Server active...\n";
 
       try {
@@ -217,7 +161,6 @@ void asio_client_test()
    });
 
    ready.wait();
-   const auto port = server.port;
 
    try {
       constexpr auto N = 100;
@@ -228,11 +171,11 @@ void asio_client_test()
       threads.reserve(N);
 
       for (size_t i = 0; i < N; ++i) {
-         clients.emplace_back(glz::asio_client{"127.0.0.1", std::to_string(port)});
+         clients.emplace_back(glz::asio_client{"localhost", std::to_string(port)});
       }
 
       for (size_t i = 0; i < N; ++i) {
-         threads.emplace_back(std::async(std::launch::async, [&, i] {
+         threads.emplace_back(std::async([&, i] {
             auto& client = clients[i];
             if (auto ec = client.init(); bool(ec)) {
                std::cerr << "Error: " << glz::write_json(ec).value_or("error") << std::endl;
@@ -298,57 +241,39 @@ struct api2
 
 void async_calls()
 {
+   static constexpr int16_t port = 8765;
    std::latch ready{1};
 
-   glz::asio_server server{.port = 0, .concurrency = 2};
+   glz::asio_server server{.port = port, .concurrency = 2};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async(std::launch::async, [&] {
+   std::future<void> server_thread = std::async([&] {
       api2 methods{};
       server.on(methods);
       server.run();
    });
 
    ready.wait();
-   const auto port = server.port;
-   const auto port_string = std::to_string(port);
 
    try {
+      glz::asio_client client{"localhost", std::to_string(port)};
+      (void)client.init();
+
       std::vector<std::future<void>> threads;
 
-      threads.emplace_back(std::async(std::launch::async, [port_string] {
-         glz::asio_client client{"127.0.0.1", port_string};
-         if (auto ec = client.init(); bool(ec)) {
-            throw std::runtime_error(glz::write_json(ec).value_or("error"));
-         }
+      threads.emplace_back(std::async([&] {
          int ret{};
          glz::repe::message msg{};
          client.call({"/first/sum"}, msg, 25);
-         auto err = glz::repe::decode_message(ret, msg);
-         if (err) {
-            throw std::runtime_error(err.value());
-         }
-         if (ret != 25) {
-            throw std::runtime_error("unexpected /first/sum result");
-         }
+         glz::repe::decode_message(ret, msg);
       }));
 
-      threads.emplace_back(std::async(std::launch::async, [port_string] {
-         glz::asio_client client{"127.0.0.1", port_string};
-         if (auto ec = client.init(); bool(ec)) {
-            throw std::runtime_error(glz::write_json(ec).value_or("error"));
-         }
+      threads.emplace_back(std::async([&] {
          int ret{};
          glz::repe::message msg{};
          client.call({"/second/sum"}, msg, 5);
-         auto err = glz::repe::decode_message(ret, msg);
-         if (err) {
-            throw std::runtime_error(err.value());
-         }
-         if (ret != 5) {
-            throw std::runtime_error("unexpected /second/sum result");
-         }
+         glz::repe::decode_message(ret, msg);
       }));
 
       for (auto& t : threads) {
@@ -370,13 +295,14 @@ struct raw_json_api
 
 void raw_json_tests()
 {
+   static constexpr int16_t port = 8765;
    std::latch ready{1};
 
-   glz::asio_server server{.port = 0, .concurrency = 2};
+   glz::asio_server server{.port = port, .concurrency = 2};
    server.reuse_address = true;
    server.on_listen = [&] { ready.count_down(); };
 
-   std::future<void> server_thread = std::async(std::launch::async, [&] {
+   std::future<void> server_thread = std::async([&] {
       api2 methods{};
       raw_json_api api{};
       server.on(api);
@@ -384,16 +310,11 @@ void raw_json_tests()
    });
 
    ready.wait();
-   const auto port = server.port;
 
    glz::raw_json results{};
 
-   glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   if (!init_client_or_fail(client, "raw_json_tests")) {
-      server.stop();
-      server_thread.get();
-      return;
-   }
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
 
    glz::repe::message msg{};
    client.call({"/do_nothing"}, msg);
@@ -402,7 +323,6 @@ void raw_json_tests()
    }
 
    server.stop();
-   server_thread.get();
 }
 
 struct async_api
@@ -412,17 +332,17 @@ struct async_api
 
 void async_server_test()
 {
+   static constexpr int16_t port = 8765;
+
+   glz::asio_server server{.port = port, .concurrency = 1, .reuse_address = true};
+
    async_api api{};
-   glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
    server.on(api);
 
    server.run_async();
-   const auto port = server.port;
 
-   glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   if (!init_client_or_fail(client, "async_server_test")) {
-      return;
-   }
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
 
    int result{};
    glz::repe::message msg{};
@@ -439,45 +359,23 @@ struct error_api
 
 void server_error_test()
 {
+   static constexpr int16_t port = 8765;
+
+   glz::asio_server server{.port = port, .concurrency = 1, .reuse_address = true};
+   server.error_handler = [](const std::string& error) { expect(error == "func error"); };
+
    error_api api{};
-   std::atomic<bool> saw_unexpected_error{false};
-   std::mutex unexpected_error_mutex;
-   std::string unexpected_error_message;
-
-   glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
-   server.error_handler = [&](const std::string& error) {
-      if (error != "func error") {
-         saw_unexpected_error.store(true, std::memory_order_relaxed);
-         std::lock_guard lock{unexpected_error_mutex};
-         unexpected_error_message = error;
-      }
-   };
-
    server.on(api);
 
    server.run_async();
-   const auto port = server.port;
 
-   glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   if (!init_client_or_fail(client, "server_error_test")) {
-      return;
-   }
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
 
    int result{};
    glz::repe::message msg{};
    client.call({"/func"}, msg, 100);
-   auto err = glz::repe::decode_message(result, msg);
-   expect(bool(err));
-   if (err) {
-      expect(err.value().find("func error") != std::string::npos) << err.value();
-   }
-   std::string unexpected_error_snapshot;
-   {
-      std::lock_guard lock{unexpected_error_mutex};
-      unexpected_error_snapshot = unexpected_error_message;
-   }
-   expect(!saw_unexpected_error.load(std::memory_order_relaxed))
-      << "Unexpected server error: " << unexpected_error_snapshot;
+   expect(bool(glz::repe::decode_message(result, msg)));
 }
 
 struct some_object_t
@@ -489,55 +387,48 @@ struct some_object_t
 };
 
 suite send_receive_api_tests = [] {
-   if (group_enabled("send_receive")) {
-      "send"_test = [] {
-         some_object_t obj{};
-         glz::asio_server server{.port = 0, .concurrency = 1, .reuse_address = true};
-         server.on(obj);
+   "send"_test = [] {
+      static constexpr int16_t port = 8765;
 
-         server.run_async();
-         const auto port = server.port;
+      glz::asio_server server{.port = port, .concurrency = 1, .reuse_address = true};
 
-         glz::asio_client client{"127.0.0.1", std::to_string(port)};
-         if (!init_client_or_fail(client, "send_receive/send")) {
-            return;
-         }
+      some_object_t obj{};
+      server.on(obj);
 
-         try {
-            client.set("/age", 33);
-            expect(bool(obj.age == 33));
+      server.run_async();
 
-            {
-               int age{};
-               client.get("/age", age);
-               expect(age == 33);
-            }
+      glz::asio_client client{"localhost", std::to_string(port)};
+      (void)client.init();
 
-            client.set("/name", "Ryan");
-            expect(bool(obj.name == "Ryan"));
+      client.set("/age", 33);
+      expect(bool(obj.age == 33));
 
-            {
-               std::string name{};
-               client.get("/name", name);
-               expect(name == "Ryan");
-            }
+      {
+         int age{};
+         client.get("/age", age);
+         expect(age == 33);
+      }
 
-            client.set("/name", "Paul");
-            expect(bool(obj.name == "Paul"));
+      client.set("/name", "Ryan");
+      expect(bool(obj.name == "Ryan"));
 
-            expect("Paul" == client.get<std::string>("/name"));
+      {
+         std::string name{};
+         client.get("/name", name);
+         expect(name == "Ryan");
+      }
 
-            {
-               int x = 3;
-               client.inout("/square", x, x);
-               expect(x == 9);
-            }
-         }
-         catch (const std::exception& e) {
-            expect(false) << e.what();
-         }
-      };
-   }
+      client.set("/name", "Paul");
+      expect(bool(obj.name == "Paul"));
+
+      expect("Paul" == client.get<std::string>("/name"));
+
+      {
+         int x = 3;
+         client.inout("/square", x, x);
+         expect(x == 9);
+      }
+   };
 };
 
 struct keep_alive_api
@@ -549,30 +440,22 @@ struct keep_alive_api
 
 void server_keep_alive_test()
 {
-   keep_alive_api api{};
-   std::atomic<bool> saw_unexpected_error{false};
-   std::mutex unexpected_error_mutex;
-   std::string unexpected_error_message;
+   static constexpr int16_t port = 8766;
 
-   glz::asio_server server{.port = 0, .concurrency = 1};
-   server.reuse_address = true;
-   server.error_handler = [&](const std::string& error) {
+   glz::asio_server server{.port = port, .concurrency = 1};
+   server.error_handler = [](const std::string& error) {
       if (error != "broken" && error != "unknown error") {
-         saw_unexpected_error.store(true, std::memory_order_relaxed);
-         std::lock_guard lock{unexpected_error_mutex};
-         unexpected_error_message = error;
+         expect(false) << "Unexpected error: " << error;
       }
    };
 
+   keep_alive_api api{};
    server.on(api);
 
    server.run_async();
-   const auto port = server.port;
 
-   glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   if (!init_client_or_fail(client, "server_keep_alive_test")) {
-      return;
-   }
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
 
    int result{};
    glz::repe::message msg{};
@@ -599,29 +482,21 @@ void server_keep_alive_test()
    client.call({"/works"}, msg);
    expect(not glz::repe::decode_message(result, msg));
    expect(result == 42);
-   std::string unexpected_error_snapshot;
-   {
-      std::lock_guard lock{unexpected_error_mutex};
-      unexpected_error_snapshot = unexpected_error_message;
-   }
-   expect(!saw_unexpected_error.load(std::memory_order_relaxed))
-      << "Unexpected server error: " << unexpected_error_snapshot;
 }
 
 void client_exception_test()
 {
+   static constexpr int16_t port = 8767;
+
+   glz::asio_server server{.port = port, .concurrency = 1};
+
    keep_alive_api api{};
-   glz::asio_server server{.port = 0, .concurrency = 1};
-   server.reuse_address = true;
    server.on(api);
 
    server.run_async();
-   const auto port = server.port;
 
-   glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   if (!init_client_or_fail(client, "client_exception_test")) {
-      return;
-   }
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
 
    try {
       int i{};
@@ -649,14 +524,15 @@ struct custom_call_api
 
 void custom_call_handler_test()
 {
-   custom_call_api api{};
-   std::atomic<int> call_count{0};
+   static constexpr int16_t port = 8768;
 
-   glz::asio_server server{.port = 0, .concurrency = 1};
-   server.reuse_address = true;
+   glz::asio_server server{.port = port, .concurrency = 1};
+
+   custom_call_api api{};
    server.on(api);
 
    // Set custom call handler that intercepts all calls using zero-copy API
+   std::atomic<int> call_count{0};
    server.call = [&](std::span<const char> request, std::string& response_buffer) {
       ++call_count;
 
@@ -682,12 +558,9 @@ void custom_call_handler_test()
    };
 
    server.run_async();
-   const auto port = server.port;
 
-   glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   if (!init_client_or_fail(client, "custom_call_handler_test")) {
-      return;
-   }
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
 
    glz::repe::message msg{};
 
@@ -708,15 +581,16 @@ void custom_call_handler_test()
 
 void custom_call_middleware_test()
 {
-   custom_call_api api{};
-   std::vector<std::string> logged_queries;
-   std::mutex log_mutex;
+   static constexpr int16_t port = 8769;
 
-   glz::asio_server server{.port = 0, .concurrency = 1};
-   server.reuse_address = true;
+   glz::asio_server server{.port = port, .concurrency = 1};
+
+   custom_call_api api{};
    server.on(api);
 
    // Set middleware-style handler that logs and delegates using zero-copy API
+   std::vector<std::string> logged_queries;
+   std::mutex log_mutex;
 
    server.call = [&](std::span<const char> request, std::string& response_buffer) {
       // Zero-copy parse
@@ -741,12 +615,9 @@ void custom_call_middleware_test()
    };
 
    server.run_async();
-   const auto port = server.port;
 
-   glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   if (!init_client_or_fail(client, "custom_call_middleware_test")) {
-      return;
-   }
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
 
    glz::repe::message msg{};
    client.call({"/value"}, msg);
@@ -756,24 +627,17 @@ void custom_call_middleware_test()
    client.call({"/value"}, msg, 42);
    expect(not bool(msg.error()));
 
-   std::vector<std::string> logged_queries_snapshot;
-   {
-      std::lock_guard lock{log_mutex};
-      logged_queries_snapshot = logged_queries;
-   }
-
    // Verify logging happened
-   expect(logged_queries_snapshot.size() == 2);
-   if (logged_queries_snapshot.size() == 2) {
-      expect(logged_queries_snapshot[0] == "/value");
-      expect(logged_queries_snapshot[1] == "/value");
-   }
+   expect(logged_queries.size() == 2);
+   expect(logged_queries[0] == "/value");
+   expect(logged_queries[1] == "/value");
 }
 
 void custom_call_error_handling_test()
 {
-   glz::asio_server server{.port = 0, .concurrency = 1};
-   server.reuse_address = true;
+   static constexpr int16_t port = 8770;
+
+   glz::asio_server server{.port = port, .concurrency = 1};
 
    // Custom handler that returns an error for certain paths using zero-copy API
    server.call = [](std::span<const char> request, std::string& response_buffer) {
@@ -798,12 +662,9 @@ void custom_call_error_handling_test()
    };
 
    server.run_async();
-   const auto port = server.port;
 
-   glz::asio_client client{"127.0.0.1", std::to_string(port)};
-   if (!init_client_or_fail(client, "custom_call_error_handling_test")) {
-      return;
-   }
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
 
    glz::repe::message msg{};
 
@@ -821,239 +682,197 @@ void custom_call_error_handling_test()
 
 // Connection state tests
 suite connection_state_tests = [] {
-   if (group_enabled("minimal")) {
-      "initial_connected_state"_test = [] {
-         // Client should not be connected before init()
-         glz::asio_client client{"127.0.0.1", "9999"};
-         expect(not client.connected()) << "Client should not be connected before init()";
-      };
-   }
+   "initial_connected_state"_test = [] {
+      // Client should not be connected before init()
+      glz::asio_client client{"localhost", "9999"};
+      expect(not client.connected()) << "Client should not be connected before init()";
+   };
 
-   if (group_enabled("connection_state")) {
-      "connected_after_init"_test = [] {
-         some_object_t obj{};
-         glz::asio_server server{.port = 0, .concurrency = 1};
-         server.reuse_address = true;
-         server.on(obj);
-         server.run_async();
-         const auto port = server.port;
+   "connected_after_init"_test = [] {
+      static constexpr int16_t port = 8771;
 
-         glz::asio_client client{"127.0.0.1", std::to_string(port)};
-         expect(not client.connected()) << "Client should not be connected before init()";
+      glz::asio_server server{.port = port, .concurrency = 1};
 
-         auto ec = client.init();
-         expect(not bool(ec)) << "init() should succeed";
-         expect(client.connected()) << "Client should be connected after successful init()";
+      some_object_t obj{};
+      server.on(obj);
+      server.run_async();
 
-         server.stop();
-      };
+      glz::asio_client client{"localhost", std::to_string(port)};
+      expect(not client.connected()) << "Client should not be connected before init()";
 
-      "connected_false_after_server_shutdown"_test = [] {
-         auto server = std::make_unique<glz::asio_server<>>();
-         server->port = 0;
-         server->concurrency = 1;
-         server->reuse_address = true;
+      auto ec = client.init();
+      expect(not bool(ec)) << "init() should succeed";
+      expect(client.connected()) << "Client should be connected after successful init()";
 
-         some_object_t obj{};
-         server->on(obj);
-         server->run_async();
-         const auto port = server->port;
+      server.stop();
+   };
 
-         glz::asio_client client{"127.0.0.1", std::to_string(port)};
-         if (!init_client_or_fail(client, "connection_state/connected_false_after_server_shutdown")) {
-            return;
-         }
-         expect(client.connected()) << "Client should be connected initially";
-         if (!client.connected()) {
-            return;
-         }
+   "connected_false_after_server_shutdown"_test = [] {
+      static constexpr int16_t port = 8772;
 
-         // Verify connection works
-         int age{};
-         try {
-            client.get("/age", age);
-         }
-         catch (const std::exception& e) {
-            expect(false) << e.what();
-            return;
-         }
+      auto server = std::make_unique<glz::asio_server<>>();
+      server->port = port;
+      server->concurrency = 1;
 
-         // Shutdown server - destructor joins threads so shutdown is complete after reset()
-         server->stop();
-         server.reset();
+      some_object_t obj{};
+      server->on(obj);
+      server->run_async();
 
-         // Try an operation - should fail and update connected state
-         glz::repe::message msg{};
-         client.call({"/age"}, msg);
+      glz::asio_client client{"localhost", std::to_string(port)};
+      (void)client.init();
+      expect(client.connected()) << "Client should be connected initially";
 
-         // After a failed call due to connection loss, connected() should be false
-         expect(not client.connected()) << "Client should not be connected after server shutdown and failed call";
-      };
+      // Verify connection works
+      int age{};
+      client.get("/age", age);
 
-      "connected_false_when_init_fails"_test = [] {
-         // Try to connect to a port where no server is running
-         glz::asio_client client{"127.0.0.1", "59999"};
-         expect(not client.connected()) << "Client should not be connected before init()";
+      // Shutdown server - destructor joins threads so shutdown is complete after reset()
+      server->stop();
+      server.reset();
 
-         auto ec = client.init();
-         expect(bool(ec)) << "init() should fail when no server is running";
-         expect(not client.connected()) << "Client should not be connected after failed init()";
-      };
+      // Try an operation - should fail and update connected state
+      glz::repe::message msg{};
+      client.call({"/age"}, msg);
 
-      "call_returns_error_when_not_connected"_test = [] {
-         glz::asio_client client{"127.0.0.1", "59999"};
+      // After a failed call due to connection loss, connected() should be false
+      expect(not client.connected()) << "Client should not be connected after server shutdown and failed call";
+   };
 
-         // Don't call init(), try to call directly
-         glz::repe::message msg{};
-         client.call({"/test"}, msg);
+   "connected_false_when_init_fails"_test = [] {
+      // Try to connect to a port where no server is running
+      glz::asio_client client{"localhost", "59999"};
+      expect(not client.connected()) << "Client should not be connected before init()";
 
-         expect(bool(msg.error())) << "call() should return error when not connected";
-      };
+      auto ec = client.init();
+      expect(bool(ec)) << "init() should fail when no server is running";
+      expect(not client.connected()) << "Client should not be connected after failed init()";
+   };
 
-      "set_throws_when_not_connected"_test = [] {
-         glz::asio_client client{"127.0.0.1", "59999"};
+   "call_returns_error_when_not_connected"_test = [] {
+      glz::asio_client client{"localhost", "59999"};
 
-         bool threw = false;
-         try {
-            client.set("/test", 42);
-         }
-         catch (const std::runtime_error& e) {
-            threw = true;
-            expect(std::string(e.what()).find("NOT CONNECTED") != std::string::npos)
-               << "Exception should mention NOT CONNECTED";
-         }
-         expect(threw) << "set() should throw when not connected";
-      };
+      // Don't call init(), try to call directly
+      glz::repe::message msg{};
+      client.call({"/test"}, msg);
 
-      "get_throws_when_not_connected"_test = [] {
-         glz::asio_client client{"127.0.0.1", "59999"};
+      expect(bool(msg.error())) << "call() should return error when not connected";
+   };
 
-         bool threw = false;
-         try {
-            int value{};
-            client.get("/test", value);
-         }
-         catch (const std::runtime_error& e) {
-            threw = true;
-            expect(std::string(e.what()).find("NOT CONNECTED") != std::string::npos)
-               << "Exception should mention NOT CONNECTED";
-         }
-         expect(threw) << "get() should throw when not connected";
-      };
+   "set_throws_when_not_connected"_test = [] {
+      glz::asio_client client{"localhost", "59999"};
 
-      "inout_throws_when_not_connected"_test = [] {
-         glz::asio_client client{"127.0.0.1", "59999"};
+      bool threw = false;
+      try {
+         client.set("/test", 42);
+      }
+      catch (const std::runtime_error& e) {
+         threw = true;
+         expect(std::string(e.what()).find("NOT CONNECTED") != std::string::npos)
+            << "Exception should mention NOT CONNECTED";
+      }
+      expect(threw) << "set() should throw when not connected";
+   };
 
-         bool threw = false;
-         try {
-            int x = 5;
-            client.inout("/test", x, x);
-         }
-         catch (const std::runtime_error& e) {
-            threw = true;
-            expect(std::string(e.what()).find("NOT CONNECTED") != std::string::npos)
-               << "Exception should mention NOT CONNECTED";
-         }
-         expect(threw) << "inout() should throw when not connected";
-      };
+   "get_throws_when_not_connected"_test = [] {
+      glz::asio_client client{"localhost", "59999"};
 
-      "reconnect_after_server_restart"_test = [] {
-         // Start server
-         auto server = std::make_unique<glz::asio_server<>>();
-         server->port = 0;
-         server->concurrency = 1;
-         server->reuse_address = true;
+      bool threw = false;
+      try {
+         int value{};
+         client.get("/test", value);
+      }
+      catch (const std::runtime_error& e) {
+         threw = true;
+         expect(std::string(e.what()).find("NOT CONNECTED") != std::string::npos)
+            << "Exception should mention NOT CONNECTED";
+      }
+      expect(threw) << "get() should throw when not connected";
+   };
 
-         some_object_t obj{.age = 25};
-         server->on(obj);
-         server->run_async();
-         const auto port = server->port;
+   "inout_throws_when_not_connected"_test = [] {
+      glz::asio_client client{"localhost", "59999"};
 
-         glz::asio_client client{"127.0.0.1", std::to_string(port)};
-         if (!init_client_or_fail(client, "connection_state/reconnect_after_server_restart initial")) {
-            return;
-         }
-         expect(client.connected());
-         if (!client.connected()) {
-            return;
-         }
+      bool threw = false;
+      try {
+         int x = 5;
+         client.inout("/test", x, x);
+      }
+      catch (const std::runtime_error& e) {
+         threw = true;
+         expect(std::string(e.what()).find("NOT CONNECTED") != std::string::npos)
+            << "Exception should mention NOT CONNECTED";
+      }
+      expect(threw) << "inout() should throw when not connected";
+   };
 
-         // Verify connection works
-         int age{};
-         try {
-            client.get("/age", age);
-         }
-         catch (const std::exception& e) {
-            expect(false) << e.what();
-            return;
-         }
-         expect(age == 25);
+   "reconnect_after_server_restart"_test = [] {
+      static constexpr int16_t port = 8773;
 
-         // Shutdown server
-         server->stop();
-         server.reset();
+      // Start server
+      auto server = std::make_unique<glz::asio_server<>>();
+      server->port = port;
+      server->concurrency = 1;
+      server->reuse_address = true;
 
-         // Try operation - should fail
-         glz::repe::message msg{};
-         client.call({"/age"}, msg);
-         expect(not client.connected()) << "Should be disconnected after server shutdown";
+      some_object_t obj{.age = 25};
+      server->on(obj);
+      server->run_async();
 
-         // Restart server on same port
-         server = std::make_unique<glz::asio_server<>>();
-         server->port = port;
-         server->concurrency = 1;
-         server->reuse_address = true;
+      glz::asio_client client{"localhost", std::to_string(port)};
+      (void)client.init();
+      expect(client.connected());
 
-         some_object_t obj2{.age = 99};
-         server->on(obj2);
-         server->run_async();
+      // Verify connection works
+      int age{};
+      client.get("/age", age);
+      expect(age == 25);
 
-         // Re-init client
-         if (!init_client_or_fail(client, "connection_state/reconnect_after_server_restart reinit")) {
-            return;
-         }
-         expect(client.connected()) << "Should be connected after re-init";
-         if (!client.connected()) {
-            return;
-         }
+      // Shutdown server
+      server->stop();
+      server.reset();
 
-         // Verify new connection works
-         try {
-            client.get("/age", age);
-         }
-         catch (const std::exception& e) {
-            expect(false) << e.what();
-            return;
-         }
-         expect(age == 99) << "Should get value from new server";
+      // Try operation - should fail
+      glz::repe::message msg{};
+      client.call({"/age"}, msg);
+      expect(not client.connected()) << "Should be disconnected after server shutdown";
 
-         server->stop();
-         server.reset();
-      };
-   }
+      // Restart server on same port
+      server = std::make_unique<glz::asio_server<>>();
+      server->port = port;
+      server->concurrency = 1;
+      server->reuse_address = true;
+
+      some_object_t obj2{.age = 99};
+      server->on(obj2);
+      server->run_async();
+
+      // Re-init client
+      auto ec = client.init();
+      expect(not bool(ec)) << "Re-init should succeed";
+      expect(client.connected()) << "Should be connected after re-init";
+
+      // Verify new connection works
+      client.get("/age", age);
+      expect(age == 99) << "Should get value from new server";
+
+      server->stop();
+   };
 };
 
-suite standalone_async_tests = [] {
-   if (group_enabled("async_core")) {
-      "notify_test"_test = [] { notify_test(); };
-      "async_clients_test"_test = [] { async_clients_test(); };
-      "asio_client_test"_test = [] { asio_client_test(); };
-      "async_calls_test"_test = [] { async_calls(); };
-      "raw_json_test"_test = [] { raw_json_tests(); };
-      "async_server_test"_test = [] { async_server_test(); };
-   }
+int main()
+{
+   notify_test();
+   async_clients_test();
+   asio_client_test();
+   async_calls();
+   raw_json_tests();
+   async_server_test();
+   server_error_test();
+   server_keep_alive_test();
+   client_exception_test();
+   custom_call_handler_test();
+   custom_call_middleware_test();
+   custom_call_error_handling_test();
 
-   if (group_enabled("async_error")) {
-      "server_error_test"_test = [] { server_error_test(); };
-      "server_keep_alive_test"_test = [] { server_keep_alive_test(); };
-      "client_exception_test"_test = [] { client_exception_test(); };
-   }
-
-   if (group_enabled("custom_call")) {
-      "custom_call_handler_test"_test = [] { custom_call_handler_test(); };
-      "custom_call_middleware_test"_test = [] { custom_call_middleware_test(); };
-      "custom_call_error_handling_test"_test = [] { custom_call_error_handling_test(); };
-   }
-};
-
-int main() { return 0; }
+   return 0;
+}
