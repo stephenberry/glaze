@@ -23,6 +23,7 @@
 
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/util/env.hpp"
 #include "glaze/util/key_transformers.hpp"
 
 #ifdef GLZ_ENABLE_SSL
@@ -176,22 +177,7 @@ namespace glz
 
       inline std::optional<std::string> env_path(const char* name)
       {
-#if defined(_MSC_VER) && !defined(__clang__)
-         char* value = nullptr;
-         size_t len = 0;
-         if (_dupenv_s(&value, &len, name) == 0 && value && *value) {
-            std::string out{value};
-            std::free(value);
-            return out;
-         }
-         std::free(value);
-         return std::nullopt;
-#else
-         if (const char* value = std::getenv(name); value && *value) {
-            return std::string{value};
-         }
-         return std::nullopt;
-#endif
+         return getenv_nonempty(name);
       }
 
       inline std::optional<std::string_view> to_sv_opt(const std::optional<std::string>& value)

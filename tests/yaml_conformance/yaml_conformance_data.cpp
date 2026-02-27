@@ -20,6 +20,7 @@
 
 #include "glaze/glaze.hpp"
 #include "glaze/json/patch.hpp"
+#include "glaze/util/env.hpp"
 #include "glaze/yaml.hpp"
 #include "ut/ut.hpp"
 
@@ -28,26 +29,6 @@ namespace fs = std::filesystem;
 
 namespace
 {
-   std::optional<std::string> getenv_copy(const char* name)
-   {
-#if defined(_MSC_VER) && !defined(__clang__)
-      char* value = nullptr;
-      size_t len = 0;
-      if (_dupenv_s(&value, &len, name) == 0 && value && *value) {
-         std::string out{value};
-         std::free(value);
-         return out;
-      }
-      std::free(value);
-      return std::nullopt;
-#else
-      if (const char* value = std::getenv(name); value && *value) {
-         return std::string{value};
-      }
-      return std::nullopt;
-#endif
-   }
-
    std::string read_file(const fs::path& path)
    {
       std::ifstream f(path, std::ios::binary);
@@ -1245,7 +1226,7 @@ suite yaml_conformance_data_tests = [] {
       return;
 #else
       fs::path suite_dir{YAML_TEST_SUITE_DIR};
-      if (const auto override_dir = getenv_copy("YAML_TEST_SUITE_DIR_OVERRIDE"); override_dir && !override_dir->empty()) {
+      if (const auto override_dir = glz::getenv_nonempty("YAML_TEST_SUITE_DIR_OVERRIDE")) {
          suite_dir = fs::path{*override_dir};
       }
       expect(fs::exists(suite_dir)) << "yaml-test-suite directory not found: " << suite_dir.string();
