@@ -771,13 +771,54 @@ namespace glz
          stop_requested.store(false, std::memory_order_relaxed);
          listener_acceptor = std::make_shared<asio::ip::tcp::acceptor>(executor);
          auto& acceptor = *listener_acceptor;
-         asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v4(), port};
-         acceptor.open(endpoint.protocol());
-         if (reuse_address) {
-            acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
+         // Match non-Windows behavior when possible: prefer IPv6 dual-stack (accepts v4 and v6),
+         // and fall back to IPv4-only if dual-stack IPv6 is unavailable on the host.
+         auto open_bind_listen = [&](const asio::ip::tcp::endpoint& endpoint, const bool dual_stack_v6) {
+            asio::error_code ec{};
+            acceptor.open(endpoint.protocol(), ec);
+            if (ec) {
+               return ec;
+            }
+            if (dual_stack_v6) {
+               acceptor.set_option(asio::ip::v6_only(false), ec);
+               if (ec) {
+                  asio::error_code close_ec{};
+                  acceptor.close(close_ec);
+                  return ec;
+               }
+            }
+            if (reuse_address) {
+               acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true), ec);
+               if (ec) {
+                  asio::error_code close_ec{};
+                  acceptor.close(close_ec);
+                  return ec;
+               }
+            }
+            acceptor.bind(endpoint, ec);
+            if (ec) {
+               asio::error_code close_ec{};
+               acceptor.close(close_ec);
+               return ec;
+            }
+            acceptor.listen(asio::socket_base::max_listen_connections, ec);
+            if (ec) {
+               asio::error_code close_ec{};
+               acceptor.close(close_ec);
+               return ec;
+            }
+            return ec;
+         };
+
+         auto ec = open_bind_listen(asio::ip::tcp::endpoint{asio::ip::tcp::v6(), port}, true);
+         if (ec) {
+            const auto v6_error = ec.message();
+            ec = open_bind_listen(asio::ip::tcp::endpoint{asio::ip::tcp::v4(), port}, false);
+            if (ec) {
+               throw std::runtime_error("asio_server failed to listen on IPv6 dual-stack and IPv4 fallback (v6: " +
+                                        v6_error + ", v4: " + ec.message() + ')');
+            }
          }
-         acceptor.bind(endpoint);
-         acceptor.listen();
          port = acceptor.local_endpoint().port();
 #else
          asio::ip::tcp::acceptor acceptor(executor);
