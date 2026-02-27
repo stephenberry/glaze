@@ -856,6 +856,10 @@ namespace glz
       }
 
 #if defined(_WIN32)
+      // Windows/MSVC uses a callback session loop (start_session_windows) rather than the coroutine
+      // run_instance/listener path below due to observed lifecycle crashes in CI.
+      // Keep protocol semantics in sync with run_instance/co_receive_raw:
+      // message framing, header validation, and error-to-REPE mapping.
       struct windows_session_state
       {
          asio_server* self{};
@@ -1082,6 +1086,8 @@ namespace glz
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
+         // Non-Windows path: this coroutine flow must stay semantically aligned with the
+         // Windows callback path above (start_session_windows) for framing/validation/error behavior.
          socket.set_option(asio::ip::tcp::no_delay(true));
          socket.set_option(asio::socket_base::keep_alive(true));
 
