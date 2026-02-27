@@ -653,9 +653,6 @@ namespace glz
          // Explicitly join threads before member destruction begins,
          // ensuring coroutines don't access destroyed members (like registry)
          threads.reset();
-#if defined(_WIN32)
-         listener_acceptor.reset();
-#endif
       }
 
       struct glaze
@@ -686,6 +683,50 @@ namespace glz
       }
 
       bool initialized = false;
+
+      void emit_error(const std::string& message)
+      {
+         if (error_handler) {
+            error_handler(message);
+         }
+         else {
+            std::fprintf(stderr, "glz::asio_server error: %s\n", message.c_str());
+         }
+      }
+
+      void encode_dispatch_error(std::span<const char> request, std::string& response, const std::string& message)
+      {
+         emit_error(message);
+         auto id = repe::extract_id(request);
+         repe::encode_error_buffer(error_code::invalid_call, response, message, id);
+      }
+
+      void dispatch_custom_request(std::span<const char> request, std::string& response)
+      {
+         assert(bool(call));
+         try {
+            call(request, response);
+         }
+         catch (const std::exception& e) {
+            encode_dispatch_error(request, response, e.what());
+         }
+         catch (...) {
+            encode_dispatch_error(request, response, "unknown error");
+         }
+      }
+
+      void dispatch_registry_request(std::span<const char> request, std::string& response)
+      {
+         try {
+            registry.call(request, response);
+         }
+         catch (const std::exception& e) {
+            encode_dispatch_error(request, response, e.what());
+         }
+         catch (...) {
+            encode_dispatch_error(request, response, "unknown error");
+         }
+      }
 
 #if defined(_WIN32)
       void add_active_socket(const std::shared_ptr<asio::ip::tcp::socket>& socket)
@@ -863,12 +904,7 @@ namespace glz
             return true;
          }
 
-         if (state->self->error_handler) {
-            state->self->error_handler(std::string{context} + ": " + ec.message());
-         }
-         else {
-            std::fprintf(stderr, "glz::asio_server %s: %s\n", context, ec.message().c_str());
-         }
+         state->self->emit_error(std::string{context} + ": " + ec.message());
          finish_windows_session(state);
          return true;
       }
@@ -1003,27 +1039,11 @@ namespace glz
                return;
             }
 
-            try {
-               if (state->self->call) {
-                  state->self->call(std::span<const char>(state->request), state->response);
-               }
-               else {
-                  state->self->registry.call(std::span<const char>(state->request), state->response);
-               }
+            if (state->self->call) {
+               state->self->dispatch_custom_request(std::span<const char>(state->request), state->response);
             }
-            catch (const std::exception& e) {
-               if (state->self->error_handler) {
-                  state->self->error_handler(e.what());
-               }
-               auto id = repe::extract_id(state->request);
-               repe::encode_error_buffer(error_code::invalid_call, state->response, e.what(), id);
-            }
-            catch (...) {
-               if (state->self->error_handler) {
-                  state->self->error_handler("unknown error");
-               }
-               auto id = repe::extract_id(state->request);
-               repe::encode_error_buffer(error_code::invalid_call, state->response, "unknown error", id);
+            else {
+               state->self->dispatch_registry_request(std::span<const char>(state->request), state->response);
             }
 
             (*write_response)();
@@ -1044,12 +1064,7 @@ namespace glz
                const bool shutting_down = stop_requested.load(std::memory_order_relaxed);
                if (!(shutting_down &&
                      (ec == asio::error::operation_aborted || ec == asio::error::bad_descriptor))) {
-                  if (error_handler) {
-                     error_handler(ec.message());
-                  }
-                  else {
-                     std::fprintf(stderr, "glz::asio_server listener error: %s\n", ec.message().c_str());
-                  }
+                  emit_error(ec.message());
                }
             }
             else {
@@ -1079,24 +1094,7 @@ namespace glz
                // Custom call handler path with buffer pool
                while (true) {
                   co_await co_receive_raw(socket, request_buf.value(), max_message_size);
-
-                  try {
-                     call(std::span<const char>(request_buf.value()), response_buf.value());
-                  }
-                  catch (const std::exception& e) {
-                     if (error_handler) {
-                        error_handler(e.what());
-                     }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), e.what(), id);
-                  }
-                  catch (...) {
-                     if (error_handler) {
-                        error_handler("unknown error");
-                     }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), "unknown error", id);
-                  }
+                  dispatch_custom_request(std::span<const char>(request_buf.value()), response_buf.value());
 
                   // Send response if buffer is not empty
                   if (!response_buf.value().empty()) {
@@ -1108,24 +1106,7 @@ namespace glz
                // Standard registry path with span-based call
                while (true) {
                   co_await co_receive_raw(socket, request_buf.value(), max_message_size);
-
-                  try {
-                     registry.call(std::span<const char>(request_buf.value()), response_buf.value());
-                  }
-                  catch (const std::exception& e) {
-                     if (error_handler) {
-                        error_handler(e.what());
-                     }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), e.what(), id);
-                  }
-                  catch (...) {
-                     if (error_handler) {
-                        error_handler("unknown error");
-                     }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), "unknown error", id);
-                  }
+                  dispatch_registry_request(std::span<const char>(request_buf.value()), response_buf.value());
 
                   // Send response if buffer is not empty
                   if (!response_buf.value().empty()) {
@@ -1139,20 +1120,10 @@ namespace glz
             if (e.code() == asio::error::eof) {
                co_return;
             }
-            if (error_handler) {
-               error_handler(e.what());
-            }
-            else {
-               std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
-            }
+            emit_error(e.what());
          }
          catch (const std::exception& e) {
-            if (error_handler) {
-               error_handler(e.what());
-            }
-            else {
-               std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
-            }
+            emit_error(e.what());
          }
          // Buffers automatically returned to pool when scoped_buffers are destroyed
       }
