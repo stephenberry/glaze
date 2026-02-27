@@ -918,6 +918,136 @@ namespace glz
          return true;
       }
 
+      void start_windows_read_length(const std::shared_ptr<windows_session_state>& state)
+      {
+         // Step-wise async state machine: avoids retain cycles from self-referential std::function chains.
+         if (!state || !state->self || !state->socket) {
+            return;
+         }
+         if (state->self->stop_requested.load(std::memory_order_relaxed)) {
+            finish_windows_session(state);
+            return;
+         }
+
+         state->request.clear();
+         state->response.clear();
+         state->message_length = 0;
+
+         asio::async_read(
+            *state->socket, asio::buffer(&state->message_length, sizeof(state->message_length)),
+            asio::transfer_exactly(sizeof(state->message_length)),
+            [state](const asio::error_code& ec, size_t) {
+               if (handle_windows_session_error(state, ec, "read length")) {
+                  return;
+               }
+               if (!state || !state->self) {
+                  return;
+               }
+
+               if (state->message_length < sizeof(repe::header)) {
+                  if (state->self->error_handler) {
+                     state->self->error_handler("Invalid REPE message: length too small for header");
+                  }
+                  finish_windows_session(state);
+                  return;
+               }
+               if (state->self->max_message_size > 0 && state->message_length > state->self->max_message_size) {
+                  if (state->self->error_handler) {
+                     state->self->error_handler("REPE message exceeds maximum allowed size");
+                  }
+                  finish_windows_session(state);
+                  return;
+               }
+
+               state->request.resize(size_t(state->message_length));
+               std::memcpy(state->request.data(), &state->message_length, sizeof(state->message_length));
+
+               const auto remaining = size_t(state->message_length - sizeof(state->message_length));
+               if (!remaining) {
+                  state->self->process_windows_request(state);
+                  return;
+               }
+               state->self->start_windows_read_body(state);
+            });
+      }
+
+      void start_windows_read_body(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self || !state->socket) {
+            return;
+         }
+
+         const auto remaining = size_t(state->message_length - sizeof(state->message_length));
+         asio::async_read(*state->socket, asio::buffer(state->request.data() + sizeof(state->message_length), remaining),
+                          asio::transfer_exactly(remaining), [state](const asio::error_code& ec, size_t) {
+                             if (handle_windows_session_error(state, ec, "read body")) {
+                                return;
+                             }
+                             if (!state || !state->self) {
+                                return;
+                             }
+                             state->self->process_windows_request(state);
+                          });
+      }
+
+      void process_windows_request(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self) {
+            return;
+         }
+
+         uint16_t spec{};
+         uint8_t version{};
+         std::memcpy(&spec, state->request.data() + offsetof(repe::header, spec), sizeof(spec));
+         std::memcpy(&version, state->request.data() + offsetof(repe::header, version), sizeof(version));
+
+         if (spec != repe::repe_magic) {
+            if (state->self->error_handler) {
+               state->self->error_handler("Invalid REPE magic bytes");
+            }
+            finish_windows_session(state);
+            return;
+         }
+         if (version != 1) {
+            if (state->self->error_handler) {
+               state->self->error_handler("Unsupported REPE version");
+            }
+            finish_windows_session(state);
+            return;
+         }
+
+         if (state->self->call) {
+            state->self->dispatch_custom_request(std::span<const char>(state->request), state->response);
+         }
+         else {
+            state->self->dispatch_registry_request(std::span<const char>(state->request), state->response);
+         }
+
+         start_windows_write_response(state);
+      }
+
+      void start_windows_write_response(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self || !state->socket) {
+            return;
+         }
+         if (state->response.empty()) {
+            start_windows_read_length(state);
+            return;
+         }
+
+         asio::async_write(*state->socket, asio::buffer(state->response.data(), state->response.size()),
+                           asio::transfer_exactly(state->response.size()), [state](const asio::error_code& ec, size_t) {
+                              if (handle_windows_session_error(state, ec, "write response")) {
+                                 return;
+                              }
+                              if (!state || !state->self) {
+                                 return;
+                              }
+                              state->self->start_windows_read_length(state);
+                           });
+      }
+
       void start_session_windows(const std::shared_ptr<asio::ip::tcp::socket>& socket_ptr)
       {
          if (!socket_ptr) {
@@ -939,126 +1069,7 @@ namespace glz
          auto state = std::make_shared<windows_session_state>();
          state->self = this;
          state->socket = socket_ptr;
-
-         auto read_length = std::make_shared<std::function<void()>>();
-         auto read_body = std::make_shared<std::function<void()>>();
-         auto process_request = std::make_shared<std::function<void()>>();
-         auto write_response = std::make_shared<std::function<void()>>();
-
-         *read_length = [state, read_length, read_body, process_request]() {
-            if (!state || !state->self || !state->socket) {
-               return;
-            }
-            if (state->self->stop_requested.load(std::memory_order_relaxed)) {
-               finish_windows_session(state);
-               return;
-            }
-
-            state->request.clear();
-            state->response.clear();
-            state->message_length = 0;
-
-            asio::async_read(*state->socket, asio::buffer(&state->message_length, sizeof(state->message_length)),
-                             asio::transfer_exactly(sizeof(state->message_length)), [state, read_body, process_request](const asio::error_code& ec, size_t) {
-                                if (handle_windows_session_error(state, ec, "read length")) {
-                                   return;
-                                }
-
-                                if (state->message_length < sizeof(repe::header)) {
-                                   if (state->self->error_handler) {
-                                      state->self->error_handler("Invalid REPE message: length too small for header");
-                                   }
-                                   finish_windows_session(state);
-                                   return;
-                                }
-                                if (state->self->max_message_size > 0 && state->message_length > state->self->max_message_size) {
-                                   if (state->self->error_handler) {
-                                      state->self->error_handler("REPE message exceeds maximum allowed size");
-                                   }
-                                   finish_windows_session(state);
-                                   return;
-                                }
-
-                                state->request.resize(size_t(state->message_length));
-                                std::memcpy(state->request.data(), &state->message_length, sizeof(state->message_length));
-
-                                const auto remaining = size_t(state->message_length - sizeof(state->message_length));
-                                if (!remaining) {
-                                   (*process_request)();
-                                   return;
-                                }
-                                (*read_body)();
-                             });
-         };
-
-         *read_body = [state, process_request]() {
-            if (!state || !state->socket) {
-               return;
-            }
-            const auto remaining = size_t(state->message_length - sizeof(state->message_length));
-            asio::async_read(*state->socket, asio::buffer(state->request.data() + sizeof(state->message_length), remaining),
-                             asio::transfer_exactly(remaining), [state, process_request](const asio::error_code& ec, size_t) {
-                                if (handle_windows_session_error(state, ec, "read body")) {
-                                   return;
-                                }
-                                (*process_request)();
-                             });
-         };
-
-         *write_response = [state, read_length]() {
-            if (!state || !state->socket) {
-               return;
-            }
-            if (state->response.empty()) {
-               (*read_length)();
-               return;
-            }
-
-            asio::async_write(*state->socket, asio::buffer(state->response.data(), state->response.size()),
-                              asio::transfer_exactly(state->response.size()), [state, read_length](const asio::error_code& ec, size_t) {
-                                 if (handle_windows_session_error(state, ec, "write response")) {
-                                    return;
-                                 }
-                                 (*read_length)();
-                              });
-         };
-
-         *process_request = [state, write_response]() {
-            if (!state || !state->self) {
-               return;
-            }
-
-            uint16_t spec{};
-            uint8_t version{};
-            std::memcpy(&spec, state->request.data() + offsetof(repe::header, spec), sizeof(spec));
-            std::memcpy(&version, state->request.data() + offsetof(repe::header, version), sizeof(version));
-
-            if (spec != repe::repe_magic) {
-               if (state->self->error_handler) {
-                  state->self->error_handler("Invalid REPE magic bytes");
-               }
-               finish_windows_session(state);
-               return;
-            }
-            if (version != 1) {
-               if (state->self->error_handler) {
-                  state->self->error_handler("Unsupported REPE version");
-               }
-               finish_windows_session(state);
-               return;
-            }
-
-            if (state->self->call) {
-               state->self->dispatch_custom_request(std::span<const char>(state->request), state->response);
-            }
-            else {
-               state->self->dispatch_registry_request(std::span<const char>(state->request), state->response);
-            }
-
-            (*write_response)();
-         };
-
-         (*read_length)();
+         start_windows_read_length(state);
       }
 
       void start_listener_windows()
