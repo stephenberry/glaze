@@ -7,6 +7,8 @@
 // ASIO requires a Windows target macro; if missing, it warns and assumes Windows 7.
 // Set that same default explicitly (0x0601 = Windows 7) only when the build has not
 // already provided _WIN32_WINNT/_WIN32_WINDOWS, so project-defined values still win.
+// This is a fallback only: if Windows/ASIO headers were included earlier, this define
+// may come too late to affect their internal target-version checks.
 #define _WIN32_WINNT 0x0601
 #endif
 
