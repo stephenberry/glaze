@@ -862,6 +862,9 @@ namespace glz
       // message framing, header validation, and error-to-REPE mapping.
       struct windows_session_state
       {
+         // Non-owning back-pointer. Lifetime relies on asio_server::~asio_server calling stop()
+         // and joining all server-owned io_context threads before member destruction. Do not run
+         // this server's io_context on external/untracked threads, or callbacks may outlive `self`.
          asio_server* self{};
          std::shared_ptr<asio::ip::tcp::socket> socket{};
          std::string request{};
