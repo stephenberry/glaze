@@ -515,6 +515,26 @@ struct glz::meta<constrained_object>
 };
 ```
 
+### Skipping read_constraint validation
+
+In some cases you may want to skip `read_constraint` validation—for example, when performance is critical and the data
+is known to be valid. You can disable `read_constraint` checks by creating a custom options struct
+with `skip_read_constraint = true`:
+
+```c++
+struct skip_constraint_opts : glz::opts
+{
+   bool skip_read_constraint = true;
+};
+
+// Use it like this:
+constexpr skip_read_constraint opts{};
+auto ec = glz::read<opts>(obj, buffer);
+```
+
+With this option enabled, the `read_constraint` is still defined in `glz::meta<T>` but will not be evaluated during
+deserialization. This allows you to toggle validation on or off at compile time based on your use case.
+
 ### Object level validation
 
 To validate combinations of fields after the object has been fully deserialized, provide a single
