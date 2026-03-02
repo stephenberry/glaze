@@ -1,6 +1,6 @@
 # TOML (Tom's Obvious, Minimal Language)
 
-Glaze ships with a fast TOML 1.0 reader and writer. The same compile-time reflection metadata you already use for JSON works for TOML, so you can reuse your `glz::meta` specializations without additional boilerplate.
+Glaze ships with a fast TOML 1.1 reader and writer. The same compile-time reflection metadata you already use for JSON works for TOML, so you can reuse your `glz::meta` specializations without additional boilerplate.
 
 ## Getting Started
 
