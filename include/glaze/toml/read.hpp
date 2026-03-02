@@ -6,6 +6,7 @@
 #include <cctype>
 #include <charconv>
 #include <iostream>
+#include <limits>
 
 #include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
@@ -604,6 +605,50 @@ namespace glz
 
          return true;
       }
+
+      constexpr bool is_toml_number_terminator(const char c) noexcept
+      {
+         return c == ',' || c == ']' || c == '}' || c == '\n' || c == '\r' || c == '#' || c == ' ' || c == '\t';
+      }
+
+      template <std::floating_point T>
+      bool parse_toml_special_float(T& value, auto& it, auto end) noexcept
+      {
+         auto p = it;
+         bool negative = false;
+
+         if (p != end && (*p == '+' || *p == '-')) {
+            negative = (*p == '-');
+            ++p;
+         }
+
+         if ((end - p) >= 3 && p[0] == 'i' && p[1] == 'n' && p[2] == 'f') {
+            const auto next = p + 3;
+            if (next != end && !is_toml_number_terminator(*next)) {
+               return false;
+            }
+
+            value = negative ? -std::numeric_limits<T>::infinity() : std::numeric_limits<T>::infinity();
+            it = next;
+            return true;
+         }
+
+         if ((end - p) >= 3 && p[0] == 'n' && p[1] == 'a' && p[2] == 'n') {
+            const auto next = p + 3;
+            if (next != end && !is_toml_number_terminator(*next)) {
+               return false;
+            }
+
+            value = std::numeric_limits<T>::quiet_NaN();
+            if (negative) {
+               value = -value;
+            }
+            it = next;
+            return true;
+         }
+
+         return false;
+      }
    }
 
    template <num_t T>
@@ -631,6 +676,10 @@ namespace glz
             }
          }
          else {
+            if (detail::parse_toml_special_float(value, it, end)) {
+               return;
+            }
+
             auto [ptr, ec] = glz::from_chars<false>(it, end, value); // Always treat as non-null-terminated
             if (ec != std::errc()) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;

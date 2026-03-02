@@ -1,5 +1,6 @@
 #include "glaze/toml.hpp"
 
+#include <cmath>
 #include <chrono>
 #include <cstdint>
 #include <limits>
@@ -80,6 +81,12 @@ struct unicode_name_struct
 struct unicode_key_struct
 {
    int a{};
+};
+
+struct float_special_struct
+{
+   double value{};
+   std::vector<double> values{};
 };
 
 template <>
@@ -4283,6 +4290,64 @@ inline_data = {
       const auto error = glz::read_toml(value, input);
       expect(not error) << glz::format_error(error, input);
       expect(value.a == 7);
+   };
+
+   "toml_1_1_struct_float_value_inf_nan"_test = [] {
+      {
+         const std::string input = "value = inf";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(std::isinf(value.value));
+         expect(value.value > 0.0);
+      }
+
+      {
+         const std::string input = "value = -inf";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(std::isinf(value.value));
+         expect(value.value < 0.0);
+      }
+
+      {
+         const std::string input = "value = +inf";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(std::isinf(value.value));
+         expect(value.value > 0.0);
+      }
+
+      {
+         const std::string input = "value = nan";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(std::isnan(value.value));
+      }
+
+      {
+         const std::string input = "value = +nan";
+         float_special_struct value{};
+         const auto error = glz::read_toml(value, input);
+         expect(not error) << glz::format_error(error, input);
+         expect(std::isnan(value.value));
+      }
+   };
+
+   "toml_1_1_struct_float_array_inf_nan"_test = [] {
+      const std::string input = "values = [inf, nan, -inf]";
+      float_special_struct value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value.values.size() == 3);
+      expect(std::isinf(value.values[0]));
+      expect(value.values[0] > 0.0);
+      expect(std::isnan(value.values[1]));
+      expect(std::isinf(value.values[2]));
+      expect(value.values[2] < 0.0);
    };
 
    "toml_1_1_basic_string_hex_escape_xHH_invalid_short"_test = [] {
