@@ -1445,12 +1445,18 @@ namespace glz
             else if (*it == ',') {
                ++it;
                skip_ws_and_comments(it, end);
+               if (it != end && *it == ']') {
+                  ++it;
+                  return;
+               }
             }
             else {
                ctx.error = error_code::syntax_error;
                return;
             }
          }
+
+         ctx.error = error_code::unexpected_end;
       }
    };
 
@@ -1513,17 +1519,23 @@ namespace glz
 
             if (*it == ']') {
                ++it;
-               break;
+               return;
             }
             else if (*it == ',') {
                ++it;
                skip_ws_and_comments(it, end);
+               if (it != end && *it == ']') {
+                  ++it;
+                  return;
+               }
             }
             else {
                ctx.error = error_code::syntax_error;
                return;
             }
          }
+
+         ctx.error = error_code::unexpected_end;
       }
    };
 

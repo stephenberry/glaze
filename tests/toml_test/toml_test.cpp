@@ -89,6 +89,11 @@ struct float_special_struct
    std::vector<double> values{};
 };
 
+struct int_array_struct
+{
+   std::vector<int> values{};
+};
+
 template <>
 struct glz::meta<dotted_unknown_inner>
 {
@@ -4348,6 +4353,23 @@ inline_data = {
       expect(std::isnan(value.values[1]));
       expect(std::isinf(value.values[2]));
       expect(value.values[2] < 0.0);
+   };
+
+   "toml_struct_array_trailing_comma_parses"_test = [] {
+      const std::string input = "values = [1, 2,]";
+      int_array_struct value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value.values.size() == 2);
+      expect(value.values[0] == 1);
+      expect(value.values[1] == 2);
+   };
+
+   "toml_struct_array_missing_close_after_comma_errors"_test = [] {
+      const std::string input = "values = [1, 2,";
+      int_array_struct value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
    };
 
    "toml_1_1_basic_string_hex_escape_xHH_invalid_short"_test = [] {
