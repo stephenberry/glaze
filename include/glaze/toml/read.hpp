@@ -34,6 +34,124 @@ namespace glz
       }
    };
 
+   GLZ_ALWAYS_INLINE constexpr int toml_hex_to_int(const char c) noexcept
+   {
+      if (c >= '0' && c <= '9') return c - '0';
+      if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+      if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+      return -1;
+   }
+
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE bool append_toml_unicode_escape_u(std::string& out, It& it, End end) noexcept
+   {
+      auto hex_it = it;
+      ++hex_it; // first hex digit after 'u'
+      if (hex_it == end) {
+         return false;
+      }
+
+      const auto* const hex_begin = &(*hex_it);
+      const auto* const hex_end = hex_begin + (end - hex_it);
+      const auto* cursor = hex_begin;
+      char utf8[4]{};
+      char* dst = utf8;
+
+      if (!handle_unicode_code_point(cursor, dst, hex_end)) {
+         return false;
+      }
+
+      out.append(utf8, static_cast<size_t>(dst - utf8));
+      hex_it += (cursor - hex_begin);
+      --hex_it; // leave iterator on the last consumed character
+      it = hex_it;
+      return true;
+   }
+
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE bool append_toml_unicode_escape_U(std::string& out, It& it, End end) noexcept
+   {
+      auto hex_it = it;
+      ++hex_it; // first hex digit after 'U'
+
+      if ((end - hex_it) < 8) {
+         return false;
+      }
+
+      uint32_t code_point{};
+      for (size_t i = 0; i < 8; ++i) {
+         const int digit = toml_hex_to_int(*(hex_it + i));
+         if (digit < 0) {
+            return false;
+         }
+         code_point = (code_point << 4) | static_cast<uint32_t>(digit);
+      }
+
+      if (code_point > 0x10FFFF || (code_point >= 0xD800 && code_point <= 0xDFFF)) {
+         return false;
+      }
+
+      char utf8[4]{};
+      const auto offset = code_point_to_utf8(code_point, utf8);
+      if (!offset) {
+         return false;
+      }
+
+      out.append(utf8, static_cast<size_t>(offset));
+      it = hex_it + 7; // leave iterator on the last consumed character
+      return true;
+   }
+
+   template <class It, class End>
+   GLZ_ALWAYS_INLINE bool append_toml_basic_escape(std::string& out, It& it, End end) noexcept
+   {
+      switch (*it) {
+      case '"':
+         out.push_back('"');
+         return true;
+      case '\\':
+         out.push_back('\\');
+         return true;
+      case 'e':
+         out.push_back('\x1B');
+         return true;
+      case 'b':
+         out.push_back('\b');
+         return true;
+      case 't':
+         out.push_back('\t');
+         return true;
+      case 'n':
+         out.push_back('\n');
+         return true;
+      case 'f':
+         out.push_back('\f');
+         return true;
+      case 'r':
+         out.push_back('\r');
+         return true;
+      case 'x': {
+         if (it + 2 >= end) {
+            return false;
+         }
+         const int hi = toml_hex_to_int(*(it + 1));
+         const int lo = toml_hex_to_int(*(it + 2));
+         if (hi < 0 || lo < 0) {
+            return false;
+         }
+         out.push_back(static_cast<char>((hi << 4) | lo));
+         it += 2;
+         return true;
+      }
+      case 'u':
+         return append_toml_unicode_escape_u(out, it, end);
+      case 'U':
+         return append_toml_unicode_escape_U(out, it, end);
+      default:
+         return false;
+      }
+   }
+
    // Parse TOML key (bare key or quoted key)
    template <class Ctx, class It, class End>
    GLZ_ALWAYS_INLINE bool parse_toml_key(std::string& key, Ctx& ctx, It&& it, End end) noexcept
@@ -56,26 +174,9 @@ namespace glz
                   ctx.error = error_code::unexpected_end;
                   return false;
                }
-               switch (*it) {
-               case '"':
-                  key.push_back('"');
-                  break;
-               case '\\':
-                  key.push_back('\\');
-                  break;
-               case 'n':
-                  key.push_back('\n');
-                  break;
-               case 't':
-                  key.push_back('\t');
-                  break;
-               case 'r':
-                  key.push_back('\r');
-                  break;
-               default:
-                  key.push_back('\\');
-                  key.push_back(*it);
-                  break;
+               if (!append_toml_basic_escape(key, it, end)) {
+                  ctx.error = error_code::syntax_error;
+                  return false;
                }
             }
             else {
@@ -152,26 +253,9 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return false;
                   }
-                  switch (*it) {
-                  case '"':
-                     key.push_back('"');
-                     break;
-                  case '\\':
-                     key.push_back('\\');
-                     break;
-                  case 'n':
-                     key.push_back('\n');
-                     break;
-                  case 't':
-                     key.push_back('\t');
-                     break;
-                  case 'r':
-                     key.push_back('\r');
-                     break;
-                  default:
-                     key.push_back('\\');
-                     key.push_back(*it);
-                     break;
+                  if (!append_toml_basic_escape(key, it, end)) {
+                     ctx.error = error_code::syntax_error;
+                     return false;
                   }
                }
                else {
@@ -592,77 +676,24 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  switch (*it) {
-                  case '"':
-                     value.push_back('"');
-                     break;
-                  case '\\':
-                     value.push_back('\\');
-                     break;
-                  case 'e':
-                     value.push_back('\x1B');
-                     break;
-                  case 'x': {
-                     if (it + 2 >= end) {
-                        ctx.error = error_code::unexpected_end;
-                        return;
-                     }
-
-                     const auto hex_to_int = [](const char c) -> int {
-                        if (c >= '0' && c <= '9') return c - '0';
-                        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
-                        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-                        return -1;
-                     };
-
-                     const int hi = hex_to_int(*(it + 1));
-                     const int lo = hex_to_int(*(it + 2));
-                     if (hi < 0 || lo < 0) {
-                        ctx.error = error_code::syntax_error;
-                        return;
-                     }
-
-                     value.push_back(static_cast<char>((hi << 4) | lo));
-                     it += 2;
-                     break;
-                  }
-                  case 'n':
-                     value.push_back('\n');
-                     break;
-                  case 't':
-                     value.push_back('\t');
-                     break;
-                  case 'r':
-                     value.push_back('\r');
-                     break;
-                  case 'b':
-                     value.push_back('\b');
-                     break;
-                  case 'f':
-                     value.push_back('\f');
-                     break;
-                  // TOML: Any other character is an error for escape sequences in basic strings
-                  // However, we also need to handle escaped newlines for line trimming
-                  case '\n': /* ignore escaped newline */
+                  // Escaped newline continuation in multiline basic strings
+                  if (*it == '\n') {
                      // Trim all whitespace after escaped newline until non-whitespace or actual newline
                      while (it + 1 < end &&
                             (*(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\r' || *(it + 1) == '\n')) {
                         ++it;
                         if (*it == '\n') break; // Stop if we hit an actual newline
                      }
-                     break;
-                  case '\r': // part of CRLF, handle similar to \n
+                  }
+                  else if (*it == '\r') { // part of CRLF, handle similar to \n
                      if (it + 1 < end && *(it + 1) == '\n') ++it;
                      while (it + 1 < end &&
                             (*(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\r' || *(it + 1) == '\n')) {
                         ++it;
                         if (*it == '\n') break;
                      }
-                     break;
-                  default:
-                     // In TOML, an unknown escape sequence is an error.
-                     // For simplicity here, we might just append them or flag an error.
-                     // Glaze JSON parser often appends, let's be stricter for TOML.
+                  }
+                  else if (!append_toml_basic_escape(value, it, end)) {
                      ctx.error = error_code::syntax_error;
                      return;
                   }
@@ -690,56 +721,7 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  switch (*it) {
-                  case '"':
-                     value.push_back('"');
-                     break;
-                  case '\\':
-                     value.push_back('\\');
-                     break;
-                  case 'e':
-                     value.push_back('\x1B');
-                     break;
-                  case 'x': {
-                     if (it + 2 >= end) {
-                        ctx.error = error_code::unexpected_end;
-                        return;
-                     }
-
-                     const auto hex_to_int = [](const char c) -> int {
-                        if (c >= '0' && c <= '9') return c - '0';
-                        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
-                        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-                        return -1;
-                     };
-
-                     const int hi = hex_to_int(*(it + 1));
-                     const int lo = hex_to_int(*(it + 2));
-                     if (hi < 0 || lo < 0) {
-                        ctx.error = error_code::syntax_error;
-                        return;
-                     }
-
-                     value.push_back(static_cast<char>((hi << 4) | lo));
-                     it += 2;
-                     break;
-                  }
-                  case 'n':
-                     value.push_back('\n');
-                     break;
-                  case 't':
-                     value.push_back('\t');
-                     break;
-                  case 'r':
-                     value.push_back('\r');
-                     break;
-                  case 'b':
-                     value.push_back('\b');
-                     break;
-                  case 'f':
-                     value.push_back('\f');
-                     break;
-                  default:
+                  if (!append_toml_basic_escape(value, it, end)) {
                      ctx.error = error_code::syntax_error;
                      return;
                   }

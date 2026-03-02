@@ -72,6 +72,16 @@ struct simple_value_struct
    std::string value{"initial"};
 };
 
+struct unicode_name_struct
+{
+   std::string name{};
+};
+
+struct unicode_key_struct
+{
+   int a{};
+};
+
 template <>
 struct glz::meta<dotted_unknown_inner>
 {
@@ -4257,6 +4267,22 @@ inline_data = {
       expected.push_back('\x1B');
       expected.push_back('Z');
       expect(value == expected);
+   };
+
+   "toml_1_1_struct_value_unicode_escape_u"_test = [] {
+      const std::string input = R"(name = "\u0041")";
+      unicode_name_struct value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value.name == "A");
+   };
+
+   "toml_1_1_struct_quoted_key_unicode_escape_u"_test = [] {
+      const std::string input = R"("\u0061" = 7)";
+      unicode_key_struct value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value.a == 7);
    };
 
    "toml_1_1_basic_string_hex_escape_xHH_invalid_short"_test = [] {
