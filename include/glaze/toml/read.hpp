@@ -90,6 +90,24 @@ namespace glz
          }
          ++it; // Skip closing quote
       }
+      else if (*it == '\'') {
+         // Single-quoted (literal) key
+         ++it;
+         while (it != end && *it != '\'') {
+            if (*it == '\n' || *it == '\r') {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            key.push_back(*it);
+            ++it;
+         }
+
+         if (it == end || *it != '\'') {
+            ctx.error = error_code::syntax_error;
+            return false;
+         }
+         ++it; // Skip closing quote
+      }
       else {
          // Bare key
          while (it != end && (std::isalnum(*it) || *it == '_' || *it == '-')) {
@@ -163,6 +181,23 @@ namespace glz
             }
 
             if (it == end || *it != '"') {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            ++it; // skip closing quote
+         }
+         else if (*it == '\'') {
+            ++it;
+            while (it != end && *it != '\'') {
+               if (*it == '\n' || *it == '\r') {
+                  ctx.error = error_code::syntax_error;
+                  return false;
+               }
+               key.push_back(*it);
+               ++it;
+            }
+
+            if (it == end || *it != '\'') {
                ctx.error = error_code::syntax_error;
                return false;
             }
@@ -564,6 +599,33 @@ namespace glz
                   case '\\':
                      value.push_back('\\');
                      break;
+                  case 'e':
+                     value.push_back('\x1B');
+                     break;
+                  case 'x': {
+                     if (it + 2 >= end) {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+
+                     const auto hex_to_int = [](const char c) -> int {
+                        if (c >= '0' && c <= '9') return c - '0';
+                        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+                        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+                        return -1;
+                     };
+
+                     const int hi = hex_to_int(*(it + 1));
+                     const int lo = hex_to_int(*(it + 2));
+                     if (hi < 0 || lo < 0) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+
+                     value.push_back(static_cast<char>((hi << 4) | lo));
+                     it += 2;
+                     break;
+                  }
                   case 'n':
                      value.push_back('\n');
                      break;
@@ -635,6 +697,33 @@ namespace glz
                   case '\\':
                      value.push_back('\\');
                      break;
+                  case 'e':
+                     value.push_back('\x1B');
+                     break;
+                  case 'x': {
+                     if (it + 2 >= end) {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+
+                     const auto hex_to_int = [](const char c) -> int {
+                        if (c >= '0' && c <= '9') return c - '0';
+                        if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+                        if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+                        return -1;
+                     };
+
+                     const int hi = hex_to_int(*(it + 1));
+                     const int lo = hex_to_int(*(it + 2));
+                     if (hi < 0 || lo < 0) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+
+                     value.push_back(static_cast<char>((hi << 4) | lo));
+                     it += 2;
+                     break;
+                  }
                   case 'n':
                      value.push_back('\n');
                      break;
@@ -1427,6 +1516,11 @@ namespace glz
                break;
             }
 
+            if (is_inline_table && (*it == '\n' || *it == '\r')) {
+               skip_to_next_line(ctx, it, end);
+               continue;
+            }
+
             if (is_inline_table && *it == '}') {
                ++it; // Consume '}'
                return; // End of inline table
@@ -1736,56 +1830,82 @@ namespace glz
          }
 
          using Value = typename T::mapped_type;
+         const auto map_it = root.find(path.front());
+         const bool exists = (map_it != root.end());
 
          if (path.size() == 1) {
-            // Last key in path - parse the value directly
-            from<TOML, Value>::template op<toml::is_internal_on<Opts>()>(root[path.front()], ctx, it, end);
-            return !bool(ctx.error);
-         }
-         else {
-            // Navigate/create nested map
-            auto& nested_value = root[path.front()];
-
-            // Handle different value types for nested navigation
-            if constexpr (is_variant<Value>) {
-               // Direct variant type - emplace the map alternative
-               constexpr auto map_idx = find_map_alternative_index<Value>();
-               if constexpr (map_idx != std::variant_npos) {
-                  using MapType = std::variant_alternative_t<map_idx, Value>;
-                  if (!std::holds_alternative<MapType>(nested_value)) {
-                     nested_value.template emplace<map_idx>();
-                  }
-                  return resolve_nested_map<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, it, end);
-               }
-               else {
-                  ctx.error = error_code::no_matching_variant_type;
-                  return false;
-               }
-            }
-            else if constexpr (has_variant_data_member<Value>) {
-               // Types like generic_json that wrap a variant in a 'data' member
-               using DataType = decltype(nested_value.data);
-               constexpr auto map_idx = find_map_alternative_index<std::remove_reference_t<DataType>>();
-               if constexpr (map_idx != std::variant_npos) {
-                  using MapType = std::variant_alternative_t<map_idx, std::remove_reference_t<DataType>>;
-                  if (!std::holds_alternative<MapType>(nested_value.data)) {
-                     nested_value.data.template emplace<map_idx>();
-                  }
-                  return resolve_nested_map<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, it, end);
-               }
-               else {
-                  ctx.error = error_code::no_matching_variant_type;
-                  return false;
-               }
-            }
-            else if constexpr (readable_map_t<Value>) {
-               return resolve_nested_map<Opts>(nested_value, path.subspan(1), ctx, it, end);
-            }
-            else {
-               // Value type doesn't support nesting
+            // Duplicate assignment for an already-defined key is invalid.
+            if (exists) {
                ctx.error = error_code::syntax_error;
                return false;
             }
+
+            // Last key in path - parse the value directly.
+            from<TOML, Value>::template op<toml::is_internal_on<Opts>()>(root[path.front()], ctx, it, end);
+            return !bool(ctx.error);
+         }
+
+         // Navigate/create nested map
+         if constexpr (is_variant<Value>) {
+            constexpr auto map_idx = find_map_alternative_index<Value>();
+            if constexpr (map_idx != std::variant_npos) {
+               using MapType = std::variant_alternative_t<map_idx, Value>;
+
+               if (!exists) {
+                  auto& nested_value = root[path.front()];
+                  nested_value.template emplace<map_idx>();
+                  return resolve_nested_map<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, it, end);
+               }
+
+               auto& nested_value = map_it->second;
+               if (!std::holds_alternative<MapType>(nested_value)) {
+                  ctx.error = error_code::syntax_error;
+                  return false;
+               }
+
+               return resolve_nested_map<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx, it, end);
+            }
+            else {
+               ctx.error = error_code::no_matching_variant_type;
+               return false;
+            }
+         }
+         else if constexpr (has_variant_data_member<Value>) {
+            using DataType = decltype(std::declval<Value&>().data);
+            constexpr auto map_idx = find_map_alternative_index<std::remove_reference_t<DataType>>();
+            if constexpr (map_idx != std::variant_npos) {
+               using MapType = std::variant_alternative_t<map_idx, std::remove_reference_t<DataType>>;
+
+               if (!exists) {
+                  auto& nested_value = root[path.front()];
+                  nested_value.data.template emplace<map_idx>();
+                  return resolve_nested_map<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, it, end);
+               }
+
+               auto& nested_value = map_it->second;
+               if (!std::holds_alternative<MapType>(nested_value.data)) {
+                  ctx.error = error_code::syntax_error;
+                  return false;
+               }
+
+               return resolve_nested_map<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx, it, end);
+            }
+            else {
+               ctx.error = error_code::no_matching_variant_type;
+               return false;
+            }
+         }
+         else if constexpr (readable_map_t<Value>) {
+            if (!exists) {
+               return resolve_nested_map<Opts>(root[path.front()], path.subspan(1), ctx, it, end);
+            }
+
+            return resolve_nested_map<Opts>(map_it->second, path.subspan(1), ctx, it, end);
+         }
+         else {
+            // Value type doesn't support nesting.
+            ctx.error = error_code::syntax_error;
+            return false;
          }
       }
 
@@ -1800,17 +1920,30 @@ namespace glz
          }
 
          using Value = typename T::mapped_type;
-         auto& nested_value = root[path.front()];
+         const auto map_it = root.find(path.front());
+         const bool exists = (map_it != root.end());
 
          if (path.size() == 1) {
             // Last key in path - just ensure the map exists at this location
             if constexpr (is_variant<Value>) {
                constexpr auto map_idx = find_map_alternative_index<Value>();
                if constexpr (map_idx != std::variant_npos) {
-                  if (!std::holds_alternative<std::variant_alternative_t<map_idx, Value>>(nested_value)) {
+                  using MapType = std::variant_alternative_t<map_idx, Value>;
+
+                  if (!exists) {
+                     auto& nested_value = root[path.front()];
                      nested_value.template emplace<map_idx>();
+                     return true;
                   }
-                  return true;
+
+                  if (!std::holds_alternative<MapType>(map_it->second)) {
+                     ctx.error = error_code::syntax_error;
+                     return false;
+                  }
+
+                  // Re-defining an already-defined table is invalid.
+                  ctx.error = error_code::syntax_error;
+                  return false;
                }
                else {
                   ctx.error = error_code::no_matching_variant_type;
@@ -1818,13 +1951,25 @@ namespace glz
                }
             }
             else if constexpr (has_variant_data_member<Value>) {
-               using DataType = std::remove_reference_t<decltype(nested_value.data)>;
+               using DataType = std::remove_reference_t<decltype(std::declval<Value&>().data)>;
                constexpr auto map_idx = find_map_alternative_index<DataType>();
                if constexpr (map_idx != std::variant_npos) {
-                  if (!std::holds_alternative<std::variant_alternative_t<map_idx, DataType>>(nested_value.data)) {
+                  using MapType = std::variant_alternative_t<map_idx, DataType>;
+
+                  if (!exists) {
+                     auto& nested_value = root[path.front()];
                      nested_value.data.template emplace<map_idx>();
+                     return true;
                   }
-                  return true;
+
+                  if (!std::holds_alternative<MapType>(map_it->second.data)) {
+                     ctx.error = error_code::syntax_error;
+                     return false;
+                  }
+
+                  // Re-defining an already-defined table is invalid.
+                  ctx.error = error_code::syntax_error;
+                  return false;
                }
                else {
                   ctx.error = error_code::no_matching_variant_type;
@@ -1832,7 +1977,13 @@ namespace glz
                }
             }
             else if constexpr (readable_map_t<Value>) {
-               return true; // Already a map type, nothing to do
+               if (exists) {
+                  ctx.error = error_code::syntax_error;
+                  return false;
+               }
+
+               root[path.front()];
+               return true;
             }
             else {
                ctx.error = error_code::syntax_error;
@@ -1845,9 +1996,19 @@ namespace glz
                constexpr auto map_idx = find_map_alternative_index<Value>();
                if constexpr (map_idx != std::variant_npos) {
                   using MapType = std::variant_alternative_t<map_idx, Value>;
-                  if (!std::holds_alternative<MapType>(nested_value)) {
+
+                  if (!exists) {
+                     auto& nested_value = root[path.front()];
                      nested_value.template emplace<map_idx>();
+                     return ensure_map_path<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx);
                   }
+
+                  auto& nested_value = map_it->second;
+                  if (!std::holds_alternative<MapType>(nested_value)) {
+                     ctx.error = error_code::syntax_error;
+                     return false;
+                  }
+
                   return ensure_map_path<Opts>(std::get<MapType>(nested_value), path.subspan(1), ctx);
                }
                else {
@@ -1856,13 +2017,23 @@ namespace glz
                }
             }
             else if constexpr (has_variant_data_member<Value>) {
-               using DataType = std::remove_reference_t<decltype(nested_value.data)>;
+               using DataType = std::remove_reference_t<decltype(std::declval<Value&>().data)>;
                constexpr auto map_idx = find_map_alternative_index<DataType>();
                if constexpr (map_idx != std::variant_npos) {
                   using MapType = std::variant_alternative_t<map_idx, DataType>;
-                  if (!std::holds_alternative<MapType>(nested_value.data)) {
+
+                  if (!exists) {
+                     auto& nested_value = root[path.front()];
                      nested_value.data.template emplace<map_idx>();
+                     return ensure_map_path<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx);
                   }
+
+                  auto& nested_value = map_it->second;
+                  if (!std::holds_alternative<MapType>(nested_value.data)) {
+                     ctx.error = error_code::syntax_error;
+                     return false;
+                  }
+
                   return ensure_map_path<Opts>(std::get<MapType>(nested_value.data), path.subspan(1), ctx);
                }
                else {
@@ -1871,7 +2042,11 @@ namespace glz
                }
             }
             else if constexpr (readable_map_t<Value>) {
-               return ensure_map_path<Opts>(nested_value, path.subspan(1), ctx);
+               if (!exists) {
+                  return ensure_map_path<Opts>(root[path.front()], path.subspan(1), ctx);
+               }
+
+               return ensure_map_path<Opts>(map_it->second, path.subspan(1), ctx);
             }
             else {
                ctx.error = error_code::syntax_error;
@@ -1896,6 +2071,16 @@ namespace glz
             skip_ws_and_comments(it, end);
             if (it == end) {
                ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            if (*it == '\n' || *it == '\r') {
+               skip_to_next_line(ctx, it, end);
+               continue;
+            }
+
+            if (*it == '}') {
+               ++it;
                return;
             }
 
@@ -1932,6 +2117,7 @@ namespace glz
             }
             else if (*it == ',') {
                ++it;
+               skip_ws_and_comments(it, end);
             }
             else {
                ctx.error = error_code::syntax_error;

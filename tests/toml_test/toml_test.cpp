@@ -2482,6 +2482,13 @@ struct glz::meta<simple_catalog>
    static constexpr auto value = object("products", &T::products);
 };
 
+struct quoted_header_catalog
+{
+   std::vector<product> products_list{};
+
+   bool operator==(const quoted_header_catalog&) const = default;
+};
+
 // Structs for edge case tests (need external linkage)
 struct item_with_tags
 {
@@ -4199,6 +4206,291 @@ a.b.f = true)";
       expect(std::get<int64_t>(c.at("d").data) == 42);
       expect(std::get<std::string>(c.at("e").data) == "deep");
       expect(std::get<bool>(b.at("f").data) == true);
+   };
+};
+
+suite toml_1_1_delta_tests = [] {
+   "toml_1_1_inline_table_allows_newlines_and_trailing_comma_object"_test = [] {
+      const std::string input = R"(name = "Test Person"
+inline_data = {
+  key1 = "value1",
+  key2 = 100,
+})";
+
+      struct_with_inline_table s{};
+      const auto error = glz::read_toml(s, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(s.name == "Test Person");
+      expect(s.inline_data.key1 == "value1");
+      expect(s.inline_data.key2 == 100);
+   };
+
+   "toml_1_1_inline_table_allows_newlines_and_trailing_comma_map"_test = [] {
+      const std::string input = R"({
+  a = 1,
+  b = 2,
+})";
+
+      std::map<std::string, int> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value.size() == 2);
+      expect(value["a"] == 1);
+      expect(value["b"] == 2);
+   };
+
+   "toml_1_1_basic_string_hex_escape_xHH"_test = [] {
+      const std::string input = R"("\x48\x69")";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "Hi");
+   };
+
+   "toml_1_1_basic_string_escape_e"_test = [] {
+      const std::string input = R"("a\eZ")";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+
+      std::string expected = "a";
+      expected.push_back('\x1B');
+      expected.push_back('Z');
+      expect(value == expected);
+   };
+
+   "toml_1_1_basic_string_hex_escape_xHH_invalid_short"_test = [] {
+      const std::string input = R"("\x4")";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_basic_string_hex_escape_xHH_invalid_digits"_test = [] {
+      const std::string input = R"("\xGG")";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_multiline_basic_string_hex_escape_xHH"_test = [] {
+      const std::string input = "\"\"\"prefix\\x41suffix\"\"\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "prefixAsuffix");
+   };
+
+   "toml_1_1_multiline_basic_string_escape_e"_test = [] {
+      const std::string input = "\"\"\"A\\eB\"\"\"";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+
+      std::string expected = "A";
+      expected.push_back('\x1B');
+      expected.push_back('B');
+      expect(value == expected);
+   };
+
+   "toml_1_1_single_quoted_key_basic"_test = [] {
+      const std::string input = R"('first name' = "Nick")";
+      std::map<std::string, std::string> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value.size() == 1);
+      expect(value["first name"] == "Nick");
+   };
+
+   "toml_1_1_single_quoted_dotted_keys"_test = [] {
+      const std::string input = R"('fruit'.'apple tree'.color = "red")";
+      std::map<std::string, glz::generic_i64> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      if (error) return;
+
+      auto& fruit_obj = std::get<glz::generic_i64::object_t>(value.at("fruit").data);
+      auto& apple_obj = std::get<glz::generic_i64::object_t>(fruit_obj.at("apple tree").data);
+      expect(std::get<std::string>(apple_obj.at("color").data) == "red");
+   };
+
+   "toml_1_1_single_quoted_table_header"_test = [] {
+      const std::string input = R"(['fruit section']
+color = "red"
+)";
+      std::map<std::string, glz::generic_i64> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      if (error) return;
+
+      auto& fruit_obj = std::get<glz::generic_i64::object_t>(value.at("fruit section").data);
+      expect(std::get<std::string>(fruit_obj.at("color").data) == "red");
+   };
+
+   "toml_1_1_single_quoted_array_of_tables_header"_test = [] {
+      const std::string input = R"([['products_list']]
+name = "Hammer"
+sku = 1
+
+[['products_list']]
+name = "Nail"
+sku = 2
+)";
+
+      quoted_header_catalog c{};
+      const auto error = glz::read_toml(c, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(c.products_list.size() == 2);
+      expect(c.products_list[0].name == "Hammer");
+      expect(c.products_list[0].sku == 1);
+      expect(c.products_list[1].name == "Nail");
+      expect(c.products_list[1].sku == 2);
+   };
+
+   "toml_1_1_inline_table_comments_object"_test = [] {
+      const std::string input = R"(name = "Test Person"
+inline_data = {
+  key1 = "value1", # comment after first entry
+  # comment-only line in inline table
+  key2 = 100, # comment after second entry
+  # comment before close
+})";
+
+      struct_with_inline_table s{};
+      const auto error = glz::read_toml(s, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(s.inline_data.key1 == "value1");
+      expect(s.inline_data.key2 == 100);
+   };
+
+   "toml_1_1_inline_table_comments_map"_test = [] {
+      const std::string input = R"({
+  a = 1, # comment after first entry
+  # comment-only line in inline table
+  b = 2, # comment after second entry
+  # comment before close
+})";
+
+      std::map<std::string, int> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value.size() == 2);
+      expect(value.at("a") == 1);
+      expect(value.at("b") == 2);
+   };
+
+   "toml_1_1_conflict_scalar_then_dotted_key_error"_test = [] {
+      const std::string input = R"(fruit.apple = 1
+fruit.apple.sweet = true
+)";
+
+      std::map<std::string, glz::generic_i64> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_conflict_dotted_key_then_scalar_error"_test = [] {
+      const std::string input = R"(fruit.apple.sweet = true
+fruit.apple = 1
+)";
+
+      std::map<std::string, glz::generic_i64> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_conflict_scalar_then_table_header_error"_test = [] {
+      const std::string input = R"(fruit.apple = 1
+[fruit.apple]
+color = "red"
+)";
+
+      std::map<std::string, glz::generic_i64> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(error);
+   };
+
+   "toml_1_1_comments_do_not_affect_tables"_test = [] {
+      const std::string input = R"(# A full-line comment before any table
+[[products]]
+name = "Hammer"
+sku = 1 # end-of-line comment
+
+# Another comment between array entries
+[[products]]
+name = "Nail"
+sku = 2
+)";
+
+      simple_catalog c{};
+      const auto error = glz::read_toml(c, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(c.products.size() == 2);
+      expect(c.products[0].name == "Hammer");
+      expect(c.products[0].sku == 1);
+      expect(c.products[1].name == "Nail");
+      expect(c.products[1].sku == 2);
+   };
+
+   "toml_1_1_dotted_keys_and_table_definitions"_test = [] {
+      const std::string input = R"([fruit]
+apple.color = "red"
+apple.taste.sweet = true
+)";
+
+      std::map<std::string, glz::generic_i64> value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+
+      auto& fruit_obj = std::get<glz::generic_i64::object_t>(value.at("fruit").data);
+      auto& apple_obj = std::get<glz::generic_i64::object_t>(fruit_obj.at("apple").data);
+      auto& taste_obj = std::get<glz::generic_i64::object_t>(apple_obj.at("taste").data);
+
+      expect(std::get<std::string>(apple_obj.at("color").data) == "red");
+      expect(std::get<bool>(taste_obj.at("sweet").data) == true);
+   };
+
+   "toml_1_1_local_datetime_seconds_optional"_test = [] {
+      using namespace std::chrono;
+      const std::string input = "2024-06-15T10:30";
+      system_clock::time_point tp{};
+      const auto error = glz::read_toml(tp, input);
+      expect(not error) << glz::format_error(error, input);
+
+      const auto expected = sys_days{year{2024} / month{6} / day{15}} + hours{10} + minutes{30};
+      expect(time_point_cast<seconds>(tp) == time_point_cast<seconds>(expected));
+   };
+
+   "toml_1_1_multiline_literal_strings_keep_line_endings"_test = [] {
+      const std::string input = "'''first\r\nsecond'''";
+      std::string value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value == "first\r\nsecond");
+   };
+
+   "toml_1_1_sub_millisecond_precision_local_time"_test = [] {
+      using namespace std::chrono;
+      const std::string input = "10:30:45.123456789";
+      hh_mm_ss<nanoseconds> tod{nanoseconds{0}};
+      const auto error = glz::read_toml(tod, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(tod.hours().count() == 10);
+      expect(tod.minutes().count() == 30);
+      expect(tod.seconds().count() == 45);
+      expect(tod.subseconds().count() == 123456789);
+   };
+
+   "toml_1_1_numeric_size_support_is_implementation_defined"_test = [] {
+      std::int64_t i{};
+      const auto int_error = glz::read_toml(i, "9223372036854775807");
+      expect(not int_error);
+      expect(i == std::numeric_limits<std::int64_t>::max());
+
+      double d{};
+      const auto float_error = glz::read_toml(d, "3.141592653589793");
+      expect(not float_error);
+      expect(std::abs(d - 3.141592653589793) < 1e-15);
    };
 };
 
