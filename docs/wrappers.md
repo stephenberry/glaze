@@ -528,7 +528,7 @@ struct skip_constraint_opts : glz::opts
 };
 
 // Use it like this:
-constexpr skip_read_constraint opts{};
+constexpr skip_constraint_opts opts{};
 auto ec = glz::read<opts>(obj, buffer);
 ```
 

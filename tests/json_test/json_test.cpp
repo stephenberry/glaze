@@ -8213,7 +8213,7 @@ suite skip_read_constraint_tests = []{
       auto ec = glz::read_json(obj, buffer);
       expect(ec == glz::error_code::constraint_violated);
 
-      // With skip_self_constraint = true, constraint is skipped
+      // With skip_read_constraint = true, constraint is skipped
       obj = {};
       ec = glz::read<opts>(obj, buffer);
       expect(ec == glz::error_code::none);

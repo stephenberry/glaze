@@ -103,7 +103,7 @@ namespace glz
                         parse<Format>::template op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        if (!check_skip_read_constraint(Opts)){
+                        if (!check_skip_read_constraint(Opts)) {
                            auto success = constraint(input);
                            if (not success) {
                               ctx.error = error_code::constraint_violated;

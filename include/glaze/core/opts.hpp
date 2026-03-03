@@ -633,7 +633,7 @@ namespace glz
    consteval bool check_skip_read_constraint(auto&& Opts)
    {
       if constexpr (requires { Opts.skip_read_constraint; }) {
-         return Opts.skip_read_constraint;      
+         return Opts.skip_read_constraint;
       }
       else {
          return false;
