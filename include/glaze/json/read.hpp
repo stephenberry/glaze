@@ -3203,8 +3203,8 @@ namespace glz
                   // using Key = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
                   using Key = typename T::key_type;
                   if constexpr (std::is_same_v<Key, std::string>) {
-                     static thread_local Key key;
-                     parse<JSON>::op<Opts>(key, ctx, it, end);
+                     ctx.scratch.clear();
+                     parse<JSON>::op<Opts>(ctx.scratch, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
@@ -3212,7 +3212,7 @@ namespace glz
                         return;
                      }
 
-                     reading(key);
+                     reading(ctx.scratch);
                      if constexpr (Opts.partial_read) {
                         if (read_count == value.size()) {
                            return;

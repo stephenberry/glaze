@@ -1386,8 +1386,23 @@ namespace glz
                }
             }
          }
+         else if constexpr (std::is_same_v<Key, std::string>) {
+            for (size_t i = 0; i < n; ++i) {
+               ctx.scratch.clear();
+               if constexpr (Opts.partial_read) {
+                  parse<BEVE>::op<no_header_on<Opts>()>(ctx.scratch, key_tag, ctx, it, end);
+                  if (auto element = value.find(ctx.scratch); element != value.end()) {
+                     parse<BEVE>::op<Opts>(element->second, ctx, it, end);
+                  }
+               }
+               else {
+                  parse<BEVE>::op<no_header_on<Opts>()>(ctx.scratch, key_tag, ctx, it, end);
+                  parse<BEVE>::op<Opts>(value[ctx.scratch], ctx, it, end);
+               }
+            }
+         }
          else {
-            static thread_local Key key;
+            Key key;
             for (size_t i = 0; i < n; ++i) {
                if constexpr (Opts.partial_read) {
                   parse<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
