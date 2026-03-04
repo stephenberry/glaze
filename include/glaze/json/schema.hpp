@@ -586,9 +586,24 @@ namespace glz
             std::sort(fields.begin(), fields.end());
 
             for (const auto& key : json_schema_names) {
-               if (!std::binary_search(fields.begin(), fields.end(), key)) {
-                  return false;
+               if (std::binary_search(fields.begin(), fields.end(), key)) {
+                  continue;
                }
+               // For types with modify, json_schema members may use original C++ member names
+               if constexpr (modify_t<std::decay_t<T>>) {
+                  constexpr auto& original_fields = member_names<std::decay_t<T>>;
+                  bool found = false;
+                  for (const auto& field : original_fields) {
+                     if (field == key) {
+                        found = true;
+                        break;
+                     }
+                  }
+                  if (found) {
+                     continue;
+                  }
+               }
+               return false;
             }
             return true;
          }
@@ -666,11 +681,21 @@ namespace glz
                   // Instead we just loop over the keys, looking for a match:
 
                   constexpr auto schema_index = [] {
-                     size_t i{};
                      const auto& schema_keys = reflect<json_schema_type<T>>::keys;
-                     for (; i < json_schema_size; ++i) {
+                     for (size_t i = 0; i < json_schema_size; ++i) {
                         if (schema_keys[i] == key) {
                            return i;
+                        }
+                     }
+                     // For modify types, try matching by original C++ member name
+                     if constexpr (modify_t<std::decay_t<T>> && I < count_members<std::decay_t<T>>) {
+                        constexpr sv original_name = member_names<std::decay_t<T>>[I];
+                        if constexpr (original_name != key) {
+                           for (size_t i = 0; i < json_schema_size; ++i) {
+                              if (schema_keys[i] == original_name) {
+                                 return i;
+                              }
+                           }
                         }
                      }
                      return json_schema_size;
