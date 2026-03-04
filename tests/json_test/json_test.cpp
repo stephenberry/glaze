@@ -8202,7 +8202,7 @@ struct skip_read_constraint_opts : glz::opts
    bool skip_read_constraint = true;
 };
 
-suite skip_read_constraint_tests = []{
+suite skip_read_constraint_tests = [] {
    "skip_read_constraint allows invalid data through"_test = [] {
       constexpr skip_read_constraint_opts opts{};
 
