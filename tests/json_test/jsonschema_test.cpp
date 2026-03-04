@@ -474,4 +474,41 @@ suite schema_tests = [] {
    };
 };
 
+struct identifier
+{
+   std::string value;
+};
+
+template <>
+struct glz::meta<identifier>
+{
+   static constexpr auto value{&identifier::value};
+};
+
+template <>
+struct glz::json_schema<identifier>
+{
+   schema value{.description = "C++ identifier"};
+};
+
+struct cpp_class
+{
+   identifier name;
+};
+
+suite value_type_schema = [] {
+   "value_type_json_schema"_test = [] {
+      auto s = glz::write_json_schema<cpp_class>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(s);
+      expect(obj.has_value()) << "Failed to parse schema";
+
+      // The $defs/identifier definition should have the description from json_schema<identifier>
+      expect(obj->defs.has_value());
+      auto it = obj->defs->find("identifier");
+      expect(it != obj->defs->end());
+      expect(it->second.attributes.description.has_value());
+      expect(*it->second.attributes.description == "C++ identifier");
+   };
+};
+
 int main() { return 0; }
