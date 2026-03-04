@@ -11892,7 +11892,7 @@ struct glz::meta<large_struct_t>
              &T::four, &T::five, &T::six, &T::seven);
 };
 
-suite marker_9 = [] { std::cerr << ">>> MARKER 9: large_struct_tests (line ~11878)" << std::endl; };
+suite marker_9a = [] { std::cerr << ">>> MARKER 9a: large_struct_tests" << std::endl; };
 
 suite large_struct_tests = [] {
    "large_struct"_test = [] {
@@ -11911,6 +11911,8 @@ struct thread_msg
    uint64_t id{};
    std::string val{};
 };
+
+suite marker_9b = [] { std::cerr << ">>> MARKER 9b: threading_tests" << std::endl; };
 
 suite threading_tests = [] {
    "threading"_test = [] {
@@ -11958,6 +11960,8 @@ static_assert(glz::json_boolean<bool>);
 static_assert(glz::json_number<float>);
 static_assert(glz::json_integer<uint64_t>);
 static_assert(glz::json_null<std::nullptr_t>);
+
+suite marker_9c = [] { std::cerr << ">>> MARKER 9c: directory_tests" << std::endl; };
 
 suite directory_tests = [] {
    "directory"_test = [] {
@@ -12059,6 +12063,8 @@ namespace glz
       }
    };
 }
+
+suite marker_9d = [] { std::cerr << ">>> MARKER 9d: custom_error" << std::endl; };
 
 suite custom_error = [] {
    "custom_errors_t"_test = [] {
@@ -12454,6 +12460,8 @@ suite offset_one_test = [] {
       expect(obj.abcdefghlllo == 6);
    };
 };
+
+suite marker_9e = [] { std::cerr << ">>> MARKER 9e: flat_map_tests" << std::endl; };
 
 suite flat_map_tests = [] {
    "flat_map"_test = [] {
