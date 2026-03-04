@@ -12497,6 +12497,8 @@ suite ndjson_options = [] {
    };
 };
 
+suite marker_9f = [] { std::cerr << ">>> MARKER 9f: atomics" << std::endl; };
+
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};
@@ -12619,6 +12621,8 @@ struct glz::meta<birds>
    static constexpr glz::tuple value{&T::crow, &T::sparrow, &T::hawk};
 };
 
+suite marker_9g = [] { std::cerr << ">>> MARKER 9g: meta_keys_for_struct" << std::endl; };
+
 suite meta_keys_for_struct = [] {
    "meta_keys birds"_test = [] {
       birds obj{"caw", "chirp", "screech"};
@@ -12719,6 +12723,8 @@ struct glz::meta<private_fields_t>
    using T = private_fields_t;
    static constexpr auto value = object(&T::cash, &T::currency);
 };
+
+suite marker_9h = [] { std::cerr << ">>> MARKER 9h: private_fields_tests" << std::endl; };
 
 suite private_fields_tests = [] {
    "private fields"_test = [] {
@@ -12836,6 +12842,8 @@ struct glz::meta<cast_nullable_obj>
    static constexpr auto value = object("a", cast<&T::a, std::optional<int>>, "b", &T::b);
 };
 
+suite marker_9i = [] { std::cerr << ">>> MARKER 9i: cast_tests" << std::endl; };
+
 suite cast_tests = [] {
    "cast"_test = [] {
       cast_obj obj{};
@@ -12933,6 +12941,8 @@ suite operation_specific_skipping_tests = [] {
       expect(obj.input_only_field == "new_input");
    };
 };
+
+suite marker_9j = [] { std::cerr << ">>> MARKER 9j: glaze_error_category_tests" << std::endl; };
 
 suite glaze_error_category_tests = [] {
    "error_category_name"_test = [] {
