@@ -499,6 +499,18 @@ namespace glz
    template <class T>
    using meta_keys_t = decay_keep_volatile_t<decltype(meta_keys_v<T>)>;
 
+   // Extract value type M from member object pointer M C::*
+   template <class T>
+   struct remove_member_object_pointer
+   {
+      using type = T;
+   };
+   template <class M, class C>
+   struct remove_member_object_pointer<M C::*>
+   {
+      using type = M;
+   };
+
    template <class T>
    struct remove_meta_wrapper
    {
@@ -507,7 +519,10 @@ namespace glz
    template <glaze_t T>
    struct remove_meta_wrapper<T>
    {
-      using type = std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<T>>>;
+      using wrapper = std::remove_const_t<meta_wrapper_t<T>>;
+      // remove_pointer_t handles regular pointers (T*),
+      // remove_member_object_pointer handles member pointers (M C::*)
+      using type = typename remove_member_object_pointer<std::remove_pointer_t<wrapper>>::type;
    };
    template <class T>
    using remove_meta_wrapper_t = typename remove_meta_wrapper<T>::type;
