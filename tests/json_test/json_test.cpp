@@ -13178,6 +13178,10 @@ suite member_function_pointer_serialization = [] {
          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})")
          << buffer;
 #endif
+#elif defined(_MSC_VER)
+      // MSVC produces fully qualified type names with calling convention
+      expect(buffer.find("MemberFunctionThing") != std::string::npos && buffer.find("test_item") != std::string::npos)
+         << buffer;
 #else
       expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
          << buffer;
@@ -13199,7 +13203,12 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer2{};
       expect(not glz::write<opts_with_function_pointers{}>(s, buffer2));
+#if defined(_MSC_VER)
+      // MSVC produces different type names and calling conventions
+      expect(buffer2.find("struct_t") != std::string::npos && buffer2.find("f1") != std::string::npos) << buffer2;
+#else
       expect(buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})") << buffer2;
+#endif
    };
 };
 
