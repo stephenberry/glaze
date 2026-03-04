@@ -511,4 +511,26 @@ suite value_type_schema = [] {
    };
 };
 
+struct cpp_class_variant
+{
+   std::variant<identifier, std::nullopt_t> name;
+};
+
+suite value_type_variant_schema = [] {
+   "value_type_variant_json_schema"_test = [] {
+      auto s = glz::write_json_schema<cpp_class_variant>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(s);
+      expect(obj.has_value()) << "Failed to parse schema";
+
+      // The variant definition should include "string" in its type array
+      expect(obj->defs.has_value());
+      auto it = obj->defs->find("std::variant<identifier,std::nullopt_t>");
+      expect(it != obj->defs->end());
+      expect(it->second.type.has_value());
+      auto& types = *it->second.type;
+      expect(std::find(types.begin(), types.end(), "string") != types.end()) << "missing string type";
+      expect(std::find(types.begin(), types.end(), "null") != types.end()) << "missing null type";
+   };
+};
+
 int main() { return 0; }
