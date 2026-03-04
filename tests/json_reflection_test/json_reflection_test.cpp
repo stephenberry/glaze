@@ -81,6 +81,28 @@ struct glz::meta<schema_modify_sample>
 
 static_assert(glz::glaze_object_t<schema_modify_sample>);
 
+struct modify_rename_schema_test
+{
+   int enum_{};
+   std::string class_{};
+};
+
+template <>
+struct glz::meta<modify_rename_schema_test>
+{
+   using T = modify_rename_schema_test;
+   static constexpr auto modify = glz::object(
+      "enum", &T::enum_,
+      "class", &T::class_);
+};
+
+template <>
+struct glz::json_schema<modify_rename_schema_test>
+{
+   glz::schema enum_{.description = "enum field"};
+   glz::schema class_{.description = "class field"};
+};
+
 struct modify_header
 {
    std::string id{"id"};
@@ -333,6 +355,16 @@ suite modify_json_schema = [] {
       expect(schema.find(R"("primary_alias")") != std::string::npos) << schema;
       expect(schema.find(R"("value")") == std::string::npos) << schema;
       expect(schema.find(R"("note")") != std::string::npos) << schema;
+   };
+
+   "json_schema with modify rename"_test = [] {
+      const auto schema = glz::write_json_schema<modify_rename_schema_test>().value_or("error");
+      // Keys should use the renamed names from modify
+      expect(schema.find(R"("enum")") != std::string::npos) << schema;
+      expect(schema.find(R"("class")") != std::string::npos) << schema;
+      // Schema descriptions should be applied
+      expect(schema.find(R"("enum field")") != std::string::npos) << schema;
+      expect(schema.find(R"("class field")") != std::string::npos) << schema;
    };
 };
 
