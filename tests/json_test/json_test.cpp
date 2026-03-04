@@ -7151,6 +7151,7 @@ struct variant_to_tuple<std::variant<Ts...>>
 {
    using type = std::tuple<Ts...>;
 };
+
 suite constexpr_values_test = [] {
    "constexpr_values_write"_test = [] {
       cx_values obj{};
@@ -12772,14 +12773,14 @@ suite factor8_strings = [] {
       const auto payload = R"("abcdefg")"; // 8 chars after open quote
       const auto parsed = glz::read_json<std::string>(payload);
       expect(parsed.has_value());
-      expect(*parsed->end() == '\0');
+      expect(parsed->data()[parsed->size()] == '\0');
    };
 
    "factor of 8"_test = [] {
       const auto payload = R"("abcdefghijklmno")"; // 16 chars after open quote
       const auto parsed = glz::read_json<std::string>(payload);
       expect(parsed.has_value());
-      expect(*parsed->end() == '\0');
+      expect(parsed->data()[parsed->size()] == '\0');
    };
 };
 
@@ -13139,6 +13140,10 @@ suite member_function_pointer_serialization = [] {
          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})")
          << buffer;
 #endif
+#elif defined(_MSC_VER)
+      // MSVC produces fully qualified type names with calling convention
+      expect(buffer.find("MemberFunctionThing") != std::string::npos && buffer.find("test_item") != std::string::npos)
+         << buffer;
 #else
       expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
          << buffer;
@@ -13160,7 +13165,12 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer2{};
       expect(not glz::write<opts_with_function_pointers{}>(s, buffer2));
+#if defined(_MSC_VER)
+      // MSVC produces different type names and calling conventions
+      expect(buffer2.find("struct_t") != std::string::npos && buffer2.find("f1") != std::string::npos) << buffer2;
+#else
       expect(buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})") << buffer2;
+#endif
    };
 };
 
