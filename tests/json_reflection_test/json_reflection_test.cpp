@@ -1269,6 +1269,39 @@ struct glz::meta<rename_with_modify>
    static constexpr auto modify = glz::object("first_alias", &rename_with_modify::first);
 };
 
+enum class enum_fuzz_case {
+   aaaa,
+   aaa,
+   aab,
+   aac,
+};
+
+template <>
+struct glz::meta<enum_fuzz_case>
+{
+   using enum enum_fuzz_case;
+   static constexpr auto value = glz::enumerate("aaaa", aaaa, "aaa", aaa, "aab", aab, "aac", aac);
+};
+
+struct enum_container
+{
+   enum_fuzz_case enum_field{};
+};
+
+suite unique_index_sized_hash_bounds = [] {
+   "truncated enum payload does not read out of bounds"_test = [] {
+      enum_container obj{};
+
+      // Truncated quoted enum payload:
+      // {"enum_field":":
+      // (truncated immediately after the closing quote of enum string)
+      using namespace std::string_view_literals;
+      constexpr auto json = R"({"enum_field":":")"sv;
+      const auto ec = glz::read_json(obj, json);
+      expect(ec != glz::error_code::none);
+   };
+};
+
 suite rename_tests = [] {
    "rename"_test = [] {
       renamed_t obj{};
