@@ -1938,7 +1938,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         static thread_local std::string buffer{};
+         std::string buffer{};
          parse<BEVE>::op<Opts>(buffer, ctx, args...);
          if (bool(ctx.error)) [[unlikely]] {
             return;

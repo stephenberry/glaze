@@ -118,7 +118,7 @@ namespace glz
                         using P = std::decay_t<Params>;
                         constexpr auto N = glz::tuple_size_v<Tuple>;
                         static_assert(N == 1, "Only one input is allowed for your function");
-                        static thread_local std::array<char, 256> input{};
+                        std::array<char, 256> input{};
                         if constexpr (is_help<P>) {
                            std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
                            print_input_type<typename P::value_type>();
@@ -173,7 +173,7 @@ namespace glz
                      using P = std::decay_t<Params>;
                      constexpr auto N = glz::tuple_size_v<Tuple>;
                      static_assert(N == 1, "Only one input is allowed for your function");
-                     static thread_local std::array<char, 256> input{};
+                     std::array<char, 256> input{};
                      if constexpr (is_help<P>) {
                         std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
                         print_input_type<typename P::value_type>();
