@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - feature/*
-      - msvc
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
@@ -41,4 +40,4 @@ jobs:
 
     - name: Test
       working-directory: build
-      run: ctest --verbose --build-config ${{env.BUILD_TYPE}} --timeout 300
+      run: ctest --build-config ${{env.BUILD_TYPE}} --timeout 300

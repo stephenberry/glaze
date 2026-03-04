@@ -82,8 +82,6 @@ namespace glz
    };
 } // namespace glz
 
-suite marker_1 = [] { std::cerr << ">>> MARKER 1: char_empty_string (line ~85)" << std::endl; };
-
 suite char_empty_string = [] {
    "char empty string deserializes to null char"_test = [] {
       CharRoundtrip original{};
@@ -1356,8 +1354,6 @@ suite enum_types = [] {
       expect(color == Color::Red);
    };
 };
-
-suite marker_2 = [] { std::cerr << ">>> MARKER 2: user_types (line ~1358)" << std::endl; };
 
 suite user_types = [] {
    using namespace ut;
@@ -2893,8 +2889,6 @@ struct std::hash<json_cast_module_id>
 {
    size_t operator()(const json_cast_module_id& id) const noexcept { return std::hash<uint64_t>{}(id.value); }
 };
-
-suite marker_3 = [] { std::cerr << ">>> MARKER 3: strong_id_json_tests (line ~2893)" << std::endl; };
 
 suite strong_id_json_tests = [] {
    "map json_module_id"_test = [] {
@@ -4468,8 +4462,6 @@ struct glz::meta<obj_t>
              "boolean", &T::boolean, "another_bool", &T::another_bool);
 };
 
-suite marker_4 = [] { std::cerr << ">>> MARKER 4: json_performance (line ~4465)" << std::endl; };
-
 suite json_performance = [] {
    "json performance"_test = [] {
       std::string buffer{json0};
@@ -6001,8 +5993,6 @@ suite get_sv = [] {
    };
 };
 
-suite marker_5 = [] { std::cerr << ">>> MARKER 5: no_except_tests (line ~5996)" << std::endl; };
-
 suite no_except_tests = [] {
    "no except"_test = [] {
       my_struct s{};
@@ -7161,8 +7151,6 @@ struct variant_to_tuple<std::variant<Ts...>>
 {
    using type = std::tuple<Ts...>;
 };
-
-suite marker_6 = [] { std::cerr << ">>> MARKER 6: constexpr_values_test (line ~7154)" << std::endl; };
 
 suite constexpr_values_test = [] {
    "constexpr_values_write"_test = [] {
@@ -8810,8 +8798,6 @@ struct glz::meta<my_unknown_struct>
    //     &T::unknown
    // };
 };
-
-suite marker_7 = [] { std::cerr << ">>> MARKER 7: unknown_fields_member_test (line ~8801)" << std::endl; };
 
 suite unknown_fields_member_test = [] {
    "decode_unknown"_test = [] {
@@ -10514,8 +10500,6 @@ struct S0
    std::string f1{}; /*, f1misc is ignored*/
 };
 
-suite marker_8 = [] { std::cerr << ">>> MARKER 8: error_on_unknown_keys_test (line ~10502)" << std::endl; };
-
 suite error_on_unknown_keys_test = [] {
    "error_on_unknown_keys"_test = [] {
       auto input = R"({"f1":"main","f1misc":"this should be dropped silently"})";
@@ -11892,8 +11876,6 @@ struct glz::meta<large_struct_t>
              &T::four, &T::five, &T::six, &T::seven);
 };
 
-suite marker_9a = [] { std::cerr << ">>> MARKER 9a: large_struct_tests" << std::endl; };
-
 suite large_struct_tests = [] {
    "large_struct"_test = [] {
       large_struct_t obj{};
@@ -11911,8 +11893,6 @@ struct thread_msg
    uint64_t id{};
    std::string val{};
 };
-
-suite marker_9b = [] { std::cerr << ">>> MARKER 9b: threading_tests" << std::endl; };
 
 suite threading_tests = [] {
    "threading"_test = [] {
@@ -11960,8 +11940,6 @@ static_assert(glz::json_boolean<bool>);
 static_assert(glz::json_number<float>);
 static_assert(glz::json_integer<uint64_t>);
 static_assert(glz::json_null<std::nullptr_t>);
-
-suite marker_9c = [] { std::cerr << ">>> MARKER 9c: directory_tests" << std::endl; };
 
 suite directory_tests = [] {
    "directory"_test = [] {
@@ -12063,8 +12041,6 @@ namespace glz
       }
    };
 }
-
-suite marker_9d = [] { std::cerr << ">>> MARKER 9d: custom_error" << std::endl; };
 
 suite custom_error = [] {
    "custom_errors_t"_test = [] {
@@ -12461,8 +12437,6 @@ suite offset_one_test = [] {
    };
 };
 
-suite marker_9e = [] { std::cerr << ">>> MARKER 9e: flat_map_tests" << std::endl; };
-
 suite flat_map_tests = [] {
    "flat_map"_test = [] {
       glz::flat_map<std::string_view, int> map{{"one", 1}, {"two", 2}};
@@ -12496,8 +12470,6 @@ suite ndjson_options = [] {
       expect(not ec);
    };
 };
-
-suite marker_9f = [] { std::cerr << ">>> MARKER 9f: atomics" << std::endl; };
 
 suite atomics = [] {
    "atomics"_test = [] {
@@ -12621,8 +12593,6 @@ struct glz::meta<birds>
    static constexpr glz::tuple value{&T::crow, &T::sparrow, &T::hawk};
 };
 
-suite marker_9g = [] { std::cerr << ">>> MARKER 9g: meta_keys_for_struct" << std::endl; };
-
 suite meta_keys_for_struct = [] {
    "meta_keys birds"_test = [] {
       birds obj{"caw", "chirp", "screech"};
@@ -12723,8 +12693,6 @@ struct glz::meta<private_fields_t>
    using T = private_fields_t;
    static constexpr auto value = object(&T::cash, &T::currency);
 };
-
-suite marker_9h = [] { std::cerr << ">>> MARKER 9h: private_fields_tests" << std::endl; };
 
 suite private_fields_tests = [] {
    "private fields"_test = [] {
@@ -12842,8 +12810,6 @@ struct glz::meta<cast_nullable_obj>
    static constexpr auto value = object("a", cast<&T::a, std::optional<int>>, "b", &T::b);
 };
 
-suite marker_9i = [] { std::cerr << ">>> MARKER 9i: cast_tests" << std::endl; };
-
 suite cast_tests = [] {
    "cast"_test = [] {
       cast_obj obj{};
@@ -12941,8 +12907,6 @@ suite operation_specific_skipping_tests = [] {
       expect(obj.input_only_field == "new_input");
    };
 };
-
-suite marker_9j = [] { std::cerr << ">>> MARKER 9j: glaze_error_category_tests" << std::endl; };
 
 suite glaze_error_category_tests = [] {
    "error_category_name"_test = [] {
@@ -13051,8 +13015,6 @@ suite explicit_string_view_support = [] {
       expect(buffer == R"("explicit")");
    };
 };
-
-suite marker_10 = [] { std::cerr << ">>> MARKER 10: span_char_serialization (line ~13018)" << std::endl; };
 
 suite span_char_serialization = [] {
    "write json from std::span<const char>"_test = [] {
