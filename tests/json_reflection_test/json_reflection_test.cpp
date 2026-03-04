@@ -91,9 +91,7 @@ template <>
 struct glz::meta<modify_rename_schema_test>
 {
    using T = modify_rename_schema_test;
-   static constexpr auto modify = glz::object(
-      "enum", &T::enum_,
-      "class", &T::class_);
+   static constexpr auto modify = glz::object("enum", &T::enum_, "class", &T::class_);
 };
 
 template <>
