@@ -2649,18 +2649,16 @@ namespace glz
             ++ctx.depth;
          }
 
-         std::string& s = string_buffer();
-
          constexpr auto& HashInfo = hash_info<T>;
          static_assert(bool(HashInfo.type));
 
          while (true) {
-            parse<JSON>::op<ws_handled_off<Opts>()>(s, ctx, it, end);
+            parse<JSON>::op<ws_handled_off<Opts>()>(ctx.scratch, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
             const auto index =
-               decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(s.data(), s.data() + s.size(), s.size());
+               decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
 
             constexpr auto N = reflect<T>::size;
             if (index < N) [[likely]] {
@@ -4376,11 +4374,11 @@ namespace glz
             }
             else {
                // either we have an unexpected value or we are decoding an object
-               auto& key = string_buffer();
-               parse<JSON>::op<Opts>(key, ctx, it, end);
+               ctx.scratch.clear();
+               parse<JSON>::op<Opts>(ctx.scratch, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               if (key == "unexpected") {
+               if (ctx.scratch == "unexpected") {
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
@@ -4522,8 +4520,8 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
-         std::string& buffer = string_buffer();
-         parse<JSON>::op<Opts>(buffer, ctx, it, end);
+         ctx.scratch.clear();
+         parse<JSON>::op<Opts>(ctx.scratch, ctx, it, end);
          if constexpr (Opts.null_terminated) {
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -4533,7 +4531,7 @@ namespace glz
                return;
             }
          }
-         value = buffer;
+         value = ctx.scratch;
       }
    };
 
