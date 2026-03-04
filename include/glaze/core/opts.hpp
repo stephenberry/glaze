@@ -192,6 +192,10 @@ namespace glz
    // When specified, uses std::format_to instead of Dragonbox for float/double serialization
 
    // ---
+   // bool skip_read_constraint = false;
+   // Skip read_constraint validation during reading. Useful for performance when constraints are known to be valid
+
+   // ---
    // bool skip_self_constraint = false;
    // Skip self_constraint validation during reading. Useful for performance when constraints are known to be valid
    // or when validation should be deferred.
@@ -623,6 +627,16 @@ namespace glz
       }
       else {
          return {};
+      }
+   }
+
+   consteval bool check_skip_read_constraint(auto&& Opts)
+   {
+      if constexpr (requires { Opts.skip_read_constraint; }) {
+         return Opts.skip_read_constraint;
+      }
+      else {
+         return false;
       }
    }
 

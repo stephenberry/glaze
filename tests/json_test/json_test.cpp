@@ -8197,6 +8197,31 @@ suite self_constraint_real_world = [] {
    };
 };
 
+struct skip_read_constraint_opts : glz::opts
+{
+   bool skip_read_constraint = true;
+};
+
+suite skip_read_constraint_tests = []{
+   "skip_read_constraint allows invalid data through"_test = [] {
+      constexpr skip_read_constraint_opts opts{};
+
+      constrained_object obj{};
+      std::string buffer = R"({"age": 120,"name":"Constantine"})";
+
+      // With default options, constraint is violated
+      auto ec = glz::read_json(obj, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+
+      // With skip_read_constraint = true, constraint is skipped
+      obj = {};
+      ec = glz::read<opts>(obj, buffer);
+      expect(ec == glz::error_code::none);
+      expect(obj.age == 120);
+      expect(obj.name == "Constantine");
+   };
+};
+
 struct skip_self_constraint_opts : glz::opts
 {
    bool skip_self_constraint = true;
