@@ -181,7 +181,7 @@ namespace glz
                   }
                }
                else {
-                  static thread_local auto k = typename std::decay_t<T>::key_type(key);
+                  auto k = typename std::decay_t<T>::key_type(key);
                   auto it = value.find(k);
                   if (it != value.end()) {
                      serialize_partial<JSON>::op<sub_partial, Opts>(it->second, ctx, b, ix);

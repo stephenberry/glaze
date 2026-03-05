@@ -34,11 +34,11 @@ set_tests_properties(json_test json_test_non_null PROPERTIES TIMEOUT 60)
 
 ## glz::generic test
 
-add_executable(json_t_test generic_test.cpp)
+add_executable(generic_test generic_test.cpp)
 
-target_link_libraries(json_t_test PRIVATE glz_test_common)
+target_link_libraries(generic_test PRIVATE glz_test_common)
 
-add_test(NAME json_t_test COMMAND json_t_test)
+add_test(NAME generic_test COMMAND generic_test)
 
 ## glz::generic_i64 and glz::generic_u64 tests
 

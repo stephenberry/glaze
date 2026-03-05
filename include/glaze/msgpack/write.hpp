@@ -951,10 +951,9 @@ namespace glz
                   }
                }
                else {
-                  static thread_local auto key =
-                     typename std::decay_t<Value>::key_type(key_value); // TODO handle numeric pointer segments
-                  serialize<MSGPACK>::op<Opts>(key, ctx, b, ix);
-                  auto it = value.find(key);
+                  auto k = typename std::decay_t<Value>::key_type(key_value); // TODO handle numeric pointer segments
+                  serialize<MSGPACK>::op<Opts>(k, ctx, b, ix);
+                  auto it = value.find(k);
                   if (it != value.end()) {
                      serialize_partial<MSGPACK>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                   }

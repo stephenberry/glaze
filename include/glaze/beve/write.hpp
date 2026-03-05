@@ -316,10 +316,9 @@ namespace glz
                   }
                }
                else {
-                  static thread_local auto key =
-                     typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-                  serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                  auto it = value.find(key);
+                  auto k = typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
+                  serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
+                  auto it = value.find(k);
                   if (it != value.end()) {
                      serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                   }

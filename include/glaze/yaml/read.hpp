@@ -2545,10 +2545,9 @@ namespace glz
                return;
             }
 
-            // Parse key using thread-local buffer to avoid allocation
-            auto& key = string_buffer();
-            key.clear();
-            if (!parse_yaml_key(key, ctx, it, end, true)) {
+            // Parse key using scratch buffer to avoid allocation
+            ctx.scratch.clear();
+            if (!parse_yaml_key(ctx.scratch, ctx, it, end, true)) {
                return;
             }
 
@@ -2570,9 +2569,9 @@ namespace glz
 
             // Look up key and parse value
             const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
-               key.data(), key.data() + key.size(), key.size());
+               ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
 
-            const bool key_matches = index < N && std::string_view{key} == reflect<U>::keys[index];
+            const bool key_matches = index < N && std::string_view{ctx.scratch} == reflect<U>::keys[index];
 
             if (key_matches) [[likely]] {
                visit<N>(
@@ -3460,10 +3459,9 @@ namespace glz
 
          parse_block_mapping_loop<Opts>(
             ctx, it, end, mapping_indent, [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
-               // Parse key using thread-local buffer to avoid allocation
-               auto& key = string_buffer();
-               key.clear();
-               if (!parse_yaml_key(key, ctx, it, end, false)) {
+               // Parse key using scratch buffer to avoid allocation
+               ctx.scratch.clear();
+               if (!parse_yaml_key(ctx.scratch, ctx, it, end, false)) {
                   return false;
                }
 
@@ -3479,9 +3477,9 @@ namespace glz
 
                // Look up key
                const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
-                  key.data(), key.data() + key.size(), key.size());
+                  ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
 
-               const bool key_matches = index < N && std::string_view{key} == reflect<U>::keys[index];
+               const bool key_matches = index < N && std::string_view{ctx.scratch} == reflect<U>::keys[index];
 
                if (key_matches) [[likely]] {
                   visit<N>(

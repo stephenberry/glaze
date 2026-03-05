@@ -19,9 +19,9 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         static thread_local std::string s{};
-         parse<JSON>::op<Opts>(s, ctx, args...);
-         auto pe = glz::read<Opts>(value.val, s);
+         ctx.scratch.clear();
+         parse<JSON>::op<Opts>(ctx.scratch, ctx, args...);
+         auto pe = glz::read<Opts>(value.val, ctx.scratch);
          if (pe) [[unlikely]] {
             ctx.error = pe.ec;
          }
@@ -34,7 +34,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         static thread_local std::string s(128, ' ');
+         std::string s{};
          size_t oix = 0; // overwrite index
          using Value = core_t<decltype(value.val)>;
          to<JSON, Value>::template op<Opts>(value.val, ctx, s, oix);
@@ -50,26 +50,25 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
-         std::string& temp = string_buffer();
-         temp.clear();
-         parse<JSON>::op<Opts>(temp, ctx, it, end);
+         ctx.scratch.clear();
+         parse<JSON>::op<Opts>(ctx.scratch, ctx, it, end);
 
          if (bool(ctx.error)) return;
 
          using V = std::remove_reference_t<T>;
          if constexpr (std::is_array_v<V>) {
-            if (temp.size() > std::extent_v<V>) {
+            if (ctx.scratch.size() > std::extent_v<V>) {
                ctx.error = error_code::exceeded_static_array_size;
                return;
             }
-            std::memcpy(value.val, temp.data(), temp.size());
-            if (temp.size() < std::extent_v<V>) {
-               std::memset(value.val + temp.size(), 0, std::extent_v<V> - temp.size());
+            std::memcpy(value.val, ctx.scratch.data(), ctx.scratch.size());
+            if (ctx.scratch.size() < std::extent_v<V>) {
+               std::memset(value.val + ctx.scratch.size(), 0, std::extent_v<V> - ctx.scratch.size());
             }
          }
          else if constexpr (resizable<V>) {
-            value.val.resize(temp.size());
-            std::memcpy(value.val.data(), temp.data(), temp.size());
+            value.val.resize(ctx.scratch.size());
+            std::memcpy(value.val.data(), ctx.scratch.data(), ctx.scratch.size());
          }
       }
    };
