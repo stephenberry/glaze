@@ -2657,8 +2657,8 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            const auto index =
-               decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
+            const auto index = decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(
+               ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
 
             constexpr auto N = reflect<T>::size;
             if (index < N) [[likely]] {
