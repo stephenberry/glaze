@@ -3496,6 +3496,20 @@ suite thread_pool = [] {
 
       expect(numbers.size() == 1000);
    };
+
+   "thread pool zero threads fallback"_test = [] {
+      glz::pool pool(0);
+
+      std::atomic<int> x = 0;
+
+      for (auto i = 0; i < 1000; ++i) {
+         pool.emplace_back([&] { ++x; });
+      }
+
+      pool.wait();
+
+      expect(x == 1000);
+   };
 };
 
 struct local_meta
@@ -6651,6 +6665,44 @@ suite mimics_string_key_tests = [] {
       static_assert(glz::mimics_str_t<mimics_string_key>);
       expect(true);
    };
+
+   // Test for issue #2285: mimic = std::string doesn't work in std::vector<std::pair<...>>
+   "mimics<T, std::string> in vector<pair> write"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> v{{{"key1"}, {"value1"}}, {{"key2"}, {"value2"}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(v, buffer));
+      expect(buffer == R"({"key1":"value1","key2":"value2"})") << buffer;
+   };
+
+   "mimics<T, std::string> in vector<pair> read"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> v;
+      std::string json = R"({"key1":"value1","key2":"value2"})";
+
+      expect(not glz::read_json(v, json));
+      expect(v.size() == 2);
+      expect(v[0].first.value == "key1");
+      expect(v[0].second.value == "value1");
+      expect(v[1].first.value == "key2");
+      expect(v[1].second.value == "value2");
+   };
+
+   "mimics<T, std::string> in vector<pair> roundtrip"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> original{{{"key1"}, {"value1"}},
+                                                                            {{"key2"}, {"value2"}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(original, buffer));
+
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> parsed;
+      expect(not glz::read_json(parsed, buffer));
+
+      expect(parsed.size() == original.size());
+      for (size_t i = 0; i < original.size(); ++i) {
+         expect(parsed[i].first.value == original[i].first.value);
+         expect(parsed[i].second.value == original[i].second.value);
+      }
+   };
 };
 
 suite char_array = [] {
@@ -6990,6 +7042,20 @@ struct glz::meta<cx_values>
    static constexpr auto value{glz::object("info", &T::info, "index", &T::index, "value", &T::value)};
 };
 
+struct cx_values_implicit_static_key
+{
+   static constexpr std::string_view other_type{"http://www.github.io"};
+   std::string type{"http://www.github.io"};
+   int status{};
+};
+
+template <>
+struct glz::meta<cx_values_implicit_static_key>
+{
+   using T = cx_values_implicit_static_key;
+   static constexpr auto value{glz::object(&T::other_type, &T::type, &T::status)};
+};
+
 struct direct_cx_value_conversion
 {
    static constexpr std::uint64_t const_v{42};
@@ -7085,6 +7151,7 @@ struct variant_to_tuple<std::variant<Ts...>>
 {
    using type = std::tuple<Ts...>;
 };
+
 suite constexpr_values_test = [] {
    "constexpr_values_write"_test = [] {
       cx_values obj{};
@@ -7100,6 +7167,20 @@ suite constexpr_values_test = [] {
       expect(obj.info == "information");
       expect(obj.index == 42);
       expect(obj.value == "special");
+   };
+
+   "constexpr_values_implicit_static_key"_test = [] {
+      cx_values_implicit_static_key obj{};
+      obj.status = 100;
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"other_type":"http://www.github.io","type":"http://www.github.io","status":100})") << s;
+
+      s = R"({"other_type":"something_else","type":"updated","status":200})";
+      expect(!glz::read_json(obj, s));
+      expect(cx_values_implicit_static_key::other_type == "http://www.github.io");
+      expect(obj.type == "updated");
+      expect(obj.status == 200);
    };
 
    using const_only_variant =
@@ -7350,7 +7431,7 @@ suite obj_nested_merge = [] {
          !glz::read_json(json, "{\"key1\":42,\"key2\":\"hello world\",\"v\":[1,2,3],\"m\":{\"a\":1,\"b\":2,\"c\":3}}"));
       glz::obj obj{"not", "important"};
       auto s = glz::write_json(glz::merge{obj, json}).value_or("error");
-      expect(s == R"({"not":"important","key1":42,"key2":"hello world","m":{"a":1,"b":2,"c":3},"v":[1,2,3]})") << s;
+      expect(s == R"({"not":"important","key1":42,"key2":"hello world","v":[1,2,3],"m":{"a":1,"b":2,"c":3}})") << s;
    };
 };
 
@@ -8114,6 +8195,31 @@ suite self_constraint_real_world = [] {
          expect(minimal == glz::error_code::none);
          expect(!request.discount_code);
       }
+   };
+};
+
+struct skip_read_constraint_opts : glz::opts
+{
+   bool skip_read_constraint = true;
+};
+
+suite skip_read_constraint_tests = [] {
+   "skip_read_constraint allows invalid data through"_test = [] {
+      constexpr skip_read_constraint_opts opts{};
+
+      constrained_object obj{};
+      std::string buffer = R"({"age": 120,"name":"Constantine"})";
+
+      // With default options, constraint is violated
+      auto ec = glz::read_json(obj, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+
+      // With skip_read_constraint = true, constraint is skipped
+      obj = {};
+      ec = glz::read<opts>(obj, buffer);
+      expect(ec == glz::error_code::none);
+      expect(obj.age == 120);
+      expect(obj.name == "Constantine");
    };
 };
 
@@ -11111,7 +11217,7 @@ struct glz::meta<mixed_member_format_t>
 struct scientific_format_t
 {
    double large{1234567.89};
-   double small{0.000123456};
+   double small_val{0.000123456}; // "small" is a macro on Windows (rpcndr.h)
 };
 
 template <>
@@ -11119,7 +11225,7 @@ struct glz::meta<scientific_format_t>
 {
    using T = scientific_format_t;
    static constexpr auto value =
-      glz::object("large", glz::float_format<&T::large, "{:.2e}">, "small", glz::float_format<&T::small, "{:.3E}">);
+      glz::object("large", glz::float_format<&T::large, "{:.2e}">, "small", glz::float_format<&T::small_val, "{:.3E}">);
 };
 
 suite float_format_wrapper_tests = [] {
@@ -11184,7 +11290,7 @@ suite float_format_wrapper_tests = [] {
       std::string input = R"({"large":1e6,"small":1e-6})";
       expect(!glz::read_json(obj, input));
       expect(obj.large == 1e6);
-      expect(obj.small == 1e-6);
+      expect(obj.small_val == 1e-6);
    };
 
    "float_format_wrapper_negative_values"_test = [] {
@@ -12667,14 +12773,14 @@ suite factor8_strings = [] {
       const auto payload = R"("abcdefg")"; // 8 chars after open quote
       const auto parsed = glz::read_json<std::string>(payload);
       expect(parsed.has_value());
-      expect(*parsed->end() == '\0');
+      expect(parsed->data()[parsed->size()] == '\0');
    };
 
    "factor of 8"_test = [] {
       const auto payload = R"("abcdefghijklmno")"; // 16 chars after open quote
       const auto parsed = glz::read_json<std::string>(payload);
       expect(parsed.has_value());
-      expect(*parsed->end() == '\0');
+      expect(parsed->data()[parsed->size()] == '\0');
    };
 };
 
@@ -12693,7 +12799,7 @@ struct glz::meta<cast_obj>
 
 struct cast_nullable_obj
 {
-   std::optional<int> a;
+   std::optional<double> a;
    std::string b;
 };
 
@@ -12701,7 +12807,7 @@ template <>
 struct glz::meta<cast_nullable_obj>
 {
    using T = cast_nullable_obj;
-   static constexpr auto value = object("a", cast<&T::a, std::optional<double>>, "b", &T::b);
+   static constexpr auto value = object("a", cast<&T::a, std::optional<int>>, "b", &T::b);
 };
 
 suite cast_tests = [] {
@@ -12742,11 +12848,11 @@ suite cast_tests = [] {
       expect(obj.b == "hello");
 
       // Test with value present
-      data = R"({"a":42.5,"b":"world"})";
+      data = R"({"a":42,"b":"world"})";
       ec = glz::read<opts>(obj, data);
       expect(!ec) << glz::format_error(ec, data);
       expect(obj.a.has_value());
-      expect(obj.a.value() == 42);
+      expect(obj.a.value() == 42.0);
       expect(obj.b == "world");
 
       // Test missing required field
@@ -13044,6 +13150,10 @@ suite member_function_pointer_serialization = [] {
          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})")
          << buffer;
 #endif
+#elif defined(_MSC_VER)
+      // MSVC produces fully qualified type names with calling convention
+      expect(buffer.find("MemberFunctionThing") != std::string::npos && buffer.find("test_item") != std::string::npos)
+         << buffer;
 #else
       expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
          << buffer;
@@ -13072,6 +13182,9 @@ suite member_function_pointer_serialization = [] {
       bool pass = (buffer2 == R"json({"f1":"(member-function-pointer-type)"})json") ||
                   (buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})");
       expect(pass) << buffer2;
+#elif defined(_MSC_VER)
+      // MSVC produces different type names and calling conventions
+      expect(buffer2.find("struct_t") != std::string::npos && buffer2.find("f1") != std::string::npos) << buffer2;
 #else
       expect(buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})") << buffer2;
 #endif

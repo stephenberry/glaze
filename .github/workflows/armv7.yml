@@ -1,0 +1,87 @@
+name: armv7
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  build-armv7:
+    runs-on: ubuntu-24.04
+    name: GCC armv7 (NEON, cross-compiled)
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install cross-compiler and QEMU
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          gcc-13-arm-linux-gnueabihf \
+          g++-13-arm-linux-gnueabihf \
+          libstdc++-13-dev-armhf-cross \
+          libc6-armhf-cross \
+          qemu-user-static
+
+    - name: Verify compiler and NEON target macro
+      run: |
+        arm-linux-gnueabihf-g++-13 --version
+        qemu-arm-static --version
+        arm-linux-gnueabihf-g++-13 -std=c++23 -march=armv7-a -mfpu=neon -mfloat-abi=hard -dM -E -x c++ /dev/null | grep "__ARM_NEON"
+
+    - name: Create CMake toolchain file
+      run: |
+        cat > toolchain-armv7.cmake << 'EOF'
+        set(CMAKE_SYSTEM_NAME Linux)
+        set(CMAKE_SYSTEM_PROCESSOR armv7)
+
+        set(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc-13)
+        set(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++-13)
+
+        set(CMAKE_FIND_ROOT_PATH /usr/arm-linux-gnueabihf)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+        # Use QEMU to run selected target binaries in smoke tests.
+        set(CMAKE_CROSSCOMPILING_EMULATOR qemu-arm-static;-L;/usr/arm-linux-gnueabihf)
+
+        # We're cross-compiling; avoid running target executables during configure.
+        set(CMAKE_CROSSCOMPILING TRUE)
+        EOF
+
+    - name: Configure CMake
+      run: |
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_TOOLCHAIN_FILE=toolchain-armv7.cmake \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23 \
+          -DCMAKE_C_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard -Wno-psabi" \
+          -DCMAKE_CXX_FLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=hard -Wno-psabi" \
+          -DBUILD_TESTING=ON \
+          -Dglaze_BUILD_NETWORKING_TESTS=OFF \
+          -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+          -Dglaze_BUILD_SSL_TESTS=OFF \
+          -Dglaze_ENABLE_FUZZING=OFF
+
+    - name: Build (unit tests + library)
+      run: cmake --build "$GITHUB_WORKSPACE/build" -j "$(nproc)"
+
+    - name: Smoke test under QEMU
+      env:
+        QEMU_LD_PREFIX: /usr/arm-linux-gnueabihf
+      run: |
+        ctest --test-dir "$GITHUB_WORKSPACE/build" \
+          --output-on-failure \
+          -R "^(api_test|json_test|roundtrip_JSON)$"

@@ -389,7 +389,7 @@ struct HealthStatus
 {
    std::string status;
    std::string version;
-   int uptime_seconds;
+   int64_t uptime_seconds;
    struct
    {
       bool database;

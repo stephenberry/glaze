@@ -161,6 +161,7 @@ suite tagged_variant_tests = [] {
       expect(parsed_var == var);
    };
 
+#if !defined(_MSC_VER)
    "tagged_variant_schema_tests"_test = [] {
       auto s = glz::write_json_schema<tagged_variant>().value_or("error");
       // P2996 reflection returns type names without std:: prefix
@@ -176,6 +177,7 @@ suite tagged_variant_tests = [] {
          << s;
 #endif
    };
+#endif
 
    "array_variant_tests"_test = [] {
       // Test array based variant (experimental, not meant for external usage since api might change)
@@ -204,6 +206,7 @@ suite tagged_variant_tests = [] {
       expect(s == R"({"num":["int8_t",-5]})");
    };
 
+#if !defined(_MSC_VER)
    "shared_ptr variant schema"_test = [] {
       const auto schema = glz::write_json_schema<std::shared_ptr<tagged_variant2>>().value_or("error");
       // P2996 reflection returns type names without std:: prefix
@@ -219,6 +222,7 @@ suite tagged_variant_tests = [] {
          << schema;
 #endif
    };
+#endif
 };
 
 struct variant_obj

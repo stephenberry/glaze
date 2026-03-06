@@ -75,6 +75,7 @@ nav:
    - Rename Keys: rename-keys.md
    - Skip Keys: skip-keys.md
    - Generic JSON: generic-json.md
+   - Ordered Maps: ordered-maps.md
  - Reflection:
    - Pure Reflection: pure-reflection.md
    - Modify Reflection: modify-reflection.md

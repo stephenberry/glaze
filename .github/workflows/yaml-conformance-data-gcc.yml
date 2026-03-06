@@ -1,0 +1,50 @@
+name: yaml-conformance-data-gcc
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc: [14]
+        build_type: [Debug]
+        std: [23]
+
+    env:
+      CC: gcc-${{matrix.gcc}}
+      CXX: g++-${{matrix.gcc}}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -Dglaze_YAML_CONFORMANCE_DATA=ON \
+          -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+          -Dglaze_BUILD_NETWORKING_TESTS=OFF
+
+    - name: Build yaml_conformance_data
+      run: cmake --build build -j $(nproc) --target yaml_conformance_data
+
+    - name: Test yaml_conformance_data
+      run: ctest --output-on-failure --test-dir ${{github.workspace}}/build -R '^yaml_conformance_data$'

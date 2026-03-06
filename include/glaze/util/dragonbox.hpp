@@ -3050,7 +3050,7 @@ namespace glz::jkj
             s = s * 2 + b;
             significand = b ? r : significand;
 
-            exponent += s;
+            exponent += static_cast<DecimalExponentType>(s);
          }
       };
 

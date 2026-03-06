@@ -315,7 +315,111 @@ auto ec = glz::read_yaml(value, yaml);
 
 - `!!int` is valid for floating-point types (widening conversion allowed)
 - `!!float` is NOT valid for integer types
-- Unknown or custom tags (e.g., `!mytag`, `!!custom`) produce `feature_not_supported` error
+- Unknown or custom tags (e.g., `!mytag`, `!!custom`) are ignored and values parse normally
+- Malformed tags (e.g., unterminated `!<...` or invalid tag token syntax) produce `syntax_error`
+
+## Anchors and Aliases
+
+Glaze supports YAML anchors (`&name`) and aliases (`*name`), which let you define a value once and reference it elsewhere in the document. This is useful for avoiding repetition in configuration files.
+
+### Basic Usage
+
+```yaml
+defaults: &defaults
+  timeout: 30
+  retries: 3
+
+production:
+  host: prod.example.com
+  <<: *defaults  # Not yet supported (merge keys)
+
+# Simple scalar anchors and aliases:
+database_host: &db_host db.example.com
+primary: *db_host
+replica: *db_host
+```
+
+### Scalar Anchors
+
+Anchor a scalar value and reuse it via alias:
+
+```yaml
+first: &name Alice
+second: *name
+```
+
+Parses into `{"first": "Alice", "second": "Alice"}`. This works with all scalar types: strings, numbers, booleans, and enums.
+
+```cpp
+std::string yaml = R"(
+anchor: &val 42
+alias: *val)";
+std::map<std::string, int> obj{};
+auto ec = glz::read_yaml(obj, yaml);
+// obj["anchor"] == 42, obj["alias"] == 42
+```
+
+### Anchors on Collections
+
+Anchors can be placed on flow-style sequences and mappings:
+
+```yaml
+# Flow mapping anchor
+defaults: &cfg {x: 1, y: 2}
+copy: *cfg
+
+# Flow sequence anchor
+items: &list [a, b, c]
+more: *list
+```
+
+```cpp
+std::string yaml = R"(
+items: &s [10, 20, 30]
+copy: *s)";
+std::map<std::string, std::vector<int>> obj{};
+auto ec = glz::read_yaml(obj, yaml);
+// obj["items"] == {10, 20, 30}, obj["copy"] == {10, 20, 30}
+```
+
+### Anchor Override
+
+Redefining an anchor replaces the stored value. Aliases always resolve to the most recent definition:
+
+```yaml
+a: &x first
+b: *x       # "first"
+c: &x second
+d: *x       # "second"
+```
+
+### Anchors in Sequences
+
+```yaml
+- &a hello
+- &b world
+- *a        # "hello"
+- *b        # "world"
+```
+
+### Error Handling
+
+An alias referencing an undefined anchor produces a `syntax_error`:
+
+```cpp
+std::string yaml = "value: *undefined";
+glz::generic parsed{};
+auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+// ec is truthy — undefined alias
+```
+
+### Current Anchor Limitations
+
+- **Merge keys** (`<<: *alias`) are not yet supported
+- **Anchors on empty/null nodes** (`key: &anchor` with no value) are not yet resolved via alias
+- **Aliases as mapping keys** (`*alias: value`) have limited support
+- **Anchors on block-style collections** (block mappings/sequences on subsequent lines) have limited support; flow-style anchors are fully supported
+- **Tag + anchor combinations** (`!!tag &anchor value`) are not supported together
 
 ## Limitations
 
@@ -323,10 +427,10 @@ The current YAML implementation has some limitations compared to the full YAML 1
 
 ### Not Supported
 
-- **Anchors and aliases** (`&anchor`, `*alias`) - These will produce a `feature_not_supported` error
 - **Custom tags** (`!mytag`) - Only YAML Core Schema tags are supported
 - **Multi-document streams** - Only single documents are supported
 - **Complex keys** - Only simple scalar keys are supported
+- **Merge keys** (`<<: *alias`) - Not yet supported
 
 ### Tab Indentation
 

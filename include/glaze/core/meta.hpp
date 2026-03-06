@@ -500,6 +500,23 @@ namespace glz
    template <class T>
    using meta_keys_t = decay_keep_volatile_t<decltype(meta_keys_v<T>)>;
 
+   // Unwrap pointer indirection: T* -> T, M C::* -> M, otherwise identity
+   template <class T>
+   struct unwrap_pointer
+   {
+      using type = T;
+   };
+   template <class T>
+   struct unwrap_pointer<T*>
+   {
+      using type = T;
+   };
+   template <class M, class C>
+   struct unwrap_pointer<M C::*>
+   {
+      using type = M;
+   };
+
    template <class T>
    struct remove_meta_wrapper
    {
@@ -508,7 +525,7 @@ namespace glz
    template <glaze_t T>
    struct remove_meta_wrapper<T>
    {
-      using type = std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<T>>>;
+      using type = typename unwrap_pointer<std::decay_t<meta_wrapper_t<T>>>::type;
    };
    template <class T>
    using remove_meta_wrapper_t = typename remove_meta_wrapper<T>::type;

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/core/context.hpp"
+#include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/wrappers.hpp"
 #include "glaze/core/write.hpp"
@@ -37,7 +38,7 @@ namespace glz
                   else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                      parse<Format>::template op<Opts>(input, ctx, it, end);
-                     if constexpr (Opts.null_terminated) {
+                     if constexpr (check_null_terminated(Opts)) {
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
@@ -72,7 +73,7 @@ namespace glz
                      else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                         std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                         parse<Format>::template op<Opts>(input, ctx, it, end);
-                        if constexpr (Opts.null_terminated) {
+                        if constexpr (check_null_terminated(Opts)) {
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
@@ -116,7 +117,7 @@ namespace glz
                   else if constexpr (N > 1) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
                      parse<Format>::template op<Opts>(input, ctx, it, end);
-                     if constexpr (Opts.null_terminated) {
+                     if constexpr (check_null_terminated(Opts)) {
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }

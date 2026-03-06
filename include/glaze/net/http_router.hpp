@@ -110,7 +110,7 @@ namespace glz
       /**
        * @brief Human-readable description of the constraint
        *
-       * Used for error reporting and debugging.
+       * Used for OpenAPI parameter descriptions and debugging output.
        */
       std::string description{};
 

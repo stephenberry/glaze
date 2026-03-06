@@ -2161,7 +2161,7 @@ namespace glz
             const auto* c = quote_memchr<HashInfo.min_length>(it, end);
             if (c) [[likely]] {
                const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-               if (n == 0 || n > HashInfo.max_length) [[unlikely]] {
+               if (n == 0 || n > HashInfo.max_length || HashInfo.unique_index >= size_t(end - it)) [[unlikely]] {
                   return N; // error
                }
 
@@ -2575,7 +2575,6 @@ namespace glz
 
       if constexpr (K > 0) {
          using keys_t = keys_wrapper<variant_deduction_keys<T>>;
-         constexpr auto& HashInfo = hash_info<keys_t>;
 
          // Populate bit arrays - for each key, set bits for variant types that have it
          for_each<std::variant_size_v<T>>([&]<auto I>() {
@@ -2584,6 +2583,7 @@ namespace glz
                using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
                constexpr auto Size = reflect<X>::size;
                if constexpr (Size > 0) {
+                  constexpr auto& HashInfo = hash_info<keys_t>;
                   for (size_t J = 0; J < Size; ++J) {
                      sv key = reflect<X>::keys[J];
                      const auto index = decode_hash_with_size<JSON, keys_t, HashInfo, HashInfo.type>::op(
