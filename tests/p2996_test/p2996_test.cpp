@@ -2,10 +2,12 @@
 // For the license information refer to glaze.hpp
 // P2996 Reflection Test - Verifies C++26 P2996 reflection works with Glaze
 
-#include "glaze/glaze.hpp"
 #include <iostream>
 
-struct TestStruct {
+#include "glaze/glaze.hpp"
+
+struct TestStruct
+{
    std::string name;
    int value;
    double data;

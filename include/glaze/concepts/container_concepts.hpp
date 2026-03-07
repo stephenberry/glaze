@@ -81,9 +81,9 @@ namespace glz
       std::same_as<std::remove_cvref_t<T>, wchar_t>;
 
    template <class T>
-   concept bool_t =
-      std::same_as<std::remove_cvref_t<T>, bool> || std::same_as<std::remove_cvref_t<T>, std::vector<bool>::reference> ||
-      std::same_as<std::remove_cvref_t<T>, std::vector<bool>::const_reference>;
+   concept bool_t = std::same_as<std::remove_cvref_t<T>, bool> ||
+                    std::same_as<std::remove_cvref_t<T>, std::vector<bool>::reference> ||
+                    std::same_as<std::remove_cvref_t<T>, std::vector<bool>::const_reference>;
 
    template <class T>
    concept int_t = std::integral<std::remove_cvref_t<T>> && !char_t<T> && !wide_char_t<T> && !bool_t<T>;

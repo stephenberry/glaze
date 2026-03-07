@@ -641,5 +641,6 @@ namespace glz
    // Register shared_async_vector as having specified Glaze serialization
    // This prevents P2996 automatic reflection from trying to reflect the mutex member
    template <class T>
-   struct specified<shared_async_vector<T>> : std::true_type {};
+   struct specified<shared_async_vector<T>> : std::true_type
+   {};
 }

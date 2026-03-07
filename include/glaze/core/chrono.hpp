@@ -104,17 +104,22 @@ namespace glz
    // Register chrono types as having specified Glaze serialization
    // This prevents P2996 automatic reflection from creating ambiguous specializations
    template <class Rep, class Period>
-   struct specified<std::chrono::duration<Rep, Period>> : std::true_type {};
+   struct specified<std::chrono::duration<Rep, Period>> : std::true_type
+   {};
 
    template <class Clock, class Duration>
-   struct specified<std::chrono::time_point<Clock, Duration>> : std::true_type {};
+   struct specified<std::chrono::time_point<Clock, Duration>> : std::true_type
+   {};
 
    template <>
-   struct specified<std::chrono::year_month_day> : std::true_type {};
+   struct specified<std::chrono::year_month_day> : std::true_type
+   {};
 
    template <class Duration>
-   struct specified<std::chrono::hh_mm_ss<Duration>> : std::true_type {};
+   struct specified<std::chrono::hh_mm_ss<Duration>> : std::true_type
+   {};
 
    template <class Duration>
-   struct specified<epoch_time<Duration>> : std::true_type {};
+   struct specified<epoch_time<Duration>> : std::true_type
+   {};
 }

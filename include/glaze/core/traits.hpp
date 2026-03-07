@@ -12,7 +12,8 @@ namespace glz
    // for types that have explicit to/from implementations to prevent
    // automatic reflection from creating ambiguous specializations.
    template <class T>
-   struct specified : std::false_type {};
+   struct specified : std::false_type
+   {};
 
    template <class T>
    concept is_specified = specified<std::remove_cvref_t<T>>::value;

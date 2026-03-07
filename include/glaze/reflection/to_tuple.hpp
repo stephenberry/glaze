@@ -28,10 +28,7 @@ namespace glz
       // Supports inheritance - automatically includes base class members
 
       // Helper to get access context for reflection
-      inline consteval auto reflection_access_ctx()
-      {
-         return std::meta::access_context::unchecked();
-      }
+      inline consteval auto reflection_access_ctx() { return std::meta::access_context::unchecked(); }
 
       // Count members using P2996 reflection
       // Works for any class type, including non-aggregates (classes with custom constructors)

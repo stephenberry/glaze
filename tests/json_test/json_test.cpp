@@ -13132,11 +13132,11 @@ suite member_function_pointer_serialization = [] {
       // P2996 display_string_of behavior varies by compiler:
       // - Bloomberg Clang: "(member-function-pointer-type)"
       // - GCC: full signature like traditional GCC
-      bool pass = (buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") ||
-                  (buffer ==
-                   R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})") ||
-                  (buffer ==
-                   R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})");
+      bool pass =
+         (buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") ||
+         (buffer ==
+          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})") ||
+         (buffer == R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})");
       expect(pass) << buffer;
 #elif defined(__GNUC__) && !defined(__clang__)
 #if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0

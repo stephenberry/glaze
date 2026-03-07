@@ -113,7 +113,8 @@ namespace glz::detail
       constexpr size_t N = Enums.size();
       std::array<std::pair<E, std::string_view>, N> table{};
       size_t i = 0;
-      template for (constexpr info I : Enums) {
+      template for (constexpr info I : Enums)
+      {
          table[i] = {[:I:], identifier_of(I)};
          ++i;
       }
@@ -143,9 +144,7 @@ namespace glz
 #if defined(__clang__)
          // Bloomberg Clang: reflect_constant_array returns info, splice to get array
          constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
-         template for (constexpr std::meta::info I : [:Enums:])
-            if (e == [:I:])
-               return std::meta::identifier_of(I);
+         template for (constexpr std::meta::info I : [:Enums:]) if (e == [:I:]) return std::meta::identifier_of(I);
 #else
          // GCC: Use lookup table to avoid consteval promotion
          static constexpr auto table = detail::make_enum_to_string_table<E>();
@@ -168,9 +167,7 @@ namespace glz
 #if defined(__clang__)
          // Bloomberg Clang: reflect_constant_array returns info, splice to get array
          constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
-         template for (constexpr std::meta::info I : [:Enums:])
-            if (s == std::meta::identifier_of(I))
-               return [:I:];
+         template for (constexpr std::meta::info I : [:Enums:]) if (s == std::meta::identifier_of(I)) return [:I:];
 #else
          // GCC: Use lookup table to avoid consteval promotion
          static constexpr auto table = detail::make_enum_to_string_table<E>();

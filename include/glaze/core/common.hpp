@@ -307,18 +307,16 @@ namespace glz
    };
 
    template <class T>
-   concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T> &&
-                      !has_value_method<T>);
+   concept array_t =
+      (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T> && !has_value_method<T>);
 
    template <class T>
-   concept readable_array_t =
-      (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T> &&
-       !has_value_method<T>);
+   concept readable_array_t = (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> &&
+                               !filesystem_path<T> && !has_value_method<T>);
 
    template <class T>
-   concept writable_array_t =
-      (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T> &&
-       !has_value_method<T>);
+   concept writable_array_t = (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> &&
+                               !filesystem_path<T> && !has_value_method<T>);
 
    template <class T>
    concept fixed_array_value_t =
@@ -334,9 +332,8 @@ namespace glz
    // 2. Via glz::meta specialization: template<> struct glz::meta<T> { static constexpr bool glaze_reflect = false; };
    // This allows users to define custom glz::to/from specializations without editing the library
    template <class T>
-   concept is_no_reflect =
-      requires { requires std::remove_cvref_t<T>::glaze_reflect == false; } ||
-      requires { requires meta<std::decay_t<T>>::glaze_reflect == false; };
+   concept is_no_reflect = requires { requires std::remove_cvref_t<T>::glaze_reflect == false; } ||
+                           requires { requires meta<std::decay_t<T>>::glaze_reflect == false; };
 
    /// \brief check if container has fixed size and its subsequent T::value_type
    template <class T>
@@ -460,8 +457,8 @@ namespace glz
    // Concept to detect enums using P2996 reflection (only available with GLZ_REFLECTION26)
 #if GLZ_REFLECTION26
    template <class T>
-   concept is_reflect_enum = std::is_enum_v<std::remove_cvref_t<T>> &&
-                             requires { requires meta<std::remove_cvref_t<T>>::glaze_reflect_enum; };
+   concept is_reflect_enum =
+      std::is_enum_v<std::remove_cvref_t<T>> && requires { requires meta<std::remove_cvref_t<T>>::glaze_reflect_enum; };
 #else
    template <class T>
    concept is_reflect_enum = false;
@@ -483,42 +480,44 @@ namespace glz
 #if GLZ_REFLECTION26
    // Register std library types as having specified Glaze serialization
    template <class... Ts>
-   struct specified<std::tuple<Ts...>> : std::true_type {};
+   struct specified<std::tuple<Ts...>> : std::true_type
+   {};
 
    template <class... Ts>
-   struct specified<std::variant<Ts...>> : std::true_type {};
+   struct specified<std::variant<Ts...>> : std::true_type
+   {};
 
    template <class T>
-   struct specified<std::reference_wrapper<T>> : std::true_type {};
+   struct specified<std::reference_wrapper<T>> : std::true_type
+   {};
 
    template <class T>
-   struct specified<std::complex<T>> : std::true_type {};
+   struct specified<std::complex<T>> : std::true_type
+   {};
 
    template <size_t N>
-   struct specified<std::bitset<N>> : std::true_type {};
+   struct specified<std::bitset<N>> : std::true_type
+   {};
 
    template <class T>
-   struct specified<std::atomic<T>> : std::true_type {};
+   struct specified<std::atomic<T>> : std::true_type
+   {};
 
    // P2996 can reflect any class, but we must exclude types with their own Glaze specializations.
    // Types with custom serialization should specialize glz::specified<T> to std::true_type.
    template <class T>
-   concept reflectable =
-      std::is_class_v<std::remove_cvref_t<T>> &&
-      !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> ||
-        range<T> || pair_t<T> || null_t<T> || str_t<T> || bool_t<T> ||
-        tuple_t<T> || func_t<T> || is_specified<T>);
+   concept reflectable = std::is_class_v<std::remove_cvref_t<T>> &&
+                         !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> || range<T> || pair_t<T> || null_t<T> ||
+                           str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);
 #else
    // Traditional reflection requires aggregates. The exclusion list mirrors P2996 for consistency.
    // These exclusions handle aggregate types that shouldn't be reflected as objects:
    // str_t: aggregate string-like types, tuple_t: std::array and custom tuple-like aggregates,
    // func_t: aggregate callables, is_specified: types with explicit serialization.
    template <class T>
-   concept reflectable =
-      std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
-      !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> ||
-        range<T> || pair_t<T> || null_t<T> || str_t<T> || bool_t<T> ||
-        tuple_t<T> || func_t<T> || is_specified<T>);
+   concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
+                         !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> || range<T> || pair_t<T> || null_t<T> ||
+                           str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);
 #endif
 
    template <class T>

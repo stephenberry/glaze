@@ -1272,14 +1272,16 @@ suite enum_name_test = [] {
 // qualified_type_names option tests
 // ============================================================================
 
-namespace test_ns {
+namespace test_ns
+{
    struct NamespacedType
    {
       int x;
       std::string y;
    };
 
-   namespace nested {
+   namespace nested
+   {
       struct DeepType
       {
          double value;
@@ -1410,9 +1412,7 @@ suite qualified_type_names_tests = [] {
       expect(glz::name_for_opts<TypeWithLocalName, opts_qualified{}>() == "LocalCustomName");
    };
 
-   "name_for_opts returns void for void type"_test = [] {
-      expect(glz::name_for_opts<void, glz::opts{}>() == "void");
-   };
+   "name_for_opts returns void for void type"_test = [] { expect(glz::name_for_opts<void, glz::opts{}>() == "void"); };
 
    // =========================================================================
    // name_v backward compatibility tests
@@ -1426,9 +1426,7 @@ suite qualified_type_names_tests = [] {
 #endif
    };
 
-   "name_v uses meta name when available"_test = [] {
-      expect(glz::name_v<TypeWithMetaName> == "CustomName");
-   };
+   "name_v uses meta name when available"_test = [] { expect(glz::name_v<TypeWithMetaName> == "CustomName"); };
 
    "name_v uses local glaze name when available"_test = [] {
       expect(glz::name_v<TypeWithLocalName> == "LocalCustomName");

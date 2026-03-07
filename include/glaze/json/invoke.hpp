@@ -164,7 +164,8 @@ namespace glz
 
    // Register invoke_update as having specified Glaze serialization
    template <class Signature>
-   struct specified<invoke_update<Signature>> : std::true_type {};
+   struct specified<invoke_update<Signature>> : std::true_type
+   {};
 
    template <is_invoke_update T>
    struct from<JSON, T>

@@ -3,7 +3,6 @@
 // Tests reflection on types that are NOT aggregate initializable
 
 #include "glaze/glaze.hpp"
-
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -99,8 +98,7 @@ template <>
 struct glz::meta<DerivedClass>
 {
    using T = DerivedClass;
-   static constexpr auto value =
-      object(&T::base_name, &T::base_id, &T::derived_data, &T::derived_value);
+   static constexpr auto value = object(&T::base_name, &T::base_id, &T::derived_data, &T::derived_value);
 };
 
 // ============================================================================
@@ -289,7 +287,6 @@ suite non_aggregate_reflection_tests = [] {
       expect(obj2.derived_value == 2.5);
    };
 
-
    "no copy class serialization"_test = [] {
       NoCopyClass obj("unique", 777);
 
@@ -352,7 +349,8 @@ suite non_aggregate_reflection_tests = [] {
 
       std::string json;
       expect(not glz::write_json(obj, json));
-      expect(json == R"({"outer_name":"outer_test","nested":{"inner_name":"inner_test","inner_value":123},"values":[1,2,3]})")
+      expect(json ==
+             R"({"outer_name":"outer_test","nested":{"inner_name":"inner_test","inner_value":123},"values":[1,2,3]})")
          << json;
 
       OuterClass obj2;
@@ -447,7 +445,7 @@ class OwnedTypeWithCustomConcept
 {
   public:
    static constexpr bool glaze_reflect = false; // Opt out of P2996 reflection
-   using custom_marker = void;                  // Satisfies a user concept
+   using custom_marker = void; // Satisfies a user concept
 
    int value = 0;
    OwnedTypeWithCustomConcept() = default;
