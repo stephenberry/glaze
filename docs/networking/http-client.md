@@ -182,45 +182,45 @@ void post_json_async(
 The HTTP client supports streaming requests, which allow you to receive data in chunks.
 
 ```cpp
-std::shared_ptr<http_stream_connection> stream_request(const stream_request_params& params);
+std::shared_ptr<http_stream_connection> stream_request_v2(const stream_request_params_v2& params);
 ```
 
-The `stream_request_params` struct contains the following fields:
+The `stream_request_params_v2` struct contains the following fields:
 
 ```cpp
-struct stream_request_params {
-    std::string url;
-    http_data_handler on_data;
-    http_error_handler on_error;
+struct stream_request_params_v2 {
     std::string method{"GET"};
+    std::string url;
+    std::chrono::seconds timeout{30s};
+    stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
+    size_t max_buffer_size{1024 * 1024};
     std::string body;
     std::unordered_map<std::string, std::string> headers;
     http_connect_handler on_connect;
     http_disconnect_handler on_disconnect;
-    std::chrono::seconds timeout{30s};
-    stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
-    std::function<bool(int)> status_is_error;
-    size_t max_buffer_size{1024 * 1024};
+    http_data_handler on_data;
+    http_error_handler on_error;
+    std::function<bool(int)> status_is_error{[](int status){ return status >= 400; }};
 };
 ```
 
--   `url`: The URL to request.
--   `on_data`: A callback that's called when data is received.
--   `on_error`: A callback that's called when an error occurs.
 -   `method`: The HTTP method to use. (default is "GET")
+-   `url`: The URL to request.
+-   `timeout`: Set connection timeout. (default is 30s)
+-   `strategy`: Can be `bulk_transfer` (default, larger chunks, better throughput) or `immediate_delivery` (smaller chunks, lower latency)
+-   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughtput at cost of memory usage. (default is 1 MiB)
 -   `body`: The HTTP Body to send.
 -   `headers`: The HTTP headers to send.
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
 -   `on_disconnect`: A callback that's called when the connection is closed.
--   `timeout`: Set connection timeout. (default is 30s)
--   `strategy`: Can be `bulk_transfer` (default, larger chunks, better throughput) or `immediate_delivery` (smaller chunks, lower latency)
+-   `on_data`: A callback that's called when data is received.
+-   `on_error`: A callback that's called when an error occurs.
 -   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
--   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughtput at cost of memory usage. (default is 1 MiB)
 
 To override the default behaviour you can supply a predicate:
 
 ```cpp
-auto conn = client.stream_request({
+auto conn = client.stream_request_v2({
     .url = "http://localhost/typesense",
     .on_data = on_data,
     .on_error = on_error,
