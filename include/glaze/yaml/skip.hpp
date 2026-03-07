@@ -327,8 +327,7 @@ namespace glz::yaml
 
             // At current indent: continue only if it's another sequence item (indentless sequence)
             if (line_indent == current_indent) {
-               if (!(*it == '-' &&
-                     ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n'))) {
+               if (!(*it == '-' && ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n'))) {
                   it = line_start;
                   break;
                }
