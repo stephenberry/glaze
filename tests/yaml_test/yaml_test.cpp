@@ -3349,6 +3349,46 @@ name: bar)";
       }
    };
 
+   // https://github.com/stephenberry/glaze/issues/2356
+   "known_field_indentless_sequence"_test = [] {
+      // Unindented sequence under a known key
+      {
+         std::string yaml = R"(---
+title: foo
+numbers:
+- 1
+- 2
+- 3
+...)";
+         nested_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.title == "foo");
+         expect(data.numbers.size() == 3);
+         expect(data.numbers[0] == 1);
+         expect(data.numbers[1] == 2);
+         expect(data.numbers[2] == 3);
+      }
+
+      // Known key indentless sequence followed by another key
+      {
+         std::string yaml = R"(title: hello
+numbers:
+- 10
+- 20
+- 30
+title: world)";
+         nested_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.title == "world");
+         expect(data.numbers.size() == 3);
+         expect(data.numbers[0] == 10);
+         expect(data.numbers[1] == 20);
+         expect(data.numbers[2] == 30);
+      }
+   };
+
    "anchor_empty_node"_test = [] {
       std::string yaml = R"(a: &anchor
 b: *anchor)";
