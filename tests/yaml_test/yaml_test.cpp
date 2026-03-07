@@ -3445,6 +3445,43 @@ name: correct)";
       }
    };
 
+   "skip_unknown_multiline_plain_scalar"_test = [] {
+      // When an unknown key has a multi-line plain scalar value,
+      // continuation lines at deeper indentation must be skipped.
+      // Bug: skip_plain_scalar only reads to the end of the first line,
+      // so continuation lines are misinterpreted as struct keys, causing
+      // a syntax error.
+      {
+         std::string yaml = R"(x: 42
+unknown: this value
+  continues here
+y: 3.14
+name: hello)";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 42);
+         expect(data.y == 3.14);
+         expect(data.name == "hello");
+      }
+
+      // Multi-line plain scalar with multiple continuation lines
+      {
+         std::string yaml = R"(unknown: line one
+  line two
+  line three
+x: 99
+y: 1.5
+name: works)";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 99);
+         expect(data.y == 1.5);
+         expect(data.name == "works");
+      }
+   };
+
    "anchor_empty_node"_test = [] {
       std::string yaml = R"(a: &anchor
 b: *anchor)";
