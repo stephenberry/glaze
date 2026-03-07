@@ -596,7 +596,7 @@ namespace glz
       std::string url;
       http_data_handler on_data;
       http_error_handler on_error;
-      std::string method{};
+      std::string method{"GET"};
       std::string body{};
       std::unordered_map<std::string, std::string> headers{};
       http_connect_handler on_connect{};
@@ -604,6 +604,7 @@ namespace glz
       std::chrono::seconds timeout{std::chrono::seconds{30}};
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
       std::function<bool(int)> status_is_error{}; // Custom predicate to decide whether a status code should fail
+      size_t max_buffer_size{1024 * 1024};
    };
 
    struct http_client
@@ -784,11 +785,9 @@ namespace glz
             return nullptr;
          }
 
-         std::string method = params.method.empty() ? "GET" : params.method;
-
-         return perform_stream_request(method, *url_result, params.body, params.headers, params.timeout,
-                                       params.strategy, params.status_is_error, params.on_data, params.on_error,
-                                       params.on_connect, params.on_disconnect);
+         return perform_stream_request(params.method, *url_result, params.body, params.max_buffer_size, params.headers,
+                                       params.timeout, params.strategy, params.status_is_error, params.on_data,
+                                       params.on_error, params.on_connect, params.on_disconnect);
       }
 
       // Asynchronous GET request
@@ -939,7 +938,7 @@ namespace glz
       }
 
       std::shared_ptr<http_stream_connection> perform_stream_request(
-         const std::string& method, const url_parts& url, const std::string& body,
+         const std::string& method, const url_parts& url, const std::string& body, size_t max_buffer_size,
          const std::unordered_map<std::string, std::string>& headers, std::chrono::seconds timeout,
          stream_read_strategy strategy, std::function<bool(int)> status_is_error, http_data_handler on_data,
          http_error_handler on_error, http_connect_handler on_connect, http_disconnect_handler on_disconnect)
@@ -954,7 +953,7 @@ namespace glz
          }
 #endif
 
-         auto connection = std::make_shared<http_stream_connection>(1024 * 1024, strategy);
+         auto connection = std::make_shared<http_stream_connection>(max_buffer_size, strategy);
          connection->socket =
             std::make_shared<socket_variant>(connection_pool->get_connection(url.host, url.port, use_https));
          connection->timer = std::make_shared<asio::steady_timer>(io_executor);

@@ -182,34 +182,40 @@ void post_json_async(
 The HTTP client supports streaming requests, which allow you to receive data in chunks.
 
 ```cpp
-template<typename OnData, typename OnError, typename OnConnect, typename OnDisconnect>
-stream_connection::pointer stream_request(stream_options options);
+std::shared_ptr<http_stream_connection> stream_request(const stream_request_params& params);
 ```
 
-The `stream_options` struct contains the following fields:
+The `stream_request_params` struct contains the following fields:
 
 ```cpp
-struct stream_options {
+struct stream_request_params {
     std::string url;
-    std::string method = "GET";
+    http_data_handler on_data;
+    http_error_handler on_error;
+    std::string method{"GET"};
+    std::string body;
     std::unordered_map<std::string, std::string> headers;
-    OnData on_data;
-    OnError on_error;
-    OnConnect on_connect;
-    OnDisconnect on_disconnect;
+    http_connect_handler on_connect;
+    http_disconnect_handler on_disconnect;
+    std::chrono::seconds timeout{30s};
+    stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
     std::function<bool(int)> status_is_error;
+    size_t max_buffer_size{1024 * 1024};
 };
 ```
 
 -   `url`: The URL to request.
--   `method`: The HTTP method to use (default: "GET").
--   `headers`: The HTTP headers to send.
 -   `on_data`: A callback that's called when data is received.
 -   `on_error`: A callback that's called when an error occurs.
+-   `method`: The HTTP method to use. (default is "GET")
+-   `body`: The HTTP Body to send.
+-   `headers`: The HTTP headers to send.
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
 -   `on_disconnect`: A callback that's called when the connection is closed.
--   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to
-    checking for codes ≥ 400).
+-   `timeout`: Set connection timeout. (default is 30s)
+-   `strategy`: Can be `bulk_transfer` (default, larger chunks, better throughput) or `immediate_delivery` (smaller chunks, lower latency)
+-   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
+-   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughtput at cost of memory usage. (default is 1 MiB)
 
 To override the default behaviour you can supply a predicate:
 
@@ -222,7 +228,7 @@ auto conn = client.stream_request({
 });
 ```
 
-The `stream_connection::pointer` object contains a `disconnect()` method that can be used to close the connection.
+The `http_stream_connection` object contains a `disconnect()` method that can be used to close the connection.
 
 ### Handling HTTP Errors During Streaming
 
