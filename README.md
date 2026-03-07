@@ -29,11 +29,43 @@ Formats Supported:
 > ```
 > - This change also improves performance for `glz::generic`, offering faster lookup and iteration for typical JSON sized objects.
 
-## With compile time reflection for MSVC, Clang, and GCC!
+## With C++23 & C++26 compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
 - See [example on Compiler Explorer](https://gcc.godbolt.org/z/T4To5fKfz)
-- Optional [C++26 P2996 reflection](https://stephenberry.github.io/glaze/p2996-reflection/) backend for future-proof standardized reflection
+
+## C++26 P2996 Reflection Support
+
+Glaze now supports [P2996 "Reflection for C++26"](https://wg21.link/P2996). When enabled, P2996 unlocks capabilities that aren't possible with traditional compile-time reflection:
+
+- **Non-aggregate types** — classes with constructors, virtual functions, and inheritance just work
+- **Automatic enum serialization** — no `glz::meta` needed, enums serialize to strings automatically
+- **Unlimited struct members** — no 128-member cap
+- **Private member access** — reflect on all members regardless of access specifiers
+- **Standardized** — no compiler-specific hacks, built on `std::meta`
+
+```cpp
+// Classes with constructors — just works with P2996
+class User {
+public:
+   std::string name;
+   int age;
+   User() = default;
+   User(std::string n, int a) : name(std::move(n)), age(a) {}
+};
+
+User u{"Alice", 30};
+auto json = glz::write_json(u).value_or("error");
+// {"name":"Alice","age":30}
+
+// Enums serialize as strings — no glz::meta required
+enum class Color { Red, Green, Blue };
+Color c = Color::Green;
+auto color_json = glz::write<glz::opts{.reflect_enums = true}>(c).value_or("error");
+// "Green"
+```
+
+Supported compilers: [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) (`-std=c++26 -freflection`) and [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996). See the [P2996 documentation](https://stephenberry.github.io/glaze/p2996-reflection/) for setup and details.
 
 ## [📖 Documentation](https://stephenberry.github.io/glaze/)
 
@@ -43,7 +75,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 
 - Pure, compile time reflection for structs
   - Powerful meta specialization system for custom names and behavior
-  - Optional [C++26 P2996](https://stephenberry.github.io/glaze/p2996-reflection/) backend
+  - [C++26 P2996 reflection](https://stephenberry.github.io/glaze/p2996-reflection/) support — non-aggregates, automatic enums, unlimited members
 - JSON [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) compliance with UTF-8 validation
 - Standard C++ library support
 - Header only

@@ -23,12 +23,21 @@ The entire Glaze API remains unchanged - JSON, BEVE, CSV, and all other formats 
 
 P2996 reflection requires a compiler with C++26 reflection support:
 
-- **Bloomberg clang-p2996**: The reference implementation
+- **GCC 16+**: Reflection support merged into GCC trunk
+  - Available via the [Ubuntu Toolchain PPA](https://launchpad.net/~ubuntu-toolchain-r/+archive/ubuntu/ppa) or by building from source
+  - See [GCC 16 changes](https://gcc.gnu.org/gcc-16/changes.html) for the full list of supported reflection proposals
+- **Bloomberg clang-p2996**: Experimental Clang fork with P2996 support
   - Repository: https://github.com/bloomberg/clang-p2996
-  - Based on Clang/LLVM with P2996 extensions
+  - Docker image: `vsavkov/clang-p2996:amd64`
 
 ### Compiler Flags
 
+**GCC 16+:**
+```bash
+g++-16 -std=c++26 -freflection
+```
+
+**Bloomberg clang-p2996:**
 ```bash
 clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++
 ```
@@ -37,8 +46,8 @@ clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++
 |------|---------|
 | `-std=c++26` | Enable C++26 mode |
 | `-freflection` | Enable P2996 reflection |
-| `-fexpansion-statements` | Enable template for... expansion |
-| `-stdlib=libc++` | Required for `<meta>` header |
+| `-fexpansion-statements` | Enable expansion statements (Bloomberg Clang only) |
+| `-stdlib=libc++` | Required for `<meta>` header (Bloomberg Clang only) |
 
 ## Enabling P2996 Support
 
