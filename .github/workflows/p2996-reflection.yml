@@ -1,0 +1,70 @@
+name: p2996-reflection
+
+# C++26 P2996 Reflection Testing
+# This workflow tests Glaze with the Bloomberg clang-p2996 compiler
+# Uses public Docker image: https://hub.docker.com/r/vsavkov/clang-p2996
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+  # Public Docker image with Bloomberg clang-p2996
+  # See: https://hub.docker.com/r/vsavkov/clang-p2996
+  P2996_IMAGE: vsavkov/clang-p2996:amd64
+  # Library path for runtime linking
+  P2996_LIB_PATH: /opt/p2996/clang/lib/x86_64-unknown-linux-gnu
+
+jobs:
+  test-p2996:
+    runs-on: ubuntu-latest
+    name: P2996 Reflection Tests
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Pull P2996 Docker image
+      run: docker pull ${{ env.P2996_IMAGE }}
+
+    - name: Verify P2996 compiler
+      run: docker run --rm ${{ env.P2996_IMAGE }} clang++ --version
+
+    - name: Test P2996 reflection
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/glaze \
+          -w /glaze \
+          ${{ env.P2996_IMAGE }} \
+          /bin/sh -c "
+            clang++ -std=c++26 -freflection -fexpansion-statements -stdlib=libc++ \
+              -I/glaze/include -DGLZ_REFLECTION26=1 \
+              -Wl,-rpath,${{ env.P2996_LIB_PATH }} \
+              -o /tmp/p2996_test /glaze/tests/p2996_test/p2996_test.cpp && \
+            /tmp/p2996_test
+          "
+
+    - name: Build and run tests with CMake
+      run: |
+        docker run --rm \
+          -v ${{ github.workspace }}:/glaze \
+          -w /glaze \
+          ${{ env.P2996_IMAGE }} \
+          /bin/sh -c "
+            apt-get update && apt-get install -y cmake &&
+            cmake -B build \
+              -DCMAKE_CXX_COMPILER=clang++ \
+              -DCMAKE_CXX_FLAGS='-std=c++26 -freflection -fexpansion-statements -stdlib=libc++' \
+              -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,${{ env.P2996_LIB_PATH }}' \
+              -DCMAKE_BUILD_TYPE=Release \
+              -Dglaze_DEVELOPER_MODE=ON \
+              -Dglaze_ENABLE_REFLECTION26=ON \
+              -Dglaze_BUILD_NETWORKING_TESTS=OFF \
+              -Dglaze_ENABLE_SANITIZERS=OFF \
+              -Dglaze_ENABLE_FUZZING=OFF &&
+            cmake --build build -j &&
+            ctest --test-dir build --output-on-failure -j
+          "

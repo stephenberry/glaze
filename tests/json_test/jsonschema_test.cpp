@@ -524,8 +524,10 @@ suite value_type_variant_schema = [] {
 
       // The variant definition should include "string" in its type array
       expect(obj->defs.has_value());
-      auto it = obj->defs->find("std::variant<identifier,std::nullopt_t>");
-      expect(it != obj->defs->end());
+      using variant_t = std::variant<identifier, std::nullopt_t>;
+      auto it = obj->defs->find(glz::name_v<variant_t>);
+      expect(it != obj->defs->end()) << "missing def for: " << std::string(glz::name_v<variant_t>);
+      if (it == obj->defs->end()) return; // avoid segfault on missing key
       expect(it->second.type.has_value());
       auto& types = *it->second.type;
       expect(std::find(types.begin(), types.end(), "string") != types.end()) << "missing string type";

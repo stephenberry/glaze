@@ -272,4 +272,9 @@ namespace glz
    {
       return lhs >= rhs.load();
    }
+
+   // Register guard as having specified Glaze serialization
+   // This prevents P2996 automatic reflection from trying to reflect the atomic member
+   template <class T>
+   struct specified<guard<T>> : std::true_type {};
 }
