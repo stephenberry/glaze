@@ -3530,7 +3530,10 @@ namespace glz
                                     if (!ctx.push_indent(nested_indent)) [[unlikely]]
                                        return false;
                                  }
+                                 const bool prev_allow_indentless_sequence = ctx.allow_indentless_sequence;
+                                 ctx.allow_indentless_sequence = (nested_indent <= line_indent);
                                  from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
+                                 ctx.allow_indentless_sequence = prev_allow_indentless_sequence;
                                  ctx.pop_indent();
                               }
                            }
