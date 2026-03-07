@@ -3549,6 +3549,14 @@ namespace glz
                      if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                         skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
                      }
+                     else {
+                        // Value may be on the next line (block sequence, mapping, etc.)
+                        int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
+                        if (nested_indent >= 0) {
+                           skip_to_content(it, end);
+                           skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
+                        }
+                     }
                   }
                }
 
