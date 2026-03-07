@@ -351,6 +351,36 @@ namespace glz::yaml
          if (it != end && !at_newline_or_end(it, end)) {
             skip_yaml_value<Opts>(ctx, it, end, current_indent, in_flow);
          }
+
+         // Skip remaining entries in the block mapping
+         // All lines at indentation > current_indent belong to this mapping
+         if (!in_flow) {
+            while (it != end) {
+               while (it != end && *it != '\n' && *it != '\r') ++it;
+               if (!skip_newline(it, end)) break;
+
+               auto line_start = it;
+               int32_t line_indent = measure_indent(it, end, ctx);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it == end) break;
+               if (*it == '\n' || *it == '\r') continue; // blank line
+               if (*it == '#') continue; // comment line, will be skipped next iteration
+
+               if (at_document_end(it, end) || at_document_start(it, end)) {
+                  it = line_start;
+                  break;
+               }
+
+               if (line_indent <= current_indent) {
+                  it = line_start;
+                  break;
+               }
+
+               // Content at deeper indent - skip this line
+            }
+         }
       }
    }
 

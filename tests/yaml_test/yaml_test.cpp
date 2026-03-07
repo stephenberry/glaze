@@ -3389,6 +3389,62 @@ title: world)";
       }
    };
 
+   "skip_unknown_nested_block_mapping"_test = [] {
+      // When an unknown key has a block mapping value on subsequent lines,
+      // all entries of that nested mapping must be skipped.
+      // Bug: skip_yaml_value only skipped the first key-value pair,
+      // causing remaining entries to leak into the parent struct parser.
+      {
+         std::string yaml = R"(x: 42
+unknown_key:
+  name: leaked
+  y: 999.0
+)";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 42);
+         expect(data.y == 0.0) << "y should remain default, not be overwritten by nested mapping";
+         expect(data.name == "") << "name should remain default, not be overwritten by nested mapping";
+      }
+
+      // Unknown key with deeper nesting
+      {
+         std::string yaml = R"(x: 1
+unknown:
+  sub1:
+    deep: value
+  sub2: val2
+y: 3.14
+name: hello)";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 1);
+         expect(data.y == 3.14);
+         expect(data.name == "hello");
+      }
+
+      // Multiple unknown keys with block mapping values
+      {
+         std::string yaml = R"(unknown1:
+  a: 1
+  b: 2
+x: 10
+unknown2:
+  name: wrong
+  y: 777.0
+y: 2.5
+name: correct)";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 10);
+         expect(data.y == 2.5);
+         expect(data.name == "correct");
+      }
+   };
+
    "anchor_empty_node"_test = [] {
       std::string yaml = R"(a: &anchor
 b: *anchor)";
