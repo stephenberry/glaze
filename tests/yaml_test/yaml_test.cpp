@@ -3297,6 +3297,58 @@ extra: *a)";
       expect(obj.name == "skipped");
    };
 
+   // https://github.com/stephenberry/glaze/issues/2352
+   "skip_unknown_indentless_sequence"_test = [] {
+      // Unindented sequence under unknown key
+      {
+         std::string yaml = R"(---
+x: 1
+y: 1.0
+name: foo
+c:
+- baz
+...)";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::yaml::yaml_opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 1);
+         expect(data.y == 1.0);
+         expect(data.name == "foo");
+      }
+
+      // Multiple items in unknown indentless sequence
+      {
+         std::string yaml = R"(x: 1
+c:
+- baz1
+- baz2
+y: 2.0
+name: bar)";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::yaml::yaml_opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 1);
+         expect(data.y == 2.0);
+         expect(data.name == "bar");
+      }
+
+      // Unknown key with indented (normal) block sequence on next line
+      {
+         std::string yaml = R"(x: 1
+c:
+  - baz1
+  - baz2
+y: 2.0
+name: bar)";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::yaml::yaml_opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 1);
+         expect(data.y == 2.0);
+         expect(data.name == "bar");
+      }
+   };
+
    "anchor_empty_node"_test = [] {
       std::string yaml = R"(a: &anchor
 b: *anchor)";

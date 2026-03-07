@@ -319,10 +319,19 @@ namespace glz::yaml
                break;
             }
 
-            // If dedented or not a sequence item, we're done
-            if (line_indent <= current_indent) {
+            // If dedented past current indent, we're done
+            if (line_indent < current_indent) {
                it = line_start;
                break;
+            }
+
+            // At current indent: continue only if it's another sequence item (indentless sequence)
+            if (line_indent == current_indent) {
+               if (!(*it == '-' &&
+                     ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n'))) {
+                  it = line_start;
+                  break;
+               }
             }
 
             // Continue with next line
