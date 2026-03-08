@@ -359,7 +359,11 @@ namespace glz::yaml
 
                if (it == end) break;
                if (*it == '\n' || *it == '\r') continue; // blank line
-               if (*it == '#') continue; // comment line, will be skipped next iteration
+               if (*it == '#') {
+                  // Skip comment content to reach end of line
+                  while (it != end && *it != '\n' && *it != '\r') ++it;
+                  continue;
+               }
 
                if (at_document_end(it, end) || at_document_start(it, end)) {
                   it = line_start;

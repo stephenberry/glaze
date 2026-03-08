@@ -3467,6 +3467,23 @@ name: correct)";
          expect(data.y == 2.5);
          expect(data.name == "correct");
       }
+
+      // Comments within a nested block mapping must be skipped
+      {
+         std::string yaml = R"(x: 42
+unknown:
+  key1: val1
+  # a comment
+  key2: val2
+y: 3.14
+name: hello)";
+         simple_struct data{};
+         auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 42);
+         expect(data.y == 3.14);
+         expect(data.name == "hello");
+      }
    };
 
    "skip_unknown_multiline_plain_scalar"_test = [] {
