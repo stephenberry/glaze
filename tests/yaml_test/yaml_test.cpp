@@ -7495,6 +7495,30 @@ items:
       expect(result.name == "line1\nline2\rline3");
    };
 
+   "yaml_empty_map_roundtrip"_test = [] {
+      // An empty map field in a struct must serialize as {} (flow style),
+      // not as a bare "key:" with no value, which YAML treats as null.
+      map_member_struct obj;
+      obj.title = "test";
+      // obj.data is default-constructed (empty map)
+
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+
+      const std::string expected = R"(title: test
+data: {}
+)";
+      expect(yaml == expected) << "got:\n" << yaml;
+
+      // Round-trip
+      map_member_struct result{};
+      ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.title == "test");
+      expect(result.data.empty());
+   };
+
    "stackoverflow_example_single_quoted"_test = [] {
       // Note: there are trailing spaces after "and" on line 5 - these get trimmed
       std::string yaml =

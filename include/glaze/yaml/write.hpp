@@ -875,6 +875,18 @@ namespace glz
                }
             }
             else {
+               // Empty containers go on same line as flow-style {} or []
+               bool wrote_empty = false;
+               if constexpr (writable_map_t<val_t>) {
+                  if (member.empty()) {
+                     dump(" {}\n", b, ix);
+                     wrote_empty = true;
+                  }
+               }
+               if (wrote_empty) {
+                  return;
+               }
+
                // Complex types go on next line with increased indent
                dump('\n', b, ix);
 
