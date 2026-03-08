@@ -315,12 +315,21 @@ namespace glz
 
          // Check if string needs quoting
          if (yaml::needs_quoting(str)) {
-            // Prefer single quotes if no single quotes in string
-            if (str.find('\'') == std::string_view::npos) {
-               write_single_quoted_string(str, ctx, b, ix);
+            // Double-quoted style is required for strings with characters that need
+            // escape sequences (\r, \0, control chars) since single-quoted strings
+            // have no escape mechanism for these.
+            bool needs_escapes = false;
+            for (char c : str) {
+               if (c == '\r' || c == '\0' || (static_cast<unsigned char>(c) < 0x20 && c != '\t')) {
+                  needs_escapes = true;
+                  break;
+               }
+            }
+            if (needs_escapes || str.find('\'') != std::string_view::npos) {
+               write_double_quoted_string(str, ctx, b, ix);
             }
             else {
-               write_double_quoted_string(str, ctx, b, ix);
+               write_single_quoted_string(str, ctx, b, ix);
             }
          }
          else {

@@ -7337,6 +7337,27 @@ suite yaml_quoted_string_folding_tests = [] {
       expect(result.data["beta"] == "hello");
    };
 
+   "yaml_carriage_return_string_roundtrip"_test = [] {
+      // Strings containing \r must use double-quoted style so the \r is escaped.
+      // Single-quoted style treats \r as a line break and folds it to a space.
+      simple_struct obj;
+      obj.name = "hello\rworld";
+      obj.x = 1;
+      obj.y = 2.0;
+
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+
+      const std::string expected = "x: 1\ny: 2\nname: \"hello\\rworld\"\n";
+      expect(yaml == expected);
+
+      simple_struct result{};
+      ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.name == "hello\rworld");
+   };
+
    "yaml_trailing_whitespace_roundtrip"_test = [] {
       // Strings with trailing whitespace must be quoted when written,
       // because the YAML reader trims trailing whitespace from plain scalars.
