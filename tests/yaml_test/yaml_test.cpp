@@ -55,6 +55,18 @@ struct map_member_struct
    std::map<std::string, std::string> data{};
 };
 
+struct optional_string_inner
+{
+   std::optional<std::string> desc{};
+   int count{};
+};
+
+struct optional_string_outer
+{
+   std::string title{};
+   optional_string_inner nested{};
+};
+
 template <>
 struct glz::meta<nested_struct>
 {
@@ -7335,6 +7347,30 @@ suite yaml_quoted_string_folding_tests = [] {
       expect(!ec) << glz::format_error(ec, yaml);
       expect(result.data["alpha"] == "line1\nline2");
       expect(result.data["beta"] == "hello");
+   };
+
+   "yaml_optional_multiline_string_indent"_test = [] {
+      // std::optional<std::string> with multiline content in a nested struct
+      // must pass the correct indent_level so the block scalar content lines
+      // are indented deeper than the key.
+      optional_string_outer obj;
+      obj.title = "test";
+      obj.nested.desc = "line1\nline2";
+      obj.nested.count = 42;
+
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+
+      const std::string expected = "title: test\nnested:\n  desc: |-\n    line1\n    line2\n\n  count: 42\n";
+      expect(yaml == expected);
+
+      optional_string_outer result{};
+      ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.nested.desc.has_value());
+      expect(result.nested.desc.value() == "line1\nline2");
+      expect(result.nested.count == 42);
    };
 
    "yaml_carriage_return_string_roundtrip"_test = [] {

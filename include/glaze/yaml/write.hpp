@@ -816,6 +816,20 @@ namespace glz
                if constexpr (str_t<val_t>) {
                   yaml::write_yaml_string<Opts>(sv{member}, ctx, b, ix, indent_level);
                }
+               else if constexpr (nullable_like<val_t>) {
+                  if (member) {
+                     using inner_t = std::remove_cvref_t<decltype(*member)>;
+                     if constexpr (str_t<inner_t>) {
+                        yaml::write_yaml_string<Opts>(sv{*member}, ctx, b, ix, indent_level);
+                     }
+                     else {
+                        serialize<YAML>::op<Opts>(member, ctx, b, ix);
+                     }
+                  }
+                  else {
+                     serialize<YAML>::op<Opts>(member, ctx, b, ix);
+                  }
+               }
                else {
                   serialize<YAML>::op<Opts>(member, ctx, b, ix);
                }
