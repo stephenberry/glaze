@@ -1242,7 +1242,7 @@ suite yaml_tag_tests = [] {
       std::string value;
       auto ec = glz::read_yaml(value, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
-      expect(value == "\xff");
+      expect(value == "\xc3\xbf");
    };
 
    "dq_escape_hex_lowercase"_test = [] {
