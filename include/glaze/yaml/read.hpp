@@ -528,8 +528,9 @@ namespace glz
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     *dst++ = static_cast<char>((hi << 4) | lo);
+                     const uint32_t codepoint = (hi << 4) | lo;
                      src += 2;
+                     dst += code_point_to_utf8(codepoint, dst);
                      break;
                   }
                   case 'u': {
