@@ -7472,6 +7472,29 @@ items:
       expect(result.items[1] == "simple");
    };
 
+   "yaml_multiline_with_carriage_return"_test = [] {
+      // A string containing both \n and \r must NOT use block scalar style,
+      // because block scalars have no escape mechanism and \r would be
+      // treated as a line break by the parser. Must use double-quoted style.
+      simple_struct obj;
+      obj.x = 1;
+      obj.y = 2.0;
+      obj.name = "line1\nline2\rline3";
+
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+
+      const std::string expected = "x: 1\ny: 2\nname: \"line1\\nline2\\rline3\"\n";
+      expect(yaml == expected) << "got:\n" << yaml;
+
+      // Round-trip
+      simple_struct result{};
+      ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.name == "line1\nline2\rline3");
+   };
+
    "stackoverflow_example_single_quoted"_test = [] {
       // Note: there are trailing spaces after "and" on line 5 - these get trimmed
       std::string yaml =

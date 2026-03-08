@@ -293,6 +293,22 @@ namespace glz
                return;
             }
 
+            // Block scalars have no escape mechanism, so characters like \r, \0,
+            // and other control chars cannot be represented. Fall back to double-quoted.
+            {
+               bool has_unrepresentable = false;
+               for (char c : str) {
+                  if (c == '\r' || c == '\0' || (static_cast<unsigned char>(c) < 0x20 && c != '\n' && c != '\t')) {
+                     has_unrepresentable = true;
+                     break;
+                  }
+               }
+               if (has_unrepresentable) {
+                  write_double_quoted_string(str, ctx, b, ix);
+                  return;
+               }
+            }
+
             size_t trailing_newlines = 0;
             for (size_t i = str.size(); i > 0; --i) {
                if (str[i - 1] == '\n') {
