@@ -497,7 +497,11 @@ namespace glz
             }
             dump("- ", b, ix);
 
-            if constexpr (is_simple_type<element_t>()) {
+            if constexpr (str_t<element_t>) {
+               write_yaml_string<Opts>(sv{element}, ctx, b, ix, indent_level);
+               dump('\n', b, ix);
+            }
+            else if constexpr (is_simple_type<element_t>()) {
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }

@@ -67,6 +67,12 @@ struct optional_string_outer
    optional_string_inner nested{};
 };
 
+struct seq_string_struct
+{
+   std::string title{};
+   std::vector<std::string> items{};
+};
+
 template <>
 struct glz::meta<nested_struct>
 {
@@ -7339,7 +7345,14 @@ suite yaml_quoted_string_folding_tests = [] {
       auto ec = glz::write_yaml(obj, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
 
-      const std::string expected = "title: test\ndata:\n  alpha: |-\n    line1\n    line2\n\n  beta: hello\n";
+      const std::string expected = R"(title: test
+data:
+  alpha: |-
+    line1
+    line2
+
+  beta: hello
+)";
       expect(yaml == expected);
 
       map_member_struct result{};
@@ -7362,7 +7375,14 @@ suite yaml_quoted_string_folding_tests = [] {
       auto ec = glz::write_yaml(obj, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
 
-      const std::string expected = "title: test\nnested:\n  desc: |-\n    line1\n    line2\n\n  count: 42\n";
+      const std::string expected = R"(title: test
+nested:
+  desc: |-
+    line1
+    line2
+
+  count: 42
+)";
       expect(yaml == expected);
 
       optional_string_outer result{};
@@ -7416,6 +7436,40 @@ name: 'hello '
       ec = glz::read_yaml(result, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(result.name == "hello ");
+   };
+
+   "yaml_sequence_multiline_string_indent"_test = [] {
+      // Multiline strings inside a vector<string> in a nested struct must
+      // use the correct indent_level for block scalar content.
+      // write_block_sequence dispatches strings through serialize<YAML>::op
+      // which defaults indent_level=0, producing wrong indentation.
+      seq_string_struct obj;
+      obj.title = "test";
+      obj.items = {"line1\nline2", "simple"};
+
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+
+      // Items are at indent_level=1, so block scalar content should be at 4 spaces
+      const std::string expected = R"(title: test
+items:
+  - |-
+    line1
+    line2
+
+  - simple
+)";
+      expect(yaml == expected) << "got:\n" << yaml;
+
+      // Round-trip
+      seq_string_struct result{};
+      ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.title == "test");
+      expect(result.items.size() == 2u);
+      expect(result.items[0] == "line1\nline2");
+      expect(result.items[1] == "simple");
    };
 
    "stackoverflow_example_single_quoted"_test = [] {
