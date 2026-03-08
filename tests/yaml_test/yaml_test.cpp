@@ -7309,6 +7309,30 @@ suite yaml_quoted_string_folding_tests = [] {
       expect(result[0] == "very \"long\" 'string' with\nparagraph gap, \n and spaces.") << "got: " << result[0];
    };
 
+   "yaml_trailing_whitespace_roundtrip"_test = [] {
+      // Strings with trailing whitespace must be quoted when written,
+      // because the YAML reader trims trailing whitespace from plain scalars.
+      simple_struct obj;
+      obj.name = "hello ";
+      obj.x = 1;
+      obj.y = 2.0;
+
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+
+      const std::string expected = R"(x: 1
+y: 2
+name: 'hello '
+)";
+      expect(yaml == expected);
+
+      simple_struct result{};
+      ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.name == "hello ");
+   };
+
    "stackoverflow_example_single_quoted"_test = [] {
       // Note: there are trailing spaces after "and" on line 5 - these get trimmed
       std::string yaml =
