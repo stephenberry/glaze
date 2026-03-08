@@ -830,30 +830,48 @@ namespace glz
             dump(key, b, ix);
             dump(':', b, ix);
 
-            if constexpr (is_simple_type<val_t>() || nullable_like<val_t>) {
+            if constexpr (is_simple_type<val_t>()) {
                // Simple types go on same line
                dump(' ', b, ix);
                if constexpr (str_t<val_t>) {
                   yaml::write_yaml_string<Opts>(sv{member}, ctx, b, ix, indent_level);
                }
-               else if constexpr (nullable_like<val_t>) {
-                  if (member) {
-                     using inner_t = std::remove_cvref_t<decltype(*member)>;
-                     if constexpr (str_t<inner_t>) {
-                        yaml::write_yaml_string<Opts>(sv{*member}, ctx, b, ix, indent_level);
-                     }
-                     else {
-                        serialize<YAML>::op<Opts>(member, ctx, b, ix);
-                     }
-                  }
-                  else {
-                     serialize<YAML>::op<Opts>(member, ctx, b, ix);
-                  }
-               }
                else {
                   serialize<YAML>::op<Opts>(member, ctx, b, ix);
                }
                dump('\n', b, ix);
+            }
+            else if constexpr (nullable_like<val_t>) {
+               using inner_t = std::remove_cvref_t<decltype(*std::declval<val_t&>())>;
+               if (!member) {
+                  // Null - always same line
+                  dump(' ', b, ix);
+                  serialize<YAML>::op<Opts>(member, ctx, b, ix);
+                  dump('\n', b, ix);
+               }
+               else if constexpr (is_simple_type<inner_t>() || str_t<inner_t>) {
+                  // Simple inner type - same line
+                  dump(' ', b, ix);
+                  if constexpr (str_t<inner_t>) {
+                     yaml::write_yaml_string<Opts>(sv{*member}, ctx, b, ix, indent_level);
+                  }
+                  else {
+                     serialize<YAML>::op<Opts>(*member, ctx, b, ix);
+                  }
+                  dump('\n', b, ix);
+               }
+               else {
+                  // Complex inner type - next line with increased indent
+                  dump('\n', b, ix);
+                  if constexpr (requires { ctx.indent_level; }) {
+                     auto nested_ctx = ctx;
+                     nested_ctx.indent_level = indent_level + 1;
+                     serialize<YAML>::op<Opts>(*member, nested_ctx, b, ix);
+                  }
+                  else {
+                     write_block_mapping_nested<Opts>(*member, ctx, b, ix, indent_level + 1);
+                  }
+               }
             }
             else if constexpr (is_or_wraps_variant<val_t>()) {
                // Variants and variant-wrappers (e.g., glz::generic) may hold simple values

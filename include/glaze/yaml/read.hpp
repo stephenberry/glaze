@@ -2044,6 +2044,11 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
+         // Save position before consuming whitespace so we can restore it
+         // if the speculative null check fails. The indentation whitespace is
+         // structurally significant for block-style inner values (sequences, mappings).
+         auto before_ws = it;
+
          yaml::skip_inline_ws(it, end);
 
          if (it == end) {
@@ -2084,7 +2089,6 @@ namespace glz
 
          // Check for null value (without tag)
          if (tag == yaml::yaml_tag::none) {
-            auto start = it;
             std::string str;
             yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
 
@@ -2093,8 +2097,9 @@ namespace glz
                return;
             }
 
-            // Not null - reset and parse the actual value
-            it = start;
+            // Not null - reset to before whitespace consumption so the inner
+            // parser can measure indentation correctly for block-style values.
+            it = before_ws;
          }
 
          if (!value) {

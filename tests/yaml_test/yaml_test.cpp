@@ -111,6 +111,20 @@ struct optional_struct
    std::optional<std::string> email{};
 };
 
+struct optional_vector_struct
+{
+   int x{};
+   std::optional<std::vector<int>> items{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<optional_vector_struct>
+{
+   using T = optional_vector_struct;
+   static constexpr auto value = object("x", &T::x, "items", &T::items, "name", &T::name);
+};
+
 template <>
 struct glz::meta<optional_struct>
 {
@@ -7550,6 +7564,32 @@ data: {}
       expect(result.size() == 1u);
       // In single-quoted, \n is literal two chars, trailing spaces trimmed
       expect(result[0] == "very \"long\" 'string' with\nparagraph gap, \\n and spaces.") << "got: " << result[0];
+   };
+};
+
+suite optional_vector_round_trip_tests = [] {
+   "optional vector round trip"_test = [] {
+      optional_vector_struct obj{};
+      obj.x = 42;
+      obj.items = std::vector<int>{1, 2, 3};
+      obj.name = "hello";
+
+      std::string yaml;
+      auto wec = glz::write_yaml(obj, yaml);
+      expect(!wec);
+
+      optional_vector_struct parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.x == 42);
+      expect(parsed.items.has_value());
+      expect(parsed.items->size() == 3u);
+      if (parsed.items && parsed.items->size() == 3) {
+         expect((*parsed.items)[0] == 1);
+         expect((*parsed.items)[1] == 2);
+         expect((*parsed.items)[2] == 3);
+      }
+      expect(parsed.name == "hello");
    };
 };
 
