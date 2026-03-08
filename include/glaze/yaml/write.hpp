@@ -899,7 +899,12 @@ namespace glz
                dump(':', b, ix);
 
                using val_t = std::remove_cvref_t<decltype(v)>;
-               if constexpr (is_simple_type<val_t>()) {
+               if constexpr (str_t<val_t>) {
+                  dump(' ', b, ix);
+                  write_yaml_string<Opts>(sv{v}, ctx, b, ix, indent_level);
+                  dump('\n', b, ix);
+               }
+               else if constexpr (is_simple_type<val_t>()) {
                   dump(' ', b, ix);
                   serialize<YAML>::op<Opts>(v, ctx, b, ix);
                   dump('\n', b, ix);

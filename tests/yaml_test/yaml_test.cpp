@@ -49,6 +49,12 @@ struct nested_struct
    std::vector<int> numbers{};
 };
 
+struct map_member_struct
+{
+   std::string title{};
+   std::map<std::string, std::string> data{};
+};
+
 template <>
 struct glz::meta<nested_struct>
 {
@@ -7307,6 +7313,28 @@ suite yaml_quoted_string_folding_tests = [] {
       expect(result.size() == 1u);
       // Trailing spaces are trimmed, backslash continuations should work
       expect(result[0] == "very \"long\" 'string' with\nparagraph gap, \n and spaces.") << "got: " << result[0];
+   };
+
+   "yaml_map_multiline_string_indent"_test = [] {
+      // Multiline string values in nested maps must be indented deeper than the
+      // map key, otherwise the block scalar content merges with sibling entries.
+      map_member_struct obj;
+      obj.title = "test";
+      obj.data["alpha"] = "line1\nline2";
+      obj.data["beta"] = "hello";
+
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+
+      const std::string expected = "title: test\ndata:\n  alpha: |-\n    line1\n    line2\n\n  beta: hello\n";
+      expect(yaml == expected);
+
+      map_member_struct result{};
+      ec = glz::read_yaml(result, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(result.data["alpha"] == "line1\nline2");
+      expect(result.data["beta"] == "hello");
    };
 
    "yaml_trailing_whitespace_roundtrip"_test = [] {
