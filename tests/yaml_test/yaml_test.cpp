@@ -3482,6 +3482,33 @@ name: works)";
       }
    };
 
+   "flow_mapping_newline_before_comma"_test = [] {
+      // In YAML flow context, newlines are treated as whitespace.
+      // A newline between a value and the comma separator should be valid.
+      // Bug: parse_flow_mapping used skip_inline_ws (spaces/tabs only) instead
+      // of skip_flow_ws_and_newlines after values, rejecting valid YAML.
+      {
+         // Newline before comma
+         std::string yaml = "{x: 1\n, y: 2.5\n, name: hello}";
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 1);
+         expect(data.y == 2.5);
+         expect(data.name == "hello");
+      }
+
+      // Newline after value, comma on next line (indented)
+      {
+         std::string yaml = "{x: 42\n  , y: 3.14}";
+         simple_struct data{};
+         auto ec = glz::read_yaml(data, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(data.x == 42);
+         expect(data.y == 3.14);
+      }
+   };
+
    "anchor_empty_node"_test = [] {
       std::string yaml = R"(a: &anchor
 b: *anchor)";

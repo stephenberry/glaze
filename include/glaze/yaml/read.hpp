@@ -2606,7 +2606,12 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            skip_inline_ws(it, end);
+            // In flow context, newlines are treated as whitespace (YAML spec).
+            // Use skip_flow_ws_and_newlines so that a newline between a value
+            // and its separator (comma or closing brace) is accepted.
+            skip_flow_ws_and_newlines(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             if (it != end && *it == '}') {
                ++it;
@@ -2615,21 +2620,6 @@ namespace glz
             }
             else if (it != end && *it == ',') {
                ++it;
-               skip_inline_ws(it, end);
-            }
-            else if (it != end && (*it == '\n' || *it == '\r')) {
-               // Newlines without a separating comma are only valid before the
-               // closing '}' of the current flow mapping.
-               skip_flow_ws_and_newlines(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               if (it != end && *it == '}') {
-                  ++it;
-                  validate_flow_node_adjacent_tail(ctx, it, end);
-                  return;
-               }
-               ctx.error = error_code::syntax_error;
-               return;
             }
             else {
                ctx.error = error_code::syntax_error;
