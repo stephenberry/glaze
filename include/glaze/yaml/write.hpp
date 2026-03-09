@@ -293,6 +293,22 @@ namespace glz
                return;
             }
 
+            // Block scalars have no escape mechanism, so characters like \r, \0,
+            // and other control chars cannot be represented. Fall back to double-quoted.
+            {
+               bool has_unrepresentable = false;
+               for (char c : str) {
+                  if (c == '\r' || c == '\0' || (static_cast<unsigned char>(c) < 0x20 && c != '\n' && c != '\t')) {
+                     has_unrepresentable = true;
+                     break;
+                  }
+               }
+               if (has_unrepresentable) {
+                  write_double_quoted_string(str, ctx, b, ix);
+                  return;
+               }
+            }
+
             size_t trailing_newlines = 0;
             for (size_t i = str.size(); i > 0; --i) {
                if (str[i - 1] == '\n') {
@@ -315,12 +331,21 @@ namespace glz
 
          // Check if string needs quoting
          if (yaml::needs_quoting(str)) {
-            // Prefer single quotes if no single quotes in string
-            if (str.find('\'') == std::string_view::npos) {
-               write_single_quoted_string(str, ctx, b, ix);
+            // Double-quoted style is required for strings with characters that need
+            // escape sequences (\r, \0, control chars) since single-quoted strings
+            // have no escape mechanism for these.
+            bool needs_escapes = false;
+            for (char c : str) {
+               if (c == '\r' || c == '\0' || (static_cast<unsigned char>(c) < 0x20 && c != '\t')) {
+                  needs_escapes = true;
+                  break;
+               }
+            }
+            if (needs_escapes || str.find('\'') != std::string_view::npos) {
+               write_double_quoted_string(str, ctx, b, ix);
             }
             else {
-               write_double_quoted_string(str, ctx, b, ix);
+               write_single_quoted_string(str, ctx, b, ix);
             }
          }
          else {
@@ -488,9 +513,50 @@ namespace glz
             }
             dump("- ", b, ix);
 
-            if constexpr (is_simple_type<element_t>()) {
+            if constexpr (str_t<element_t>) {
+               write_yaml_string<Opts>(sv{element}, ctx, b, ix, indent_level);
+               dump('\n', b, ix);
+            }
+            else if constexpr (is_simple_type<element_t>()) {
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
+            }
+            else if constexpr (nullable_like<element_t>) {
+               using inner_t = std::remove_cvref_t<decltype(*element)>;
+               if (!element) {
+                  dump("null", b, ix);
+                  dump('\n', b, ix);
+               }
+               else if constexpr (str_t<inner_t>) {
+                  write_yaml_string<Opts>(sv{*element}, ctx, b, ix, indent_level);
+                  dump('\n', b, ix);
+               }
+               else if constexpr (is_simple_type<inner_t>()) {
+                  serialize<YAML>::op<Opts>(*element, ctx, b, ix);
+                  dump('\n', b, ix);
+               }
+               else {
+                  // Complex inner type - check for empty containers first
+                  bool wrote_empty = false;
+                  if constexpr (writable_map_t<inner_t>) {
+                     if (element->empty()) {
+                        dump("{}\n", b, ix);
+                        wrote_empty = true;
+                     }
+                  }
+                  else if constexpr (writable_array_t<inner_t>) {
+                     if constexpr (requires { element->empty(); }) {
+                        if (element->empty()) {
+                           dump("[]\n", b, ix);
+                           wrote_empty = true;
+                        }
+                     }
+                  }
+                  if (!wrote_empty) {
+                     dump('\n', b, ix);
+                     write_block_mapping_nested<Opts>(*element, ctx, b, ix, indent_level + 1);
+                  }
+               }
             }
             else if constexpr (is_or_wraps_variant<element_t>()) {
                // For variants, check at runtime if they hold a simple type
@@ -801,7 +867,7 @@ namespace glz
             dump(key, b, ix);
             dump(':', b, ix);
 
-            if constexpr (is_simple_type<val_t>() || nullable_like<val_t>) {
+            if constexpr (is_simple_type<val_t>()) {
                // Simple types go on same line
                dump(' ', b, ix);
                if constexpr (str_t<val_t>) {
@@ -811,6 +877,56 @@ namespace glz
                   serialize<YAML>::op<Opts>(member, ctx, b, ix);
                }
                dump('\n', b, ix);
+            }
+            else if constexpr (nullable_like<val_t>) {
+               using inner_t = std::remove_cvref_t<decltype(*std::declval<val_t&>())>;
+               if (!member) {
+                  // Null - always same line
+                  dump(' ', b, ix);
+                  serialize<YAML>::op<Opts>(member, ctx, b, ix);
+                  dump('\n', b, ix);
+               }
+               else if constexpr (is_simple_type<inner_t>() || str_t<inner_t>) {
+                  // Simple inner type - same line
+                  dump(' ', b, ix);
+                  if constexpr (str_t<inner_t>) {
+                     yaml::write_yaml_string<Opts>(sv{*member}, ctx, b, ix, indent_level);
+                  }
+                  else {
+                     serialize<YAML>::op<Opts>(*member, ctx, b, ix);
+                  }
+                  dump('\n', b, ix);
+               }
+               else {
+                  // Complex inner type - check for empty containers first
+                  bool wrote_empty = false;
+                  if constexpr (writable_map_t<inner_t>) {
+                     if (member->empty()) {
+                        dump(" {}\n", b, ix);
+                        wrote_empty = true;
+                     }
+                  }
+                  else if constexpr (writable_array_t<inner_t>) {
+                     if constexpr (requires { member->empty(); }) {
+                        if (member->empty()) {
+                           dump(" []\n", b, ix);
+                           wrote_empty = true;
+                        }
+                     }
+                  }
+                  if (!wrote_empty) {
+                     // Non-empty complex inner type - next line with increased indent
+                     dump('\n', b, ix);
+                     if constexpr (requires { ctx.indent_level; }) {
+                        auto nested_ctx = ctx;
+                        nested_ctx.indent_level = indent_level + 1;
+                        serialize<YAML>::op<Opts>(*member, nested_ctx, b, ix);
+                     }
+                     else {
+                        write_block_mapping_nested<Opts>(*member, ctx, b, ix, indent_level + 1);
+                     }
+                  }
+               }
             }
             else if constexpr (is_or_wraps_variant<val_t>()) {
                // Variants and variant-wrappers (e.g., glz::generic) may hold simple values
@@ -832,6 +948,18 @@ namespace glz
                }
             }
             else {
+               // Empty containers go on same line as flow-style {} or []
+               bool wrote_empty = false;
+               if constexpr (writable_map_t<val_t>) {
+                  if (member.empty()) {
+                     dump(" {}\n", b, ix);
+                     wrote_empty = true;
+                  }
+               }
+               if (wrote_empty) {
+                  return;
+               }
+
                // Complex types go on next line with increased indent
                dump('\n', b, ix);
 
@@ -899,10 +1027,55 @@ namespace glz
                dump(':', b, ix);
 
                using val_t = std::remove_cvref_t<decltype(v)>;
-               if constexpr (is_simple_type<val_t>()) {
+               if constexpr (str_t<val_t>) {
+                  dump(' ', b, ix);
+                  write_yaml_string<Opts>(sv{v}, ctx, b, ix, indent_level);
+                  dump('\n', b, ix);
+               }
+               else if constexpr (is_simple_type<val_t>()) {
                   dump(' ', b, ix);
                   serialize<YAML>::op<Opts>(v, ctx, b, ix);
                   dump('\n', b, ix);
+               }
+               else if constexpr (nullable_like<val_t>) {
+                  using inner_t = std::remove_cvref_t<decltype(*v)>;
+                  if (!v) {
+                     dump(' ', b, ix);
+                     dump("null", b, ix);
+                     dump('\n', b, ix);
+                  }
+                  else if constexpr (str_t<inner_t>) {
+                     dump(' ', b, ix);
+                     write_yaml_string<Opts>(sv{*v}, ctx, b, ix, indent_level);
+                     dump('\n', b, ix);
+                  }
+                  else if constexpr (is_simple_type<inner_t>()) {
+                     dump(' ', b, ix);
+                     serialize<YAML>::op<Opts>(*v, ctx, b, ix);
+                     dump('\n', b, ix);
+                  }
+                  else {
+                     // Complex inner type - check for empty containers first
+                     bool wrote_empty = false;
+                     if constexpr (writable_map_t<inner_t>) {
+                        if (v->empty()) {
+                           dump(" {}\n", b, ix);
+                           wrote_empty = true;
+                        }
+                     }
+                     else if constexpr (writable_array_t<inner_t>) {
+                        if constexpr (requires { v->empty(); }) {
+                           if (v->empty()) {
+                              dump(" []\n", b, ix);
+                              wrote_empty = true;
+                           }
+                        }
+                     }
+                     if (!wrote_empty) {
+                        dump('\n', b, ix);
+                        write_block_mapping_nested<Opts>(*v, ctx, b, ix, indent_level + 1);
+                     }
+                  }
                }
                else if constexpr (is_or_wraps_variant<val_t>()) {
                   // For variants and types wrapping variants (like glz::generic),

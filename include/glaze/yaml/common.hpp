@@ -1119,6 +1119,12 @@ namespace glz::yaml
          return true;
       }
 
+      // Check last character - trailing whitespace is stripped by plain scalar parser
+      char last = s.back();
+      if (last == ' ' || last == '\t') {
+         return true;
+      }
+
       // Check if it looks like a special value
       if (is_yaml_bool(s) || is_yaml_null(s)) {
          return true;
