@@ -602,7 +602,7 @@ namespace glz
       http_disconnect_handler on_disconnect{};
       std::chrono::seconds timeout{std::chrono::seconds{30}};
       stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
-      std::function<bool(int)> status_is_error{[](int status){ return status >= 400; }};
+      std::function<bool(int)> status_is_error{[](int status) { return status >= 400; }};
       size_t max_buffer_size{1024 * 1024};
    };
 
@@ -620,7 +620,7 @@ namespace glz
       http_disconnect_handler on_disconnect;
       http_data_handler on_data;
       http_error_handler on_error;
-      std::function<bool(int)> status_is_error{[](int status){ return status >= 400; }};
+      std::function<bool(int)> status_is_error{[](int status) { return status >= 400; }};
    };
 
    struct http_client
