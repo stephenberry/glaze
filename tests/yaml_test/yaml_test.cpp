@@ -7627,7 +7627,8 @@ suite nullable_in_collections_tests = [] {
    };
 
    "map of optional string round trip"_test = [] {
-      std::map<std::string, std::optional<std::string>> obj{{"a", "line1\nline2"}, {"b", std::nullopt}, {"c", "simple"}};
+      std::map<std::string, std::optional<std::string>> obj{
+         {"a", "line1\nline2"}, {"b", std::nullopt}, {"c", "simple"}};
 
       std::string yaml;
       auto wec = glz::write_yaml(obj, yaml);
