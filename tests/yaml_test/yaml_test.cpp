@@ -7659,4 +7659,36 @@ suite nullable_in_collections_tests = [] {
    };
 };
 
+suite nullable_empty_container_in_collections_tests = [] {
+   "map of optional empty map round trip"_test = [] {
+      std::map<std::string, std::optional<std::map<std::string, int>>> obj{{"a", std::map<std::string, int>{}}};
+
+      std::string yaml;
+      auto wec = glz::write_yaml(obj, yaml);
+      expect(!wec);
+
+      std::map<std::string, std::optional<std::map<std::string, int>>> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.count("a") == 1u);
+      expect(parsed["a"].has_value()) << "engaged empty map inside map should round-trip as engaged";
+   };
+
+   "vector of optional empty map round trip"_test = [] {
+      std::vector<std::optional<std::map<std::string, int>>> obj{std::map<std::string, int>{}};
+
+      std::string yaml;
+      auto wec = glz::write_yaml(obj, yaml);
+      expect(!wec);
+
+      std::vector<std::optional<std::map<std::string, int>>> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 1u);
+      if (parsed.size() == 1u) {
+         expect(parsed[0].has_value()) << "engaged empty map inside vector should round-trip as engaged";
+      }
+   };
+};
+
 int main() { return 0; }

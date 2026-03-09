@@ -536,9 +536,26 @@ namespace glz
                   dump('\n', b, ix);
                }
                else {
-                  // Complex inner type - write on next line with increased indent
-                  dump('\n', b, ix);
-                  write_block_mapping_nested<Opts>(*element, ctx, b, ix, indent_level + 1);
+                  // Complex inner type - check for empty containers first
+                  bool wrote_empty = false;
+                  if constexpr (writable_map_t<inner_t>) {
+                     if (element->empty()) {
+                        dump("{}\n", b, ix);
+                        wrote_empty = true;
+                     }
+                  }
+                  else if constexpr (writable_array_t<inner_t>) {
+                     if constexpr (requires { element->empty(); }) {
+                        if (element->empty()) {
+                           dump("[]\n", b, ix);
+                           wrote_empty = true;
+                        }
+                     }
+                  }
+                  if (!wrote_empty) {
+                     dump('\n', b, ix);
+                     write_block_mapping_nested<Opts>(*element, ctx, b, ix, indent_level + 1);
+                  }
                }
             }
             else if constexpr (is_or_wraps_variant<element_t>()) {
@@ -1038,8 +1055,26 @@ namespace glz
                      dump('\n', b, ix);
                   }
                   else {
-                     dump('\n', b, ix);
-                     write_block_mapping_nested<Opts>(*v, ctx, b, ix, indent_level + 1);
+                     // Complex inner type - check for empty containers first
+                     bool wrote_empty = false;
+                     if constexpr (writable_map_t<inner_t>) {
+                        if (v->empty()) {
+                           dump(" {}\n", b, ix);
+                           wrote_empty = true;
+                        }
+                     }
+                     else if constexpr (writable_array_t<inner_t>) {
+                        if constexpr (requires { v->empty(); }) {
+                           if (v->empty()) {
+                              dump(" []\n", b, ix);
+                              wrote_empty = true;
+                           }
+                        }
+                     }
+                     if (!wrote_empty) {
+                        dump('\n', b, ix);
+                        write_block_mapping_nested<Opts>(*v, ctx, b, ix, indent_level + 1);
+                     }
                   }
                }
                else if constexpr (is_or_wraps_variant<val_t>()) {
