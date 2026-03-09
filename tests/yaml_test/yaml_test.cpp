@@ -7593,4 +7593,70 @@ suite optional_vector_round_trip_tests = [] {
    };
 };
 
+struct optional_map_struct
+{
+   int x{};
+   std::optional<std::map<std::string, int>> m{};
+};
+
+template <>
+struct glz::meta<optional_map_struct>
+{
+   using T = optional_map_struct;
+   static constexpr auto value = object("x", &T::x, "m", &T::m);
+};
+
+suite nullable_in_collections_tests = [] {
+   "vector of optional string round trip"_test = [] {
+      std::vector<std::optional<std::string>> obj{"hello", "line1\nline2", std::nullopt, "world"};
+
+      std::string yaml;
+      auto wec = glz::write_yaml(obj, yaml);
+      expect(!wec);
+
+      std::vector<std::optional<std::string>> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 4u);
+      if (parsed.size() == 4) {
+         expect(parsed[0].has_value() && *parsed[0] == "hello");
+         expect(parsed[1].has_value() && *parsed[1] == "line1\nline2");
+         expect(!parsed[2].has_value());
+         expect(parsed[3].has_value() && *parsed[3] == "world");
+      }
+   };
+
+   "map of optional string round trip"_test = [] {
+      std::map<std::string, std::optional<std::string>> obj{{"a", "line1\nline2"}, {"b", std::nullopt}, {"c", "simple"}};
+
+      std::string yaml;
+      auto wec = glz::write_yaml(obj, yaml);
+      expect(!wec);
+
+      std::map<std::string, std::optional<std::string>> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 3u);
+      expect(parsed["a"].has_value() && *parsed["a"] == "line1\nline2");
+      expect(!parsed["b"].has_value());
+      expect(parsed["c"].has_value() && *parsed["c"] == "simple");
+   };
+
+   "optional empty map in struct round trip"_test = [] {
+      optional_map_struct obj{};
+      obj.x = 42;
+      obj.m = std::map<std::string, int>{}; // engaged but empty
+
+      std::string yaml;
+      auto wec = glz::write_yaml(obj, yaml);
+      expect(!wec);
+
+      optional_map_struct parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.x == 42);
+      expect(parsed.m.has_value()) << "engaged empty map should round-trip as engaged";
+   };
+};
+
 int main() { return 0; }

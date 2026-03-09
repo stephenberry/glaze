@@ -521,6 +521,26 @@ namespace glz
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }
+            else if constexpr (nullable_like<element_t>) {
+               using inner_t = std::remove_cvref_t<decltype(*element)>;
+               if (!element) {
+                  dump("null", b, ix);
+                  dump('\n', b, ix);
+               }
+               else if constexpr (str_t<inner_t>) {
+                  write_yaml_string<Opts>(sv{*element}, ctx, b, ix, indent_level);
+                  dump('\n', b, ix);
+               }
+               else if constexpr (is_simple_type<inner_t>()) {
+                  serialize<YAML>::op<Opts>(*element, ctx, b, ix);
+                  dump('\n', b, ix);
+               }
+               else {
+                  // Complex inner type - write on next line with increased indent
+                  dump('\n', b, ix);
+                  write_block_mapping_nested<Opts>(*element, ctx, b, ix, indent_level + 1);
+               }
+            }
             else if constexpr (is_or_wraps_variant<element_t>()) {
                // For variants, check at runtime if they hold a simple type
                if (variant_holds_simple_type(element)) {
@@ -861,15 +881,33 @@ namespace glz
                   dump('\n', b, ix);
                }
                else {
-                  // Complex inner type - next line with increased indent
-                  dump('\n', b, ix);
-                  if constexpr (requires { ctx.indent_level; }) {
-                     auto nested_ctx = ctx;
-                     nested_ctx.indent_level = indent_level + 1;
-                     serialize<YAML>::op<Opts>(*member, nested_ctx, b, ix);
+                  // Complex inner type - check for empty containers first
+                  bool wrote_empty = false;
+                  if constexpr (writable_map_t<inner_t>) {
+                     if (member->empty()) {
+                        dump(" {}\n", b, ix);
+                        wrote_empty = true;
+                     }
                   }
-                  else {
-                     write_block_mapping_nested<Opts>(*member, ctx, b, ix, indent_level + 1);
+                  else if constexpr (writable_array_t<inner_t>) {
+                     if constexpr (requires { member->empty(); }) {
+                        if (member->empty()) {
+                           dump(" []\n", b, ix);
+                           wrote_empty = true;
+                        }
+                     }
+                  }
+                  if (!wrote_empty) {
+                     // Non-empty complex inner type - next line with increased indent
+                     dump('\n', b, ix);
+                     if constexpr (requires { ctx.indent_level; }) {
+                        auto nested_ctx = ctx;
+                        nested_ctx.indent_level = indent_level + 1;
+                        serialize<YAML>::op<Opts>(*member, nested_ctx, b, ix);
+                     }
+                     else {
+                        write_block_mapping_nested<Opts>(*member, ctx, b, ix, indent_level + 1);
+                     }
                   }
                }
             }
@@ -981,6 +1019,28 @@ namespace glz
                   dump(' ', b, ix);
                   serialize<YAML>::op<Opts>(v, ctx, b, ix);
                   dump('\n', b, ix);
+               }
+               else if constexpr (nullable_like<val_t>) {
+                  using inner_t = std::remove_cvref_t<decltype(*v)>;
+                  if (!v) {
+                     dump(' ', b, ix);
+                     dump("null", b, ix);
+                     dump('\n', b, ix);
+                  }
+                  else if constexpr (str_t<inner_t>) {
+                     dump(' ', b, ix);
+                     write_yaml_string<Opts>(sv{*v}, ctx, b, ix, indent_level);
+                     dump('\n', b, ix);
+                  }
+                  else if constexpr (is_simple_type<inner_t>()) {
+                     dump(' ', b, ix);
+                     serialize<YAML>::op<Opts>(*v, ctx, b, ix);
+                     dump('\n', b, ix);
+                  }
+                  else {
+                     dump('\n', b, ix);
+                     write_block_mapping_nested<Opts>(*v, ctx, b, ix, indent_level + 1);
+                  }
                }
                else if constexpr (is_or_wraps_variant<val_t>()) {
                   // For variants and types wrapping variants (like glz::generic),
