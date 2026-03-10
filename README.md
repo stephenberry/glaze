@@ -18,17 +18,6 @@ Formats Supported:
 >
 > Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
 
-> [!IMPORTANT]
->
-> **Breaking Change v7.1.0: `glz::generic` now preserves order of JSON keys.** The underlying map for `glz::generic` switched from `std::map` to `glz::ordered_small_map`, which preserves the order of fields as they are read. Previously keys were lexicographically sorted, so serialization output order may differ. If you need the prior sorted-key behavior, use:
->
-> ```cpp
-> glz::generic_sorted json{};
-> glz::generic_sorted_i64 json_i64{};
-> glz::generic_sorted_u64 json_u64{};
-> ```
-> - This change also improves performance for `glz::generic`, offering faster lookup and iteration for typical JSON sized objects.
-
 ## With C++23 & C++26 compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
