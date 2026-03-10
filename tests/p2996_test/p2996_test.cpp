@@ -36,6 +36,49 @@ struct NestedWithArray
    int count;
 };
 
+// Array of structs in a struct
+struct Point
+{
+   double x;
+   double y;
+};
+
+struct Polygon
+{
+   Point vertices[4];
+   std::string name;
+};
+
+// Struct containing a struct with an array
+struct Inner
+{
+   int values[3];
+};
+
+struct Outer
+{
+   Inner inner;
+   std::string tag;
+};
+
+// Multi-dimensional C-style array
+struct Matrix
+{
+   int data[2][3];
+};
+
+// Deeply nested: array of structs that contain arrays
+struct Segment
+{
+   double coords[2];
+};
+
+struct Path
+{
+   Segment segments[3];
+   int id;
+};
+
 // Test enum WITHOUT any glz::meta - used for reflect_enums option test
 enum class Direction { North, South, East, West };
 
@@ -179,6 +222,114 @@ suite c_style_array_reflection = [] {
       for (int i = 0; i < 10; ++i) {
          expect(obj2.data[i] == i + 100);
       }
+   };
+};
+
+suite c_style_array_of_structs = [] {
+   "array of structs"_test = [] {
+      Polygon obj{};
+      obj.vertices[0] = {0.0, 0.0};
+      obj.vertices[1] = {1.0, 0.0};
+      obj.vertices[2] = {1.0, 1.0};
+      obj.vertices[3] = {0.0, 1.0};
+      obj.name = "square";
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+
+      Polygon obj2{};
+      expect(not glz::read_json(obj2, s));
+      expect(obj2.name == "square");
+      expect(obj2.vertices[0].x == 0.0);
+      expect(obj2.vertices[0].y == 0.0);
+      expect(obj2.vertices[1].x == 1.0);
+      expect(obj2.vertices[2].y == 1.0);
+      expect(obj2.vertices[3].x == 0.0);
+      expect(obj2.vertices[3].y == 1.0);
+   };
+
+   "nested struct containing array"_test = [] {
+      Outer obj{};
+      obj.inner.values[0] = 10;
+      obj.inner.values[1] = 20;
+      obj.inner.values[2] = 30;
+      obj.tag = "outer";
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+
+      Outer obj2{};
+      expect(not glz::read_json(obj2, s));
+      expect(obj2.tag == "outer");
+      expect(obj2.inner.values[0] == 10);
+      expect(obj2.inner.values[1] == 20);
+      expect(obj2.inner.values[2] == 30);
+   };
+
+   "multi-dimensional array"_test = [] {
+      Matrix obj{};
+      obj.data[0][0] = 1;
+      obj.data[0][1] = 2;
+      obj.data[0][2] = 3;
+      obj.data[1][0] = 4;
+      obj.data[1][1] = 5;
+      obj.data[1][2] = 6;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"data":[[1,2,3],[4,5,6]]})") << s;
+
+      Matrix obj2{};
+      expect(not glz::read_json(obj2, s));
+      expect(obj2.data[0][0] == 1);
+      expect(obj2.data[0][2] == 3);
+      expect(obj2.data[1][0] == 4);
+      expect(obj2.data[1][2] == 6);
+   };
+
+   "array of structs containing arrays"_test = [] {
+      Path obj{};
+      obj.segments[0].coords[0] = 0.0;
+      obj.segments[0].coords[1] = 0.0;
+      obj.segments[1].coords[0] = 1.0;
+      obj.segments[1].coords[1] = 2.0;
+      obj.segments[2].coords[0] = 3.0;
+      obj.segments[2].coords[1] = 4.0;
+      obj.id = 99;
+
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+
+      Path obj2{};
+      expect(not glz::read_json(obj2, s));
+      expect(obj2.id == 99);
+      expect(obj2.segments[0].coords[0] == 0.0);
+      expect(obj2.segments[0].coords[1] == 0.0);
+      expect(obj2.segments[1].coords[0] == 1.0);
+      expect(obj2.segments[1].coords[1] == 2.0);
+      expect(obj2.segments[2].coords[0] == 3.0);
+      expect(obj2.segments[2].coords[1] == 4.0);
+   };
+
+   "array of structs beve round-trip"_test = [] {
+      Path obj{};
+      obj.segments[0].coords[0] = 1.5;
+      obj.segments[0].coords[1] = 2.5;
+      obj.segments[1].coords[0] = 3.5;
+      obj.segments[1].coords[1] = 4.5;
+      obj.segments[2].coords[0] = 5.5;
+      obj.segments[2].coords[1] = 6.5;
+      obj.id = 42;
+
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      Path obj2{};
+      expect(not glz::read_beve(obj2, s));
+      expect(obj2.id == 42);
+      expect(obj2.segments[0].coords[0] == 1.5);
+      expect(obj2.segments[1].coords[1] == 4.5);
+      expect(obj2.segments[2].coords[0] == 5.5);
    };
 };
 
