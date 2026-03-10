@@ -58,10 +58,13 @@ jobs:
         ls -la "$GITHUB_WORKSPACE"
         ls -la "$GITHUB_WORKSPACE/tests/p2996_test/" || echo "p2996_test dir not found"
 
+    - name: Fetch ut test framework
+      run: git clone --depth 1 --branch v1.1.0 https://github.com/openalgz/ut /tmp/ut
+
     - name: Test P2996 reflection (direct compile)
       run: |
         g++-16 -std=c++26 -freflection \
-          -I"$GITHUB_WORKSPACE/include" -DGLZ_REFLECTION26=1 \
+          -I"$GITHUB_WORKSPACE/include" -I/tmp/ut/include -DGLZ_REFLECTION26=1 \
           -o /tmp/p2996_test "$GITHUB_WORKSPACE/tests/p2996_test/p2996_test.cpp"
         /tmp/p2996_test
 
