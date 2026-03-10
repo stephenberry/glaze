@@ -128,7 +128,7 @@ int main() {
 |---------|-------------|-------|
 | Max struct members | 128 | Unlimited |
 | Non-aggregate types | Not supported | Full support |
-| Inheritance | Requires explicit `glz::meta` | Automatic (via `bases_of`) |
+| Inheritance | Requires explicit `glz::meta` | Automatic (via `nonstatic_data_members_of`) |
 | Member name extraction | `__PRETTY_FUNCTION__` parsing | `std::meta::identifier_of` |
 | Member count | Structured binding probe | `nonstatic_data_members_of().size()` |
 | Private member access | Limited | Full (with `access_context::unchecked()`) |
@@ -221,6 +221,60 @@ constexpr auto names = glz::member_names<Derived>;
 constexpr auto count = glz::detail::count_members<Derived>;
 // count == 3 (2 from Base + 1 from Derived)
 ```
+
+### Automatic Enum String Serialization
+
+With P2996 enabled, enums can be automatically serialized as strings without writing any `glz::meta` specializations. This uses the `reflect_enums` option.
+
+Since `reflect_enums` is not part of the base `glz::opts`, you enable it by creating a custom opts struct:
+
+```cpp
+struct reflect_enums_opts : glz::opts {
+   bool reflect_enums = true;
+};
+
+enum class Color { Red, Green, Blue };
+
+Color c = Color::Green;
+
+// Write enum as string
+auto json = glz::write<reflect_enums_opts{}>(c).value_or("error");
+// json == "\"Green\""
+
+// Read string back to enum
+Color c2;
+glz::read<reflect_enums_opts{}>(c2, json);
+// c2 == Color::Green
+```
+
+Enums in structs also work:
+
+```cpp
+struct Pixel {
+   int x;
+   int y;
+   Color color;
+};
+
+Pixel p{10, 20, Color::Blue};
+auto json = glz::write<reflect_enums_opts{}>(p).value_or("error");
+// {"x":10,"y":20,"color":"Blue"}
+```
+
+P2996 also provides `enum_to_string` and `string_to_enum` utility functions:
+
+```cpp
+constexpr auto name = glz::enum_to_string(Color::Red);
+// name == "Red"
+
+constexpr auto value = glz::string_to_enum<Color>("Blue");
+// value == Color::Blue
+
+constexpr auto invalid = glz::string_to_enum<Color>("Invalid");
+// invalid == std::nullopt
+```
+
+> **Note:** Without the `reflect_enums` option, enums without `glz::meta` specializations are still serialized as their underlying integer values, even when P2996 is enabled.
 
 ### Cleaner Type Names
 
@@ -334,3 +388,4 @@ As C++26 compilers mature and P2996 becomes widely available, it will become the
 - [Reflection in Glaze](reflection.md) - General reflection documentation
 - [Pure Reflection](pure-reflection.md) - Automatic struct reflection without metadata
 - [Modify Reflection](modify-reflection.md) - Customizing reflected member names
+- [Automatic Enum String Serialization](enum-reflection.md) - Enum reflection via external libraries

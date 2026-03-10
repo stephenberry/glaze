@@ -32,7 +32,7 @@ namespace glz
 
       // Count members using P2996 reflection
       // Works for any class type, including non-aggregates (classes with custom constructors)
-      // Note: Currently reflects direct members only. For inherited members, use glz::meta.
+      // Inherited members are automatically included via nonstatic_data_members_of
       template <class T>
          requires(std::is_class_v<std::remove_cvref_t<T>>)
       inline constexpr size_t count_members =

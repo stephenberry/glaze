@@ -61,7 +61,11 @@ auto json = glz::write_json(u).value_or("error");
 // Enums serialize as strings — no glz::meta required
 enum class Color { Red, Green, Blue };
 Color c = Color::Green;
-auto color_json = glz::write<glz::opts{.reflect_enums = true}>(c).value_or("error");
+
+struct reflect_enums_opts : glz::opts {
+   bool reflect_enums = true;
+};
+auto color_json = glz::write<reflect_enums_opts{}>(c).value_or("error");
 // "Green"
 ```
 
@@ -308,7 +312,14 @@ Glaze supports [C++26 P2996 reflection](https://wg21.link/P2996) as an alternati
 set(glaze_ENABLE_REFLECTION26 ON)
 ```
 
-Requires [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996) or a future C++26 compiler with flags:
+Requires [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) or [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996) with flags:
+
+**GCC 16+:**
+```bash
+-std=c++26 -freflection
+```
+
+**Bloomberg clang-p2996:**
 ```bash
 -std=c++26 -freflection -fexpansion-statements -stdlib=libc++
 ```
