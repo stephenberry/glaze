@@ -4669,19 +4669,21 @@ namespace glz
                }
                ++pos;
             }
+            if (digits == 0) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
             // Scale to nanoseconds
             static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
                                                 10000,      1000,      100,      10,      1};
-            if (digits > 0 && digits <= 9) {
-               subsec_nanos = frac * scale[digits];
-            }
+            subsec_nanos = frac * scale[digits];
          }
 
          // Parse timezone: Z or +HH:MM or -HH:MM (defaults to UTC if missing)
          int tz_offset_seconds = 0;
          if (pos < n) {
             if (s[pos] == 'Z') {
-               // UTC
+               ++pos; // consume 'Z'
             }
             else if (s[pos] == '+' || s[pos] == '-') {
                // +05:00 means local is ahead of UTC, so subtract to get UTC (multiply by -1)
@@ -4699,7 +4701,11 @@ namespace glz
                }
                pos += 2;
                int tz_min = 0;
-               if (pos < n && s[pos] == ':') ++pos;
+               bool has_tz_colon = false;
+               if (pos < n && s[pos] == ':') {
+                  ++pos;
+                  has_tz_colon = true;
+               }
                if (pos + 2 <= n) {
                   const int m = parse_digits(pos, 2);
                   if (m < 0 || m > 59) [[unlikely]] {
@@ -4709,8 +4715,19 @@ namespace glz
                   tz_min = m;
                   pos += 2;
                }
+               else if (has_tz_colon) [[unlikely]] {
+                  // Colon present but minutes missing or incomplete
+                  ctx.error = error_code::parse_error;
+                  return;
+               }
                tz_offset_seconds = utc_adjustment * (tz_hour * 3600 + tz_min * 60);
             }
+         }
+
+         // Reject trailing characters
+         if (pos != n) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
          }
 
          // Construct time_point using std::chrono calendar types

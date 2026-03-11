@@ -602,6 +602,77 @@ suite chrono_timezone_tests = [] {
    };
 };
 
+suite chrono_strict_parsing_tests = [] {
+   "reject_trailing_characters_after_Z"_test = [] {
+      std::chrono::system_clock::time_point tp;
+      expect(bool(glz::read_json(tp, R"("2024-12-13T15:30:45Zfoobar")")));
+   };
+
+   "reject_trailing_characters_after_offset"_test = [] {
+      std::chrono::system_clock::time_point tp;
+      expect(bool(glz::read_json(tp, R"("2024-12-13T15:30:45+05:00extra")")));
+   };
+
+   "reject_trailing_digits_after_Z"_test = [] {
+      std::chrono::system_clock::time_point tp;
+      expect(bool(glz::read_json(tp, R"("2024-12-13T15:30:45Z0")")));
+   };
+
+   "reject_trailing_characters_no_timezone"_test = [] {
+      std::chrono::system_clock::time_point tp;
+      expect(bool(glz::read_json(tp, R"("2024-12-13T15:30:45abc")")));
+   };
+
+   "reject_bare_decimal_point"_test = [] {
+      std::chrono::system_clock::time_point tp;
+      expect(bool(glz::read_json(tp, R"("2024-12-13T15:30:45.Z")")));
+   };
+
+   "reject_bare_decimal_point_no_timezone"_test = [] {
+      std::chrono::system_clock::time_point tp;
+      expect(bool(glz::read_json(tp, R"("2024-12-13T15:30:45.")")));
+   };
+
+   "reject_timezone_colon_without_minutes"_test = [] {
+      std::chrono::system_clock::time_point tp;
+      expect(bool(glz::read_json(tp, R"("2024-12-13T15:30:45+05:")")));
+   };
+
+   "reject_timezone_colon_with_one_minute_digit"_test = [] {
+      std::chrono::system_clock::time_point tp;
+      expect(bool(glz::read_json(tp, R"("2024-12-13T15:30:45+05:3")")));
+   };
+
+   "reject_timezone_colon_with_negative_incomplete"_test = [] {
+      std::chrono::system_clock::time_point tp;
+      expect(bool(glz::read_json(tp, R"("2024-12-13T15:30:45-08:")")));
+   };
+
+   "accept_hour_only_timezone_offset"_test = [] {
+      using namespace std::chrono;
+
+      // Hour-only offset is valid ISO 8601 (no colon, no minutes)
+      sys_time<seconds> tp;
+      auto err = glz::read_json(tp, R"("2024-12-13T15:30:45+05")");
+      expect(!err);
+
+      auto json = glz::write_json(tp);
+      expect(json.value() == R"("2024-12-13T10:30:45Z")") << json.value();
+   };
+
+   "accept_valid_fractional_seconds"_test = [] {
+      using namespace std::chrono;
+
+      // Single fractional digit should still work
+      sys_time<milliseconds> tp;
+      auto err = glz::read_json(tp, R"("2024-12-13T15:30:45.1Z")");
+      expect(!err);
+
+      auto json = glz::write_json(tp);
+      expect(json.value() == R"("2024-12-13T15:30:45.100Z")") << json.value();
+   };
+};
+
 suite chrono_roundtrip_1000_tests = [] {
    "duration_roundtrip_1000"_test = [] {
       // Test 1000 different duration values
