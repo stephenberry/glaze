@@ -1644,14 +1644,12 @@ namespace glz
    template <always_null_t T>
    struct to<JSON, T>
    {
-      static constexpr bool can_error = false;
-
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, B&& b, auto& ix)
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
       {
          if constexpr (not check_write_unchecked(Opts)) {
-            if (const auto k = ix + 4; k > b.size()) [[unlikely]] {
-               b.resize(2 * k);
+            if (!ensure_space(ctx, b, ix + 4)) [[unlikely]] {
+               return;
             }
          }
          if constexpr (std::endian::native == std::endian::big) {

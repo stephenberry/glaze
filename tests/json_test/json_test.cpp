@@ -13701,6 +13701,27 @@ suite bounded_buffer_overflow_tests = [] {
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "long string should overflow";
    };
+
+   // Test: always_null_t (glz::generic null) to bounded buffer (issue #2362)
+   "always_null_t to bounded buffer"_test = [] {
+      glz::generic obj{}; // default constructed generic is null
+      std::array<char, 512> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "always_null_t write to span should succeed";
+      std::string_view json(buffer.data(), result.count);
+      expect(json == "null") << "should serialize as null";
+   };
+
+   "always_null_t to small bounded buffer"_test = [] {
+      glz::generic obj{}; // default constructed generic is null
+      std::array<char, 2> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow for too-small buffer";
+   };
 };
 
 int main()
