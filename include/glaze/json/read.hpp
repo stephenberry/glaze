@@ -4615,8 +4615,8 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         // Minimum: YYYY-MM-DDTHH:MM:SSZ = 20 chars
-         if (str.size() < 20) [[unlikely]] {
+         // Minimum: YYYY-MM-DDTHH:MM:SS = 19 chars (timezone is optional, defaults to UTC)
+         if (str.size() < 19) [[unlikely]] {
             ctx.error = error_code::parse_error;
             return;
          }

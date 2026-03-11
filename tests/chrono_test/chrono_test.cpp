@@ -372,6 +372,30 @@ suite chrono_edge_case_tests = [] {
       expect(json.value() == "\"1900-01-01T00:00:00Z\"") << json.value();
    };
 
+   "no_timezone_defaults_to_utc"_test = [] {
+      using namespace std::chrono;
+
+      // ISO 8601 without timezone information should default to UTC
+      sys_time<seconds> tp;
+      auto err = glz::read_json(tp, "\"2024-12-13T15:30:45\"");
+      expect(!err);
+
+      auto json = glz::write_json(tp);
+      expect(json.value() == "\"2024-12-13T15:30:45Z\"") << json.value();
+   };
+
+   "no_timezone_with_fractional_seconds"_test = [] {
+      using namespace std::chrono;
+
+      // ISO 8601 without timezone but with fractional seconds
+      sys_time<milliseconds> tp;
+      auto err = glz::read_json(tp, "\"2024-12-13T15:30:45.123\"");
+      expect(!err);
+
+      auto json = glz::write_json(tp);
+      expect(json.value() == "\"2024-12-13T15:30:45.123Z\"") << json.value();
+   };
+
    "timezone_offset_with_minutes"_test = [] {
       using namespace std::chrono;
 
