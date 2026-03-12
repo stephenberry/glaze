@@ -9,6 +9,7 @@ out/
 CMakeUserPresets.json
 **/CMakeFiles/
 **/CMakeCache.txt
+**/Testing/
 
 # IDE files
 .idea/
@@ -54,8 +55,10 @@ alabastar.beve
 *.beve
 *.pem
 
-# Benchmark comparison directory
-benchmarks/
+# Benchmark build artifacts
+benchmarks/build*/
+**/_deps/
 pr_description.md
 /size_tests
 /tmp_benchmark
+/exterior

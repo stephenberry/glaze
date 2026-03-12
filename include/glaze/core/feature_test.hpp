@@ -12,11 +12,28 @@
 #define GLZ_HAS_CONSTEXPR_STRING 1
 #endif
 
+// C++26 P2996 Reflection Support
+// Can be enabled via:
+// 1. CMake option: glaze_ENABLE_REFLECTION26
+// 2. Compiler define: -DGLZ_REFLECTION26=1
+// 3. Automatic detection via __cpp_lib_reflection or __cpp_impl_reflection
+#ifndef GLZ_REFLECTION26
+#if defined(__cpp_lib_reflection) || defined(__cpp_impl_reflection)
+#define GLZ_REFLECTION26 1
+#else
+#define GLZ_REFLECTION26 0
+#endif
+#endif
+
 namespace glz
 {
    // Constexpr bool for use in if constexpr or other compile-time contexts
    // Use GLZ_HAS_CONSTEXPR_STRING macro for #if preprocessor guards
    inline constexpr bool has_constexpr_string = GLZ_HAS_CONSTEXPR_STRING;
+
+   // C++26 P2996 reflection support
+   // Use GLZ_REFLECTION26 macro for #if preprocessor guards
+   inline constexpr bool has_reflection26 = GLZ_REFLECTION26;
 }
 
 // Glaze Feature Test Macros for breaking changes

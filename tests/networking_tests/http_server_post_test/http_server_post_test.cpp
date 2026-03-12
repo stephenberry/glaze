@@ -6,9 +6,15 @@
 #include <thread>
 #include <ut/ut.hpp>
 
-#include "asio.hpp"
-#include "asio/io_context.hpp"
 #include "glaze/net/http_server.hpp"
+
+#if defined(GLZ_USING_BOOST_ASIO)
+namespace asio
+{
+   using namespace boost::asio;
+   using error_code = boost::system::error_code;
+}
+#endif
 
 namespace
 {
@@ -38,7 +44,7 @@ namespace
             asio::io_context io_ctx;
             asio::ip::tcp::socket sock(io_ctx);
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(port));
-            std::error_code ec;
+            asio::error_code ec;
             sock.connect(endpoint, ec);
             if (ec != asio::error::connection_refused) {
                return;
@@ -80,7 +86,7 @@ namespace
    {
       std::string resp;
       std::array<char, 4096> buf{};
-      std::error_code ec;
+      asio::error_code ec;
       for (;;) {
          std::size_t n = socket.read_some(asio::buffer(buf), ec);
          if (n == 0 || ec) break;
@@ -96,7 +102,7 @@ namespace
       asio::io_context io_ctx;
       asio::ip::tcp::socket socket(io_ctx);
       asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(test_port));
-      std::error_code ec;
+      asio::error_code ec;
       socket.connect(endpoint, ec);
       if (ec) {
          return "";
@@ -117,7 +123,7 @@ namespace
       asio::io_context io_ctx;
       asio::ip::tcp::socket socket(io_ctx);
       asio::ip::tcp::endpoint endpoint(asio::ip::make_address(test_host), uint16_t(test_port));
-      std::error_code ec;
+      asio::error_code ec;
       socket.connect(endpoint, ec);
       if (ec) {
          return "";

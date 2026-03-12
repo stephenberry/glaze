@@ -1852,9 +1852,9 @@ parse_number_string(UC const *p, UC const *pend,
       p = location_of_e;
     } else {
       while ((p != pend) && is_integer(*p)) {
-        uint8_t digit = uint8_t(*p - UC('0'));
+        uint8_t exp_digit = uint8_t(*p - UC('0'));
         if (exp_number < 0x10000000) {
-          exp_number = 10 * exp_number + digit;
+          exp_number = 10 * exp_number + exp_digit;
         }
         ++p;
       }

@@ -43,6 +43,7 @@ namespace glz
       {
          if constexpr (is_resizable) {
             if (needed > b.size()) {
+               // 2× growth amortizes repeated reallocations to O(n) total cost.
                b.resize(2 * needed);
             }
             return true;
@@ -179,6 +180,7 @@ namespace glz
 
       if constexpr (vector_like<Buffer>) {
          if (required > b.size()) [[unlikely]] {
+            // 2× growth amortizes repeated reallocations to O(n) total cost.
             b.resize(2 * required);
          }
          return true;

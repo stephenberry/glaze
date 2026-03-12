@@ -79,6 +79,8 @@ endif()
 include(../cmake/code-coverage.cmake)
 add_code_coverage_all_targets()
 
+option(glaze_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer for tests" ON)
+
 add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_23)
 target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glz_asio)
@@ -96,9 +98,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic)
     endif()
 
-        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      target_compile_options(glz_test_common INTERFACE -ftime-trace -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
-      target_link_options(glz_test_common INTERFACE -ftime-trace -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      target_compile_options(glz_test_common INTERFACE -ftime-trace)
+      target_link_options(glz_test_common INTERFACE -ftime-trace)
+      if(glaze_ENABLE_SANITIZERS)
+        target_compile_options(glz_test_common INTERFACE -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
+        target_link_options(glz_test_common INTERFACE -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
+      endif()
     endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj) #/fsanitize=address
@@ -122,6 +128,8 @@ add_subdirectory(cbor_test)
 add_subdirectory(buffer_pool_test)
 add_subdirectory(cli_menu_test)
 add_subdirectory(compare_test)
+add_subdirectory(ordered_small_map_test)
+add_subdirectory(ordered_map_test)
 add_subdirectory(csv_test)
 add_subdirectory(eigen_test)
 add_subdirectory(example_json)
@@ -132,7 +140,10 @@ if(glaze_BUILD_PERFORMANCE_TESTS)
     add_subdirectory(int_parsing)
 endif()
 add_subdirectory(jmespath)
-add_subdirectory(jsonrpc_test)
+# jsonrpc_test triggers a libc++ std::expected constraint recursion bug in P2996 clang
+if(NOT glaze_ENABLE_REFLECTION26)
+    add_subdirectory(jsonrpc_test)
+endif()
 add_subdirectory(key_transformers_test)
 add_subdirectory(lib_test)
 add_subdirectory(mock_json_test)
@@ -142,6 +153,9 @@ add_subdirectory(stencil)
 add_subdirectory(threading_test)
 add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
+add_subdirectory(yaml_test)
+
+add_subdirectory(yaml_conformance)
 add_subdirectory(msgpack_test)
 add_subdirectory(ostream_buffer_test)
 add_subdirectory(istream_buffer_test)
@@ -171,6 +185,10 @@ if(glaze_EETF_FORMAT)
     add_subdirectory(eetf_test)
 endif(glaze_EETF_FORMAT)
 
+if(glaze_ENABLE_REFLECTION26)
+    add_subdirectory(p2996_test)
+endif()
+
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 # Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -199,6 +217,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     "${CMAKE_CURRENT_BINARY_DIR}/find_package"
     --build-options
     "-Dglaze_ROOT:PATH=${CMAKE_CURRENT_BINARY_DIR}/install"
+    "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}"
+    "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}"
     "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
     "-DBUILD_TESTING=ON"
     "$<$<BOOL:${glaze_EETF_FORMAT}>:-Dglaze_EETF_FORMAT=ON>"

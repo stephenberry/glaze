@@ -14,6 +14,7 @@
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/atoi.hpp"
+#include "glaze/util/bit.hpp"
 #include "glaze/util/compare.hpp"
 #include "glaze/util/convert.hpp"
 #include "glaze/util/expected.hpp"
@@ -662,6 +663,10 @@ namespace glz
 
          std::memcpy(v, ws, 8);
          std::memcpy(v + 1, it, 8);
+         if (v[0] != v[1]) {
+            return;
+         }
+         it += 8;
          return;
       }
       {
@@ -699,48 +704,6 @@ namespace glz
          ++it;
       }*/
    }
-
-   // std::countr_zero uses another branch check whether the input is zero,
-   // we use this function when we know that x > 0
-   GLZ_ALWAYS_INLINE auto countr_zero(const uint32_t x) noexcept
-   {
-#ifdef _MSC_VER
-      return std::countr_zero(x);
-#else
-#if __has_builtin(__builtin_ctzll)
-      return __builtin_ctzl(x);
-#else
-      return std::countr_zero(x);
-#endif
-#endif
-   }
-
-   GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept
-   {
-#ifdef _MSC_VER
-      return std::countr_zero(x);
-#else
-#if __has_builtin(__builtin_ctzll)
-      return __builtin_ctzll(x);
-#else
-      return std::countr_zero(x);
-#endif
-#endif
-   }
-
-#if defined(__SIZEOF_INT128__)
-   GLZ_ALWAYS_INLINE auto countr_zero(__uint128_t x) noexcept
-   {
-      uint64_t low = uint64_t(x);
-      if (low != 0) {
-         return countr_zero(low);
-      }
-      else {
-         uint64_t high = uint64_t(x >> 64);
-         return countr_zero(high) + 64;
-      }
-   }
-#endif
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
    {

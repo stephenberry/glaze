@@ -293,7 +293,7 @@ struct glz::meta<Status> {
 
 > [!TIP]
 >
-> For automatic enum-to-string serialization without writing metadata, consider using [simple_enum](https://github.com/arturbac/simple_enum), which provides Glaze integration.
+> For automatic enum-to-string serialization without writing metadata for each enum, see [Automatic Enum Strings](enum-reflection.md).
 
 ### Variants
 

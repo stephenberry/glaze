@@ -104,7 +104,7 @@ namespace glz
                      decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
                   if (index < N) [[likely]] {
-                     static thread_local std::string temp{};
+                     std::string temp{};
                      visit<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);

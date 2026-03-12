@@ -1386,8 +1386,23 @@ namespace glz
                }
             }
          }
+         else if constexpr (std::is_same_v<Key, std::string>) {
+            for (size_t i = 0; i < n; ++i) {
+               ctx.scratch.clear();
+               if constexpr (Opts.partial_read) {
+                  parse<BEVE>::op<no_header_on<Opts>()>(ctx.scratch, key_tag, ctx, it, end);
+                  if (auto element = value.find(ctx.scratch); element != value.end()) {
+                     parse<BEVE>::op<Opts>(element->second, ctx, it, end);
+                  }
+               }
+               else {
+                  parse<BEVE>::op<no_header_on<Opts>()>(ctx.scratch, key_tag, ctx, it, end);
+                  parse<BEVE>::op<Opts>(value[ctx.scratch], ctx, it, end);
+               }
+            }
+         }
          else {
-            static thread_local Key key;
+            Key key;
             for (size_t i = 0; i < n; ++i) {
                if constexpr (Opts.partial_read) {
                   parse<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
@@ -1619,6 +1634,10 @@ namespace glz
       }
    };
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<BEVE, T> final
@@ -1693,6 +1712,9 @@ namespace glz
          ++it;
 
          static constexpr auto N = reflect<T>::size;
+         if constexpr (N == 0) {
+            (void)value;
+         }
 
          static constexpr bit_array<N> all_fields = [] {
             bit_array<N> arr{};
@@ -1825,6 +1847,9 @@ namespace glz
          }
       }
    };
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
    template <class T>
       requires glaze_array_t<T>
@@ -1928,7 +1953,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         static thread_local std::string buffer{};
+         std::string buffer{};
          parse<BEVE>::op<Opts>(buffer, ctx, args...);
          if (bool(ctx.error)) [[unlikely]] {
             return;

@@ -7,6 +7,7 @@
 #include "glaze/api/impl.hpp"
 #include "glaze/api/std/deque.hpp"
 #include "glaze/api/std/span.hpp"
+#include "glaze/api/std/unordered_map.hpp"
 #include "glaze/api/std/unordered_set.hpp"
 #include "ut/ut.hpp"
 
@@ -134,7 +135,7 @@ void tests()
       int i = 0;
       inc.value()(i);
       expect(i == 1);
-      io->call<void>("/inc", i);
+      std::ignore = io->call<void>("/inc", i);
       expect(i == 2);
 
       auto f = io->get_fn<std::function<double(const int&, const double&)>>("/f");

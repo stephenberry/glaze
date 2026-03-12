@@ -24,21 +24,38 @@ The REST Registry:
 #include "glaze/rpc/registry.hpp"
 #include "glaze/net/http_server.hpp"
 
+struct User {
+    uint64_t id{};
+    std::string name{};
+    float weight{};
+};
+
 struct UserService {
     std::vector<User> getAllUsers() { 
         return users; 
     }
     
-    User getUserById(int id) {
-        // Find and return user
+    User getUserById(size_t id) const {
+        return users.at(id);
     }
     
     User createUser(const User& user) {
-        // Create and return new user
+        users.push_back(user);
+        return users.back();
     }
     
 private:
-    std::vector<User> users;
+    std::vector<User> users{};
+};
+
+template <>
+struct glz::meta<UserService> {
+    using T = UserService;
+    static constexpr auto value = glz::object(
+        &T::getAllUsers,
+        &T::getUserById,
+        &T::createUser
+    );
 };
 
 int main() {
@@ -60,10 +77,17 @@ int main() {
 }
 ```
 
+Service types must define `glz::meta<...>::value` with the methods you want to expose.
+
 This automatically creates:
 - `GET /api/getAllUsers` → `getAllUsers()`
-- `POST /api/getUserById` → `getUserById(int)`  
+- `POST /api/getUserById` → `getUserById(size_t)`  
 - `POST /api/createUser` → `createUser(const User&)`
+
+> [!IMPORTANT]
+>
+> `registry.on(service)` requires Glaze reflection metadata. For service methods, define
+> `glz::meta<Service>::value = glz::object(...)` and list the methods you want to expose.
 
 ## Service Definition
 
@@ -106,6 +130,8 @@ private:
     std::vector<Book> books;
 };
 ```
+
+Expose methods from `BookService` by listing them in `glz::meta<BookService>::value = glz::object(...)`.
 
 ### Request/Response Objects
 
@@ -227,6 +253,9 @@ int main() {
     server.wait_for_signal();
 }
 ```
+
+Each registered service in this setup (`UserService`, `ProductService`, `OrderService`) needs its own
+`glz::meta<...>::value = glz::object(...)` declaration.
 
 ## Customization
 

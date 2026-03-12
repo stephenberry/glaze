@@ -708,6 +708,10 @@ namespace glz
       }
    };
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4702) // unreachable code from if constexpr
+#endif
    template <writable_array_t T>
    struct to<MSGPACK, T>
    {
@@ -740,6 +744,9 @@ namespace glz
             }
          }
       }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
    };
 
    template <>
@@ -944,10 +951,9 @@ namespace glz
                   }
                }
                else {
-                  static thread_local auto key =
-                     typename std::decay_t<Value>::key_type(key_value); // TODO handle numeric pointer segments
-                  serialize<MSGPACK>::op<Opts>(key, ctx, b, ix);
-                  auto it = value.find(key);
+                  auto k = typename std::decay_t<Value>::key_type(key_value); // TODO handle numeric pointer segments
+                  serialize<MSGPACK>::op<Opts>(k, ctx, b, ix);
+                  auto it = value.find(k);
                   if (it != value.end()) {
                      serialize_partial<MSGPACK>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                   }

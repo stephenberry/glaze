@@ -69,6 +69,24 @@ suite generic_i64_tests = [] {
       expect(json["value"].get<double>() == 3.14);
    };
 
+   "i64_json_ptr_get_and_get_if"_test = [] {
+      glz::generic_i64 json{};
+      std::string buffer = R"({"Example":{"enabled":true,"name":"test"}})";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+
+      auto enabled = glz::get<bool>(json, "/Example/enabled");
+      expect(enabled.has_value());
+      expect(enabled->get() == true);
+
+      auto name = glz::get<std::string>(json, "/Example/name");
+      expect(name.has_value());
+      expect(name->get() == "test");
+
+      auto* name_if = glz::get_if<std::string>(json, "/Example/name");
+      expect(name_if != nullptr);
+      expect(*name_if == "test");
+   };
+
    "i64_in_array"_test = [] {
       glz::generic_i64 json{};
       std::string buffer = "[1, 2, 3, 4, 5]";
@@ -301,6 +319,24 @@ suite generic_u64_tests = [] {
       // value should be double
       expect(json["value"].is_double());
       expect(json["value"].get<double>() == 3.14);
+   };
+
+   "u64_json_ptr_get_and_get_if"_test = [] {
+      glz::generic_u64 json{};
+      std::string buffer = R"({"Example":{"enabled":true,"name":"test"}})";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+
+      auto enabled = glz::get<bool>(json, "/Example/enabled");
+      expect(enabled.has_value());
+      expect(enabled->get() == true);
+
+      auto name = glz::get<std::string>(json, "/Example/name");
+      expect(name.has_value());
+      expect(name->get() == "test");
+
+      auto* name_if = glz::get_if<std::string>(json, "/Example/name");
+      expect(name_if != nullptr);
+      expect(*name_if == "test");
    };
 
    "u64_as_conversion"_test = [] {

@@ -177,7 +177,7 @@ suite buffer_pool_tests = [] {
    "concurrent_borrow_return"_test = [] {
       glz::buffer_pool pool{10};
       constexpr int num_threads = 4;
-      constexpr int iterations = 50;
+      [[maybe_unused]] constexpr int iterations = 50; // maybe_unused to fix MSVC bug
 
       std::atomic<int> active_buffers{0};
       std::atomic<int> max_active{0};

@@ -41,6 +41,36 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
+         // write_chars assumes callers ensure capacity for bounded buffers.
+         // CSV can write numerics in tight loops, so guard bounded buffers here.
+         if constexpr (!check_write_unchecked(Opts) && has_bounded_capacity<B>) {
+            constexpr size_t max_numeric_chars = [] {
+               if constexpr (std::floating_point<T>) {
+                  if constexpr (sizeof(T) > 8) {
+                     return size_t{64};
+                  }
+                  else if constexpr (sizeof(T) > 4) {
+                     return size_t{32};
+                  }
+                  else {
+                     return size_t{24};
+                  }
+               }
+               else if constexpr (sizeof(T) > 4) {
+                  return size_t{24};
+               }
+               else if constexpr (sizeof(T) > 2) {
+                  return size_t{16};
+               }
+               else {
+                  return size_t{8};
+               }
+            }();
+
+            if (!ensure_space(ctx, b, ix + max_numeric_chars)) [[unlikely]] {
+               return;
+            }
+         }
          write_chars::op<Opts>(value, ctx, b, ix);
       }
    };

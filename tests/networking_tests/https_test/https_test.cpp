@@ -10,8 +10,6 @@
 #include <memory>
 #include <thread>
 
-#include "asio/io_context.hpp"
-
 #ifndef GLZ_ENABLE_SSL
 #define GLZ_ENABLE_SSL
 #endif
@@ -35,7 +33,13 @@
 #undef DELETE
 #endif
 
-#include <asio.hpp>
+#if defined(GLZ_USING_BOOST_ASIO)
+namespace asio
+{
+   using namespace boost::asio;
+   using error_code = boost::system::error_code;
+}
+#endif
 
 using namespace ut;
 
@@ -308,7 +312,7 @@ struct TestUser
 };
 
 // Helper function to check if an error should be suppressed
-bool should_suppress_error(const std::error_code& ec)
+bool should_suppress_error(const asio::error_code& ec)
 {
    // Common errors that are expected during normal operation
    if (ec == asio::error::eof) return true; // Client disconnected normally
@@ -686,7 +690,7 @@ suite server_lifecycle_external_context_tests = [] {
          asio::ip::tcp::socket socket(client_io);
          asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 8443);
 
-         std::error_code ec;
+         asio::error_code ec;
          socket.connect(endpoint, ec);
          connection_successful = !ec;
          if (!ec) {
@@ -713,7 +717,7 @@ suite server_lifecycle_external_context_tests = [] {
          asio::ip::tcp::socket socket(client_io);
          asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 8443);
 
-         std::error_code ec;
+         asio::error_code ec;
          socket.connect(endpoint, ec);
          connection_refused = (ec == asio::error::connection_refused);
          if (!ec) {

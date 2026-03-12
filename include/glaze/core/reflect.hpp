@@ -7,7 +7,12 @@
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"
+#include "glaze/reflection/get_name.hpp"
 #include "glaze/util/primes_64.hpp"
+
+#if GLZ_REFLECTION26
+#include <meta>
+#endif
 
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
@@ -309,6 +314,14 @@ namespace glz
       using type = member_t<V, decltype(get<I>(values))>;
    };
 
+   // Note: is_reflect_enum<T> types do NOT get a reflect<T> specialization here.
+   // P2996 reflection must be done inline in the handlers (to<JSON, T>, from<JSON, T>)
+   // because P2996 operations like std::meta::enumerators_of require a consteval context
+   // that is not available during template class instantiation.
+
+   // Note: is_reflect_enum handlers use the existing enum_nameof and enum_count
+   // from get_name.hpp. The enum values are obtained using P2996 splicing inline.
+
    template <class T>
       requires(is_memory_object<T>)
    struct reflect<T> : reflect<memory_type<T>>
@@ -471,6 +484,15 @@ namespace glz
          for_each<N>([&]<auto I>() constexpr {
             using V = std::decay_t<refl_t<T, I>>;
 
+            // Check if field is skipped during parse - if so, don't require it
+            if constexpr (meta_has_skip<T>) {
+               constexpr auto key = reflect<T>::keys[I];
+               if constexpr (meta<T>::skip(key, {operation::parse})) {
+                  fields[I] = false;
+                  return;
+               }
+            }
+
             // Check if meta<T>::requires_key customization point exists
             if constexpr (meta_has_requires_key<T>) {
                constexpr auto key = reflect<T>::keys[I];
@@ -632,10 +654,13 @@ namespace glz
    enum struct int_hash_type {
       direct, // Sequential values starting at 0: value as index
       offset, // Sequential values with offset: value - min_value
+      two_element, // N==2: compare against first value
       power_of_two, // Powers of 2 (flags): countr_zero(value)
       small_range, // Sparse lookup table for small ranges
       modular, // Perfect hash: (value * seed) % table_size
-      modular_shifted // Perfect hash with shift: ((value >> shift) * seed) % table_size
+      modular_shifted, // Perfect hash with shift: ((value >> shift) * seed) % table_size
+      linear_search, // Fallback: linear scan through values (N <= 16)
+      binary_search // Fallback: binary search through sorted values (N > 16)
    };
 
    template <size_t N, size_t TableSize>
@@ -683,6 +708,13 @@ namespace glz
          else {
             return int_keys_info_t<1, 0>{.type = int_hash_type::offset, .min_value = static_cast<int64_t>(value)};
          }
+      }
+      else if constexpr (N == 2) {
+         // For two-element enums, compare against first value
+         constexpr auto first_value = static_cast<int64_t>(static_cast<U>(glz::get<0>(reflect<T>::values)));
+         constexpr auto second_value = static_cast<int64_t>(static_cast<U>(glz::get<1>(reflect<T>::values)));
+         return int_keys_info_t<2, 0>{
+            .type = int_hash_type::two_element, .min_value = first_value, .max_value = second_value};
       }
       else {
          // Extract values into array for analysis
@@ -852,20 +884,29 @@ namespace glz
                   return std::pair{false, uint64_t{0}};
                }();
 
-               static_assert(shifted_info.first, "Failed to find perfect hash seed for enum");
+               if constexpr (shifted_info.first) {
+                  int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
+                                                      .seed = shifted_info.second,
+                                                      .table_size = table_size,
+                                                      .shift = common_shift};
+                  info.table.fill(static_cast<uint8_t>(N));
 
-               int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
-                                                   .seed = shifted_info.second,
-                                                   .table_size = table_size,
-                                                   .shift = common_shift};
-               info.table.fill(static_cast<uint8_t>(N));
-
-               for (size_t i = 0; i < N; ++i) {
-                  const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
-                  const auto h = (shifted * info.seed) % table_size;
-                  info.table[h] = static_cast<uint8_t>(i);
+                  for (size_t i = 0; i < N; ++i) {
+                     const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
+                     const auto h = (shifted * info.seed) % table_size;
+                     info.table[h] = static_cast<uint8_t>(i);
+                  }
+                  return info;
                }
-               return info;
+               else {
+                  // Fallback: linear search for small N, binary search for larger N
+                  if constexpr (N <= 16) {
+                     return int_keys_info_t<N, 0>{.type = int_hash_type::linear_search};
+                  }
+                  else {
+                     return int_keys_info_t<N, 0>{.type = int_hash_type::binary_search};
+                  }
+               }
             }
          }
       }
@@ -900,6 +941,17 @@ namespace glz
          else if constexpr (Info.type == offset) {
             return static_cast<size_t>(value - Info.min_value);
          }
+         else if constexpr (Info.type == two_element) {
+            // Compare against first value: if match return 0, else check second
+            // Use uint64_t to handle both signed and unsigned underlying types correctly
+            if (static_cast<uint64_t>(value) == static_cast<uint64_t>(Info.min_value)) {
+               return 0;
+            }
+            else if (static_cast<uint64_t>(value) == static_cast<uint64_t>(Info.max_value)) {
+               return 1;
+            }
+            return N; // Not found
+         }
          else if constexpr (Info.type == power_of_two) {
             using UnsignedU = std::make_unsigned_t<U>;
             const auto uv = static_cast<UnsignedU>(value);
@@ -924,10 +976,73 @@ namespace glz
             const auto h = (static_cast<uint64_t>(value) * Info.seed) % Info.table_size;
             return Info.table[h]; // Returns N if slot is empty
          }
-         else { // modular_shifted
+         else if constexpr (Info.type == modular_shifted) {
             const auto shifted = static_cast<uint64_t>(value) >> Info.shift;
             const auto h = (shifted * Info.seed) % Info.table_size;
             return Info.table[h]; // Returns N if slot is empty
+         }
+         else if constexpr (Info.type == linear_search) {
+            // Linear scan through enum values
+            constexpr auto& values = enum_values_array<T>;
+            for (size_t i = 0; i < N; ++i) {
+               if (values[i] == value) {
+                  return i;
+               }
+            }
+            return N; // Not found
+         }
+         else { // binary_search
+            // Binary search through sorted enum values
+            // Compute sorted indices and values together to avoid capture issues
+            constexpr auto sorted_data = []() {
+               struct result_t
+               {
+                  std::array<size_t, N> indices{};
+                  std::array<U, N> values{};
+               };
+               result_t result{};
+
+               // Initialize indices
+               for (size_t i = 0; i < N; ++i) {
+                  result.indices[i] = i;
+               }
+
+               // Sort indices by their corresponding values (bubble sort for constexpr)
+               constexpr auto& src_values = enum_values_array<T>;
+               for (size_t i = 0; i < N - 1; ++i) {
+                  for (size_t j = i + 1; j < N; ++j) {
+                     if (src_values[result.indices[j]] < src_values[result.indices[i]]) {
+                        auto tmp = result.indices[i];
+                        result.indices[i] = result.indices[j];
+                        result.indices[j] = tmp;
+                     }
+                  }
+               }
+
+               // Build sorted values array
+               for (size_t i = 0; i < N; ++i) {
+                  result.values[i] = src_values[result.indices[i]];
+               }
+
+               return result;
+            }();
+
+            // Binary search
+            size_t left = 0;
+            size_t right = N;
+            while (left < right) {
+               const size_t mid = left + (right - left) / 2;
+               if (sorted_data.values[mid] < value) {
+                  left = mid + 1;
+               }
+               else {
+                  right = mid;
+               }
+            }
+            if (left < N && sorted_data.values[left] == value) {
+               return sorted_data.indices[left];
+            }
+            return N; // Not found
          }
       }
    };
@@ -937,6 +1052,7 @@ namespace glz
    // ============================================================================
 
    // get a std::string_view from an enum value
+   // Note: is_reflect_enum types are handled separately because P2996 requires inline consteval context
    template <class T>
       requires(glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
    constexpr auto get_enum_name(T&& enum_value)
@@ -2045,7 +2161,7 @@ namespace glz
             const auto* c = quote_memchr<HashInfo.min_length>(it, end);
             if (c) [[likely]] {
                const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-               if (n == 0 || n > HashInfo.max_length) [[unlikely]] {
+               if (n == 0 || n > HashInfo.max_length || HashInfo.unique_index >= size_t(end - it)) [[unlikely]] {
                   return N; // error
                }
 
@@ -2204,8 +2320,9 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
-         // For JSON we require at a minimum ":1} characters after a key (1 being a single char number)
-         // This means that we can require all these characters to exist for SWAR parsing
+         // Bounds checks ensure we can safely read the string content and determine its length.
+         // Note: This is used for both object keys and enum values, so we cannot assume
+         // extra characters exist after the closing quote (e.g., standalone enum: "value")
 
          if constexpr (length_range == 0) {
             if ((it + min_length) >= end) [[unlikely]] {
@@ -2217,7 +2334,9 @@ namespace glz
          else {
             if constexpr (length_range == 1) {
                auto quote = it + min_length;
-               if ((quote + 1) >= end) [[unlikely]] {
+               // Ensure we can read *quote to determine if string is min_length or max_length.
+               // The check (quote + 1) > end ensures quote < end, making *quote dereferenceable.
+               if ((quote + 1) > end) [[unlikely]] {
                   return N;
                }
 
@@ -2456,7 +2575,6 @@ namespace glz
 
       if constexpr (K > 0) {
          using keys_t = keys_wrapper<variant_deduction_keys<T>>;
-         constexpr auto& HashInfo = hash_info<keys_t>;
 
          // Populate bit arrays - for each key, set bits for variant types that have it
          for_each<std::variant_size_v<T>>([&]<auto I>() {
@@ -2465,6 +2583,7 @@ namespace glz
                using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
                constexpr auto Size = reflect<X>::size;
                if constexpr (Size > 0) {
+                  constexpr auto& HashInfo = hash_info<keys_t>;
                   for (size_t J = 0; J < Size; ++J) {
                      sv key = reflect<X>::keys[J];
                      const auto index = decode_hash_with_size<JSON, keys_t, HashInfo, HashInfo.type>::op(
@@ -2505,6 +2624,13 @@ namespace glz
          else {
             return int_keys_info_t<1, 0>{.type = int_hash_type::offset, .min_value = static_cast<int64_t>(value)};
          }
+      }
+      else if constexpr (N == 2) {
+         // For two-element IDs, compare against first value
+         constexpr auto first_value = static_cast<int64_t>(ids_v<T>[0]);
+         constexpr auto second_value = static_cast<int64_t>(ids_v<T>[1]);
+         return int_keys_info_t<2, 0>{
+            .type = int_hash_type::two_element, .min_value = first_value, .max_value = second_value};
       }
       else {
          // Extract values from ids_v<T>
@@ -2673,20 +2799,29 @@ namespace glz
                   return std::pair{false, uint64_t{0}};
                }();
 
-               static_assert(shifted_info.first, "Failed to find perfect hash seed for variant int IDs");
+               if constexpr (shifted_info.first) {
+                  int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
+                                                      .seed = shifted_info.second,
+                                                      .table_size = table_size,
+                                                      .shift = common_shift};
+                  info.table.fill(static_cast<uint8_t>(N));
 
-               int_keys_info_t<N, table_size> info{.type = int_hash_type::modular_shifted,
-                                                   .seed = shifted_info.second,
-                                                   .table_size = table_size,
-                                                   .shift = common_shift};
-               info.table.fill(static_cast<uint8_t>(N));
-
-               for (size_t i = 0; i < N; ++i) {
-                  const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
-                  const auto h = (shifted * info.seed) % table_size;
-                  info.table[h] = static_cast<uint8_t>(i);
+                  for (size_t i = 0; i < N; ++i) {
+                     const auto shifted = static_cast<uint64_t>(vals[i]) >> common_shift;
+                     const auto h = (shifted * info.seed) % table_size;
+                     info.table[h] = static_cast<uint8_t>(i);
+                  }
+                  return info;
                }
-               return info;
+               else {
+                  // Fallback: linear search for small N, binary search for larger N
+                  if constexpr (N <= 16) {
+                     return int_keys_info_t<N, 0>{.type = int_hash_type::linear_search};
+                  }
+                  else {
+                     return int_keys_info_t<N, 0>{.type = int_hash_type::binary_search};
+                  }
+               }
             }
          }
       }
@@ -2736,6 +2871,17 @@ namespace glz
          else if constexpr (Info.type == offset) {
             return static_cast<size_t>(id - Info.min_value);
          }
+         else if constexpr (Info.type == two_element) {
+            // Compare against first value: if match return 0, else check second
+            // Use uint64_t to handle both signed and unsigned underlying types correctly
+            if (static_cast<uint64_t>(id) == static_cast<uint64_t>(Info.min_value)) {
+               return 0;
+            }
+            else if (static_cast<uint64_t>(id) == static_cast<uint64_t>(Info.max_value)) {
+               return 1;
+            }
+            return N; // Not found
+         }
          else if constexpr (Info.type == power_of_two) {
             using UnsignedU = std::make_unsigned_t<U>;
             const auto uv = static_cast<UnsignedU>(id);
@@ -2759,10 +2905,61 @@ namespace glz
             const auto h = (static_cast<uint64_t>(id) * Info.seed) % Info.table_size;
             return Info.table[h];
          }
-         else { // modular_shifted
+         else if constexpr (Info.type == modular_shifted) {
             const auto shifted = static_cast<uint64_t>(id) >> Info.shift;
             const auto h = (shifted * Info.seed) % Info.table_size;
             return Info.table[h];
+         }
+         else if constexpr (Info.type == linear_search) {
+            for (size_t i = 0; i < N; ++i) {
+               if (ids_v<T>[i] == id) {
+                  return i;
+               }
+            }
+            return N;
+         }
+         else { // binary_search
+            constexpr auto sorted_data = []() {
+               struct result_t
+               {
+                  std::array<size_t, N> indices{};
+                  std::array<U, N> values{};
+               };
+               result_t result{};
+
+               for (size_t i = 0; i < N; ++i) {
+                  result.indices[i] = i;
+               }
+               for (size_t i = 0; i < N - 1; ++i) {
+                  for (size_t j = i + 1; j < N; ++j) {
+                     if (ids_v<T>[result.indices[j]] < ids_v<T>[result.indices[i]]) {
+                        auto tmp = result.indices[i];
+                        result.indices[i] = result.indices[j];
+                        result.indices[j] = tmp;
+                     }
+                  }
+               }
+               for (size_t i = 0; i < N; ++i) {
+                  result.values[i] = ids_v<T>[result.indices[i]];
+               }
+               return result;
+            }();
+
+            size_t left = 0;
+            size_t right = N;
+            while (left < right) {
+               const size_t mid = left + (right - left) / 2;
+               if (sorted_data.values[mid] < id) {
+                  left = mid + 1;
+               }
+               else {
+                  right = mid;
+               }
+            }
+            if (left < N && sorted_data.values[left] == id) {
+               return sorted_data.indices[left];
+            }
+            return N;
          }
       }
    };

@@ -145,25 +145,47 @@ Since Glaze is header-only, you can simply:
 
 ## CMake Configuration Options
 
-### AVX2 Support
-Enable AVX2 SIMD instructions for better performance (if your target supports it):
+### SIMD Support
+
+Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations:
+
+| Flag | Detected When | Architecture |
+|------|--------------|--------------|
+| `GLZ_USE_SSE2` | `__x86_64__` or `_M_X64` | x86-64 (always has SSE2) |
+| `GLZ_USE_AVX2` | `__AVX2__` (in addition to x86-64) | x86-64 with AVX2 |
+| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM64 / AArch64 |
+
+Detection uses compiler-predefined macros that reflect the target architecture, so cross-compilation works correctly without any manual configuration.
+
+### Disable SIMD
+
+To disable all SIMD intrinsics (e.g., when benchmarking SWAR-only performance or working around a platform issue):
 
 ```cmake
-set(glaze_ENABLE_AVX2 ON)
+set(glaze_DISABLE_SIMD_WHEN_SUPPORTED ON)
 FetchContent_MakeAvailable(glaze)
 ```
 
-Or define the macro directly:
+This sets `GLZ_DISABLE_SIMD` as an INTERFACE compile definition, so it automatically propagates to all targets linking against `glaze::glaze`.
+
+Or define the macro directly before including Glaze headers:
 ```cpp
-#define GLZ_USE_AVX2
+#define GLZ_DISABLE_SIMD
+#include "glaze/glaze.hpp"
 ```
 
-### Disable AVX2 (Cross-compilation)
-For cross-compilation to ARM or other architectures:
+### C++26 P2996 Reflection
+
+Enable C++26 P2996 reflection support for use with Bloomberg clang-p2996 or future C++26 compilers:
 
 ```cmake
-set(glaze_ENABLE_AVX2 OFF)
+set(glaze_ENABLE_REFLECTION26 ON)
+FetchContent_MakeAvailable(glaze)
 ```
+
+This replaces traditional `__PRETTY_FUNCTION__` reflection with standardized P2996 reflection primitives. Requires compiler flags: `-std=c++26 -freflection -fexpansion-statements -stdlib=libc++`
+
+See [P2996 Reflection](p2996-reflection.md) for details.
 
 ### Disable Forced Inlining
 
@@ -216,11 +238,6 @@ project(MyGlazeProject LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Enable AVX2 if building for x86_64
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-    set(glaze_ENABLE_AVX2 ON)
-endif()
 
 include(FetchContent)
 FetchContent_Declare(

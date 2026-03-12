@@ -140,22 +140,6 @@ namespace glz
       }
    };
 
-   // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup, etc.
-   // We don't put this in the context because we don't want to continually reallocate.
-   // IMPORTANT: Do not call use this when nested calls may be made that need additional buffers on the same thread.
-   inline std::string& string_buffer() noexcept
-   {
-      static thread_local std::string buffer(256, '\0');
-      return buffer;
-   }
-
-   // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
-   inline std::string& error_buffer() noexcept
-   {
-      static thread_local std::string buffer(256, '\0');
-      return buffer;
-   }
-
    template <class T>
       requires(glaze_value_t<T> && !custom_read<T>)
    struct from<JSON, T>
@@ -2009,6 +1993,8 @@ namespace glz
       }
    };
 
+   // Fallback handler for enums without explicit glz::meta
+   // Reads as underlying integer unless reflect_enums option is enabled (P2996)
    template <class T>
       requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
    struct from<JSON, T>
@@ -2016,10 +2002,52 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
-         // TODO: use std::bit_cast???
-         std::underlying_type_t<std::decay_t<T>> x{};
-         parse<JSON>::op<Opts>(x, ctx, it, end);
-         value = static_cast<std::decay_t<T>>(x);
+#if GLZ_REFLECTION26
+         if constexpr (check_reflect_enums(Opts)) {
+            // P2996 reflection using reflect_constant_array and expansion statements
+            if constexpr (!check_ws_handled(Opts)) {
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
+            }
+
+            if (*it != '"') [[unlikely]] {
+               ctx.error = error_code::expected_quote;
+               return;
+            }
+            ++it;
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
+
+            // Extract the string key
+            const auto start = it;
+            while (*it != '"' && it != end) {
+               ++it;
+            }
+            const sv key{start, static_cast<size_t>(it - start)};
+            ++it; // skip closing quote
+
+            using V = std::decay_t<T>;
+            auto result = string_to_enum<V>(key);
+            if (result) {
+               value = *result;
+            }
+            else [[unlikely]] {
+               ctx.error = error_code::unexpected_enum;
+            }
+         }
+         else
+#endif
+         {
+            // Fallback: read as underlying integer
+            std::underlying_type_t<std::decay_t<T>> x{};
+            parse<JSON>::op<Opts>(x, ctx, it, end);
+            value = static_cast<std::decay_t<T>>(x);
+         }
       }
    };
 
@@ -2394,7 +2422,8 @@ namespace glz
             using V = std::decay_t<decltype(item)>;
 
             if constexpr (str_t<typename V::first_type> ||
-                          (std::is_enum_v<typename V::first_type> && glaze_t<typename V::first_type>)) {
+                          (std::is_enum_v<typename V::first_type> && glaze_t<typename V::first_type>) ||
+                          mimics_str_t<typename V::first_type>) {
                parse<JSON>::op<Opts>(item.first, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2664,18 +2693,16 @@ namespace glz
             ++ctx.depth;
          }
 
-         std::string& s = string_buffer();
-
          constexpr auto& HashInfo = hash_info<T>;
          static_assert(bool(HashInfo.type));
 
          while (true) {
-            parse<JSON>::op<ws_handled_off<Opts>()>(s, ctx, it, end);
+            parse<JSON>::op<ws_handled_off<Opts>()>(ctx.scratch, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            const auto index =
-               decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(s.data(), s.data() + s.size(), s.size());
+            const auto index = decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(
+               ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
 
             constexpr auto N = reflect<T>::size;
             if (index < N) [[likely]] {
@@ -2789,7 +2816,7 @@ namespace glz
          }
 
          using first_type = typename T::first_type;
-         if constexpr (str_t<first_type> || is_named_enum<first_type>) {
+         if constexpr (str_t<first_type> || is_named_enum<first_type> || mimics_str_t<first_type>) {
             parse<JSON>::op<Opts>(value.first, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -3220,8 +3247,8 @@ namespace glz
                   // using Key = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
                   using Key = typename T::key_type;
                   if constexpr (std::is_same_v<Key, std::string>) {
-                     static thread_local Key key;
-                     parse<JSON>::op<Opts>(key, ctx, it, end);
+                     ctx.scratch.clear();
+                     parse<JSON>::op<Opts>(ctx.scratch, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
@@ -3229,7 +3256,7 @@ namespace glz
                         return;
                      }
 
-                     reading(key);
+                     reading(ctx.scratch);
                      if constexpr (Opts.partial_read) {
                         if (read_count == value.size()) {
                            return;
@@ -3785,11 +3812,12 @@ namespace glz
                                  constexpr auto variant_size = std::variant_size_v<T>;
                                  if constexpr (ids_size < variant_size) {
                                     // Use the first unlabeled type as the default
-                                    const auto type_index = ids_size;
+                                    const auto default_type_index = ids_size;
 
                                     it = start; // we restart our object parsing now that we know the target type
-                                    tag_specified_index = type_index; // Store the default type index
-                                    if (value.index() != type_index) emplace_runtime_variant(value, type_index);
+                                    tag_specified_index = default_type_index; // Store the default type index
+                                    if (value.index() != default_type_index)
+                                       emplace_runtime_variant(value, default_type_index);
                                     std::visit(
                                        [&](auto&& v) {
                                           using V = std::decay_t<decltype(v)>;
@@ -4390,11 +4418,11 @@ namespace glz
             }
             else {
                // either we have an unexpected value or we are decoding an object
-               auto& key = string_buffer();
-               parse<JSON>::op<Opts>(key, ctx, it, end);
+               ctx.scratch.clear();
+               parse<JSON>::op<Opts>(ctx.scratch, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               if (key == "unexpected") {
+               if (ctx.scratch == "unexpected") {
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
@@ -4536,8 +4564,8 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
-         std::string& buffer = string_buffer();
-         parse<JSON>::op<Opts>(buffer, ctx, it, end);
+         ctx.scratch.clear();
+         parse<JSON>::op<Opts>(ctx.scratch, ctx, it, end);
          if constexpr (Opts.null_terminated) {
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -4547,7 +4575,7 @@ namespace glz
                return;
             }
          }
-         value = buffer;
+         value = ctx.scratch;
       }
    };
 
@@ -4587,8 +4615,8 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         // Minimum: YYYY-MM-DDTHH:MM:SSZ = 20 chars
-         if (str.size() < 20) [[unlikely]] {
+         // Minimum: YYYY-MM-DDTHH:MM:SS = 19 chars (timezone is optional, defaults to UTC)
+         if (str.size() < 19) [[unlikely]] {
             ctx.error = error_code::parse_error;
             return;
          }
@@ -4641,19 +4669,21 @@ namespace glz
                }
                ++pos;
             }
+            if (digits == 0) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
             // Scale to nanoseconds
             static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
                                                 10000,      1000,      100,      10,      1};
-            if (digits > 0 && digits <= 9) {
-               subsec_nanos = frac * scale[digits];
-            }
+            subsec_nanos = frac * scale[digits];
          }
 
          // Parse timezone: Z or +HH:MM or -HH:MM (defaults to UTC if missing)
          int tz_offset_seconds = 0;
          if (pos < n) {
             if (s[pos] == 'Z') {
-               // UTC
+               ++pos; // consume 'Z'
             }
             else if (s[pos] == '+' || s[pos] == '-') {
                // +05:00 means local is ahead of UTC, so subtract to get UTC (multiply by -1)
@@ -4671,7 +4701,11 @@ namespace glz
                }
                pos += 2;
                int tz_min = 0;
-               if (pos < n && s[pos] == ':') ++pos;
+               bool has_tz_colon = false;
+               if (pos < n && s[pos] == ':') {
+                  ++pos;
+                  has_tz_colon = true;
+               }
                if (pos + 2 <= n) {
                   const int m = parse_digits(pos, 2);
                   if (m < 0 || m > 59) [[unlikely]] {
@@ -4681,8 +4715,19 @@ namespace glz
                   tz_min = m;
                   pos += 2;
                }
+               else if (has_tz_colon) [[unlikely]] {
+                  // Colon present but minutes missing or incomplete
+                  ctx.error = error_code::parse_error;
+                  return;
+               }
                tz_offset_seconds = utc_adjustment * (tz_hour * 3600 + tz_min * 60);
             }
+         }
+
+         // Reject trailing characters
+         if (pos != n) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
          }
 
          // Construct time_point using std::chrono calendar types

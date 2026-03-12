@@ -23,7 +23,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, auto&&... args)
       {
-         static thread_local eetf::atom a{};
+         eetf::atom a{};
          parse<EETF>::op<Opts>(a, args...);
          value.val = a;
       }
@@ -35,7 +35,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         static thread_local eetf::atom s(value.val);
+         eetf::atom s(value.val);
          using S = core_t<decltype(s)>;
          to<EETF, S>::template op<Opts>(s, ctx, b, ix);
       }

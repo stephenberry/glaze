@@ -174,7 +174,9 @@ namespace glz
       constexpr auto cat_impl([[maybe_unused]] T tup, type_list<Outer...>, type_list<Inner...>)
          -> tuple<type_t<Inner>...>
       {
-         return {{{static_cast<type_t<Outer>&&>(tup.identity_t<Outer>::value).identity_t<Inner>::value}...}};
+         // .template added to fix MSVC bug
+         return {{{static_cast<type_t<Outer>&&>(tup.template identity_t<Outer>::value)
+                      .template identity_t<Inner>::value}...}};
       }
 
       template <class... T>

@@ -49,10 +49,25 @@ int main() {
 #include "glaze/rpc/registry.hpp"
 #include "glaze/net/http_server.hpp"
 
+struct User {
+    int id{};
+    std::string name{};
+};
+
 struct UserService {
     std::vector<User> getAllUsers() { /* ... */ }
     User getUserById(int id) { /* ... */ }
     User createUser(const User& user) { /* ... */ }
+};
+
+template <>
+struct glz::meta<UserService> {
+    using T = UserService;
+    static constexpr auto value = glz::object(
+        &T::getAllUsers,
+        &T::getUserById,
+        &T::createUser
+    );
 };
 
 int main() {
@@ -70,6 +85,8 @@ int main() {
     return 0;
 }
 ```
+
+`registry.on(service)` requires reflection metadata (`glz::meta<T>` or a reflectable aggregate).
 
 ## Core Components
 

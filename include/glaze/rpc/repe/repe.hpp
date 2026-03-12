@@ -408,8 +408,7 @@ namespace glz::repe
          }
          else {
             // Serialize body to temporary buffer first (glz::write clears the buffer)
-            thread_local std::string body_buffer;
-            body_buffer.clear();
+            std::string body_buffer;
             auto ec = glz::write<Opts>(std::forward<T>(value), body_buffer);
             if (ec) {
                return ec.ec;

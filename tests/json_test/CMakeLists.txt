@@ -30,13 +30,15 @@ endfunction()
 add_glz_json_test(${PROJECT_NAME} ${JSON_TEST_SOURCES})
 add_glz_json_test(json_variant_support_test ${JSON_VARIANT_SUPPORT_SOURCES})
 
+set_tests_properties(json_test json_test_non_null PROPERTIES TIMEOUT 60)
+
 ## glz::generic test
 
-add_executable(json_t_test generic_test.cpp)
+add_executable(generic_test generic_test.cpp)
 
-target_link_libraries(json_t_test PRIVATE glz_test_common)
+target_link_libraries(generic_test PRIVATE glz_test_common)
 
-add_test(NAME json_t_test COMMAND json_t_test)
+add_test(NAME generic_test COMMAND generic_test)
 
 ## glz::generic_i64 and glz::generic_u64 tests
 
@@ -157,3 +159,11 @@ add_executable(lazy_test lazy_test.cpp)
 target_link_libraries(lazy_test PRIVATE glz_test_common)
 
 add_test(NAME lazy_test COMMAND lazy_test)
+
+## Non-aggregate reflection test - C++26 P2996 reflection for non-aggregate types
+
+add_executable(non_aggregate_reflection_test non_aggregate_reflection_test.cpp)
+
+target_link_libraries(non_aggregate_reflection_test PRIVATE glz_test_common)
+
+add_test(NAME non_aggregate_reflection_test COMMAND non_aggregate_reflection_test)

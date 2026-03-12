@@ -38,6 +38,44 @@ int main() {
 - **Thread-Safe**: Multiple threads can safely use the same client instance
 - **Error Handling**: Uses `std::expected` for clean error handling
 
+## HTTPS Trust Store Configuration
+
+When using HTTPS, certificate verification depends on your OpenSSL trust store configuration.
+To simplify setup, `http_client` provides:
+
+```cpp
+std::expected<void, std::error_code> configure_system_ca_certificates(
+    std::optional<std::string_view> cert_bundle_file = std::nullopt
+);
+```
+
+Fallback order:
+
+1. Explicit `cert_bundle_file` argument (if provided)
+2. `SSL_CERT_FILE` environment variable
+3. `SSL_CERT_DIR` environment variable
+4. OpenSSL default verify paths (`set_default_verify_paths`)
+
+Example:
+
+```cpp
+glz::http_client client;
+
+if (auto ec = client.configure_system_ca_certificates("/path/to/cert.pem"); !ec) {
+    std::cerr << "Failed to configure CA trust roots: " << ec.error().message() << '\n';
+    return;
+}
+
+auto response = client.get("https://example.com");
+```
+
+Notes:
+
+- On macOS with Homebrew OpenSSL, you may need to point `SSL_CERT_FILE` at Homebrew's CA bundle
+  (commonly `/opt/homebrew/etc/ca-certificates/cert.pem`).
+- OpenSSL certificate lookup behavior is platform/package-manager dependent; explicit configuration is recommended
+  for reproducible deployments.
+
 ## Synchronous Methods
 
 ### GET Request
@@ -144,39 +182,45 @@ void post_json_async(
 The HTTP client supports streaming requests, which allow you to receive data in chunks.
 
 ```cpp
-template<typename OnData, typename OnError, typename OnConnect, typename OnDisconnect>
-stream_connection::pointer stream_request(stream_options options);
+std::shared_ptr<http_stream_connection> stream_request_v2(const stream_request_params_v2& params);
 ```
 
-The `stream_options` struct contains the following fields:
+The `stream_request_params_v2` struct contains the following fields:
 
 ```cpp
-struct stream_options {
+struct stream_request_params_v2 {
+    std::string method{"GET"};
     std::string url;
-    std::string method = "GET";
+    std::chrono::seconds timeout{30s};
+    stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
+    size_t max_buffer_size{1024 * 1024};
+    std::string body;
     std::unordered_map<std::string, std::string> headers;
-    OnData on_data;
-    OnError on_error;
-    OnConnect on_connect;
-    OnDisconnect on_disconnect;
-    std::function<bool(int)> status_is_error;
+    http_connect_handler on_connect;
+    http_disconnect_handler on_disconnect;
+    http_data_handler on_data;
+    http_error_handler on_error;
+    std::function<bool(int)> status_is_error{[](int status){ return status >= 400; }};
 };
 ```
 
+-   `method`: The HTTP method to use. (default is "GET")
 -   `url`: The URL to request.
--   `method`: The HTTP method to use (default: "GET").
+-   `timeout`: Set connection timeout. (default is 30s)
+-   `strategy`: Can be `bulk_transfer` (default, larger chunks, better throughput) or `immediate_delivery` (smaller chunks, lower latency)
+-   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughtput at cost of memory usage. (default is 1 MiB)
+-   `body`: The HTTP Body to send.
 -   `headers`: The HTTP headers to send.
--   `on_data`: A callback that's called when data is received.
--   `on_error`: A callback that's called when an error occurs.
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
 -   `on_disconnect`: A callback that's called when the connection is closed.
--   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to
-    checking for codes ≥ 400).
+-   `on_data`: A callback that's called when data is received.
+-   `on_error`: A callback that's called when an error occurs.
+-   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to checking for codes ≥ 400).
 
 To override the default behaviour you can supply a predicate:
 
 ```cpp
-auto conn = client.stream_request({
+auto conn = client.stream_request_v2({
     .url = "http://localhost/typesense",
     .on_data = on_data,
     .on_error = on_error,
@@ -184,7 +228,7 @@ auto conn = client.stream_request({
 });
 ```
 
-The `stream_connection::pointer` object contains a `disconnect()` method that can be used to close the connection.
+The `http_stream_connection` object contains a `disconnect()` method that can be used to close the connection.
 
 ### Handling HTTP Errors During Streaming
 

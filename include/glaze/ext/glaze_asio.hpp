@@ -3,19 +3,36 @@
 
 #pragma once
 
+#if defined(_WIN32) && !defined(_WIN32_WINNT) && !defined(_WIN32_WINDOWS)
+// ASIO requires a Windows target macro; if missing, it warns and assumes Windows 7.
+// Set that same default explicitly (0x0601 = Windows 7) only when the build has not
+// already provided _WIN32_WINNT/_WIN32_WINDOWS, so project-defined values still win.
+// This is a fallback only: if Windows/ASIO headers were included earlier, this define
+// may come too late to affect their internal target-version checks.
+#define _WIN32_WINNT 0x0601
+#endif
+
 #if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
 #include <asio/signal_set.hpp>
+#ifdef GLZ_ENABLE_SSL
+#include <asio/ssl.hpp>
+#endif
 #elif __has_include(<boost/asio.hpp>)
 #ifndef GLZ_USING_BOOST_ASIO
 #define GLZ_USING_BOOST_ASIO
 #endif
 #include <boost/asio.hpp>
 #include <boost/asio/signal_set.hpp>
+#ifdef GLZ_ENABLE_SSL
+#include <boost/asio/ssl.hpp>
+#endif
 #else
 static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
 #endif
 
+#include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <coroutine>
 #include <iostream>
@@ -649,6 +666,12 @@ namespace glz
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<asio::signal_set> signals{};
       std::shared_ptr<std::vector<std::thread>> threads{};
+#if defined(_WIN32)
+      std::shared_ptr<asio::ip::tcp::acceptor> listener_acceptor{};
+      std::atomic<bool> stop_requested{false};
+      std::mutex active_sockets_mutex{};
+      std::vector<std::shared_ptr<asio::ip::tcp::socket>> active_sockets{};
+#endif
 
       glz::registry<Opts> registry{};
 
@@ -662,6 +685,64 @@ namespace glz
       }
 
       bool initialized = false;
+
+      void emit_error(const std::string& message)
+      {
+         if (error_handler) {
+            error_handler(message);
+         }
+         else {
+            std::fprintf(stderr, "glz::asio_server error: %s\n", message.c_str());
+         }
+      }
+
+      void encode_dispatch_error(std::span<const char> request, std::string& response, const std::string& message)
+      {
+         emit_error(message);
+         auto id = repe::extract_id(request);
+         repe::encode_error_buffer(error_code::invalid_call, response, message, id);
+      }
+
+      void dispatch_custom_request(std::span<const char> request, std::string& response)
+      {
+         assert(bool(call));
+         try {
+            call(request, response);
+         }
+         catch (const std::exception& e) {
+            encode_dispatch_error(request, response, e.what());
+         }
+         catch (...) {
+            encode_dispatch_error(request, response, "unknown error");
+         }
+      }
+
+      void dispatch_registry_request(std::span<const char> request, std::string& response)
+      {
+         try {
+            registry.call(request, response);
+         }
+         catch (const std::exception& e) {
+            encode_dispatch_error(request, response, e.what());
+         }
+         catch (...) {
+            encode_dispatch_error(request, response, "unknown error");
+         }
+      }
+
+#if defined(_WIN32)
+      void add_active_socket(const std::shared_ptr<asio::ip::tcp::socket>& socket)
+      {
+         std::lock_guard lock{active_sockets_mutex};
+         active_sockets.push_back(socket);
+      }
+
+      void remove_active_socket(const std::shared_ptr<asio::ip::tcp::socket>& socket)
+      {
+         std::lock_guard lock{active_sockets_mutex};
+         std::erase_if(active_sockets, [&](const auto& current) { return current.get() == socket.get(); });
+      }
+#endif
 
       void init()
       {
@@ -686,6 +767,60 @@ namespace glz
 
          // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
          auto executor = ctx->get_executor();
+#if defined(_WIN32)
+         stop_requested.store(false, std::memory_order_relaxed);
+         listener_acceptor = std::make_shared<asio::ip::tcp::acceptor>(executor);
+         auto& acceptor = *listener_acceptor;
+         // Match non-Windows behavior when possible: prefer IPv6 dual-stack (accepts v4 and v6),
+         // and fall back to IPv4-only if dual-stack IPv6 is unavailable on the host.
+         auto open_bind_listen = [&](const asio::ip::tcp::endpoint& endpoint, const bool dual_stack_v6) {
+            asio::error_code ec{};
+            acceptor.open(endpoint.protocol(), ec);
+            if (ec) {
+               return ec;
+            }
+            if (dual_stack_v6) {
+               acceptor.set_option(asio::ip::v6_only(false), ec);
+               if (ec) {
+                  asio::error_code close_ec{};
+                  acceptor.close(close_ec);
+                  return ec;
+               }
+            }
+            if (reuse_address) {
+               acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true), ec);
+               if (ec) {
+                  asio::error_code close_ec{};
+                  acceptor.close(close_ec);
+                  return ec;
+               }
+            }
+            acceptor.bind(endpoint, ec);
+            if (ec) {
+               asio::error_code close_ec{};
+               acceptor.close(close_ec);
+               return ec;
+            }
+            acceptor.listen(asio::socket_base::max_listen_connections, ec);
+            if (ec) {
+               asio::error_code close_ec{};
+               acceptor.close(close_ec);
+               return ec;
+            }
+            return ec;
+         };
+
+         auto ec = open_bind_listen(asio::ip::tcp::endpoint{asio::ip::tcp::v6(), port}, true);
+         if (ec) {
+            const auto v6_error = ec.message();
+            ec = open_bind_listen(asio::ip::tcp::endpoint{asio::ip::tcp::v4(), port}, false);
+            if (ec) {
+               throw std::runtime_error("asio_server failed to listen on IPv6 dual-stack and IPv4 fallback (v6: " +
+                                        v6_error + ", v4: " + ec.message() + ')');
+            }
+         }
+         port = acceptor.local_endpoint().port();
+#else
          asio::ip::tcp::acceptor acceptor(executor);
          asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v6(), port};
          acceptor.open(endpoint.protocol());
@@ -695,13 +830,18 @@ namespace glz
          acceptor.bind(endpoint);
          acceptor.listen();
          port = acceptor.local_endpoint().port();
+#endif
 
          if (on_listen) {
             on_listen();
          }
 
          // Start the listener coroutine
+#if defined(_WIN32)
+         start_listener_windows();
+#else
          asio::co_spawn(*ctx, listener(std::move(acceptor)), asio::detached);
+#endif
 
          // Run the io_context in multiple threads for concurrency
          threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
@@ -711,6 +851,7 @@ namespace glz
                   thread.join();
                }
             }
+            delete ptr;
          });
 
          threads->reserve(concurrency - uint32_t(run_on_main_thread));
@@ -734,10 +875,274 @@ namespace glz
          if (ctx) {
             ctx->stop(); // Stop the server's io_context
          }
+#if defined(_WIN32)
+         stop_requested.store(true, std::memory_order_relaxed);
+         if (listener_acceptor) {
+            asio::error_code ec{};
+            listener_acceptor->cancel(ec);
+            listener_acceptor->close(ec);
+         }
+
+         std::vector<std::shared_ptr<asio::ip::tcp::socket>> sockets_to_close;
+         {
+            std::lock_guard lock{active_sockets_mutex};
+            sockets_to_close = active_sockets;
+         }
+         for (auto& socket : sockets_to_close) {
+            if (!socket) continue;
+            asio::error_code ec{};
+            socket->cancel(ec);
+            socket->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+            socket->close(ec);
+         }
+#endif
       }
+
+#if defined(_WIN32)
+      // Windows/MSVC uses a callback session loop (start_session_windows) rather than the coroutine
+      // run_instance/listener path below due to observed lifecycle crashes in CI.
+      // Keep protocol semantics in sync with run_instance/co_receive_raw:
+      // message framing, header validation, and error-to-REPE mapping.
+      struct windows_session_state
+      {
+         // Non-owning back-pointer. Lifetime relies on asio_server::~asio_server calling stop()
+         // and joining all server-owned io_context threads before member destruction. Do not run
+         // this server's io_context on external/untracked threads, or callbacks may outlive `self`.
+         asio_server* self{};
+         std::shared_ptr<asio::ip::tcp::socket> socket{};
+         std::string request{};
+         std::string response{};
+         uint64_t message_length{};
+      };
+
+      static void finish_windows_session(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self) {
+            return;
+         }
+         auto socket = state->socket;
+         if (!socket) {
+            return;
+         }
+         state->socket.reset();
+         asio::error_code ec{};
+         socket->cancel(ec);
+         socket->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+         socket->close(ec);
+         state->self->remove_active_socket(socket);
+      }
+
+      static bool handle_windows_session_error(const std::shared_ptr<windows_session_state>& state,
+                                               const asio::error_code& ec, const char* context)
+      {
+         if (!state || !state->self) {
+            return true;
+         }
+         if (!ec) {
+            return false;
+         }
+
+         if (ec == asio::error::eof) {
+            finish_windows_session(state);
+            return true;
+         }
+
+         const bool shutting_down = state->self->stop_requested.load(std::memory_order_relaxed);
+         if (shutting_down && (ec == asio::error::operation_aborted || ec == asio::error::bad_descriptor)) {
+            finish_windows_session(state);
+            return true;
+         }
+
+         state->self->emit_error(std::string{context} + ": " + ec.message());
+         finish_windows_session(state);
+         return true;
+      }
+
+      void start_windows_read_length(const std::shared_ptr<windows_session_state>& state)
+      {
+         // Step-wise async state machine: avoids retain cycles from self-referential std::function chains.
+         if (!state || !state->self || !state->socket) {
+            return;
+         }
+         if (state->self->stop_requested.load(std::memory_order_relaxed)) {
+            finish_windows_session(state);
+            return;
+         }
+
+         state->request.clear();
+         state->response.clear();
+         state->message_length = 0;
+
+         asio::async_read(
+            *state->socket, asio::buffer(&state->message_length, sizeof(state->message_length)),
+            asio::transfer_exactly(sizeof(state->message_length)), [state](const asio::error_code& ec, size_t) {
+               if (handle_windows_session_error(state, ec, "read length")) {
+                  return;
+               }
+               if (!state || !state->self) {
+                  return;
+               }
+
+               if (state->message_length < sizeof(repe::header)) {
+                  if (state->self->error_handler) {
+                     state->self->error_handler("Invalid REPE message: length too small for header");
+                  }
+                  finish_windows_session(state);
+                  return;
+               }
+               if (state->self->max_message_size > 0 && state->message_length > state->self->max_message_size) {
+                  if (state->self->error_handler) {
+                     state->self->error_handler("REPE message exceeds maximum allowed size");
+                  }
+                  finish_windows_session(state);
+                  return;
+               }
+
+               state->request.resize(size_t(state->message_length));
+               std::memcpy(state->request.data(), &state->message_length, sizeof(state->message_length));
+
+               const auto remaining = size_t(state->message_length - sizeof(state->message_length));
+               if (!remaining) {
+                  state->self->process_windows_request(state);
+                  return;
+               }
+               state->self->start_windows_read_body(state);
+            });
+      }
+
+      void start_windows_read_body(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self || !state->socket) {
+            return;
+         }
+
+         const auto remaining = size_t(state->message_length - sizeof(state->message_length));
+         asio::async_read(*state->socket,
+                          asio::buffer(state->request.data() + sizeof(state->message_length), remaining),
+                          asio::transfer_exactly(remaining), [state](const asio::error_code& ec, size_t) {
+                             if (handle_windows_session_error(state, ec, "read body")) {
+                                return;
+                             }
+                             if (!state || !state->self) {
+                                return;
+                             }
+                             state->self->process_windows_request(state);
+                          });
+      }
+
+      void process_windows_request(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self) {
+            return;
+         }
+
+         uint16_t spec{};
+         uint8_t version{};
+         std::memcpy(&spec, state->request.data() + offsetof(repe::header, spec), sizeof(spec));
+         std::memcpy(&version, state->request.data() + offsetof(repe::header, version), sizeof(version));
+
+         if (spec != repe::repe_magic) {
+            if (state->self->error_handler) {
+               state->self->error_handler("Invalid REPE magic bytes");
+            }
+            finish_windows_session(state);
+            return;
+         }
+         if (version != 1) {
+            if (state->self->error_handler) {
+               state->self->error_handler("Unsupported REPE version");
+            }
+            finish_windows_session(state);
+            return;
+         }
+
+         if (state->self->call) {
+            state->self->dispatch_custom_request(std::span<const char>(state->request), state->response);
+         }
+         else {
+            state->self->dispatch_registry_request(std::span<const char>(state->request), state->response);
+         }
+
+         start_windows_write_response(state);
+      }
+
+      void start_windows_write_response(const std::shared_ptr<windows_session_state>& state)
+      {
+         if (!state || !state->self || !state->socket) {
+            return;
+         }
+         if (state->response.empty()) {
+            start_windows_read_length(state);
+            return;
+         }
+
+         asio::async_write(*state->socket, asio::buffer(state->response.data(), state->response.size()),
+                           asio::transfer_exactly(state->response.size()), [state](const asio::error_code& ec, size_t) {
+                              if (handle_windows_session_error(state, ec, "write response")) {
+                                 return;
+                              }
+                              if (!state || !state->self) {
+                                 return;
+                              }
+                              state->self->start_windows_read_length(state);
+                           });
+      }
+
+      void start_session_windows(const std::shared_ptr<asio::ip::tcp::socket>& socket_ptr)
+      {
+         if (!socket_ptr) {
+            return;
+         }
+
+         asio::error_code ec{};
+         socket_ptr->set_option(asio::ip::tcp::no_delay(true), ec);
+         if (ec) {
+            remove_active_socket(socket_ptr);
+            return;
+         }
+         socket_ptr->set_option(asio::socket_base::keep_alive(true), ec);
+         if (ec) {
+            remove_active_socket(socket_ptr);
+            return;
+         }
+
+         auto state = std::make_shared<windows_session_state>();
+         state->self = this;
+         state->socket = socket_ptr;
+         start_windows_read_length(state);
+      }
+
+      void start_listener_windows()
+      {
+         auto acceptor = listener_acceptor;
+         if (!acceptor) {
+            return;
+         }
+
+         acceptor->async_accept([this, acceptor](const asio::error_code& ec, asio::ip::tcp::socket socket) {
+            if (ec) {
+               const bool shutting_down = stop_requested.load(std::memory_order_relaxed);
+               if (!(shutting_down && (ec == asio::error::operation_aborted || ec == asio::error::bad_descriptor))) {
+                  emit_error(ec.message());
+               }
+            }
+            else {
+               auto socket_ptr = std::make_shared<asio::ip::tcp::socket>(std::move(socket));
+               add_active_socket(socket_ptr);
+               start_session_windows(socket_ptr);
+            }
+
+            if (!stop_requested.load(std::memory_order_relaxed) && acceptor->is_open()) {
+               start_listener_windows();
+            }
+         });
+      }
+#endif
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
+         // Non-Windows path: this coroutine flow must stay semantically aligned with the
+         // Windows callback path above (start_session_windows) for framing/validation/error behavior.
          socket.set_option(asio::ip::tcp::no_delay(true));
          socket.set_option(asio::socket_base::keep_alive(true));
 
@@ -750,24 +1155,7 @@ namespace glz
                // Custom call handler path with buffer pool
                while (true) {
                   co_await co_receive_raw(socket, request_buf.value(), max_message_size);
-
-                  try {
-                     call(std::span<const char>(request_buf.value()), response_buf.value());
-                  }
-                  catch (const std::exception& e) {
-                     if (error_handler) {
-                        error_handler(e.what());
-                     }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), e.what(), id);
-                  }
-                  catch (...) {
-                     if (error_handler) {
-                        error_handler("unknown error");
-                     }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), "unknown error", id);
-                  }
+                  dispatch_custom_request(std::span<const char>(request_buf.value()), response_buf.value());
 
                   // Send response if buffer is not empty
                   if (!response_buf.value().empty()) {
@@ -779,24 +1167,7 @@ namespace glz
                // Standard registry path with span-based call
                while (true) {
                   co_await co_receive_raw(socket, request_buf.value(), max_message_size);
-
-                  try {
-                     registry.call(std::span<const char>(request_buf.value()), response_buf.value());
-                  }
-                  catch (const std::exception& e) {
-                     if (error_handler) {
-                        error_handler(e.what());
-                     }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), e.what(), id);
-                  }
-                  catch (...) {
-                     if (error_handler) {
-                        error_handler("unknown error");
-                     }
-                     auto id = repe::extract_id(request_buf.value());
-                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), "unknown error", id);
-                  }
+                  dispatch_registry_request(std::span<const char>(request_buf.value()), response_buf.value());
 
                   // Send response if buffer is not empty
                   if (!response_buf.value().empty()) {
@@ -810,20 +1181,10 @@ namespace glz
             if (e.code() == asio::error::eof) {
                co_return;
             }
-            if (error_handler) {
-               error_handler(e.what());
-            }
-            else {
-               std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
-            }
+            emit_error(e.what());
          }
          catch (const std::exception& e) {
-            if (error_handler) {
-               error_handler(e.what());
-            }
-            else {
-               std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
-            }
+            emit_error(e.what());
          }
          // Buffers automatically returned to pool when scoped_buffers are destroyed
       }

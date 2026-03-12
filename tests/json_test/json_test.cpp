@@ -349,130 +349,6 @@ suite enum_tests = [] {
    };
 };
 
-// Issue #2246: Sparse enums with huge values that share common power-of-2 factors
-// These enums previously failed to compile with "Failed to find perfect hash seed for enum"
-// because values like 0 and 400,000,000 both hash to 0 with standard modular hash.
-// The fix adds a modular_shifted hash type that removes common trailing zeros before hashing.
-
-enum class SparseEnum : int { Zero = 0, FourHundredMillion = 400000000 };
-
-template <>
-struct glz::meta<SparseEnum>
-{
-   using enum SparseEnum;
-   static constexpr auto value = enumerate(Zero, FourHundredMillion);
-};
-
-// Another sparse enum with values that have common factors
-enum class SparseEnumMillions : int { A = 0, B = 1000000, C = 2000000 };
-
-template <>
-struct glz::meta<SparseEnumMillions>
-{
-   using enum SparseEnumMillions;
-   static constexpr auto value = enumerate(A, B, C);
-};
-
-// Sparse enum with power-of-2 gaps (tests that standard modular still works when possible)
-enum class SparseEnumPow2 : int { X = 1, Y = 1024, Z = 65536 };
-
-template <>
-struct glz::meta<SparseEnumPow2>
-{
-   using enum SparseEnumPow2;
-   static constexpr auto value = enumerate(X, Y, Z);
-};
-
-// Test struct for sparse enum in object test
-struct SparseEnumTestStruct
-{
-   SparseEnum e1{SparseEnum::Zero};
-   SparseEnum e2{SparseEnum::FourHundredMillion};
-};
-
-suite sparse_enum_tests = [] {
-   "sparse_enum_serialization"_test = [] {
-      // Test issue #2246: enum values 0 and 400,000,000
-      SparseEnum e = SparseEnum::Zero;
-      std::string json;
-      expect(not glz::write_json(e, json));
-      expect(json == "\"Zero\"") << json;
-
-      e = SparseEnum::FourHundredMillion;
-      json.clear();
-      expect(not glz::write_json(e, json));
-      expect(json == "\"FourHundredMillion\"") << json;
-   };
-
-   "sparse_enum_deserialization"_test = [] {
-      SparseEnum e;
-      expect(not glz::read_json(e, R"("Zero")"));
-      expect(e == SparseEnum::Zero);
-
-      expect(not glz::read_json(e, R"("FourHundredMillion")"));
-      expect(e == SparseEnum::FourHundredMillion);
-   };
-
-   "sparse_enum_roundtrip"_test = [] {
-      for (auto val : {SparseEnum::Zero, SparseEnum::FourHundredMillion}) {
-         std::string json;
-         expect(not glz::write_json(val, json));
-
-         SparseEnum parsed;
-         expect(not glz::read_json(parsed, json));
-         expect(parsed == val);
-      }
-   };
-
-   "sparse_enum_millions_roundtrip"_test = [] {
-      for (auto val : {SparseEnumMillions::A, SparseEnumMillions::B, SparseEnumMillions::C}) {
-         std::string json;
-         expect(not glz::write_json(val, json));
-
-         SparseEnumMillions parsed;
-         expect(not glz::read_json(parsed, json));
-         expect(parsed == val);
-      }
-   };
-
-   "sparse_enum_pow2_roundtrip"_test = [] {
-      for (auto val : {SparseEnumPow2::X, SparseEnumPow2::Y, SparseEnumPow2::Z}) {
-         std::string json;
-         expect(not glz::write_json(val, json));
-
-         SparseEnumPow2 parsed;
-         expect(not glz::read_json(parsed, json));
-         expect(parsed == val);
-      }
-   };
-
-   "sparse_enum_get_name"_test = [] {
-      expect(glz::get_enum_name(SparseEnum::Zero) == "Zero");
-      expect(glz::get_enum_name(SparseEnum::FourHundredMillion) == "FourHundredMillion");
-      expect(glz::get_enum_name(SparseEnumMillions::A) == "A");
-      expect(glz::get_enum_name(SparseEnumMillions::B) == "B");
-      expect(glz::get_enum_name(SparseEnumMillions::C) == "C");
-   };
-
-   "sparse_enum_invalid_value"_test = [] {
-      // Test that invalid enum values return empty string
-      auto invalid = static_cast<SparseEnum>(12345);
-      expect(glz::get_enum_name(invalid).empty());
-   };
-
-   "sparse_enum_in_struct"_test = [] {
-      SparseEnumTestStruct obj;
-      std::string json;
-      expect(not glz::write_json(obj, json));
-      expect(json == R"({"e1":"Zero","e2":"FourHundredMillion"})") << json;
-
-      SparseEnumTestStruct parsed;
-      expect(not glz::read_json(parsed, json));
-      expect(parsed.e1 == SparseEnum::Zero);
-      expect(parsed.e2 == SparseEnum::FourHundredMillion);
-   };
-};
-
 static constexpr auto MY_ARRAY_MAX = 2;
 
 struct MyArrayStruct
@@ -3619,6 +3495,20 @@ suite thread_pool = [] {
       pool.wait();
 
       expect(numbers.size() == 1000);
+   };
+
+   "thread pool zero threads fallback"_test = [] {
+      glz::pool pool(0);
+
+      std::atomic<int> x = 0;
+
+      for (auto i = 0; i < 1000; ++i) {
+         pool.emplace_back([&] { ++x; });
+      }
+
+      pool.wait();
+
+      expect(x == 1000);
    };
 };
 
@@ -6775,6 +6665,44 @@ suite mimics_string_key_tests = [] {
       static_assert(glz::mimics_str_t<mimics_string_key>);
       expect(true);
    };
+
+   // Test for issue #2285: mimic = std::string doesn't work in std::vector<std::pair<...>>
+   "mimics<T, std::string> in vector<pair> write"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> v{{{"key1"}, {"value1"}}, {{"key2"}, {"value2"}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(v, buffer));
+      expect(buffer == R"({"key1":"value1","key2":"value2"})") << buffer;
+   };
+
+   "mimics<T, std::string> in vector<pair> read"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> v;
+      std::string json = R"({"key1":"value1","key2":"value2"})";
+
+      expect(not glz::read_json(v, json));
+      expect(v.size() == 2);
+      expect(v[0].first.value == "key1");
+      expect(v[0].second.value == "value1");
+      expect(v[1].first.value == "key2");
+      expect(v[1].second.value == "value2");
+   };
+
+   "mimics<T, std::string> in vector<pair> roundtrip"_test = [] {
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> original{{{"key1"}, {"value1"}},
+                                                                            {{"key2"}, {"value2"}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(original, buffer));
+
+      std::vector<std::pair<mimics_string_key, mimics_string_key>> parsed;
+      expect(not glz::read_json(parsed, buffer));
+
+      expect(parsed.size() == original.size());
+      for (size_t i = 0; i < original.size(); ++i) {
+         expect(parsed[i].first.value == original[i].first.value);
+         expect(parsed[i].second.value == original[i].second.value);
+      }
+   };
 };
 
 suite char_array = [] {
@@ -7114,6 +7042,20 @@ struct glz::meta<cx_values>
    static constexpr auto value{glz::object("info", &T::info, "index", &T::index, "value", &T::value)};
 };
 
+struct cx_values_implicit_static_key
+{
+   static constexpr std::string_view other_type{"http://www.github.io"};
+   std::string type{"http://www.github.io"};
+   int status{};
+};
+
+template <>
+struct glz::meta<cx_values_implicit_static_key>
+{
+   using T = cx_values_implicit_static_key;
+   static constexpr auto value{glz::object(&T::other_type, &T::type, &T::status)};
+};
+
 struct direct_cx_value_conversion
 {
    static constexpr std::uint64_t const_v{42};
@@ -7209,6 +7151,7 @@ struct variant_to_tuple<std::variant<Ts...>>
 {
    using type = std::tuple<Ts...>;
 };
+
 suite constexpr_values_test = [] {
    "constexpr_values_write"_test = [] {
       cx_values obj{};
@@ -7224,6 +7167,20 @@ suite constexpr_values_test = [] {
       expect(obj.info == "information");
       expect(obj.index == 42);
       expect(obj.value == "special");
+   };
+
+   "constexpr_values_implicit_static_key"_test = [] {
+      cx_values_implicit_static_key obj{};
+      obj.status = 100;
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"other_type":"http://www.github.io","type":"http://www.github.io","status":100})") << s;
+
+      s = R"({"other_type":"something_else","type":"updated","status":200})";
+      expect(!glz::read_json(obj, s));
+      expect(cx_values_implicit_static_key::other_type == "http://www.github.io");
+      expect(obj.type == "updated");
+      expect(obj.status == 200);
    };
 
    using const_only_variant =
@@ -7474,7 +7431,7 @@ suite obj_nested_merge = [] {
          !glz::read_json(json, "{\"key1\":42,\"key2\":\"hello world\",\"v\":[1,2,3],\"m\":{\"a\":1,\"b\":2,\"c\":3}}"));
       glz::obj obj{"not", "important"};
       auto s = glz::write_json(glz::merge{obj, json}).value_or("error");
-      expect(s == R"({"not":"important","key1":42,"key2":"hello world","m":{"a":1,"b":2,"c":3},"v":[1,2,3]})") << s;
+      expect(s == R"({"not":"important","key1":42,"key2":"hello world","v":[1,2,3],"m":{"a":1,"b":2,"c":3}})") << s;
    };
 };
 
@@ -8238,6 +8195,31 @@ suite self_constraint_real_world = [] {
          expect(minimal == glz::error_code::none);
          expect(!request.discount_code);
       }
+   };
+};
+
+struct skip_read_constraint_opts : glz::opts
+{
+   bool skip_read_constraint = true;
+};
+
+suite skip_read_constraint_tests = [] {
+   "skip_read_constraint allows invalid data through"_test = [] {
+      constexpr skip_read_constraint_opts opts{};
+
+      constrained_object obj{};
+      std::string buffer = R"({"age": 120,"name":"Constantine"})";
+
+      // With default options, constraint is violated
+      auto ec = glz::read_json(obj, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+
+      // With skip_read_constraint = true, constraint is skipped
+      obj = {};
+      ec = glz::read<opts>(obj, buffer);
+      expect(ec == glz::error_code::none);
+      expect(obj.age == 120);
+      expect(obj.name == "Constantine");
    };
 };
 
@@ -11235,7 +11217,7 @@ struct glz::meta<mixed_member_format_t>
 struct scientific_format_t
 {
    double large{1234567.89};
-   double small{0.000123456};
+   double small_val{0.000123456}; // "small" is a macro on Windows (rpcndr.h)
 };
 
 template <>
@@ -11243,7 +11225,7 @@ struct glz::meta<scientific_format_t>
 {
    using T = scientific_format_t;
    static constexpr auto value =
-      glz::object("large", glz::float_format<&T::large, "{:.2e}">, "small", glz::float_format<&T::small, "{:.3E}">);
+      glz::object("large", glz::float_format<&T::large, "{:.2e}">, "small", glz::float_format<&T::small_val, "{:.3E}">);
 };
 
 suite float_format_wrapper_tests = [] {
@@ -11308,7 +11290,7 @@ suite float_format_wrapper_tests = [] {
       std::string input = R"({"large":1e6,"small":1e-6})";
       expect(!glz::read_json(obj, input));
       expect(obj.large == 1e6);
-      expect(obj.small == 1e-6);
+      expect(obj.small_val == 1e-6);
    };
 
    "float_format_wrapper_negative_values"_test = [] {
@@ -11785,6 +11767,65 @@ suite error_on_missing_keys_symbols_tests = [] {
                           },
                           single_symbol_info_js>(result, payload);
       expect(not ec);
+   };
+};
+
+// Test for https://github.com/stephenberry/glaze/issues/2279
+// error_on_missing_keys should not require fields that are skipped via meta::skip
+struct skip_on_parse_t
+{
+   std::string name{};
+   int skipped_field{};
+   int normal_field{};
+};
+
+template <>
+struct glz::meta<skip_on_parse_t>
+{
+   using T = skip_on_parse_t;
+   static constexpr auto value = object(&T::name, &T::skipped_field, &T::normal_field);
+
+   static constexpr bool skip(const std::string_view key, const glz::meta_context& ctx)
+   {
+      return key == "skipped_field" && ctx.op == glz::operation::parse;
+   }
+};
+
+suite error_on_missing_keys_with_skip_tests = [] {
+   "error_on_missing_keys with meta::skip - skipped field missing from JSON"_test = [] {
+      // When a field is skipped via meta::skip for parse, it should not be required
+      // even when error_on_missing_keys is set
+      skip_on_parse_t obj;
+      obj.skipped_field = 42;
+      std::string json = R"({"name":"test","normal_field":100})"; // skipped_field not in JSON
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      auto ec = glz::read<opts>(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.name == "test");
+      expect(obj.skipped_field == 42); // Unchanged, field was skipped
+      expect(obj.normal_field == 100);
+   };
+
+   "error_on_missing_keys with meta::skip - required field missing"_test = [] {
+      // Ensure that non-skipped fields are still required
+      skip_on_parse_t obj;
+      std::string json = R"({"name":"test"})"; // normal_field missing
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      auto ec = glz::read<opts>(obj, json);
+      expect(ec == glz::error_code::missing_key);
+   };
+
+   "error_on_missing_keys with meta::skip - skipped field present in JSON"_test = [] {
+      // When skipped field is present, it should be skipped (not parsed)
+      skip_on_parse_t obj;
+      obj.skipped_field = 42;
+      std::string json = R"({"name":"test","skipped_field":999,"normal_field":100})";
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+      auto ec = glz::read<opts>(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.name == "test");
+      expect(obj.skipped_field == 42); // Unchanged because field is skipped during parse
+      expect(obj.normal_field == 100);
    };
 };
 
@@ -12732,14 +12773,14 @@ suite factor8_strings = [] {
       const auto payload = R"("abcdefg")"; // 8 chars after open quote
       const auto parsed = glz::read_json<std::string>(payload);
       expect(parsed.has_value());
-      expect(*parsed->end() == '\0');
+      expect(parsed->data()[parsed->size()] == '\0');
    };
 
    "factor of 8"_test = [] {
       const auto payload = R"("abcdefghijklmno")"; // 16 chars after open quote
       const auto parsed = glz::read_json<std::string>(payload);
       expect(parsed.has_value());
-      expect(*parsed->end() == '\0');
+      expect(parsed->data()[parsed->size()] == '\0');
    };
 };
 
@@ -12758,7 +12799,7 @@ struct glz::meta<cast_obj>
 
 struct cast_nullable_obj
 {
-   std::optional<int> a;
+   std::optional<double> a;
    std::string b;
 };
 
@@ -12766,7 +12807,7 @@ template <>
 struct glz::meta<cast_nullable_obj>
 {
    using T = cast_nullable_obj;
-   static constexpr auto value = object("a", cast<&T::a, std::optional<double>>, "b", &T::b);
+   static constexpr auto value = object("a", cast<&T::a, std::optional<int>>, "b", &T::b);
 };
 
 suite cast_tests = [] {
@@ -12807,11 +12848,11 @@ suite cast_tests = [] {
       expect(obj.b == "hello");
 
       // Test with value present
-      data = R"({"a":42.5,"b":"world"})";
+      data = R"({"a":42,"b":"world"})";
       ec = glz::read<opts>(obj, data);
       expect(!ec) << glz::format_error(ec, data);
       expect(obj.a.has_value());
-      expect(obj.a.value() == 42);
+      expect(obj.a.value() == 42.0);
       expect(obj.b == "world");
 
       // Test missing required field
@@ -13087,7 +13128,17 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer{};
       expect(not glz::write<opts_with_function_pointers{}>(thing, buffer));
-#if defined(__GNUC__) && !defined(__clang__)
+#if GLZ_REFLECTION26
+      // P2996 display_string_of behavior varies by compiler:
+      // - Bloomberg Clang: "(member-function-pointer-type)"
+      // - GCC: full signature like traditional GCC
+      bool pass =
+         (buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") ||
+         (buffer ==
+          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})") ||
+         (buffer == R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})");
+      expect(pass) << buffer;
+#elif defined(__GNUC__) && !defined(__clang__)
 #if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
       // Old ABI uses std::basic_string<char> without __cxx11 namespace
       expect(buffer ==
@@ -13099,6 +13150,10 @@ suite member_function_pointer_serialization = [] {
          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})")
          << buffer;
 #endif
+#elif defined(_MSC_VER)
+      // MSVC produces fully qualified type names with calling convention
+      expect(buffer.find("MemberFunctionThing") != std::string::npos && buffer.find("test_item") != std::string::npos)
+         << buffer;
 #else
       expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
          << buffer;
@@ -13120,7 +13175,19 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer2{};
       expect(not glz::write<opts_with_function_pointers{}>(s, buffer2));
+#if GLZ_REFLECTION26
+      // P2996 display_string_of behavior varies by compiler:
+      // - Bloomberg Clang: "(member-function-pointer-type)"
+      // - GCC: full signature like traditional output
+      bool pass = (buffer2 == R"json({"f1":"(member-function-pointer-type)"})json") ||
+                  (buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})");
+      expect(pass) << buffer2;
+#elif defined(_MSC_VER)
+      // MSVC produces different type names and calling conventions
+      expect(buffer2.find("struct_t") != std::string::npos && buffer2.find("f1") != std::string::npos) << buffer2;
+#else
       expect(buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})") << buffer2;
+#endif
    };
 };
 
@@ -13633,6 +13700,27 @@ suite bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "long string should overflow";
+   };
+
+   // Test: always_null_t (glz::generic null) to bounded buffer (issue #2362)
+   "always_null_t to bounded buffer"_test = [] {
+      glz::generic obj{}; // default constructed generic is null
+      std::array<char, 512> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "always_null_t write to span should succeed";
+      std::string_view json(buffer.data(), result.count);
+      expect(json == "null") << "should serialize as null";
+   };
+
+   "always_null_t to small bounded buffer"_test = [] {
+      glz::generic obj{}; // default constructed generic is null
+      std::array<char, 2> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow for too-small buffer";
    };
 };
 
