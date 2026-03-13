@@ -6950,7 +6950,9 @@ struct glz::meta<short_string_glaze_proxy_t>
       copy_to_short_string(*obj.proxy, value);
    };
 
-   static constexpr auto write = [](short_string_glaze_proxy_t& obj) -> std::string_view { return {obj.proxy->data()}; };
+   static constexpr auto write = [](short_string_glaze_proxy_t& obj) -> std::string_view {
+      return {obj.proxy->data()};
+   };
 
    static constexpr auto value = glz::custom<read, write>;
 };
