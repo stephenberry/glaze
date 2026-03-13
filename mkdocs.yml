@@ -132,6 +132,7 @@ nav:
    - JSON-RPC 2.0 Registry: rpc/jsonrpc-registry.md
    - JSON-RPC 2.0 Client/Server: rpc/json-rpc.md
    - REPE to JSON-RPC: rpc/repe-jsonrpc-conversion.md
+   - OpenRPC: rpc/openrpc.md
  - Interface Utilities:
    - JSON Include: json-include.md
    - CLI Menu: cli-menu.md
