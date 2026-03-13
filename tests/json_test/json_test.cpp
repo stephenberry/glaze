@@ -6927,6 +6927,87 @@ suite numbers_as_strings_suite = [] {
    };
 };
 
+using short_string_t = std::array<char, 64>;
+
+void copy_to_short_string(short_string_t& out, const std::string_view value)
+{
+   const auto n = (std::min)(value.size(), out.size() - 1);
+   std::fill(out.begin(), out.end(), '\0');
+   std::memcpy(out.data(), value.data(), n);
+}
+
+struct short_string_glaze_proxy_t
+{
+   short_string_t* proxy{};
+
+   explicit short_string_glaze_proxy_t(short_string_t& value) : proxy{&value} {}
+};
+
+template <>
+struct glz::meta<short_string_glaze_proxy_t>
+{
+   static constexpr auto read = [](short_string_glaze_proxy_t& obj, const std::string_view& value) {
+      copy_to_short_string(*obj.proxy, value);
+   };
+
+   static constexpr auto write = [](short_string_glaze_proxy_t& obj) -> std::string_view { return {obj.proxy->data()}; };
+
+   static constexpr auto value = glz::custom<read, write>;
+};
+
+struct object_with_short_string
+{
+   short_string_t value{};
+};
+
+template <>
+struct glz::meta<object_with_short_string>
+{
+   using T = object_with_short_string;
+   static constexpr auto value = glz::object("value", glz::string_as_number<&T::value>);
+};
+
+struct object_with_short_string_proxy
+{
+   short_string_glaze_proxy_t value;
+};
+
+template <>
+struct glz::meta<object_with_short_string_proxy>
+{
+   using T = object_with_short_string_proxy;
+   static constexpr auto value = glz::object("value", glz::string_as_number<&T::value>);
+};
+
+suite string_as_number_custom_proxy_suite = [] {
+   "string_as_number_with_custom_string_view_proxy"_test = [] {
+      object_with_short_string target{};
+      object_with_short_string_proxy proxy{short_string_glaze_proxy_t{target.value}};
+
+      const std::string input = R"({"value":13})";
+      const auto err = glz::read_json(proxy, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(std::string_view{target.value.data()} == "13");
+
+      std::string output{};
+      expect(not glz::write_json(proxy, output));
+      expect(output == input) << output;
+   };
+
+   "string_as_number_with_char_array_storage"_test = [] {
+      object_with_short_string target{};
+
+      const std::string input = R"({"value":42})";
+      const auto err = glz::read_json(target, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(std::string_view{target.value.data()} == "42");
+
+      std::string output{};
+      expect(not glz::write_json(target, output));
+      expect(output == input) << output;
+   };
+};
+
 enum struct MyEnum { VALUE_1 = 200, VALUE_2 = 300, VALUE_3 = 400, UNUSED_VALUE = 500 };
 
 suite numeric_enums_suite = [] {

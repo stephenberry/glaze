@@ -3621,7 +3621,7 @@ suite streaming_special_types_input_tests = [] {
       std::istringstream iss("\"Active\"");
       glz::istream_buffer<> buffer(iss);
 
-      Status s;
+      Status s{};
       auto ec = glz::read_json(s, buffer);
 
       expect(!ec) << "Error: " << int(ec.ec);
