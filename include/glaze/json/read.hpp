@@ -1770,6 +1770,55 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class It, class End>
+         requires(check_string_as_number(Opts))
+      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End end) noexcept
+      {
+         auto start = it;
+         skip_number<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         if (start == it) [[unlikely]] {
+            ctx.error = error_code::parse_number_failure;
+            return;
+         }
+
+         const size_t n = size_t(it - start);
+         if constexpr (string_view_t<T>) {
+            using value_type = typename std::decay_t<T>::value_type;
+            if constexpr (std::same_as<value_type, char8_t>) {
+               value = {reinterpret_cast<const char8_t*>(start), n};
+            }
+            else {
+               value = {start, n};
+            }
+         }
+         else if constexpr (char_array_t<T>) {
+            if ((n + 1) > sizeof(value)) {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            std::memcpy(value, start, n);
+            value[n] = '\0';
+         }
+         else if constexpr (array_char_t<T>) {
+            if ((n + 1) > value.size()) {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            std::memcpy(value.data(), start, n);
+            value[n] = '\0';
+         }
+         else if constexpr (static_string_t<T>) {
+            if (n > value.capacity()) {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            value.assign(start, n);
+         }
+      }
+
+      template <auto Opts, class It, class End>
+         requires(!check_string_as_number(Opts))
       GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End end) noexcept
       {
          if constexpr (!check_opening_handled(Opts)) {
