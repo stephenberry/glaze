@@ -857,6 +857,22 @@ suite lazy_json_tests = [] {
       expect(user.name == "Alice");
    };
 
+   "lazy_json_read_into_partial_read_clears_error"_test = [] {
+      std::string buffer = R"({
+         "user": {"name": "Alice", "ignored": 42}
+      })";
+
+      auto result = glz::lazy_json<glz::opts{.partial_read = true}>(buffer);
+      expect(result.has_value());
+
+      MinimalUser user{};
+      auto ec = (*result)["user"].read_into(user);
+
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(ec == glz::error_code::none);
+      expect(user.name == "Alice");
+   };
+
    "lazy_json_read_into_nested"_test = [] {
       std::string buffer = R"({
          "people": [

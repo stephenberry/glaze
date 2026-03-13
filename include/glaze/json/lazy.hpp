@@ -260,6 +260,7 @@ namespace glz
          auto it = data_;
          auto end = json_end();
          parse<JSON>::op<Opts>(value, ctx, it, end);
+         finalize_read_context<Opts>(ctx);
          if (bool(ctx.error)) {
             return error_ctx{static_cast<size_t>(it - data_), ctx.error};
          }
