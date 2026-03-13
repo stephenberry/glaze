@@ -6931,7 +6931,7 @@ using short_string_t = std::array<char, 64>;
 
 void copy_to_short_string(short_string_t& out, const std::string_view value)
 {
-   const auto n = std::min(value.size(), out.size() - 1);
+   const auto n = (std::min)(value.size(), out.size() - 1);
    std::fill(out.begin(), out.end(), '\0');
    std::memcpy(out.data(), value.data(), n);
 }
