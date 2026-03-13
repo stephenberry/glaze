@@ -4,6 +4,8 @@
 #pragma once
 
 #include "glaze/glaze.hpp"
+#include "glaze/json/schema.hpp"
+#include "glaze/rpc/openrpc.hpp"
 #include "glaze/rpc/repe/buffer.hpp"
 #include "glaze/rpc/repe/repe.hpp"
 
@@ -104,9 +106,28 @@ namespace glz
 
       typename protocol_storage<Proto>::type endpoints{};
 
-      void clear() { endpoints.clear(); }
+      openrpc_info open_rpc_info{};
+
+      void clear()
+      {
+         endpoints.clear();
+         methods_metadata.clear();
+      }
 
      private:
+      std::vector<method_metadata> methods_metadata{};
+
+      // Helper to generate JSON schema string for a type
+      template <class T>
+      static std::string generate_schema()
+      {
+         auto result = write_json_schema<std::decay_t<T>>();
+         if (result) {
+            return std::move(*result);
+         }
+         return "{}";
+      }
+
       // Helper to register all members of a type without registering the root endpoint
       template <const std::string_view& root, class T, const std::string_view& parent>
          requires(glaze_object_t<T> || reflectable<T>)
@@ -152,6 +173,12 @@ namespace glz
             if constexpr (std::is_invocable_v<Func>) {
                using Result = std::decay_t<std::invoke_result_t<Func>>;
                impl::template register_function_endpoint<Func, Result>(full_key, func, *this);
+               if constexpr (std::same_as<Result, void>) {
+                  methods_metadata.push_back({std::string(full_key), {}, {}, false});
+               }
+               else {
+                  methods_metadata.push_back({std::string(full_key), {}, generate_schema<Result>(), false});
+               }
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
@@ -161,6 +188,15 @@ namespace glz
                using Params = glz::tuple_element_t<0, Tuple>;
 
                impl::template register_param_function_endpoint<Func, Params>(full_key, func, *this);
+               using Result = std::invoke_result_t<std::remove_cvref_t<Func>, Params>;
+               if constexpr (std::same_as<std::decay_t<Result>, void>) {
+                  methods_metadata.push_back(
+                     {std::string(full_key), generate_schema<Params>(), {}, true});
+               }
+               else {
+                  methods_metadata.push_back(
+                     {std::string(full_key), generate_schema<Params>(), generate_schema<std::decay_t<Result>>(), true});
+               }
             }
             else if constexpr (is_function_ptr_invocable<std::remove_cvref_t<Func>>) {
                // Handle function pointers with arguments (e.g., void(*)(int))
@@ -171,15 +207,26 @@ namespace glz
                using Params = glz::tuple_element_t<0, Tuple>;
 
                impl::template register_param_function_endpoint<Func, Params>(full_key, func, *this);
+               using Result = std::invoke_result_t<std::remove_cvref_t<Func>, Params>;
+               if constexpr (std::same_as<std::decay_t<Result>, void>) {
+                  methods_metadata.push_back(
+                     {std::string(full_key), generate_schema<Params>(), {}, true});
+               }
+               else {
+                  methods_metadata.push_back(
+                     {std::string(full_key), generate_schema<Params>(), generate_schema<std::decay_t<Result>>(), true});
+               }
             }
             else if constexpr (std::is_pointer_v<std::remove_cvref_t<Func>> &&
                                (glaze_object_t<std::remove_pointer_t<std::remove_cvref_t<Func>>> ||
                                 reflectable<std::remove_pointer_t<std::remove_cvref_t<Func>>>)) {
                // Handle pointer members explicitly for RPC traversal
                if (func) { // Only traverse if pointer is valid
-                  on<root, std::remove_pointer_t<std::remove_cvref_t<Func>>, full_key>(*func);
-                  impl::template register_object_endpoint<std::remove_pointer_t<std::remove_cvref_t<Func>>>(
-                     full_key, *func, *this);
+                  using ObjType = std::remove_pointer_t<std::remove_cvref_t<Func>>;
+                  on<root, ObjType, full_key>(*func);
+                  impl::template register_object_endpoint<ObjType>(full_key, *func, *this);
+                  auto schema = generate_schema<ObjType>();
+                  methods_metadata.push_back({std::string(full_key), schema, schema, false});
                }
                // else: skip registration for null pointers - no endpoints created
             }
@@ -187,10 +234,18 @@ namespace glz
                on<root, std::remove_cvref_t<Func>, full_key>(func);
 
                impl::template register_object_endpoint<std::remove_cvref_t<Func>>(full_key, func, *this);
+               {
+                  auto schema = generate_schema<std::remove_cvref_t<Func>>();
+                  methods_metadata.push_back({std::string(full_key), schema, schema, false});
+               }
             }
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
                impl::template register_value_endpoint<std::remove_cvref_t<Func>>(full_key, func, *this);
+               {
+                  auto schema = generate_schema<std::remove_cvref_t<Func>>();
+                  methods_metadata.push_back({std::string(full_key), schema, schema, false});
+               }
             }
             else {
                static_assert(std::is_lvalue_reference_v<Func>);
@@ -203,11 +258,14 @@ namespace glz
                   if constexpr (std::is_void_v<Ret>) {
                      if constexpr (n_args == 0) {
                         impl::template register_member_function_endpoint<T, F, void>(full_key, value, func, *this);
+                        methods_metadata.push_back({std::string(full_key), {}, {}, false});
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
                         impl::template register_member_function_with_params_endpoint<T, F, Input, void>(full_key, value,
                                                                                                         func, *this);
+                        methods_metadata.push_back(
+                           {std::string(full_key), generate_schema<Input>(), {}, true});
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -217,11 +275,15 @@ namespace glz
                      // Member function pointers
                      if constexpr (n_args == 0) {
                         impl::template register_member_function_endpoint<T, F, Ret>(full_key, value, func, *this);
+                        methods_metadata.push_back(
+                           {std::string(full_key), {}, generate_schema<Ret>(), false});
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
                         impl::template register_member_function_with_params_endpoint<T, F, Input, Ret>(full_key, value,
                                                                                                        func, *this);
+                        methods_metadata.push_back(
+                           {std::string(full_key), generate_schema<Input>(), generate_schema<Ret>(), true});
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -232,6 +294,10 @@ namespace glz
                   // this is a variable and not a function, so we build RPC read/write calls
                   // We can't remove const here, because const fields need to be able to be written
                   impl::template register_variable_endpoint<std::remove_reference_t<Func>>(full_key, func, *this);
+                  {
+                     auto schema = generate_schema<std::remove_reference_t<Func>>();
+                     methods_metadata.push_back({std::string(full_key), schema, schema, false});
+                  }
                }
             }
          });
@@ -247,6 +313,8 @@ namespace glz
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
             impl::register_endpoint(root, value, *this);
+            auto schema = generate_schema<T>();
+            methods_metadata.push_back({std::string(root), schema, schema, false});
          }
 
          register_members<root, T, parent>(value);
@@ -268,6 +336,63 @@ namespace glz
             using T = std::decay_t<decltype(obj)>;
             register_members<root, T, root>(obj);
          });
+      }
+
+      /// Generate the OpenRPC specification document from registered endpoints
+      open_rpc open_rpc_spec() const
+      {
+         open_rpc doc;
+         doc.info = open_rpc_info;
+         doc.methods.reserve(methods_metadata.size());
+
+         for (const auto& meta : methods_metadata) {
+            openrpc_method method;
+            method.name = meta.name;
+
+            if (!meta.params_schema.empty()) {
+               openrpc_content_descriptor param;
+               param.name = "params";
+               param.schema = raw_json{meta.params_schema};
+               if (meta.params_required) {
+                  param.required = true;
+               }
+               method.params.push_back(std::move(param));
+            }
+
+            if (!meta.result_schema.empty()) {
+               openrpc_content_descriptor result;
+               result.name = "result";
+               result.schema = raw_json{meta.result_schema};
+               method.result = std::move(result);
+            }
+
+            doc.methods.push_back(std::move(method));
+         }
+
+         return doc;
+      }
+
+      /// Register a /open_rpc endpoint that returns the OpenRPC specification
+      void register_open_rpc()
+      {
+         if constexpr (Proto == REPE) {
+            endpoints["/open_rpc"] = [this](repe::state_view& state) {
+               if (state.notify()) {
+                  return;
+               }
+               auto spec = open_rpc_spec();
+               repe::write_response<Opts>(spec, state);
+            };
+         }
+         else if constexpr (Proto == JSONRPC) {
+            endpoints["/open_rpc"] = [this](jsonrpc::state&& state) {
+               if (state.notify()) {
+                  return;
+               }
+               auto spec = open_rpc_spec();
+               jsonrpc::write_response<Opts>(spec, state);
+            };
+         }
       }
 
       /// Message-based call for REPE protocol (deprecated)

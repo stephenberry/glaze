@@ -514,7 +514,7 @@ namespace glz
          }
       };
 
-      template <nullable_t T>
+      template <nullable_like T>
       struct to_json_schema<T>
       {
          template <auto Opts>
