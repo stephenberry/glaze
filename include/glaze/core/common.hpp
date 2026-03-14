@@ -30,7 +30,6 @@
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
-#include "glaze/util/utility.hpp"
 #include "glaze/util/validate.hpp"
 #include "glaze/util/variant.hpp"
 

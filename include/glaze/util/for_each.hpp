@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "glaze/util/inline.hpp"
-#include "glaze/util/utility.hpp"
 
 // We do not mark these functions noexcept so that it can be used in exception contexts
 // Furthermore, adding noexcept can increase assembly size because exceptions need to cause termination
