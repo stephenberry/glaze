@@ -2582,7 +2582,7 @@ namespace glz
             ++it;
          }
       }
-      unreachable();
+      std::unreachable();
    }
 
    // For types like std::forward_list

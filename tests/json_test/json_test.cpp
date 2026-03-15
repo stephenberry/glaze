@@ -3896,7 +3896,7 @@ suite read_file_test = [] {
 
    "read_file invalid"_test = [] {
       file_struct s;
-      expect(glz::read_file_json(s, "../nonexsistant_file.json", std::string{}) != glz::error_code::none);
+      expect(glz::read_file_json(s, "../nonexistent_file.json", std::string{}) != glz::error_code::none);
    };
 };
 
