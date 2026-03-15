@@ -3916,6 +3916,7 @@ namespace glz
                                  }
                                  else {
                                     ctx.error = error_code::no_matching_variant_type;
+                                    ctx.custom_error_message = variant_ids_string_v<T>;
                                     return;
                                  }
                               }
@@ -3972,6 +3973,7 @@ namespace glz
                               }
                               else {
                                  ctx.error = error_code::no_matching_variant_type;
+                                 ctx.custom_error_message = variant_ids_string_v<T>;
                                  return;
                               }
                            }
