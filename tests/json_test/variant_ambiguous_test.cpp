@@ -1123,7 +1123,8 @@ suite variant_error_message_tests = [] {
       auto error_msg = glz::format_error(ec, json);
       expect(error_msg == R"(1:19: no_matching_variant_type
    {"action":"DELETE","id":"456"}
-                     ^ supported types: CREATE, UPDATE)") << error_msg;
+                     ^ supported types: CREATE, UPDATE)")
+         << error_msg;
    };
 
    "variant error message includes supported types - tag last"_test = [] {
@@ -1134,7 +1135,8 @@ suite variant_error_message_tests = [] {
       auto error_msg = glz::format_error(ec, json);
       expect(error_msg == R"(1:31: no_matching_variant_type
    {"id":"456","action":"UNKNOWN"}
-                                 ^ supported types: CREATE, UPDATE)") << error_msg;
+                                 ^ supported types: CREATE, UPDATE)")
+         << error_msg;
    };
 };
 
