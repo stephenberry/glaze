@@ -723,6 +723,40 @@ namespace glz
 
    // Compile-time string listing the variant type IDs (e.g. "TYPE_A, TYPE_B, TYPE_C")
    // Used for error messages when no matching variant type is found
+   namespace detail
+   {
+      template <is_variant T>
+      inline constexpr size_t variant_ids_string_len = [] {
+         constexpr auto& ids = ids_v<T>;
+         constexpr auto N = ids.size();
+         size_t len = 17; // "supported types: "
+         for (size_t i = 0; i < N; ++i) {
+            if (i > 0) len += 2; // ", "
+            len += ids[i].size();
+         }
+         return len;
+      }();
+
+      template <is_variant T, size_t Len>
+      inline constexpr auto variant_ids_joined = [] {
+         constexpr auto& ids = ids_v<T>;
+         constexpr auto N = ids.size();
+         std::array<char, Len + 1> arr{};
+         const char* prefix = "supported types: ";
+         size_t pos = 0;
+         for (size_t i = 0; i < 17; ++i) arr[pos++] = prefix[i];
+         for (size_t i = 0; i < N; ++i) {
+            if (i > 0) {
+               arr[pos++] = ',';
+               arr[pos++] = ' ';
+            }
+            for (auto c : ids[i]) arr[pos++] = c;
+         }
+         arr[Len] = '\0';
+         return arr;
+      }();
+   }
+
    template <is_variant T>
    inline constexpr std::string_view variant_ids_string_v = [] {
       constexpr auto& ids = ids_v<T>;
@@ -732,35 +766,9 @@ namespace glz
          return std::string_view{};
       }
       else if constexpr (std::is_same_v<std::decay_t<decltype(ids[0])>, std::string_view>) {
-         // String IDs: join into comma-separated list
-         constexpr size_t prefix_len = 17; // "supported types: "
-         constexpr size_t total_len = [] {
-            size_t len = prefix_len;
-            for (size_t i = 0; i < N; ++i) {
-               if (i > 0) len += 2; // ", "
-               len += ids[i].size();
-            }
-            return len;
-         }();
-
-         constexpr auto joined = []<size_t Len = total_len> {
-            std::array<char, Len + 1> arr{};
-            const char* prefix = "supported types: ";
-            size_t pos = 0;
-            for (size_t i = 0; i < prefix_len; ++i) arr[pos++] = prefix[i];
-            for (size_t i = 0; i < N; ++i) {
-               if (i > 0) {
-                  arr[pos++] = ',';
-                  arr[pos++] = ' ';
-               }
-               for (auto c : ids[i]) arr[pos++] = c;
-            }
-            arr[Len] = '\0';
-            return arr;
-         }();
-
-         auto& static_arr = detail::make_static<joined>::value;
-         return std::string_view{static_arr.data(), total_len};
+         constexpr auto Len = detail::variant_ids_string_len<T>;
+         auto& static_arr = detail::make_static<detail::variant_ids_joined<T, Len>>::value;
+         return std::string_view{static_arr.data(), Len};
       }
       else {
          return std::string_view{};
