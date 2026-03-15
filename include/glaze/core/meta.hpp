@@ -743,8 +743,8 @@ namespace glz
             return len;
          }();
 
-         constexpr auto joined = [] {
-            std::array<char, total_len + 1> arr{};
+         constexpr auto joined = []<size_t Len = total_len> {
+            std::array<char, Len + 1> arr{};
             const char* prefix = "supported types: ";
             size_t pos = 0;
             for (size_t i = 0; i < prefix_len; ++i) arr[pos++] = prefix[i];
@@ -755,7 +755,7 @@ namespace glz
                }
                for (auto c : ids[i]) arr[pos++] = c;
             }
-            arr[total_len] = '\0';
+            arr[Len] = '\0';
             return arr;
          }();
 
