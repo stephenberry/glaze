@@ -1101,6 +1101,44 @@ suite variant_default_tests = [] {
 };
 
 // ============================================================================
+// Variant error message tests - verify supported types in error messages
+// ============================================================================
+
+// Variant without a default handler (ids_size == variant_size)
+using StrictActionVariant = std::variant<CreateAction, UpdateAction>;
+
+template <>
+struct glz::meta<StrictActionVariant>
+{
+   static constexpr std::string_view tag = "action";
+   static constexpr auto ids = std::array{"CREATE", "UPDATE"};
+};
+
+suite variant_error_message_tests = [] {
+   "variant error message includes supported types - tag first"_test = [] {
+      std::string_view json = R"({"action":"DELETE","id":"456"})";
+      StrictActionVariant av{};
+      auto ec = glz::read_json(av, json);
+      expect(ec == glz::error_code::no_matching_variant_type);
+      auto error_msg = glz::format_error(ec, json);
+      expect(error_msg == R"(1:19: no_matching_variant_type
+   {"action":"DELETE","id":"456"}
+                     ^ supported types: CREATE, UPDATE)") << error_msg;
+   };
+
+   "variant error message includes supported types - tag last"_test = [] {
+      std::string_view json = R"({"id":"456","action":"UNKNOWN"})";
+      StrictActionVariant av{};
+      auto ec = glz::read_json(av, json);
+      expect(ec == glz::error_code::no_matching_variant_type);
+      auto error_msg = glz::format_error(ec, json);
+      expect(error_msg == R"(1:31: no_matching_variant_type
+   {"id":"456","action":"UNKNOWN"}
+                                 ^ supported types: CREATE, UPDATE)") << error_msg;
+   };
+};
+
+// ============================================================================
 // Numeric variant tests - int64_t and double
 // ============================================================================
 

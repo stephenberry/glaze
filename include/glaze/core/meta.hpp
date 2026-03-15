@@ -721,6 +721,52 @@ namespace glz
       }
    }();
 
+   // Compile-time string listing the variant type IDs (e.g. "TYPE_A, TYPE_B, TYPE_C")
+   // Used for error messages when no matching variant type is found
+   template <is_variant T>
+   inline constexpr std::string_view variant_ids_string_v = [] {
+      constexpr auto& ids = ids_v<T>;
+      constexpr auto N = ids.size();
+
+      if constexpr (N == 0) {
+         return std::string_view{};
+      }
+      else if constexpr (std::is_same_v<std::decay_t<decltype(ids[0])>, std::string_view>) {
+         // String IDs: join into comma-separated list
+         constexpr size_t prefix_len = 17; // "supported types: "
+         constexpr size_t total_len = [] {
+            size_t len = prefix_len;
+            for (size_t i = 0; i < N; ++i) {
+               if (i > 0) len += 2; // ", "
+               len += ids[i].size();
+            }
+            return len;
+         }();
+
+         constexpr auto joined = [] {
+            std::array<char, total_len + 1> arr{};
+            const char* prefix = "supported types: ";
+            size_t pos = 0;
+            for (size_t i = 0; i < prefix_len; ++i) arr[pos++] = prefix[i];
+            for (size_t i = 0; i < N; ++i) {
+               if (i > 0) {
+                  arr[pos++] = ',';
+                  arr[pos++] = ' ';
+               }
+               for (auto c : ids[i]) arr[pos++] = c;
+            }
+            arr[total_len] = '\0';
+            return arr;
+         }();
+
+         auto& static_arr = detail::make_static<joined>::value;
+         return std::string_view{static_arr.data(), total_len};
+      }
+      else {
+         return std::string_view{};
+      }
+   }();
+
    template <class T>
    concept versioned = requires { meta<std::decay_t<T>>::version; };
 
