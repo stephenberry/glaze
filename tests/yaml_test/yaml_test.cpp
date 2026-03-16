@@ -6031,6 +6031,77 @@ suite generic_malformed_flow_tests = [] {
    };
 };
 
+// Issue #2379: glz::generic_u64 (and generic_i64) should work with YAML
+suite yaml_generic_u64_parsing_tests = [] {
+   "generic_u64_block_mapping_multiple_entries"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+city: NYC)";
+      glz::generic_u64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.holds<glz::generic_u64::object_t>());
+
+      auto& obj = parsed.get<glz::generic_u64::object_t>();
+      expect(obj.size() == 3u);
+      expect(obj.at("name").get<std::string>() == "Alice");
+      expect(obj.at("age").get<uint64_t>() == 30u);
+      expect(obj.at("city").get<std::string>() == "NYC");
+   };
+
+   "generic_u64_roundtrip"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+active: true)";
+      glz::generic_u64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      glz::generic_u64 reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+      expect(reparsed.holds<glz::generic_u64::object_t>());
+
+      auto& obj = reparsed.get<glz::generic_u64::object_t>();
+      expect(obj.size() == 3u);
+   };
+
+   "generic_u64_negative_numbers"_test = [] {
+      std::string yaml = R"(positive: 42
+negative: -5
+decimal: 3.14)";
+      glz::generic_u64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& obj = parsed.get<glz::generic_u64::object_t>();
+      expect(obj.size() == 3u);
+      expect(obj.at("positive").get<uint64_t>() == 42u);
+      expect(obj.at("negative").get<int64_t>() == -5);
+      expect(obj.at("decimal").get<double>() == 3.14);
+   };
+
+   "generic_i64_block_mapping"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+score: -10)";
+      glz::generic_i64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.holds<glz::generic_i64::object_t>());
+
+      auto& obj = parsed.get<glz::generic_i64::object_t>();
+      expect(obj.size() == 3u);
+      expect(obj.at("name").get<std::string>() == "Alice");
+      expect(obj.at("age").get<int64_t>() == 30);
+      expect(obj.at("score").get<int64_t>() == -10);
+   };
+};
+
 suite generic_boolean_null_key_tests = [] {
    "generic_true_as_key"_test = [] {
       // "true: value" should parse as object with key "true", not as boolean
