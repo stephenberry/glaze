@@ -7763,4 +7763,43 @@ suite nullable_empty_container_in_collections_tests = [] {
    };
 };
 
+// Test that glz::read with opts{.format = YAML} works (issue #2380)
+suite generic_read_yaml_format = [] {
+   "glz::read with format YAML"_test = [] {
+      constexpr auto options = glz::opts{.format = glz::YAML};
+
+      std::string yaml = R"(name: John
+age: 30)";
+
+      std::map<std::string, glz::generic> obj;
+      auto ec = glz::read<options>(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.size() == 2u);
+   };
+
+   "glz::read generic with format YAML"_test = [] {
+      constexpr auto options = glz::opts{.format = glz::YAML};
+
+      std::string yaml = "hello";
+
+      glz::generic obj;
+      auto ec = glz::read<options>(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+   };
+
+   "glz::read with format YAML vector"_test = [] {
+      constexpr auto options = glz::opts{.format = glz::YAML};
+
+      std::string yaml = R"(- 1
+- 2
+- 3)";
+
+      std::vector<int> obj;
+      auto ec = glz::read<options>(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.size() == 3u);
+      expect(obj == std::vector<int>{1, 2, 3});
+   };
+};
+
 int main() { return 0; }

@@ -120,7 +120,7 @@ namespace glz
       requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer)
    {
-      context ctx{};
+      format_context_t<Opts.format> ctx{};
       return read<Opts>(value, buffer, ctx);
    }
 
@@ -146,7 +146,7 @@ namespace glz
       requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
    {
-      context ctx{};
+      format_context_t<Opts.format> ctx{};
       return read<Opts>(value, std::forward<Buffer>(buffer), ctx);
    }
 

@@ -115,7 +115,16 @@ namespace glz::yaml
          return c;
       }
    };
+} // namespace glz::yaml
 
+template <>
+struct glz::format_context<glz::YAML>
+{
+   using type = glz::yaml::yaml_context;
+};
+
+namespace glz::yaml
+{
    // Lookup table for characters that can start a plain scalar in flow context
    // In flow context, these are NOT allowed: [ ] { } , : # ' " | > @ ` \n \r
    inline constexpr std::array<bool, 256> can_start_plain_flow_table = [] {
