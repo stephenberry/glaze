@@ -44,6 +44,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool write_type_info` | `true` | Write type info for meta objects in variants |
 | `bool append_arrays` | `false` | Append to arrays instead of replacing contents |
 | `bool shrink_to_fit` | `false` | Shrink dynamic containers after reading |
+| `bool error_on_missing_array_elements` | `false` | Require arrays to have all elements expected by the target type (tuples, `glaze_array_t`, `tuple_t`) |
 | `bool error_on_const_read` | `false` | Error when attempting to read into a const value |
 | `bool hide_non_invocable` | `true` | Hide non-invocable members from `cli_menu` |
 | `bool escape_control_characters` | `false` | Escape control characters as unicode sequences |
@@ -176,6 +177,19 @@ Skips `read_constraint` validation during deserialization. Useful for performanc
 
 #### `skip_self_constraint`
 Skips `self_constraint` validation during deserialization. Useful for performance when data is known to be valid. See [Wrappers](wrappers.md) for more on constraints.
+
+#### `error_on_missing_array_elements`
+When `true`, requires JSON/YAML arrays to contain all elements expected by the target type (tuples, `glaze_array_t`, and `tuple_t`). By default, if the array has fewer elements than expected, the remaining elements are left at their default values. Extra elements always produce an error regardless of this option. BEVE, MSGPACK, and CBOR already enforce strict size matching by default.
+
+```cpp
+struct strict_opts : glz::opts {
+   bool error_on_missing_array_elements = true;
+};
+
+std::tuple<int, double, std::string> t{};
+auto ec = glz::read<strict_opts{}>(t, R"([1, 2.5])");
+// ec == glz::error_code::array_element_not_found
+```
 
 #### `error_on_const_read`
 When `true`, attempting to read into a const value produces an error. By default, const values are silently skipped.

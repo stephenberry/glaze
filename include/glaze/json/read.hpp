@@ -2670,7 +2670,10 @@ namespace glz
                return;
 
             if (*it == ']') {
-               if constexpr (not Opts.null_terminated) {
+               if constexpr (check_error_on_missing_array_elements(Opts)) {
+                  ctx.error = error_code::array_element_not_found;
+               }
+               else if constexpr (not Opts.null_terminated) {
                   --ctx.depth;
                }
                return;

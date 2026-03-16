@@ -166,6 +166,10 @@ namespace glz
    // Shrinks dynamic containers to new size to save memory
 
    // ---
+   // bool error_on_missing_array_elements = false;
+   // Require arrays to have all elements expected by the target type (tuples, glaze_array_t, tuple_t)
+
+   // ---
    // bool error_on_const_read = false;
    // Error if attempt is made to read into a const value, by default the value is skipped without error
 
@@ -361,6 +365,16 @@ namespace glz
    {
       if constexpr (requires { Opts.append_arrays; }) {
          return Opts.append_arrays;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_error_on_missing_array_elements(auto&& Opts)
+   {
+      if constexpr (requires { Opts.error_on_missing_array_elements; }) {
+         return Opts.error_on_missing_array_elements;
       }
       else {
          return false;

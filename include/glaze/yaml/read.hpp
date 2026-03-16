@@ -3712,6 +3712,9 @@ namespace glz
                   return;
 
                if (it != end && *it == ']') {
+                  if constexpr (check_error_on_missing_array_elements(Opts)) {
+                     ctx.error = error_code::array_element_not_found;
+                  }
                   return; // Early termination
                }
 
