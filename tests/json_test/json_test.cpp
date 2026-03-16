@@ -1176,6 +1176,26 @@ suite container_types = [] {
       expect(glz::read_json(tuple2, buffer) == glz::error_code::none);
       expect(tuple == tuple2);
    };
+   "tuple error_on_missing_array_elements"_test = [] {
+      struct opts_strict_elements : glz::opts
+      {
+         bool error_on_missing_array_elements = true;
+      };
+
+      std::tuple<int, double, std::string> t{};
+
+      // Exact match should succeed
+      expect(glz::read<opts_strict_elements{}>(t, R"([1, 2.5, "hello"])") == glz::error_code::none);
+      expect(std::get<0>(t) == 1);
+      expect(std::get<1>(t) == 2.5);
+      expect(std::get<2>(t) == "hello");
+
+      // Fewer elements should error
+      expect(glz::read<opts_strict_elements{}>(t, R"([1, 2.5])") == glz::error_code::array_element_not_found);
+
+      // Fewer elements without the option should succeed (default behavior)
+      expect(glz::read_json(t, R"([1, 2.5])") == glz::error_code::none);
+   };
    "pair roundtrip"_test = [] {
       auto pair = std::make_pair(std::string("water"), 5.2);
       decltype(pair) pair2{};

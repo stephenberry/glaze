@@ -2665,42 +2665,43 @@ namespace glz
             return;
          }
 
-         for_each<N>([&]<size_t I>() {
+         for_each_short_circuit<N>([&]<size_t I>() -> bool {
             if (bool(ctx.error)) [[unlikely]]
-               return;
+               return true;
 
             if (*it == ']') {
-               if constexpr (not Opts.null_terminated) {
-                  --ctx.depth;
+               if constexpr (check_error_on_missing_array_elements(Opts)) {
+                  ctx.error = error_code::array_element_not_found;
                }
-               return;
+               return true;
             }
             if constexpr (I != 0) {
                if (match_invalid_end<',', Opts>(ctx, it, end)) {
-                  return;
+                  return true;
                }
                if (skip_ws<Opts>(ctx, it, end)) {
-                  return;
+                  return true;
                }
             }
             if constexpr (is_std_tuple<T>) {
                parse<JSON>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
-                  return;
+                  return true;
             }
             else if constexpr (glaze_array_t<T>) {
                parse<JSON>::op<ws_handled<Opts>()>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
-                  return;
+                  return true;
             }
             else {
                parse<JSON>::op<ws_handled<Opts>()>(glz::get<I>(value), ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
-                  return;
+                  return true;
             }
             if (skip_ws<Opts>(ctx, it, end)) {
-               return;
+               return true;
             }
+            return false;
          });
 
          if constexpr (Opts.partial_read) {
