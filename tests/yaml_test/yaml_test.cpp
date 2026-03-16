@@ -6040,13 +6040,13 @@ city: NYC)";
       glz::generic_u64 parsed;
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
-      expect(std::holds_alternative<glz::generic_u64::object_t>(parsed.data));
+      expect(parsed.holds<glz::generic_u64::object_t>());
 
-      auto& obj = std::get<glz::generic_u64::object_t>(parsed.data);
+      auto& obj = parsed.get<glz::generic_u64::object_t>();
       expect(obj.size() == 3u);
-      expect(std::get<std::string>(obj.at("name").data) == "Alice");
-      expect(std::get<uint64_t>(obj.at("age").data) == 30u);
-      expect(std::get<std::string>(obj.at("city").data) == "NYC");
+      expect(obj.at("name").get<std::string>() == "Alice");
+      expect(obj.at("age").get<uint64_t>() == 30u);
+      expect(obj.at("city").get<std::string>() == "NYC");
    };
 
    "generic_u64_roundtrip"_test = [] {
@@ -6064,9 +6064,9 @@ active: true)";
       glz::generic_u64 reparsed;
       auto rec2 = glz::read_yaml(reparsed, output);
       expect(!rec2) << glz::format_error(rec2, output);
-      expect(std::holds_alternative<glz::generic_u64::object_t>(reparsed.data));
+      expect(reparsed.holds<glz::generic_u64::object_t>());
 
-      auto& obj = std::get<glz::generic_u64::object_t>(reparsed.data);
+      auto& obj = reparsed.get<glz::generic_u64::object_t>();
       expect(obj.size() == 3u);
    };
 
@@ -6078,11 +6078,11 @@ decimal: 3.14)";
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
 
-      auto& obj = std::get<glz::generic_u64::object_t>(parsed.data);
+      auto& obj = parsed.get<glz::generic_u64::object_t>();
       expect(obj.size() == 3u);
-      expect(std::get<uint64_t>(obj.at("positive").data) == 42u);
-      expect(std::get<int64_t>(obj.at("negative").data) == -5);
-      expect(std::get<double>(obj.at("decimal").data) == 3.14);
+      expect(obj.at("positive").get<uint64_t>() == 42u);
+      expect(obj.at("negative").get<int64_t>() == -5);
+      expect(obj.at("decimal").get<double>() == 3.14);
    };
 
    "generic_i64_block_mapping"_test = [] {
@@ -6092,13 +6092,13 @@ score: -10)";
       glz::generic_i64 parsed;
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
-      expect(std::holds_alternative<glz::generic_i64::object_t>(parsed.data));
+      expect(parsed.holds<glz::generic_i64::object_t>());
 
-      auto& obj = std::get<glz::generic_i64::object_t>(parsed.data);
+      auto& obj = parsed.get<glz::generic_i64::object_t>();
       expect(obj.size() == 3u);
-      expect(std::get<std::string>(obj.at("name").data) == "Alice");
-      expect(std::get<int64_t>(obj.at("age").data) == 30);
-      expect(std::get<int64_t>(obj.at("score").data) == -10);
+      expect(obj.at("name").get<std::string>() == "Alice");
+      expect(obj.at("age").get<int64_t>() == 30);
+      expect(obj.at("score").get<int64_t>() == -10);
    };
 };
 
