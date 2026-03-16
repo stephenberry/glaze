@@ -6031,6 +6031,77 @@ suite generic_malformed_flow_tests = [] {
    };
 };
 
+// Issue #2379: glz::generic_u64 (and generic_i64) should work with YAML
+suite yaml_generic_u64_parsing_tests = [] {
+   "generic_u64_block_mapping_multiple_entries"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+city: NYC)";
+      glz::generic_u64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic_u64::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic_u64::object_t>(parsed.data);
+      expect(obj.size() == 3u);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+      expect(std::get<uint64_t>(obj.at("age").data) == 30u);
+      expect(std::get<std::string>(obj.at("city").data) == "NYC");
+   };
+
+   "generic_u64_roundtrip"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+active: true)";
+      glz::generic_u64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      glz::generic_u64 reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+      expect(std::holds_alternative<glz::generic_u64::object_t>(reparsed.data));
+
+      auto& obj = std::get<glz::generic_u64::object_t>(reparsed.data);
+      expect(obj.size() == 3u);
+   };
+
+   "generic_u64_negative_numbers"_test = [] {
+      std::string yaml = R"(positive: 42
+negative: -5
+decimal: 3.14)";
+      glz::generic_u64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& obj = std::get<glz::generic_u64::object_t>(parsed.data);
+      expect(obj.size() == 3u);
+      expect(std::get<uint64_t>(obj.at("positive").data) == 42u);
+      expect(std::get<int64_t>(obj.at("negative").data) == -5);
+      expect(std::get<double>(obj.at("decimal").data) == 3.14);
+   };
+
+   "generic_i64_block_mapping"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+score: -10)";
+      glz::generic_i64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<glz::generic_i64::object_t>(parsed.data));
+
+      auto& obj = std::get<glz::generic_i64::object_t>(parsed.data);
+      expect(obj.size() == 3u);
+      expect(std::get<std::string>(obj.at("name").data) == "Alice");
+      expect(std::get<int64_t>(obj.at("age").data) == 30);
+      expect(std::get<int64_t>(obj.at("score").data) == -10);
+   };
+};
+
 suite generic_boolean_null_key_tests = [] {
    "generic_true_as_key"_test = [] {
       // "true: value" should parse as object with key "true", not as boolean

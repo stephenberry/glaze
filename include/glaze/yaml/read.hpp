@@ -4689,7 +4689,7 @@ namespace glz
    consteval auto yaml_variant_is_auto_deducible()
    {
       using counts = yaml_variant_type_count<T>;
-      return counts::n_bool < 2 && counts::n_num < 2 && counts::n_str < 2 && counts::n_object < 2 &&
+      return counts::n_bool < 2 && counts::n_str < 2 && counts::n_object < 2 &&
              counts::n_array < 2 && counts::n_null < 2;
    }
 
