@@ -1439,6 +1439,17 @@ namespace glz
    struct serialize
    {};
 
+   // Default context type for a format.
+   // Formats that need a richer context (e.g. YAML) specialize this.
+   template <uint32_t Format>
+   struct format_context
+   {
+      using type = context;
+   };
+
+   template <uint32_t Format>
+   using format_context_t = typename format_context<Format>::type;
+
    template <uint32_t Format>
    struct serialize_partial
    {};
