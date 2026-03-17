@@ -252,6 +252,50 @@ namespace glz
          register_members<root, T, parent>(value);
       }
 
+      // Non-throwing registration API for callers that need explicit route registration errors.
+      template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
+         requires(glaze_object_t<T> || reflectable<T>)
+      [[nodiscard]] bool try_on(T& value, std::string* error_message = nullptr)
+      {
+         if (error_message) {
+            error_message->clear();
+         }
+
+         if constexpr (Proto == REST) {
+            endpoints.clear_route_error();
+#if __cpp_exceptions
+            try {
+               on<root, T, parent>(value);
+            }
+            catch (const std::exception& e) {
+               if (error_message) {
+                  *error_message = e.what();
+               }
+               return false;
+            }
+            catch (...) {
+               if (error_message) {
+                  *error_message = "Unknown route registration error";
+               }
+               return false;
+            }
+#else
+            on<root, T, parent>(value);
+#endif
+            if (endpoints.has_route_error()) {
+               if (error_message) {
+                  *error_message = std::string(endpoints.route_error());
+               }
+               return false;
+            }
+         }
+         else {
+            on<root, T, parent>(value);
+         }
+
+         return true;
+      }
+
       // Register multiple C++ types merged together, allowing the root endpoint to return a combined view
       template <const std::string_view& root = detail::empty_path, class... Ts>
          requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
@@ -268,6 +312,50 @@ namespace glz
             using T = std::decay_t<decltype(obj)>;
             register_members<root, T, root>(obj);
          });
+      }
+
+      // Non-throwing registration API for merged objects.
+      template <const std::string_view& root = detail::empty_path, class... Ts>
+         requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
+      [[nodiscard]] bool try_on(glz::merge<Ts...>& merged, std::string* error_message = nullptr)
+      {
+         if (error_message) {
+            error_message->clear();
+         }
+
+         if constexpr (Proto == REST) {
+            endpoints.clear_route_error();
+#if __cpp_exceptions
+            try {
+               on<root>(merged);
+            }
+            catch (const std::exception& e) {
+               if (error_message) {
+                  *error_message = e.what();
+               }
+               return false;
+            }
+            catch (...) {
+               if (error_message) {
+                  *error_message = "Unknown route registration error";
+               }
+               return false;
+            }
+#else
+            on<root>(merged);
+#endif
+            if (endpoints.has_route_error()) {
+               if (error_message) {
+                  *error_message = std::string(endpoints.route_error());
+               }
+               return false;
+            }
+         }
+         else {
+            on<root>(merged);
+         }
+
+         return true;
       }
 
       /// Message-based call for REPE protocol (deprecated)
@@ -328,6 +416,7 @@ namespace glz
                resp.reset(req_view);
                repe::state_view state{req_view, resp};
 
+#if __cpp_exceptions
                try {
                   it->second(state);
                }
@@ -335,6 +424,9 @@ namespace glz
                   resp.reset(req_view);
                   resp.set_error(error_code::parse_error, detail::build_registry_error(in.query, e.what()));
                }
+#else
+               it->second(state);
+#endif
             }
          }
          else {
@@ -412,6 +504,7 @@ namespace glz
          // Zero-copy call: state_view references the parsed request and response builder directly
          repe::state_view state{req, resp};
 
+#if __cpp_exceptions
          try {
             it->second(state);
          }
@@ -425,6 +518,9 @@ namespace glz
             resp.set_error(error_code::parse_error, "Unknown error");
             return;
          }
+#else
+         it->second(state);
+#endif
 
          // For notifications, response buffer stays empty (no response sent)
       }
@@ -529,6 +625,7 @@ namespace glz
          bool has_params = !req.params.str.empty() && req.params.str != "null";
          jsonrpc::state state{req.id, response, is_notification, has_params, req.params.str};
 
+#if __cpp_exceptions
          try {
             it->second(std::move(state));
          }
@@ -540,6 +637,9 @@ namespace glz
             return R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":)" +
                    write_json(std::string_view{e.what()}).value_or("null") + R"(},"id":)" + id_json + "}";
          }
+#else
+         it->second(std::move(state));
+#endif
 
          if (is_notification) {
             return std::nullopt;

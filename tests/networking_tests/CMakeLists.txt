@@ -1,6 +1,7 @@
 # glz_asio is defined in the parent tests/CMakeLists.txt
 
 option(glaze_BUILD_SSL_TESTS "Build SSL/TLS tests (requires OpenSSL headers matching target architecture)" ON)
+option(glaze_BUILD_REGISTRY_NOEXCEPT_TESTS "Build no-exceptions variants of registry networking tests" ON)
 
 # HTTP Examples
 add_subdirectory(http_examples)
