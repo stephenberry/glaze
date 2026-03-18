@@ -15,7 +15,7 @@ struct Value
 };
 
 template <typename T>
-void test(const uint8_t* Data, size_t Size)
+void test(const uint8_t* Data, std::size_t Size)
 {
    using S = Value<T>;
    S s{};
@@ -48,7 +48,7 @@ void test(const uint8_t* Data, size_t Size)
    }
 }
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, std::size_t Size)
 {
    if (Size < 1 + sizeof(float)) {
       return 0;

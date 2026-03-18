@@ -10,9 +10,9 @@ using namespace ut;
 using namespace glz::perf;
 
 #ifdef NDEBUG
-[[maybe_unused]] constexpr size_t iterations = 1'000'000;
+[[maybe_unused]] constexpr std::size_t iterations = 1'000'000;
 #else
-[[maybe_unused]] constexpr size_t iterations = 100'000;
+[[maybe_unused]] constexpr std::size_t iterations = 100'000;
 #endif
 
 struct icon_emoji_data
@@ -311,7 +311,7 @@ auto generic_tester()
 
    auto t0 = std::chrono::steady_clock::now();
 
-   for (size_t i = 0; i < iterations; ++i) {
+   for (std::size_t i = 0; i < iterations; ++i) {
       if (glz::read<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -330,7 +330,7 @@ auto generic_tester()
    // write performance
    t0 = std::chrono::steady_clock::now();
 
-   for (size_t i = 0; i < iterations; ++i) {
+   for (std::size_t i = 0; i < iterations; ++i) {
       if (glz::write<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -347,7 +347,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (size_t i = 0; i < iterations; ++i) {
+   for (std::size_t i = 0; i < iterations; ++i) {
       if (glz::read_json(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -362,7 +362,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (size_t i = 0; i < iterations; ++i) {
+   for (std::size_t i = 0; i < iterations; ++i) {
       if (glz::validate_json(buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -378,7 +378,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (size_t i = 0; i < iterations; ++i) {
+   for (std::size_t i = 0; i < iterations; ++i) {
       if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -394,7 +394,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (size_t i = 0; i < iterations; ++i) {
+   for (std::size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -409,7 +409,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (size_t i = 0; i < iterations; ++i) {
+   for (std::size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;

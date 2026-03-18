@@ -40,7 +40,7 @@ struct glz::meta<SparseEnumPow2>
 };
 
 // Issue #2262: Sparse enum with adjacent values where shift doesn't help
-enum class SparseEnumXor : uint32_t { no_error = 0, invalid_version = 400000000, unsupported_version = 400000001 };
+enum class SparseEnumXor : std::uint32_t { no_error = 0, invalid_version = 400000000, unsupported_version = 400000001 };
 
 template <>
 struct glz::meta<SparseEnumXor>
@@ -200,8 +200,8 @@ struct glz::meta<TwoElementSmall>
    static constexpr auto value = enumerate(First, Second);
 };
 
-// Two-element enum with large uint64_t values (tests uint64_t casting)
-enum class TwoElementLargeU64 : uint64_t { Low = 0, High = 0xFFFFFFFFFFFFFFFFull };
+// Two-element enum with large std::uint64_t values (tests std::uint64_t casting)
+enum class TwoElementLargeU64 : std::uint64_t { Low = 0, High = 0xFFFFFFFFFFFFFFFFull };
 
 template <>
 struct glz::meta<TwoElementLargeU64>
@@ -274,7 +274,7 @@ suite two_element_enum_tests = [] {
    };
 
    "two_element_large_u64_roundtrip"_test = [] {
-      // Test with max uint64_t value to verify casting works correctly
+      // Test with max std::uint64_t value to verify casting works correctly
       for (auto val : {TwoElementLargeU64::Low, TwoElementLargeU64::High}) {
          std::string json;
          expect(not glz::write_json(val, json));
@@ -742,8 +742,8 @@ struct glz::meta<RandomI8Enum2>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-// uint32_t enums (sparse, needs hash)
-enum class RandomU32Enum1 : uint32_t {
+// std::uint32_t enums (sparse, needs hash)
+enum class RandomU32Enum1 : std::uint32_t {
    v0 = 15228622,
    v1 = 41531046,
    v2 = 106456634,
@@ -820,7 +820,7 @@ struct glz::meta<RandomU32Enum1>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomU32Enum2 : uint32_t {
+enum class RandomU32Enum2 : std::uint32_t {
    v0 = 1743499,
    v1 = 104906255,
    v2 = 116402431,
@@ -897,7 +897,7 @@ struct glz::meta<RandomU32Enum2>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomU32Enum3 : uint32_t {
+enum class RandomU32Enum3 : std::uint32_t {
    v0 = 11492154,
    v1 = 220661337,
    v2 = 230249217,
@@ -1133,7 +1133,7 @@ struct glz::meta<RandomI64Enum2>
 template <typename E>
 void test_enum_roundtrip()
 {
-   glz::for_each<glz::reflect<E>::size>([&]<size_t I>() {
+   glz::for_each<glz::reflect<E>::size>([&]<std::size_t I>() {
       E val = static_cast<E>(glz::get<I>(glz::reflect<E>::values));
       std::string json;
       expect(not glz::write_json(val, json));

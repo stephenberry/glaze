@@ -25,7 +25,7 @@ struct my_struct
    int i = 287;
    double d = 3.14;
    std::string hello = "Hello World";
-   std::array<uint64_t, 3> arr = {1, 2, 3};
+   std::array<std::uint64_t, 3> arr = {1, 2, 3};
 };
 
 template <>
@@ -195,7 +195,7 @@ struct empty_t
 // TestMsg for byte buffer tests
 struct TestMsg
 {
-   uint64_t id{};
+   std::uint64_t id{};
    std::string val{};
 };
 
@@ -374,21 +374,21 @@ void integer_tests()
    };
 
    "uint32"_test = [] {
-      uint32_t v = 100000;
+      std::uint32_t v = 100000;
       std::string buffer;
       expect(not glz::write_cbor(v, buffer));
       expect(buffer.size() == 5u); // 4-byte follows
-      uint32_t result{};
+      std::uint32_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == v);
    };
 
    "uint64"_test = [] {
-      uint64_t v = 5000000000ULL;
+      std::uint64_t v = 5000000000ULL;
       std::string buffer;
       expect(not glz::write_cbor(v, buffer));
       expect(buffer.size() == 9u); // 8-byte follows
-      uint64_t result{};
+      std::uint64_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == v);
    };
@@ -462,10 +462,10 @@ void integer_tests()
    };
 
    "uint32_max"_test = [] {
-      uint32_t v = std::numeric_limits<uint32_t>::max();
+      std::uint32_t v = std::numeric_limits<std::uint32_t>::max();
       std::string buffer;
       expect(not glz::write_cbor(v, buffer));
-      uint32_t result{};
+      std::uint32_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == v);
    };
@@ -1424,13 +1424,13 @@ void container_roundtrip_tests()
    };
 
    "vector_uint64_random"_test = [] {
-      std::uniform_int_distribution<uint64_t> dist((std::numeric_limits<uint64_t>::min)(),
-                                                   (std::numeric_limits<uint64_t>::max)());
+      std::uniform_int_distribution<std::uint64_t> dist((std::numeric_limits<std::uint64_t>::min)(),
+                                                   (std::numeric_limits<std::uint64_t>::max)());
       std::mt19937 gen{};
-      std::vector<uint64_t> vec(100);
+      std::vector<std::uint64_t> vec(100);
       for (auto& item : vec) item = dist(gen);
       std::string buffer{};
-      std::vector<uint64_t> vec2{};
+      std::vector<std::uint64_t> vec2{};
       expect(not glz::write_cbor(vec, buffer));
       expect(not glz::read_cbor(vec2, buffer));
       expect(vec == vec2);
@@ -1774,49 +1774,49 @@ void rfc8949_appendix_a_tests()
    // === Integers ===
    "rfc_uint_0"_test = [&] {
       auto buffer = from_hex({0x00});
-      uint64_t result{};
+      std::uint64_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == 0u);
    };
 
    "rfc_uint_1"_test = [&] {
       auto buffer = from_hex({0x01});
-      uint64_t result{};
+      std::uint64_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == 1u);
    };
 
    "rfc_uint_10"_test = [&] {
       auto buffer = from_hex({0x0a});
-      uint64_t result{};
+      std::uint64_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == 10u);
    };
 
    "rfc_uint_23"_test = [&] {
       auto buffer = from_hex({0x17});
-      uint64_t result{};
+      std::uint64_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == 23u);
    };
 
    "rfc_uint_24"_test = [&] {
       auto buffer = from_hex({0x18, 0x18});
-      uint64_t result{};
+      std::uint64_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == 24u);
    };
 
    "rfc_uint_100"_test = [&] {
       auto buffer = from_hex({0x18, 0x64});
-      uint64_t result{};
+      std::uint64_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == 100u);
    };
 
    "rfc_uint_1000"_test = [&] {
       auto buffer = from_hex({0x19, 0x03, 0xe8});
-      uint64_t result{};
+      std::uint64_t result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == 1000u);
    };
@@ -2043,11 +2043,11 @@ void rfc8949_appendix_a_tests()
    "rfc_write_empty_numeric_array"_test = [] {
       // Numeric arrays use RFC 8746 typed arrays
       std::string buffer;
-      std::vector<int32_t> v;
+      std::vector<std::int32_t> v;
       expect(not glz::write_cbor(v, buffer));
       // Expected: tag (D8 XX) + empty byte string (40)
       // Tag is 74 (ta_sint32_be) on big endian, 78 (ta_sint32_le) on little endian
-      constexpr auto expected_tag = glz::cbor::typed_array::native_tag<int32_t>();
+      constexpr auto expected_tag = glz::cbor::typed_array::native_tag<std::int32_t>();
       expect(buffer.size() == 3u);
       expect(static_cast<uint8_t>(buffer[0]) == 0xd8); // tag follows
       expect(static_cast<uint8_t>(buffer[1]) == expected_tag);
@@ -2083,11 +2083,11 @@ void typed_array_tests()
    };
 
    "typed_array_int32"_test = [] {
-      std::vector<int32_t> v = {-1000, 0, 1000, 2000000};
+      std::vector<std::int32_t> v = {-1000, 0, 1000, 2000000};
       std::string buffer;
       expect(not glz::write_cbor(v, buffer));
 
-      std::vector<int32_t> result;
+      std::vector<std::int32_t> result;
       expect(not glz::read_cbor(result, buffer));
       expect(result == v);
    };
@@ -2114,7 +2114,7 @@ void typed_array_tests()
 
    "typed_array_large"_test = [] {
       std::vector<int64_t> v(1000);
-      for (size_t i = 0; i < v.size(); ++i) {
+      for (std::size_t i = 0; i < v.size(); ++i) {
          v[i] = static_cast<int64_t>(i) * 1000 - 500000;
       }
       std::string buffer;
@@ -2205,7 +2205,7 @@ void cbor_to_json_tests()
    };
 
    "cbor_to_json_typed_array"_test = [] {
-      std::vector<int32_t> v = {100, 200, 300};
+      std::vector<std::int32_t> v = {100, 200, 300};
       std::string cbor_buffer;
       expect(not glz::write_cbor(v, cbor_buffer));
 
@@ -2446,8 +2446,8 @@ void allocation_limits_tests()
       // Try to read with a limit of 50 characters
       struct limited_opts : glz::opts
       {
-         uint32_t format = glz::CBOR;
-         size_t max_string_length = 50;
+         std::uint32_t format = glz::CBOR;
+         std::size_t max_string_length = 50;
       };
 
       std::string result;
@@ -2462,8 +2462,8 @@ void allocation_limits_tests()
 
       struct limited_opts : glz::opts
       {
-         uint32_t format = glz::CBOR;
-         size_t max_string_length = 50;
+         std::uint32_t format = glz::CBOR;
+         std::size_t max_string_length = 50;
       };
 
       std::string result;
@@ -2479,8 +2479,8 @@ void allocation_limits_tests()
 
       struct limited_opts : glz::opts
       {
-         uint32_t format = glz::CBOR;
-         size_t max_array_size = 50;
+         std::uint32_t format = glz::CBOR;
+         std::size_t max_array_size = 50;
       };
 
       std::vector<int> result;
@@ -2495,8 +2495,8 @@ void allocation_limits_tests()
 
       struct limited_opts : glz::opts
       {
-         uint32_t format = glz::CBOR;
-         size_t max_array_size = 50;
+         std::uint32_t format = glz::CBOR;
+         std::size_t max_array_size = 50;
       };
 
       std::vector<int> result;
@@ -2510,7 +2510,7 @@ void allocation_limits_tests()
       // Major type 4 (array) with 4-byte length: 0x9a followed by count
       std::vector<uint8_t> malicious_buffer;
       malicious_buffer.push_back(0x9a); // array with 4-byte length
-      uint32_t fake_count = 1'000'000'000;
+      std::uint32_t fake_count = 1'000'000'000;
       // CBOR uses big-endian
       malicious_buffer.push_back((fake_count >> 24) & 0xFF);
       malicious_buffer.push_back((fake_count >> 16) & 0xFF);
@@ -2527,7 +2527,7 @@ void allocation_limits_tests()
       // Major type 3 (text string) with 4-byte length: 0x7a followed by length
       std::vector<uint8_t> malicious_buffer;
       malicious_buffer.push_back(0x7a); // text string with 4-byte length
-      uint32_t fake_length = 1'000'000'000;
+      std::uint32_t fake_length = 1'000'000'000;
       malicious_buffer.push_back((fake_length >> 24) & 0xFF);
       malicious_buffer.push_back((fake_length >> 16) & 0xFF);
       malicious_buffer.push_back((fake_length >> 8) & 0xFF);
@@ -2548,8 +2548,8 @@ void allocation_limits_tests()
 
       struct map_limited_opts : glz::opts
       {
-         uint32_t format = glz::CBOR;
-         size_t max_map_size = 50;
+         std::uint32_t format = glz::CBOR;
+         std::size_t max_map_size = 50;
       };
 
       std::map<std::string, int> result;
@@ -2564,8 +2564,8 @@ void allocation_limits_tests()
 
       struct map_limited_opts : glz::opts
       {
-         uint32_t format = glz::CBOR;
-         size_t max_map_size = 50;
+         std::uint32_t format = glz::CBOR;
+         std::size_t max_map_size = 50;
       };
 
       std::map<std::string, int> result;
@@ -2582,8 +2582,8 @@ void allocation_limits_tests()
       // Extend opts to add allocation limits
       struct array_limited_opts : glz::opts
       {
-         uint32_t format = glz::CBOR;
-         size_t max_array_size = 50;
+         std::uint32_t format = glz::CBOR;
+         std::size_t max_array_size = 50;
       };
 
       std::vector<int> result;

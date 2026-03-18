@@ -50,10 +50,10 @@ namespace scalar
 // ============================================================================
 namespace matching
 {
-   BENCH_ALWAYS_INLINE void skip_matching_ws(const char* ws, const char*& it, uint64_t length) noexcept
+   BENCH_ALWAYS_INLINE void skip_matching_ws(const char* ws, const char*& it, std::uint64_t length) noexcept
    {
       if (length > 7) {
-         uint64_t v[2];
+         std::uint64_t v[2];
          while (length > 8) {
             std::memcpy(v, ws, 8);
             std::memcpy(v + 1, it, 8);
@@ -78,9 +78,9 @@ namespace matching
          return;
       }
       {
-         constexpr uint64_t n{sizeof(uint32_t)};
+         constexpr std::uint64_t n{sizeof(std::uint32_t)};
          if (length >= n) {
-            uint32_t v[2];
+            std::uint32_t v[2];
             std::memcpy(v, ws, n);
             std::memcpy(v + 1, it, n);
             if (v[0] != v[1]) {
@@ -92,7 +92,7 @@ namespace matching
          }
       }
       {
-         constexpr uint64_t n{sizeof(uint16_t)};
+         constexpr std::uint64_t n{sizeof(uint16_t)};
          if (length >= n) {
             uint16_t v[2];
             std::memcpy(v, ws, n);
@@ -111,9 +111,9 @@ namespace matching
 // ============================================================================
 namespace combined
 {
-   BENCH_ALWAYS_INLINE void skip(const char* ws_pattern, const char*& it, const char* end, size_t ws_size) noexcept
+   BENCH_ALWAYS_INLINE void skip(const char* ws_pattern, const char*& it, const char* end, std::size_t ws_size) noexcept
    {
-      if (ws_size && ws_size < size_t(end - it)) {
+      if (ws_size && ws_size < std::size_t(end - it)) {
          matching::skip_matching_ws(ws_pattern, it, ws_size);
       }
       scalar::skip_ws(it);
@@ -125,12 +125,12 @@ namespace combined
 // ============================================================================
 
 // Build a buffer of repeated [ws + delimiter] tokens
-static std::string build_repeated(const std::string& ws, char delim, size_t count)
+static std::string build_repeated(const std::string& ws, char delim, std::size_t count)
 {
    std::string buf;
-   const size_t token_size = ws.size() + 1;
+   const std::size_t token_size = ws.size() + 1;
    buf.reserve(token_size * count);
-   for (size_t i = 0; i < count; ++i) {
+   for (std::size_t i = 0; i < count; ++i) {
       buf += ws;
       buf += delim;
    }
@@ -138,12 +138,12 @@ static std::string build_repeated(const std::string& ws, char delim, size_t coun
 }
 
 // Verify both approaches produce identical results on a buffer
-static bool verify_correctness(const std::string& buf, const char* ws_pattern, size_t ws_size, const char* test_name)
+static bool verify_correctness(const std::string& buf, const char* ws_pattern, std::size_t ws_size, const char* test_name)
 {
    // Scalar-only
    const char* it_a = buf.data();
    const char* end = buf.data() + buf.size();
-   size_t skips_a = 0;
+   std::size_t skips_a = 0;
    while (it_a < end) {
       scalar::skip_ws(it_a);
       if (it_a < end) ++it_a;
@@ -152,7 +152,7 @@ static bool verify_correctness(const std::string& buf, const char* ws_pattern, s
 
    // Combined (matching + scalar)
    const char* it_b = buf.data();
-   size_t skips_b = 0;
+   std::size_t skips_b = 0;
    while (it_b < end) {
       combined::skip(ws_pattern, it_b, end, ws_size);
       if (it_b < end) ++it_b;
@@ -172,9 +172,9 @@ static bool verify_correctness(const std::string& buf, const char* ws_pattern, s
 // Benchmark runner
 // ============================================================================
 
-static void bench_fixed_pattern(const char* name, const std::string& ws, size_t count)
+static void bench_fixed_pattern(const char* name, const std::string& ws, std::size_t count)
 {
-   const size_t ws_size = ws.size();
+   const std::size_t ws_size = ws.size();
    const std::string buf = build_repeated(ws, '{', count);
 
    // Verify correctness first
@@ -213,7 +213,7 @@ static void bench_fixed_pattern(const char* name, const std::string& ws, size_t 
 
 int main()
 {
-   constexpr size_t N = 500000;
+   constexpr std::size_t N = 500000;
 
    // ========================================================================
    // Part 1: Fixed-size patterns (best case for skip_matching_ws — always matches)
@@ -254,7 +254,7 @@ int main()
 
       std::string buf;
       buf.reserve((ws_a.size() + 1 + ws_b.size() + 1) * (N / 2));
-      for (size_t i = 0; i < N / 2; ++i) {
+      for (std::size_t i = 0; i < N / 2; ++i) {
          buf += ws_a;
          buf += '{';
          buf += ws_b;
@@ -284,7 +284,7 @@ int main()
          const char* it = buf.data();
          const char* end = buf.data() + buf.size();
          const char* ws_ptr = ws_a.data();
-         size_t ws_size = ws_a.size();
+         std::size_t ws_size = ws_a.size();
          while (it < end) {
             combined::skip(ws_ptr, it, end, ws_size);
             if (it < end) ++it;
@@ -303,7 +303,7 @@ int main()
 
       std::string buf;
       buf.reserve((ws_a.size() + 1 + ws_b.size() + 1) * (N / 2));
-      for (size_t i = 0; i < N / 2; ++i) {
+      for (std::size_t i = 0; i < N / 2; ++i) {
          buf += ws_a;
          buf += '{';
          buf += ws_b;
@@ -332,7 +332,7 @@ int main()
          const char* it = buf.data();
          const char* end = buf.data() + buf.size();
          const char* ws_ptr = ws_a.data();
-         size_t ws_size = ws_a.size();
+         std::size_t ws_size = ws_a.size();
          while (it < end) {
             combined::skip(ws_ptr, it, end, ws_size);
             if (it < end) ++it;
@@ -358,8 +358,8 @@ int main()
 
       std::string buf;
       buf.reserve(N * 6); // rough estimate
-      for (size_t i = 0; i < N; ++i) {
-         size_t mod = i % 10;
+      for (std::size_t i = 0; i < N; ++i) {
+         std::size_t mod = i % 10;
          if (mod < 8) {
             buf += ws_primary;
          }
@@ -376,7 +376,7 @@ int main()
          std::abort();
       }
 
-      size_t total_ws = buf.size() - N; // total ws bytes (buf minus N delimiters)
+      std::size_t total_ws = buf.size() - N; // total ws bytes (buf minus N delimiters)
 
       bencher::stage stage;
       stage.name = "Realistic nesting: 80% \\n+4sp, 10% \\n+6sp, 10% \\n+2sp";
@@ -396,7 +396,7 @@ int main()
          const char* it = buf.data();
          const char* end = buf.data() + buf.size();
          const char* ws_ptr = ws_primary.data();
-         size_t ws_size = ws_primary.size();
+         std::size_t ws_size = ws_primary.size();
          while (it < end) {
             combined::skip(ws_ptr, it, end, ws_size);
             if (it < end) ++it;
@@ -443,16 +443,16 @@ int main()
       // Extract whitespace gaps: sequences of ws chars between non-ws chars
       struct ws_gap
       {
-         size_t offset;
-         size_t length;
+         std::size_t offset;
+         std::size_t length;
       };
       std::vector<ws_gap> gaps;
-      size_t total_ws = 0;
+      std::size_t total_ws = 0;
       {
-         size_t i = 0;
+         std::size_t i = 0;
          while (i < json.size()) {
             if (scalar::whitespace_table[uint8_t(json[i])]) {
-               size_t start = i;
+               std::size_t start = i;
                while (i < json.size() && scalar::whitespace_table[uint8_t(json[i])]) {
                   ++i;
                }
@@ -469,13 +469,13 @@ int main()
                   total_ws);
 
       // Print gap size distribution
-      std::array<size_t, 32> size_dist{};
+      std::array<std::size_t, 32> size_dist{};
       for (const auto& g : gaps) {
-         size_t bucket = g.length < 32 ? g.length : 31;
+         std::size_t bucket = g.length < 32 ? g.length : 31;
          ++size_dist[bucket];
       }
       std::printf("Gap size distribution:\n");
-      for (size_t s = 1; s < 32; ++s) {
+      for (std::size_t s = 1; s < 32; ++s) {
          if (size_dist[s] > 0) {
             std::printf("  %2zu bytes: %zu gaps\n", s, size_dist[s]);
          }
@@ -490,7 +490,7 @@ int main()
          struct pattern_count
          {
             std::string pat;
-            size_t count;
+            std::size_t count;
          };
          std::vector<pattern_count> pats;
          for (const auto& g : gaps) {
@@ -506,8 +506,8 @@ int main()
             if (!found) pats.push_back({p, 1});
          }
          // Find most frequent
-         size_t best = 0;
-         for (size_t i = 1; i < pats.size(); ++i) {
+         std::size_t best = 0;
+         for (std::size_t i = 1; i < pats.size(); ++i) {
             if (pats[i].count > pats[best].count) best = i;
          }
          most_common_ws = pats[best].pat;
@@ -517,10 +517,10 @@ int main()
 
       // Benchmark: iterate through the actual JSON, skipping ws gaps
       // Repeat the JSON multiple times for stable timing
-      constexpr size_t repeats = 100;
+      constexpr std::size_t repeats = 100;
       std::string big_json;
       big_json.reserve(json.size() * repeats);
-      for (size_t r = 0; r < repeats; ++r) {
+      for (std::size_t r = 0; r < repeats; ++r) {
          big_json += json;
       }
 
@@ -530,11 +530,11 @@ int main()
       stage.run("scalar skip_ws only", [&] {
          const char* it = big_json.data();
          const char* end = big_json.data() + big_json.size();
-         size_t ws_bytes = 0;
+         std::size_t ws_bytes = 0;
          while (it < end) {
             const char* before = it;
             scalar::skip_ws(it);
-            ws_bytes += size_t(it - before);
+            ws_bytes += std::size_t(it - before);
             if (it < end) ++it; // advance past non-ws char
          }
          bencher::do_not_optimize(it);
@@ -545,12 +545,12 @@ int main()
          const char* it = big_json.data();
          const char* end = big_json.data() + big_json.size();
          const char* ws_ptr = most_common_ws.data();
-         size_t ws_size = most_common_ws.size();
-         size_t ws_bytes = 0;
+         std::size_t ws_size = most_common_ws.size();
+         std::size_t ws_bytes = 0;
          while (it < end) {
             const char* before = it;
             combined::skip(ws_ptr, it, end, ws_size);
-            ws_bytes += size_t(it - before);
+            ws_bytes += std::size_t(it - before);
             if (it < end) ++it;
          }
          bencher::do_not_optimize(it);
@@ -568,15 +568,15 @@ int main()
    std::printf("\n=== Part 5: Contiguous whitespace throughput ===\n\n");
 
    {
-      size_t sizes[] = {16, 64, 256, 1024, 4096};
-      for (size_t sz : sizes) {
+      std::size_t sizes[] = {16, 64, 256, 1024, 4096};
+      for (std::size_t sz : sizes) {
          // All spaces followed by a terminator
          std::string ws(sz, ' ');
          ws += 'x';
 
          // For matching: record first 8 bytes (or fewer) as the pattern
          // In reality the pattern would be the first line's indent
-         std::string pattern(std::min(sz, size_t(8)), ' ');
+         std::string pattern(std::min(sz, std::size_t(8)), ' ');
 
          char label[64];
          std::snprintf(label, sizeof(label), "Contiguous spaces (%zu B)", sz);

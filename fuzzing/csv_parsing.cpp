@@ -12,7 +12,7 @@ struct my_struct
    std::vector<std::array<int, 3>> v3s{};
 };
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, std::size_t Size)
 {
    if (Size < 1) return 0;
 

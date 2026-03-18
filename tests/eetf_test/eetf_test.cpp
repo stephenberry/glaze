@@ -45,20 +45,20 @@ struct my_struct
    double d = 3.14;
    std::string hello = "Hello World";
    glz::eetf::atom a = "elang_atom_field"_atom;
-   std::array<uint64_t, 3> arr = {1, 2, 3};
+   std::array<std::uint64_t, 3> arr = {1, 2, 3};
 };
 
 struct my_struct_meta
 {
    my_struct_meta() : val_i{287}, val_d{3.14}, val_str{"Hello World"}, val_arr{1, 2, 3} {}
-   my_struct_meta(int i, double d, std::string s, std::vector<uint64_t> v)
+   my_struct_meta(int i, double d, std::string s, std::vector<std::uint64_t> v)
       : val_i{i}, val_d{d}, val_str{s}, val_arr{std::move(v)}
    {}
 
    int val_i;
    double val_d;
    std::string val_str;
-   std::vector<uint64_t> val_arr;
+   std::vector<std::uint64_t> val_arr;
 };
 
 template <>

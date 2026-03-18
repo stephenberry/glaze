@@ -158,3 +158,9 @@ target_link_libraries(lazy_test PRIVATE glz_test_common)
 
 add_test(NAME lazy_test COMMAND lazy_test)
 
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    json_test_shared_types.ixx
+)

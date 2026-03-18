@@ -36,10 +36,10 @@ namespace lazy_beve_test
 
    struct Numbers
    {
-      int32_t int_val{42};
+      std::int32_t int_val{42};
       double float_val{3.14};
       int64_t negative{-100};
-      uint64_t big{9007199254740993ULL};
+      std::uint64_t big{9007199254740993ULL};
    };
 
    struct StringData
@@ -221,10 +221,10 @@ suite lazy_beve_tests = [] {
       expect(result.has_value());
 
       auto& doc = *result;
-      expect(doc["int_val"].get<int32_t>().value() == 42);
+      expect(doc["int_val"].get<std::int32_t>().value() == 42);
       expect(std::abs(doc["float_val"].get<double>().value() - 3.14) < 0.001);
       expect(doc["negative"].get<int64_t>().value() == -100);
-      expect(doc["big"].get<uint64_t>().value() == 9007199254740993ULL);
+      expect(doc["big"].get<std::uint64_t>().value() == 9007199254740993ULL);
    };
 
    "lazy_beve_string_view"_test = [] {
@@ -673,7 +673,7 @@ suite lazy_beve_tests = [] {
       expect(result.has_value());
 
       int64_t sum = 0;
-      size_t count = 0;
+      std::size_t count = 0;
       for (auto& item : result->root()) {
          auto val = item.get<int64_t>();
          if (val) sum += *val;
@@ -693,7 +693,7 @@ suite lazy_beve_tests = [] {
       auto result = glz::lazy_beve(buffer);
       expect(result.has_value());
 
-      size_t count = 0;
+      std::size_t count = 0;
       for ([[maybe_unused]] auto& item : result->root()) {
          ++count;
       }
@@ -823,7 +823,7 @@ suite lazy_beve_tests = [] {
       expect(result.has_value());
 
       // Iterate over number-keyed map
-      size_t count = 0;
+      std::size_t count = 0;
       for (auto& item : result->root()) {
          auto val = item.get<std::string_view>();
          expect(val.has_value());
@@ -1023,7 +1023,7 @@ suite lazy_beve_tests = [] {
    // ============================================================================
 
    "lazy_beve_uint_array"_test = [] {
-      std::vector<uint32_t> uints{100u, 200u, 300u};
+      std::vector<std::uint32_t> uints{100u, 200u, 300u};
       std::vector<std::byte> buffer;
       auto ec = glz::write_beve(uints, buffer);
       expect(ec == glz::error_code::none);
@@ -1037,7 +1037,7 @@ suite lazy_beve_tests = [] {
    };
 
    "lazy_beve_uint64_array"_test = [] {
-      std::vector<uint64_t> uints{1ULL << 40, 1ULL << 50, 1ULL << 60};
+      std::vector<std::uint64_t> uints{1ULL << 40, 1ULL << 50, 1ULL << 60};
       std::vector<std::byte> buffer;
       auto ec = glz::write_beve(uints, buffer);
       expect(ec == glz::error_code::none);

@@ -254,7 +254,7 @@ suite csv_tests = [] {
       expect(!ec) << glz::format_error(ec, buffer) << '\n';
 
       expect(result.size() == data.size());
-      for (size_t i = 0; i < data.size(); ++i) {
+      for (std::size_t i = 0; i < data.size(); ++i) {
          expect(result[i] == data[i]);
       }
    };
@@ -375,11 +375,11 @@ v3s[2],1,2,3,4)");
    };
 
    "std::map row wise"_test = [] {
-      std::map<std::string, std::vector<uint64_t>> m;
+      std::map<std::string, std::vector<std::uint64_t>> m;
       auto& x = m["x"];
       auto& y = m["y"];
 
-      for (size_t i = 0; i < 10; ++i) {
+      for (std::size_t i = 0; i < 10; ++i) {
          x.emplace_back(i);
          y.emplace_back(i + 1);
       }
@@ -396,16 +396,16 @@ y,1,2,3,4,5,6,7,8,9,10
       m.clear();
       expect(!glz::read<glz::opts_csv{}>(m, out));
 
-      expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
-      expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+      expect(m["x"] == std::vector<std::uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+      expect(m["y"] == std::vector<std::uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
 
    "std::map column wise"_test = [] {
-      std::map<std::string, std::vector<uint64_t>> m;
+      std::map<std::string, std::vector<std::uint64_t>> m;
       auto& x = m["x"];
       auto& y = m["y"];
 
-      for (size_t i = 0; i < 10; ++i) {
+      for (std::size_t i = 0; i < 10; ++i) {
          x.emplace_back(i);
          y.emplace_back(i + 1);
       }
@@ -431,16 +431,16 @@ y,1,2,3,4,5,6,7,8,9,10
       m.clear();
       expect(!glz::read<glz::opts_csv{.layout = glz::colwise}>(m, out));
 
-      expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
-      expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+      expect(m["x"] == std::vector<std::uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+      expect(m["y"] == std::vector<std::uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
 
    "std::unordered_map row wise"_test = [] {
-      std::unordered_map<std::string, std::vector<uint64_t>> m;
+      std::unordered_map<std::string, std::vector<std::uint64_t>> m;
       auto& x = m["x"];
       auto& y = m["y"];
 
-      for (size_t i = 0; i < 10; ++i) {
+      for (std::size_t i = 0; i < 10; ++i) {
          x.emplace_back(i);
          y.emplace_back(i + 1);
       }
@@ -459,19 +459,19 @@ y,1,2,3,4,5,6,7,8,9,10
       m.clear();
       expect(!glz::read<glz::opts_csv{}>(m, out));
 
-      expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
-      expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+      expect(m["x"] == std::vector<std::uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+      expect(m["y"] == std::vector<std::uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
 
    "recorder rowwise"_test = [] {
-      uint64_t t{};
-      uint64_t x{1};
+      std::uint64_t t{};
+      std::uint64_t x{1};
 
-      glz::recorder<uint64_t> recorder;
+      glz::recorder<std::uint64_t> recorder;
       recorder["t"] = t;
       recorder["x"] = x;
 
-      for (size_t i = 0; i < 5; ++i) {
+      for (std::size_t i = 0; i < 5; ++i) {
          recorder.update();
          ++t;
          ++x;
@@ -483,14 +483,14 @@ x,1,2,3,4,5)");
    };
 
    "recorder colwise"_test = [] {
-      uint64_t t{};
-      uint64_t x{1};
+      std::uint64_t t{};
+      std::uint64_t x{1};
 
-      glz::recorder<uint64_t> recorder;
+      glz::recorder<std::uint64_t> recorder;
       recorder["t"] = t;
       recorder["x"] = x;
 
-      for (size_t i = 0; i < 5; ++i) {
+      for (std::size_t i = 0; i < 5; ++i) {
          recorder.update();
          ++t;
          ++x;
@@ -1267,7 +1267,7 @@ suite vector_data_point_no_headers_tests = [] {
       expect(!glz::read<glz::opts_csv{.use_headers = false}>(result, buffer));
 
       expect(result.size() == original.size()) << "Sizes should match after roundtrip";
-      for (size_t i = 0; i < original.size(); ++i) {
+      for (std::size_t i = 0; i < original.size(); ++i) {
          expect(result[i].id == original[i].id) << "IDs should match";
          expect(result[i].value == original[i].value) << "Values should match";
          expect(result[i].name == original[i].name) << "Names should match";
@@ -1645,7 +1645,7 @@ v3s[2],1,2,3,4)";
 3,4)";
 
       auto buffer = make_buffer(csv_data);
-      std::map<std::string, std::vector<uint64_t>> m;
+      std::map<std::string, std::vector<std::uint64_t>> m;
 
       expect(!glz::read_csv<glz::colwise>(m, buffer)) << "Should parse map from non-null-terminated buffer\n";
 
@@ -2164,7 +2164,7 @@ Bob,Manager,Sales)";
       expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(result, buffer));
 
       expect(result.size() == original.size()) << "Same number of columns";
-      for (size_t i = 0; i < original.size(); ++i) {
+      for (std::size_t i = 0; i < original.size(); ++i) {
          expect(result[i] == original[i]) << "Column " << i << " should match";
       }
    };
@@ -2217,8 +2217,8 @@ Bob,Manager,Sales)";
       expect(col_wise[0].size() == 2) << "Each column should have 2 elements";
 
       // Verify transpose relationship
-      for (size_t i = 0; i < row_wise.size(); ++i) {
-         for (size_t j = 0; j < row_wise[i].size(); ++j) {
+      for (std::size_t i = 0; i < row_wise.size(); ++i) {
+         for (std::size_t j = 0; j < row_wise[i].size(); ++j) {
             expect(row_wise[i][j] == col_wise[j][i])
                << "Element at [" << i << "][" << j << "] should match transposed position";
          }

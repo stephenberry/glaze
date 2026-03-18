@@ -1,8 +1,9 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/json.hpp"
-#include "ut/ut.hpp"
+import glaze.json;
+
+import ut;
 
 using namespace ut;
 
@@ -167,8 +168,8 @@ suite lazy_json_tests = [] {
       expect(result.has_value());
 
       auto& doc = *result;
-      expect(doc["int"].get<int32_t>().value() == 42);
-      expect(doc["int"].get<uint32_t>().value() == 42u);
+      expect(doc["int"].get<std::int32_t>().value() == 42);
+      expect(doc["int"].get<std::uint32_t>().value() == 42u);
       expect(doc["int"].get<int64_t>().value() == 42);
       expect(doc["int"].get<double>().value() == 42.0);
 
@@ -251,7 +252,7 @@ suite lazy_json_tests = [] {
 
       auto& doc = *result;
       expect(doc.root().size() == 20u);
-      for (size_t i = 0; i < 20; ++i) {
+      for (std::size_t i = 0; i < 20; ++i) {
          expect(doc[i].get<int64_t>().value() == static_cast<int64_t>(i));
       }
    };
@@ -486,7 +487,7 @@ suite lazy_json_tests = [] {
 
       auto indexed = result->root().index();
       int64_t sum = 0;
-      size_t count = 0;
+      std::size_t count = 0;
       for (auto& item : indexed) {
          auto val = item.get<int64_t>();
          if (val) sum += *val;

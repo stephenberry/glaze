@@ -1,10 +1,11 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <cstdlib>
+import std;
 
-#include "glaze/json/patch.hpp"
-#include "ut/ut.hpp"
+import glaze.json;
+
+import ut;
 
 using namespace ut;
 
@@ -252,7 +253,7 @@ suite json_merge_patch_tests = [] {
 
       // Build a deeply nested patch exceeding max_recursive_depth_limit (256)
       glz::generic* current = &patch;
-      for (size_t i = 0; i < glz::max_recursive_depth_limit + 10; ++i) {
+      for (std::size_t i = 0; i < glz::max_recursive_depth_limit + 10; ++i) {
          current->get_object()["nested"].data = glz::generic::object_t{};
          current = &current->get_object()["nested"];
       }

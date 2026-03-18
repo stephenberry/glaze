@@ -1545,7 +1545,7 @@ suite yaml_container_tests = [] {
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
       expect(parsed.size() == original.size());
-      for (size_t i = 0; i < original.size(); ++i) {
+      for (std::size_t i = 0; i < original.size(); ++i) {
          expect(std::abs(parsed[i] - original[i]) < 0.0001);
       }
    };
@@ -1816,7 +1816,7 @@ suite yaml_array_tests = [] {
       std::array<double, 3> parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
-      for (size_t i = 0; i < 3; ++i) {
+      for (std::size_t i = 0; i < 3; ++i) {
          expect(std::abs(parsed[i] - original[i]) < 0.001);
       }
    };
@@ -1878,12 +1878,12 @@ suite yaml_number_tests = [] {
    };
 
    "uint64_max"_test = [] {
-      uint64_t original = 18446744073709551615ULL; // Max uint64
+      std::uint64_t original = 18446744073709551615ULL; // Max uint64
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
 
-      uint64_t parsed{};
+      std::uint64_t parsed{};
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
       expect(parsed == original);

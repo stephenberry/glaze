@@ -89,13 +89,13 @@ std::optional<websocket_frame> consume_frame(std::vector<uint8_t>& buffer)
    uint8_t second = buffer[offset++];
    uint8_t opcode = first & 0x0F;
    bool masked = (second & 0x80) != 0;
-   uint64_t payload_length = static_cast<uint64_t>(second & 0x7F);
+   std::uint64_t payload_length = static_cast<std::uint64_t>(second & 0x7F);
 
    if (payload_length == 126) {
       if (buffer.size() < offset + 2) {
          return std::nullopt;
       }
-      payload_length = (static_cast<uint64_t>(buffer[offset]) << 8) | buffer[offset + 1];
+      payload_length = (static_cast<std::uint64_t>(buffer[offset]) << 8) | buffer[offset + 1];
       offset += 2;
    }
    else if (payload_length == 127) {
@@ -123,7 +123,7 @@ std::optional<websocket_frame> consume_frame(std::vector<uint8_t>& buffer)
    }
 
    std::vector<uint8_t> payload(static_cast<std::size_t>(payload_length));
-   for (uint64_t i = 0; i < payload_length; ++i) {
+   for (std::uint64_t i = 0; i < payload_length; ++i) {
       uint8_t byte = buffer[offset + static_cast<std::size_t>(i)];
       if (masked) {
          byte ^= mask_key[static_cast<std::size_t>(i) % 4];

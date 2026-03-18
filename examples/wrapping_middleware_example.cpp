@@ -13,12 +13,12 @@
 // Thread-safe metrics structure
 struct ServerMetrics
 {
-   std::atomic<uint64_t> total_requests{0};
-   std::atomic<uint64_t> total_responses{0};
+   std::atomic<std::uint64_t> total_requests{0};
+   std::atomic<std::uint64_t> total_responses{0};
    std::atomic<double> response_time_sum{0.0};
-   std::atomic<uint64_t> status_2xx{0};
-   std::atomic<uint64_t> status_4xx{0};
-   std::atomic<uint64_t> status_5xx{0};
+   std::atomic<std::uint64_t> status_2xx{0};
+   std::atomic<std::uint64_t> status_4xx{0};
+   std::atomic<std::uint64_t> status_5xx{0};
 
    void print_stats() const
    {

@@ -118,7 +118,7 @@ struct my_struct
   int i = 287;
   double d = 3.14;
   std::string hello = "Hello World";
-  std::array<uint64_t, 3> arr = { 1, 2, 3 };
+  std::array<std::uint64_t, 3> arr = { 1, 2, 3 };
   std::map<std::string, int> map{{"one", 1}, {"two", 2}};
 };
 ```
@@ -361,7 +361,7 @@ struct my_struct
   int i = 287;
   double d = 3.14;
   std::string hello = "Hello World";
-  std::array<uint64_t, 3> arr = { 1, 2, 3 };
+  std::array<std::uint64_t, 3> arr = { 1, 2, 3 };
   std::map<std::string, int> map{{"one", 1}, {"two", 2}};
   
   struct glaze {
@@ -416,7 +416,7 @@ struct server_status
 {
    std::string name;
    std::string region;
-   uint64_t active_sessions{};
+   std::uint64_t active_sessions{};
    std::optional<std::string> maintenance;
    double cpu_percent{};
 };
@@ -475,7 +475,7 @@ static_assert(glz::reflect<my_struct>::keys[0] == "i"); // Access keys
 
 ```c++
 struct test_type {
-   int32_t int1{};
+   std::int32_t int1{};
    int64_t int2{};
 };
 
@@ -500,15 +500,15 @@ For common use cases or cases where a specific member variable should have speci
 ```c++
 struct custom_encoding
 {
-   uint64_t x{};
+   std::uint64_t x{};
    std::string y{};
-   std::array<uint32_t, 3> z{};
+   std::array<std::uint32_t, 3> z{};
    
    void read_x(const std::string& s) {
       x = std::stoi(s);
    }
    
-   uint64_t write_x() {
+   std::uint64_t write_x() {
       return x;
    }
    
@@ -538,7 +538,7 @@ suite custom_encoding_test = [] {
       expect(!glz::read_json(obj, s));
       expect(obj.x == 3);
       expect(obj.y == "helloworld");
-      expect(obj.z == std::array<uint32_t, 3>{1, 2, 3});
+      expect(obj.z == std::array<std::uint32_t, 3>{1, 2, 3});
    };
    
    "custom_writing"_test = [] {
@@ -802,7 +802,7 @@ my_struct obj{};
 auto ec = glz::read_json(obj, buffer);
 if (!ec) {
    // Success: ec.count contains bytes consumed
-   size_t bytes_consumed = ec.count;
+   std::size_t bytes_consumed = ec.count;
    // bytes_consumed == 13 (entire JSON object)
 }
 ```
@@ -1241,7 +1241,7 @@ You can parse quoted JSON numbers directly to types like `double`, `int`, etc. b
 ```c++
 struct A {
    double x;
-   std::vector<uint32_t> y;
+   std::vector<std::uint32_t> y;
 };
 
 template <>
@@ -1257,7 +1257,7 @@ struct glz::meta<A> {
 }
 ```
 
-The quoted JSON numbers will be parsed directly into the `double` and `std::vector<uint32_t>`. The `glz::quoted` function works for nested objects and arrays as well.
+The quoted JSON numbers will be parsed directly into the `double` and `std::vector<std::uint32_t>`. The `glz::quoted` function works for nested objects and arrays as well.
 
 ## JSON Lines (NDJSON) Support
 

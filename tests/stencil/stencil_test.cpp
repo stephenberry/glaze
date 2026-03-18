@@ -10,7 +10,7 @@ struct person
 {
    std::string first_name{};
    std::string last_name{};
-   uint32_t age{};
+   std::uint32_t age{};
    bool hungry{};
    bool employed{};
 };
@@ -21,8 +21,8 @@ struct TodoItem
    bool completed;
    std::string priority;
    std::string category;
-   size_t id;
-   size_t index;
+   std::size_t id;
+   std::size_t index;
 };
 
 struct TodoList
@@ -30,7 +30,7 @@ struct TodoList
    std::string title;
    std::vector<TodoItem> items;
    bool has_items;
-   size_t total_count;
+   std::size_t total_count;
 };
 
 suite stencil_tests = [] {
@@ -383,7 +383,7 @@ suite mustache_example_tests = [] {
 struct Person
 {
    std::string name;
-   uint32_t age;
+   std::uint32_t age;
    bool active;
 };
 
@@ -400,8 +400,8 @@ struct TodoItemData
    std::string text;
    bool completed;
    std::string css_class;
-   size_t id;
-   size_t index;
+   std::size_t id;
+   std::size_t index;
    std::string priority;
    std::string category;
    std::string priority_class;
@@ -412,9 +412,9 @@ struct TodoListData
    std::string component_id;
    std::vector<TodoItemData> items;
    bool has_items;
-   size_t total_items;
-   size_t completed_items;
-   size_t pending_items;
+   std::size_t total_items;
+   std::size_t completed_items;
+   std::size_t pending_items;
 };
 
 suite mustache_container_iteration_tests = [] {

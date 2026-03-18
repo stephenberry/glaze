@@ -19,26 +19,26 @@
 // ============================================================================
 
 // Pure ASCII lowercase, no escaping needed
-static std::string gen_ascii(size_t len, uint64_t seed = 42)
+static std::string gen_ascii(std::size_t len, std::uint64_t seed = 42)
 {
    std::mt19937 rng(seed);
    std::uniform_int_distribution<int> dist('a', 'z');
    std::string s;
    s.reserve(len);
-   for (size_t i = 0; i < len; ++i) {
+   for (std::size_t i = 0; i < len; ++i) {
       s += static_cast<char>(dist(rng));
    }
    return s;
 }
 
 // ASCII with ~15% characters that need escaping
-static std::string gen_escaped(size_t len, uint64_t seed = 42)
+static std::string gen_escaped(std::size_t len, std::uint64_t seed = 42)
 {
    std::mt19937 rng(seed);
    std::uniform_int_distribution<int> dist(0, 99);
    std::string s;
    s.reserve(len);
-   for (size_t i = 0; i < len; ++i) {
+   for (std::size_t i = 0; i < len; ++i) {
       int r = dist(rng);
       if (r < 5)
          s += '"';
@@ -55,7 +55,7 @@ static std::string gen_escaped(size_t len, uint64_t seed = 42)
 }
 
 // UTF-8 multibyte strings (2-4 byte sequences, no escaping needed)
-static std::string gen_utf8(size_t approx_len, uint64_t seed = 42)
+static std::string gen_utf8(std::size_t approx_len, std::uint64_t seed = 42)
 {
    std::mt19937 rng(seed);
    std::uniform_int_distribution<int> dist(0, 3);
@@ -102,35 +102,35 @@ static std::string gen_all_control_chars()
 }
 
 // Edge case: string with byte 0x1F (unit separator) — boundary of control char range
-static std::string gen_boundary_0x1f(size_t len)
+static std::string gen_boundary_0x1f(std::size_t len)
 {
    std::string s(len, 'x');
    // Place 0x1F at various positions
-   for (size_t i = 0; i < len; i += 7) {
+   for (std::size_t i = 0; i < len; i += 7) {
       s[i] = 0x1F;
    }
    return s;
 }
 
 // Edge case: string with bytes at 0x20 boundary (0x1F and 0x20 alternating)
-static std::string gen_boundary_alternating(size_t len)
+static std::string gen_boundary_alternating(std::size_t len)
 {
    std::string s;
    s.reserve(len);
-   for (size_t i = 0; i < len; ++i) {
+   for (std::size_t i = 0; i < len; ++i) {
       s += (i % 2 == 0) ? char(0x1F) : char(0x20);
    }
    return s;
 }
 
 // High bytes (0x80-0xFF) — should NOT be escaped
-static std::string gen_high_bytes(size_t len, uint64_t seed = 42)
+static std::string gen_high_bytes(std::size_t len, std::uint64_t seed = 42)
 {
    std::mt19937 rng(seed);
    std::uniform_int_distribution<int> dist(0x80, 0xFF);
    std::string s;
    s.reserve(len);
-   for (size_t i = 0; i < len; ++i) {
+   for (std::size_t i = 0; i < len; ++i) {
       s += static_cast<char>(dist(rng));
    }
    return s;
@@ -162,7 +162,7 @@ static void verify(const char* name, const std::string& input)
                    simd_result.size() > 200 ? "..." : "");
 
       // Find first difference
-      for (size_t i = 0; i < std::min(swar_result.size(), simd_result.size()); ++i) {
+      for (std::size_t i = 0; i < std::min(swar_result.size(), simd_result.size()); ++i) {
          if (swar_result[i] != simd_result[i]) {
             std::fprintf(stderr, "  First diff at byte %zu: SWAR=0x%02X SIMD=0x%02X\n", i,
                          (unsigned char)swar_result[i], (unsigned char)simd_result[i]);
@@ -199,21 +199,21 @@ static void run_correctness_checks()
    verify("single 0xFF", std::string(1, '\xFF'));
 
    // Pure ASCII, various sizes (tests SWAR, SSE2/NEON, AVX2 paths)
-   for (size_t len : {1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 100, 255, 256, 1000, 4096, 16384}) {
+   for (std::size_t len : {1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 100, 255, 256, 1000, 4096, 16384}) {
       char label[64];
       std::snprintf(label, sizeof(label), "ASCII %zu", len);
       verify(label, gen_ascii(len));
    }
 
    // Escaped strings, various sizes
-   for (size_t len : {1, 7, 8, 15, 16, 31, 32, 64, 256, 1000, 4096}) {
+   for (std::size_t len : {1, 7, 8, 15, 16, 31, 32, 64, 256, 1000, 4096}) {
       char label[64];
       std::snprintf(label, sizeof(label), "escaped %zu", len);
       verify(label, gen_escaped(len));
    }
 
    // UTF-8 multibyte (bytes >= 0x80 must NOT be escaped)
-   for (size_t len : {16, 64, 256, 1024, 4096}) {
+   for (std::size_t len : {16, 64, 256, 1024, 4096}) {
       char label[64];
       std::snprintf(label, sizeof(label), "utf8 %zu", len);
       verify(label, gen_utf8(len));
@@ -223,30 +223,30 @@ static void run_correctness_checks()
    verify("all_control_chars", gen_all_control_chars());
 
    // Boundary 0x1F at various positions
-   for (size_t len : {7, 8, 15, 16, 31, 32, 64, 256}) {
+   for (std::size_t len : {7, 8, 15, 16, 31, 32, 64, 256}) {
       char label[64];
       std::snprintf(label, sizeof(label), "boundary_0x1F %zu", len);
       verify(label, gen_boundary_0x1f(len));
    }
 
    // Alternating 0x1F/0x20
-   for (size_t len : {8, 16, 32, 64, 256}) {
+   for (std::size_t len : {8, 16, 32, 64, 256}) {
       char label[64];
       std::snprintf(label, sizeof(label), "alternating_0x1F_0x20 %zu", len);
       verify(label, gen_boundary_alternating(len));
    }
 
    // High bytes (0x80-0xFF) — must NOT be escaped
-   for (size_t len : {8, 16, 32, 64, 256, 1024}) {
+   for (std::size_t len : {8, 16, 32, 64, 256, 1024}) {
       char label[64];
       std::snprintf(label, sizeof(label), "high_bytes %zu", len);
       verify(label, gen_high_bytes(len));
    }
 
    // String with escapes at exact SIMD boundary positions
-   for (size_t boundary : {8, 16, 32}) {
+   for (std::size_t boundary : {8, 16, 32}) {
       for (int offset = -1; offset <= 1; ++offset) {
-         size_t pos = boundary + offset;
+         std::size_t pos = boundary + offset;
          if (pos == 0) continue;
          std::string s(pos + 10, 'a');
          s[pos] = '"'; // Place escapable char at boundary
@@ -332,7 +332,7 @@ int main()
 
    // --- Pure ASCII (no escaping) ---
    std::printf("=== Pure ASCII (no escaping needed) ===\n\n");
-   for (size_t len : {16, 64, 256, 1024, 4096, 16384}) {
+   for (std::size_t len : {16, 64, 256, 1024, 4096, 16384}) {
       char label[128];
       std::snprintf(label, sizeof(label), "ASCII %zu bytes", len);
       bench_string(label, gen_ascii(len));
@@ -340,7 +340,7 @@ int main()
 
    // --- ASCII with ~15% escapable characters ---
    std::printf("\n=== ~15%% escapable characters ===\n\n");
-   for (size_t len : {16, 64, 256, 1024, 4096, 16384}) {
+   for (std::size_t len : {16, 64, 256, 1024, 4096, 16384}) {
       char label[128];
       std::snprintf(label, sizeof(label), "Escaped %zu bytes", len);
       bench_string(label, gen_escaped(len));
@@ -348,7 +348,7 @@ int main()
 
    // --- UTF-8 multibyte (no escaping needed, but high bytes) ---
    std::printf("\n=== UTF-8 multibyte (no escaping, bytes >= 0x80) ===\n\n");
-   for (size_t len : {64, 256, 1024, 4096}) {
+   for (std::size_t len : {64, 256, 1024, 4096}) {
       char label[128];
       std::snprintf(label, sizeof(label), "UTF-8 ~%zu bytes", len);
       bench_string(label, gen_utf8(len));
@@ -356,7 +356,7 @@ int main()
 
    // --- High bytes only (0x80-0xFF, no escaping) ---
    std::printf("\n=== High bytes only (0x80-0xFF, no escaping) ===\n\n");
-   for (size_t len : {64, 256, 1024, 4096}) {
+   for (std::size_t len : {64, 256, 1024, 4096}) {
       char label[128];
       std::snprintf(label, sizeof(label), "High bytes %zu", len);
       bench_string(label, gen_high_bytes(len));
@@ -368,14 +368,14 @@ int main()
 
    // --- Boundary cases ---
    std::printf("\n=== Boundary 0x1F (every 7th byte) ===\n\n");
-   for (size_t len : {64, 256, 1024}) {
+   for (std::size_t len : {64, 256, 1024}) {
       char label[128];
       std::snprintf(label, sizeof(label), "0x1F boundary %zu bytes", len);
       bench_string(label, gen_boundary_0x1f(len));
    }
 
    std::printf("\n=== Alternating 0x1F/0x20 ===\n\n");
-   for (size_t len : {64, 256, 1024}) {
+   for (std::size_t len : {64, 256, 1024}) {
       char label[128];
       std::snprintf(label, sizeof(label), "Alt 0x1F/0x20 %zu bytes", len);
       bench_string(label, gen_boundary_alternating(len));

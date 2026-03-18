@@ -34,7 +34,7 @@ namespace
    }
 }
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, std::size_t Size)
 {
    constexpr auto bytes_used_for_nullterm = 1;
    constexpr auto bytes_used_for_size = 2;
@@ -44,7 +44,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    Data += bytes_used_for_nullterm;
    Size -= bytes_used_for_nullterm;
 
-   const auto pathsize = std::min(Size - bytes_used_for_size, size_t{Data[0]} + (Data[1] << 8));
+   const auto pathsize = std::min(Size - bytes_used_for_size, std::size_t{Data[0]} + (Data[1] << 8));
    Data += bytes_used_for_size;
    Size -= bytes_used_for_size;
 

@@ -1,6 +1,9 @@
-#include <iostream>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
+import std;
+
+import glaze.json;
 
 namespace mylib
 {
@@ -40,7 +43,7 @@ namespace test1
 template <>
 struct glz::meta<test1::AppContext>
 {
-   template <size_t Index>
+   template <std::size_t Index>
    static constexpr auto rename_key()
    {
       // Get the member type at this index
@@ -70,7 +73,7 @@ namespace test2
 template <>
 struct glz::meta<test2::AppContext>
 {
-   template <size_t Index>
+   template <std::size_t Index>
    static constexpr auto rename_key()
    {
       using MemberType = glz::member_type_t<test2::AppContext, Index>;
@@ -78,7 +81,7 @@ struct glz::meta<test2::AppContext>
       if constexpr (std::is_enum_v<MemberType>) {
          // Strip namespace from enum type name
          constexpr auto full_name = glz::name_v<MemberType>;
-         constexpr size_t pos = full_name.rfind("::");
+         constexpr std::size_t pos = full_name.rfind("::");
          return (pos == std::string_view::npos) ? full_name : full_name.substr(pos + 2);
       }
       else {
@@ -101,7 +104,7 @@ namespace test3
 template <>
 struct glz::meta<test3::Point>
 {
-   template <size_t Index>
+   template <std::size_t Index>
    static constexpr auto rename_key()
    {
       constexpr auto name = glz::member_nameof<Index, test3::Point>;

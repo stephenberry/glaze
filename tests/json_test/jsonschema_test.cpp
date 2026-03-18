@@ -1,9 +1,11 @@
-#include <algorithm>
-#include <cstdint>
-#include <glaze/json.hpp>
-#include <glaze/json/schema.hpp>
-#include <string>
-#include <ut/ut.hpp>
+// Glaze Library
+// For the license information refer to glaze.ixx
+
+import std;
+
+import glaze.json;
+
+import ut;
 
 using namespace ut;
 
@@ -425,7 +427,7 @@ suite schema_tests = [] {
       std::string schema_str = glz::write_json_schema<required_meta>().value_or("error");
       expect(
          schema_str ==
-         R"({"type":["object"],"properties":{"a":{"$ref":"#/$defs/int32_t"},"b":{"$ref":"#/$defs/int32_t"},"reserved_1":{"$ref":"#/$defs/int32_t"},"reserved_2":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})");
+         R"({"type":["object"],"properties":{"a":{"$ref":"#/$defs/std::int32_t"},"b":{"$ref":"#/$defs/std::int32_t"},"reserved_1":{"$ref":"#/$defs/std::int32_t"},"reserved_2":{"$ref":"#/$defs/std::int32_t"}},"additionalProperties":false,"$defs":{"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})");
    };
 
    "Opts.error_on_missing_keys as fallback"_test = [] {
@@ -437,11 +439,11 @@ suite schema_tests = [] {
 
       expect(
          schema_str_req ==
-         R"({"type":["object"],"properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})");
+         R"({"type":["object"],"properties":{"important":{"$ref":"#/$defs/std::int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<std::int32_t>"}},"additionalProperties":false,"$defs":{"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::optional<std::int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})");
 
       expect(
          schema_str_nreq ==
-         R"({"type":["object"],"properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})");
+         R"({"type":["object"],"properties":{"important":{"$ref":"#/$defs/std::int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<std::int32_t>"}},"additionalProperties":false,"$defs":{"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::optional<std::int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})");
    };
 
    // Demonstrates using error_on_missing_keys to mark all non-nullable fields as required in JSON schema

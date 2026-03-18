@@ -114,7 +114,7 @@ suite buffer_pool_tests = [] {
 
    "oversized_buffer_shrink"_test = [] {
       glz::buffer_pool pool{10, 1000}; // Max buffer size 1000
-      size_t original_capacity{};
+      std::size_t original_capacity{};
       {
          auto buf = pool.borrow();
          buf.value().resize(5000);

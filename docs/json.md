@@ -204,7 +204,7 @@ Person person{};
 auto ec = glz::read_json(person, buffer);
 if (!ec) {
     // Success: ec.count contains bytes consumed
-    size_t bytes_read = ec.count;
+    std::size_t bytes_read = ec.count;
 
     // Useful for reading multiple values from one buffer:
     std::string_view remaining = std::string_view(buffer).substr(bytes_read);

@@ -15,7 +15,7 @@ struct my_struct
    int i{};
    double d{};
    std::string hello{};
-   std::array<uint64_t, 3> arr{};
+   std::array<std::uint64_t, 3> arr{};
 };
 
 static_assert(glz::reflectable<my_struct>);
@@ -123,7 +123,7 @@ struct server_status
 {
    std::string name{};
    std::string region{};
-   uint64_t active_sessions{};
+   std::uint64_t active_sessions{};
    std::optional<std::string> maintenance{};
    double cpu_percent{};
 };
@@ -158,7 +158,7 @@ suite reflection = [] {
       expect(obj.i == 287);
       expect(obj.d == 3.14);
       expect(obj.hello == "Hello World");
-      expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
+      expect(obj.arr == std::array<std::uint64_t, 3>{1, 2, 3});
 
       buffer.clear();
       expect(not glz::write_json(obj, buffer));
@@ -359,7 +359,7 @@ suite nested_reflection = [] {
       expect(obj.thing.i == 287);
       expect(obj.thing.d == 3.14);
       expect(obj.thing.hello == "Hello World");
-      expect(obj.thing.arr == std::array<uint64_t, 3>{1, 2, 3});
+      expect(obj.thing.arr == std::array<std::uint64_t, 3>{1, 2, 3});
 
       buffer.clear();
       expect(not glz::write_json(obj, buffer));
@@ -570,7 +570,7 @@ namespace testing
       Q v1;
       uint8_t v2;
       B v3;
-      uint64_t v4;
+      std::uint64_t v4;
       uint8_t v5;
       std::vector<uint8_t> v6;
    };
@@ -589,23 +589,23 @@ namespace testing
       bool s;
       uint8_t sn;
       std::string sid;
-      uint64_t time;
+      std::uint64_t time;
       uint8_t p;
-      uint64_t age;
-      uint32_t gs;
+      std::uint64_t age;
+      std::uint32_t gs;
       VS srs;
       std::map<uint8_t, V> layers;
    };
 
    struct A
    {
-      uint64_t b;
+      std::uint64_t b;
       std::vector<uint8_t> e;
    };
 
    struct ASS
    {
-      uint32_t sr;
+      std::uint32_t sr;
       uint8_t cc;
    };
 
@@ -616,9 +616,9 @@ namespace testing
       bool s;
       uint8_t sn;
       std::string sid;
-      uint64_t time;
+      std::uint64_t time;
       uint8_t p;
-      uint64_t age;
+      std::uint64_t age;
       ASS srs;
       std::map<uint8_t, A> layers;
    };
@@ -635,7 +635,7 @@ namespace testing
       std::string n;
       std::string e;
       std::string aid;
-      uint64_t o;
+      std::uint64_t o;
       bool ob;
       std::string ri;
       std::map<uint8_t, VC> v;
@@ -724,7 +724,7 @@ suite json_schema = [] {
       // when you update this string
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"array":{"$ref":"#/$defs/std::array<std::string,4>"},"b":{"$ref":"#/$defs/bool"},"c":{"$ref":"#/$defs/char"},"color":{"$ref":"#/$defs/Color"},"d":{"$ref":"#/$defs/double"},"i":{"$ref":"#/$defs/int32_t"},"map":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"optional":{"$ref":"#/$defs/std::optional<V3>"},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"$ref":"#/$defs/std::array<sub_thing2,1>"},"thing_ptr":{"$ref":"#/$defs/sub_thing*"},"vb":{"$ref":"#/$defs/std::vector<bool>"},"vec3":{"$ref":"#/$defs/V3"},"vector":{"$ref":"#/$defs/std::vector<V3>"}},"additionalProperties":false,"$defs":{"Color":{"type":["string"],"oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"V3":{"type":["object"],"properties":{"x":{"$ref":"#/$defs/double"},"y":{"$ref":"#/$defs/double"},"z":{"$ref":"#/$defs/double"}},"additionalProperties":false},"bool":{"type":["boolean"]},"char":{"type":["string"]},"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":["number"],"minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<std::string,4>":{"type":["array"],"items":{"$ref":"#/$defs/std::string"},"minItems":4,"maxItems":4},"std::array<sub_thing2,1>":{"type":["array"],"items":{"$ref":"#/$defs/sub_thing2"},"minItems":1,"maxItems":1},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::optional<V3>":{"type":["object","null"],"properties":{"x":{"$ref":"#/$defs/double"},"y":{"$ref":"#/$defs/double"},"z":{"$ref":"#/$defs/double"}},"additionalProperties":false},"std::string":{"type":["string"]},"std::vector<V3>":{"type":["array"],"items":{"$ref":"#/$defs/V3"}},"std::vector<bool>":{"type":["array"],"items":{"$ref":"#/$defs/bool"}},"sub_thing":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing*":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing2":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false}},"title":"Thing"})")
+         R"({"type":["object"],"properties":{"array":{"$ref":"#/$defs/std::array<std::string,4>"},"b":{"$ref":"#/$defs/bool"},"c":{"$ref":"#/$defs/char"},"color":{"$ref":"#/$defs/Color"},"d":{"$ref":"#/$defs/double"},"i":{"$ref":"#/$defs/std::int32_t"},"map":{"$ref":"#/$defs/std::map<std::string,std::int32_t>"},"optional":{"$ref":"#/$defs/std::optional<V3>"},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"$ref":"#/$defs/std::array<sub_thing2,1>"},"thing_ptr":{"$ref":"#/$defs/sub_thing*"},"vb":{"$ref":"#/$defs/std::vector<bool>"},"vec3":{"$ref":"#/$defs/V3"},"vector":{"$ref":"#/$defs/std::vector<V3>"}},"additionalProperties":false,"$defs":{"Color":{"type":["string"],"oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"V3":{"type":["object"],"properties":{"x":{"$ref":"#/$defs/double"},"y":{"$ref":"#/$defs/double"},"z":{"$ref":"#/$defs/double"}},"additionalProperties":false},"bool":{"type":["boolean"]},"char":{"type":["string"]},"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":["number"],"minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<std::string,4>":{"type":["array"],"items":{"$ref":"#/$defs/std::string"},"minItems":4,"maxItems":4},"std::array<sub_thing2,1>":{"type":["array"],"items":{"$ref":"#/$defs/sub_thing2"},"minItems":1,"maxItems":1},"std::map<std::string,std::int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"std::optional<V3>":{"type":["object","null"],"properties":{"x":{"$ref":"#/$defs/double"},"y":{"$ref":"#/$defs/double"},"z":{"$ref":"#/$defs/double"}},"additionalProperties":false},"std::string":{"type":["string"]},"std::vector<V3>":{"type":["array"],"items":{"$ref":"#/$defs/V3"}},"std::vector<bool>":{"type":["array"],"items":{"$ref":"#/$defs/bool"}},"sub_thing":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing*":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing2":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false}},"title":"Thing"})")
          << schema;
    };
 };
@@ -837,7 +837,7 @@ suite meta_schema_reflection_tests = [] {
       const auto json_schema = glz::write_json_schema<meta_schema_t>().value_or("error");
       expect(
          json_schema ==
-         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"meta_schema_t"})")
+         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/std::int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"meta_schema_t"})")
          << json_schema;
    };
 
@@ -850,7 +850,7 @@ suite meta_schema_reflection_tests = [] {
       const auto json_schema = glz::write_json_schema<local_schema_t>().value_or("error");
       expect(
          json_schema ==
-         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"local_schema_t"})")
+         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/std::int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"local_schema_t"})")
          << json_schema;
    };
 };
@@ -954,7 +954,7 @@ suite modify_unknown_keys = [] {
 struct empty_optional_t
 {
    std::string value{};
-   std::optional<uint64_t> opt{};
+   std::optional<std::uint64_t> opt{};
 };
 
 suite empty_optional_tests = [] {
@@ -1044,7 +1044,7 @@ namespace glz
       template <auto Opts>
       static void op(std::chrono::seconds& value, is_context auto&& ctx, auto&&... args)
       {
-         int32_t sec_count{};
+         std::int32_t sec_count{};
          parse<JSON>::op<Opts>(sec_count, ctx, args...);
          if (glz::error_code::none == ctx.error) value = std::chrono::seconds{sec_count};
       }
@@ -1141,22 +1141,22 @@ suite hash_tests = [] {
 
 struct custom_state
 {
-   std::array<uint32_t, 8> statuses() { return {}; }
+   std::array<std::uint32_t, 8> statuses() { return {}; }
 };
 
 template <>
 struct glz::meta<custom_state>
 {
    using T = custom_state;
-   static constexpr auto read = [](T&, const std::array<uint32_t, 8>&) {};
+   static constexpr auto read = [](T&, const std::array<std::uint32_t, 8>&) {};
    static constexpr auto value = custom<read, &T::statuses>;
 };
 
 struct custom_holder
 {
-   uint32_t x{};
-   uint32_t y{};
-   uint32_t z{};
+   std::uint32_t x{};
+   std::uint32_t y{};
+   std::uint32_t z{};
    custom_state state{};
 };
 

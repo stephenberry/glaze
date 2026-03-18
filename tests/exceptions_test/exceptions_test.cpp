@@ -16,7 +16,7 @@ struct my_struct
    int i = 287;
    double d = 3.14;
    std::string hello = "Hello World";
-   std::array<uint64_t, 3> arr = {1, 2, 3};
+   std::array<std::uint64_t, 3> arr = {1, 2, 3};
 };
 
 template <>
@@ -54,7 +54,7 @@ suite starter = [] {
       const std::string schema = glz::ex::write_json_schema<my_struct>();
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
+         R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<std::uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/std::int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<std::uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/std::uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"std::uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
 
@@ -63,7 +63,7 @@ suite starter = [] {
       glz::ex::write_json_schema<my_struct>(schema);
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
+         R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<std::uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/std::int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<std::uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/std::uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"std::uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
 };
@@ -698,12 +698,12 @@ suite async_tests = [] {
 
 struct times
 {
-   uint64_t time;
-   std::optional<uint64_t> time1;
+   std::uint64_t time;
+   std::optional<std::uint64_t> time1;
 
-   void read_time(uint64_t timeValue) { time = timeValue; }
+   void read_time(std::uint64_t timeValue) { time = timeValue; }
 
-   void read_time1(std::optional<uint64_t> time1Value) { time1 = time1Value; }
+   void read_time1(std::optional<std::uint64_t> time1Value) { time1 = time1Value; }
 };
 
 struct date

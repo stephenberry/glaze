@@ -1,8 +1,8 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/json.hpp"
-#include "ut/ut.hpp"
+import glaze.json;
+import ut;
 
 using namespace ut;
 
@@ -243,15 +243,15 @@ suite generic_i64_tests = [] {
    };
 };
 
-// Tests for generic_u64 (uint64_t → int64_t → double)
+// Tests for generic_u64 (std::uint64_t → int64_t → double)
 suite generic_u64_tests = [] {
    "u64_parse_large_unsigned"_test = [] {
       glz::generic_u64 json{};
-      std::string buffer = "18446744073709551615"; // max uint64_t
+      std::string buffer = "18446744073709551615"; // max std::uint64_t
       expect(glz::read_json(json, buffer) == glz::error_code::none);
       expect(json.is_number());
       expect(json.is_uint64());
-      expect(json.get<uint64_t>() == 18446744073709551615ULL);
+      expect(json.get<std::uint64_t>() == 18446744073709551615ULL);
    };
 
    "u64_parse_negative"_test = [] {
@@ -269,9 +269,9 @@ suite generic_u64_tests = [] {
       std::string buffer = "42";
       expect(glz::read_json(json, buffer) == glz::error_code::none);
       expect(json.is_number());
-      // Small positive integers should be stored as uint64_t
+      // Small positive integers should be stored as std::uint64_t
       expect(json.is_uint64());
-      expect(json.get<uint64_t>() == 42);
+      expect(json.get<std::uint64_t>() == 42);
    };
 
    "u64_parse_floating_point"_test = [] {
@@ -290,9 +290,9 @@ suite generic_u64_tests = [] {
       std::string buffer = R"({"big_id":18446744073709551615,"neg":-100,"value":3.14})";
       expect(glz::read_json(json, buffer) == glz::error_code::none);
 
-      // big_id should be uint64_t
+      // big_id should be std::uint64_t
       expect(json["big_id"].is_uint64());
-      expect(json["big_id"].get<uint64_t>() == 18446744073709551615ULL);
+      expect(json["big_id"].get<std::uint64_t>() == 18446744073709551615ULL);
 
       // neg should be int64_t
       expect(json["neg"].is_int64());
@@ -310,7 +310,7 @@ suite generic_u64_tests = [] {
 
       // Test as<T>() conversion
       expect(json.as<int>() == 12345);
-      expect(json.as<uint64_t>() == 12345ULL);
+      expect(json.as<std::uint64_t>() == 12345ULL);
       expect(json.as<double>() == 12345.0);
    };
 
@@ -332,7 +332,7 @@ suite generic_u64_tests = [] {
       glz::generic_u64 json{};
       json = 18446744073709551615ULL;
       expect(json.is_uint64());
-      expect(json.get<uint64_t>() == 18446744073709551615ULL);
+      expect(json.get<std::uint64_t>() == 18446744073709551615ULL);
 
       // Test write
       auto result = json.dump();
@@ -348,7 +348,7 @@ suite generic_u64_tests = [] {
    };
 
    "u64_roundtrip"_test = [] {
-      glz::generic_u64 json = 18446744073709551615ULL; // max uint64_t
+      glz::generic_u64 json = 18446744073709551615ULL; // max std::uint64_t
       auto json_str = json.dump();
       expect(json_str.has_value());
       expect(json_str.value() == "18446744073709551615");
@@ -356,14 +356,14 @@ suite generic_u64_tests = [] {
       glz::generic_u64 json2{};
       expect(glz::read_json(json2, json_str.value()) == glz::error_code::none);
       expect(json2.is_uint64());
-      expect(json2.get<uint64_t>() == 18446744073709551615ULL);
+      expect(json2.get<std::uint64_t>() == 18446744073709551615ULL);
    };
 
    "u64_convert_from_generic_uint64"_test = [] {
       glz::generic_u64 json{};
       expect(glz::read_json(json, "42") == glz::error_code::none);
 
-      uint64_t val;
+      std::uint64_t val;
       auto ec = glz::convert_from_generic(val, json);
       expect(!ec);
       expect(val == 42ULL);

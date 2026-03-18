@@ -735,8 +735,8 @@ suite response_middleware_tests = [] {
       // Simulate basic metrics tracking without timing
       struct Metrics
       {
-         std::atomic<uint64_t> total_requests{0};
-         std::atomic<uint64_t> total_responses{0};
+         std::atomic<std::uint64_t> total_requests{0};
+         std::atomic<std::uint64_t> total_responses{0};
       };
 
       Metrics metrics;
@@ -1006,10 +1006,10 @@ suite wrapping_middleware_tests = [] {
    "wrap_middleware_metrics_use_case"_test = [] {
       struct Metrics
       {
-         std::atomic<uint64_t> total_requests{0};
-         std::atomic<uint64_t> total_responses{0};
-         std::atomic<uint64_t> success_count{0};
-         std::atomic<uint64_t> error_count{0};
+         std::atomic<std::uint64_t> total_requests{0};
+         std::atomic<std::uint64_t> total_responses{0};
+         std::atomic<std::uint64_t> success_count{0};
+         std::atomic<std::uint64_t> error_count{0};
       };
 
       Metrics metrics;
@@ -1141,7 +1141,7 @@ struct raw_http_client
 
          // Parse headers
          std::string header_line;
-         size_t content_length = 0;
+         std::size_t content_length = 0;
          while (std::getline(response_stream, header_line) && header_line != "\r") {
             if (!header_line.empty() && header_line.back() == '\r') {
                header_line.pop_back();
@@ -1169,7 +1169,7 @@ struct raw_http_client
          // Read body based on content-length
          if (content_length > 0) {
             // Read any remaining data already in buffer
-            size_t already_read = response_buffer.size();
+            std::size_t already_read = response_buffer.size();
             if (already_read < content_length) {
                asio::read(socket_, response_buffer, asio::transfer_exactly(content_length - already_read));
             }

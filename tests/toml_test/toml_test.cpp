@@ -18,7 +18,7 @@ struct my_struct
    int i = 287;
    double d = 3.14;
    std::string hello = "Hello World";
-   std::array<uint64_t, 3> arr = {1, 2, 3};
+   std::array<std::uint64_t, 3> arr = {1, 2, 3};
 };
 
 struct nested
@@ -352,7 +352,7 @@ arr = [4, 5, 6])";
    "read_wrong_overflow_integer"_test = [] {
       // Max uint64 value plus one.
       std::string toml_input = "18446744073709551616";
-      uint64_t value{};
+      std::uint64_t value{};
       auto error = glz::read_toml(value, toml_input);
       expect(error);
       expect(error == glz::error_code::parse_number_failure);
@@ -361,7 +361,7 @@ arr = [4, 5, 6])";
    "read_nearly_overfow_integer"_test = [] {
       // Max uint64 value.
       std::string toml_input = "18446744073709551615";
-      uint64_t value{};
+      std::uint64_t value{};
       expect(not glz::read_toml(value, toml_input));
       expect(value == 18446744073709551615ull);
    };
@@ -2883,7 +2883,7 @@ name = "NotArray"
       expect(not glz::read_toml(parsed, buffer));
 
       expect(parsed.products.size() == 5);
-      for (size_t i = 0; i < 5; ++i) {
+      for (std::size_t i = 0; i < 5; ++i) {
          expect(parsed.products[i] == original.products[i]);
       }
    };
@@ -3370,9 +3370,9 @@ suite generic_u64_toml_tests = [] {
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.is_number());
-      // Positive integers should go to uint64_t (first int type)
-      expect(g.holds<uint64_t>());
-      expect(g.get<uint64_t>() == 42);
+      // Positive integers should go to std::uint64_t (first int type)
+      expect(g.holds<std::uint64_t>());
+      expect(g.get<std::uint64_t>() == 42);
    };
 
    "generic_u64_read_toml_negative_int"_test = [] {
@@ -3685,8 +3685,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "18446744073709551615"; // UINT64_MAX
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<uint64_t>());
-      expect(g.get<uint64_t>() == UINT64_MAX);
+      expect(g.holds<std::uint64_t>());
+      expect(g.get<std::uint64_t>() == UINT64_MAX);
    };
 
    "generic_i64_read_large_negative"_test = [] {
@@ -3726,8 +3726,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "0";
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<uint64_t>());
-      expect(g.get<uint64_t>() == 0);
+      expect(g.holds<std::uint64_t>());
+      expect(g.get<std::uint64_t>() == 0);
    };
 
    "generic_u64_read_one"_test = [] {
@@ -3735,8 +3735,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "1";
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<uint64_t>());
-      expect(g.get<uint64_t>() == 1);
+      expect(g.holds<std::uint64_t>());
+      expect(g.get<std::uint64_t>() == 1);
    };
 
    "generic_u64_read_negative_one"_test = [] {
@@ -3938,9 +3938,9 @@ negative = -42)";
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.holds<glz::generic_u64::object_t>());
       auto& obj = g.get<glz::generic_u64::object_t>();
-      // Large positive number should be uint64_t
-      expect(obj.at("positive").holds<uint64_t>());
-      expect(obj.at("positive").get<uint64_t>() == UINT64_MAX);
+      // Large positive number should be std::uint64_t
+      expect(obj.at("positive").holds<std::uint64_t>());
+      expect(obj.at("positive").get<std::uint64_t>() == UINT64_MAX);
       // Negative number should use int64_t
       expect(obj.at("negative").holds<int64_t>());
       expect(obj.at("negative").get<int64_t>() == -42);
@@ -4048,7 +4048,7 @@ name = "test")";
       auto ec = glz::read_toml(m, toml);
       expect(not ec) << glz::format_error(ec, toml);
       expect(m.size() == 3);
-      expect(std::get<uint64_t>(m["big_positive"].data) == UINT64_MAX);
+      expect(std::get<std::uint64_t>(m["big_positive"].data) == UINT64_MAX);
       expect(std::get<int64_t>(m["negative"].data) == -100); // negative uses int64_t
       expect(std::get<std::string>(m["name"].data) == "test");
    };

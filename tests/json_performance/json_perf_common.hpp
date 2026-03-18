@@ -10,20 +10,20 @@ namespace glz::perf
    // We scale all speeds by the minified JSON byte length, so that libraries which do not efficiently write JSON do not
    // get an unfair advantage. We want to know how fast the libraries will serialize/deserialize with respect to one
    // another.
-   inline size_t minified_byte_length{};
+   inline std::size_t minified_byte_length{};
 
    struct results
    {
       std::string_view name{};
       std::string_view url{};
-      size_t iterations{};
+      std::size_t iterations{};
 
-      std::optional<size_t> json_byte_length{};
+      std::optional<std::size_t> json_byte_length{};
       std::optional<double> json_read{};
       std::optional<double> json_write{};
       std::optional<double> json_roundtrip{};
 
-      std::optional<size_t> binary_byte_length{};
+      std::optional<std::size_t> binary_byte_length{};
       std::optional<double> beve_write{};
       std::optional<double> beve_read{};
       std::optional<double> beve_roundtrip{};

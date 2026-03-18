@@ -887,7 +887,7 @@ void run_integrity_check_server(std::atomic<bool>& server_ready, std::atomic<boo
             std::cerr << "[integrity_server] Invalid message detected! Size=" << message.size() << std::endl;
             // Print hex dump of first 64 bytes for debugging
             std::cerr << "[integrity_server] Hex dump: ";
-            for (size_t i = 0; i < std::min(message.size(), size_t(64)); ++i) {
+            for (std::size_t i = 0; i < std::min(message.size(), std::size_t(64)); ++i) {
                std::cerr << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)message[i] << " ";
             }
             std::cerr << std::dec << std::endl;
@@ -1277,14 +1277,14 @@ suite websocket_write_queue_tests = [] {
       std::atomic<bool> start_flag{false};
 
       // Different sized payloads for each thread
-      std::vector<size_t> payload_sizes = {10, 100, 1000, 10000}; // 10B to 10KB
+      std::vector<std::size_t> payload_sizes = {10, 100, 1000, 10000}; // 10B to 10KB
 
       for (int t = 0; t < threads_count; ++t) {
          sender_threads.emplace_back([&client, &start_flag, t, &payload_sizes]() {
             while (!start_flag.load()) {
                std::this_thread::yield();
             }
-            size_t payload_size = payload_sizes[t % payload_sizes.size()];
+            std::size_t payload_size = payload_sizes[t % payload_sizes.size()];
             std::string payload(payload_size, 'A' + (t % 26));
             for (int i = 0; i < messages_per_thread; ++i) {
                client.send("MSG:T" + std::to_string(t) + "_M" + std::to_string(i) + ":" + payload);

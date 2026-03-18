@@ -30,7 +30,7 @@
 using namespace ut;
 
 // Helper to convert float bits to float
-inline float bits_to_float(uint32_t bits)
+inline float bits_to_float(std::uint32_t bits)
 {
    float f;
    std::memcpy(&f, &bits, sizeof(float));
@@ -38,7 +38,7 @@ inline float bits_to_float(uint32_t bits)
 }
 
 // Helper to convert double bits to double
-inline double bits_to_double(uint64_t bits)
+inline double bits_to_double(std::uint64_t bits)
 {
    double d;
    std::memcpy(&d, &bits, sizeof(double));
@@ -46,17 +46,17 @@ inline double bits_to_double(uint64_t bits)
 }
 
 // Helper to get float bits
-inline uint32_t float_to_bits(float f)
+inline std::uint32_t float_to_bits(float f)
 {
-   uint32_t bits;
+   std::uint32_t bits;
    std::memcpy(&bits, &f, sizeof(float));
    return bits;
 }
 
 // Helper to get double bits
-inline uint64_t double_to_bits(double d)
+inline std::uint64_t double_to_bits(double d)
 {
-   uint64_t bits;
+   std::uint64_t bits;
    std::memcpy(&bits, &d, sizeof(double));
    return bits;
 }
@@ -261,23 +261,23 @@ suite exhaustive_float_tests = [] {
       const unsigned num_threads = std::max(1u, std::thread::hardware_concurrency());
       std::cout << "Using " << num_threads << " threads" << std::endl;
 
-      constexpr uint64_t total_values = 0x100000000ULL; // 2^32
-      const uint64_t chunk_size = total_values / num_threads;
+      constexpr std::uint64_t total_values = 0x100000000ULL; // 2^32
+      const std::uint64_t chunk_size = total_values / num_threads;
 
       // Thread-local results to avoid atomic contention
       struct ThreadResult
       {
-         uint64_t passed{0};
-         uint64_t skipped{0};
-         uint32_t first_failure{UINT32_MAX};
+         std::uint64_t passed{0};
+         std::uint64_t skipped{0};
+         std::uint32_t first_failure{UINT32_MAX};
       };
       std::vector<ThreadResult> results(num_threads);
 
-      auto worker = [&](unsigned thread_id, uint64_t start, uint64_t end_range) {
+      auto worker = [&](unsigned thread_id, std::uint64_t start, std::uint64_t end_range) {
          ThreadResult& result = results[thread_id];
          char buf[32]; // Minimal buffer for float serialization
 
-         for (uint64_t bits = start; bits < end_range; ++bits) {
+         for (std::uint64_t bits = start; bits < end_range; ++bits) {
             float value;
             std::memcpy(&value, &bits, sizeof(float));
 
@@ -299,7 +299,7 @@ suite exhaustive_float_tests = [] {
                ++result.passed;
             }
             else if (result.first_failure == UINT32_MAX) {
-               result.first_failure = static_cast<uint32_t>(bits);
+               result.first_failure = static_cast<std::uint32_t>(bits);
             }
          }
       };
@@ -309,8 +309,8 @@ suite exhaustive_float_tests = [] {
       std::vector<std::thread> threads;
       threads.reserve(num_threads);
       for (unsigned i = 0; i < num_threads; ++i) {
-         uint64_t start = i * chunk_size;
-         uint64_t end_range = (i == num_threads - 1) ? total_values : (i + 1) * chunk_size;
+         std::uint64_t start = i * chunk_size;
+         std::uint64_t end_range = (i == num_threads - 1) ? total_values : (i + 1) * chunk_size;
          threads.emplace_back(worker, i, start, end_range);
       }
 
@@ -322,9 +322,9 @@ suite exhaustive_float_tests = [] {
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
       // Aggregate results
-      uint64_t total_passed = 0;
-      uint64_t total_skipped = 0;
-      uint32_t first_failure = UINT32_MAX;
+      std::uint64_t total_passed = 0;
+      std::uint64_t total_skipped = 0;
+      std::uint32_t first_failure = UINT32_MAX;
 
       for (const auto& r : results) {
          total_passed += r.passed;
@@ -334,8 +334,8 @@ suite exhaustive_float_tests = [] {
          }
       }
 
-      uint64_t expected_pass = total_values - total_skipped;
-      uint64_t failures = expected_pass - total_passed;
+      std::uint64_t expected_pass = total_values - total_skipped;
+      std::uint64_t failures = expected_pass - total_passed;
 
       std::cout << "Exhaustive float roundtrip: total=" << total_values << ", passed=" << total_passed
                 << ", skipped=" << total_skipped << std::endl;
@@ -359,19 +359,19 @@ suite exhaustive_float_tests = [] {
 suite random_double_tests = [] {
    "random_double_roundtrip"_test = [] {
       std::random_device rd;
-      uint64_t seed = rd();
+      std::uint64_t seed = rd();
       std::cout << "\n=== Random double roundtrip test (seed=" << seed << ") ===" << std::endl;
 
       std::mt19937_64 rng(seed);
-      std::uniform_int_distribution<uint64_t> dist;
+      std::uniform_int_distribution<std::uint64_t> dist;
 
-      constexpr uint64_t num_tests = 1'000'000; // 1 million random doubles
-      uint64_t passed = 0;
-      uint64_t skipped = 0;
+      constexpr std::uint64_t num_tests = 1'000'000; // 1 million random doubles
+      std::uint64_t passed = 0;
+      std::uint64_t skipped = 0;
       bool first_failure_logged = false;
 
-      for (uint64_t i = 0; i < num_tests; ++i) {
-         uint64_t bits = dist(rng);
+      for (std::uint64_t i = 0; i < num_tests; ++i) {
+         std::uint64_t bits = dist(rng);
          double value = bits_to_double(bits);
 
          if (std::isnan(value) || std::isinf(value)) {
@@ -394,8 +394,8 @@ suite random_double_tests = [] {
       std::cout << "Random double roundtrip: total=" << num_tests << ", passed=" << passed << ", skipped=" << skipped
                 << std::endl;
 
-      uint64_t tested = num_tests - skipped;
-      uint64_t failures = tested - passed;
+      std::uint64_t tested = num_tests - skipped;
+      std::uint64_t failures = tested - passed;
       std::cout << "Failures: " << failures << std::endl;
 
       // Require 0% failure rate - we fixed the bugs that caused failures
@@ -404,19 +404,19 @@ suite random_double_tests = [] {
 
    "random_double_parse_equivalence"_test = [] {
       std::random_device rd;
-      uint64_t seed = rd();
+      std::uint64_t seed = rd();
       std::cout << "\n=== Random double parse equivalence test (seed=" << seed << ") ===" << std::endl;
 
       std::mt19937_64 rng(seed);
-      std::uniform_int_distribution<uint64_t> dist;
+      std::uniform_int_distribution<std::uint64_t> dist;
 
-      constexpr uint64_t num_tests = 1'000'000; // 1 million tests
-      uint64_t passed = 0;
-      uint64_t skipped = 0;
+      constexpr std::uint64_t num_tests = 1'000'000; // 1 million tests
+      std::uint64_t passed = 0;
+      std::uint64_t skipped = 0;
       bool first_failure_logged = false;
 
-      for (uint64_t i = 0; i < num_tests; ++i) {
-         uint64_t bits = dist(rng);
+      for (std::uint64_t i = 0; i < num_tests; ++i) {
+         std::uint64_t bits = dist(rng);
          double value = bits_to_double(bits);
 
          if (std::isnan(value) || std::isinf(value)) {
@@ -441,8 +441,8 @@ suite random_double_tests = [] {
       std::cout << "Random double parse equivalence: total=" << num_tests << ", passed=" << passed
                 << ", skipped=" << skipped << std::endl;
 
-      uint64_t tested = num_tests - skipped;
-      uint64_t failures = tested - passed;
+      std::uint64_t tested = num_tests - skipped;
+      std::uint64_t failures = tested - passed;
       std::cout << "Failures: " << failures << std::endl;
 
       // Require exact equivalence with fast_float
@@ -507,7 +507,7 @@ suite regression_tests = [] {
 
    "known_hard_bit_patterns_double"_test = [] {
       // Specific bit patterns that were known to cause failures before fixes
-      std::vector<uint64_t> hard_patterns = {
+      std::vector<std::uint64_t> hard_patterns = {
          0xfface22e6775c7bc, // Required rounding fix (-1.0141348953347229734e+307)
          0x7fefffffffffffff, // Largest normal double
          0x0010000000000000, // Smallest normal double
@@ -524,7 +524,7 @@ suite regression_tests = [] {
       };
 
       int passed = 0;
-      for (uint64_t bits : hard_patterns) {
+      for (std::uint64_t bits : hard_patterns) {
          double value = bits_to_double(bits);
 
          if (std::isnan(value) || std::isinf(value)) {
@@ -575,7 +575,7 @@ suite regression_tests = [] {
 
    "sequential_doubles_near_critical_regions"_test = [] {
       // Test 100 consecutive doubles near critical exponent regions
-      std::vector<uint64_t> critical_starts = {
+      std::vector<std::uint64_t> critical_starts = {
          0x7fe0000000000000, // Near max exponent
          0x0010000000000000, // Near min normal
          0x000fffffffffffff, // Subnormal region
@@ -586,9 +586,9 @@ suite regression_tests = [] {
       int total_passed = 0;
       int total_tested = 0;
 
-      for (uint64_t start : critical_starts) {
-         for (uint64_t offset = 0; offset < 100; ++offset) {
-            uint64_t bits = start + offset;
+      for (std::uint64_t start : critical_starts) {
+         for (std::uint64_t offset = 0; offset < 100; ++offset) {
+            std::uint64_t bits = start + offset;
             double value = bits_to_double(bits);
 
             if (std::isnan(value) || std::isinf(value)) {
@@ -619,7 +619,7 @@ suite subnormal_tests = [] {
       int total = 0;
 
       // Test specific subnormal patterns
-      std::vector<uint64_t> subnormal_patterns = {
+      std::vector<std::uint64_t> subnormal_patterns = {
          0x0000000000000001, // Smallest positive subnormal
          0x0000000000000002,
          0x0000000000000010,
@@ -643,7 +643,7 @@ suite subnormal_tests = [] {
          0x800fffffffffffff,
       };
 
-      for (uint64_t bits : subnormal_patterns) {
+      for (std::uint64_t bits : subnormal_patterns) {
          double value = bits_to_double(bits);
          ++total;
 
@@ -665,19 +665,19 @@ suite subnormal_tests = [] {
    "random_subnormal_roundtrip"_test = [] {
       // Test random subnormals (more comprehensive)
       std::random_device rd;
-      uint64_t seed = rd();
+      std::uint64_t seed = rd();
       std::cout << "Random subnormals (seed=" << seed << "): ";
 
       std::mt19937_64 rng(seed);
-      std::uniform_int_distribution<uint64_t> dist(1, 0x000fffffffffffffULL);
+      std::uniform_int_distribution<std::uint64_t> dist(1, 0x000fffffffffffffULL);
 
       constexpr int num_tests = 10000;
       int passed = 0;
 
       for (int i = 0; i < num_tests; ++i) {
-         uint64_t mantissa = dist(rng);
-         uint64_t sign = (rng() & 1) ? 0x8000000000000000ULL : 0;
-         uint64_t bits = sign | mantissa;
+         std::uint64_t mantissa = dist(rng);
+         std::uint64_t sign = (rng() & 1) ? 0x8000000000000000ULL : 0;
+         std::uint64_t bits = sign | mantissa;
          double value = bits_to_double(bits);
 
          if (test_roundtrip(value)) {

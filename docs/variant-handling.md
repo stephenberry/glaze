@@ -18,9 +18,9 @@ expect(s == R"("not_a_fish")");
 
 Read example:
 ```c++
-std::variant<int32_t, double> x = 44;
+std::variant<std::int32_t, double> x = 44;
 glz::read_json(x, "33");
-expect(std::get<int32_t>(x) == 33);
+expect(std::get<std::int32_t>(x) == 33);
 ```
 
 ### Multiple Types of Same Category

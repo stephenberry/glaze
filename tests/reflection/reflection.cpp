@@ -11,7 +11,7 @@ using namespace ut;
 
 struct test_type
 {
-   int32_t int1{};
+   std::int32_t int1{};
    int64_t int2{};
 };
 
@@ -31,7 +31,7 @@ suite reflect_test_type = [] {
 
 struct test_type_meta
 {
-   int32_t int1{};
+   std::int32_t int1{};
    int64_t int2{};
 };
 

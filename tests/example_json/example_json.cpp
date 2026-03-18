@@ -14,7 +14,7 @@ struct BasicStruct
    int i{};
    double d{};
    std::string str{};
-   std::array<uint32_t, 3> arr{};
+   std::array<std::uint32_t, 3> arr{};
 };
 static_assert(glz::reflectable<BasicStruct>);
 
@@ -31,7 +31,7 @@ suite basic_reflection = [] {
       expect(obj2.i == 42);
       expect(obj2.d == 3.14);
       expect(obj2.str == "Hello");
-      expect(obj2.arr == std::array<uint32_t, 3>{1, 2, 3});
+      expect(obj2.arr == std::array<std::uint32_t, 3>{1, 2, 3});
    };
 };
 
@@ -471,7 +471,7 @@ suite schema_generation = [] {
       auto schema = glz::write_json_schema<SchemaDemo>().value_or("error");
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"flag":{"$ref":"#/$defs/bool","description":"A boolean flag"},"name":{"$ref":"#/$defs/std::string","description":"A name for something"},"x":{"$ref":"#/$defs/int32_t","description":"An integer x"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"SchemaDemo"})")
+         R"({"type":["object"],"properties":{"flag":{"$ref":"#/$defs/bool","description":"A boolean flag"},"name":{"$ref":"#/$defs/std::string","description":"A name for something"},"x":{"$ref":"#/$defs/std::int32_t","description":"An integer x"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"SchemaDemo"})")
          << schema;
    };
 };
@@ -500,7 +500,7 @@ suite local_schema_test = [] {
       auto schema = glz::write_json_schema<LocalSchema>().value_or("error");
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"count":{"$ref":"#/$defs/int32_t","description":"A count"},"file":{"$ref":"#/$defs/std::string","description":"A file path"},"valid":{"$ref":"#/$defs/bool","description":"Validity flag"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"LocalSchema"})")
+         R"({"type":["object"],"properties":{"count":{"$ref":"#/$defs/std::int32_t","description":"A count"},"file":{"$ref":"#/$defs/std::string","description":"A file path"},"valid":{"$ref":"#/$defs/bool","description":"Validity flag"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"LocalSchema"})")
          << schema;
    };
 };

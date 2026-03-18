@@ -61,7 +61,7 @@ void test()
 
    std::vector<std::thread> threads;
    threads.reserve(nthreads);
-   for (size_t threadi = 0; threadi < nthreads; ++threadi) {
+   for (std::size_t threadi = 0; threadi < nthreads; ++threadi) {
       const UT start = threadi * step;
       const UT stop = (threadi == nthreads - 1) ? (std::numeric_limits<UT>::max)() : start + step;
       // std::cout << "thread i=" << threadi << " goes from " << start << " to " << stop << '\n';

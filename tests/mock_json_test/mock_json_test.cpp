@@ -10,7 +10,7 @@ using namespace ut;
 struct fantasy_nation_t
 {
    std::string country_name{};
-   uint64_t population{};
+   std::uint64_t population{};
    std::string ruler{};
    std::string government_type{};
    std::string currency{};
@@ -56,9 +56,9 @@ suite fantasy_nations = [] {
 
 struct stock_trade_t
 {
-   uint64_t trade_id{};
+   std::uint64_t trade_id{};
    std::string stock_symbol{};
-   uint64_t quantity{};
+   std::uint64_t quantity{};
    double purchase_price{};
    double sale_price{};
    std::string purchase_date{};
@@ -93,7 +93,7 @@ struct url_t
    std::string url{};
    std::string expanded_url{};
    std::string display_url{};
-   std::vector<uint64_t> indices{};
+   std::vector<std::uint64_t> indices{};
 };
 
 struct metadata_t
@@ -115,7 +115,7 @@ struct entities_t
 
 struct user_t
 {
-   uint64_t id{};
+   std::uint64_t id{};
    std::string id_str{};
    std::string name{};
    std::string screen_name{};
@@ -124,16 +124,16 @@ struct user_t
    std::optional<std::string> url{};
    entities_t entities{};
    bool protected_ = false;
-   uint64_t followers_count{};
-   uint64_t friends_count{};
-   uint64_t listed_count{};
+   std::uint64_t followers_count{};
+   std::uint64_t friends_count{};
+   std::uint64_t listed_count{};
    std::string created_at{};
-   uint64_t favourites_count{};
+   std::uint64_t favourites_count{};
    std::optional<int64_t> utc_offset{};
    std::optional<std::string> time_zone{};
    bool geo_enabled{};
    bool verified{};
-   uint64_t statuses_count{};
+   std::uint64_t statuses_count{};
    std::string lang{};
    bool contributors_enabled{};
    bool is_translator{};
@@ -177,15 +177,15 @@ struct user_mention_t
 {
    std::string screen_name{};
    std::string name{};
-   uint64_t id{};
+   std::uint64_t id{};
    std::string id_str{};
-   std::vector<uint64_t> indices;
+   std::vector<std::uint64_t> indices;
 };
 
 struct size_type
 {
-   uint32_t w{};
-   uint32_t h{};
+   std::uint32_t w{};
+   std::uint32_t h{};
    std::string resize{};
 };
 
@@ -199,9 +199,9 @@ struct sizes_type
 
 struct media_t
 {
-   uint64_t id{};
+   std::uint64_t id{};
    std::string id_str{};
-   std::vector<uint64_t> indices;
+   std::vector<std::uint64_t> indices;
    std::string media_url{};
    std::string media_url_https{};
    std::string url{};
@@ -209,14 +209,14 @@ struct media_t
    std::string expanded_url{};
    std::string type{};
    sizes_type sizes{};
-   uint64_t source_status_id{};
+   std::uint64_t source_status_id{};
    std::string source_status_id_str{};
 };
 
 struct hashtag_t
 {
    std::string text{};
-   std::vector<uint64_t> indices{};
+   std::vector<std::uint64_t> indices{};
 };
 
 struct status_entities_t
@@ -237,24 +237,24 @@ struct status_t
 {
    metadata_t metadata{};
    std::string created_at{};
-   uint64_t id{};
+   std::uint64_t id{};
    std::string id_str{};
    std::string text{};
    std::string source{};
    bool truncated{};
-   std::optional<uint64_t> in_reply_to_status_id{};
+   std::optional<std::uint64_t> in_reply_to_status_id{};
    std::optional<std::string> in_reply_to_status_id_str{};
-   std::optional<uint64_t> in_reply_to_user_id{};
+   std::optional<std::uint64_t> in_reply_to_user_id{};
    std::optional<std::string> in_reply_to_user_id_str{};
    std::optional<std::string> in_reply_to_screen_name{};
    user_t user{};
-   std::optional<uint64_t> geo{};
+   std::optional<std::uint64_t> geo{};
    std::optional<std::array<double, 2>> coordinates{};
    std::optional<std::string> place{};
    std::optional<std::string> contributors{};
    std::shared_ptr<status_t> retweeted_status{};
-   uint64_t retweet_count{};
-   uint64_t favorite_count{};
+   std::uint64_t retweet_count{};
+   std::uint64_t favorite_count{};
    status_entities_t entities{};
    bool favorited{};
    bool retweeted{};
@@ -265,13 +265,13 @@ struct status_t
 struct search_metadata_t
 {
    double completed_in{};
-   uint64_t max_id{};
+   std::uint64_t max_id{};
    std::string max_id_str{};
    std::string next_results{};
    std::string query{};
    std::string refresh_url{};
-   uint64_t count{};
-   uint64_t since_id{};
+   std::uint64_t count{};
+   std::uint64_t since_id{};
    std::string since_id_str{};
 };
 

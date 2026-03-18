@@ -406,11 +406,11 @@ namespace test_plugin
    };
 
    // Simulated plugin exports
-   uint32_t interface_version() { return REPE_PLUGIN_INTERFACE_VERSION; }
+   std::uint32_t interface_version() { return REPE_PLUGIN_INTERFACE_VERSION; }
 
    const repe_plugin_data* info() { return &plugin_info_data; }
 
-   repe_result init(const char*, uint64_t)
+   repe_result init(const char*, std::uint64_t)
    {
       try {
          ensure_initialized();
@@ -426,7 +426,7 @@ namespace test_plugin
       // Cleanup
    }
 
-   repe_buffer call(const char* request, uint64_t request_size)
+   repe_buffer call(const char* request, std::uint64_t request_size)
    {
       // Plugin is responsible for ensuring initialization before calling plugin_call
       ensure_initialized();

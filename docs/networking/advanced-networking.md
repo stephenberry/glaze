@@ -326,10 +326,10 @@ void run_multiple_servers_shared_context() {
 
     // Run the shared io_context in a thread pool
     std::vector<std::thread> threads;
-    const size_t num_threads = std::thread::hardware_concurrency();
+    const std::size_t num_threads = std::thread::hardware_concurrency();
     threads.reserve(num_threads);
 
-    for (size_t i = 0; i < num_threads; ++i) {
+    for (std::size_t i = 0; i < num_threads; ++i) {
         threads.emplace_back([io_ctx]() {
             io_ctx->run();
         });

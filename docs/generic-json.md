@@ -12,7 +12,7 @@ Glaze provides three generic JSON types with different number storage strategies
 |------|---------------|----------|
 | `glz::generic` | `double` | Fast, JavaScript-compatible (default) |
 | `glz::generic_i64` | `int64_t` then `double` | Signed integer precision |
-| `glz::generic_u64` | `uint64_t` then `int64_t` then `double` | Full integer range |
+| `glz::generic_u64` | `std::uint64_t` then `int64_t` then `double` | Full integer range |
 
 ### glz::generic (Default)
 
@@ -51,16 +51,16 @@ assert(json["id"].as<double>() == 9007199254740993.0);
 
 ### glz::generic_u64
 
-Provides full integer range support. Positive integers are stored as `uint64_t`, negative integers as `int64_t`, and floating-point numbers as `double`. This handles the complete unsigned 64-bit range (0 to 18.4 quintillion).
+Provides full integer range support. Positive integers are stored as `std::uint64_t`, negative integers as `int64_t`, and floating-point numbers as `double`. This handles the complete unsigned 64-bit range (0 to 18.4 quintillion).
 
 ```c++
 glz::generic_u64 json{};
 std::string buffer = R"({"big_id": 18446744073709551615, "neg": -100, "pi": 3.14})";
 glz::read_json(json, buffer);
 
-// Maximum uint64_t value preserved exactly
+// Maximum std::uint64_t value preserved exactly
 assert(json["big_id"].is_uint64());
-assert(json["big_id"].get<uint64_t>() == 18446744073709551615ULL);
+assert(json["big_id"].get<std::uint64_t>() == 18446744073709551615ULL);
 
 // Negative integers stored as int64_t
 assert(json["neg"].is_int64());
@@ -149,7 +149,7 @@ There are also free functions of these, such as `glz::is_object(...)`
 
 - `.is_int64()` - true if stored as `int64_t`
 - `.is_double()` - true if stored as `double`
-- `.is_uint64()` - true if stored as `uint64_t` (only `generic_u64`)
+- `.is_uint64()` - true if stored as `std::uint64_t` (only `generic_u64`)
 - `.as_number()` - returns the value as `double`, converting if necessary
 
 ```c++

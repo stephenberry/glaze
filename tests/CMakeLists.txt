@@ -3,9 +3,11 @@ include(FetchContent)
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v1.1.0
+  GIT_TAG v1.2.0
   GIT_SHALLOW TRUE
 )
+
+set (UT_ENABLE_MODULES ON)
 
 message(STATUS "Fetching dependencies...")
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
@@ -14,6 +16,7 @@ FetchContent_MakeAvailable(ut)
 set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
 message(STATUS "...finished fetching dependencies.")
+
 
 # Setup ASIO dependency (used by networking tests)
 # This must be defined here before glz_test_common/glz_test_exceptions

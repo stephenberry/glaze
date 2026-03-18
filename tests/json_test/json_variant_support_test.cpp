@@ -1,22 +1,13 @@
 
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <array>
-#include <cstdint>
-#include <map>
-#include <memory>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <tuple>
-#include <variant>
-#include <vector>
+import std;
 
-#include "glaze/containers/flat_map.hpp"
-#include "glaze/json.hpp"
-#include "json_test_shared_types.hpp"
-#include "ut/ut.hpp"
+import glaze.container.flat_map;
+import glaze.json;
+import glaze.tests.json.json_test_shared_types;
+import ut;
 
 using namespace ut;
 
@@ -67,7 +58,7 @@ struct glz::meta<tagged_variant2>
 };
 
 // Test array based variant (experimental, not meant for external usage since api might change)
-using num_variant = std::variant<double, int32_t, uint64_t, int8_t, float>;
+using num_variant = std::variant<double, std::int32_t, std::uint64_t, int8_t, float>;
 struct holds_some_num
 {
    num_variant num{};
@@ -165,7 +156,7 @@ suite tagged_variant_tests = [] {
       auto s = glz::write_json_schema<tagged_variant>().value_or("error");
       expect(
          s ==
-         R"({"type":["object"],"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"action":{"const":"PUT"},"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":["object"],"properties":{"action":{"const":"DELETE"},"data":{"$ref":"#/$defs/std::string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"std::variant<put_action, delete_action>"})")
+         R"({"type":["object"],"$defs":{"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::map<std::string,std::int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"action":{"const":"PUT"},"data":{"$ref":"#/$defs/std::map<std::string,std::int32_t>"}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":["object"],"properties":{"action":{"const":"DELETE"},"data":{"$ref":"#/$defs/std::string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"std::variant<put_action, delete_action>"})")
          << s;
    };
 
@@ -177,20 +168,20 @@ suite tagged_variant_tests = [] {
       std::string b = R"({"num":["float", 3.14]})";
       expect(ec == glz::error_code::none) << glz::format_error(ec, b);
       expect(std::get<float>(obj.num) == 3.14f);
-      expect(not glz::read_json(obj, R"({"num":["uint64_t", 5]})"));
-      expect(std::get<uint64_t>(obj.num) == 5);
+      expect(not glz::read_json(obj, R"({"num":["std::uint64_t", 5]})"));
+      expect(std::get<std::uint64_t>(obj.num) == 5);
       expect(not glz::read_json(obj, R"({"num":["int8_t", -3]})"));
       expect(std::get<int8_t>(obj.num) == -3);
-      expect(not glz::read_json(obj, R"({"num":["int32_t", -2]})"));
-      expect(std::get<int32_t>(obj.num) == -2);
+      expect(not glz::read_json(obj, R"({"num":["std::int32_t", -2]})"));
+      expect(std::get<std::int32_t>(obj.num) == -2);
 
       obj.num = 5.0;
       std::string s{};
       expect(not glz::write_json(obj, s));
       expect(s == R"({"num":["double",5]})");
-      obj.num = uint64_t{3};
+      obj.num = std::uint64_t{3};
       expect(not glz::write_json(obj, s));
-      expect(s == R"({"num":["uint64_t",3]})");
+      expect(s == R"({"num":["std::uint64_t",3]})");
       obj.num = int8_t{-5};
       expect(not glz::write_json(obj, s));
       expect(s == R"({"num":["int8_t",-5]})");
@@ -200,7 +191,7 @@ suite tagged_variant_tests = [] {
       const auto schema = glz::write_json_schema<std::shared_ptr<tagged_variant2>>().value_or("error");
       expect(
          schema ==
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":["null"],"title":"std::monostate","const":null}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})")
+         R"({"type":["object","null"],"$defs":{"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::map<std::string,std::int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::map<std::string,std::int32_t>"},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":["null"],"title":"std::monostate","const":null}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})")
          << schema;
    };
 };
@@ -247,9 +238,9 @@ suite variant_tests = [] {
    };
 
    "variant_read_"_test = [] {
-      std::variant<int32_t, double> x = 44;
+      std::variant<std::int32_t, double> x = 44;
       expect(glz::read_json(x, "33") == glz::error_code::none);
-      expect(std::get<int32_t>(x) == 33);
+      expect(std::get<std::int32_t>(x) == 33);
    };
 
    // TODO: Make reading into the active element work here
@@ -499,7 +490,7 @@ suite vector_variant_reflection_tests = [] {
 
       expect(decoded.size() == original.size());
 
-      for (size_t i = 0; i < original.size(); ++i) {
+      for (std::size_t i = 0; i < original.size(); ++i) {
          expect(original[i].index() == decoded[i].index());
       }
    };

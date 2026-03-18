@@ -112,7 +112,7 @@ class UserAPI
       return false;
    }
 
-   size_t user_count() const { return users_.size(); }
+   std::size_t user_count() const { return users_.size(); }
 };
 
 // Task structures from Auto-Generated REST API example
@@ -224,7 +224,7 @@ class TaskService
       return completed;
    }
 
-   size_t task_count() const { return tasks_.size(); }
+   std::size_t task_count() const { return tasks_.size(); }
 };
 
 // Chat structures from WebSocket Chat Server example
@@ -296,7 +296,7 @@ class ChatRoom
       }
    }
 
-   size_t get_user_count() const { return connection_ids_.size(); }
+   std::size_t get_user_count() const { return connection_ids_.size(); }
 
    std::vector<ChatMessage> get_message_history() const
    {
@@ -367,7 +367,7 @@ class SimpleAuthService
 
    void logout(const std::string& token) { active_tokens_.erase(token); }
 
-   size_t active_token_count() const { return active_tokens_.size(); }
+   std::size_t active_token_count() const { return active_tokens_.size(); }
 
   private:
    std::string generate_token()
@@ -460,7 +460,7 @@ class ProductService
       return result;
    }
 
-   size_t product_count() const { return products_.size(); }
+   std::size_t product_count() const { return products_.size(); }
 };
 
 // HealthChecker from Microservice Template example

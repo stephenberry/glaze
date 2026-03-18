@@ -3,7 +3,7 @@
 #include <glaze/glaze.hpp>
 #include <vector>
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, std::size_t Size)
 {
    // non-null terminated
    {

@@ -22,10 +22,10 @@ using namespace ut;
 // This mimics network streams or pipes where data arrives in chunks
 class slow_stringbuf : public std::stringbuf
 {
-   size_t max_bytes_per_read_;
+   std::size_t max_bytes_per_read_;
 
   public:
-   slow_stringbuf(const std::string& s, size_t max_bytes_per_read)
+   slow_stringbuf(const std::string& s, std::size_t max_bytes_per_read)
       : std::stringbuf(s, std::ios_base::in), max_bytes_per_read_(max_bytes_per_read)
    {}
 
@@ -42,8 +42,8 @@ class slow_stringbuf : public std::stringbuf
 class pipe_buffer : public std::streambuf
 {
    std::vector<char> buffer_;
-   size_t read_pos_ = 0;
-   size_t write_pos_ = 0;
+   std::size_t read_pos_ = 0;
+   std::size_t write_pos_ = 0;
    bool closed_ = false;
    mutable std::mutex mutex_;
    std::condition_variable cv_;
@@ -52,10 +52,10 @@ class pipe_buffer : public std::streambuf
    pipe_buffer() : buffer_(65536) {} // 64KB buffer
 
    // Writer side: append data to the buffer
-   void write(const char* data, size_t len)
+   void write(const char* data, std::size_t len)
    {
       std::lock_guard<std::mutex> lock(mutex_);
-      for (size_t i = 0; i < len && write_pos_ < buffer_.size(); ++i) {
+      for (std::size_t i = 0; i < len && write_pos_ < buffer_.size(); ++i) {
          buffer_[write_pos_++] = data[i];
       }
       cv_.notify_one();
@@ -108,12 +108,12 @@ class pipe_buffer : public std::streambuf
       // Wait for at least some data
       cv_.wait(lock, [this] { return read_pos_ < write_pos_ || closed_; });
 
-      size_t available = write_pos_ - read_pos_;
+      std::size_t available = write_pos_ - read_pos_;
       if (available == 0) {
          return 0;
       }
 
-      size_t to_read = std::min(static_cast<size_t>(n), available);
+      std::size_t to_read = std::min(static_cast<std::size_t>(n), available);
       std::memcpy(s, buffer_.data() + read_pos_, to_read);
       read_pos_ += to_read;
 
@@ -125,11 +125,11 @@ class pipe_buffer : public std::streambuf
 // This mimics network streams, pipes, or slow storage where writes happen in chunks
 class slow_ostringbuf : public std::stringbuf
 {
-   size_t max_bytes_per_write_;
-   size_t total_write_calls_ = 0;
+   std::size_t max_bytes_per_write_;
+   std::size_t total_write_calls_ = 0;
 
   public:
-   explicit slow_ostringbuf(size_t max_bytes_per_write)
+   explicit slow_ostringbuf(std::size_t max_bytes_per_write)
       : std::stringbuf(std::ios_base::out), max_bytes_per_write_(max_bytes_per_write)
    {}
 
@@ -137,7 +137,7 @@ class slow_ostringbuf : public std::stringbuf
    std::string output() const { return str(); }
 
    // Get number of write calls made (for verification)
-   size_t write_calls() const { return total_write_calls_; }
+   std::size_t write_calls() const { return total_write_calls_; }
 
   protected:
    // Override xsputn to simulate slow writes by writing in chunks
@@ -1246,10 +1246,10 @@ suite async_streaming_tests = [] {
          std::string json = R"({"id":42,"name":"async test"})";
 
          // Send in small chunks with delays
-         size_t pos = 0;
-         size_t chunk_size = 5;
+         std::size_t pos = 0;
+         std::size_t chunk_size = 5;
          while (pos < json.size()) {
-            size_t len = std::min(chunk_size, json.size() - pos);
+            std::size_t len = std::min(chunk_size, json.size() - pos);
             pbuf.write(json.data() + pos, len);
             pos += len;
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -1285,9 +1285,9 @@ suite async_streaming_tests = [] {
          (void)glz::write_json(original, json);
 
          // Send in variable-sized chunks
-         size_t pos = 0;
+         std::size_t pos = 0;
          while (pos < json.size()) {
-            size_t len = std::min(size_t(7 + (pos % 5)), json.size() - pos); // Varying chunk sizes
+            std::size_t len = std::min(std::size_t(7 + (pos % 5)), json.size() - pos); // Varying chunk sizes
             pbuf.write(json.data() + pos, len);
             pos += len;
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -1318,9 +1318,9 @@ suite async_streaming_tests = [] {
          (void)glz::write_json(original, json);
 
          // Send with longer delays between chunks
-         size_t pos = 0;
+         std::size_t pos = 0;
          while (pos < json.size()) {
-            size_t len = std::min(size_t(10), json.size() - pos);
+            std::size_t len = std::min(std::size_t(10), json.size() - pos);
             pbuf.write(json.data() + pos, len);
             pos += len;
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
@@ -1361,7 +1361,7 @@ suite async_streaming_tests = [] {
          (void)glz::write_json(original, json);
 
          // Send byte by byte with tiny delays (stress test)
-         for (size_t i = 0; i < json.size(); ++i) {
+         for (std::size_t i = 0; i < json.size(); ++i) {
             pbuf.write(json.data() + i, 1);
             if (i % 10 == 0) {
                std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -2393,7 +2393,7 @@ suite buffer_boundary_tests = [] {
       std::string json = R"({"id":42,"name":"test"})";
 
       // Try various offsets to hit colon at boundary
-      for (size_t chunk = 3; chunk <= 8; ++chunk) {
+      for (std::size_t chunk = 3; chunk <= 8; ++chunk) {
          slow_stringbuf sbuf(json, chunk);
          std::istream slow_stream(&sbuf);
          glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
@@ -2410,7 +2410,7 @@ suite buffer_boundary_tests = [] {
    "array comma at buffer boundary"_test = [] {
       std::string json = R"([111,222,333,444,555,666,777,888,999])";
 
-      for (size_t chunk = 3; chunk <= 8; ++chunk) {
+      for (std::size_t chunk = 3; chunk <= 8; ++chunk) {
          slow_stringbuf sbuf(json, chunk);
          std::istream slow_stream(&sbuf);
          glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
@@ -2428,7 +2428,7 @@ suite buffer_boundary_tests = [] {
    "object brace at buffer boundary"_test = [] {
       std::string json = R"({"inner":{"x":10,"y":20},"outer":30})";
 
-      for (size_t chunk = 3; chunk <= 10; ++chunk) {
+      for (std::size_t chunk = 3; chunk <= 10; ++chunk) {
          slow_stringbuf sbuf(json, chunk);
          std::istream slow_stream(&sbuf);
          glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
@@ -2457,7 +2457,7 @@ suite buffer_boundary_tests = [] {
    "null/true/false at buffer boundary"_test = [] {
       std::string json = R"([null,true,false,null,true,false])";
 
-      for (size_t chunk = 2; chunk <= 6; ++chunk) {
+      for (std::size_t chunk = 2; chunk <= 6; ++chunk) {
          slow_stringbuf sbuf(json, chunk);
          std::istream slow_stream(&sbuf);
          glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
@@ -2476,7 +2476,7 @@ suite buffer_boundary_tests = [] {
    "deeply nested at each level crossing boundary"_test = [] {
       std::string json = R"({"a":{"b":{"c":{"d":{"e":{"f":1}}}}}})";
 
-      for (size_t chunk = 2; chunk <= 8; ++chunk) {
+      for (std::size_t chunk = 2; chunk <= 8; ++chunk) {
          slow_stringbuf sbuf(json, chunk);
          std::istream slow_stream(&sbuf);
          glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
@@ -2491,7 +2491,7 @@ suite buffer_boundary_tests = [] {
    "floating point at buffer boundary"_test = [] {
       std::string json = R"([3.14159265358979,2.71828182845904,1.41421356237309])";
 
-      for (size_t chunk = 4; chunk <= 10; ++chunk) {
+      for (std::size_t chunk = 4; chunk <= 10; ++chunk) {
          slow_stringbuf sbuf(json, chunk);
          std::istream slow_stream(&sbuf);
          glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
@@ -2508,7 +2508,7 @@ suite buffer_boundary_tests = [] {
    "scientific notation at buffer boundary"_test = [] {
       std::string json = R"([1.23e+10,4.56e-20,7.89E+30])";
 
-      for (size_t chunk = 3; chunk <= 8; ++chunk) {
+      for (std::size_t chunk = 3; chunk <= 8; ++chunk) {
          slow_stringbuf sbuf(json, chunk);
          std::istream slow_stream(&sbuf);
          glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
@@ -2524,7 +2524,7 @@ suite buffer_boundary_tests = [] {
    "negative numbers at buffer boundary"_test = [] {
       std::string json = R"([-123,-456,-789,-1000])";
 
-      for (size_t chunk = 2; chunk <= 6; ++chunk) {
+      for (std::size_t chunk = 2; chunk <= 6; ++chunk) {
          slow_stringbuf sbuf(json, chunk);
          std::istream slow_stream(&sbuf);
          glz::basic_istream_buffer<std::istream, 512> buffer(slow_stream);
@@ -2652,11 +2652,11 @@ suite json_stream_reader_edge_cases = [] {
 
       Record r;
       reader.read_next(r);
-      size_t after_first = reader.bytes_consumed();
+      std::size_t after_first = reader.bytes_consumed();
       expect(after_first > 0u);
 
       reader.read_next(r);
-      size_t after_second = reader.bytes_consumed();
+      std::size_t after_second = reader.bytes_consumed();
       expect(after_second > after_first);
    };
 
@@ -3544,7 +3544,7 @@ suite streaming_state_unit_tests = [] {
       glz::istream_buffer<> buffer(iss);
 
       auto state = glz::make_streaming_state(buffer);
-      size_t original_size = state.size();
+      std::size_t original_size = state.size();
 
       state.consume_bytes(5);
 
