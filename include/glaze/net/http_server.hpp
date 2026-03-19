@@ -1405,7 +1405,6 @@ namespace glz
       // Connection configuration
       connection_config conn_config_;
 
-
       // Connection state for managing keep-alive connections
       // Uses socket_type which is either tcp::socket (HTTP) or ssl::stream<tcp::socket> (HTTPS)
       struct connection_state : public std::enable_shared_from_this<connection_state>
@@ -1660,6 +1659,7 @@ namespace glz
 
          result.is_http_11 = (major_v == "1" && minor_v == "1");
 
+         // from_string validates by matching against known methods; rejects all unknown input
          auto method_opt = from_string(method_sv);
          if (!method_opt) {
             result.status = parse_status::error;
@@ -1771,7 +1771,7 @@ namespace glz
          for (size_t i = 0; i <= haystack.size() - needle.size(); ++i) {
             bool match = true;
             for (size_t j = 0; j < needle.size(); ++j) {
-               if (ascii_tolower(haystack[i + j]) != needle[j]) { match = false; break; }
+               if (ascii_tolower(haystack[i + j]) != ascii_tolower(needle[j])) { match = false; break; }
             }
             if (match) return true;
          }
@@ -1841,7 +1841,7 @@ namespace glz
          auto [handle, params] = root_router.match(conn->request_.method, request.path);
 
          // Reuse the connection-persistent response object (preserves capacity).
-         // No clear() needed — the handler overwrites status, headers, and body.
+         // Cleared in the keep-alive reset path after the response is written.
          response& response = conn->response_;
 
          // Call request hooks for metrics/logging
