@@ -1410,8 +1410,9 @@ namespace glz
       // Uses socket_type which is either tcp::socket (HTTP) or ssl::stream<tcp::socket> (HTTPS)
       struct connection_state : public std::enable_shared_from_this<connection_state>
       {
-         std::shared_ptr<socket_type> socket;
-         asio::streambuf buffer;
+         socket_type socket;
+         std::string read_buf; // Flat read buffer (capacity reused across keep-alive)
+         size_t buf_len = 0; // Valid data in read_buf[0..buf_len)
          request request_;
          asio::ip::tcp::endpoint remote_endpoint;
          asio::steady_timer idle_timer;
@@ -1420,11 +1421,13 @@ namespace glz
          response response_; // Persists across keep-alive requests to reuse capacity
          std::string header_buf; // Persists across keep-alive requests to reuse capacity
 
-         connection_state(std::shared_ptr<socket_type> sock, asio::ip::tcp::endpoint endpoint)
+         connection_state(socket_type sock, asio::ip::tcp::endpoint endpoint)
             : socket(std::move(sock)),
               remote_endpoint(std::move(endpoint)),
-              idle_timer(socket->lowest_layer().get_executor())
-         {}
+              idle_timer(socket.lowest_layer().get_executor())
+         {
+            read_buf.resize(8192); // Pre-size to cover typical requests
+         }
       };
 
       // Helper for executing wrapping middleware chain
@@ -1463,27 +1466,26 @@ namespace glz
                else {
                   if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
-                     // For HTTPS: wrap socket in SSL stream and perform handshake
-                     auto ssl_socket = std::make_shared<socket_type>(std::move(socket), *ssl_context);
-                     ssl_socket->async_handshake(asio::ssl::stream_base::server, [this, ssl_socket, remote_endpoint](
+                     // For HTTPS: create connection eagerly, then perform SSL handshake
+                     auto conn = std::make_shared<connection_state>(
+                        socket_type(std::move(socket), *ssl_context), remote_endpoint);
+                     conn->socket.async_handshake(asio::ssl::stream_base::server, [this, conn](
                                                                                     std::error_code handshake_ec) {
                         if (!handshake_ec) {
-                           auto conn = std::make_shared<connection_state>(ssl_socket, remote_endpoint);
                            start_connection(conn);
                         }
                         else {
                            // SSL handshake failed - explicitly close the socket
                            error_handler(handshake_ec, std::source_location::current());
                            asio::error_code close_ec;
-                           ssl_socket->lowest_layer().close(close_ec);
+                           conn->socket.lowest_layer().close(close_ec);
                         }
                      });
 #endif
                   }
                   else {
                      // For HTTP: use TCP socket directly
-                     auto socket_ptr = std::make_shared<socket_type>(std::move(socket));
-                     auto conn = std::make_shared<connection_state>(std::move(socket_ptr), remote_endpoint);
+                     auto conn = std::make_shared<connection_state>(std::move(socket), remote_endpoint);
                      start_connection(conn);
                   }
                }
@@ -1518,10 +1520,9 @@ namespace glz
          conn->idle_timer.expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
          conn->idle_timer.async_wait([conn](asio::error_code ec) {
             if (!ec) {
-               // Timer expired - close the connection
+               // Timer expired - send FIN; socket closed via RAII when conn is destroyed
                asio::error_code close_ec;
-               conn->socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
-               conn->socket->lowest_layer().close(close_ec);
+               conn->socket.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
             }
             // If ec is operation_aborted, the timer was cancelled (new request arrived)
          });
@@ -1529,6 +1530,14 @@ namespace glz
 
       // Cancel the idle timer (called when a new request starts)
       inline void cancel_idle_timer(std::shared_ptr<connection_state> conn) { conn->idle_timer.cancel(); }
+
+      // Parse result from try_parse_request
+      enum struct parse_status { complete, incomplete, error };
+      struct parse_result {
+         parse_status status = parse_status::incomplete;
+         size_t headers_end = 0; // Byte offset past the final \r\n\r\n
+         bool is_http_11 = false;
+      };
 
       // Read the next HTTP request from the connection
       inline void read_request(std::shared_ptr<connection_state> conn)
@@ -1538,68 +1547,93 @@ namespace glz
             start_idle_timer(conn);
          }
 
-         asio::async_read_until(*conn->socket, conn->buffer, "\r\n\r\n",
-                                [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
-                                   // Cancel idle timer since we received data
-                                   cancel_idle_timer(conn);
+         // Check for pipelined data already in buffer
+         if (conn->buf_len > 0) {
+            auto result = try_parse_request(conn);
+            if (result.status == parse_status::complete) {
+               cancel_idle_timer(conn);
+               conn->request_count++;
+               finish_request(conn, result);
+               return;
+            }
+            else if (result.status == parse_status::error) {
+               cancel_idle_timer(conn);
+               return; // error response already sent by try_parse_request
+            }
+         }
 
-                                   if (ec) {
-                                      // EOF is a normal disconnect, not a server error
-                                      if (ec != asio::error::eof && ec != asio::error::operation_aborted) {
-                                         error_handler(ec, std::source_location::current());
-                                      }
-                                      return;
-                                   }
-
-                                   conn->request_count++;
-                                   process_request_data(conn);
-                                });
+         do_read_some(conn);
       }
 
-      // Process data received from the connection
-      inline void process_request_data(std::shared_ptr<connection_state> conn)
+      // Async read loop: read data from socket and attempt to parse
+      inline void do_read_some(std::shared_ptr<connection_state> conn)
       {
-         const auto data_size = conn->buffer.size();
-         const char* data_ptr = static_cast<const char*>(conn->buffer.data().data());
-         std::string_view request_view(data_ptr, data_size);
-
-         size_t headers_end_pos = request_view.find("\r\n\r\n");
-         if (headers_end_pos == std::string_view::npos) {
-            send_error_response_with_close(conn, 400, "Bad Request");
-            return;
-         }
-         std::string_view headers_part = request_view.substr(0, headers_end_pos);
-         size_t body_start_offset = headers_end_pos + 4;
-
-         // Parse request line
-         size_t request_line_end_pos = headers_part.find("\r\n");
-         std::string_view request_line;
-         if (request_line_end_pos == std::string_view::npos) {
-            request_line = headers_part; // Request line is the entire headers_part
-            headers_part = ""; // headers_part becomes empty as there are no more headers
-         }
-         else {
-            request_line = headers_part.substr(0, request_line_end_pos);
-            headers_part.remove_prefix(request_line_end_pos + 2); // +2 for \r\n
+         // Grow buffer if full
+         if (conn->buf_len == conn->read_buf.size()) {
+            conn->read_buf.resize(conn->read_buf.size() * 2);
          }
 
-         // Parse method, target, and HTTP version from the request line
+         conn->socket.async_read_some(
+            asio::buffer(&conn->read_buf[conn->buf_len], conn->read_buf.size() - conn->buf_len),
+            [this, conn](asio::error_code ec, std::size_t bytes_transferred) {
+               cancel_idle_timer(conn);
+
+               if (ec) {
+                  if (ec != asio::error::eof && ec != asio::error::operation_aborted) {
+                     error_handler(ec, std::source_location::current());
+                  }
+                  return;
+               }
+
+               conn->buf_len += bytes_transferred;
+
+               auto result = try_parse_request(conn);
+               if (result.status == parse_status::complete) {
+                  conn->request_count++;
+                  finish_request(conn, result);
+               }
+               else if (result.status == parse_status::incomplete) {
+                  do_read_some(conn); // Need more data
+               }
+               // error: response already sent by try_parse_request
+            });
+      }
+
+      // Single-pass HTTP request parser: scans data line by line, parsing semantics as it goes.
+      // Returns complete when all headers are found, incomplete if more data needed.
+      inline parse_result try_parse_request(std::shared_ptr<connection_state> conn)
+      {
+         std::string_view data(conn->read_buf.data(), conn->buf_len);
+         parse_result result;
+
+         // Clear headers for re-parse safety (preserves bucket allocation)
+         conn->request_.headers.clear();
+
+         // --- Parse request line ---
+         size_t rl_end = data.find("\r\n");
+         if (rl_end == std::string_view::npos) return result; // incomplete
+
+         std::string_view request_line = data.substr(0, rl_end);
+
          size_t first_space = request_line.find(' ');
          if (first_space == std::string_view::npos) {
+            result.status = parse_status::error;
             send_error_response_with_close(conn, 400, "Bad Request");
-            return;
+            return result;
          }
          std::string_view method_sv = request_line.substr(0, first_space);
 
          size_t second_space = request_line.find(' ', first_space + 1);
          if (second_space == std::string_view::npos) {
+            result.status = parse_status::error;
             send_error_response_with_close(conn, 400, "Bad Request");
-            return;
+            return result;
          }
          std::string_view target_sv = request_line.substr(first_space + 1, second_space - first_space - 1);
          if (target_sv.empty() || target_sv.find(' ') != std::string_view::npos) {
+            result.status = parse_status::error;
             send_error_response_with_close(conn, 400, "Bad Request");
-            return;
+            return result;
          }
 
          std::string_view http_version_part = request_line.substr(second_space + 1);
@@ -1607,40 +1641,58 @@ namespace glz
             http_version_part.remove_suffix(1);
          }
          if (http_version_part.size() < 7 || http_version_part.rfind("HTTP/", 0) != 0) {
+            result.status = parse_status::error;
             send_error_response_with_close(conn, 400, "Bad Request");
-            return;
+            return result;
          }
          std::string_view version_number = http_version_part.substr(5);
          size_t dot_pos = version_number.find('.');
          if (dot_pos == std::string_view::npos || dot_pos == 0 || dot_pos == version_number.length() - 1) {
+            result.status = parse_status::error;
             send_error_response_with_close(conn, 400, "Bad Request");
-            return;
+            return result;
          }
          std::string_view major_v = version_number.substr(0, dot_pos);
          std::string_view minor_v = version_number.substr(dot_pos + 1);
          if (major_v.empty() || !std::all_of(major_v.begin(), major_v.end(), ::isdigit) || minor_v.empty() ||
              !std::all_of(minor_v.begin(), minor_v.end(), ::isdigit)) {
+            result.status = parse_status::error;
             send_error_response_with_close(conn, 400, "Bad Request");
-            return;
+            return result;
          }
 
-         // Determine HTTP version for keep-alive default behavior
-         // HTTP/1.1 defaults to keep-alive, HTTP/1.0 defaults to close
-         bool is_http_11 = (major_v == "1" && minor_v == "1");
+         result.is_http_11 = (major_v == "1" && minor_v == "1");
 
          auto method_opt = from_string(method_sv);
          if (!method_opt) {
+            result.status = parse_status::error;
             send_error_response_with_close(conn, 501, "Not Implemented");
-            return;
+            return result;
          }
          conn->request_.method = *method_opt;
          conn->request_.target = target_sv;
-         // Parse headers
-         std::unordered_map<std::string, std::string>& headers = conn->request_.headers;
-         while (!headers_part.empty()) {
-            size_t line_end = headers_part.find("\r\n");
-            std::string_view line = headers_part.substr(0, line_end);
 
+         // --- Parse headers line by line (single pass) ---
+         size_t pos = rl_end + 2;
+         auto& headers = conn->request_.headers;
+
+         while (true) {
+            // Need at least 2 bytes to check for empty line
+            if (pos + 1 >= conn->buf_len) return result; // incomplete
+
+            // Empty line = end of headers
+            if (data[pos] == '\r' && data[pos + 1] == '\n') {
+               result.headers_end = pos + 2;
+               result.status = parse_status::complete;
+               return result;
+            }
+
+            // Find end of this header line
+            size_t line_end = data.find("\r\n", pos);
+            if (line_end == std::string_view::npos) return result; // incomplete
+
+            // Parse header name:value
+            std::string_view line = data.substr(pos, line_end - pos);
             auto colon_pos = line.find(':');
             if (colon_pos != std::string_view::npos) {
                std::string_view name_sv = line.substr(0, colon_pos);
@@ -1651,23 +1703,26 @@ namespace glz
                headers[std::move(key)] = std::string(value_sv);
             }
 
-            if (line_end == std::string_view::npos) break;
-            headers_part.remove_prefix(line_end + 2);
+            pos = line_end + 2;
          }
+      }
 
-         // Determine if connection should be kept alive based on:
-         // 1. Server configuration
-         // 2. HTTP version (1.1 = keep-alive by default, 1.0 = close by default)
-         // 3. Client's Connection header
-         // 4. Max requests per connection limit
-         bool should_keep_alive = determine_keep_alive(headers, is_http_11, conn);
+      // Post-parse dispatch: keep-alive, body reading, handler invocation
+      inline void finish_request(std::shared_ptr<connection_state> conn, const parse_result& result)
+      {
+         auto& headers = conn->request_.headers;
+
+         bool should_keep_alive = determine_keep_alive(headers, result.is_http_11, conn);
          conn->should_close = !should_keep_alive;
 
-         // Consume the parsed headers from the buffer
-         conn->buffer.consume(body_start_offset);
+         // Shift remaining data (body + pipelined) to buffer front
+         size_t remaining = conn->buf_len - result.headers_end;
+         if (remaining > 0) {
+            std::memmove(conn->read_buf.data(), &conn->read_buf[result.headers_end], remaining);
+         }
+         conn->buf_len = remaining;
 
          if (is_websocket_upgrade(headers)) {
-            // WebSocket upgrades take over the connection
             handle_websocket_upgrade_with_conn(std::move(conn));
             return;
          }
@@ -1684,19 +1739,26 @@ namespace glz
 
          if (content_length > 0) {
             conn->request_.body.resize(content_length);
-            // Copy what's already in the buffer to the body
-            const size_t initial_body_size = std::min(content_length, conn->buffer.size());
-            const auto missing_bytes = content_length - initial_body_size;
-            std::memcpy(conn->request_.body.data(), conn->buffer.data().data(), initial_body_size);
-            conn->buffer.consume(initial_body_size);
-            if (initial_body_size < content_length) {
-               asio::async_read(*conn->socket, asio::buffer(&conn->request_.body[initial_body_size], missing_bytes),
+            // Copy already-buffered body bytes
+            const size_t initial_body_size = std::min(content_length, conn->buf_len);
+            if (initial_body_size > 0) {
+               std::memcpy(conn->request_.body.data(), conn->read_buf.data(), initial_body_size);
+            }
+            // Shift leftover data (pipelined bytes past this body)
+            size_t leftover = conn->buf_len - initial_body_size;
+            if (leftover > 0) {
+               std::memmove(conn->read_buf.data(), &conn->read_buf[initial_body_size], leftover);
+            }
+            conn->buf_len = leftover;
+
+            const size_t missing_bytes = content_length - initial_body_size;
+            if (missing_bytes > 0) {
+               asio::async_read(conn->socket, asio::buffer(&conn->request_.body[initial_body_size], missing_bytes),
                                 asio::transfer_exactly(missing_bytes), [this, conn](std::error_code ec, size_t) {
                                    if (ec) {
                                       error_handler(ec, std::source_location::current());
                                       return;
                                    }
-                                   // Append newly read data
                                    process_full_request_with_conn(conn);
                                 });
             }
@@ -2044,7 +2106,7 @@ namespace glz
          auto unlimited = [](const asio::error_code& ec, std::size_t) -> std::size_t {
             return ec ? 0 : (std::numeric_limits<std::size_t>::max)();
          };
-         asio::async_write(*conn->socket, bufs, unlimited,
+         asio::async_write(conn->socket, bufs, unlimited,
                            [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                               if (ec) {
                                  // Write error - connection is dead
@@ -2052,10 +2114,9 @@ namespace glz
                               }
 
                               if (conn->should_close) {
-                                 // Close the connection gracefully
+                                 // Send FIN; socket closed via RAII when conn is destroyed
                                  asio::error_code close_ec;
-                                 conn->socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
-                                 conn->socket->lowest_layer().close(close_ec);
+                                 conn->socket.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
                               }
                               else {
                                  // Keep-alive: read the next request
@@ -2116,7 +2177,8 @@ namespace glz
 
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
-         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(conn->socket, ws_it->second);
+         auto socket_ptr = std::make_shared<socket_type>(std::move(conn->socket));
+         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(socket_ptr, ws_it->second);
          ws_conn->start(req);
       }
 
@@ -2124,7 +2186,8 @@ namespace glz
                                                      const streaming_handler& handler)
       {
          // Create streaming connection (works for both HTTP and HTTPS via interface)
-         auto stream_conn = std::make_shared<streaming_connection<socket_type>>(conn->socket);
+         auto socket_ptr = std::make_shared<socket_type>(std::move(conn->socket));
+         auto stream_conn = std::make_shared<streaming_connection<socket_type>>(socket_ptr);
          streaming_response stream_res(stream_conn);
 
          try {
