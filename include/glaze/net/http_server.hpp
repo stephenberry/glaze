@@ -1564,6 +1564,7 @@ namespace glz
       // Async read loop: read data from socket and attempt to parse
       inline void do_read_some(std::shared_ptr<connection_state> conn)
       {
+         std::cerr << "[glz] do_read_some: buf_len=" << conn->buf_len << " buf_size=" << conn->read_buf.size() << "\n";
          // Grow buffer if full (or allocate on first read)
          if (conn->buf_len == conn->read_buf.size()) {
             conn->read_buf.resize((std::max)(conn->read_buf.size() * 2, size_t{4096}));
@@ -1583,9 +1584,12 @@ namespace glz
 
                conn->buf_len += bytes_transferred;
 
+               std::cerr << "[glz] read complete: bytes=" << bytes_transferred << " buf_len=" << conn->buf_len << "\n";
                auto result = try_parse_request(conn);
+               std::cerr << "[glz] parse result: status=" << int(result.status) << " headers_end=" << result.headers_end << "\n";
                if (result.status == parse_status::complete) {
                   conn->request_count++;
+                  std::cerr << "[glz] calling finish_request\n";
                   finish_request(conn, result);
                }
                else if (result.status == parse_status::incomplete) {
@@ -1709,6 +1713,7 @@ namespace glz
       // Buffer compaction happens in the keep-alive reset (send_response_with_conn completion).
       inline void finish_request(std::shared_ptr<connection_state> conn, const parse_result& result)
       {
+         std::cerr << "[glz] finish_request: headers_end=" << result.headers_end << " buf_len=" << conn->buf_len << "\n";
          auto& headers = conn->request_.headers;
 
          bool should_keep_alive = determine_keep_alive(headers, result.is_http_11, conn);
@@ -1732,6 +1737,8 @@ namespace glz
          // Body bytes in the buffer start at headers_end
          const size_t body_offset = result.headers_end;
          const size_t available_body = conn->buf_len - body_offset;
+
+         std::cerr << "[glz] content_length=" << content_length << " body_offset=" << body_offset << " available_body=" << available_body << "\n";
 
          if (content_length > 0) {
             conn->request_.body.resize(content_length);
@@ -2032,6 +2039,7 @@ namespace glz
       // Send response with keep-alive support
       inline void send_response_with_conn(std::shared_ptr<connection_state> conn, response& response)
       {
+         std::cerr << "[glz] send_response: status=" << response.status_code << " body_size=" << response.response_body.size() << "\n";
          // Reuse connection-persistent header buffer (preserves capacity across requests)
          conn->header_buf.clear();
          auto& h = conn->header_buf;
@@ -2153,6 +2161,7 @@ namespace glz
       inline void send_error_response_with_conn(std::shared_ptr<connection_state> conn, int status_code,
                                                 const std::string& message)
       {
+         conn->response_.clear();
          conn->response_.status(status_code).content_type("text/plain").body(message);
          send_response_with_conn(conn, conn->response_);
       }
