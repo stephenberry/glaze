@@ -1404,6 +1404,7 @@ namespace glz
       // Connection configuration
       connection_config conn_config_;
 
+
       // Connection state for managing keep-alive connections
       // Uses socket_type which is either tcp::socket (HTTP) or ssl::stream<tcp::socket> (HTTPS)
       struct connection_state : public std::enable_shared_from_this<connection_state>
@@ -1415,6 +1416,8 @@ namespace glz
          std::shared_ptr<asio::steady_timer> idle_timer;
          uint32_t request_count = 0;
          bool should_close = false;
+         response response_; // Persists across keep-alive requests to reuse capacity
+         std::string header_buf; // Persists across keep-alive requests to reuse capacity
 
          connection_state(std::shared_ptr<socket_type> sock, asio::ip::tcp::endpoint endpoint)
             : socket(std::move(sock)),
@@ -1450,7 +1453,7 @@ namespace glz
 
       inline void do_accept()
       {
-         acceptor->async_accept([this](std::error_code ec, asio::ip::tcp::socket socket) {
+         acceptor->async_accept(asio::make_strand(io_executor), [this](std::error_code ec, asio::ip::tcp::socket socket) {
             if (!ec) {
                asio::error_code endpoint_ec;
                auto remote_endpoint = socket.remote_endpoint(endpoint_ec);
@@ -1768,8 +1771,9 @@ namespace glz
          // Find a matching route
          auto [handle, params] = root_router.match(conn->request_.method, request.path);
 
-         // Create the response object
-         response response;
+         // Reuse the connection-persistent response object (preserves capacity).
+         // No clear() needed — the handler overwrites status, headers, and body.
+         response& response = conn->response_;
 
          // Call request hooks for metrics/logging
          try {
@@ -1937,75 +1941,81 @@ namespace glz
       }
 
       // Send response with keep-alive support
-      inline void send_response_with_conn(std::shared_ptr<connection_state> conn, const response& response)
+      inline void send_response_with_conn(std::shared_ptr<connection_state> conn, response& response)
       {
-         size_t estimated_size = 64;
+         // Reuse connection-persistent header buffer (preserves capacity across requests)
+         conn->header_buf.clear();
+         auto& h = conn->header_buf;
+
+         h.append("HTTP/1.1 ");
+         h.append(std::to_string(response.status_code));
+         h.append(" ");
+         h.append(get_status_message(response.status_code));
+         h.append("\r\n");
 
          for (const auto& [name, value] : response.response_headers) {
-            estimated_size += name.size() + value.size() + 4;
-         }
-
-         estimated_size += response.response_body.size() + 128;
-
-         std::string response_str;
-         response_str.reserve(estimated_size);
-
-         response_str.append("HTTP/1.1 ");
-         response_str.append(std::to_string(response.status_code));
-         response_str.append(" ");
-         response_str.append(get_status_message(response.status_code));
-         response_str.append("\r\n");
-
-         for (const auto& [name, value] : response.response_headers) {
-            response_str.append(name);
-            response_str.append(": ");
-            response_str.append(value);
-            response_str.append("\r\n");
+            h.append(name);
+            h.append(": ");
+            h.append(value);
+            h.append("\r\n");
          }
 
          if (response.response_headers.find("content-length") == response.response_headers.end()) {
-            response_str.append("Content-Length: ");
-            response_str.append(std::to_string(response.response_body.size()));
-            response_str.append("\r\n");
+            h.append("Content-Length: ");
+            h.append(std::to_string(response.response_body.size()));
+            h.append("\r\n");
          }
 
          if (response.response_headers.find("date") == response.response_headers.end()) {
-            response_str.append("Date: ");
-            response_str.append(get_current_date());
-            response_str.append("\r\n");
+            h.append("Date: ");
+            h.append(get_current_date());
+            h.append("\r\n");
          }
 
          if (response.response_headers.find("server") == response.response_headers.end()) {
-            response_str.append("Server: Glaze/1.0\r\n");
+            h.append("Server: Glaze/1.0\r\n");
          }
 
          // Add Connection header based on keep-alive decision
          if (response.response_headers.find("connection") == response.response_headers.end()) {
             if (conn->should_close) {
-               response_str.append("Connection: close\r\n");
+               h.append("Connection: close\r\n");
             }
             else {
-               response_str.append("Connection: keep-alive\r\n");
+               h.append("Connection: keep-alive\r\n");
                // Add Keep-Alive header with timeout info
                if (conn_config_.keep_alive_timeout > 0) {
-                  response_str.append("Keep-Alive: timeout=");
-                  response_str.append(std::to_string(conn_config_.keep_alive_timeout));
+                  h.append("Keep-Alive: timeout=");
+                  h.append(std::to_string(conn_config_.keep_alive_timeout));
                   if (conn_config_.max_requests_per_connection > 0) {
-                     response_str.append(", max=");
-                     response_str.append(std::to_string(conn_config_.max_requests_per_connection));
+                     h.append(", max=");
+                     h.append(std::to_string(conn_config_.max_requests_per_connection));
                   }
-                  response_str.append("\r\n");
+                  h.append("\r\n");
                }
             }
          }
 
-         response_str.append("\r\n");
-         response_str.append(response.response_body);
+         h.append("\r\n");
 
-         auto response_buffer = std::make_shared<std::string>(std::move(response_str));
+         // Scatter-gather write: send headers and body as separate buffers.
+         // Zero-copy for the body — write directly from conn->response_.response_body.
+         // conn (shared_ptr) keeps header_buf and response_body alive during the async write.
+         // The socket's strand executor enables continuation optimization for the internal
+         // write loop, avoiding per-chunk event loop queue overhead for large payloads.
+         std::array<asio::const_buffer, 2> bufs = {
+            asio::buffer(h),
+            asio::buffer(response.response_body)
+         };
 
-         asio::async_write(*conn->socket, asio::buffer(*response_buffer),
-                           [this, conn, response_buffer](asio::error_code ec, std::size_t /*bytes_transferred*/) {
+         // Custom completion condition: removes the default 64KB-per-chunk cap
+         // in asio::async_write (transfer_all uses 65536). Without this, a 960KB
+         // response requires ~15 event loop iterations instead of ~8.
+         auto unlimited = [](const asio::error_code& ec, std::size_t) -> std::size_t {
+            return ec ? 0 : (std::numeric_limits<std::size_t>::max)();
+         };
+         asio::async_write(*conn->socket, bufs, unlimited,
+                           [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                               if (ec) {
                                  // Write error - connection is dead
                                  return;
@@ -2019,8 +2029,6 @@ namespace glz
                               }
                               else {
                                  // Keep-alive: read the next request
-                                 // Reset request_ structure members that accumulate or persist
-                                 // (method, target, path are overwritten; remote_ip/port are connection-level)
                                  conn->request_.params.clear();
                                  conn->request_.query.clear();
                                  conn->request_.headers.clear();
@@ -2035,9 +2043,8 @@ namespace glz
       inline void send_error_response_with_conn(std::shared_ptr<connection_state> conn, int status_code,
                                                 const std::string& message)
       {
-         response resp;
-         resp.status(status_code).content_type("text/plain").body(message);
-         send_response_with_conn(conn, resp);
+         conn->response_.status(status_code).content_type("text/plain").body(message);
+         send_response_with_conn(conn, conn->response_);
       }
 
       // Send error response and close connection (for protocol errors)

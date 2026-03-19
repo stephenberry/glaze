@@ -58,7 +58,7 @@ namespace glz
 
       inline response& body(std::string_view content)
       {
-         response_body = std::string(content);
+         response_body.assign(content.data(), content.size());
          return *this;
       }
 
@@ -79,6 +79,14 @@ namespace glz
             response_body = R"({"error":"glz::write_json error"})"; // rare that this would ever happen
          }
          return *this;
+      }
+
+      // Reset response for reuse, preserving allocated capacity
+      void clear()
+      {
+         status_code = 200;
+         response_headers.clear();
+         response_body.clear(); // preserves capacity
       }
 
       inline response& content_type(std::string_view type) { return header("content-type", type); }
