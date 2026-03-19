@@ -39,9 +39,17 @@ namespace glz
    // Response builder
    struct response
    {
+      enum header_flag : uint8_t {
+         has_content_length = 1,
+         has_date = 2,
+         has_server = 4,
+         has_connection = 8,
+      };
+
       int status_code = 200;
       std::unordered_map<std::string, std::string> response_headers{};
       std::string response_body{};
+      uint8_t user_headers_set{};
 
       inline response& status(int code)
       {
@@ -52,7 +60,16 @@ namespace glz
       inline response& header(std::string_view name, std::string_view value)
       {
          // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-         response_headers[to_lower_case(name)] = std::string(value);
+         std::string key(name);
+         for (auto& c : key) c = ascii_tolower(c);
+
+         // Track which default headers the user has set
+         if (key == "content-length") user_headers_set |= has_content_length;
+         else if (key == "date") user_headers_set |= has_date;
+         else if (key == "server") user_headers_set |= has_server;
+         else if (key == "connection") user_headers_set |= has_connection;
+
+         response_headers[std::move(key)] = std::string(value);
          return *this;
       }
 
@@ -87,6 +104,7 @@ namespace glz
          status_code = 200;
          response_headers.clear();
          response_body.clear(); // preserves capacity
+         user_headers_set = 0;
       }
 
       inline response& content_type(std::string_view type) { return header("content-type", type); }

@@ -27,6 +27,7 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/openapi.hpp"
 #include "glaze/net/websocket_connection.hpp"
+#include "glaze/util/itoa.hpp"
 #include "glaze/util/key_transformers.hpp"
 
 // To deconflict Windows.h
@@ -1410,10 +1411,10 @@ namespace glz
       struct connection_state : public std::enable_shared_from_this<connection_state>
       {
          std::shared_ptr<socket_type> socket;
-         std::shared_ptr<asio::streambuf> buffer;
+         asio::streambuf buffer;
          request request_;
          asio::ip::tcp::endpoint remote_endpoint;
-         std::shared_ptr<asio::steady_timer> idle_timer;
+         asio::steady_timer idle_timer;
          uint32_t request_count = 0;
          bool should_close = false;
          response response_; // Persists across keep-alive requests to reuse capacity
@@ -1421,9 +1422,8 @@ namespace glz
 
          connection_state(std::shared_ptr<socket_type> sock, asio::ip::tcp::endpoint endpoint)
             : socket(std::move(sock)),
-              buffer(std::make_shared<asio::streambuf>()),
               remote_endpoint(std::move(endpoint)),
-              idle_timer(std::make_shared<asio::steady_timer>(socket->lowest_layer().get_executor()))
+              idle_timer(socket->lowest_layer().get_executor())
          {}
       };
 
@@ -1515,8 +1515,8 @@ namespace glz
             return; // No timeout configured
          }
 
-         conn->idle_timer->expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
-         conn->idle_timer->async_wait([conn](asio::error_code ec) {
+         conn->idle_timer.expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
+         conn->idle_timer.async_wait([conn](asio::error_code ec) {
             if (!ec) {
                // Timer expired - close the connection
                asio::error_code close_ec;
@@ -1528,7 +1528,7 @@ namespace glz
       }
 
       // Cancel the idle timer (called when a new request starts)
-      inline void cancel_idle_timer(std::shared_ptr<connection_state> conn) { conn->idle_timer->cancel(); }
+      inline void cancel_idle_timer(std::shared_ptr<connection_state> conn) { conn->idle_timer.cancel(); }
 
       // Read the next HTTP request from the connection
       inline void read_request(std::shared_ptr<connection_state> conn)
@@ -1538,7 +1538,7 @@ namespace glz
             start_idle_timer(conn);
          }
 
-         asio::async_read_until(*conn->socket, *conn->buffer, "\r\n\r\n",
+         asio::async_read_until(*conn->socket, conn->buffer, "\r\n\r\n",
                                 [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                                    // Cancel idle timer since we received data
                                    cancel_idle_timer(conn);
@@ -1559,8 +1559,8 @@ namespace glz
       // Process data received from the connection
       inline void process_request_data(std::shared_ptr<connection_state> conn)
       {
-         const auto data_size = conn->buffer->size();
-         const char* data_ptr = static_cast<const char*>(conn->buffer->data().data());
+         const auto data_size = conn->buffer.size();
+         const char* data_ptr = static_cast<const char*>(conn->buffer.data().data());
          std::string_view request_view(data_ptr, data_size);
 
          size_t headers_end_pos = request_view.find("\r\n\r\n");
@@ -1590,11 +1590,6 @@ namespace glz
             return;
          }
          std::string_view method_sv = request_line.substr(0, first_space);
-         if (method_sv.empty() ||
-             !std::all_of(method_sv.begin(), method_sv.end(), [](char c) { return std::isalnum(c) || c == '_'; })) {
-            send_error_response_with_close(conn, 400, "Bad Request");
-            return;
-         }
 
          size_t second_space = request_line.find(' ', first_space + 1);
          if (second_space == std::string_view::npos) {
@@ -1633,7 +1628,7 @@ namespace glz
          // HTTP/1.1 defaults to keep-alive, HTTP/1.0 defaults to close
          bool is_http_11 = (major_v == "1" && minor_v == "1");
 
-         auto method_opt = from_string(std::string(method_sv));
+         auto method_opt = from_string(method_sv);
          if (!method_opt) {
             send_error_response_with_close(conn, 501, "Not Implemented");
             return;
@@ -1651,7 +1646,9 @@ namespace glz
                std::string_view name_sv = line.substr(0, colon_pos);
                std::string_view value_sv = line.substr(colon_pos + 1);
                value_sv.remove_prefix(std::min(value_sv.find_first_not_of(" \t"), value_sv.size()));
-               headers[to_lower_case(name_sv)] = std::string(value_sv);
+               std::string key(name_sv);
+               for (auto& c : key) c = ascii_tolower(c);
+               headers[std::move(key)] = std::string(value_sv);
             }
 
             if (line_end == std::string_view::npos) break;
@@ -1667,7 +1664,7 @@ namespace glz
          conn->should_close = !should_keep_alive;
 
          // Consume the parsed headers from the buffer
-         conn->buffer->consume(body_start_offset);
+         conn->buffer.consume(body_start_offset);
 
          if (is_websocket_upgrade(headers)) {
             // WebSocket upgrades take over the connection
@@ -1677,10 +1674,9 @@ namespace glz
 
          std::size_t content_length = 0;
          if (auto it = headers.find("content-length"); it != headers.end()) {
-            try {
-               content_length = std::stoul(it->second);
-            }
-            catch (const std::exception&) {
+            const auto& cl = it->second;
+            auto [ptr, ec] = std::from_chars(cl.data(), cl.data() + cl.size(), content_length);
+            if (ec != std::errc{} || ptr != cl.data() + cl.size()) {
                send_error_response_with_close(conn, 400, "Bad Request");
                return;
             }
@@ -1689,10 +1685,10 @@ namespace glz
          if (content_length > 0) {
             conn->request_.body.resize(content_length);
             // Copy what's already in the buffer to the body
-            const size_t initial_body_size = std::min(content_length, conn->buffer->size());
+            const size_t initial_body_size = std::min(content_length, conn->buffer.size());
             const auto missing_bytes = content_length - initial_body_size;
-            std::memcpy(conn->request_.body.data(), conn->buffer->data().data(), initial_body_size);
-            conn->buffer->consume(initial_body_size);
+            std::memcpy(conn->request_.body.data(), conn->buffer.data().data(), initial_body_size);
+            conn->buffer.consume(initial_body_size);
             if (initial_body_size < content_length) {
                asio::async_read(*conn->socket, asio::buffer(&conn->request_.body[initial_body_size], missing_bytes),
                                 asio::transfer_exactly(missing_bytes), [this, conn](std::error_code ec, size_t) {
@@ -1714,7 +1710,7 @@ namespace glz
       }
 
       // Determine if the connection should be kept alive
-      inline bool determine_keep_alive(const std::unordered_map<std::string, std::string>& headers, bool is_http_11,
+      inline bool determine_keep_alive(std::unordered_map<std::string, std::string>& headers, bool is_http_11,
                                        std::shared_ptr<connection_state> conn)
       {
          // If server has keep-alive disabled, always close
@@ -1731,7 +1727,9 @@ namespace glz
          // Check client's Connection header
          auto conn_header_it = headers.find("connection");
          if (conn_header_it != headers.end()) {
-            std::string conn_value = to_lower_case(conn_header_it->second);
+            // Lowercase in-place (safe: headers cleared before next request)
+            auto& conn_value = conn_header_it->second;
+            for (auto& c : conn_value) c = ascii_tolower(c);
             if (conn_value.find("close") != std::string::npos) {
                return false; // Client requested close
             }
@@ -1940,18 +1938,47 @@ namespace glz
          }
       }
 
+      // Pre-cached status lines for common HTTP status codes
+      inline static std::string_view get_status_line(int code)
+      {
+         switch (code) {
+         case 200: return "HTTP/1.1 200 OK\r\n";
+         case 201: return "HTTP/1.1 201 Created\r\n";
+         case 204: return "HTTP/1.1 204 No Content\r\n";
+         case 301: return "HTTP/1.1 301 Moved Permanently\r\n";
+         case 400: return "HTTP/1.1 400 Bad Request\r\n";
+         case 401: return "HTTP/1.1 401 Unauthorized\r\n";
+         case 403: return "HTTP/1.1 403 Forbidden\r\n";
+         case 404: return "HTTP/1.1 404 Not Found\r\n";
+         case 405: return "HTTP/1.1 405 Method Not Allowed\r\n";
+         case 500: return "HTTP/1.1 500 Internal Server Error\r\n";
+         case 501: return "HTTP/1.1 501 Not Implemented\r\n";
+         case 503: return "HTTP/1.1 503 Service Unavailable\r\n";
+         default: return {};
+         }
+      }
+
       // Send response with keep-alive support
       inline void send_response_with_conn(std::shared_ptr<connection_state> conn, response& response)
       {
          // Reuse connection-persistent header buffer (preserves capacity across requests)
          conn->header_buf.clear();
          auto& h = conn->header_buf;
+         char num_buf[20];
 
-         h.append("HTTP/1.1 ");
-         h.append(std::to_string(response.status_code));
-         h.append(" ");
-         h.append(get_status_message(response.status_code));
-         h.append("\r\n");
+         // Status line (pre-cached for common codes)
+         auto status_line = get_status_line(response.status_code);
+         if (!status_line.empty()) {
+            h.append(status_line);
+         }
+         else {
+            h.append("HTTP/1.1 ");
+            auto* end = glz::to_chars(num_buf, static_cast<int32_t>(response.status_code));
+            h.append(num_buf, size_t(end - num_buf));
+            h.append(" ");
+            h.append(get_status_message(response.status_code));
+            h.append("\r\n");
+         }
 
          for (const auto& [name, value] : response.response_headers) {
             h.append(name);
@@ -1960,24 +1987,25 @@ namespace glz
             h.append("\r\n");
          }
 
-         if (response.response_headers.find("content-length") == response.response_headers.end()) {
+         if (!(response.user_headers_set & response::has_content_length)) {
             h.append("Content-Length: ");
-            h.append(std::to_string(response.response_body.size()));
+            auto* end = glz::to_chars(num_buf, static_cast<uint64_t>(response.response_body.size()));
+            h.append(num_buf, size_t(end - num_buf));
             h.append("\r\n");
          }
 
-         if (response.response_headers.find("date") == response.response_headers.end()) {
+         if (!(response.user_headers_set & response::has_date)) {
             h.append("Date: ");
             h.append(get_current_date());
             h.append("\r\n");
          }
 
-         if (response.response_headers.find("server") == response.response_headers.end()) {
+         if (!(response.user_headers_set & response::has_server)) {
             h.append("Server: Glaze/1.0\r\n");
          }
 
          // Add Connection header based on keep-alive decision
-         if (response.response_headers.find("connection") == response.response_headers.end()) {
+         if (!(response.user_headers_set & response::has_connection)) {
             if (conn->should_close) {
                h.append("Connection: close\r\n");
             }
@@ -1986,10 +2014,12 @@ namespace glz
                // Add Keep-Alive header with timeout info
                if (conn_config_.keep_alive_timeout > 0) {
                   h.append("Keep-Alive: timeout=");
-                  h.append(std::to_string(conn_config_.keep_alive_timeout));
+                  auto* end = glz::to_chars(num_buf, conn_config_.keep_alive_timeout);
+                  h.append(num_buf, size_t(end - num_buf));
                   if (conn_config_.max_requests_per_connection > 0) {
                      h.append(", max=");
-                     h.append(std::to_string(conn_config_.max_requests_per_connection));
+                     end = glz::to_chars(num_buf, conn_config_.max_requests_per_connection);
+                     h.append(num_buf, size_t(end - num_buf));
                   }
                   h.append("\r\n");
                }
@@ -2033,6 +2063,7 @@ namespace glz
                                  conn->request_.query.clear();
                                  conn->request_.headers.clear();
                                  conn->request_.body.clear();
+                                 conn->response_.clear();
 
                                  read_request(conn);
                               }
@@ -2055,7 +2086,7 @@ namespace glz
          send_error_response_with_conn(conn, status_code, message);
       }
 
-      inline bool is_websocket_upgrade(const std::unordered_map<std::string, std::string>& headers)
+      inline bool is_websocket_upgrade(std::unordered_map<std::string, std::string>& headers)
       {
          auto upgrade_it = headers.find("upgrade");
          if (upgrade_it == headers.end()) return false;
@@ -2063,13 +2094,12 @@ namespace glz
          auto connection_it = headers.find("connection");
          if (connection_it == headers.end()) return false;
 
-         // Check if upgrade header contains "websocket" (case-insensitive)
-         auto upgrade_value = to_lower_case(upgrade_it->second);
-         if (upgrade_value.find("websocket") == std::string::npos) return false;
+         // Lowercase values in-place (safe: headers cleared before next request)
+         for (auto& c : upgrade_it->second) c = ascii_tolower(c);
+         if (upgrade_it->second.find("websocket") == std::string::npos) return false;
 
-         // Check if connection header contains "upgrade" (case-insensitive)
-         auto connection_value = to_lower_case(connection_it->second);
-         return connection_value.find("upgrade") != std::string::npos;
+         for (auto& c : connection_it->second) c = ascii_tolower(c);
+         return connection_it->second.find("upgrade") != std::string::npos;
       }
 
       inline void handle_websocket_upgrade_with_conn(std::shared_ptr<connection_state> conn)
@@ -2147,21 +2177,26 @@ namespace glz
          }
       }
 
-      inline std::string get_current_date()
+      inline const std::string& get_current_date()
       {
+         static thread_local std::string cached;
+         static thread_local std::chrono::seconds cached_sec{};
          auto now = std::chrono::system_clock::now();
-         auto time_t_now = std::chrono::system_clock::to_time_t(now);
-
-         char buf[100];
+         auto sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch());
+         if (sec != cached_sec) {
+            cached_sec = sec;
+            auto time_t_now = std::chrono::system_clock::to_time_t(now);
+            char buf[64];
 #ifdef _MSC_VER
-         std::tm tm_buf;
-         gmtime_s(&tm_buf, &time_t_now);
-         std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", &tm_buf);
+            std::tm tm_buf;
+            gmtime_s(&tm_buf, &time_t_now);
+            std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", &tm_buf);
 #else
-         std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", std::gmtime(&time_t_now));
+            std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", std::gmtime(&time_t_now));
 #endif
-
-         return buf;
+            cached = buf;
+         }
+         return cached;
       }
    };
 
