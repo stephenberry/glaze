@@ -1413,6 +1413,7 @@ namespace glz
          socket_type socket;
          std::string read_buf; // Flat read buffer (capacity reused across keep-alive)
          size_t buf_len = 0; // Valid data in read_buf[0..buf_len)
+         size_t buf_consumed = 0; // Bytes consumed for current request (shifted on next request)
          request request_;
          asio::ip::tcp::endpoint remote_endpoint;
          asio::steady_timer idle_timer;
@@ -1425,9 +1426,7 @@ namespace glz
             : socket(std::move(sock)),
               remote_endpoint(std::move(endpoint)),
               idle_timer(socket.lowest_layer().get_executor())
-         {
-            read_buf.resize(8192); // Pre-size to cover typical requests
-         }
+         {}
       };
 
       // Helper for executing wrapping middleware chain
@@ -1505,8 +1504,6 @@ namespace glz
       // Start handling a new connection
       inline void start_connection(std::shared_ptr<connection_state> conn)
       {
-         conn->request_.remote_ip = conn->remote_endpoint.address().to_string();
-         conn->request_.remote_port = conn->remote_endpoint.port();
          read_request(conn);
       }
 
@@ -1568,9 +1565,9 @@ namespace glz
       // Async read loop: read data from socket and attempt to parse
       inline void do_read_some(std::shared_ptr<connection_state> conn)
       {
-         // Grow buffer if full
+         // Grow buffer if full (or allocate on first read)
          if (conn->buf_len == conn->read_buf.size()) {
-            conn->read_buf.resize(conn->read_buf.size() * 2);
+            conn->read_buf.resize((std::max)(conn->read_buf.size() * 2, size_t{4096}));
          }
 
          conn->socket.async_read_some(
@@ -1707,20 +1704,15 @@ namespace glz
          }
       }
 
-      // Post-parse dispatch: keep-alive, body reading, handler invocation
+      // Post-parse dispatch: keep-alive, body reading, handler invocation.
+      // Does NOT shift the read buffer — header string_views remain valid through the handler.
+      // Buffer compaction happens in the keep-alive reset (send_response_with_conn completion).
       inline void finish_request(std::shared_ptr<connection_state> conn, const parse_result& result)
       {
          auto& headers = conn->request_.headers;
 
          bool should_keep_alive = determine_keep_alive(headers, result.is_http_11, conn);
          conn->should_close = !should_keep_alive;
-
-         // Shift remaining data (body + pipelined) to buffer front
-         size_t remaining = conn->buf_len - result.headers_end;
-         if (remaining > 0) {
-            std::memmove(conn->read_buf.data(), &conn->read_buf[result.headers_end], remaining);
-         }
-         conn->buf_len = remaining;
 
          if (is_websocket_upgrade(headers)) {
             handle_websocket_upgrade_with_conn(std::move(conn));
@@ -1737,19 +1729,18 @@ namespace glz
             }
          }
 
+         // Body bytes in the buffer start at headers_end
+         const size_t body_offset = result.headers_end;
+         const size_t available_body = conn->buf_len - body_offset;
+
          if (content_length > 0) {
             conn->request_.body.resize(content_length);
-            // Copy already-buffered body bytes
-            const size_t initial_body_size = std::min(content_length, conn->buf_len);
+            const size_t initial_body_size = std::min(content_length, available_body);
             if (initial_body_size > 0) {
-               std::memcpy(conn->request_.body.data(), conn->read_buf.data(), initial_body_size);
+               std::memcpy(conn->request_.body.data(), &conn->read_buf[body_offset], initial_body_size);
             }
-            // Shift leftover data (pipelined bytes past this body)
-            size_t leftover = conn->buf_len - initial_body_size;
-            if (leftover > 0) {
-               std::memmove(conn->read_buf.data(), &conn->read_buf[initial_body_size], leftover);
-            }
-            conn->buf_len = leftover;
+            // Track consumed bytes (headers + body taken from buffer)
+            conn->buf_consumed = body_offset + initial_body_size;
 
             const size_t missing_bytes = content_length - initial_body_size;
             if (missing_bytes > 0) {
@@ -1767,13 +1758,28 @@ namespace glz
             }
          }
          else {
+            conn->buf_consumed = body_offset;
             process_full_request_with_conn(conn);
          }
       }
 
       // Determine if the connection should be kept alive
-      inline bool determine_keep_alive(std::unordered_map<std::string, std::string>& headers, bool is_http_11,
-                                       std::shared_ptr<connection_state> conn)
+      // Case-insensitive substring search
+      static bool ci_contains(std::string_view haystack, std::string_view needle)
+      {
+         if (needle.size() > haystack.size()) return false;
+         for (size_t i = 0; i <= haystack.size() - needle.size(); ++i) {
+            bool match = true;
+            for (size_t j = 0; j < needle.size(); ++j) {
+               if (ascii_tolower(haystack[i + j]) != needle[j]) { match = false; break; }
+            }
+            if (match) return true;
+         }
+         return false;
+      }
+
+      inline bool determine_keep_alive(const std::unordered_map<std::string, std::string>& headers,
+                                       bool is_http_11, std::shared_ptr<connection_state> conn)
       {
          // If server has keep-alive disabled, always close
          if (!conn_config_.keep_alive) {
@@ -1786,17 +1792,14 @@ namespace glz
             return false;
          }
 
-         // Check client's Connection header
+         // Check client's Connection header (case-insensitive)
          auto conn_header_it = headers.find("connection");
          if (conn_header_it != headers.end()) {
-            // Lowercase in-place (safe: headers cleared before next request)
-            auto& conn_value = conn_header_it->second;
-            for (auto& c : conn_value) c = ascii_tolower(c);
-            if (conn_value.find("close") != std::string::npos) {
-               return false; // Client requested close
+            if (ci_contains(conn_header_it->second, "close")) {
+               return false;
             }
-            if (conn_value.find("keep-alive") != std::string::npos) {
-               return true; // Client explicitly requested keep-alive
+            if (ci_contains(conn_header_it->second, "keep-alive")) {
+               return true;
             }
          }
 
@@ -1822,6 +1825,12 @@ namespace glz
 
          // Create the request object
          request& request = conn->request_;
+
+         // Lazy remote IP resolution (deferred from accept to avoid syscall + allocation per connection)
+         if (request.remote_ip.empty()) {
+            request.remote_ip = conn->remote_endpoint.address().to_string();
+            request.remote_port = conn->remote_endpoint.port();
+         }
 
          // Parse path and query string from target
          const auto [path_view, query_string] = split_target(conn->request_.target);
@@ -1884,7 +1893,7 @@ namespace glz
                   if (auto request_method_it = request.headers.find("access-control-request-method");
                       request_method_it != request.headers.end()) {
                      has_request_method_header = true;
-                     std::string method_token = request_method_it->second;
+                     std::string method_token{request_method_it->second};
                      auto trim_pos = method_token.find_last_not_of(" \t\r\n");
                      if (trim_pos != std::string::npos) {
                         method_token.erase(trim_pos + 1);
@@ -2119,12 +2128,21 @@ namespace glz
                                  conn->socket.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
                               }
                               else {
-                                 // Keep-alive: read the next request
+                                 // Keep-alive: compact buffer (shift leftover pipelined data to front)
+                                 // Must happen AFTER clearing headers since string_views point into read_buf
                                  conn->request_.params.clear();
                                  conn->request_.query.clear();
                                  conn->request_.headers.clear();
                                  conn->request_.body.clear();
                                  conn->response_.clear();
+
+                                 size_t leftover = conn->buf_len - conn->buf_consumed;
+                                 if (leftover > 0) {
+                                    std::memmove(conn->read_buf.data(),
+                                                 &conn->read_buf[conn->buf_consumed], leftover);
+                                 }
+                                 conn->buf_len = leftover;
+                                 conn->buf_consumed = 0;
 
                                  read_request(conn);
                               }
@@ -2147,7 +2165,7 @@ namespace glz
          send_error_response_with_conn(conn, status_code, message);
       }
 
-      inline bool is_websocket_upgrade(std::unordered_map<std::string, std::string>& headers)
+      inline bool is_websocket_upgrade(const std::unordered_map<std::string, std::string>& headers)
       {
          auto upgrade_it = headers.find("upgrade");
          if (upgrade_it == headers.end()) return false;
@@ -2155,12 +2173,8 @@ namespace glz
          auto connection_it = headers.find("connection");
          if (connection_it == headers.end()) return false;
 
-         // Lowercase values in-place (safe: headers cleared before next request)
-         for (auto& c : upgrade_it->second) c = ascii_tolower(c);
-         if (upgrade_it->second.find("websocket") == std::string::npos) return false;
-
-         for (auto& c : connection_it->second) c = ascii_tolower(c);
-         return connection_it->second.find("upgrade") != std::string::npos;
+         if (!ci_contains(upgrade_it->second, "websocket")) return false;
+         return ci_contains(connection_it->second, "upgrade");
       }
 
       inline void handle_websocket_upgrade_with_conn(std::shared_ptr<connection_state> conn)
