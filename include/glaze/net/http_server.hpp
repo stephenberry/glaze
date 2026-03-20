@@ -2122,14 +2122,8 @@ namespace glz
             asio::buffer(response.response_body)
          };
 
-         // Custom completion condition: removes the default 64KB-per-chunk cap
-         // in asio::async_write (transfer_all uses 65536). Without this, a 960KB
-         // response requires ~15 event loop iterations instead of ~8.
-         auto unlimited = [](const asio::error_code& ec, std::size_t) -> std::size_t {
-            return ec ? 0 : (std::numeric_limits<std::size_t>::max)();
-         };
          std::cerr << "[glz] calling async_write\n";
-         asio::async_write(conn->socket, bufs, unlimited,
+         asio::async_write(conn->socket, bufs,
                            [this, conn](asio::error_code ec, std::size_t bytes_written) {
                               std::cerr << "[glz] async_write complete: ec=" << ec.message() << " bytes=" << bytes_written << "\n";
                               if (ec) {
