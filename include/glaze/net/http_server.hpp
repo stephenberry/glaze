@@ -2043,7 +2043,6 @@ namespace glz
          // Reuse connection-persistent header buffer (preserves capacity across requests)
          conn->header_buf.clear();
          auto& h = conn->header_buf;
-         char num_buf[20];
 
          // Status line (pre-cached for common codes)
          auto status_line = get_status_line(response.status_code);
@@ -2052,13 +2051,11 @@ namespace glz
          }
          else {
             h.append("HTTP/1.1 ");
-            auto* end = glz::to_chars(num_buf, static_cast<int32_t>(response.status_code));
-            h.append(num_buf, size_t(end - num_buf));
+            h.append(std::to_string(response.status_code));
             h.append(" ");
             h.append(get_status_message(response.status_code));
             h.append("\r\n");
          }
-         std::cerr << "[glz] status_line done\n";
 
          for (const auto& [name, value] : response.response_headers) {
             h.append(name);
@@ -2066,22 +2063,18 @@ namespace glz
             h.append(value);
             h.append("\r\n");
          }
-         std::cerr << "[glz] custom_headers done\n";
 
          if (!(response.user_headers_set & response::has_content_length)) {
             h.append("Content-Length: ");
-            auto* end = glz::to_chars(num_buf, static_cast<uint64_t>(response.response_body.size()));
-            h.append(num_buf, size_t(end - num_buf));
+            h.append(std::to_string(response.response_body.size()));
             h.append("\r\n");
          }
-         std::cerr << "[glz] content_length done\n";
 
          if (!(response.user_headers_set & response::has_date)) {
             h.append("Date: ");
             h.append(get_current_date());
             h.append("\r\n");
          }
-         std::cerr << "[glz] date done\n";
 
          if (!(response.user_headers_set & response::has_server)) {
             h.append("Server: Glaze/1.0\r\n");
@@ -2097,12 +2090,10 @@ namespace glz
                // Add Keep-Alive header with timeout info
                if (conn_config_.keep_alive_timeout > 0) {
                   h.append("Keep-Alive: timeout=");
-                  auto* end = glz::to_chars(num_buf, conn_config_.keep_alive_timeout);
-                  h.append(num_buf, size_t(end - num_buf));
+                  h.append(std::to_string(conn_config_.keep_alive_timeout));
                   if (conn_config_.max_requests_per_connection > 0) {
                      h.append(", max=");
-                     end = glz::to_chars(num_buf, conn_config_.max_requests_per_connection);
-                     h.append(num_buf, size_t(end - num_buf));
+                     h.append(std::to_string(conn_config_.max_requests_per_connection));
                   }
                   h.append("\r\n");
                }
