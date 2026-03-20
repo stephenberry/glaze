@@ -2040,73 +2040,73 @@ namespace glz
       inline void send_response_with_conn(std::shared_ptr<connection_state> conn, response& response)
       {
          std::cerr << "[glz] send_response: status=" << response.status_code << " body_size=" << response.response_body.size() << "\n";
-         // Reuse connection-persistent header buffer (preserves capacity across requests)
-         conn->header_buf.clear();
-         auto& h = conn->header_buf;
+
+         std::string response_str;
+         response_str.reserve(128 + response.response_body.size());
 
          // Status line (pre-cached for common codes)
          auto status_line = get_status_line(response.status_code);
          if (!status_line.empty()) {
-            h.append(status_line);
+            response_str.append(status_line);
          }
          else {
-            h.append("HTTP/1.1 ");
-            h.append(std::to_string(response.status_code));
-            h.append(" ");
-            h.append(get_status_message(response.status_code));
-            h.append("\r\n");
+            response_str.append("HTTP/1.1 ");
+            response_str.append(std::to_string(response.status_code));
+            response_str.append(" ");
+            response_str.append(get_status_message(response.status_code));
+            response_str.append("\r\n");
          }
 
          for (const auto& [name, value] : response.response_headers) {
-            h.append(name);
-            h.append(": ");
-            h.append(value);
-            h.append("\r\n");
+            response_str.append(name);
+            response_str.append(": ");
+            response_str.append(value);
+            response_str.append("\r\n");
          }
 
          if (!(response.user_headers_set & response::has_content_length)) {
-            h.append("Content-Length: ");
-            h.append(std::to_string(response.response_body.size()));
-            h.append("\r\n");
+            response_str.append("Content-Length: ");
+            response_str.append(std::to_string(response.response_body.size()));
+            response_str.append("\r\n");
          }
 
          if (!(response.user_headers_set & response::has_date)) {
-            h.append("Date: ");
-            h.append(get_current_date());
-            h.append("\r\n");
+            response_str.append("Date: ");
+            response_str.append(get_current_date());
+            response_str.append("\r\n");
          }
 
          if (!(response.user_headers_set & response::has_server)) {
-            h.append("Server: Glaze/1.0\r\n");
+            response_str.append("Server: Glaze/1.0\r\n");
          }
 
          // Add Connection header based on keep-alive decision
          if (!(response.user_headers_set & response::has_connection)) {
             if (conn->should_close) {
-               h.append("Connection: close\r\n");
+               response_str.append("Connection: close\r\n");
             }
             else {
-               h.append("Connection: keep-alive\r\n");
+               response_str.append("Connection: keep-alive\r\n");
                // Add Keep-Alive header with timeout info
                if (conn_config_.keep_alive_timeout > 0) {
-                  h.append("Keep-Alive: timeout=");
-                  h.append(std::to_string(conn_config_.keep_alive_timeout));
+                  response_str.append("Keep-Alive: timeout=");
+                  response_str.append(std::to_string(conn_config_.keep_alive_timeout));
                   if (conn_config_.max_requests_per_connection > 0) {
-                     h.append(", max=");
-                     h.append(std::to_string(conn_config_.max_requests_per_connection));
+                     response_str.append(", max=");
+                     response_str.append(std::to_string(conn_config_.max_requests_per_connection));
                   }
-                  h.append("\r\n");
+                  response_str.append("\r\n");
                }
             }
          }
 
-         h.append("\r\n");
-         h.append(response.response_body);
-         std::cerr << "[glz] headers built, size=" << h.size() << "\n";
+         response_str.append("\r\n");
+         response_str.append(response.response_body);
 
-         std::cerr << "[glz] calling async_write\n";
-         asio::async_write(conn->socket, asio::buffer(h),
-                           [this, conn](asio::error_code ec, std::size_t bytes_written) {
+         auto response_buffer = std::make_shared<std::string>(std::move(response_str));
+         std::cerr << "[glz] calling async_write, size=" << response_buffer->size() << "\n";
+         asio::async_write(conn->socket, asio::buffer(*response_buffer),
+                           [this, conn, response_buffer](asio::error_code ec, std::size_t bytes_written) {
                               std::cerr << "[glz] async_write complete: ec=" << ec.message() << " bytes=" << bytes_written << "\n";
                               if (ec) {
                                  // Write error - connection is dead
@@ -2120,7 +2120,6 @@ namespace glz
                               }
                               else {
                                  // Keep-alive: compact buffer (shift leftover pipelined data to front)
-                                 // Must happen AFTER clearing headers since string_views point into read_buf
                                  conn->request_.params.clear();
                                  conn->request_.query.clear();
                                  conn->request_.headers.clear();
