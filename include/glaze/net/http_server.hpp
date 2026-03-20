@@ -1559,21 +1559,19 @@ namespace glz
             }
          }
 
-         do_read_some(conn);
+         do_read_headers(conn);
       }
 
-      // Async read loop: read data from socket and attempt to parse
-      inline void do_read_some(std::shared_ptr<connection_state> conn)
+      // Read headers using async_read_until with dynamic_buffer wrapping our flat string
+      inline void do_read_headers(std::shared_ptr<connection_state> conn)
       {
-         std::cerr << "[glz] do_read_some: buf_len=" << conn->buf_len << " buf_size=" << conn->read_buf.size() << "\n";
-         // Grow buffer if full (or allocate on first read)
-         if (conn->buf_len == conn->read_buf.size()) {
-            conn->read_buf.resize((std::max)(conn->read_buf.size() * 2, size_t{4096}));
-         }
+         std::cerr << "[glz] do_read_headers: buf_len=" << conn->buf_len << " buf_size=" << conn->read_buf.size() << "\n";
 
-         conn->socket->async_read_some(
-            asio::buffer(&conn->read_buf[conn->buf_len], conn->read_buf.size() - conn->buf_len),
-            [this, conn](asio::error_code ec, std::size_t bytes_transferred) {
+         // Trim read_buf to buf_len so dynamic_buffer starts from the right position
+         conn->read_buf.resize(conn->buf_len);
+
+         asio::async_read_until(*conn->socket, asio::dynamic_buffer(conn->read_buf), "\r\n\r\n",
+            [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                cancel_idle_timer(conn);
 
                if (ec) {
@@ -1583,9 +1581,10 @@ namespace glz
                   return;
                }
 
-               conn->buf_len += bytes_transferred;
+               // dynamic_buffer grew read_buf; update buf_len to match
+               conn->buf_len = conn->read_buf.size();
 
-               std::cerr << "[glz] read complete: bytes=" << bytes_transferred << " buf_len=" << conn->buf_len << "\n";
+               std::cerr << "[glz] read complete: buf_len=" << conn->buf_len << "\n";
                auto result = try_parse_request(conn);
                std::cerr << "[glz] parse result: status=" << int(result.status) << " headers_end=" << result.headers_end << "\n";
                if (result.status == parse_status::complete) {
@@ -1593,10 +1592,13 @@ namespace glz
                   std::cerr << "[glz] calling finish_request\n";
                   finish_request(conn, result);
                }
-               else if (result.status == parse_status::incomplete) {
-                  do_read_some(conn); // Need more data
+               else if (result.status == parse_status::error) {
+                  // error response already sent by try_parse_request
                }
-               // error: response already sent by try_parse_request
+               else {
+                  // incomplete — shouldn't happen since async_read_until found \r\n\r\n
+                  send_error_response_with_close(conn, 400, "Bad Request");
+               }
             });
       }
 
