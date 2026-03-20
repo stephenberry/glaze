@@ -1409,22 +1409,22 @@ namespace glz
       // Uses socket_type which is either tcp::socket (HTTP) or ssl::stream<tcp::socket> (HTTPS)
       struct connection_state : public std::enable_shared_from_this<connection_state>
       {
-         std::shared_ptr<socket_type> socket;
+         socket_type socket;
          std::string read_buf; // Flat read buffer (capacity reused across keep-alive)
          size_t buf_len = 0; // Valid data in read_buf[0..buf_len)
          size_t buf_consumed = 0; // Bytes consumed for current request (shifted on next request)
          request request_;
          asio::ip::tcp::endpoint remote_endpoint;
-         std::shared_ptr<asio::steady_timer> idle_timer;
+         asio::steady_timer idle_timer;
          uint32_t request_count = 0;
          bool should_close = false;
          response response_; // Persists across keep-alive requests to reuse capacity
          std::string header_buf; // Persists across keep-alive requests to reuse capacity
 
-         connection_state(std::shared_ptr<socket_type> sock, asio::ip::tcp::endpoint endpoint)
+         connection_state(socket_type sock, asio::ip::tcp::endpoint endpoint)
             : socket(std::move(sock)),
               remote_endpoint(std::move(endpoint)),
-              idle_timer(std::make_shared<asio::steady_timer>(socket->lowest_layer().get_executor()))
+              idle_timer(socket.lowest_layer().get_executor())
          {}
       };
 
@@ -1464,27 +1464,26 @@ namespace glz
                else {
                   if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
-                     // For HTTPS: wrap socket in SSL stream and perform handshake
-                     auto ssl_socket = std::make_shared<socket_type>(std::move(socket), *ssl_context);
-                     ssl_socket->async_handshake(asio::ssl::stream_base::server, [this, ssl_socket, remote_endpoint](
+                     // For HTTPS: create connection eagerly, then perform SSL handshake
+                     auto conn = std::make_shared<connection_state>(
+                        socket_type(std::move(socket), *ssl_context), remote_endpoint);
+                     conn->socket.async_handshake(asio::ssl::stream_base::server, [this, conn](
                                                                                     std::error_code handshake_ec) {
                         if (!handshake_ec) {
-                           auto conn = std::make_shared<connection_state>(ssl_socket, remote_endpoint);
                            start_connection(conn);
                         }
                         else {
                            // SSL handshake failed - explicitly close the socket
                            error_handler(handshake_ec, std::source_location::current());
                            asio::error_code close_ec;
-                           ssl_socket->lowest_layer().close(close_ec);
+                           conn->socket.lowest_layer().close(close_ec);
                         }
                      });
 #endif
                   }
                   else {
                      // For HTTP: use TCP socket directly
-                     auto socket_ptr = std::make_shared<socket_type>(std::move(socket));
-                     auto conn = std::make_shared<connection_state>(std::move(socket_ptr), remote_endpoint);
+                     auto conn = std::make_shared<connection_state>(std::move(socket), remote_endpoint);
                      start_connection(conn);
                   }
                }
@@ -1514,19 +1513,19 @@ namespace glz
             return; // No timeout configured
          }
 
-         conn->idle_timer->expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
-         conn->idle_timer->async_wait([conn](asio::error_code ec) {
+         conn->idle_timer.expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
+         conn->idle_timer.async_wait([conn](asio::error_code ec) {
             if (!ec) {
                // Timer expired - send FIN; socket closed via RAII when conn is destroyed
                asio::error_code close_ec;
-               conn->socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
+               conn->socket.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
             }
             // If ec is operation_aborted, the timer was cancelled (new request arrived)
          });
       }
 
       // Cancel the idle timer (called when a new request starts)
-      inline void cancel_idle_timer(std::shared_ptr<connection_state> conn) { conn->idle_timer->cancel(); }
+      inline void cancel_idle_timer(std::shared_ptr<connection_state> conn) { conn->idle_timer.cancel(); }
 
       // Parse result from try_parse_request
       enum struct parse_status { complete, incomplete, error };
@@ -1565,12 +1564,12 @@ namespace glz
       // Read headers using async_read_until with dynamic_buffer wrapping our flat string
       inline void do_read_headers(std::shared_ptr<connection_state> conn)
       {
-         std::cerr << "[glz] do_read_headers: buf_len=" << conn->buf_len << " buf_size=" << conn->read_buf.size() << "\n";
+
 
          // Trim read_buf to buf_len so dynamic_buffer starts from the right position
          conn->read_buf.resize(conn->buf_len);
 
-         asio::async_read_until(*conn->socket, asio::dynamic_buffer(conn->read_buf), "\r\n\r\n",
+         asio::async_read_until(conn->socket, asio::dynamic_buffer(conn->read_buf), "\r\n\r\n",
             [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                cancel_idle_timer(conn);
 
@@ -1584,12 +1583,12 @@ namespace glz
                // dynamic_buffer grew read_buf; update buf_len to match
                conn->buf_len = conn->read_buf.size();
 
-               std::cerr << "[glz] read complete: buf_len=" << conn->buf_len << "\n";
+
                auto result = try_parse_request(conn);
-               std::cerr << "[glz] parse result: status=" << int(result.status) << " headers_end=" << result.headers_end << "\n";
+
                if (result.status == parse_status::complete) {
                   conn->request_count++;
-                  std::cerr << "[glz] calling finish_request\n";
+
                   finish_request(conn, result);
                }
                else if (result.status == parse_status::error) {
@@ -1716,7 +1715,7 @@ namespace glz
       // Buffer compaction happens in the keep-alive reset (send_response_with_conn completion).
       inline void finish_request(std::shared_ptr<connection_state> conn, const parse_result& result)
       {
-         std::cerr << "[glz] finish_request: headers_end=" << result.headers_end << " buf_len=" << conn->buf_len << "\n";
+
          auto& headers = conn->request_.headers;
 
          bool should_keep_alive = determine_keep_alive(headers, result.is_http_11, conn);
@@ -1741,7 +1740,6 @@ namespace glz
          const size_t body_offset = result.headers_end;
          const size_t available_body = conn->buf_len - body_offset;
 
-         std::cerr << "[glz] content_length=" << content_length << " body_offset=" << body_offset << " available_body=" << available_body << "\n";
 
          if (content_length > 0) {
             conn->request_.body.resize(content_length);
@@ -1754,7 +1752,7 @@ namespace glz
 
             const size_t missing_bytes = content_length - initial_body_size;
             if (missing_bytes > 0) {
-               asio::async_read(*conn->socket, asio::buffer(&conn->request_.body[initial_body_size], missing_bytes),
+               asio::async_read(conn->socket, asio::buffer(&conn->request_.body[initial_body_size], missing_bytes),
                                 asio::transfer_exactly(missing_bytes), [this, conn](std::error_code ec, size_t) {
                                    if (ec) {
                                       error_handler(ec, std::source_location::current());
@@ -2042,75 +2040,89 @@ namespace glz
       // Send response with keep-alive support
       inline void send_response_with_conn(std::shared_ptr<connection_state> conn, response& response)
       {
-         std::cerr << "[glz] send_response: status=" << response.status_code << " body_size=" << response.response_body.size() << "\n";
-
-         std::string response_str;
-         response_str.reserve(128 + response.response_body.size());
+         // Reuse connection-persistent header buffer (preserves capacity across requests)
+         conn->header_buf.clear();
+         auto& h = conn->header_buf;
+         char num_buf[20];
 
          // Status line (pre-cached for common codes)
          auto status_line = get_status_line(response.status_code);
          if (!status_line.empty()) {
-            response_str.append(status_line);
+            h.append(status_line);
          }
          else {
-            response_str.append("HTTP/1.1 ");
-            response_str.append(std::to_string(response.status_code));
-            response_str.append(" ");
-            response_str.append(get_status_message(response.status_code));
-            response_str.append("\r\n");
+            h.append("HTTP/1.1 ");
+            auto* end = glz::to_chars(num_buf, static_cast<int32_t>(response.status_code));
+            h.append(num_buf, size_t(end - num_buf));
+            h.append(" ");
+            h.append(get_status_message(response.status_code));
+            h.append("\r\n");
          }
 
          for (const auto& [name, value] : response.response_headers) {
-            response_str.append(name);
-            response_str.append(": ");
-            response_str.append(value);
-            response_str.append("\r\n");
+            h.append(name);
+            h.append(": ");
+            h.append(value);
+            h.append("\r\n");
          }
 
          if (!(response.user_headers_set & response::has_content_length)) {
-            response_str.append("Content-Length: ");
-            response_str.append(std::to_string(response.response_body.size()));
-            response_str.append("\r\n");
+            h.append("Content-Length: ");
+            auto* end = glz::to_chars(num_buf, static_cast<uint64_t>(response.response_body.size()));
+            h.append(num_buf, size_t(end - num_buf));
+            h.append("\r\n");
          }
 
          if (!(response.user_headers_set & response::has_date)) {
-            response_str.append("Date: ");
-            response_str.append(get_current_date());
-            response_str.append("\r\n");
+            h.append("Date: ");
+            h.append(get_current_date());
+            h.append("\r\n");
          }
 
          if (!(response.user_headers_set & response::has_server)) {
-            response_str.append("Server: Glaze/1.0\r\n");
+            h.append("Server: Glaze/1.0\r\n");
          }
 
          // Add Connection header based on keep-alive decision
          if (!(response.user_headers_set & response::has_connection)) {
             if (conn->should_close) {
-               response_str.append("Connection: close\r\n");
+               h.append("Connection: close\r\n");
             }
             else {
-               response_str.append("Connection: keep-alive\r\n");
+               h.append("Connection: keep-alive\r\n");
                // Add Keep-Alive header with timeout info
                if (conn_config_.keep_alive_timeout > 0) {
-                  response_str.append("Keep-Alive: timeout=");
-                  response_str.append(std::to_string(conn_config_.keep_alive_timeout));
+                  h.append("Keep-Alive: timeout=");
+                  auto* end = glz::to_chars(num_buf, conn_config_.keep_alive_timeout);
+                  h.append(num_buf, size_t(end - num_buf));
                   if (conn_config_.max_requests_per_connection > 0) {
-                     response_str.append(", max=");
-                     response_str.append(std::to_string(conn_config_.max_requests_per_connection));
+                     h.append(", max=");
+                     end = glz::to_chars(num_buf, conn_config_.max_requests_per_connection);
+                     h.append(num_buf, size_t(end - num_buf));
                   }
-                  response_str.append("\r\n");
+                  h.append("\r\n");
                }
             }
          }
 
-         response_str.append("\r\n");
-         response_str.append(response.response_body);
+         h.append("\r\n");
 
-         auto response_buffer = std::make_shared<std::string>(std::move(response_str));
-         std::cerr << "[glz] calling async_write, size=" << response_buffer->size() << "\n";
-         asio::async_write(*conn->socket, asio::buffer(*response_buffer),
-                           [this, conn, response_buffer](asio::error_code ec, std::size_t bytes_written) {
-                              std::cerr << "[glz] async_write complete: ec=" << ec.message() << " bytes=" << bytes_written << "\n";
+         // Scatter-gather write: send headers and body as separate buffers.
+         // Zero-copy for the body — write directly from conn->response_.response_body.
+         // conn (shared_ptr) keeps header_buf and response_body alive during the async write.
+         std::array<asio::const_buffer, 2> bufs = {
+            asio::buffer(h),
+            asio::buffer(response.response_body)
+         };
+
+         // Custom completion condition: removes the default 64KB-per-chunk cap
+         // in asio::async_write (transfer_all uses 65536). Without this, a 960KB
+         // response requires ~15 event loop iterations instead of ~8.
+         auto unlimited = [](const asio::error_code& ec, std::size_t) -> std::size_t {
+            return ec ? 0 : (std::numeric_limits<std::size_t>::max)();
+         };
+         asio::async_write(conn->socket, bufs, unlimited,
+                           [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                               if (ec) {
                                  // Write error - connection is dead
                                  return;
@@ -2119,7 +2131,7 @@ namespace glz
                               if (conn->should_close) {
                                  // Send FIN; socket closed via RAII when conn is destroyed
                                  asio::error_code close_ec;
-                                 conn->socket->lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
+                                 conn->socket.lowest_layer().shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
                               }
                               else {
                                  // Keep-alive: compact buffer (shift leftover pipelined data to front)
@@ -2185,7 +2197,8 @@ namespace glz
 
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
-         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(conn->socket, ws_it->second);
+         auto socket_ptr = std::make_shared<socket_type>(std::move(conn->socket));
+         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(socket_ptr, ws_it->second);
          ws_conn->start(req);
       }
 
@@ -2193,7 +2206,8 @@ namespace glz
                                                      const streaming_handler& handler)
       {
          // Create streaming connection (works for both HTTP and HTTPS via interface)
-         auto stream_conn = std::make_shared<streaming_connection<socket_type>>(conn->socket);
+         auto socket_ptr = std::make_shared<socket_type>(std::move(conn->socket));
+         auto stream_conn = std::make_shared<streaming_connection<socket_type>>(socket_ptr);
          streaming_response stream_res(stream_conn);
 
          try {
