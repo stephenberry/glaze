@@ -2110,20 +2110,11 @@ namespace glz
          }
 
          h.append("\r\n");
+         h.append(response.response_body);
          std::cerr << "[glz] headers built, size=" << h.size() << "\n";
 
-         // Scatter-gather write: send headers and body as separate buffers.
-         // Zero-copy for the body — write directly from conn->response_.response_body.
-         // conn (shared_ptr) keeps header_buf and response_body alive during the async write.
-         // The socket's strand executor enables continuation optimization for the internal
-         // write loop, avoiding per-chunk event loop queue overhead for large payloads.
-         std::array<asio::const_buffer, 2> bufs = {
-            asio::buffer(h),
-            asio::buffer(response.response_body)
-         };
-
          std::cerr << "[glz] calling async_write\n";
-         asio::async_write(conn->socket, bufs,
+         asio::async_write(conn->socket, asio::buffer(h),
                            [this, conn](asio::error_code ec, std::size_t bytes_written) {
                               std::cerr << "[glz] async_write complete: ec=" << ec.message() << " bytes=" << bytes_written << "\n";
                               if (ec) {
