@@ -2165,10 +2165,35 @@ namespace glz
                      return;
                   }
                   else {
-                     if constexpr (null_t<val_t> && Opts.skip_null_members) {
-                        if constexpr (always_null_t<val_t>)
-                           return;
-                        else {
+                     if constexpr (Opts.skip_null_members) {
+                        if constexpr (null_t<val_t>) {
+                           if constexpr (always_null_t<val_t>)
+                              return;
+                           else {
+                              const auto is_null = [&]() {
+                                 decltype(auto) element = [&]() -> decltype(auto) {
+                                    if constexpr (reflectable<T>) {
+                                       return get<I>(t);
+                                    }
+                                    else {
+                                       return get<I>(reflect<T>::values);
+                                    }
+                                 };
+
+                                 if constexpr (nullable_wrapper<val_t>) {
+                                    return !bool(element()(value).val);
+                                 }
+                                 else if constexpr (nullable_value_t<val_t>) {
+                                    return !get_member(value, element()).has_value();
+                                 }
+                                 else {
+                                    return !bool(get_member(value, element()));
+                                 }
+                              }();
+                              if (is_null) return;
+                           }
+                        }
+                        else if constexpr (is_specialization_v<val_t, custom_t>) {
                            const auto is_null = [&]() {
                               decltype(auto) element = [&]() -> decltype(auto) {
                                  if constexpr (reflectable<T>) {
@@ -2179,14 +2204,64 @@ namespace glz
                                  }
                               };
 
-                              if constexpr (nullable_wrapper<val_t>) {
-                                 return !bool(element()(value).val);
-                              }
-                              else if constexpr (nullable_value_t<val_t>) {
-                                 return !get_member(value, element()).has_value();
+                              auto&& custom = get_member(value, element());
+                              using CustomT = std::decay_t<decltype(custom)>;
+                              using To = typename CustomT::to_t;
+
+                              auto is_ret_null = [&](auto&& ret) {
+                                 using Ret = std::remove_cvref_t<decltype(ret)>;
+                                 if constexpr (null_t<Ret>) {
+                                    if constexpr (always_null_t<Ret>) {
+                                       return true;
+                                    }
+                                    else if constexpr (nullable_wrapper<Ret>) {
+                                       return !bool(ret.val);
+                                    }
+                                    else if constexpr (nullable_value_t<Ret>) {
+                                       return !ret.has_value();
+                                    }
+                                    else {
+                                       return !bool(ret);
+                                    }
+                                 }
+                                 else {
+                                    return false;
+                                 }
+                              };
+
+                              if constexpr (std::is_member_pointer_v<To>) {
+                                 if constexpr (std::is_member_function_pointer_v<To>) {
+                                    return is_ret_null((custom.val.*(custom.to))());
+                                 }
+                                 else if constexpr (std::is_member_object_pointer_v<To>) {
+                                    auto& to = custom.val.*(custom.to);
+                                    using Func = std::decay_t<decltype(to)>;
+                                    if constexpr (is_specialization_v<Func, std::function>) {
+                                       using Ret = typename function_traits<Func>::result_type;
+                                       static_assert(!std::is_void_v<Ret>,
+                                                     "conversion to JSON must return a value");
+                                       return is_ret_null(to());
+                                    }
+                                    else {
+                                       return is_ret_null(to);
+                                    }
+                                 }
+                                 else {
+                                    static_assert(false_v<To>, "invalid type for custom");
+                                 }
                               }
                               else {
-                                 return !bool(get_member(value, element()));
+                                 if constexpr (std::invocable<To, decltype(custom.val)>) {
+                                    return is_ret_null(std::invoke(custom.to, custom.val));
+                                 }
+                                 else if constexpr (std::invocable<To, decltype(custom.val), context&>) {
+                                    return is_ret_null(std::invoke(custom.to, custom.val, ctx));
+                                 }
+                                 else {
+                                    static_assert(false_v<To>,
+                                                  "expected invocable function, perhaps you need const qualified input "
+                                                  "on your lambda");
+                                 }
                               }
                            }();
                            if (is_null) return;

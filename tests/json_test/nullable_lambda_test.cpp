@@ -109,4 +109,62 @@ suite nullable_lambda_optional_tests = [] {
    };
 };
 
+struct my_struct_custom_optional
+{
+   int value = 42;
+};
+
+template <>
+struct glz::meta<my_struct_custom_optional>
+{
+   using T = my_struct_custom_optional;
+
+   static constexpr auto set_status = [](T& s, std::optional<std::string> value) {
+      if (value.has_value())
+      {
+         s.value = 50;
+      }
+      else
+      {
+         s.value = 0;
+      }
+   };
+
+   static constexpr auto get_status = [](auto& s) -> std::optional<std::string> {
+      if (s.value > 50)
+      {
+         return "high";
+      }
+      else
+      {
+         return std::nullopt;
+      }
+   };
+
+   static constexpr auto value = glz::object("value", &T::value, "status",
+                                              glz::custom<set_status, get_status>);
+};
+
+suite nullable_lambda_custom_optional_tests = [] {
+   "glz::custom getter returns nullopt - should skip field"_test = [] {
+      my_struct_custom_optional obj{};
+      obj.value = 42;
+
+      std::string buffer;
+      expect(not glz::write_json(obj, buffer));
+
+      expect(buffer == R"({"value":42})") << "Got: " << buffer;
+   };
+
+   "glz::custom getter returns optional value - should write field"_test = [] {
+      my_struct_custom_optional obj{};
+      obj.value = 100;
+
+      std::string buffer;
+      expect(not glz::write_json(obj, buffer));
+
+      expect(buffer == R"({"value":100,"status":"high"})") << "Got: " << buffer;
+   };
+};
+
 int main() {}

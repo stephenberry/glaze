@@ -380,6 +380,9 @@ namespace glz
    template <class T, size_t I>
    using field_t = std::remove_cvref_t<refl_t<T, I>>;
 
+   template <class V>
+   consteval bool custom_to_is_nullable_or_false();
+
    template <auto Opts, class T>
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
@@ -393,7 +396,8 @@ namespace glz
             return [&]<size_t... I>(std::index_sequence<I...>) {
                return ((always_skipped<field_t<T, I>> ||
                         (!write_function_pointers && is_member_function_pointer<field_t<T, I>>) ||
-                        null_t<field_t<T, I>>) ||
+                        null_t<field_t<T, I>> ||
+                        is_specialization_v<field_t<T, I>, custom_t>) ||
                        ...);
             }(std::make_index_sequence<N>{});
          }
@@ -472,6 +476,74 @@ namespace glz
       }
 
       return false;
+   }
+
+   template <class V>
+   consteval bool custom_type_to_is_nullable()
+   {
+      using To = typename V::to_t;
+
+      if constexpr (std::is_member_pointer_v<To>) {
+         if constexpr (std::is_member_function_pointer_v<To>) {
+            using Ret = typename return_type<To>::type;
+            if constexpr (std::is_void_v<Ret>) {
+               return false;
+            }
+            else {
+               return bool(null_t<Ret>);
+            }
+         }
+         else if constexpr (std::is_member_object_pointer_v<To>) {
+            using Value = std::decay_t<decltype(std::declval<V>().val.*(std::declval<V>().to))>;
+            if constexpr (is_specialization_v<Value, std::function>) {
+               using Ret = typename function_traits<Value>::result_type;
+               if constexpr (std::is_void_v<Ret>) {
+                  return false;
+               }
+               else {
+                  return bool(null_t<Ret>);
+               }
+            }
+            else {
+               return bool(null_t<Value>);
+            }
+         }
+      }
+      else {
+         using Obj = decltype(std::declval<V>().val);
+         if constexpr (std::invocable<To, Obj>) {
+            using Ret = std::remove_cvref_t<decltype(std::invoke(std::declval<To>(), std::declval<Obj>()))>;
+            if constexpr (std::is_void_v<Ret>) {
+               return false;
+            }
+            else {
+               return bool(null_t<Ret>);
+            }
+         }
+         else if constexpr (std::invocable<To, Obj, context&>) {
+            using Ret = std::remove_cvref_t<
+               decltype(std::invoke(std::declval<To>(), std::declval<Obj>(), std::declval<context&>()))>;
+            if constexpr (std::is_void_v<Ret>) {
+               return false;
+            }
+            else {
+               return bool(null_t<Ret>);
+            }
+         }
+      }
+
+      return false;
+   }
+
+   template <class V>
+   consteval bool custom_to_is_nullable_or_false()
+   {
+      if constexpr (is_specialization_v<V, custom_t>) {
+         return custom_type_to_is_nullable<V>();
+      }
+      else {
+         return false;
+      }
    }
 
    template <class T, auto Opts>
