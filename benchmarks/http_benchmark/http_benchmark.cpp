@@ -6,14 +6,13 @@
 // Uses raw TCP sockets for load generation to avoid client-side bias.
 
 #include <atomic>
+#include <boost/asio.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
 #include <chrono>
 #include <string>
 #include <thread>
 #include <vector>
-
-#include <boost/asio.hpp>
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
 
 #include "bencher/bar_chart.hpp"
 #include "bencher/bencher.hpp"
@@ -63,9 +62,8 @@ static void init_payloads()
       std::vector<User> v;
       v.reserve(count);
       for (int64_t i = 0; i < count; ++i) {
-         v.push_back(
-            {i, "User " + std::to_string(i), "user" + std::to_string(i) + "@test.com", 20 + (i % 50), (i % 2 == 0),
-             i * 10});
+         v.push_back({i, "User " + std::to_string(i), "user" + std::to_string(i) + "@test.com", 20 + (i % 50),
+                      (i % 2 == 0), i * 10});
       }
       return v;
    };
@@ -197,16 +195,11 @@ static void validate_servers(uint16_t glaze_port, uint16_t beast_port)
    };
 
    std::vector<endpoint> endpoints = {
-      {"GET /plaintext",
-       "GET /plaintext HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
-      {"GET /json",
-       "GET /json HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
-      {"GET /user",
-       "GET /user HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
-      {"GET /users",
-       "GET /users HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
-      {"GET /users-10k",
-       "GET /users-10k HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
+      {"GET /plaintext", "GET /plaintext HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
+      {"GET /json", "GET /json HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
+      {"GET /user", "GET /user HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
+      {"GET /users", "GET /users HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
+      {"GET /users-10k", "GET /users-10k HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"},
       {"POST /echo",
        "POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n"
        "Content-Length: 34\r\nConnection: close\r\n\r\n{\"message\":\"benchmark\",\"value\":42}"},
@@ -345,12 +338,13 @@ class beast_listener : public std::enable_shared_from_this<beast_listener>
   private:
    void do_accept()
    {
-      acceptor_.async_accept(net::make_strand(ioc_), [self = shared_from_this()](beast::error_code ec, tcp::socket socket) {
-         if (!ec) {
-            std::make_shared<beast_session>(std::move(socket))->run();
-         }
-         self->do_accept();
-      });
+      acceptor_.async_accept(net::make_strand(ioc_),
+                             [self = shared_from_this()](beast::error_code ec, tcp::socket socket) {
+                                if (!ec) {
+                                   std::make_shared<beast_session>(std::move(socket))->run();
+                                }
+                                self->do_accept();
+                             });
    }
 };
 
@@ -691,8 +685,8 @@ int main()
       // Concurrent plaintext
       {
          bencher::stage stage;
-         stage.name = "Concurrent Plaintext (" + std::to_string(client_threads) +
-                      " clients x 1000 req, " + std::to_string(hw_threads) + " server threads)";
+         stage.name = "Concurrent Plaintext (" + std::to_string(client_threads) + " clients x 1000 req, " +
+                      std::to_string(hw_threads) + " server threads)";
          stage.throughput_units_label = "req/s";
          stage.throughput_units_divisor = 1;
 
@@ -707,8 +701,8 @@ int main()
       // Concurrent JSON 100 users
       {
          bencher::stage stage;
-         stage.name = "Concurrent JSON 100 Users (" + std::to_string(client_threads) +
-                      " clients x 1000 req, " + std::to_string(hw_threads) + " server threads)";
+         stage.name = "Concurrent JSON 100 Users (" + std::to_string(client_threads) + " clients x 1000 req, " +
+                      std::to_string(hw_threads) + " server threads)";
          stage.throughput_units_label = "req/s";
          stage.throughput_units_divisor = 1;
 

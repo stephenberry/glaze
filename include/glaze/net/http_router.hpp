@@ -64,10 +64,14 @@ namespace glz
          for (auto& c : key) c = ascii_tolower(c);
 
          // Track which default headers the user has set
-         if (key == "content-length") user_headers_set |= has_content_length;
-         else if (key == "date") user_headers_set |= has_date;
-         else if (key == "server") user_headers_set |= has_server;
-         else if (key == "connection") user_headers_set |= has_connection;
+         if (key == "content-length")
+            user_headers_set |= has_content_length;
+         else if (key == "date")
+            user_headers_set |= has_date;
+         else if (key == "server")
+            user_headers_set |= has_server;
+         else if (key == "connection")
+            user_headers_set |= has_connection;
 
          response_headers[std::move(key)] = std::string(value);
          return *this;

@@ -1465,20 +1465,20 @@ namespace glz
                   if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
                      // For HTTPS: create connection eagerly, then perform SSL handshake
-                     auto conn = std::make_shared<connection_state>(
-                        socket_type(std::move(socket), *ssl_context), remote_endpoint);
-                     conn->socket.async_handshake(asio::ssl::stream_base::server, [this, conn](
-                                                                                    std::error_code handshake_ec) {
-                        if (!handshake_ec) {
-                           start_connection(conn);
-                        }
-                        else {
-                           // SSL handshake failed - explicitly close the socket
-                           error_handler(handshake_ec, std::source_location::current());
-                           asio::error_code close_ec;
-                           conn->socket.lowest_layer().close(close_ec);
-                        }
-                     });
+                     auto conn = std::make_shared<connection_state>(socket_type(std::move(socket), *ssl_context),
+                                                                    remote_endpoint);
+                     conn->socket.async_handshake(asio::ssl::stream_base::server,
+                                                  [this, conn](std::error_code handshake_ec) {
+                                                     if (!handshake_ec) {
+                                                        start_connection(conn);
+                                                     }
+                                                     else {
+                                                        // SSL handshake failed - explicitly close the socket
+                                                        error_handler(handshake_ec, std::source_location::current());
+                                                        asio::error_code close_ec;
+                                                        conn->socket.lowest_layer().close(close_ec);
+                                                     }
+                                                  });
 #endif
                   }
                   else {
@@ -1501,10 +1501,7 @@ namespace glz
       }
 
       // Start handling a new connection
-      inline void start_connection(std::shared_ptr<connection_state> conn)
-      {
-         read_request(conn);
-      }
+      inline void start_connection(std::shared_ptr<connection_state> conn) { read_request(conn); }
 
       // Start or reset the idle timer for keep-alive connections
       inline void start_idle_timer(std::shared_ptr<connection_state> conn)
@@ -1529,7 +1526,8 @@ namespace glz
 
       // Parse result from try_parse_request
       enum struct parse_status { complete, incomplete, error };
-      struct parse_result {
+      struct parse_result
+      {
          parse_status status = parse_status::incomplete;
          size_t headers_end = 0; // Byte offset past the final \r\n\r\n
          bool is_http_11 = false;
@@ -1564,41 +1562,38 @@ namespace glz
       // Read headers using async_read_until with dynamic_buffer wrapping our flat string
       inline void do_read_headers(std::shared_ptr<connection_state> conn)
       {
-
-
          // Trim read_buf to buf_len so dynamic_buffer starts from the right position
          conn->read_buf.resize(conn->buf_len);
 
          asio::async_read_until(conn->socket, asio::dynamic_buffer(conn->read_buf), "\r\n\r\n",
-            [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
-               cancel_idle_timer(conn);
+                                [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
+                                   cancel_idle_timer(conn);
 
-               if (ec) {
-                  if (ec != asio::error::eof && ec != asio::error::operation_aborted) {
-                     error_handler(ec, std::source_location::current());
-                  }
-                  return;
-               }
+                                   if (ec) {
+                                      if (ec != asio::error::eof && ec != asio::error::operation_aborted) {
+                                         error_handler(ec, std::source_location::current());
+                                      }
+                                      return;
+                                   }
 
-               // dynamic_buffer grew read_buf; update buf_len to match
-               conn->buf_len = conn->read_buf.size();
+                                   // dynamic_buffer grew read_buf; update buf_len to match
+                                   conn->buf_len = conn->read_buf.size();
 
+                                   auto result = try_parse_request(conn);
 
-               auto result = try_parse_request(conn);
+                                   if (result.status == parse_status::complete) {
+                                      conn->request_count++;
 
-               if (result.status == parse_status::complete) {
-                  conn->request_count++;
-
-                  finish_request(conn, result);
-               }
-               else if (result.status == parse_status::error) {
-                  // error response already sent by try_parse_request
-               }
-               else {
-                  // incomplete — shouldn't happen since async_read_until found \r\n\r\n
-                  send_error_response_with_close(conn, 400, "Bad Request");
-               }
-            });
+                                      finish_request(conn, result);
+                                   }
+                                   else if (result.status == parse_status::error) {
+                                      // error response already sent by try_parse_request
+                                   }
+                                   else {
+                                      // incomplete — shouldn't happen since async_read_until found \r\n\r\n
+                                      send_error_response_with_close(conn, 400, "Bad Request");
+                                   }
+                                });
       }
 
       // Single-pass HTTP request parser: scans data line by line, parsing semantics as it goes.
@@ -1715,7 +1710,6 @@ namespace glz
       // Buffer compaction happens in the keep-alive reset (send_response_with_conn completion).
       inline void finish_request(std::shared_ptr<connection_state> conn, const parse_result& result)
       {
-
          auto& headers = conn->request_.headers;
 
          bool should_keep_alive = determine_keep_alive(headers, result.is_http_11, conn);
@@ -1739,7 +1733,6 @@ namespace glz
          // Body bytes in the buffer start at headers_end
          const size_t body_offset = result.headers_end;
          const size_t available_body = conn->buf_len - body_offset;
-
 
          if (content_length > 0) {
             conn->request_.body.resize(content_length);
@@ -1779,15 +1772,18 @@ namespace glz
          for (size_t i = 0; i <= haystack.size() - needle.size(); ++i) {
             bool match = true;
             for (size_t j = 0; j < needle.size(); ++j) {
-               if (ascii_tolower(haystack[i + j]) != ascii_tolower(needle[j])) { match = false; break; }
+               if (ascii_tolower(haystack[i + j]) != ascii_tolower(needle[j])) {
+                  match = false;
+                  break;
+               }
             }
             if (match) return true;
          }
          return false;
       }
 
-      inline bool determine_keep_alive(const std::unordered_map<std::string, std::string>& headers,
-                                       bool is_http_11, std::shared_ptr<connection_state> conn)
+      inline bool determine_keep_alive(const std::unordered_map<std::string, std::string>& headers, bool is_http_11,
+                                       std::shared_ptr<connection_state> conn)
       {
          // If server has keep-alive disabled, always close
          if (!conn_config_.keep_alive) {
@@ -2021,19 +2017,32 @@ namespace glz
       inline static std::string_view get_status_line(int code)
       {
          switch (code) {
-         case 200: return "HTTP/1.1 200 OK\r\n";
-         case 201: return "HTTP/1.1 201 Created\r\n";
-         case 204: return "HTTP/1.1 204 No Content\r\n";
-         case 301: return "HTTP/1.1 301 Moved Permanently\r\n";
-         case 400: return "HTTP/1.1 400 Bad Request\r\n";
-         case 401: return "HTTP/1.1 401 Unauthorized\r\n";
-         case 403: return "HTTP/1.1 403 Forbidden\r\n";
-         case 404: return "HTTP/1.1 404 Not Found\r\n";
-         case 405: return "HTTP/1.1 405 Method Not Allowed\r\n";
-         case 500: return "HTTP/1.1 500 Internal Server Error\r\n";
-         case 501: return "HTTP/1.1 501 Not Implemented\r\n";
-         case 503: return "HTTP/1.1 503 Service Unavailable\r\n";
-         default: return {};
+         case 200:
+            return "HTTP/1.1 200 OK\r\n";
+         case 201:
+            return "HTTP/1.1 201 Created\r\n";
+         case 204:
+            return "HTTP/1.1 204 No Content\r\n";
+         case 301:
+            return "HTTP/1.1 301 Moved Permanently\r\n";
+         case 400:
+            return "HTTP/1.1 400 Bad Request\r\n";
+         case 401:
+            return "HTTP/1.1 401 Unauthorized\r\n";
+         case 403:
+            return "HTTP/1.1 403 Forbidden\r\n";
+         case 404:
+            return "HTTP/1.1 404 Not Found\r\n";
+         case 405:
+            return "HTTP/1.1 405 Method Not Allowed\r\n";
+         case 500:
+            return "HTTP/1.1 500 Internal Server Error\r\n";
+         case 501:
+            return "HTTP/1.1 501 Not Implemented\r\n";
+         case 503:
+            return "HTTP/1.1 503 Service Unavailable\r\n";
+         default:
+            return {};
          }
       }
 
@@ -2110,10 +2119,7 @@ namespace glz
          // Scatter-gather write: send headers and body as separate buffers.
          // Zero-copy for the body — write directly from conn->response_.response_body.
          // conn (shared_ptr) keeps header_buf and response_body alive during the async write.
-         std::array<asio::const_buffer, 2> bufs = {
-            asio::buffer(h),
-            asio::buffer(response.response_body)
-         };
+         std::array<asio::const_buffer, 2> bufs = {asio::buffer(h), asio::buffer(response.response_body)};
 
          // Custom completion condition: removes the default 64KB-per-chunk cap
          // in asio::async_write (transfer_all uses 65536). Without this, a 960KB
@@ -2143,8 +2149,7 @@ namespace glz
 
                                  size_t leftover = conn->buf_len - conn->buf_consumed;
                                  if (leftover > 0) {
-                                    std::memmove(conn->read_buf.data(),
-                                                 &conn->read_buf[conn->buf_consumed], leftover);
+                                    std::memmove(conn->read_buf.data(), &conn->read_buf[conn->buf_consumed], leftover);
                                  }
                                  conn->buf_len = leftover;
                                  conn->buf_consumed = 0;
