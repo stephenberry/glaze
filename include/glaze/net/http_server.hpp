@@ -2058,6 +2058,7 @@ namespace glz
             h.append(get_status_message(response.status_code));
             h.append("\r\n");
          }
+         std::cerr << "[glz] status_line done\n";
 
          for (const auto& [name, value] : response.response_headers) {
             h.append(name);
@@ -2065,6 +2066,7 @@ namespace glz
             h.append(value);
             h.append("\r\n");
          }
+         std::cerr << "[glz] custom_headers done\n";
 
          if (!(response.user_headers_set & response::has_content_length)) {
             h.append("Content-Length: ");
@@ -2072,12 +2074,14 @@ namespace glz
             h.append(num_buf, size_t(end - num_buf));
             h.append("\r\n");
          }
+         std::cerr << "[glz] content_length done\n";
 
          if (!(response.user_headers_set & response::has_date)) {
             h.append("Date: ");
             h.append(get_current_date());
             h.append("\r\n");
          }
+         std::cerr << "[glz] date done\n";
 
          if (!(response.user_headers_set & response::has_server)) {
             h.append("Server: Glaze/1.0\r\n");
@@ -2106,6 +2110,7 @@ namespace glz
          }
 
          h.append("\r\n");
+         std::cerr << "[glz] headers built, size=" << h.size() << "\n";
 
          // Scatter-gather write: send headers and body as separate buffers.
          // Zero-copy for the body — write directly from conn->response_.response_body.
@@ -2123,8 +2128,10 @@ namespace glz
          auto unlimited = [](const asio::error_code& ec, std::size_t) -> std::size_t {
             return ec ? 0 : (std::numeric_limits<std::size_t>::max)();
          };
+         std::cerr << "[glz] calling async_write\n";
          asio::async_write(conn->socket, bufs, unlimited,
-                           [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
+                           [this, conn](asio::error_code ec, std::size_t bytes_written) {
+                              std::cerr << "[glz] async_write complete: ec=" << ec.message() << " bytes=" << bytes_written << "\n";
                               if (ec) {
                                  // Write error - connection is dead
                                  return;
