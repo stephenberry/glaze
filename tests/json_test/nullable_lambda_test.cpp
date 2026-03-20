@@ -109,4 +109,69 @@ suite nullable_lambda_optional_tests = [] {
    };
 };
 
+// Test with glz::custom and optional return type (GitHub issue #2386)
+struct my_struct_custom_optional
+{
+   int value = 42;
+};
+
+template <>
+struct glz::meta<my_struct_custom_optional>
+{
+   using T = my_struct_custom_optional;
+   static constexpr auto set_status = [](T& s, std::optional<std::string> val) {
+      if (val.has_value()) {
+         s.value = 50;
+      }
+      else {
+         s.value = 0;
+      }
+   };
+   static constexpr auto get_status = [](auto& s) -> std::optional<std::string> {
+      if (s.value > 50) {
+         return "high";
+      }
+      else {
+         return std::nullopt;
+      }
+   };
+   static constexpr auto value = glz::object("value", &T::value, "status", glz::custom<set_status, get_status>);
+};
+
+suite custom_nullable_optional_tests = [] {
+   "custom getter returns nullopt - should skip field"_test = [] {
+      my_struct_custom_optional obj{};
+      obj.value = 42; // getter returns nullopt
+
+      std::string buffer;
+      expect(not glz::write_json(obj, buffer));
+
+      // The "status" field should be omitted
+      expect(buffer == R"({"value":42})") << "Got: " << buffer;
+   };
+
+   "custom getter returns optional value - should write field"_test = [] {
+      my_struct_custom_optional obj{};
+      obj.value = 100; // getter returns "high"
+
+      std::string buffer;
+      expect(not glz::write_json(obj, buffer));
+
+      // The "status" field should be present
+      expect(buffer == R"({"value":100,"status":"high"})") << "Got: " << buffer;
+   };
+
+   "custom getter with skip_null_members false"_test = [] {
+      constexpr auto opts = glz::opts{.skip_null_members = false};
+      my_struct_custom_optional obj{};
+      obj.value = 42; // getter returns nullopt
+
+      std::string buffer;
+      expect(not glz::write<opts>(obj, buffer));
+
+      // When skip_null_members is false, null should be written explicitly
+      expect(buffer == R"({"value":42,"status":null})") << "Got: " << buffer;
+   };
+};
+
 int main() {}

@@ -2192,6 +2192,18 @@ namespace glz
                            if (is_null) return;
                         }
                      }
+                     else if constexpr (is_specialization_v<val_t, custom_t> && Opts.skip_null_members &&
+                                        custom_getter_returns_nullable<val_t>()) {
+                        decltype(auto) custom_val = [&]() -> decltype(auto) {
+                           if constexpr (reflectable<T>) {
+                              return get_member(value, get<I>(t));
+                           }
+                           else {
+                              return get_member(value, get<I>(reflect<T>::values));
+                           }
+                        }();
+                        if (custom_getter_is_null(custom_val, ctx)) return;
+                     }
 
                      if constexpr (Opts.prettify) {
                         if (!ensure_space(ctx, b, ix + padding + ctx.depth)) [[unlikely]] {
