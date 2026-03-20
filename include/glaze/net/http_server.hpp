@@ -1454,7 +1454,7 @@ namespace glz
 
       inline void do_accept()
       {
-         acceptor->async_accept(asio::make_strand(io_executor), [this](std::error_code ec, asio::ip::tcp::socket socket) {
+         acceptor->async_accept([this](std::error_code ec, asio::ip::tcp::socket socket) {
             if (!ec) {
                asio::error_code endpoint_ec;
                auto remote_endpoint = socket.remote_endpoint(endpoint_ec);
