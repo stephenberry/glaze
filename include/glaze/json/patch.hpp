@@ -236,7 +236,7 @@ namespace glz
    template <class GenericType>
       requires is_generic_json<GenericType>
    [[nodiscard]] expected<std::pair<GenericType*, std::string>, error_ctx> navigate_to_parent(GenericType& root,
-                                                                                             std::string_view path)
+                                                                                              std::string_view path)
    {
       if (path.empty()) {
          // Empty path refers to root itself, which has no parent
@@ -708,7 +708,7 @@ namespace glz
    template <class GenericType>
       requires is_generic_json<GenericType>
    [[nodiscard]] expected<patch_document_t<GenericType>, error_ctx> diff(const GenericType& source,
-                                                                        const GenericType& target, diff_opts opts = {})
+                                                                         const GenericType& target, diff_opts opts = {})
    {
       patch_document_t<GenericType> ops;
       detail::diff_impl(source, target, "", ops, opts);
@@ -763,8 +763,8 @@ namespace glz
    template <class GenericType = generic>
       requires is_generic_json<GenericType>
    [[nodiscard]] expected<patch_document_t<GenericType>, error_ctx> diff(std::string_view source_json,
-                                                                        std::string_view target_json,
-                                                                        diff_opts opts = {})
+                                                                         std::string_view target_json,
+                                                                         diff_opts opts = {})
    {
       auto source = read_json<GenericType>(source_json);
       if (!source) {
@@ -814,8 +814,7 @@ namespace glz
       // Modifies target in-place according to RFC 7386 algorithm
       template <class GenericType>
          requires is_generic_json<GenericType>
-      [[nodiscard]] error_ctx apply_merge_patch_impl(GenericType& target, const GenericType& patch,
-                                                     uint32_t depth = 0)
+      [[nodiscard]] error_ctx apply_merge_patch_impl(GenericType& target, const GenericType& patch, uint32_t depth = 0)
       {
          if (depth >= max_recursive_depth_limit) [[unlikely]] {
             return error_ctx{0, error_code::exceeded_max_recursive_depth};
@@ -1000,7 +999,8 @@ namespace glz
    // the target contains explicit null values (they would be interpreted as removals)
    template <class GenericType>
       requires is_generic_json<GenericType>
-   [[nodiscard]] inline expected<GenericType, error_ctx> merge_diff(const GenericType& source, const GenericType& target)
+   [[nodiscard]] inline expected<GenericType, error_ctx> merge_diff(const GenericType& source,
+                                                                    const GenericType& target)
    {
       GenericType patch;
       detail::merge_diff_impl(source, target, patch);
@@ -1073,8 +1073,7 @@ namespace glz
    // Note: Uses template parameter G constrained to generic_json to prevent implicit conversion
    // from string literals (which would cause ambiguity with the string_view overload)
    template <class T, class G>
-      requires(merge_patch_struct<T> && std::is_default_constructible_v<T> &&
-               is_generic_json<std::remove_cvref_t<G>>)
+      requires(merge_patch_struct<T> && std::is_default_constructible_v<T> && is_generic_json<std::remove_cvref_t<G>>)
    [[nodiscard]] inline expected<T, error_ctx> merge_patched(const T& target, G&& patch)
    {
       T result = target;

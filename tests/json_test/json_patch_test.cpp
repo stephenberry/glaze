@@ -1109,9 +1109,8 @@ suite generic_i64_patch_tests = [] {
    };
 
    "i64 patch_json string convenience"_test = [] {
-      auto result = glz::patch_json<glz::generic_i64>(
-         R"({"a":1})",
-         R"([{"op":"replace","path":"/a","value":9223372036854775807}])");
+      auto result = glz::patch_json<glz::generic_i64>(R"({"a":1})",
+                                                      R"([{"op":"replace","path":"/a","value":9223372036854775807}])");
       expect(result.has_value());
       expect(*result == R"({"a":9223372036854775807})");
    };
@@ -1185,9 +1184,8 @@ suite generic_u64_patch_tests = [] {
    };
 
    "u64 patch_json string convenience"_test = [] {
-      auto result = glz::patch_json<glz::generic_u64>(
-         R"({"a":1})",
-         R"([{"op":"replace","path":"/a","value":18446744073709551615}])");
+      auto result = glz::patch_json<glz::generic_u64>(R"({"a":1})",
+                                                      R"([{"op":"replace","path":"/a","value":18446744073709551615}])");
       expect(result.has_value());
       expect(*result == R"({"a":18446744073709551615})");
    };
