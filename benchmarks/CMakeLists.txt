@@ -116,3 +116,6 @@ target_compile_options(ordered_map_memory PRIVATE
   $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
+
+# HTTP server benchmark: Glaze vs Boost.Beast
+add_subdirectory(http_benchmark)
