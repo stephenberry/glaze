@@ -1415,7 +1415,7 @@ namespace glz
          size_t buf_consumed = 0; // Bytes consumed for current request (shifted on next request)
          request request_;
          asio::ip::tcp::endpoint remote_endpoint;
-         asio::steady_timer idle_timer;
+         std::shared_ptr<asio::steady_timer> idle_timer;
          uint32_t request_count = 0;
          bool should_close = false;
          response response_; // Persists across keep-alive requests to reuse capacity
@@ -1424,7 +1424,7 @@ namespace glz
          connection_state(std::shared_ptr<socket_type> sock, asio::ip::tcp::endpoint endpoint)
             : socket(std::move(sock)),
               remote_endpoint(std::move(endpoint)),
-              idle_timer(socket->lowest_layer().get_executor())
+              idle_timer(std::make_shared<asio::steady_timer>(socket->lowest_layer().get_executor()))
          {}
       };
 
@@ -1514,8 +1514,8 @@ namespace glz
             return; // No timeout configured
          }
 
-         conn->idle_timer.expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
-         conn->idle_timer.async_wait([conn](asio::error_code ec) {
+         conn->idle_timer->expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
+         conn->idle_timer->async_wait([conn](asio::error_code ec) {
             if (!ec) {
                // Timer expired - send FIN; socket closed via RAII when conn is destroyed
                asio::error_code close_ec;
@@ -1526,7 +1526,7 @@ namespace glz
       }
 
       // Cancel the idle timer (called when a new request starts)
-      inline void cancel_idle_timer(std::shared_ptr<connection_state> conn) { conn->idle_timer.cancel(); }
+      inline void cancel_idle_timer(std::shared_ptr<connection_state> conn) { conn->idle_timer->cancel(); }
 
       // Parse result from try_parse_request
       enum struct parse_status { complete, incomplete, error };
