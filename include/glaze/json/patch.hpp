@@ -13,6 +13,18 @@
 
 namespace glz
 {
+   // Trait to detect any generic_json specialization
+   template <class T>
+   struct is_generic_json_t : std::false_type
+   {};
+
+   template <num_mode Mode, template <class> class MapType>
+   struct is_generic_json_t<generic_json<Mode, MapType>> : std::true_type
+   {};
+
+   template <class T>
+   concept is_generic_json = is_generic_json_t<std::decay_t<T>>::value;
+
    // RFC 6902 operation types
    enum struct patch_op_type : uint8_t { add, remove, replace, move, copy, test };
 
@@ -20,16 +32,23 @@ namespace glz
    // Uses std::optional for fields that are only present for certain operations:
    // - value: required for add, replace, test
    // - from: required for move, copy
-   struct patch_op
+   template <class GenericType = generic>
+   struct patch_op_t
    {
       patch_op_type op{};
       std::string path{};
-      std::optional<generic> value{};
+      std::optional<GenericType> value{};
       std::optional<std::string> from{};
    };
 
+   // Backward-compatible aliases
+   using patch_op = patch_op_t<>;
+
    // A patch document is an array of operations
-   using patch_document = std::vector<patch_op>;
+   template <class GenericType = generic>
+   using patch_document_t = std::vector<patch_op_t<GenericType>>;
+
+   using patch_document = patch_document_t<>;
 
    // Options for diff generation
    struct diff_opts
@@ -121,7 +140,9 @@ namespace glz
    }
 
    // Deep equality comparison for generic values
-   [[nodiscard]] inline bool equal(const generic& a, const generic& b) noexcept
+   template <class GenericType>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] bool equal(const GenericType& a, const GenericType& b) noexcept
    {
       if (a.data.index() != b.data.index()) {
          return false;
@@ -136,14 +157,14 @@ namespace glz
             if constexpr (std::same_as<T, std::nullptr_t>) {
                return true;
             }
-            else if constexpr (std::same_as<T, generic::array_t>) {
+            else if constexpr (std::same_as<T, typename GenericType::array_t>) {
                if (val_a.size() != val_b.size()) return false;
                for (size_t i = 0; i < val_a.size(); ++i) {
                   if (!equal(val_a[i], val_b[i])) return false;
                }
                return true;
             }
-            else if constexpr (std::same_as<T, generic::object_t>) {
+            else if constexpr (std::same_as<T, typename GenericType::object_t>) {
                if (val_a.size() != val_b.size()) return false;
                for (const auto& [key, value] : val_a) {
                   auto it = val_b.find(key);
@@ -212,8 +233,10 @@ namespace glz
    //   path=""       → error (root has no parent)
    //   path="/foo"   → returns {&root, "foo"} (root is parent of top-level keys)
    //   path="/a/b"   → returns {&root["a"], "b"}
-   [[nodiscard]] inline expected<std::pair<generic*, std::string>, error_ctx> navigate_to_parent(generic& root,
-                                                                                                 std::string_view path)
+   template <class GenericType>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] expected<std::pair<GenericType*, std::string>, error_ctx> navigate_to_parent(GenericType& root,
+                                                                                             std::string_view path)
    {
       if (path.empty()) {
          // Empty path refers to root itself, which has no parent
@@ -230,7 +253,7 @@ namespace glz
       // Determine the parent:
       // - If parent_path is empty (e.g., path="/foo"), the parent is root
       // - Otherwise, navigate to parent_path (e.g., path="/a/b" → navigate to "/a")
-      generic* parent = nullptr;
+      GenericType* parent = nullptr;
       if (parent_path.empty()) {
          parent = &root;
       }
@@ -242,13 +265,15 @@ namespace glz
          return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
       }
 
-      return std::pair<generic*, std::string>{parent, std::move(token)};
+      return std::pair<GenericType*, std::string>{parent, std::move(token)};
    }
 
    // Insert a value at a JSON Pointer path
    // If create_intermediate is true, creates intermediate objects as needed (like mkdir -p)
-   [[nodiscard]] inline error_ctx insert_at(generic& root, std::string_view path, generic value,
-                                            bool create_intermediate = false)
+   template <class GenericType>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] error_ctx insert_at(GenericType& root, std::string_view path, GenericType value,
+                                     bool create_intermediate = false)
    {
       // Empty path means replace root
       if (path.empty()) {
@@ -268,7 +293,7 @@ namespace glz
             return error_ctx{0, error_code::invalid_json_pointer};
          }
 
-         generic* current = &root;
+         GenericType* current = &root;
          std::string_view remaining = path.substr(1); // Skip leading '/'
 
          while (!remaining.empty()) {
@@ -287,7 +312,7 @@ namespace glz
             if (is_last_segment) {
                // Final segment - insert the value
                if (current->is_null()) {
-                  current->data = generic::object_t{};
+                  current->data = typename GenericType::object_t{};
                }
                if (current->is_object()) {
                   current->get_object()[*segment] = std::move(value);
@@ -313,7 +338,7 @@ namespace glz
             else {
                // Intermediate segment - navigate or create
                if (current->is_null()) {
-                  current->data = generic::object_t{};
+                  current->data = typename GenericType::object_t{};
                }
                if (current->is_object()) {
                   auto& obj = current->get_object();
@@ -321,8 +346,8 @@ namespace glz
                   if (it == obj.end()) {
                      // Create intermediate object
                      // Note: Use emplace + assignment to avoid brace init creating an array
-                     auto [new_it, inserted] = obj.emplace(*segment, generic{});
-                     new_it->second.data = generic::object_t{};
+                     auto [new_it, inserted] = obj.emplace(*segment, GenericType{});
+                     new_it->second.data = typename GenericType::object_t{};
                      it = new_it;
                   }
                   current = &it->second;
@@ -384,7 +409,9 @@ namespace glz
    }
 
    // Remove a value at a JSON Pointer path
-   [[nodiscard]] inline expected<generic, error_ctx> remove_at(generic& root, std::string_view path)
+   template <class GenericType>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] expected<GenericType, error_ctx> remove_at(GenericType& root, std::string_view path)
    {
       if (path.empty()) {
          // Cannot remove root
@@ -404,7 +431,7 @@ namespace glz
          if (it == obj.end()) {
             return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
          }
-         generic removed = std::move(it->second);
+         GenericType removed = std::move(it->second);
          obj.erase(it);
          return removed;
       }
@@ -421,7 +448,7 @@ namespace glz
             return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
          }
 
-         generic removed = std::move(arr[index]);
+         GenericType removed = std::move(arr[index]);
          arr.erase(arr.begin() + static_cast<ptrdiff_t>(index));
          return removed;
       }
@@ -437,14 +464,18 @@ namespace glz
    namespace detail
    {
       // Add operation
-      [[nodiscard]] inline error_ctx apply_add(generic& doc, std::string_view path, const generic& value,
-                                               const patch_opts& opts)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      [[nodiscard]] error_ctx apply_add(GenericType& doc, std::string_view path, const GenericType& value,
+                                        const patch_opts& opts)
       {
          return insert_at(doc, path, value, opts.create_intermediate);
       }
 
       // Remove operation
-      [[nodiscard]] inline error_ctx apply_remove(generic& doc, std::string_view path)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      [[nodiscard]] error_ctx apply_remove(GenericType& doc, std::string_view path)
       {
          auto result = remove_at(doc, path);
          if (!result) {
@@ -454,14 +485,16 @@ namespace glz
       }
 
       // Replace operation
-      [[nodiscard]] inline error_ctx apply_replace(generic& doc, std::string_view path, const generic& value)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      [[nodiscard]] error_ctx apply_replace(GenericType& doc, std::string_view path, const GenericType& value)
       {
          if (path.empty()) {
             doc = value;
             return {};
          }
 
-         generic* target = navigate_to(&doc, path);
+         GenericType* target = navigate_to(&doc, path);
          if (!target) {
             return error_ctx{0, error_code::nonexistent_json_ptr};
          }
@@ -471,8 +504,10 @@ namespace glz
       }
 
       // Move operation
-      [[nodiscard]] inline error_ctx apply_move(generic& doc, std::string_view from, std::string_view path,
-                                                const patch_opts& opts)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      [[nodiscard]] error_ctx apply_move(GenericType& doc, std::string_view from, std::string_view path,
+                                         const patch_opts& opts)
       {
          // Check for move into self (path cannot start with from)
          if (path.starts_with(from) && (path.size() == from.size() || path[from.size()] == '/')) {
@@ -490,10 +525,12 @@ namespace glz
       }
 
       // Copy operation
-      [[nodiscard]] inline error_ctx apply_copy(generic& doc, std::string_view from, std::string_view path,
-                                                const patch_opts& opts)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      [[nodiscard]] error_ctx apply_copy(GenericType& doc, std::string_view from, std::string_view path,
+                                         const patch_opts& opts)
       {
-         const generic* source = navigate_to(&doc, from);
+         const GenericType* source = navigate_to(&doc, from);
          if (!source) {
             return error_ctx{0, error_code::nonexistent_json_ptr};
          }
@@ -502,7 +539,9 @@ namespace glz
       }
 
       // Test operation
-      [[nodiscard]] inline error_ctx apply_test(const generic& doc, std::string_view path, const generic& expected)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      [[nodiscard]] error_ctx apply_test(const GenericType& doc, std::string_view path, const GenericType& expected)
       {
          if (path.empty()) {
             if (!equal(doc, expected)) {
@@ -511,7 +550,7 @@ namespace glz
             return {};
          }
 
-         const generic* target = navigate_to(&doc, path);
+         const GenericType* target = navigate_to(&doc, path);
          if (!target) {
             return error_ctx{0, error_code::nonexistent_json_ptr};
          }
@@ -524,7 +563,10 @@ namespace glz
       }
 
       // Apply a single patch operation
-      [[nodiscard]] inline error_ctx apply_operation(generic& doc, const patch_op& op, const patch_opts& opts)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      [[nodiscard]] error_ctx apply_operation(GenericType& doc, const patch_op_t<GenericType>& op,
+                                              const patch_opts& opts)
       {
          switch (op.op) {
          case patch_op_type::add:
@@ -574,8 +616,10 @@ namespace glz
    {
       // Note: diff_opts (detect_moves, detect_copies, array_lcs) are reserved for future implementation.
       // Currently only generates add/remove/replace operations (like nlohmann/json default behavior).
-      inline void diff_impl(const generic& source, const generic& target, const std::string& path, patch_document& ops,
-                            [[maybe_unused]] const diff_opts& opts)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      void diff_impl(const GenericType& source, const GenericType& target, const std::string& path,
+                     patch_document_t<GenericType>& ops, [[maybe_unused]] const diff_opts& opts)
       {
          // Different types -> replace
          if (source.data.index() != target.data.index()) {
@@ -590,15 +634,9 @@ namespace glz
                if constexpr (std::same_as<T, std::nullptr_t>) {
                   // Both null, nothing to do
                }
-               else if constexpr (std::same_as<T, double> || std::same_as<T, std::string> || std::same_as<T, bool>) {
-                  const auto& tgt_val = std::get<T>(target.data);
-                  if (src_val != tgt_val) {
-                     ops.push_back({patch_op_type::replace, path, target, std::nullopt});
-                  }
-               }
-               else if constexpr (std::same_as<T, generic::object_t>) {
+               else if constexpr (std::same_as<T, typename GenericType::object_t>) {
                   const auto& src_obj = src_val;
-                  const auto& tgt_obj = std::get<generic::object_t>(target.data);
+                  const auto& tgt_obj = std::get<typename GenericType::object_t>(target.data);
 
                   // Keys removed from source
                   for (const auto& [key, value] : src_obj) {
@@ -620,9 +658,9 @@ namespace glz
                      }
                   }
                }
-               else if constexpr (std::same_as<T, generic::array_t>) {
+               else if constexpr (std::same_as<T, typename GenericType::array_t>) {
                   const auto& src_arr = src_val;
-                  const auto& tgt_arr = std::get<generic::array_t>(target.data);
+                  const auto& tgt_arr = std::get<typename GenericType::array_t>(target.data);
 
                   size_t min_len = std::min(src_arr.size(), tgt_arr.size());
 
@@ -650,6 +688,13 @@ namespace glz
                      }
                   }
                }
+               else {
+                  // All scalar types: double, int64_t, uint64_t, string, bool
+                  const auto& tgt_val = std::get<T>(target.data);
+                  if (src_val != tgt_val) {
+                     ops.push_back({patch_op_type::replace, path, target, std::nullopt});
+                  }
+               }
             },
             source.data);
       }
@@ -660,20 +705,24 @@ namespace glz
    // ============================================================================
 
    // Generate a patch document that transforms 'source' into 'target'
-   [[nodiscard]] inline expected<patch_document, error_ctx> diff(const generic& source, const generic& target,
-                                                                 diff_opts opts = {})
+   template <class GenericType>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] expected<patch_document_t<GenericType>, error_ctx> diff(const GenericType& source,
+                                                                        const GenericType& target, diff_opts opts = {})
    {
-      patch_document ops;
+      patch_document_t<GenericType> ops;
       detail::diff_impl(source, target, "", ops, opts);
       return ops;
    }
 
    // Apply a patch document to a JSON value (in-place modification)
-   [[nodiscard]] inline error_ctx patch(generic& document, const patch_document& ops, patch_opts opts = {})
+   template <class GenericType>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] error_ctx patch(GenericType& document, const patch_document_t<GenericType>& ops, patch_opts opts = {})
    {
       if (opts.atomic) {
          // Deep copy for rollback
-         generic backup = document;
+         GenericType backup = document;
 
          for (const auto& op : ops) {
             auto ec = detail::apply_operation(document, op, opts);
@@ -695,10 +744,13 @@ namespace glz
    }
 
    // Apply a patch document, returning a new value (non-mutating)
-   [[nodiscard]] inline expected<generic, error_ctx> patched(const generic& document, const patch_document& ops,
-                                                             patch_opts opts = {})
+   template <class GenericType>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] expected<GenericType, error_ctx> patched(const GenericType& document,
+                                                          const patch_document_t<GenericType>& ops,
+                                                          patch_opts opts = {})
    {
-      generic result = document;
+      GenericType result = document;
       opts.atomic = false; // No need for atomic since we're working on a copy
       auto ec = patch(result, ops, opts);
       if (ec) {
@@ -708,15 +760,18 @@ namespace glz
    }
 
    // Convenience overload for JSON string input
-   [[nodiscard]] inline expected<patch_document, error_ctx> diff(std::string_view source_json,
-                                                                 std::string_view target_json, diff_opts opts = {})
+   template <class GenericType = generic>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] expected<patch_document_t<GenericType>, error_ctx> diff(std::string_view source_json,
+                                                                        std::string_view target_json,
+                                                                        diff_opts opts = {})
    {
-      auto source = read_json<generic>(source_json);
+      auto source = read_json<GenericType>(source_json);
       if (!source) {
          return unexpected(source.error());
       }
 
-      auto target = read_json<generic>(target_json);
+      auto target = read_json<GenericType>(target_json);
       if (!target) {
          return unexpected(target.error());
       }
@@ -725,16 +780,17 @@ namespace glz
    }
 
    // Convenience overload for JSON string patch application
-   [[nodiscard]] inline expected<std::string, error_ctx> patch_json(std::string_view document_json,
-                                                                    std::string_view patch_json_str,
-                                                                    patch_opts opts = {})
+   template <class GenericType = generic>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] expected<std::string, error_ctx> patch_json(std::string_view document_json,
+                                                             std::string_view patch_json_str, patch_opts opts = {})
    {
-      auto document = read_json<generic>(document_json);
+      auto document = read_json<GenericType>(document_json);
       if (!document) {
          return unexpected(document.error());
       }
 
-      auto ops = read_json<patch_document>(patch_json_str);
+      auto ops = read_json<patch_document_t<GenericType>>(patch_json_str);
       if (!ops) {
          return unexpected(ops.error());
       }
@@ -756,7 +812,10 @@ namespace glz
    {
       // Recursive merge patch implementation
       // Modifies target in-place according to RFC 7386 algorithm
-      [[nodiscard]] inline error_ctx apply_merge_patch_impl(generic& target, const generic& patch, uint32_t depth = 0)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      [[nodiscard]] error_ctx apply_merge_patch_impl(GenericType& target, const GenericType& patch,
+                                                     uint32_t depth = 0)
       {
          if (depth >= max_recursive_depth_limit) [[unlikely]] {
             return error_ctx{0, error_code::exceeded_max_recursive_depth};
@@ -765,7 +824,7 @@ namespace glz
          if (patch.is_object()) {
             // If target is not an object, replace with empty object
             if (!target.is_object()) {
-               target.data = generic::object_t{};
+               target.data = typename GenericType::object_t{};
             }
 
             auto& target_obj = target.get_object();
@@ -779,7 +838,7 @@ namespace glz
                else if (value.is_object()) {
                   // Recursively merge objects
                   // Use try_emplace to avoid double lookup
-                  auto [it, inserted] = target_obj.try_emplace(key, generic{});
+                  auto [it, inserted] = target_obj.try_emplace(key, GenericType{});
                   auto ec = apply_merge_patch_impl(it->second, value, depth + 1);
                   if (ec) {
                      return ec;
@@ -800,7 +859,9 @@ namespace glz
       }
 
       // Merge diff implementation - generates a merge patch from source to target
-      inline void merge_diff_impl(const generic& source, const generic& target, generic& patch)
+      template <class GenericType>
+         requires is_generic_json<GenericType>
+      void merge_diff_impl(const GenericType& source, const GenericType& target, GenericType& patch)
       {
          // If types differ or source is not an object, return target as patch
          if (!source.is_object() || !target.is_object()) {
@@ -809,7 +870,7 @@ namespace glz
          }
 
          // Both are objects - compute diff
-         patch.data = generic::object_t{};
+         patch.data = typename GenericType::object_t{};
          auto& patch_obj = patch.get_object();
          const auto& source_obj = source.get_object();
          const auto& target_obj = target.get_object();
@@ -833,7 +894,7 @@ namespace glz
                // Key was modified
                if (source_it->second.is_object() && target_value.is_object()) {
                   // Both objects - recurse
-                  generic child_patch;
+                  GenericType child_patch;
                   merge_diff_impl(source_it->second, target_value, child_patch);
                   patch_obj.emplace(key, std::move(child_patch));
                }
@@ -854,19 +915,19 @@ namespace glz
    // Apply a merge patch to a JSON value (in-place modification)
    // Note: Uses template parameter to prevent ambiguity with string_view overload
    // (string literals would otherwise match both const generic& and string_view)
-   template <class G>
-      requires(std::same_as<std::remove_cvref_t<G>, generic>)
-   [[nodiscard]] inline error_ctx merge_patch(generic& target, G&& patch)
+   template <class GenericType, class G>
+      requires(is_generic_json<GenericType> && std::same_as<std::remove_cvref_t<G>, GenericType>)
+   [[nodiscard]] inline error_ctx merge_patch(GenericType& target, G&& patch)
    {
       return detail::apply_merge_patch_impl(target, patch);
    }
 
    // Apply a merge patch, returning a new value (non-mutating)
-   template <class G>
-      requires(std::same_as<std::remove_cvref_t<G>, generic>)
-   [[nodiscard]] inline expected<generic, error_ctx> merge_patched(const generic& target, G&& patch)
+   template <class GenericType, class G>
+      requires(is_generic_json<GenericType> && std::same_as<std::remove_cvref_t<G>, GenericType>)
+   [[nodiscard]] inline expected<GenericType, error_ctx> merge_patched(const GenericType& target, G&& patch)
    {
-      generic result = target;
+      GenericType result = target;
       auto ec = merge_patch(result, std::forward<G>(patch));
       if (ec) {
          return unexpected(ec);
@@ -875,9 +936,11 @@ namespace glz
    }
 
    // Convenience overload: apply merge patch from JSON string
-   [[nodiscard]] inline error_ctx merge_patch(generic& target, std::string_view patch_json)
+   template <class GenericType>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] inline error_ctx merge_patch(GenericType& target, std::string_view patch_json)
    {
-      auto patch = read_json<generic>(patch_json);
+      auto patch = read_json<GenericType>(patch_json);
       if (!patch) {
          return patch.error();
       }
@@ -885,15 +948,17 @@ namespace glz
    }
 
    // Convenience overload: apply merge patch from JSON strings, return JSON string
+   template <class GenericType = generic>
+      requires is_generic_json<GenericType>
    [[nodiscard]] inline expected<std::string, error_ctx> merge_patch_json(std::string_view target_json,
                                                                           std::string_view patch_json)
    {
-      auto target = read_json<generic>(target_json);
+      auto target = read_json<GenericType>(target_json);
       if (!target) {
          return unexpected(target.error());
       }
 
-      auto patch = read_json<generic>(patch_json);
+      auto patch = read_json<GenericType>(patch_json);
       if (!patch) {
          return unexpected(patch.error());
       }
@@ -907,15 +972,17 @@ namespace glz
    }
 
    // Convenience overload: apply merge patch from JSON strings, return generic
-   [[nodiscard]] inline expected<generic, error_ctx> merge_patched(std::string_view target_json,
-                                                                   std::string_view patch_json)
+   template <class GenericType = generic>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] inline expected<GenericType, error_ctx> merge_patched(std::string_view target_json,
+                                                                       std::string_view patch_json)
    {
-      auto target = read_json<generic>(target_json);
+      auto target = read_json<GenericType>(target_json);
       if (!target) {
          return unexpected(target.error());
       }
 
-      auto patch = read_json<generic>(patch_json);
+      auto patch = read_json<GenericType>(patch_json);
       if (!patch) {
          return unexpected(patch.error());
       }
@@ -931,23 +998,27 @@ namespace glz
    // Generate a merge patch that transforms 'source' into 'target'
    // Note: Due to null semantics, this cannot perfectly round-trip if
    // the target contains explicit null values (they would be interpreted as removals)
-   [[nodiscard]] inline expected<generic, error_ctx> merge_diff(const generic& source, const generic& target)
+   template <class GenericType>
+      requires is_generic_json<GenericType>
+   [[nodiscard]] inline expected<GenericType, error_ctx> merge_diff(const GenericType& source, const GenericType& target)
    {
-      generic patch;
+      GenericType patch;
       detail::merge_diff_impl(source, target, patch);
       return patch;
    }
 
    // Convenience overload: generate merge patch from JSON strings, return JSON string
+   template <class GenericType = generic>
+      requires is_generic_json<GenericType>
    [[nodiscard]] inline expected<std::string, error_ctx> merge_diff_json(std::string_view source_json,
                                                                          std::string_view target_json)
    {
-      auto source = read_json<generic>(source_json);
+      auto source = read_json<GenericType>(source_json);
       if (!source) {
          return unexpected(source.error());
       }
 
-      auto target = read_json<generic>(target_json);
+      auto target = read_json<GenericType>(target_json);
       if (!target) {
          return unexpected(target.error());
       }
@@ -964,9 +1035,9 @@ namespace glz
    // Struct/Type-based Merge Patch API
    // ============================================================================
 
-   // Concept to check if a type is not generic (to avoid ambiguous overloads)
+   // Concept to check if a type is not a generic_json specialization (to avoid ambiguous overloads)
    template <class T>
-   concept not_generic = !std::same_as<std::decay_t<T>, generic>;
+   concept not_generic = !is_generic_json<std::decay_t<T>>;
 
    // Concept to check if a type is a struct/class suitable for merge patching
    // (excludes generic and string-like types to avoid ambiguous overloads)
@@ -977,10 +1048,10 @@ namespace glz
    // Apply a merge patch to a C++ struct/type (in-place modification)
    // Glaze's read_json already has merge-patch semantics: it only updates fields
    // present in the source and leaves other fields unchanged.
-   // Note: Uses template parameter G constrained to generic to prevent implicit conversion
+   // Note: Uses template parameter G constrained to generic_json to prevent implicit conversion
    // from string literals (which would cause ambiguity with the string_view overload)
    template <class T, class G>
-      requires(merge_patch_struct<T> && std::same_as<std::remove_cvref_t<G>, generic>)
+      requires(merge_patch_struct<T> && is_generic_json<std::remove_cvref_t<G>>)
    [[nodiscard]] inline error_ctx merge_patch(T& target, G&& patch)
    {
       // Glaze can read directly from generic into structs, updating only fields present
@@ -999,11 +1070,11 @@ namespace glz
    }
 
    // Apply a merge patch, returning a new struct (non-mutating)
-   // Note: Uses template parameter G constrained to generic to prevent implicit conversion
+   // Note: Uses template parameter G constrained to generic_json to prevent implicit conversion
    // from string literals (which would cause ambiguity with the string_view overload)
    template <class T, class G>
       requires(merge_patch_struct<T> && std::is_default_constructible_v<T> &&
-               std::same_as<std::remove_cvref_t<G>, generic>)
+               is_generic_json<std::remove_cvref_t<G>>)
    [[nodiscard]] inline expected<T, error_ctx> merge_patched(const T& target, G&& patch)
    {
       T result = target;
@@ -1028,16 +1099,16 @@ namespace glz
    }
 
    // Generate a merge patch that transforms one struct into another
-   template <class T>
-      requires(merge_patch_struct<T>)
-   [[nodiscard]] inline expected<generic, error_ctx> merge_diff(const T& source, const T& target)
+   template <class T, class GenericType = generic>
+      requires(merge_patch_struct<T> && is_generic_json<GenericType>)
+   [[nodiscard]] inline expected<GenericType, error_ctx> merge_diff(const T& source, const T& target)
    {
       // Serialize both to JSON then to generic
       auto source_json = write_json(source);
       if (!source_json) {
          return unexpected(source_json.error());
       }
-      auto source_generic = read_json<generic>(*source_json);
+      auto source_generic = read_json<GenericType>(*source_json);
       if (!source_generic) {
          return unexpected(source_generic.error());
       }
@@ -1046,7 +1117,7 @@ namespace glz
       if (!target_json) {
          return unexpected(target_json.error());
       }
-      auto target_generic = read_json<generic>(*target_json);
+      auto target_generic = read_json<GenericType>(*target_json);
       if (!target_generic) {
          return unexpected(target_generic.error());
       }
