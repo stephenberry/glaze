@@ -12903,7 +12903,8 @@ struct glz::meta<cast_obj>
 struct glaze_value_nullable_field
 {
    std::optional<int> my_val;
-   struct glaze {
+   struct glaze
+   {
       static constexpr auto value{&glaze_value_nullable_field::my_val};
    };
 };
