@@ -351,31 +351,46 @@ namespace glz
 
          sv key{field.data(), field.size()};
 
-         constexpr auto N = reflect<T>::size;
+         constexpr auto N = reflect<enum_decode_type<T>>::size;
 
          if constexpr (N == 0) {
             ctx.error = error_code::unexpected_enum;
             return;
          }
          else if constexpr (N == 1) {
-            if (key == get<0>(reflect<T>::keys)) {
-               value = get<0>(reflect<T>::values);
+            if (key == reflect<enum_decode_type<T>>::keys[0]) {
+               if constexpr (has_enum_aliases<T>) {
+                  value = enum_decode_all_values<T>[0];
+               }
+               else {
+                  value = get<0>(reflect<T>::values);
+               }
             }
             else {
                ctx.error = error_code::unexpected_enum;
             }
          }
          else {
-            static constexpr auto HashInfo = hash_info<T>;
-            const auto index = decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(
+            using DT = enum_decode_type<T>;
+            static constexpr auto HashInfo = hash_info<DT>;
+            const auto index = decode_hash_with_size<CSV, DT, HashInfo, HashInfo.type>::op(
                key.data(), key.data() + key.size(), key.size());
 
-            if (index >= N || reflect<T>::keys[index] != key) [[unlikely]] {
+            if (index >= N || reflect<DT>::keys[index] != key) [[unlikely]] {
                ctx.error = error_code::unexpected_enum;
                return;
             }
 
-            visit<N>([&]<size_t I>() { value = get<I>(reflect<T>::values); }, index);
+            visit<N>(
+               [&]<size_t I>() {
+                  if constexpr (has_enum_aliases<T>) {
+                     value = enum_decode_all_values<T>[I];
+                  }
+                  else {
+                     value = get<I>(reflect<T>::values);
+                  }
+               },
+               index);
          }
       }
    };

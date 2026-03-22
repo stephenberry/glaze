@@ -322,6 +322,118 @@ namespace glz
    // Note: is_reflect_enum handlers use the existing enum_nameof and enum_count
    // from get_name.hpp. The enum values are obtained using P2996 splicing inline.
 
+   // ============================================================================
+   // Enum alias support for decoding
+   // When glz::meta<T>::aliases is defined via enumerate_aliases(), we build
+   // combined key/value arrays for decode-time hash lookup.
+   // When no aliases are defined, enum_decode_type<T> == T (zero overhead).
+   // ============================================================================
+
+   // Unwrap the EnumAliases wrapper to get the inner tuple
+   template <class T>
+      requires has_enum_aliases<T>
+   constexpr auto& enum_alias_tuple_v = meta<std::remove_cvref_t<T>>::aliases.value;
+
+   template <class T>
+      requires has_enum_aliases<T>
+   using enum_alias_tuple_t = std::remove_cvref_t<decltype(enum_alias_tuple_v<T>)>;
+
+   // Count of alias entries (non-string elements in the aliases tuple)
+   template <class T>
+      requires has_enum_aliases<T>
+   constexpr auto enum_alias_value_indices = filter_indices<enum_alias_tuple_t<T>, not_object_key_type>();
+
+   template <class T>
+      requires has_enum_aliases<T>
+   constexpr size_t enum_alias_count = enum_alias_value_indices<T>.size();
+
+   // Extract alias keys (the string preceding each enum value in the aliases tuple)
+   template <class T>
+      requires has_enum_aliases<T>
+   constexpr auto enum_alias_keys = [] {
+      constexpr auto& indices = enum_alias_value_indices<T>;
+      constexpr auto count = indices.size();
+      std::array<sv, count> keys{};
+      [&]<size_t... I>(std::index_sequence<I...>) {
+         ((keys[I] =
+              [&] {
+                 constexpr auto idx = indices[I];
+                 // Alias entries always require explicit string names, so preceding element is always a string
+                 static_assert(idx > 0, "enumerate_aliases requires explicit string names for each alias");
+                 return sv(get<idx - 1>(enum_alias_tuple_v<T>));
+              }()),
+          ...);
+      }(std::make_index_sequence<count>{});
+      return keys;
+   }();
+
+   // Extract alias enum values
+   template <class T>
+      requires has_enum_aliases<T>
+   constexpr auto enum_alias_values = [] {
+      using E = std::remove_cvref_t<T>;
+      constexpr auto& indices = enum_alias_value_indices<T>;
+      constexpr auto count = indices.size();
+      std::array<E, count> values{};
+      [&]<size_t... I>(std::index_sequence<I...>) {
+         ((values[I] = static_cast<E>(get<indices[I]>(enum_alias_tuple_v<T>))), ...);
+      }(std::make_index_sequence<count>{});
+      return values;
+   }();
+
+   // Combined decode keys: primary keys + alias keys
+   template <class T>
+      requires has_enum_aliases<T>
+   constexpr auto enum_decode_all_keys = [] {
+      constexpr auto& primary = reflect<T>::keys;
+      constexpr auto& aliases = enum_alias_keys<T>;
+      constexpr auto total = primary.size() + aliases.size();
+      std::array<sv, total> result{};
+      for (size_t i = 0; i < primary.size(); ++i) result[i] = primary[i];
+      for (size_t i = 0; i < aliases.size(); ++i) result[primary.size() + i] = aliases[i];
+      return result;
+   }();
+
+   // Combined decode values: primary values + alias values
+   template <class T>
+      requires has_enum_aliases<T>
+   constexpr auto enum_decode_all_values = [] {
+      using E = std::remove_cvref_t<T>;
+      constexpr auto primary_size = reflect<T>::size;
+      constexpr auto& alias_vals = enum_alias_values<T>;
+      constexpr auto total = primary_size + alias_vals.size();
+      std::array<E, total> result{};
+      [&]<size_t... I>(std::index_sequence<I...>) {
+         ((result[I] = get<I>(reflect<T>::values)), ...);
+      }(std::make_index_sequence<primary_size>{});
+      for (size_t i = 0; i < alias_vals.size(); ++i) result[primary_size + i] = alias_vals[i];
+      return result;
+   }();
+
+   // The type used for decode-time hash lookup.
+   // When aliases exist, this is a keys_wrapper over the combined keys.
+   // When no aliases, this is just T itself (zero overhead).
+   // Uses template specialization to avoid instantiating enum_decode_all_keys<T>
+   // when no aliases are defined.
+   template <class T, bool HasAliases = has_enum_aliases<T>>
+   struct enum_decode_type_impl
+   {
+      using type = T;
+   };
+
+   template <class T>
+   struct enum_decode_type_impl<T, true>
+   {
+      using type = keys_wrapper<enum_decode_all_keys<T>>;
+   };
+
+   template <class T>
+   using enum_decode_type = typename enum_decode_type_impl<T>::type;
+
+   // ============================================================================
+   // End of enum alias support
+   // ============================================================================
+
    template <class T>
       requires(is_memory_object<T>)
    struct reflect<T> : reflect<memory_type<T>>

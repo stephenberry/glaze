@@ -467,6 +467,13 @@ namespace glz
    template <class T>
    concept is_named_enum = ((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_read<T>);
 
+   // Detect enums with decode-only aliases defined via glz::enumerate_aliases
+   template <class T>
+   concept has_enum_aliases = is_named_enum<T> && requires {
+      requires is_specialization_v<std::remove_cvref_t<decltype(meta<std::remove_cvref_t<T>>::aliases)>,
+                                   detail::EnumAliases>;
+   };
+
    template <class T>
    concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Flags>;
 
@@ -665,6 +672,8 @@ namespace glz
    }
 
    constexpr auto enumerate(auto&&... args) noexcept { return detail::Enum{tuple{args...}}; }
+
+   constexpr auto enumerate_aliases(auto&&... args) noexcept { return detail::EnumAliases{tuple{args...}}; }
 
    constexpr auto flags(auto&&... args) noexcept { return detail::Flags{tuple{args...}}; }
 

@@ -2186,20 +2186,26 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         constexpr auto N = reflect<T>::size;
+         constexpr auto N = reflect<enum_decode_type<T>>::size;
 
          if constexpr (N == 1) {
-            static constexpr auto key = glz::get<0>(reflect<T>::keys);
+            static constexpr auto key = reflect<enum_decode_type<T>>::keys[0];
             if (str == key) {
-               value = glz::get<0>(reflect<T>::values);
+               if constexpr (has_enum_aliases<T>) {
+                  value = enum_decode_all_values<T>[0];
+               }
+               else {
+                  value = glz::get<0>(reflect<T>::values);
+               }
             }
             else {
                ctx.error = error_code::unexpected_enum;
             }
          }
          else {
-            static constexpr auto HashInfo = hash_info<T>;
-            const auto index = decode_hash_with_size<YAML, T, HashInfo, HashInfo.type>::op(
+            using DT = enum_decode_type<T>;
+            static constexpr auto HashInfo = hash_info<DT>;
+            const auto index = decode_hash_with_size<YAML, DT, HashInfo, HashInfo.type>::op(
                str.data(), str.data() + str.size(), str.size());
 
             if (index >= N) [[unlikely]] {
@@ -2209,9 +2215,14 @@ namespace glz
 
             visit<N>(
                [&]<size_t I>() {
-                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                  static constexpr auto key = reflect<DT>::keys[I];
                   if (str == key) [[likely]] {
-                     value = glz::get<I>(reflect<T>::values);
+                     if constexpr (has_enum_aliases<T>) {
+                        value = enum_decode_all_values<T>[I];
+                     }
+                     else {
+                        value = glz::get<I>(reflect<T>::values);
+                     }
                   }
                   else {
                      ctx.error = error_code::unexpected_enum;

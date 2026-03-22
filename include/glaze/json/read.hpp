@@ -346,6 +346,44 @@ namespace glz
       }
    }
 
+   // Alias-aware enum decode entry. Uses enum_decode_type<T> for key lookup
+   // and enum_decode_all_values<T> for value assignment when aliases are present.
+   // When no aliases, this is identical to the decode_index overload above.
+   template <auto Opts, class T, size_t I, class Value>
+      requires(is_named_enum<T>)
+   void decode_enum_entry(Value&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+   {
+      using DT = enum_decode_type<T>;
+      static constexpr auto TargetKey = reflect<DT>::keys[I];
+      static constexpr auto Length = TargetKey.size();
+
+      if (((it + Length) < end) && comparitor<TargetKey>(it)) [[likely]] {
+         it += Length;
+         if (*it != '"') [[unlikely]] {
+            ctx.error = error_code::unexpected_enum;
+            return;
+         }
+         if constexpr (has_enum_aliases<T>) {
+            value = enum_decode_all_values<T>[I];
+         }
+         else {
+            value = get<I>(reflect<T>::values);
+         }
+
+         ++it;
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) {
+               ctx.error = error_code::end_reached;
+               return;
+            }
+         }
+      }
+      else [[unlikely]] {
+         ctx.error = error_code::unexpected_enum;
+         return;
+      }
+   }
+
    template <auto Opts, class T, class Value, class... SelectedIndex>
       requires(glaze_object_t<T> || reflectable<T>)
    GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Value&& value, is_context auto&& ctx, auto&& it, auto&& end,
@@ -1994,7 +2032,8 @@ namespace glz
             }
          }
 
-         constexpr auto N = reflect<T>::size;
+         using DT = enum_decode_type<T>;
+         constexpr auto N = reflect<DT>::size;
 
          if (*it != '"') [[unlikely]] {
             ctx.error = error_code::expected_quote;
@@ -2009,11 +2048,11 @@ namespace glz
          }
 
          if constexpr (N == 1) {
-            decode_index<Opts, T, 0>(value, ctx, it, end);
+            decode_enum_entry<Opts, T, 0>(value, ctx, it, end);
          }
          else if constexpr (check_linear_search(Opts)) {
             // Linear search path for enums - decode_linear advances past closing quote
-            const auto index = decode_linear<T>(ctx, it, end);
+            const auto index = decode_linear<DT>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -2022,22 +2061,27 @@ namespace glz
                return;
             }
 
-            // Simply assign the enum value - fold expression dispatch
+            // Assign the enum value - fold expression dispatch
             [&]<size_t... Is>(std::index_sequence<Is...>) {
-               (void)(((index == Is ? (value = get<Is>(reflect<T>::values), true) : false) || ...));
+               if constexpr (has_enum_aliases<T>) {
+                  (void)(((index == Is ? (value = enum_decode_all_values<T>[Is], true) : false) || ...));
+               }
+               else {
+                  (void)(((index == Is ? (value = get<Is>(reflect<T>::values), true) : false) || ...));
+               }
             }(std::make_index_sequence<N>{});
          }
          else {
-            static constexpr auto HashInfo = hash_info<T>;
+            static constexpr auto HashInfo = hash_info<DT>;
 
-            const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
+            const auto index = decode_hash<JSON, DT, HashInfo, HashInfo.type>::op(it, end);
 
             if (index >= N) [[unlikely]] {
                ctx.error = error_code::unexpected_enum;
                return;
             }
 
-            visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end); }, index);
+            visit<N>([&]<size_t I>() { decode_enum_entry<Opts, T, I>(value, ctx, it, end); }, index);
          }
       }
    };

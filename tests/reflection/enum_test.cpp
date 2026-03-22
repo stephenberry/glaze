@@ -1156,4 +1156,177 @@ suite random_enum_hash_tests = [] {
    "RandomI64Enum2_roundtrip"_test = [] { test_enum_roundtrip<RandomI64Enum2>(); };
 };
 
+// ============================================================================
+// Enum alias tests (decode-only aliases via enumerate_aliases)
+// ============================================================================
+
+enum class AliasedEnum { new_value, other_value, third_value };
+
+template <>
+struct glz::meta<AliasedEnum>
+{
+   using enum AliasedEnum;
+   static constexpr auto value =
+      enumerate("new_value", new_value, "other_value", other_value, "third_value", third_value);
+   static constexpr auto aliases =
+      enumerate_aliases("old_value", new_value, "old_value2", new_value, "legacy_other", other_value);
+};
+
+// Enum with aliases and auto-named primary keys
+enum class AliasedAutoEnum { Alpha, Beta, Gamma };
+
+template <>
+struct glz::meta<AliasedAutoEnum>
+{
+   using enum AliasedAutoEnum;
+   static constexpr auto value = enumerate(Alpha, Beta, Gamma);
+   static constexpr auto aliases =
+      enumerate_aliases("alpha", Alpha, "a", Alpha, "beta", Beta, "b", Beta, "gamma", Gamma, "g", Gamma);
+};
+
+// Enum without aliases (verify zero-overhead / no regression)
+enum class NoAliasEnum { X, Y, Z };
+
+template <>
+struct glz::meta<NoAliasEnum>
+{
+   using enum NoAliasEnum;
+   static constexpr auto value = enumerate(X, Y, Z);
+};
+
+struct AliasTestObj
+{
+   AliasedEnum e{};
+};
+
+suite enum_alias_tests = [] {
+   "alias_primary_names_decode"_test = [] {
+      // Primary names should still work
+      AliasedEnum e{};
+      expect(not glz::read_json(e, R"("new_value")"));
+      expect(e == AliasedEnum::new_value);
+
+      expect(not glz::read_json(e, R"("other_value")"));
+      expect(e == AliasedEnum::other_value);
+
+      expect(not glz::read_json(e, R"("third_value")"));
+      expect(e == AliasedEnum::third_value);
+   };
+
+   "alias_names_decode"_test = [] {
+      // Alias names should decode to the correct enum value
+      AliasedEnum e{};
+      expect(not glz::read_json(e, R"("old_value")"));
+      expect(e == AliasedEnum::new_value);
+
+      expect(not glz::read_json(e, R"("old_value2")"));
+      expect(e == AliasedEnum::new_value);
+
+      expect(not glz::read_json(e, R"("legacy_other")"));
+      expect(e == AliasedEnum::other_value);
+   };
+
+   "alias_encode_uses_primary"_test = [] {
+      // Encoding should always use the primary name, never an alias
+      std::string json;
+      expect(not glz::write_json(AliasedEnum::new_value, json));
+      expect(json == R"("new_value")") << json;
+
+      json.clear();
+      expect(not glz::write_json(AliasedEnum::other_value, json));
+      expect(json == R"("other_value")") << json;
+
+      json.clear();
+      expect(not glz::write_json(AliasedEnum::third_value, json));
+      expect(json == R"("third_value")") << json;
+   };
+
+   "alias_invalid_name_fails"_test = [] {
+      // Invalid names should still produce errors
+      AliasedEnum e{};
+      auto ec = glz::read_json(e, R"("nonexistent")");
+      expect(bool(ec));
+   };
+
+   "alias_auto_named_primary_decode"_test = [] {
+      // Auto-named primary + aliases
+      AliasedAutoEnum e{};
+      expect(not glz::read_json(e, R"("Alpha")"));
+      expect(e == AliasedAutoEnum::Alpha);
+
+      expect(not glz::read_json(e, R"("Beta")"));
+      expect(e == AliasedAutoEnum::Beta);
+
+      expect(not glz::read_json(e, R"("Gamma")"));
+      expect(e == AliasedAutoEnum::Gamma);
+   };
+
+   "alias_auto_named_aliases_decode"_test = [] {
+      // Aliases for auto-named enum
+      AliasedAutoEnum e{};
+      expect(not glz::read_json(e, R"("alpha")"));
+      expect(e == AliasedAutoEnum::Alpha);
+
+      expect(not glz::read_json(e, R"("a")"));
+      expect(e == AliasedAutoEnum::Alpha);
+
+      expect(not glz::read_json(e, R"("beta")"));
+      expect(e == AliasedAutoEnum::Beta);
+
+      expect(not glz::read_json(e, R"("b")"));
+      expect(e == AliasedAutoEnum::Beta);
+
+      expect(not glz::read_json(e, R"("gamma")"));
+      expect(e == AliasedAutoEnum::Gamma);
+
+      expect(not glz::read_json(e, R"("g")"));
+      expect(e == AliasedAutoEnum::Gamma);
+   };
+
+   "alias_auto_named_encode_primary"_test = [] {
+      // Encoding auto-named should use the auto-derived primary name
+      std::string json;
+      expect(not glz::write_json(AliasedAutoEnum::Alpha, json));
+      expect(json == R"("Alpha")") << json;
+   };
+
+   "no_alias_enum_still_works"_test = [] {
+      // Verify no regression for enums without aliases
+      NoAliasEnum e{};
+      expect(not glz::read_json(e, R"("X")"));
+      expect(e == NoAliasEnum::X);
+
+      expect(not glz::read_json(e, R"("Y")"));
+      expect(e == NoAliasEnum::Y);
+
+      expect(not glz::read_json(e, R"("Z")"));
+      expect(e == NoAliasEnum::Z);
+
+      std::string json;
+      expect(not glz::write_json(NoAliasEnum::X, json));
+      expect(json == R"("X")") << json;
+   };
+
+   "alias_roundtrip_primary"_test = [] {
+      // Roundtrip: encode always uses primary, decode accepts primary
+      for (auto val : {AliasedEnum::new_value, AliasedEnum::other_value, AliasedEnum::third_value}) {
+         std::string json;
+         expect(not glz::write_json(val, json));
+         AliasedEnum parsed{};
+         expect(not glz::read_json(parsed, json));
+         expect(parsed == val);
+      }
+   };
+
+   "alias_in_object"_test = [] {
+      // Test alias decode when enum is a member of a struct
+      AliasTestObj obj{};
+      expect(not glz::read_json(obj, R"({"e":"old_value"})"));
+      expect(obj.e == AliasedEnum::new_value);
+
+      expect(not glz::read_json(obj, R"({"e":"new_value"})"));
+      expect(obj.e == AliasedEnum::new_value);
+   };
+};
+
 int main() { return 0; }

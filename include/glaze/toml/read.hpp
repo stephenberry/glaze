@@ -930,22 +930,28 @@ namespace glz
          const auto n = static_cast<size_t>(it - start);
          ++it; // skip closing quote
 
-         constexpr auto N = reflect<T>::size;
+         constexpr auto N = reflect<enum_decode_type<T>>::size;
 
          if constexpr (N == 1) {
             // Single enum value - just verify it matches
-            static constexpr auto key = glz::get<0>(reflect<T>::keys);
+            static constexpr auto key = reflect<enum_decode_type<T>>::keys[0];
             if (n == key.size() && std::string_view(start, n) == key) {
-               value = glz::get<0>(reflect<T>::values);
+               if constexpr (has_enum_aliases<T>) {
+                  value = enum_decode_all_values<T>[0];
+               }
+               else {
+                  value = glz::get<0>(reflect<T>::values);
+               }
             }
             else {
                ctx.error = error_code::unexpected_enum;
             }
          }
          else {
-            static constexpr auto HashInfo = hash_info<T>;
+            using DT = enum_decode_type<T>;
+            static constexpr auto HashInfo = hash_info<DT>;
 
-            const auto index = decode_hash_with_size<TOML, T, HashInfo, HashInfo.type>::op(start, start + n, n);
+            const auto index = decode_hash_with_size<TOML, DT, HashInfo, HashInfo.type>::op(start, start + n, n);
 
             if (index >= N) [[unlikely]] {
                ctx.error = error_code::unexpected_enum;
@@ -956,9 +962,14 @@ namespace glz
             visit<N>(
                [&]<size_t I>() {
                   // Verify the key matches (hash collision check)
-                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                  static constexpr auto key = reflect<DT>::keys[I];
                   if (n == key.size() && std::string_view(start, n) == key) [[likely]] {
-                     value = glz::get<I>(reflect<T>::values);
+                     if constexpr (has_enum_aliases<T>) {
+                        value = enum_decode_all_values<T>[I];
+                     }
+                     else {
+                        value = glz::get<I>(reflect<T>::values);
+                     }
                   }
                   else {
                      ctx.error = error_code::unexpected_enum;

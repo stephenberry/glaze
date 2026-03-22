@@ -80,6 +80,15 @@ namespace glz
       Enum(T) -> Enum<T>;
 
       template <class T>
+      struct EnumAliases
+      {
+         T value;
+      };
+
+      template <class T>
+      EnumAliases(T) -> EnumAliases<T>;
+
+      template <class T>
       struct Flags
       {
          T value;
