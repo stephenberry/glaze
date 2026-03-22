@@ -439,12 +439,11 @@ namespace glz
             // if any type could be null then we might skip
             constexpr bool write_function_pointers = check_write_function_pointers(Opts);
             return [&]<size_t... I>(std::index_sequence<I...>) {
-               return ((always_skipped<field_t<T, I>> ||
-                        (!write_function_pointers && is_member_function_pointer<field_t<T, I>>) ||
-                        null_t<field_t<T, I>> ||
-                        (is_specialization_v<field_t<T, I>, custom_t> &&
-                         custom_getter_returns_nullable<field_t<T, I>>())) ||
-                       ...);
+               return (
+                  (always_skipped<field_t<T, I>> ||
+                   (!write_function_pointers && is_member_function_pointer<field_t<T, I>>) || null_t<field_t<T, I>> ||
+                   (is_specialization_v<field_t<T, I>, custom_t> && custom_getter_returns_nullable<field_t<T, I>>())) ||
+                  ...);
             }(std::make_index_sequence<N>{});
          }
          else {
