@@ -2194,15 +2194,7 @@ namespace glz
                      }
                      else if constexpr (is_specialization_v<val_t, custom_t> && Opts.skip_null_members &&
                                         custom_getter_returns_nullable<val_t>()) {
-                        decltype(auto) custom_val = [&]() -> decltype(auto) {
-                           if constexpr (reflectable<T>) {
-                              return get_member(value, get<I>(t));
-                           }
-                           else {
-                              return get_member(value, get<I>(reflect<T>::values));
-                           }
-                        }();
-                        if (custom_getter_is_null(custom_val, ctx)) return;
+                        if (is_custom_field_null<T, I>(value, t, ctx)) return;
                      }
 
                      if constexpr (Opts.prettify) {

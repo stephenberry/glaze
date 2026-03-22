@@ -570,6 +570,22 @@ namespace glz
       }
    }
 
+   // Check if a custom_t field at index I is null, given the parent value and tie.
+   // Used by JSON/CBOR/BEVE write paths to skip null custom getter results.
+   template <class T, size_t I, class Value, class Tie, class Ctx>
+   bool is_custom_field_null(Value&& value, Tie&& t, Ctx&& ctx)
+   {
+      decltype(auto) custom_val = [&]() -> decltype(auto) {
+         if constexpr (reflectable<T>) {
+            return get_member(value, get<I>(t));
+         }
+         else {
+            return get_member(value, get<I>(reflect<T>::values));
+         }
+      }();
+      return custom_getter_is_null(custom_val, ctx);
+   }
+
    template <class T, auto Opts>
    constexpr auto required_fields()
    {
