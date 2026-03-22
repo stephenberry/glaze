@@ -12900,6 +12900,20 @@ struct glz::meta<cast_obj>
                                         "indirect", cast<[](T& s) -> auto& { return s.integer; }, double>);
 };
 
+struct glaze_value_nullable_field
+{
+   std::optional<int> my_val;
+   struct glaze {
+      static constexpr auto value{&glaze_value_nullable_field::my_val};
+   };
+};
+
+struct glaze_value_nullable_obj
+{
+   glaze_value_nullable_field field_name{};
+   std::string required_field{};
+};
+
 struct cast_nullable_obj
 {
    std::optional<double> a;
@@ -12960,6 +12974,33 @@ suite cast_tests = [] {
 
       // Test missing required field
       data = R"({"a":null})";
+      ec = glz::read<opts>(obj, data);
+      expect(ec == glz::error_code::missing_key);
+   };
+
+   "glaze_value_t nullable with error_on_missing_keys"_test = [] {
+      constexpr auto opts = glz::opts{
+         .format = glz::JSON,
+         .error_on_missing_keys = true,
+      };
+
+      // Missing nullable value-type field should not error
+      std::string_view data = R"({"required_field":"hello"})";
+      glaze_value_nullable_obj obj{};
+      auto ec = glz::read<opts>(obj, data);
+      expect(!ec) << glz::format_error(ec, data);
+      expect(!obj.field_name.my_val.has_value());
+      expect(obj.required_field == "hello");
+
+      // With value present
+      data = R"({"field_name":42,"required_field":"world"})";
+      ec = glz::read<opts>(obj, data);
+      expect(!ec) << glz::format_error(ec, data);
+      expect(obj.field_name.my_val.has_value());
+      expect(obj.field_name.my_val.value() == 42);
+
+      // Missing required (non-nullable) field should still error
+      data = R"({"field_name":42})";
       ec = glz::read<opts>(obj, data);
       expect(ec == glz::error_code::missing_key);
    };

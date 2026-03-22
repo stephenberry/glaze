@@ -619,6 +619,10 @@ namespace glz
                      using CastType = typename V::cast_type;
                      return null_t<CastType>;
                   }
+                  else if constexpr (glaze_value_t<V>) {
+                     using Inner = remove_meta_wrapper_t<V>;
+                     return null_t<Inner>;
+                  }
                   else {
                      return null_t<V>;
                   }
@@ -638,6 +642,11 @@ namespace glz
                // Handle cast_t by checking if the cast type is nullable
                using CastType = typename V::cast_type;
                fields[I] = !Opts.skip_null_members || !null_t<CastType>;
+            }
+            else if constexpr (glaze_value_t<V>) {
+               // Handle value types (structs with glaze::value) by checking the underlying type
+               using Inner = remove_meta_wrapper_t<V>;
+               fields[I] = !Opts.skip_null_members || !null_t<Inner>;
             }
             else {
                fields[I] = !Opts.skip_null_members || !null_t<V>;
