@@ -388,48 +388,44 @@ namespace glz
          return false;
       }
       else {
-      using To = typename V::to_t;
-      using ParentT = std::remove_reference_t<decltype(std::declval<V&>().val)>;
+         using To = typename V::to_t;
+         using ParentT = std::remove_reference_t<decltype(std::declval<V&>().val)>;
 
-      if constexpr (std::is_member_pointer_v<To>) {
-         if constexpr (std::is_member_function_pointer_v<To>) {
-            using Ret = std::decay_t<typename return_type<To>::type>;
-            return null_t<Ret>;
-         }
-         else if constexpr (std::is_member_object_pointer_v<To>) {
-            using Value = std::decay_t<decltype(std::declval<ParentT&>().*(std::declval<To>()))>;
-            if constexpr (is_specialization_v<Value, std::function>) {
-               using Ret = std::decay_t<typename function_traits<Value>::result_type>;
+         if constexpr (std::is_member_pointer_v<To>) {
+            if constexpr (std::is_member_function_pointer_v<To>) {
+               using Ret = std::decay_t<typename return_type<To>::type>;
                return null_t<Ret>;
             }
-            else {
-               return null_t<Value>;
+            else if constexpr (std::is_member_object_pointer_v<To>) {
+               using Value = std::decay_t<decltype(std::declval<ParentT&>().*(std::declval<To>()))>;
+               if constexpr (is_specialization_v<Value, std::function>) {
+                  using Ret = std::decay_t<typename function_traits<Value>::result_type>;
+                  return null_t<Ret>;
+               }
+               else {
+                  return null_t<Value>;
+               }
             }
+            else {
+               return false;
+            }
+         }
+         else if constexpr (std::invocable<To, ParentT&>) {
+            using Ret = std::decay_t<std::invoke_result_t<To, ParentT&>>;
+            return null_t<Ret>;
+         }
+         else if constexpr (std::invocable<To, const ParentT&>) {
+            using Ret = std::decay_t<std::invoke_result_t<To, const ParentT&>>;
+            return null_t<Ret>;
+         }
+         else if constexpr (std::invocable<To, ParentT&, context&>) {
+            using Ret = std::decay_t<std::invoke_result_t<To, ParentT&, context&>>;
+            return null_t<Ret>;
          }
          else {
             return false;
          }
       }
-      else if constexpr (is_invocable_concrete<To>) {
-         using Ret = std::decay_t<invocable_result_t<To>>;
-         return null_t<Ret>;
-      }
-      else if constexpr (std::invocable<To, ParentT&>) {
-         using Ret = std::decay_t<std::invoke_result_t<To, ParentT&>>;
-         return null_t<Ret>;
-      }
-      else if constexpr (std::invocable<To, const ParentT&>) {
-         using Ret = std::decay_t<std::invoke_result_t<To, const ParentT&>>;
-         return null_t<Ret>;
-      }
-      else if constexpr (std::invocable<To, ParentT&, context&>) {
-         using Ret = std::decay_t<std::invoke_result_t<To, ParentT&, context&>>;
-         return null_t<Ret>;
-      }
-      else {
-         return false;
-      }
-      } // else (is custom_t)
    }
 
    template <auto Opts, class T>
