@@ -682,6 +682,12 @@ namespace glz
                         }
                      }
                   }
+                  else if constexpr (is_specialization_v<val_t, custom_t> && Opts.skip_null_members &&
+                                     custom_getter_returns_nullable<val_t>()) {
+                     if (!is_custom_field_null<T, I>(value, t, ctx)) {
+                        ++member_count;
+                     }
+                  }
                   else {
                      ++member_count;
                   }
@@ -731,6 +737,12 @@ namespace glz
                         if (is_null) {
                            return;
                         }
+                     }
+                  }
+                  else if constexpr (is_specialization_v<val_t, custom_t> && Opts.skip_null_members &&
+                                     custom_getter_returns_nullable<val_t>()) {
+                     if (is_custom_field_null<T, I>(value, t, ctx)) {
+                        return;
                      }
                   }
 
