@@ -2,6 +2,10 @@
 // can be properly skipped when they return null values
 
 #include "glaze/glaze.hpp"
+#include "glaze/beve/read.hpp"
+#include "glaze/beve/write.hpp"
+#include "glaze/cbor/read.hpp"
+#include "glaze/cbor/write.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -171,6 +175,68 @@ suite custom_nullable_optional_tests = [] {
 
       // When skip_null_members is false, null should be written explicitly
       expect(buffer == R"({"value":42,"status":null})") << "Got: " << buffer;
+   };
+};
+
+// CBOR round-trip tests for custom nullable getter
+suite custom_nullable_cbor_tests = [] {
+   "cbor custom getter nullopt - round trip"_test = [] {
+      my_struct_custom_optional src{};
+      src.value = 42; // getter returns nullopt
+
+      std::string buffer;
+      expect(not glz::write_cbor(src, buffer));
+
+      my_struct_custom_optional dst{};
+      dst.value = 99;
+      expect(not glz::read_cbor(dst, buffer));
+
+      // value should survive round-trip; status was omitted (nullopt)
+      expect(dst.value == 42);
+   };
+
+   "cbor custom getter with value - round trip"_test = [] {
+      my_struct_custom_optional src{};
+      src.value = 100; // getter returns "high"
+
+      std::string buffer;
+      expect(not glz::write_cbor(src, buffer));
+
+      my_struct_custom_optional dst{};
+      expect(not glz::read_cbor(dst, buffer));
+
+      // setter receives "high" -> sets value to 50
+      expect(dst.value == 50);
+   };
+};
+
+// BEVE round-trip tests for custom nullable getter
+suite custom_nullable_beve_tests = [] {
+   "beve custom getter nullopt - round trip"_test = [] {
+      my_struct_custom_optional src{};
+      src.value = 42; // getter returns nullopt
+
+      std::string buffer;
+      expect(not glz::write_beve(src, buffer));
+
+      my_struct_custom_optional dst{};
+      dst.value = 99;
+      expect(not glz::read_beve(dst, buffer));
+
+      expect(dst.value == 42);
+   };
+
+   "beve custom getter with value - round trip"_test = [] {
+      my_struct_custom_optional src{};
+      src.value = 100; // getter returns "high"
+
+      std::string buffer;
+      expect(not glz::write_beve(src, buffer));
+
+      my_struct_custom_optional dst{};
+      expect(not glz::read_beve(dst, buffer));
+
+      expect(dst.value == 50);
    };
 };
 
