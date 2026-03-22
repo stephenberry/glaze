@@ -165,6 +165,29 @@ suite custom_nullable_optional_tests = [] {
       expect(buffer == R"({"value":100,"status":"high"})") << "Got: " << buffer;
    };
 
+   "json write then read round-trip with value"_test = [] {
+      my_struct_custom_optional src{};
+      src.value = 100; // getter returns "high"
+
+      std::string buffer;
+      expect(not glz::write_json(src, buffer));
+
+      my_struct_custom_optional dst{};
+      expect(not glz::read_json(dst, buffer));
+
+      // setter receives "high" -> sets value to 50
+      expect(dst.value == 50) << "Got: " << dst.value;
+   };
+
+   "json read with field absent - should not error"_test = [] {
+      my_struct_custom_optional dst{};
+      dst.value = 99;
+
+      // JSON with "status" omitted — the setter should not be called
+      expect(not glz::read_json(dst, R"({"value":42})"));
+      expect(dst.value == 42) << "Got: " << dst.value;
+   };
+
    "custom getter with skip_null_members false"_test = [] {
       constexpr auto opts = glz::opts{.skip_null_members = false};
       my_struct_custom_optional obj{};

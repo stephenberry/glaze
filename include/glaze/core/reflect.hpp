@@ -380,7 +380,8 @@ namespace glz
    template <class T, size_t I>
    using field_t = std::remove_cvref_t<refl_t<T, I>>;
 
-   // Check if a custom_t getter (To) returns a nullable type
+   // Check if a custom_t getter (To) returns a nullable type (write side).
+   // Complement of custom_type_is_nullable which checks the From/setter (read side).
    template <class V>
    consteval bool custom_getter_returns_nullable()
    {
@@ -474,6 +475,8 @@ namespace glz
       }
    }();
 
+   // Check if a custom_t setter (From) accepts a nullable type (read side).
+   // Complement of custom_getter_returns_nullable which checks the To/getter (write side).
    template <class V, class From>
    consteval bool custom_type_is_nullable()
    {
