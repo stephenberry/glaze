@@ -1,0 +1,44 @@
+name: clang-cl
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+env:
+  CTEST_OUTPUT_ON_FAILURE: 1
+  BUILD_TYPE: Debug
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 25
+
+    strategy:
+      matrix:
+        cpp_version: [23]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: |
+        cmake -B ${{github.workspace}}/build -G "Visual Studio 18 2026" -A x64 -T ClangCL -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}}
+
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel
+
+    - name: Test
+      working-directory: build
+      run: ctest --build-config ${{env.BUILD_TYPE}} --timeout 300
