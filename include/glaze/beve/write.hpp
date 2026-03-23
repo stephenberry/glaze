@@ -1325,6 +1325,11 @@ namespace glz
                         ++member_count;
                      }
                   }
+                  else if constexpr (Options.skip_null_members && glaze_value_is_nullable<val_t>()) {
+                     if (!is_glaze_value_field_null<T, I>(value, t)) {
+                        ++member_count;
+                     }
+                  }
                   else {
                      ++member_count;
                   }
@@ -1394,6 +1399,11 @@ namespace glz
                   else if constexpr (is_specialization_v<val_t, custom_t> && Options.skip_null_members &&
                                      custom_getter_returns_nullable<val_t>()) {
                      if (is_custom_field_null<T, I>(value, t, ctx)) {
+                        return;
+                     }
+                  }
+                  else if constexpr (Options.skip_null_members && glaze_value_is_nullable<val_t>()) {
+                     if (is_glaze_value_field_null<T, I>(value, t)) {
                         return;
                      }
                   }
