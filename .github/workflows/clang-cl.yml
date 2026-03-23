@@ -33,19 +33,12 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Configure CMake
-      shell: pwsh
       run: |
-        cmake -B ${{github.workspace}}/build `
-          -G "Visual Studio 18 2026" `
-          -A x64 `
-          -T ClangCL `
-          -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}}
+        cmake -B ${{github.workspace}}/build -G "Visual Studio 18 2026" -A x64 -T ClangCL -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}}
 
     - name: Build
-      shell: pwsh
       run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel
 
     - name: Test
-      shell: pwsh
       working-directory: build
       run: ctest --build-config ${{env.BUILD_TYPE}} --timeout 300
