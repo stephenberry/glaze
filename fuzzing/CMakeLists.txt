@@ -32,7 +32,7 @@ macro(create_fuzztest testname)
         target_link_libraries(fuzz_${testname} PRIVATE main)
     endif()
 
-    if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    if(MSVC)
         target_link_libraries(fuzz_${testname} PRIVATE main)
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
         target_compile_options(fuzz_${testname} PUBLIC -fsanitize=address,undefined -fno-sanitize-recover=all)
