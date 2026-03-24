@@ -17,12 +17,12 @@ include(FetchContent)
 # Download uWebSockets and uSockets sources (Makefile projects, no CMakeLists.txt)
 FetchContent_Declare(uWebSockets
   GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
-  GIT_TAG master
+  GIT_TAG v20.76.0
   GIT_SHALLOW TRUE
 )
 FetchContent_Declare(uSockets
   GIT_REPOSITORY https://github.com/uNetworking/uSockets.git
-  GIT_TAG master
+  GIT_TAG v0.8.8
   GIT_SHALLOW TRUE
 )
 

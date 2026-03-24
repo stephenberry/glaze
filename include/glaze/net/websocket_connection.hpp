@@ -18,7 +18,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
-#include <unordered_map>
+#include "glaze/containers/flat_map.hpp"
 #include <vector>
 
 // Optional OpenSSL support - detected at compile time
@@ -261,8 +261,8 @@ namespace glz
 
    // Thread ID → buffer index map for per-server shared receive buffers.
    // Defined here (not in http_server.hpp) because websocket_connection references it.
-   // unordered_map for O(1) lookup — the map is built once at startup and read-only after.
-   using ws_thread_map = std::unordered_map<std::thread::id, size_t>;
+   // flat_map for cache-friendly O(log n) lookup — the map is built once at startup and read-only after.
+   using ws_thread_map = glz::flat_map<std::thread::id, size_t>;
 
    // Forward declarations
    template <typename SocketType = asio::ip::tcp::socket>

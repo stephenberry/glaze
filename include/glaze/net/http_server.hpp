@@ -789,15 +789,19 @@ namespace glz
          // Start worker threads (unless explicitly set to 0)
          if (io_context && actual_threads > 0) {
             // Thread index map: each thread registers its ID → buffer index at startup.
-            // Thread-safe: each thread writes its own unique entry before io_context::run()
-            // processes any connections.
+            // A mutex serializes the emplace calls (flat_map is not thread-safe for concurrent writes).
+            // After all threads have registered, the map is read-only — no synchronization needed.
             ws_thread_indices_ = std::make_shared<ws_thread_map>();
             ws_thread_indices_->reserve(actual_threads);
+            auto thread_map_mutex = std::make_shared<std::mutex>();
 
             threads.reserve(actual_threads);
             for (size_t i = 0; i < actual_threads; ++i) {
-               threads.emplace_back([this, i] {
-                  ws_thread_indices_->emplace(std::this_thread::get_id(), i);
+               threads.emplace_back([this, i, thread_map_mutex] {
+                  {
+                     std::lock_guard<std::mutex> lock(*thread_map_mutex);
+                     ws_thread_indices_->emplace(std::this_thread::get_id(), i);
+                  }
                   io_context->run();
                });
             }

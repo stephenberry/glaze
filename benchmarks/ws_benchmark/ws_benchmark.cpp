@@ -185,8 +185,10 @@ struct glaze_ws_server
    glz::http_server<> server{};
    std::shared_ptr<glz::websocket_server> ws;
    std::thread thread;
+   int server_threads_{};
 
-   glaze_ws_server(uint16_t port)
+   glaze_ws_server(uint16_t port, int server_threads = 1)
+      : server_threads_(server_threads)
    {
       server.on_error([](std::error_code, std::source_location) {});
 
@@ -203,7 +205,7 @@ struct glaze_ws_server
       server.websocket("/ws", ws);
       server.bind("127.0.0.1", port);
       server.ws_recv_buffer_size(512 * 1024); // 512KB shared receive buffer per thread
-      thread = std::thread([this]() { server.start(1); });
+      thread = std::thread([this, server_threads]() { server.start(server_threads); });
       wait_for_server(port);
    }
 
@@ -337,8 +339,10 @@ int main()
 
    std::string all_markdown;
 
+   std::printf("=== Single-threaded servers (1 server thread) ===\n\n");
+
    {
-      glaze_ws_server glz_srv(glaze_port);
+      glaze_ws_server glz_srv(glaze_port, 1);
       uws_server uws_srv(uws_port);
 
       validate_servers(glaze_port, uws_port);
@@ -436,7 +440,7 @@ int main()
       // Concurrent Echo Small
       {
          bencher::stage stage;
-         stage.name = "Concurrent Echo Small (" + std::to_string(client_threads) + " clients x 1000 msg)";
+         stage.name = "Concurrent Echo Small (" + std::to_string(client_threads) + " clients, 1 server thread)";
          stage.throughput_units_label = "msg/s";
          stage.throughput_units_divisor = 1;
 
@@ -452,7 +456,7 @@ int main()
       {
          bencher::stage stage;
          stage.name =
-            "Concurrent Echo JSON 100 Users (" + std::to_string(client_threads) + " clients x 1000 msg)";
+            "Concurrent Echo JSON 100 Users (" + std::to_string(client_threads) + " clients, 1 server thread)";
          stage.throughput_units_label = "msg/s";
          stage.throughput_units_divisor = 1;
 
@@ -462,6 +466,81 @@ int main()
          bencher::print_results(stage);
          all_markdown += bencher::to_markdown(stage);
          bencher::save_file(stage_bar_chart(stage), "ws_concurrent_json.svg");
+      }
+   }
+
+   // -----------------------------------------------------------------------
+   // Multi-threaded server benchmarks
+   // Glaze runs with server_threads == hw_threads; uWebSockets is single-threaded
+   // by design (one event loop). This tests Glaze's multi-threaded scaling.
+   // -----------------------------------------------------------------------
+
+   const int server_threads = client_threads; // match server threads to hardware concurrency
+
+   std::printf("\n=== Multi-threaded Glaze server (%d server threads) vs single-threaded uWebSockets ===\n\n",
+               server_threads);
+
+   {
+      static constexpr uint16_t glaze_mt_port = 19767;
+      static constexpr uint16_t uws_mt_port = 19768;
+
+      glaze_ws_server glz_srv(glaze_mt_port, server_threads);
+      uws_server uws_srv(uws_mt_port);
+
+      validate_servers(glaze_mt_port, uws_mt_port);
+
+      // Multi-threaded Concurrent Echo Small
+      {
+         bencher::stage stage;
+         stage.name = "MT Concurrent Echo Small (" + std::to_string(client_threads) + " clients, Glaze " +
+                      std::to_string(server_threads) + "T)";
+         stage.throughput_units_label = "msg/s";
+         stage.throughput_units_divisor = 1;
+
+         stage.run("Glaze (" + std::to_string(server_threads) + "T)",
+                   [&] { return run_ws_concurrent(glaze_mt_port, small_payload, client_threads, 1000); });
+         stage.run("uWebSockets (1T)",
+                   [&] { return run_ws_concurrent(uws_mt_port, small_payload, client_threads, 1000); });
+
+         bencher::print_results(stage);
+         all_markdown += bencher::to_markdown(stage);
+         bencher::save_file(stage_bar_chart(stage), "ws_mt_concurrent_small.svg");
+      }
+
+      // Multi-threaded Concurrent Echo JSON 100 Users
+      {
+         bencher::stage stage;
+         stage.name = "MT Concurrent Echo JSON 100 Users (" + std::to_string(client_threads) + " clients, Glaze " +
+                      std::to_string(server_threads) + "T)";
+         stage.throughput_units_label = "msg/s";
+         stage.throughput_units_divisor = 1;
+
+         stage.run("Glaze (" + std::to_string(server_threads) + "T)",
+                   [&] { return run_ws_concurrent(glaze_mt_port, json_users, client_threads, 1000); });
+         stage.run("uWebSockets (1T)",
+                   [&] { return run_ws_concurrent(uws_mt_port, json_users, client_threads, 1000); });
+
+         bencher::print_results(stage);
+         all_markdown += bencher::to_markdown(stage);
+         bencher::save_file(stage_bar_chart(stage), "ws_mt_concurrent_json.svg");
+      }
+
+      // Multi-threaded Concurrent Echo Large (64KB)
+      {
+         bencher::stage stage;
+         stage.name = "MT Concurrent Echo Large 64KB (" + std::to_string(client_threads) + " clients, Glaze " +
+                      std::to_string(server_threads) + "T)";
+         stage.throughput_units_label = "msg/s";
+         stage.throughput_units_divisor = 1;
+
+         stage.run("Glaze (" + std::to_string(server_threads) + "T)",
+                   [&] { return run_ws_concurrent(glaze_mt_port, large_payload, client_threads, 1000); });
+         stage.run("uWebSockets (1T)",
+                   [&] { return run_ws_concurrent(uws_mt_port, large_payload, client_threads, 1000); });
+
+         bencher::print_results(stage);
+         all_markdown += bencher::to_markdown(stage);
+         bencher::save_file(stage_bar_chart(stage), "ws_mt_concurrent_large.svg");
       }
    }
 
