@@ -1170,7 +1170,35 @@ void aligned_typed_array_tests()
       expect(m == m2);
    };
 
-   // Zero-copy span tests require little-endian (BEVE wire format is little-endian)
+   "zero-copy span<const uint8_t> standard typed array"_test = [] {
+      std::vector<uint8_t> v = {1, 2, 3, 4, 5};
+      std::string beve;
+      expect(not glz::write_beve(v, beve)); // standard typed array, no alignment
+
+      std::span<const uint8_t> span;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+      expect(span.size() == size_t(5));
+      expect(span[0] == uint8_t(1));
+      expect(span[4] == uint8_t(5));
+
+      // Verify zero-copy
+      expect(reinterpret_cast<const char*>(span.data()) >= beve.data());
+      expect(reinterpret_cast<const char*>(span.data()) < beve.data() + beve.size());
+   };
+
+   "zero-copy span<const int8_t> standard typed array"_test = [] {
+      std::vector<int8_t> v = {-1, 0, 1, 2, 3};
+      std::string beve;
+      expect(not glz::write_beve(v, beve));
+
+      std::span<const int8_t> span;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+      expect(span.size() == size_t(5));
+      expect(span[0] == int8_t(-1));
+      expect(span[4] == int8_t(3));
+   };
+
+   // Zero-copy span tests for multi-byte types require little-endian (BEVE wire format is little-endian)
    if constexpr (std::endian::native == std::endian::little) {
 
    "zero-copy span<const double>"_test = [] {

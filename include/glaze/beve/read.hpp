@@ -785,11 +785,13 @@ namespace glz
       }
    };
 
-   // Zero-copy specialization for std::span<const T> with aligned typed arrays.
+   // Zero-copy specialization for std::span<const T> with numeric typed arrays.
    // Instead of copying data, the span is set to point directly into the BEVE buffer.
    // The buffer must outlive the span.
+   // For multi-byte types: requires an aligned typed array and little-endian host.
+   // For single-byte types: accepts standard typed arrays on any endianness.
    template <class T, size_t Extent>
-      requires(std::is_const_v<T> && num_t<std::remove_const_t<T>> && sizeof(T) > 1)
+      requires(std::is_const_v<T> && num_t<std::remove_const_t<T>>)
    struct from<BEVE, std::span<T, Extent>> final
    {
       using V = std::remove_const_t<T>;
@@ -797,66 +799,100 @@ namespace glz
       template <auto Opts>
       static void op(std::span<T, Extent>& value, is_context auto&& ctx, auto&& it, auto end)
       {
-         if constexpr (std::endian::native != std::endian::little) {
-            // BEVE wire format is little-endian; zero-copy span requires matching endianness.
-            // Use std::vector<T> instead, which copies and byte-swaps.
-            ctx.error = error_code::feature_not_supported;
-            return;
-         }
          if (invalid_end(ctx, it, end)) {
             return;
          }
          const auto tag = uint8_t(*it);
 
-         if (tag != tag::aligned_typed_array) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         ++it; // skip aligned header
-         if (invalid_end(ctx, it, end)) {
-            return;
-         }
-         const auto numeric_tag = uint8_t(*it);
-         constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<V> << 5);
-         if (numeric_tag != expected_header) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         ++it; // skip numeric header
-
-         const size_t n = int_from_compressed(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
-
-         if constexpr (Extent != std::dynamic_extent) {
-            if (n != Extent) [[unlikely]] {
+         if constexpr (sizeof(V) == 1) {
+            // Single-byte types: accept standard typed arrays (no alignment or endian concerns)
+            constexpr uint8_t type =
+               std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<V> << 5);
+            if (tag != expected_header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-         }
+            ++it;
 
-         // Read padding length byte and skip padding
-         if (invalid_end(ctx, it, end)) {
-            return;
-         }
-         const uint8_t padding = uint8_t(*it);
-         ++it;
-         if (padding >= sizeof(V)) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
+            const size_t n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
 
-         if ((it + padding + n * sizeof(V)) > end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-         it += padding;
+            if constexpr (Extent != std::dynamic_extent) {
+               if (n != Extent) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
 
-         value = std::span<T, Extent>{reinterpret_cast<const V*>(&(*it)), n};
-         it += n * sizeof(V);
+            if ((it + n) > end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            value = std::span<T, Extent>{reinterpret_cast<const V*>(&(*it)), n};
+            it += n;
+         }
+         else {
+            // Multi-byte types: require aligned typed array and little-endian
+            if constexpr (std::endian::native != std::endian::little) {
+               ctx.error = error_code::feature_not_supported;
+               return;
+            }
+
+            if (tag != tag::aligned_typed_array) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            ++it; // skip aligned header
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
+            const auto numeric_tag = uint8_t(*it);
+            constexpr uint8_t type =
+               std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<V> << 5);
+            if (numeric_tag != expected_header) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it; // skip numeric header
+
+            const size_t n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            if constexpr (Extent != std::dynamic_extent) {
+               if (n != Extent) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+
+            // Read padding length byte and skip padding
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
+            const uint8_t padding = uint8_t(*it);
+            ++it;
+            if (padding >= sizeof(V)) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            if ((it + padding + n * sizeof(V)) > end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            it += padding;
+
+            value = std::span<T, Extent>{reinterpret_cast<const V*>(&(*it)), n};
+            it += n * sizeof(V);
+         }
       }
    };
 
