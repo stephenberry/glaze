@@ -788,10 +788,8 @@ namespace glz
    // Zero-copy specialization for std::span<const T> with aligned typed arrays.
    // Instead of copying data, the span is set to point directly into the BEVE buffer.
    // The buffer must outlive the span.
-   // Only available on little-endian systems (BEVE wire format is little-endian).
    template <class T, size_t Extent>
-      requires(std::is_const_v<T> && num_t<std::remove_const_t<T>> && sizeof(T) > 1 &&
-               std::endian::native == std::endian::little)
+      requires(std::is_const_v<T> && num_t<std::remove_const_t<T>> && sizeof(T) > 1)
    struct from<BEVE, std::span<T, Extent>> final
    {
       using V = std::remove_const_t<T>;
@@ -799,6 +797,9 @@ namespace glz
       template <auto Opts>
       static void op(std::span<T, Extent>& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         static_assert(std::endian::native == std::endian::little,
+                       "Zero-copy std::span<const T> reading requires little-endian (BEVE wire format is "
+                       "little-endian). Use std::vector<T> instead, which copies and byte-swaps.");
          if (invalid_end(ctx, it, end)) {
             return;
          }

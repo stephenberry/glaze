@@ -1100,6 +1100,9 @@ void aligned_typed_array_tests()
       }
    };
 
+   // Zero-copy span tests require little-endian (BEVE wire format is little-endian)
+   if constexpr (std::endian::native == std::endian::little) {
+
    "zero-copy span<const double>"_test = [] {
       std::vector<double> v = {1.0, 2.0, 3.0, 4.0};
       std::string beve;
@@ -1256,6 +1259,8 @@ void aligned_typed_array_tests()
       expect(reinterpret_cast<uintptr_t>(dst.positions.data()) % alignof(float) == uintptr_t(0));
       expect(reinterpret_cast<uintptr_t>(dst.indices.data()) % alignof(int32_t) == uintptr_t(0));
    };
+
+   } // if constexpr little-endian
 }
 
 void bench()
