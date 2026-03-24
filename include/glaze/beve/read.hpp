@@ -841,6 +841,10 @@ namespace glz
          }
          const uint8_t padding = uint8_t(*it);
          ++it;
+         if (padding >= sizeof(V)) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
 
          if ((it + padding + n * sizeof(V)) > end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
@@ -1017,6 +1021,10 @@ namespace glz
                      }
                      const uint8_t padding = uint8_t(*it);
                      ++it;
+                     if (padding >= elem_byte_count) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                      if ((it + padding + count * elem_byte_count) > end) [[unlikely]] {
                         ctx.error = error_code::unexpected_end;
                         return;
@@ -1054,6 +1062,10 @@ namespace glz
                }
                const uint8_t padding = uint8_t(*it);
                ++it;
+               if (padding >= sizeof(V)) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
 
                if ((it + padding + count * sizeof(V)) > end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;

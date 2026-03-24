@@ -1100,6 +1100,76 @@ void aligned_typed_array_tests()
       }
    };
 
+   "aligned large array compressed int 2-byte"_test = [] {
+      // >63 elements forces 2-byte compressed int encoding
+      std::vector<double> v(100);
+      for (size_t i = 0; i < v.size(); ++i) {
+         v[i] = static_cast<double>(i);
+      }
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      std::vector<double> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned large array compressed int 4-byte"_test = [] {
+      // >16383 elements forces 4-byte compressed int encoding
+      std::vector<float> v(20000);
+      for (size_t i = 0; i < v.size(); ++i) {
+         v[i] = static_cast<float>(i);
+      }
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      std::vector<float> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned allow_conversions float32 to double"_test = [] {
+      // Write as aligned float32, read into vector<double> with conversions
+      std::vector<float> v = {1.0f, 2.0f, 3.0f};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      struct convert_opts : glz::opts
+      {
+         bool allow_conversions = true;
+      };
+      std::vector<double> v2;
+      expect(!glz::read<convert_opts{glz::opts{.format = glz::BEVE}}>(v2, out));
+      expect(v2.size() == size_t(3));
+      expect(v2[0] == 1.0);
+      expect(v2[1] == 2.0);
+      expect(v2[2] == 3.0);
+   };
+
+   "aligned variant containing array"_test = [] {
+      using V = std::variant<int, std::vector<double>>;
+      V v = std::vector<double>{1.0, 2.0, 3.0};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      V v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(std::holds_alternative<std::vector<double>>(v2));
+      expect(std::get<std::vector<double>>(v2) == std::vector<double>{1.0, 2.0, 3.0});
+   };
+
+   "aligned map values"_test = [] {
+      std::map<std::string, std::vector<double>> m;
+      m["a"] = {1.0, 2.0};
+      m["b"] = {3.0, 4.0, 5.0};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(m, out));
+
+      std::map<std::string, std::vector<double>> m2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(m2, out));
+      expect(m == m2);
+   };
+
    // Zero-copy span tests require little-endian (BEVE wire format is little-endian)
    if constexpr (std::endian::native == std::endian::little) {
 

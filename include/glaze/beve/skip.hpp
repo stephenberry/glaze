@@ -129,6 +129,10 @@ namespace glz
          }
          const uint8_t padding = uint8_t(*it);
          ++it;
+         if (padding >= elem_byte_count) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
          if (uint64_t(end - it) < padding + elem_byte_count * n) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;

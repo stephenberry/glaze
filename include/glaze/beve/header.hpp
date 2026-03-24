@@ -94,7 +94,7 @@ namespace glz::tag
    constexpr uint8_t f128 = 0b100'00'001;
 
    // Aligned typed array: category 3, sub-type 2 (bit 6 set, bits 5 and 7 clear)
-   // Layout: ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING | DATA
+   // Layout: ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
    constexpr uint8_t aligned_typed_array = 0b010'11'100; // 0x5C
 }
 
