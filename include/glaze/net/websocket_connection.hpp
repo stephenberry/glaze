@@ -1542,7 +1542,7 @@ namespace glz
                   asio::buffer(read_buf_.data() + buf_len_, read_buf_.size() - buf_len_),
                   fallback_ec);
                if (!fallback_ec && n == 0) {
-                  fallback_ec = asio::error::eof;
+                  fallback_ec = asio::error::make_error_code(asio::error::eof);
                }
             }
             if (fallback_ec) {
@@ -1587,7 +1587,7 @@ namespace glz
                // TCP graceful close (EOF). Synchronous read_some returns 0 with no
                // error — unlike async_read_some which surfaces error::eof. Without
                // this check, the connection would busy-loop.
-               read_ec = asio::error::eof;
+               read_ec = asio::error::make_error_code(asio::error::eof);
             }
             if (!read_ec) {
                offset += n;
