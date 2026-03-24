@@ -451,6 +451,7 @@ namespace glz
                                   std::weak_ptr<websocket_server> server = std::weak_ptr<websocket_server>{})
          : socket_(socket), server_(std::move(server))
       {
+         read_buf_.resize(initial_read_buf_size);
          // Try to get remote endpoint, but don't fail if it's not available yet
          try {
             remote_endpoint_ = socket_->lowest_layer().remote_endpoint();
@@ -560,15 +561,30 @@ namespace glz
       // Inject initial data read during handshake
       inline void set_initial_data(std::string_view data)
       {
-         frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
-         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
-         if (consumed > 0) {
-            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+         if (buf_len_ + data.size() > read_buf_.size()) {
+            read_buf_.resize(buf_len_ + data.size());
          }
+         std::memcpy(read_buf_.data() + buf_len_, data.data(), data.size());
+         buf_len_ += data.size();
+
+         compact_read_buf(process_frames(read_buf_.data(), buf_len_));
       }
 
      private:
+      static constexpr size_t initial_read_buf_size = 16384;
       size_t max_message_size_{1024 * 1024 * 16}; // 16 MB limit
+
+      // Shift unconsumed data to the front of read_buf_ after processing frames.
+      inline void compact_read_buf(size_t consumed)
+      {
+         if (consumed > 0) {
+            size_t remaining = buf_len_ - consumed;
+            if (remaining > 0) {
+               std::memmove(read_buf_.data(), read_buf_.data() + consumed, remaining);
+            }
+            buf_len_ = remaining;
+         }
+      }
 
       inline void perform_handshake(const request& req)
       {
@@ -673,20 +689,16 @@ namespace glz
             return;
          }
 
-         // Add received data to frame buffer
-         frame_buffer_.insert(frame_buffer_.end(), read_buffer_.begin(), read_buffer_.begin() + bytes_transferred);
+         buf_len_ += bytes_transferred;
 
          // Check buffer size limit (simple DoS protection)
-         if (frame_buffer_.size() > max_message_size_ + 1024) { // Allow some header overhead
+         if (buf_len_ > max_message_size_ + 1024) { // Allow some header overhead
             close(ws_close_code::message_too_big, "Buffer limit exceeded");
             return;
          }
 
-         // Process complete frames
-         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
-         if (consumed > 0) {
-            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
-         }
+         // Process complete frames directly from the flat buffer
+         compact_read_buf(process_frames(read_buf_.data(), buf_len_));
 
          // Continue reading if connection is still open
          // RFC 6455 Section 7.1.1: The initiator must continue reading to receive the peer's
@@ -758,21 +770,40 @@ namespace glz
             uint8_t* payload_ptr = data + offset + header_size;
             const auto payload_size = static_cast<size_t>(payload_length);
 
+            // Fused unmask + ASCII detection: unmask payload and simultaneously check
+            // whether all bytes are ASCII (high bit clear). If all ASCII, we can skip
+            // the separate UTF-8 validation pass for text frames.
+            bool all_ascii = false;
             if (header.mask() && payload_size > 0) {
-               for (std::size_t i = 0; i < payload_size; ++i) {
-                  payload_ptr[i] ^= mask_key[i % 4];
+               uint32_t mask32;
+               std::memcpy(&mask32, mask_key.data(), 4);
+               uint64_t mask64 = (static_cast<uint64_t>(mask32) << 32) | mask32;
+               uint64_t high_bits_acc = 0;
+               size_t i = 0;
+               for (; i + 8 <= payload_size; i += 8) {
+                  uint64_t chunk;
+                  std::memcpy(&chunk, payload_ptr + i, 8);
+                  chunk ^= mask64;
+                  std::memcpy(payload_ptr + i, &chunk, 8);
+                  high_bits_acc |= chunk;
                }
+               for (; i < payload_size; ++i) {
+                  payload_ptr[i] ^= mask_key[i % 4];
+                  high_bits_acc |= static_cast<uint64_t>(payload_ptr[i]);
+               }
+               all_ascii = !(high_bits_acc & 0x8080808080808080ULL);
             }
 
             // Handle the frame
-            handle_frame(header.opcode(), payload_ptr, payload_size, header.fin());
+            handle_frame(header.opcode(), payload_ptr, payload_size, header.fin(), all_ascii);
 
             offset += header_size + static_cast<size_t>(payload_length);
          }
          return offset;
       }
 
-      inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin)
+      inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin,
+                              bool all_ascii)
       {
          switch (opcode) {
          case ws_opcode::text:
@@ -790,7 +821,8 @@ namespace glz
             if (fin) {
                // Complete single-frame message - deliver directly (zero-copy)
                if (opcode == ws_opcode::text) {
-                  if (!glz::validate_utf8(payload, length)) {
+                  // Skip full UTF-8 validation if all bytes are ASCII (detected during unmask)
+                  if (!all_ascii && !glz::validate_utf8(payload, length)) {
                      close(ws_close_code::invalid_payload, "Invalid UTF-8");
                      return;
                   }
@@ -913,66 +945,71 @@ namespace glz
          }
 
          std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
-         auto frame_buffer = std::make_unique<std::vector<uint8_t>>(header_size + payload.size());
+         bool fast_path = false;
 
-         write_frame_header(opcode, payload.size(), fin, frame_buffer->data(), client_mode_);
-         std::copy(payload.begin(), payload.end(), frame_buffer->begin() + header_size);
-
-         // Apply masking if in client mode
-         if (client_mode_ && payload.size() > 0) {
-            // Get the masking key from the header
-            std::size_t mask_key_offset = header_size - 4;
-            const uint8_t* mask_key = frame_buffer->data() + mask_key_offset;
-            // Mask the payload
-            for (std::size_t i = 0; i < payload.size(); ++i) {
-               (*frame_buffer)[header_size + i] ^= mask_key[i % 4];
-            }
-         }
-
-         // Queue the frame and start writing if not already in progress
          {
             std::lock_guard<std::mutex> lock(write_mutex_);
-            write_queue_.push_back(std::move(frame_buffer));
             if (close_after) {
                close_after_write_ = true; // Set atomically with queuing
             }
-            if (write_in_progress_) {
-               return; // Another write is in progress, frame will be sent when it completes
-            }
-            write_in_progress_ = true;
-         }
-
-         // Start writing the queued frame
-         do_write();
-      }
-
-      // Process the write queue - called when a write completes or when starting a new write
-      inline void do_write()
-      {
-         std::unique_ptr<std::vector<uint8_t>> frame_buffer;
-         bool should_close_after = false;
-
-         {
-            std::lock_guard<std::mutex> lock(write_mutex_);
-            if (write_queue_.empty()) {
-               write_in_progress_ = false;
-               should_close_after = close_after_write_;
-               close_after_write_ = false;
+            if (!write_in_progress_) {
+               // Fast path: build frame directly in persistent write_buf_ (no allocation)
+               write_in_progress_ = true;
+               fast_path = true;
             }
             else {
-               frame_buffer = std::move(write_queue_.front());
-               write_queue_.pop_front();
+               // Slow path: allocate and queue (another write is in progress)
+               std::vector<uint8_t> frame_data(header_size + payload.size());
+               write_frame_header(opcode, payload.size(), fin, frame_data.data(), client_mode_);
+               std::memcpy(frame_data.data() + header_size, payload.data(), payload.size());
+               if (client_mode_ && payload.size() > 0) {
+                  apply_masking(frame_data.data(), header_size, payload.size());
+               }
+               pending_writes_.push_back(std::move(frame_data));
+               return;
             }
          }
 
-         // Handle close-after-write when queue is empty
-         if (!frame_buffer) {
-            if (should_close_after) {
-               schedule_close();
-            }
-            return;
+         // Fast path: build frame in persistent buffer (capacity reused, no allocation).
+         // write_buf_ is exclusively owned by the writer when write_in_progress_ == true,
+         // so no lock is needed here. Other threads will queue to pending_writes_ instead.
+         write_buf_.resize(header_size + payload.size());
+         write_frame_header(opcode, payload.size(), fin, write_buf_.data(), client_mode_);
+         std::memcpy(write_buf_.data() + header_size, payload.data(), payload.size());
+         if (client_mode_ && payload.size() > 0) {
+            apply_masking(write_buf_.data(), header_size, payload.size());
          }
 
+         start_async_write();
+      }
+
+      // Apply XOR masking to payload in a frame buffer (client mode only)
+      inline void apply_masking(uint8_t* frame_data, size_t header_size, size_t payload_size)
+      {
+         size_t mask_key_offset = header_size - 4;
+         const uint8_t* mask_key = frame_data + mask_key_offset;
+         uint8_t* payload = frame_data + header_size;
+         uint32_t mask32;
+         std::memcpy(&mask32, mask_key, 4);
+         uint64_t mask64 = (static_cast<uint64_t>(mask32) << 32) | mask32;
+         size_t i = 0;
+         for (; i + 8 <= payload_size; i += 8) {
+            uint64_t chunk;
+            std::memcpy(&chunk, payload + i, 8);
+            chunk ^= mask64;
+            std::memcpy(payload + i, &chunk, 8);
+         }
+         for (; i < payload_size; ++i) {
+            payload[i] ^= mask_key[i % 4];
+         }
+      }
+
+      // Start an async write from write_buf_.
+      // IMPORTANT: write_buf_ must not be modified between this call and the completion handler.
+      // The async_write references write_buf_.data() directly. Only drain_write_queue (called from
+      // the completion handler) may touch write_buf_ after the write finishes.
+      inline void start_async_write()
+      {
          // Hold socket_op_mutex_ while setting up the async write operation.
          // This prevents close() from being called while async_write() is setting up.
          // ASIO socket operations are NOT thread-safe for concurrent calls.
@@ -989,7 +1026,7 @@ namespace glz
                std::lock_guard<std::mutex> lock(write_mutex_);
                write_in_progress_ = false;
                had_close_pending = close_after_write_;
-               write_queue_.clear();
+               pending_writes_.clear();
                close_after_write_ = false;
             }
             if (had_close_pending) {
@@ -999,18 +1036,15 @@ namespace glz
          }
 
          auto self = this->shared_from_this();
-         // Create buffer view before moving frame_buffer into lambda (C++14 evaluation order safety)
-         auto buffer_view = asio::buffer(*frame_buffer);
-         asio::async_write(*socket, buffer_view,
-                           [self, socket, frame_buffer = std::move(frame_buffer)](std::error_code ec, std::size_t) {
+         asio::async_write(*socket, asio::buffer(write_buf_.data(), write_buf_.size()),
+                           [self, socket](std::error_code ec, size_t) {
                               if (ec) {
-                                 // Mark connection as closing before notifying handlers to avoid re-entrant close
-                                 // attempts
+                                 // Mark as closing before notifying handlers to avoid re-entrant close attempts
                                  self->is_closing_ = true;
                                  {
                                     std::lock_guard<std::mutex> lock(self->write_mutex_);
                                     self->write_in_progress_ = false;
-                                    self->write_queue_.clear();
+                                    self->pending_writes_.clear();
                                     self->close_after_write_ = false;
                                  }
                                  // Only call error handlers if not already closed (prevents calling handlers
@@ -1023,9 +1057,40 @@ namespace glz
                                  return;
                               }
 
-                              // Process next frame in queue
-                              self->do_write();
+                              // Drain pending writes
+                              self->drain_write_queue();
                            });
+      }
+
+      // Process queued writes after a write completes
+      inline void drain_write_queue()
+      {
+         bool queue_empty = false;
+         bool should_close_after = false;
+
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (pending_writes_.empty()) {
+               write_in_progress_ = false;
+               should_close_after = close_after_write_;
+               close_after_write_ = false;
+               queue_empty = true;
+            }
+            else {
+               // write_buf_ is exclusively owned by the writer when write_in_progress_ == true
+               write_buf_ = std::move(pending_writes_.front());
+               pending_writes_.pop_front();
+            }
+         }
+
+         if (queue_empty) {
+            if (should_close_after) {
+               schedule_close();
+            }
+            return;
+         }
+
+         start_async_write();
       }
 
       // Close the socket after the close frame has been sent (responder side)
@@ -1200,8 +1265,8 @@ namespace glz
 
       std::shared_ptr<SocketType> socket_;
       std::weak_ptr<websocket_server> server_;
-      std::array<uint8_t, 16384> read_buffer_;
-      std::vector<uint8_t> frame_buffer_;
+      std::vector<uint8_t> read_buf_; // Flat read buffer (replaces read_buffer_ + frame_buffer_)
+      size_t buf_len_{0}; // Valid data in read_buf_[0..buf_len_)
       std::vector<uint8_t> message_buffer_;
       ws_opcode current_opcode_{ws_opcode::continuation};
       bool is_reading_frame_{false};
@@ -1212,9 +1277,10 @@ namespace glz
       asio::ip::tcp::endpoint remote_endpoint_;
       bool client_mode_{false}; // For client-side connections (requires masking)
 
-      // Write queue for serializing outgoing frames (prevents interleaved writes)
+      // Write state for serializing outgoing frames (prevents interleaved writes)
       std::mutex write_mutex_;
-      std::deque<std::unique_ptr<std::vector<uint8_t>>> write_queue_;
+      std::vector<uint8_t> write_buf_; // Persistent write buffer (capacity reused across messages)
+      std::deque<std::vector<uint8_t>> pending_writes_; // Queue for concurrent writes
       bool write_in_progress_{false};
       bool close_after_write_{false}; // Close socket after write queue drains
 
@@ -1278,8 +1344,13 @@ namespace glz
             return;
          }
 
+         // Grow buffer if full (capped at max message size + frame overhead)
+         if (buf_len_ == read_buf_.size()) {
+            read_buf_.resize((std::min)(read_buf_.size() * 2, max_message_size_ + 16384));
+         }
+
          auto self = this->shared_from_this();
-         socket->async_read_some(asio::buffer(read_buffer_),
+         socket->async_read_some(asio::buffer(read_buf_.data() + buf_len_, read_buf_.size() - buf_len_),
                                  [self, socket](std::error_code ec, std::size_t bytes_transferred) {
                                     self->on_read(ec, bytes_transferred);
                                  });

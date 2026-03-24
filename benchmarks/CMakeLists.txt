@@ -119,3 +119,6 @@ target_compile_options(ordered_map_memory PRIVATE
 
 # HTTP server benchmark: Glaze vs Boost.Beast
 add_subdirectory(http_benchmark)
+
+# WebSocket benchmark: Glaze vs uWebSockets
+add_subdirectory(ws_benchmark)
