@@ -1530,7 +1530,7 @@ namespace glz
             // async_wait already fired — the socket is readable. Do a synchronous
             // read into read_buf_ (per-connection) and process directly.
             ensure_read_buf_capacity();
-            std::error_code fallback_ec;
+            asio::error_code fallback_ec;
             size_t n = 0;
             {
                std::lock_guard<std::mutex> lock(socket_op_mutex_);
@@ -1542,7 +1542,7 @@ namespace glz
                   asio::buffer(read_buf_.data() + buf_len_, read_buf_.size() - buf_len_),
                   fallback_ec);
                if (!fallback_ec && n == 0) {
-                  fallback_ec = asio::error::make_error_code(asio::error::eof);
+                  fallback_ec = asio::error::eof;
                }
             }
             if (fallback_ec) {
@@ -1561,7 +1561,7 @@ namespace glz
          // Safe outside the lock: the shared buffer is server-owned (refcounted via
          // shared_ptr). The ASIO single-threaded callback guarantee means no other
          // callback on this thread touches the shared buffer concurrently.
-         std::error_code read_ec;
+         asio::error_code read_ec;
          size_t offset = buf_len_;
          if (offset > 0) {
             if (offset > buf.size()) {
@@ -1587,7 +1587,7 @@ namespace glz
                // TCP graceful close (EOF). Synchronous read_some returns 0 with no
                // error — unlike async_read_some which surfaces error::eof. Without
                // this check, the connection would busy-loop.
-               read_ec = asio::error::make_error_code(asio::error::eof);
+               read_ec = asio::error::eof;
             }
             if (!read_ec) {
                offset += n;
@@ -1599,7 +1599,7 @@ namespace glz
                   static constexpr size_t max_ssl_drain_iterations = 4;
                   size_t drain_count = 0;
                   while (offset < buf.size() && drain_count < max_ssl_drain_iterations) {
-                     std::error_code drain_ec;
+                     asio::error_code drain_ec;
                      auto m = socket->read_some(
                         asio::buffer(buf.data() + offset, buf.size() - offset),
                         drain_ec);
