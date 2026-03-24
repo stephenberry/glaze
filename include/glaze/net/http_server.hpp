@@ -1215,19 +1215,11 @@ namespace glz
 
       /// @brief Set the shared WebSocket receive buffer size per thread.
       ///
-      /// When enabled (size > 0), all WebSocket connections on a given thread share a
-      /// single receive buffer, eliminating per-connection allocation and reducing the
-      /// number of async read operations for large messages.
+      /// All WebSocket connections on a given thread share a single receive buffer,
+      /// eliminating per-connection allocation. Set to 0 to disable (uses per-connection
+      /// buffers instead). Non-zero values below 16KB are clamped to 16KB.
+      /// Recommended: power-of-2 sizes (e.g., 256KB, 512KB).
       ///
-      /// @warning When shared receive buffers are enabled, the string_view passed to
-      /// on_message is ONLY valid for the duration of the callback. Retaining a reference
-      /// after the callback returns causes undefined behavior (silent data corruption).
-      /// Copy the data if you need it later. This is an opt-in performance mode — the
-      /// default (0) uses per-connection buffers where the view is valid until the next read.
-      ///
-      /// @param size Buffer size in bytes. 0 = disabled (default). Non-zero values
-      ///             below 16KB are clamped to 16KB. Recommended: power-of-2 sizes
-      ///             (e.g., 256KB, 512KB).
       /// @return Reference to this server for method chaining
       inline http_server& ws_recv_buffer_size(size_t size)
       {
@@ -1438,9 +1430,9 @@ namespace glz
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
 
-      // WebSocket shared receive buffers (opt-in via ws_recv_buffer_size()).
-      // Default 0 = per-connection buffers. When > 0, allocates one buffer per thread.
-      size_t ws_recv_buffer_size_{0};
+      // WebSocket shared receive buffers (one per thread).
+      // Set to 0 to disable (falls back to per-connection buffers).
+      size_t ws_recv_buffer_size_{512 * 1024};
       std::shared_ptr<std::vector<std::vector<uint8_t>>> ws_recv_buffers_;
       std::shared_ptr<ws_thread_map> ws_thread_indices_;
 
