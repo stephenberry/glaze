@@ -776,15 +776,29 @@ namespace glz
             }
          }
 
+         // Allocate shared WebSocket receive buffers if configured
+         if (ws_recv_buffer_size_ > 0 && actual_threads > 0) {
+            ws_recv_buffers_ = std::make_shared<std::vector<std::vector<uint8_t>>>(actual_threads);
+            for (auto& buf : *ws_recv_buffers_) {
+               buf.resize(ws_recv_buffer_size_);
+            }
+         }
+
          // Start the acceptor
          do_accept();
          // Start worker threads (unless explicitly set to 0)
          if (io_context && actual_threads > 0) {
+            // Thread index map: each thread registers its ID → buffer index at startup.
+            // Thread-safe: each thread writes its own unique entry before io_context::run()
+            // processes any connections.
+            ws_thread_indices_ = std::make_shared<ws_thread_map>();
+            ws_thread_indices_->reserve(actual_threads);
+
             threads.reserve(actual_threads);
             for (size_t i = 0; i < actual_threads; ++i) {
-               threads.emplace_back([this] {
+               threads.emplace_back([this, i] {
+                  ws_thread_indices_->emplace(std::this_thread::get_id(), i);
                   io_context->run();
-                  // Don't report errors during shutdown
                });
             }
          }
@@ -1195,6 +1209,31 @@ namespace glz
          return *this;
       }
 
+      /// @brief Set the shared WebSocket receive buffer size per thread.
+      ///
+      /// When enabled (size > 0), all WebSocket connections on a given thread share a
+      /// single receive buffer, eliminating per-connection allocation and reducing the
+      /// number of async read operations for large messages.
+      ///
+      /// @warning When shared receive buffers are enabled, the string_view passed to
+      /// on_message is ONLY valid for the duration of the callback. Retaining a reference
+      /// after the callback returns causes undefined behavior (silent data corruption).
+      /// Copy the data if you need it later. This is an opt-in performance mode — the
+      /// default (0) uses per-connection buffers where the view is valid until the next read.
+      ///
+      /// @param size Buffer size in bytes. 0 = disabled (default). Non-zero values
+      ///             below 16KB are clamped to 16KB. Recommended: power-of-2 sizes
+      ///             (e.g., 256KB, 512KB).
+      /// @return Reference to this server for method chaining
+      inline http_server& ws_recv_buffer_size(size_t size)
+      {
+         if (size > 0 && size < 16384) {
+            size = 16384;
+         }
+         ws_recv_buffer_size_ = size;
+         return *this;
+      }
+
       /**
        * @brief Register a hook to be called when a request is received
        *
@@ -1394,6 +1433,12 @@ namespace glz
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
+
+      // WebSocket shared receive buffers (opt-in via ws_recv_buffer_size()).
+      // Default 0 = per-connection buffers. When > 0, allocates one buffer per thread.
+      size_t ws_recv_buffer_size_{0};
+      std::shared_ptr<std::vector<std::vector<uint8_t>>> ws_recv_buffers_;
+      std::shared_ptr<ws_thread_map> ws_thread_indices_;
 
       // Wrapping middleware (executes around handlers)
       std::vector<wrapping_middleware> wrapping_middlewares_;
@@ -2203,7 +2248,8 @@ namespace glz
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
          auto socket_ptr = std::make_shared<socket_type>(std::move(conn->socket));
-         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(socket_ptr, ws_it->second);
+         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(
+            socket_ptr, ws_it->second, ws_recv_buffers_, ws_thread_indices_);
          ws_conn->start(req);
       }
 

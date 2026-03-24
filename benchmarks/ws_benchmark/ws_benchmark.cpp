@@ -202,6 +202,7 @@ struct glaze_ws_server
 
       server.websocket("/ws", ws);
       server.bind("127.0.0.1", port);
+      server.ws_recv_buffer_size(512 * 1024); // 512KB shared receive buffer per thread
       thread = std::thread([this]() { server.start(1); });
       wait_for_server(port);
    }
