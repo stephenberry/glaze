@@ -785,6 +785,73 @@ namespace glz
       }
    };
 
+   // Zero-copy specialization for std::span<const T> with aligned typed arrays.
+   // Instead of copying data, the span is set to point directly into the BEVE buffer.
+   // The buffer must outlive the span.
+   // Only available on little-endian systems (BEVE wire format is little-endian).
+   template <class T, size_t Extent>
+      requires(std::is_const_v<T> && num_t<std::remove_const_t<T>> && sizeof(T) > 1 &&
+               std::endian::native == std::endian::little)
+   struct from<BEVE, std::span<T, Extent>> final
+   {
+      using V = std::remove_const_t<T>;
+
+      template <auto Opts>
+      static void op(std::span<T, Extent>& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         const auto tag = uint8_t(*it);
+
+         if (tag != tag::aligned_typed_array) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         ++it; // skip aligned header
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         const auto numeric_tag = uint8_t(*it);
+         constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+         constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<V> << 5);
+         if (numeric_tag != expected_header) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         ++it; // skip numeric header
+
+         const size_t n = int_from_compressed(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         if constexpr (Extent != std::dynamic_extent) {
+            if (n != Extent) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+
+         // Read padding length byte and skip padding
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         const uint8_t padding = uint8_t(*it);
+         ++it;
+
+         if ((it + padding + n * sizeof(V)) > end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         it += padding;
+
+         value = std::span<T, Extent>{reinterpret_cast<const V*>(&(*it)), n};
+         it += n * sizeof(V);
+      }
+   };
+
    template <readable_array_t T>
    struct from<BEVE, T> final
    {
@@ -854,6 +921,36 @@ namespace glz
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
 
+            auto validate_and_resize = [&](size_t n) -> bool {
+               if constexpr (check_max_array_size(Opts) > 0) {
+                  if (n > check_max_array_size(Opts)) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return false;
+                  }
+               }
+               if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
+                  if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
+                     ctx.error = error_code::invalid_length;
+                     return false;
+                  }
+               }
+
+               if constexpr (resizable<T>) {
+                  value.resize(n);
+
+                  if constexpr (check_shrink_to_fit(Opts)) {
+                     value.shrink_to_fit();
+                  }
+               }
+               else {
+                  if (n > value.size()) {
+                     ctx.error = error_code::syntax_error;
+                     return false;
+                  }
+               }
+               return true;
+            };
+
             auto prepare = [&](const size_t element_size) -> size_t {
                ++it;
                if (invalid_end(ctx, it, end)) {
@@ -873,37 +970,102 @@ namespace glz
                   ctx.error = error_code::unexpected_end;
                   return 0;
                }
-               if constexpr (check_max_array_size(Opts) > 0) {
-                  if (n > check_max_array_size(Opts)) [[unlikely]] {
-                     ctx.error = error_code::invalid_length;
-                     return 0;
-                  }
-               }
-               if constexpr (has_runtime_max_array_size<std::decay_t<decltype(ctx)>>) {
-                  if (ctx.max_array_size > 0 && n > ctx.max_array_size) [[unlikely]] {
-                     ctx.error = error_code::invalid_length;
-                     return 0;
-                  }
-               }
-
-               if constexpr (resizable<T>) {
-                  value.resize(n);
-
-                  if constexpr (check_shrink_to_fit(Opts)) {
-                     value.shrink_to_fit();
-                  }
-               }
-               else {
-                  if (n > value.size()) {
-                     ctx.error = error_code::syntax_error;
-                     return 0;
-                  }
+               if (!validate_and_resize(n)) {
+                  return 0;
                }
 
                return n;
             };
 
-            if (tag != header) {
+            size_t n = 0;
+
+            if (tag == tag::aligned_typed_array) {
+               // Aligned typed array: ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
+               ++it; // skip aligned header byte
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
+               const auto numeric_tag = uint8_t(*it);
+               // Verify bits 0-2 are typed_array tag
+               if ((numeric_tag & 0b00000'111) != tag::typed_array) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               // Verify it's a numeric type (category 0, 1, or 2, not 3)
+               if (((numeric_tag >> 3) & 0b11) == 3) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               if (numeric_tag != header) {
+                  if constexpr (check_allow_conversions(Opts)) {
+                     const uint8_t elem_byte_count = byte_count_lookup[numeric_tag >> 5];
+                     ++it; // skip numeric header
+                     std::conditional_t<Opts.partial_read, size_t, const size_t> count =
+                        int_from_compressed(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     if constexpr (Opts.partial_read) {
+                        count = value.size();
+                     }
+
+                     // Read padding length byte and skip padding
+                     if (invalid_end(ctx, it, end)) {
+                        return;
+                     }
+                     const uint8_t padding = uint8_t(*it);
+                     ++it;
+                     if ((it + padding + count * elem_byte_count) > end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                     it += padding;
+
+                     if (!validate_and_resize(count)) {
+                        return;
+                     }
+
+                     for (auto&& x : value) {
+                        const uint8_t number_tag = tag::number | (numeric_tag & 0b11111000);
+                        parse<BEVE>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
+                     }
+                     return;
+                  }
+                  else {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               }
+
+               ++it; // skip numeric header
+               std::conditional_t<Opts.partial_read, size_t, const size_t> count = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if constexpr (Opts.partial_read) {
+                  count = value.size();
+               }
+
+               // Read padding length byte and skip padding
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
+               const uint8_t padding = uint8_t(*it);
+               ++it;
+
+               if ((it + padding + count * sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               it += padding;
+
+               if (!validate_and_resize(count)) {
+                  return;
+               }
+               n = count;
+            }
+            else if (tag != header) {
                if constexpr (check_allow_conversions(Opts)) {
                   if (tag != header) [[unlikely]] {
                      if constexpr (check_allow_conversions(Opts)) {
@@ -935,10 +1097,11 @@ namespace glz
                   return;
                }
             }
-
-            const auto n = prepare(sizeof(V));
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
+            else {
+               n = prepare(sizeof(V));
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
 
             if constexpr (contiguous<T>) {
@@ -2178,4 +2341,5 @@ namespace glz
       context ctx{};
       return read_beve_at<Opts>(value, std::forward<Buffer>(buffer), offset, ctx);
    }
+
 }
