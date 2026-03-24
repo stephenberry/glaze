@@ -12915,6 +12915,23 @@ struct glaze_value_nullable_obj
    std::string required_field{};
 };
 
+struct glaze_value_ptr_field
+{
+   std::unique_ptr<int> ptr;
+   struct glaze
+   {
+      static constexpr auto value{&glaze_value_ptr_field::ptr};
+   };
+};
+
+struct glaze_value_nullable_multi_obj
+{
+   glaze_value_nullable_field a{};
+   glaze_value_ptr_field b{};
+   std::string c{};
+   glaze_value_nullable_field d{};
+};
+
 struct cast_nullable_obj
 {
    std::optional<double> a;
@@ -12977,6 +12994,83 @@ suite cast_tests = [] {
       data = R"({"a":null})";
       ec = glz::read<opts>(obj, data);
       expect(ec == glz::error_code::missing_key);
+   };
+
+   "glaze_value_t nullable skip_null_members write"_test = [] {
+      // When skip_null_members is enabled (default), writing a glaze_value_t
+      // wrapping a nullable type should skip the field when the inner value is null
+      glaze_value_nullable_obj obj{};
+      obj.required_field = "hello";
+      // field_name.my_val is std::nullopt by default
+
+      auto result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"required_field":"hello"})") << result.value();
+
+      // With value present, the field should be written
+      obj.field_name.my_val = 42;
+      result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"field_name":42,"required_field":"hello"})") << result.value();
+   };
+
+   "glaze_value_t nullable unique_ptr inner type"_test = [] {
+      glaze_value_nullable_multi_obj obj{};
+      obj.c = "hello";
+      // a (optional) and b (unique_ptr) and d (optional) are all null
+
+      auto result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"c":"hello"})") << result.value();
+
+      // Set only the unique_ptr field
+      obj.b.ptr = std::make_unique<int>(99);
+      result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"b":99,"c":"hello"})") << result.value();
+
+      // Set all fields
+      obj.a.my_val = 1;
+      obj.d.my_val = 4;
+      result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"a":1,"b":99,"c":"hello","d":4})") << result.value();
+   };
+
+   "glaze_value_t nullable skip_null_members false"_test = [] {
+      constexpr auto opts = glz::opts{.format = glz::JSON, .skip_null_members = false};
+
+      glaze_value_nullable_obj obj{};
+      obj.required_field = "hello";
+
+      auto result = glz::write<opts>(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"field_name":null,"required_field":"hello"})") << result.value();
+   };
+
+   "glaze_value_t nullable write then read round-trip"_test = [] {
+      // Round-trip with null field: field is skipped, reading into default object preserves nullopt
+      glaze_value_nullable_obj obj{};
+      obj.required_field = "hello";
+
+      auto json = glz::write_json(obj);
+      expect(json.has_value());
+
+      glaze_value_nullable_obj obj2{};
+      auto ec = glz::read_json(obj2, json.value());
+      expect(!ec) << glz::format_error(ec, json.value());
+      expect(!obj2.field_name.my_val.has_value());
+      expect(obj2.required_field == "hello");
+
+      // Round-trip with value present
+      obj.field_name.my_val = 42;
+      json = glz::write_json(obj);
+      expect(json.has_value());
+
+      ec = glz::read_json(obj2, json.value());
+      expect(!ec) << glz::format_error(ec, json.value());
+      expect(obj2.field_name.my_val.has_value());
+      expect(obj2.field_name.my_val.value() == 42);
    };
 
    "glaze_value_t nullable with error_on_missing_keys"_test = [] {

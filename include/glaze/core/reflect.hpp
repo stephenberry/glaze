@@ -429,6 +429,41 @@ namespace glz
       }
    }
 
+   // Check if a glaze_value_t wraps a nullable inner type (write side).
+   template <class V>
+   consteval bool glaze_value_is_nullable()
+   {
+      if constexpr (glaze_value_t<V>) {
+         return null_t<remove_meta_wrapper_t<V>>;
+      }
+      else {
+         return false;
+      }
+   }
+
+   // Runtime check: is a glaze_value_t field currently null?
+   template <class T, size_t I, class Value, class Tie>
+   bool is_glaze_value_field_null(Value&& value, Tie&& t)
+   {
+      using val_t = field_t<T, I>;
+      using Inner = remove_meta_wrapper_t<val_t>;
+      decltype(auto) element = [&]() -> decltype(auto) {
+         if constexpr (reflectable<T>) {
+            return get<I>(t);
+         }
+         else {
+            return get<I>(reflect<T>::values);
+         }
+      };
+      auto&& inner_val = get_member(get_member(value, element()), meta_wrapper_v<val_t>);
+      if constexpr (nullable_value_t<Inner>) {
+         return !inner_val.has_value();
+      }
+      else {
+         return !bool(inner_val);
+      }
+   }
+
    template <auto Opts, class T>
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
@@ -443,7 +478,8 @@ namespace glz
                return (
                   (always_skipped<field_t<T, I>> ||
                    (!write_function_pointers && is_member_function_pointer<field_t<T, I>>) || null_t<field_t<T, I>> ||
-                   (is_specialization_v<field_t<T, I>, custom_t> && custom_getter_returns_nullable<field_t<T, I>>())) ||
+                   (is_specialization_v<field_t<T, I>, custom_t> && custom_getter_returns_nullable<field_t<T, I>>()) ||
+                   glaze_value_is_nullable<field_t<T, I>>()) ||
                   ...);
             }(std::make_index_sequence<N>{});
          }

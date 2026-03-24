@@ -389,6 +389,21 @@ struct outer_skip_struct
    std::optional<bool> outer_opt2{};
 };
 
+struct beve_glaze_value_nullable_field
+{
+   std::optional<int> my_val;
+   struct glaze
+   {
+      static constexpr auto value{&beve_glaze_value_nullable_field::my_val};
+   };
+};
+
+struct beve_glaze_value_nullable_obj
+{
+   beve_glaze_value_nullable_field field_name{};
+   std::string required_field{};
+};
+
 void write_tests()
 {
    using namespace ut;
@@ -712,6 +727,33 @@ void write_tests()
          expect(json_obj3.nested.inner_opt2 == beve_obj3.nested.inner_opt2);
          expect(json_obj3.nested.inner_opt2.value() == 3.14159);
       }
+   };
+
+   "glaze_value_t nullable skip_null_members beve round-trip"_test = [] {
+      // Null field should be skipped in BEVE output, then read back as default
+      beve_glaze_value_nullable_obj obj{};
+      obj.required_field = "hello";
+
+      std::vector<char> buffer;
+      auto write_err = glz::write_beve(obj, buffer);
+      expect(!write_err);
+
+      beve_glaze_value_nullable_obj obj2{};
+      auto read_err = glz::read_beve(obj2, buffer);
+      expect(!read_err);
+      expect(!obj2.field_name.my_val.has_value());
+      expect(obj2.required_field == "hello");
+
+      // With value present
+      obj.field_name.my_val = 42;
+      buffer.clear();
+      write_err = glz::write_beve(obj, buffer);
+      expect(!write_err);
+
+      read_err = glz::read_beve(obj2, buffer);
+      expect(!read_err);
+      expect(obj2.field_name.my_val.has_value());
+      expect(obj2.field_name.my_val.value() == 42);
    };
 
    "map"_test = [] {
