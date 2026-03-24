@@ -797,9 +797,12 @@ namespace glz
       template <auto Opts>
       static void op(std::span<T, Extent>& value, is_context auto&& ctx, auto&& it, auto end)
       {
-         static_assert(std::endian::native == std::endian::little,
-                       "Zero-copy std::span<const T> reading requires little-endian (BEVE wire format is "
-                       "little-endian). Use std::vector<T> instead, which copies and byte-swaps.");
+         if constexpr (std::endian::native != std::endian::little) {
+            // BEVE wire format is little-endian; zero-copy span requires matching endianness.
+            // Use std::vector<T> instead, which copies and byte-swaps.
+            ctx.error = error_code::feature_not_supported;
+            return;
+         }
          if (invalid_end(ctx, it, end)) {
             return;
          }
