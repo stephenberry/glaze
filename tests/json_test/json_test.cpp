@@ -16,6 +16,7 @@ import glaze.core.cast;
 import glaze.core.common;
 import glaze.core.context;
 import glaze.core.constraint;
+import glaze.core.custom;
 import glaze.core.manage;
 import glaze.core.meta;
 import glaze.core.std_error_code;
