@@ -228,26 +228,28 @@ private:
 
 ### Service Composition
 
+Multiple services can be registered on a single registry. Each service's member endpoints are registered under the mount path, while the root endpoint reflects the last registered service.
+
 ```cpp
 int main() {
     glz::http_server server;
-    
+
     // Multiple service instances
     UserService userService;
     ProductService productService;
     OrderService orderService;
-    
+
     // Single registry for all services
     glz::registry<glz::opts{}, glz::REST> registry;
-    
+
     // Register all services
     registry.on(userService);
-    registry.on(productService);  
+    registry.on(productService);
     registry.on(orderService);
-    
+
     // All endpoints available under /api
     server.mount("/api", registry.endpoints);
-    
+
     server.bind(8080).with_signals();
     server.start();
     server.wait_for_signal();
@@ -256,6 +258,15 @@ int main() {
 
 Each registered service in this setup (`UserService`, `ProductService`, `OrderService`) needs its own
 `glz::meta<...>::value = glz::object(...)` declaration.
+
+> [!NOTE]
+>
+> When composing multiple services, the root endpoint (e.g. `GET /api`) returns only the last registered service's data. If you need a combined root endpoint that merges all services into a single view, use `glz::merge` instead:
+>
+> ```cpp
+> auto merged = glz::merge{userService, productService, orderService};
+> registry.on(merged);
+> ```
 
 ## Customization
 

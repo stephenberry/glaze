@@ -104,7 +104,7 @@ See [REPE Buffer Handling](repe-buffer.md) for detailed documentation of these t
 
 ## Registering Multiple Objects with `glz::merge`
 
-By default, when you register an object with `server.on(obj)`, the root path `""` returns that object's JSON representation. If you call `server.on()` multiple times with different objects, only the last registered object will be returned at the root path `""`.
+By default, when you register an object with `server.on(obj)`, the root path `""` returns that object's JSON representation. If you call `server.on()` multiple times with different objects, the last registered object will be returned at the root path `""`. Each service's member endpoints are all registered regardless.
 
 To combine multiple objects into a single merged view at the root path, use `glz::merge`:
 
