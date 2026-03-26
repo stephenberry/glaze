@@ -82,10 +82,15 @@ namespace glz
 
          [[nodiscard]] friend bool operator==(const matching_iterator& left, const matching_iterator& right) noexcept
          {
-            return left.owner == right.owner && left.index == right.index && ascii_str_iequal(left.key, right.key);
+            return left.owner == right.owner && left.index == right.index && keys_equal(left.key, right.key);
          }
 
         private:
+         [[nodiscard]] static bool keys_equal(std::string_view s1, std::string_view s2) noexcept
+         {
+            return http_headers::ascii_str_iequal(s1, s2);
+         }
+
          void seek_forward() noexcept
          {
             while (index < owner->items.size()) {
