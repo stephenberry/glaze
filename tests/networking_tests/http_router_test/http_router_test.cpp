@@ -2,11 +2,11 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/net/http_router.hpp"
-#include "glaze/rpc/registry.hpp"
 
 #include <cassert>
 #include <regex>
 
+#include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
