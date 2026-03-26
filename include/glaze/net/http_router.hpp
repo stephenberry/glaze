@@ -770,15 +770,7 @@ namespace glz
 
          // Optimization: for non-parameterized routes, store them directly
          if (path_str.find(':') == std::string::npos && path_str.find('*') == std::string::npos) {
-            // Check for conflicts first
-            auto& method_handlers = direct_routes[path_str];
-            if (method_handlers.find(method) != method_handlers.end()) {
-               throw std::runtime_error("Route conflict: handler already exists for " + std::string(to_string(method)) +
-                                        " " + path_str);
-            }
-
-            // Store the route directly
-            method_handlers[method] = handle;
+            direct_routes[path_str][method] = handle;
             return;
          }
 
@@ -854,12 +846,6 @@ namespace glz
 
                current = current->static_children[segment].get();
             }
-         }
-
-         // Check for route conflict
-         if (current->is_endpoint && current->handlers.find(method) != current->handlers.end()) {
-            throw std::runtime_error("Route conflict: handler already exists for " + std::string(to_string(method)) +
-                                     " " + path_str);
          }
 
          // Mark as endpoint and set handler
