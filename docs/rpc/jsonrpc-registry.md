@@ -314,9 +314,11 @@ Function pointers support:
 
 > **Note:** Function pointers with more than one parameter are not supported. Use a struct parameter for multiple values.
 
-## Using with `glz::merge`
+## Service Composition
 
-Multiple objects can be merged into a single registry:
+Multiple services can be registered on a single registry by calling `on()` multiple times. Each service's member endpoints are all registered, while the root endpoint reflects the last registered service.
+
+To combine multiple objects into a single merged view at the root path, use `glz::merge`:
 
 ```cpp
 struct sensors_t {
