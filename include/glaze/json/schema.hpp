@@ -328,76 +328,14 @@ namespace glz
 
    namespace detail
    {
-      // In C++20+, std::string/vector support transient constexpr allocation.
-      // We can create a temporary in consteval, extract a primitive, and destroy it.
-      // The key is that everything must be destroyed before consteval ends.
+      // Automatic default value extraction for JSON Schema.
+      // In C++20+, std::string/vector support transient constexpr allocation,
+      // so we can construct T{} in consteval, extract primitive member defaults, and destroy it.
+      //
+      // Optimization: we construct T{} exactly once per type and extract all primitive
+      // defaults in a single pass, rather than once per member.
 
-      // Consteval checking function for reflectable types - extracts member and converts to int for SFINAE
-      // Returns 0 if successful, which can be used in std::integral_constant for concept checking
-      template <class T, size_t I>
-         requires reflectable<T>
-      consteval int check_default_extractable_reflectable()
-      {
-         T instance{};
-         [[maybe_unused]] auto val = get<I>(to_tie(instance));
-         return 0;
-      }
-
-      // Consteval checking function for glaze_object_t types
-      template <class T, size_t I>
-         requires(glaze_object_t<T> && std::is_member_object_pointer_v<std::decay_t<decltype(get<I>(reflect<T>::values))>>)
-      consteval int check_default_extractable_glaze_object()
-      {
-         T instance{};
-         constexpr auto member_ptr = get<I>(reflect<T>::values);
-         [[maybe_unused]] auto val = instance.*member_ptr;
-         return 0;
-      }
-
-      // Concept to check if we can extract defaults for a reflectable type
-      // Uses std::integral_constant to force compile-time evaluation in requires clause
-      template <class T, size_t I>
-      concept can_extract_default_reflectable =
-         reflectable<T> && std::default_initializable<T> &&
-         requires { typename std::integral_constant<int, check_default_extractable_reflectable<T, I>()>; };
-
-      // Concept to check if we can extract defaults for a glaze_object_t type
-      template <class T, size_t I>
-      concept can_extract_default_glaze_object =
-         glaze_object_t<T> && std::default_initializable<T> &&
-         std::is_member_object_pointer_v<std::decay_t<decltype(get<I>(reflect<T>::values))>> &&
-         requires { typename std::integral_constant<int, check_default_extractable_glaze_object<T, I>()>; };
-
-      // Consteval function to actually extract the default member value for reflectable types
-      template <class T, size_t I>
-         requires can_extract_default_reflectable<T, I>
-      consteval auto get_default_member_reflectable()
-      {
-         T instance{};
-         return get<I>(to_tie(instance));
-      }
-
-      // Consteval function to actually extract the default member value for glaze_object_t types
-      template <class T, size_t I>
-         requires can_extract_default_glaze_object<T, I>
-      consteval auto get_default_member_glaze_object()
-      {
-         T instance{};
-         constexpr auto member_ptr = get<I>(reflect<T>::values);
-         return instance.*member_ptr;
-      }
-
-      // Helper to check if a type can be converted to schema_any for default value extraction
-      template <class T>
-      constexpr bool is_schema_default_convertible =
-         std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::monostate> ||
-         (std::integral<std::decay_t<T>> && !std::same_as<std::decay_t<T>, bool> &&
-          !std::same_as<std::decay_t<T>, char>) ||
-         std::floating_point<std::decay_t<T>>;
-
-      // Convert a runtime value to schema_any for default value extraction
-      // Only supports primitive types (bool, integers, floating point)
-      // Returns nullopt for unsupported types
+      // Convert a member value to schema_any at compile time (primitives only)
       template <class T>
       constexpr auto to_schema_default(const T& value) -> std::optional<schema::schema_any>
       {
@@ -420,6 +358,81 @@ namespace glz
          else {
             return std::nullopt;
          }
+      }
+
+      template <class T>
+      constexpr bool is_schema_default_convertible_raw =
+         std::same_as<T, bool> || std::same_as<T, std::monostate> ||
+         (std::integral<T> && !std::same_as<T, bool> && !std::same_as<T, char>) ||
+         std::floating_point<T>;
+
+      template <class T>
+      constexpr bool is_schema_default_convertible = is_schema_default_convertible_raw<std::decay_t<T>>;
+
+      // Extract all primitive defaults from a reflectable type in one T{} construction
+      template <class T>
+         requires(reflectable<T> && std::default_initializable<T>)
+      consteval auto extract_all_defaults_impl()
+      {
+         constexpr auto N = reflect<T>::size;
+         std::array<std::optional<schema::schema_any>, N> result{};
+         T instance{};
+         auto tied = to_tie(instance);
+         [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&] {
+                using val_t = std::decay_t<decltype(get<Is>(tied))>;
+                if constexpr (is_schema_default_convertible<val_t>) {
+                   result[Is] = to_schema_default(get<Is>(tied));
+                }
+             }()),
+             ...);
+         }(std::make_index_sequence<N>{});
+         return result;
+      }
+
+      // Extract all primitive defaults from a glaze_object_t type in one T{} construction
+      template <class T>
+         requires(glaze_object_t<T> && std::default_initializable<T>)
+      consteval auto extract_all_defaults_impl()
+      {
+         constexpr auto N = reflect<T>::size;
+         std::array<std::optional<schema::schema_any>, N> result{};
+         T instance{};
+         [&]<size_t... Is>(std::index_sequence<Is...>) {
+            (([&] {
+                using member_type = std::decay_t<decltype(get<Is>(reflect<T>::values))>;
+                if constexpr (std::is_member_object_pointer_v<member_type>) {
+                   constexpr auto member_ptr = get<Is>(reflect<T>::values);
+                   using val_t = std::decay_t<decltype(instance.*member_ptr)>;
+                   if constexpr (is_schema_default_convertible<val_t>) {
+                      result[Is] = to_schema_default(instance.*member_ptr);
+                   }
+                }
+             }()),
+             ...);
+         }(std::make_index_sequence<N>{});
+         return result;
+      }
+
+      // SFINAE-friendly check: can we extract defaults for this type?
+      template <class T>
+      consteval int check_extractable()
+      {
+         (void)extract_all_defaults_impl<T>();
+         return 0;
+      }
+
+      template <class T>
+      concept can_extract_defaults =
+         (reflectable<T> || glaze_object_t<T>) && std::default_initializable<T> &&
+         requires { typename std::integral_constant<int, check_extractable<T>()>; };
+
+      // Public entry point: returns cached array of defaults for type T
+      template <class T>
+         requires can_extract_defaults<T>
+      consteval auto extract_all_defaults()
+      {
+         return extract_all_defaults_impl<T>();
       }
 
       template <class T = void>
@@ -776,6 +789,17 @@ namespace glz
             auto req = s.required.value_or(std::vector<std::string_view>{});
 
             s.properties = std::map<sv, schema, std::less<>>();
+
+            // Extract all primitive defaults in a single T{} construction (once per type)
+            static constexpr auto defaults = [] {
+               if constexpr (can_extract_defaults<V>) {
+                  return extract_all_defaults<V>();
+               }
+               else {
+                  return std::array<std::optional<schema::schema_any>, N>{};
+               }
+            }();
+
             for_each<N>([&]<auto I>() {
                using val_t = std::decay_t<refl_t<T, I>>;
 
@@ -824,18 +848,10 @@ namespace glz
                   }
                }
 
-               // Extract default value from struct if not explicitly specified in json_schema<T>
-               // Uses consteval extraction with transient allocation (C++20) to support types with std::string/vector
-               if constexpr (is_schema_default_convertible<val_t>) {
+               // Apply pre-extracted default if not already set by explicit json_schema<T>
+               if constexpr (defaults[I].has_value()) {
                   if (!ref_val.defaultValue) {
-                     if constexpr (can_extract_default_glaze_object<V, I>) {
-                        constexpr auto member_value = get_default_member_glaze_object<V, I>();
-                        ref_val.defaultValue = to_schema_default(member_value);
-                     }
-                     else if constexpr (can_extract_default_reflectable<V, I>) {
-                        constexpr auto member_value = get_default_member_reflectable<V, I>();
-                        ref_val.defaultValue = to_schema_default(member_value);
-                     }
+                     ref_val.defaultValue = defaults[I];
                   }
                }
 
