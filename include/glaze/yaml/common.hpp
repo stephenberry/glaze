@@ -1141,7 +1141,7 @@ namespace glz::yaml
 
       // Check for characters that require quoting
       for (char c : s) {
-         if (c == ':' || c == '#' || c == '\n' || c == '\r' || c == '\t') {
+         if (c == ':' || c == '#' || c == ',' || c == '\n' || c == '\r' || c == '\t') {
             return true;
          }
       }
