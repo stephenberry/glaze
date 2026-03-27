@@ -806,8 +806,7 @@ namespace glz
 
          if constexpr (sizeof(V) == 1) {
             // Single-byte types: accept standard typed arrays (no alignment or endian concerns)
-            constexpr uint8_t type =
-               std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<V> << 5);
             if (tag != expected_header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -852,8 +851,7 @@ namespace glz
                return;
             }
             const auto numeric_tag = uint8_t(*it);
-            constexpr uint8_t type =
-               std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t expected_header = tag::typed_array | type | (byte_count<V> << 5);
             if (numeric_tag != expected_header) [[unlikely]] {
                ctx.error = error_code::syntax_error;

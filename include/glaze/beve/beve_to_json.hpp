@@ -333,33 +333,61 @@ namespace glz
                switch (value_type_inner) {
                case 0: {
                   switch (byte_count_inner) {
-                  case 4: write_aligned_array(float{}); break;
-                  case 8: write_aligned_array(double{}); break;
-                  default: ctx.error = error_code::syntax_error; return;
+                  case 4:
+                     write_aligned_array(float{});
+                     break;
+                  case 8:
+                     write_aligned_array(double{});
+                     break;
+                  default:
+                     ctx.error = error_code::syntax_error;
+                     return;
                   }
                   break;
                }
                case 1: {
                   switch (byte_count_inner) {
-                  case 1: write_aligned_array(int8_t{}); break;
-                  case 2: write_aligned_array(int16_t{}); break;
-                  case 4: write_aligned_array(int32_t{}); break;
-                  case 8: write_aligned_array(int64_t{}); break;
-                  default: ctx.error = error_code::syntax_error; return;
+                  case 1:
+                     write_aligned_array(int8_t{});
+                     break;
+                  case 2:
+                     write_aligned_array(int16_t{});
+                     break;
+                  case 4:
+                     write_aligned_array(int32_t{});
+                     break;
+                  case 8:
+                     write_aligned_array(int64_t{});
+                     break;
+                  default:
+                     ctx.error = error_code::syntax_error;
+                     return;
                   }
                   break;
                }
                case 2: {
                   switch (byte_count_inner) {
-                  case 1: write_aligned_array(uint8_t{}); break;
-                  case 2: write_aligned_array(uint16_t{}); break;
-                  case 4: write_aligned_array(uint32_t{}); break;
-                  case 8: write_aligned_array(uint64_t{}); break;
-                  default: ctx.error = error_code::syntax_error; return;
+                  case 1:
+                     write_aligned_array(uint8_t{});
+                     break;
+                  case 2:
+                     write_aligned_array(uint16_t{});
+                     break;
+                  case 4:
+                     write_aligned_array(uint32_t{});
+                     break;
+                  case 8:
+                     write_aligned_array(uint64_t{});
+                     break;
+                  default:
+                     ctx.error = error_code::syntax_error;
+                     return;
                   }
                   break;
                }
-               default: ctx.error = error_code::syntax_error; return;
+               default:
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
 
                dump(']', out, ix);

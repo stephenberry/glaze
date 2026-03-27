@@ -441,10 +441,8 @@ namespace glz
 
          for_each<N>([&]<size_t I>() {
             constexpr auto Opts = opening_handled_off<Options>();
-            result +=
-               calculate_size<BEVE, void>::template no_header<Opts>(get<2 * I>(value.value), offset + result);
-            result +=
-               calculate_size<BEVE, void>::template op<Opts>(get<2 * I + 1>(value.value), offset + result);
+            result += calculate_size<BEVE, void>::template no_header<Opts>(get<2 * I>(value.value), offset + result);
+            result += calculate_size<BEVE, void>::template op<Opts>(get<2 * I + 1>(value.value), offset + result);
          });
 
          return result;
@@ -508,7 +506,7 @@ namespace glz
 
          [&]<size_t... I>(std::index_sequence<I...>) {
             ((result += calculate_size<BEVE, void>::template op<opening_handled<Opts>()>(glz::get<I>(value.value),
-                                                                                        offset + result)),
+                                                                                         offset + result)),
              ...);
          }(std::make_index_sequence<N>{});
 
@@ -568,12 +566,12 @@ namespace glz
             }
             else {
                if constexpr (reflectable<T>) {
-                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(t)),
-                                                                          offset + result);
+                  result +=
+                     calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(t)), offset + result);
                }
                else {
-                  result += calculate_size<BEVE, void>::template op<Opts>(
-                     get_member(value, get<I>(reflect<T>::values)), offset + result);
+                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)),
+                                                                          offset + result);
                }
             }
          });
@@ -704,8 +702,7 @@ namespace glz
                      }
                   }();
 
-                  result +=
-                     calculate_size<BEVE, void>::template op<Opts>(get_member(value, member), offset + result);
+                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, member), offset + result);
                }
             });
          }
@@ -734,8 +731,7 @@ namespace glz
                      }
                   }();
 
-                  result +=
-                     calculate_size<BEVE, void>::template op<Opts>(get_member(value, member), offset + result);
+                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, member), offset + result);
                }
             });
          }

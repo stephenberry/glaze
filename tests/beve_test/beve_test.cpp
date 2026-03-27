@@ -1200,163 +1200,162 @@ void aligned_typed_array_tests()
 
    // Zero-copy span tests for multi-byte types require little-endian (BEVE wire format is little-endian)
    if constexpr (std::endian::native == std::endian::little) {
+      "zero-copy span<const double>"_test = [] {
+         std::vector<double> v = {1.0, 2.0, 3.0, 4.0};
+         std::string beve;
+         expect(not glz::write<aligned_beve_opts>(v, beve));
 
-   "zero-copy span<const double>"_test = [] {
-      std::vector<double> v = {1.0, 2.0, 3.0, 4.0};
-      std::string beve;
-      expect(not glz::write<aligned_beve_opts>(v, beve));
+         std::span<const double> span;
+         expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+         expect(span.size() == size_t(4));
+         expect(span[0] == 1.0);
+         expect(span[1] == 2.0);
+         expect(span[2] == 3.0);
+         expect(span[3] == 4.0);
 
-      std::span<const double> span;
-      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
-      expect(span.size() == size_t(4));
-      expect(span[0] == 1.0);
-      expect(span[1] == 2.0);
-      expect(span[2] == 3.0);
-      expect(span[3] == 4.0);
+         // Verify zero-copy: span points into the original buffer
+         expect(reinterpret_cast<const char*>(span.data()) >= beve.data());
+         expect(reinterpret_cast<const char*>(span.data()) < beve.data() + beve.size());
 
-      // Verify zero-copy: span points into the original buffer
-      expect(reinterpret_cast<const char*>(span.data()) >= beve.data());
-      expect(reinterpret_cast<const char*>(span.data()) < beve.data() + beve.size());
+         // Verify alignment
+         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(double) == uintptr_t(0));
+      };
 
-      // Verify alignment
-      expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(double) == uintptr_t(0));
-   };
+      "zero-copy span<const float>"_test = [] {
+         std::vector<float> v = {1.5f, 2.5f, 3.5f};
+         std::string beve;
+         expect(not glz::write<aligned_beve_opts>(v, beve));
 
-   "zero-copy span<const float>"_test = [] {
-      std::vector<float> v = {1.5f, 2.5f, 3.5f};
-      std::string beve;
-      expect(not glz::write<aligned_beve_opts>(v, beve));
+         std::span<const float> span;
+         expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+         expect(span.size() == size_t(3));
+         expect(span[0] == 1.5f);
+         expect(span[1] == 2.5f);
+         expect(span[2] == 3.5f);
 
-      std::span<const float> span;
-      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
-      expect(span.size() == size_t(3));
-      expect(span[0] == 1.5f);
-      expect(span[1] == 2.5f);
-      expect(span[2] == 3.5f);
+         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(float) == uintptr_t(0));
+      };
 
-      expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(float) == uintptr_t(0));
-   };
+      "zero-copy span<const int32_t>"_test = [] {
+         std::vector<int32_t> v = {-10, 0, 10, 20, 30};
+         std::string beve;
+         expect(not glz::write<aligned_beve_opts>(v, beve));
 
-   "zero-copy span<const int32_t>"_test = [] {
-      std::vector<int32_t> v = {-10, 0, 10, 20, 30};
-      std::string beve;
-      expect(not glz::write<aligned_beve_opts>(v, beve));
+         std::span<const int32_t> span;
+         expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+         expect(span.size() == size_t(5));
+         expect(span[0] == -10);
+         expect(span[4] == 30);
 
-      std::span<const int32_t> span;
-      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
-      expect(span.size() == size_t(5));
-      expect(span[0] == -10);
-      expect(span[4] == 30);
+         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(int32_t) == uintptr_t(0));
+      };
 
-      expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(int32_t) == uintptr_t(0));
-   };
+      "zero-copy span<const uint64_t>"_test = [] {
+         std::vector<uint64_t> v = {100, 200, 300};
+         std::string beve;
+         expect(not glz::write<aligned_beve_opts>(v, beve));
 
-   "zero-copy span<const uint64_t>"_test = [] {
-      std::vector<uint64_t> v = {100, 200, 300};
-      std::string beve;
-      expect(not glz::write<aligned_beve_opts>(v, beve));
+         std::span<const uint64_t> span;
+         expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+         expect(span.size() == size_t(3));
+         expect(span[0] == uint64_t(100));
+         expect(span[1] == uint64_t(200));
+         expect(span[2] == uint64_t(300));
 
-      std::span<const uint64_t> span;
-      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
-      expect(span.size() == size_t(3));
-      expect(span[0] == uint64_t(100));
-      expect(span[1] == uint64_t(200));
-      expect(span[2] == uint64_t(300));
+         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(uint64_t) == uintptr_t(0));
+      };
 
-      expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(uint64_t) == uintptr_t(0));
-   };
+      "zero-copy rejects non-aligned buffer"_test = [] {
+         // Write a standard (non-aligned) typed array
+         std::vector<double> v = {1.0, 2.0};
+         std::string beve;
+         expect(not glz::write_beve(v, beve));
 
-   "zero-copy rejects non-aligned buffer"_test = [] {
-      // Write a standard (non-aligned) typed array
-      std::vector<double> v = {1.0, 2.0};
-      std::string beve;
-      expect(not glz::write_beve(v, beve));
+         // span<const T> read should reject it (not an aligned typed array)
+         std::span<const double> span;
+         auto ec = glz::read<glz::opts{.format = glz::BEVE}>(span, beve);
+         expect(bool(ec));
+      };
 
-      // span<const T> read should reject it (not an aligned typed array)
-      std::span<const double> span;
-      auto ec = glz::read<glz::opts{.format = glz::BEVE}>(span, beve);
-      expect(bool(ec));
-   };
+      "zero-copy rejects type mismatch"_test = [] {
+         std::vector<float> v = {1.0f, 2.0f};
+         std::string beve;
+         expect(not glz::write<aligned_beve_opts>(v, beve));
 
-   "zero-copy rejects type mismatch"_test = [] {
-      std::vector<float> v = {1.0f, 2.0f};
-      std::string beve;
-      expect(not glz::write<aligned_beve_opts>(v, beve));
+         // Try to read as double — should fail (type mismatch)
+         std::span<const double> span;
+         auto ec = glz::read<glz::opts{.format = glz::BEVE}>(span, beve);
+         expect(bool(ec));
+      };
 
-      // Try to read as double — should fail (type mismatch)
-      std::span<const double> span;
-      auto ec = glz::read<glz::opts{.format = glz::BEVE}>(span, beve);
-      expect(bool(ec));
-   };
+      "zero-copy empty array"_test = [] {
+         std::vector<double> v;
+         std::string beve;
+         expect(not glz::write<aligned_beve_opts>(v, beve));
 
-   "zero-copy empty array"_test = [] {
-      std::vector<double> v;
-      std::string beve;
-      expect(not glz::write<aligned_beve_opts>(v, beve));
+         std::span<const double> span;
+         expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+         expect(span.empty());
+      };
 
-      std::span<const double> span;
-      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
-      expect(span.empty());
-   };
+      "zero-copy struct with span member"_test = [] {
+         // Write with owning struct
+         owning_span_data src{"hello", {1.0, 2.0, 3.0, 4.0}};
+         std::string beve;
+         expect(not glz::write<aligned_beve_opts>(src, beve));
 
-   "zero-copy struct with span member"_test = [] {
-      // Write with owning struct
-      owning_span_data src{"hello", {1.0, 2.0, 3.0, 4.0}};
-      std::string beve;
-      expect(not glz::write<aligned_beve_opts>(src, beve));
+         // Read into struct with span<const double> — zero copy for the array
+         span_data dst{};
+         expect(!glz::read<glz::opts{.format = glz::BEVE}>(dst, beve));
 
-      // Read into struct with span<const double> — zero copy for the array
-      span_data dst{};
-      expect(!glz::read<glz::opts{.format = glz::BEVE}>(dst, beve));
+         expect(dst.name == "hello");
+         expect(dst.values.size() == size_t(4));
+         expect(dst.values[0] == 1.0);
+         expect(dst.values[1] == 2.0);
+         expect(dst.values[2] == 3.0);
+         expect(dst.values[3] == 4.0);
 
-      expect(dst.name == "hello");
-      expect(dst.values.size() == size_t(4));
-      expect(dst.values[0] == 1.0);
-      expect(dst.values[1] == 2.0);
-      expect(dst.values[2] == 3.0);
-      expect(dst.values[3] == 4.0);
+         // Verify zero-copy: span points into the beve buffer
+         const auto* buf_start = beve.data();
+         const auto* buf_end = beve.data() + beve.size();
+         const auto* span_bytes = reinterpret_cast<const char*>(dst.values.data());
+         expect(span_bytes >= buf_start);
+         expect(span_bytes < buf_end);
 
-      // Verify zero-copy: span points into the beve buffer
-      const auto* buf_start = beve.data();
-      const auto* buf_end = beve.data() + beve.size();
-      const auto* span_bytes = reinterpret_cast<const char*>(dst.values.data());
-      expect(span_bytes >= buf_start);
-      expect(span_bytes < buf_end);
+         // Verify alignment
+         expect(reinterpret_cast<uintptr_t>(dst.values.data()) % alignof(double) == uintptr_t(0));
+      };
 
-      // Verify alignment
-      expect(reinterpret_cast<uintptr_t>(dst.values.data()) % alignof(double) == uintptr_t(0));
-   };
+      "zero-copy struct with multiple span members"_test = [] {
+         owning_multi_span_data src{{1.0f, 2.0f, 3.0f}, {10, 20, 30, 40}, 7};
+         std::string beve;
+         expect(not glz::write<aligned_beve_opts>(src, beve));
 
-   "zero-copy struct with multiple span members"_test = [] {
-      owning_multi_span_data src{{1.0f, 2.0f, 3.0f}, {10, 20, 30, 40}, 7};
-      std::string beve;
-      expect(not glz::write<aligned_beve_opts>(src, beve));
+         multi_span_data dst{};
+         expect(!glz::read<glz::opts{.format = glz::BEVE}>(dst, beve));
 
-      multi_span_data dst{};
-      expect(!glz::read<glz::opts{.format = glz::BEVE}>(dst, beve));
+         expect(dst.positions.size() == size_t(3));
+         expect(dst.positions[0] == 1.0f);
+         expect(dst.positions[2] == 3.0f);
 
-      expect(dst.positions.size() == size_t(3));
-      expect(dst.positions[0] == 1.0f);
-      expect(dst.positions[2] == 3.0f);
+         expect(dst.indices.size() == size_t(4));
+         expect(dst.indices[0] == 10);
+         expect(dst.indices[3] == 40);
 
-      expect(dst.indices.size() == size_t(4));
-      expect(dst.indices[0] == 10);
-      expect(dst.indices[3] == 40);
+         expect(dst.count == 7);
 
-      expect(dst.count == 7);
+         // Both spans point into the buffer
+         const auto* buf_start = beve.data();
+         const auto* buf_end = beve.data() + beve.size();
+         expect(reinterpret_cast<const char*>(dst.positions.data()) >= buf_start);
+         expect(reinterpret_cast<const char*>(dst.positions.data()) < buf_end);
+         expect(reinterpret_cast<const char*>(dst.indices.data()) >= buf_start);
+         expect(reinterpret_cast<const char*>(dst.indices.data()) < buf_end);
 
-      // Both spans point into the buffer
-      const auto* buf_start = beve.data();
-      const auto* buf_end = beve.data() + beve.size();
-      expect(reinterpret_cast<const char*>(dst.positions.data()) >= buf_start);
-      expect(reinterpret_cast<const char*>(dst.positions.data()) < buf_end);
-      expect(reinterpret_cast<const char*>(dst.indices.data()) >= buf_start);
-      expect(reinterpret_cast<const char*>(dst.indices.data()) < buf_end);
-
-      // Both are aligned
-      expect(reinterpret_cast<uintptr_t>(dst.positions.data()) % alignof(float) == uintptr_t(0));
-      expect(reinterpret_cast<uintptr_t>(dst.indices.data()) % alignof(int32_t) == uintptr_t(0));
-   };
+         // Both are aligned
+         expect(reinterpret_cast<uintptr_t>(dst.positions.data()) % alignof(float) == uintptr_t(0));
+         expect(reinterpret_cast<uintptr_t>(dst.indices.data()) % alignof(int32_t) == uintptr_t(0));
+      };
 
    } // if constexpr little-endian
 }
