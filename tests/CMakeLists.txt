@@ -33,8 +33,8 @@ option(glaze_USE_BUNDLED_ASIO
 # First, try Boost.Asio
 find_package(Boost QUIET CONFIG)
 
-if(Boost_FOUND AND TARGET Boost::system)
-    message(STATUS "Using Boost.Asio (with Boost::system)")
+if(Boost_FOUND)
+    message(STATUS "Using Boost.Asio")
     add_library(glz_asio INTERFACE)
     # Boost.Asio is header-only, just need Boost headers
     # Boost::system was removed in Boost 1.89 (it was header-only since 1.69)
