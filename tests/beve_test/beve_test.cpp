@@ -844,6 +844,523 @@ void write_tests()
    };
 }
 
+struct aligned_opts : glz::opts
+{
+   bool aligned_arrays = true;
+};
+
+inline constexpr aligned_opts aligned_beve_opts{glz::opts{.format = glz::BEVE}};
+
+struct aligned_test_obj
+{
+   std::string name;
+   std::vector<double> data;
+};
+
+struct aligned_test_obj1
+{
+   std::vector<float> data;
+   int value;
+};
+
+struct aligned_test_obj2
+{
+   int value;
+};
+
+// Write-side structs (owning)
+struct owning_span_data
+{
+   std::string name;
+   std::vector<double> values;
+};
+
+struct owning_multi_span_data
+{
+   std::vector<float> positions;
+   std::vector<int32_t> indices;
+   int count;
+};
+
+// Read-side structs with zero-copy span members
+struct span_data
+{
+   std::string name;
+   std::span<const double> values;
+};
+
+struct multi_span_data
+{
+   std::span<const float> positions;
+   std::span<const int32_t> indices;
+   int count;
+};
+
+template <>
+struct glz::meta<span_data>
+{
+   using T = span_data;
+   static constexpr auto value = object(&T::name, &T::values);
+};
+
+template <>
+struct glz::meta<multi_span_data>
+{
+   using T = multi_span_data;
+   static constexpr auto value = object(&T::positions, &T::indices, &T::count);
+};
+
+template <>
+struct glz::meta<owning_span_data>
+{
+   using T = owning_span_data;
+   static constexpr auto value = object(&T::name, &T::values);
+};
+
+template <>
+struct glz::meta<owning_multi_span_data>
+{
+   using T = owning_multi_span_data;
+   static constexpr auto value = object(&T::positions, &T::indices, &T::count);
+};
+
+void aligned_typed_array_tests()
+{
+   using namespace ut;
+
+   "aligned float64 roundtrip"_test = [] {
+      std::vector<double> v = {1.0, 2.0, 3.0};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      // Verify the aligned header byte is present
+      expect(uint8_t(out[0]) == glz::tag::aligned_typed_array);
+
+      std::vector<double> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned float32 roundtrip"_test = [] {
+      std::vector<float> v = {1.5f, 2.5f, 3.5f, 4.5f};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      expect(uint8_t(out[0]) == glz::tag::aligned_typed_array);
+
+      std::vector<float> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned int32 roundtrip"_test = [] {
+      std::vector<int32_t> v = {10, 20, 30, 40, 50};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      expect(uint8_t(out[0]) == glz::tag::aligned_typed_array);
+
+      std::vector<int32_t> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned uint64 roundtrip"_test = [] {
+      std::vector<uint64_t> v = {100, 200, 300};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      expect(uint8_t(out[0]) == glz::tag::aligned_typed_array);
+
+      std::vector<uint64_t> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned int16 roundtrip"_test = [] {
+      std::vector<int16_t> v = {-1, 0, 1, 2, 3};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      expect(uint8_t(out[0]) == glz::tag::aligned_typed_array);
+
+      std::vector<int16_t> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned single-byte types use standard format"_test = [] {
+      // Single-byte types should not use aligned format (no alignment benefit)
+      std::vector<uint8_t> v = {1, 2, 3, 4, 5};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      // Should use standard typed array, not aligned
+      expect(uint8_t(out[0]) != glz::tag::aligned_typed_array);
+
+      std::vector<uint8_t> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned data alignment verification"_test = [] {
+      // Verify that the data payload actually starts at an aligned offset
+      std::vector<double> v = {1.0, 2.0, 3.0};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      // Parse the header manually to find data offset
+      // Byte 0: aligned header (0x5C)
+      // Byte 1: numeric header (float64 typed array)
+      // Byte 2: SIZE (compressed int for 3 elements = 0x0C, 1 byte)
+      // Byte 3: PADDING_LENGTH (4)
+      // Byte 4-7: padding (4 bytes)
+      // Byte 8: DATA starts (aligned to 8)
+
+      expect(uint8_t(out[0]) == glz::tag::aligned_typed_array);
+
+      // offset_after_padding_length = 4, alignment = 8
+      // padding = (8 - 4 % 8) % 8 = 4
+      expect(uint8_t(out[3]) == uint8_t(4)); // padding length byte
+
+      const size_t expected_data_offset = 8; // 4 + 4 = 8
+      expect(expected_data_offset % 8 == size_t(0)); // data is 8-byte aligned
+
+      // Verify total size: 1 + 1 + 1 + 1 + 4 + 3*8 = 32
+      expect(out.size() == size_t(32));
+   };
+
+   "aligned empty array roundtrip"_test = [] {
+      std::vector<double> v;
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      std::vector<double> v2 = {1.0}; // non-empty to verify it gets cleared
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v2.empty());
+   };
+
+   "aligned std::array roundtrip"_test = [] {
+      std::array<double, 4> arr = {1.1, 2.2, 3.3, 4.4};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(arr, out));
+
+      expect(uint8_t(out[0]) == glz::tag::aligned_typed_array);
+
+      std::array<double, 4> arr2{};
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(arr2, out));
+      expect(arr == arr2);
+   };
+
+   "aligned nested in object"_test = [] {
+      // Test aligned arrays as values inside an object
+      aligned_test_obj obj{"test", {1.0, 2.0, 3.0, 4.0}};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(obj, out));
+
+      aligned_test_obj obj2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(obj2, out));
+      expect(obj.name == obj2.name);
+      expect(obj.data == obj2.data);
+   };
+
+   "aligned beve_to_json"_test = [] {
+      std::vector<double> v = {1.0, 2.0, 3.0};
+      std::string beve;
+      expect(not glz::write<aligned_beve_opts>(v, beve));
+
+      std::string json;
+      auto ec = glz::beve_to_json(beve, json);
+      expect(!ec);
+      expect(json == "[1,2,3]");
+   };
+
+   "aligned skip value"_test = [] {
+      // Create an aligned typed array and verify we can skip it during object parsing
+      aligned_test_obj1 obj1{{1.0f, 2.0f, 3.0f}, 42};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(obj1, out));
+
+      // Read into a struct that doesn't have the 'data' field - it should be skipped
+      aligned_test_obj2 obj2{};
+      expect(!glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(obj2, out));
+      expect(obj2.value == 42);
+   };
+
+   "aligned peek header"_test = [] {
+      std::vector<double> v = {1.0, 2.0, 3.0};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      auto result = glz::beve_peek_header(out);
+      expect(result.has_value());
+      if (result) {
+         expect(result->type == glz::tag::typed_array);
+         expect(result->count == size_t(3));
+      }
+   };
+
+   "aligned large array compressed int 2-byte"_test = [] {
+      // >63 elements forces 2-byte compressed int encoding
+      std::vector<double> v(100);
+      for (size_t i = 0; i < v.size(); ++i) {
+         v[i] = static_cast<double>(i);
+      }
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      std::vector<double> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned large array compressed int 4-byte"_test = [] {
+      // >16383 elements forces 4-byte compressed int encoding
+      std::vector<float> v(20000);
+      for (size_t i = 0; i < v.size(); ++i) {
+         v[i] = static_cast<float>(i);
+      }
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      std::vector<float> v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(v == v2);
+   };
+
+   "aligned allow_conversions float32 to double"_test = [] {
+      // Write as aligned float32, read into vector<double> with conversions
+      std::vector<float> v = {1.0f, 2.0f, 3.0f};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      struct convert_opts : glz::opts
+      {
+         bool allow_conversions = true;
+      };
+      std::vector<double> v2;
+      expect(!glz::read<convert_opts{glz::opts{.format = glz::BEVE}}>(v2, out));
+      expect(v2.size() == size_t(3));
+      expect(v2[0] == 1.0);
+      expect(v2[1] == 2.0);
+      expect(v2[2] == 3.0);
+   };
+
+   "aligned variant containing array"_test = [] {
+      using V = std::variant<int, std::vector<double>>;
+      V v = std::vector<double>{1.0, 2.0, 3.0};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(v, out));
+
+      V v2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(v2, out));
+      expect(std::holds_alternative<std::vector<double>>(v2));
+      expect(std::get<std::vector<double>>(v2) == std::vector<double>{1.0, 2.0, 3.0});
+   };
+
+   "aligned map values"_test = [] {
+      std::map<std::string, std::vector<double>> m;
+      m["a"] = {1.0, 2.0};
+      m["b"] = {3.0, 4.0, 5.0};
+      std::string out;
+      expect(not glz::write<aligned_beve_opts>(m, out));
+
+      std::map<std::string, std::vector<double>> m2;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(m2, out));
+      expect(m == m2);
+   };
+
+   "zero-copy span<const uint8_t> standard typed array"_test = [] {
+      std::vector<uint8_t> v = {1, 2, 3, 4, 5};
+      std::string beve;
+      expect(not glz::write_beve(v, beve)); // standard typed array, no alignment
+
+      std::span<const uint8_t> span;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+      expect(span.size() == size_t(5));
+      expect(span[0] == uint8_t(1));
+      expect(span[4] == uint8_t(5));
+
+      // Verify zero-copy
+      expect(reinterpret_cast<const char*>(span.data()) >= beve.data());
+      expect(reinterpret_cast<const char*>(span.data()) < beve.data() + beve.size());
+   };
+
+   "zero-copy span<const int8_t> standard typed array"_test = [] {
+      std::vector<int8_t> v = {-1, 0, 1, 2, 3};
+      std::string beve;
+      expect(not glz::write_beve(v, beve));
+
+      std::span<const int8_t> span;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+      expect(span.size() == size_t(5));
+      expect(span[0] == int8_t(-1));
+      expect(span[4] == int8_t(3));
+   };
+
+   // Zero-copy span tests for multi-byte types require little-endian (BEVE wire format is little-endian)
+   if constexpr (std::endian::native == std::endian::little) {
+
+   "zero-copy span<const double>"_test = [] {
+      std::vector<double> v = {1.0, 2.0, 3.0, 4.0};
+      std::string beve;
+      expect(not glz::write<aligned_beve_opts>(v, beve));
+
+      std::span<const double> span;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+      expect(span.size() == size_t(4));
+      expect(span[0] == 1.0);
+      expect(span[1] == 2.0);
+      expect(span[2] == 3.0);
+      expect(span[3] == 4.0);
+
+      // Verify zero-copy: span points into the original buffer
+      expect(reinterpret_cast<const char*>(span.data()) >= beve.data());
+      expect(reinterpret_cast<const char*>(span.data()) < beve.data() + beve.size());
+
+      // Verify alignment
+      expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(double) == uintptr_t(0));
+   };
+
+   "zero-copy span<const float>"_test = [] {
+      std::vector<float> v = {1.5f, 2.5f, 3.5f};
+      std::string beve;
+      expect(not glz::write<aligned_beve_opts>(v, beve));
+
+      std::span<const float> span;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+      expect(span.size() == size_t(3));
+      expect(span[0] == 1.5f);
+      expect(span[1] == 2.5f);
+      expect(span[2] == 3.5f);
+
+      expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(float) == uintptr_t(0));
+   };
+
+   "zero-copy span<const int32_t>"_test = [] {
+      std::vector<int32_t> v = {-10, 0, 10, 20, 30};
+      std::string beve;
+      expect(not glz::write<aligned_beve_opts>(v, beve));
+
+      std::span<const int32_t> span;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+      expect(span.size() == size_t(5));
+      expect(span[0] == -10);
+      expect(span[4] == 30);
+
+      expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(int32_t) == uintptr_t(0));
+   };
+
+   "zero-copy span<const uint64_t>"_test = [] {
+      std::vector<uint64_t> v = {100, 200, 300};
+      std::string beve;
+      expect(not glz::write<aligned_beve_opts>(v, beve));
+
+      std::span<const uint64_t> span;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+      expect(span.size() == size_t(3));
+      expect(span[0] == uint64_t(100));
+      expect(span[1] == uint64_t(200));
+      expect(span[2] == uint64_t(300));
+
+      expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(uint64_t) == uintptr_t(0));
+   };
+
+   "zero-copy rejects non-aligned buffer"_test = [] {
+      // Write a standard (non-aligned) typed array
+      std::vector<double> v = {1.0, 2.0};
+      std::string beve;
+      expect(not glz::write_beve(v, beve));
+
+      // span<const T> read should reject it (not an aligned typed array)
+      std::span<const double> span;
+      auto ec = glz::read<glz::opts{.format = glz::BEVE}>(span, beve);
+      expect(bool(ec));
+   };
+
+   "zero-copy rejects type mismatch"_test = [] {
+      std::vector<float> v = {1.0f, 2.0f};
+      std::string beve;
+      expect(not glz::write<aligned_beve_opts>(v, beve));
+
+      // Try to read as double — should fail (type mismatch)
+      std::span<const double> span;
+      auto ec = glz::read<glz::opts{.format = glz::BEVE}>(span, beve);
+      expect(bool(ec));
+   };
+
+   "zero-copy empty array"_test = [] {
+      std::vector<double> v;
+      std::string beve;
+      expect(not glz::write<aligned_beve_opts>(v, beve));
+
+      std::span<const double> span;
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(span, beve));
+      expect(span.empty());
+   };
+
+   "zero-copy struct with span member"_test = [] {
+      // Write with owning struct
+      owning_span_data src{"hello", {1.0, 2.0, 3.0, 4.0}};
+      std::string beve;
+      expect(not glz::write<aligned_beve_opts>(src, beve));
+
+      // Read into struct with span<const double> — zero copy for the array
+      span_data dst{};
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(dst, beve));
+
+      expect(dst.name == "hello");
+      expect(dst.values.size() == size_t(4));
+      expect(dst.values[0] == 1.0);
+      expect(dst.values[1] == 2.0);
+      expect(dst.values[2] == 3.0);
+      expect(dst.values[3] == 4.0);
+
+      // Verify zero-copy: span points into the beve buffer
+      const auto* buf_start = beve.data();
+      const auto* buf_end = beve.data() + beve.size();
+      const auto* span_bytes = reinterpret_cast<const char*>(dst.values.data());
+      expect(span_bytes >= buf_start);
+      expect(span_bytes < buf_end);
+
+      // Verify alignment
+      expect(reinterpret_cast<uintptr_t>(dst.values.data()) % alignof(double) == uintptr_t(0));
+   };
+
+   "zero-copy struct with multiple span members"_test = [] {
+      owning_multi_span_data src{{1.0f, 2.0f, 3.0f}, {10, 20, 30, 40}, 7};
+      std::string beve;
+      expect(not glz::write<aligned_beve_opts>(src, beve));
+
+      multi_span_data dst{};
+      expect(!glz::read<glz::opts{.format = glz::BEVE}>(dst, beve));
+
+      expect(dst.positions.size() == size_t(3));
+      expect(dst.positions[0] == 1.0f);
+      expect(dst.positions[2] == 3.0f);
+
+      expect(dst.indices.size() == size_t(4));
+      expect(dst.indices[0] == 10);
+      expect(dst.indices[3] == 40);
+
+      expect(dst.count == 7);
+
+      // Both spans point into the buffer
+      const auto* buf_start = beve.data();
+      const auto* buf_end = beve.data() + beve.size();
+      expect(reinterpret_cast<const char*>(dst.positions.data()) >= buf_start);
+      expect(reinterpret_cast<const char*>(dst.positions.data()) < buf_end);
+      expect(reinterpret_cast<const char*>(dst.indices.data()) >= buf_start);
+      expect(reinterpret_cast<const char*>(dst.indices.data()) < buf_end);
+
+      // Both are aligned
+      expect(reinterpret_cast<uintptr_t>(dst.positions.data()) % alignof(float) == uintptr_t(0));
+      expect(reinterpret_cast<uintptr_t>(dst.indices.data()) % alignof(int32_t) == uintptr_t(0));
+   };
+
+   } // if constexpr little-endian
+}
+
 void bench()
 {
    using namespace ut;
@@ -5884,6 +6401,7 @@ int main()
 {
    trace.begin("binary_test");
    write_tests();
+   aligned_typed_array_tests();
    bench();
    test_partial();
    file_include_test();
