@@ -1,20 +1,31 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.beve.size;
 
-#pragma once
+import std;
 
-#include "glaze/beve/header.hpp"
-#include "glaze/beve/key_traits.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/util/expected.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/variant.hpp"
+import glaze.beve.header;
+import glaze.beve.key_traits;
+
+import glaze.core.common;
+import glaze.core.opts;
+import glaze.core.reflect;
+
+import glaze.concepts.container_concepts;
+
+import glaze.tuplet;
+
+import glaze.util.for_each;
+import glaze.util.variant;
+import glaze.util.tuple;
+import glaze.util.string_literal;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {
    // Calculate the number of bytes needed to store a compressed integer
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::size_t compressed_int_size(std::uint64_t i) noexcept
+   export [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::size_t compressed_int_size(std::uint64_t i) noexcept
    {
       if (i < 64) return 1;
       if (i < 16384) return 2;
@@ -23,7 +34,7 @@ namespace glz
    }
 
    // Compile-time version for known values
-   template <std::uint64_t i>
+   export template <std::uint64_t i>
    [[nodiscard]] consteval std::size_t compressed_int_size() noexcept
    {
       if constexpr (i < 64)
@@ -37,7 +48,7 @@ namespace glz
    }
 
    // Forward declaration for the size calculation template
-   template <std::uint32_t Format, class T>
+   export template <std::uint32_t Format, class T>
    struct calculate_size;
 
    // Primary template for BEVE size calculation dispatch
@@ -787,14 +798,14 @@ namespace glz
    // ============ Public API ============
 
    // Calculate the size in bytes needed to serialize a value to BEVE format
-   template <auto Opts = opts{}, class T>
+   export template <auto Opts = opts{}, class T>
    [[nodiscard]] std::size_t beve_size(T&& value)
    {
       return calculate_size<BEVE, std::remove_cvref_t<T>>::template op<set_beve<Opts>()>(std::forward<T>(value));
    }
 
    // Calculate size for untagged BEVE (structs_as_arrays = true)
-   template <auto Opts = opts{}, class T>
+   export template <auto Opts = opts{}, class T>
    [[nodiscard]] std::size_t beve_size_untagged(T&& value)
    {
       return calculate_size<BEVE, std::remove_cvref_t<T>>::template op<

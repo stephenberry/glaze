@@ -52,40 +52,40 @@ namespace glz
    }
 }
 
-export namespace glz::tag
+namespace glz::tag
 {
-   constexpr std::uint8_t null = 0;
-   constexpr std::uint8_t boolean = 0b00001'000;
-   constexpr std::uint8_t number = 1;
-   constexpr std::uint8_t string = 2;
-   constexpr std::uint8_t object = 3;
-   constexpr std::uint8_t typed_array = 4;
-   constexpr std::uint8_t generic_array = 5;
-   constexpr std::uint8_t extensions = 6;
+   export constexpr std::uint8_t null = 0;
+   export constexpr std::uint8_t boolean = 0b00001'000;
+   export constexpr std::uint8_t number = 1;
+   export constexpr std::uint8_t string = 2;
+   export constexpr std::uint8_t object = 3;
+   export constexpr std::uint8_t typed_array = 4;
+   export constexpr std::uint8_t generic_array = 5;
+   export constexpr std::uint8_t extensions = 6;
 
    // Data delimiter for separating multiple BEVE values in a stream/buffer
    // Used like NDJSON's newline delimiter - when converted to JSON outputs '\n'
-   constexpr std::uint8_t delimiter = 0b00000'110; // extensions type (6) with subtype 0
+   export constexpr std::uint8_t delimiter = 0b00000'110; // extensions type (6) with subtype 0
 
-   constexpr std::uint8_t bool_false = 0b000'01'000;
-   constexpr std::uint8_t bool_true = 0b000'11'000;
+   export constexpr std::uint8_t bool_false = 0b000'01'000;
+   export constexpr std::uint8_t bool_true = 0b000'11'000;
 
-   constexpr std::uint8_t i8 = 0b000'01'001;
-   constexpr std::uint8_t i16 = 0b001'01'001;
-   constexpr std::uint8_t i32 = 0b010'01'001;
-   constexpr std::uint8_t i64 = 0b011'01'001;
+   export constexpr std::uint8_t i8 = 0b000'01'001;
+   export constexpr std::uint8_t i16 = 0b001'01'001;
+   export constexpr std::uint8_t i32 = 0b010'01'001;
+   export constexpr std::uint8_t i64 = 0b011'01'001;
    constexpr std::uint8_t i128 = 0b100'01'001;
 
-   constexpr std::uint8_t u8 = 0b000'10'001;
-   constexpr std::uint8_t u16 = 0b001'10'001;
-   constexpr std::uint8_t u32 = 0b010'10'001;
-   constexpr std::uint8_t u64 = 0b011'10'001;
+   export constexpr std::uint8_t u8 = 0b000'10'001;
+   export constexpr std::uint8_t u16 = 0b001'10'001;
+   export constexpr std::uint8_t u32 = 0b010'10'001;
+   export constexpr std::uint8_t u64 = 0b011'10'001;
    constexpr std::uint8_t u128 = 0b100'10'001;
 
    constexpr std::uint8_t bf16 = 0b000'00'001; // brain float
    constexpr std::uint8_t f16 = 0b001'00'001;
-   constexpr std::uint8_t f32 = 0b010'00'001;
-   constexpr std::uint8_t f64 = 0b011'00'001;
+   export constexpr std::uint8_t f32 = 0b010'00'001;
+   export constexpr std::uint8_t f64 = 0b011'00'001;
    constexpr std::uint8_t f128 = 0b100'00'001;
 }
 
@@ -164,7 +164,7 @@ namespace glz
       }
    }
 
-   GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(is_context auto&& ctx, auto&& it, auto end) noexcept
+   export GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if (invalid_end(ctx, it, end)) {
          return;

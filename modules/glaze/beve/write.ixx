@@ -31,7 +31,7 @@ import glaze.tuplet;
 
 #include "glaze/util/inline.hpp"
 
-export namespace glz
+namespace glz
 {
    template <>
    struct serialize<BEVE>
@@ -52,7 +52,7 @@ export namespace glz
    };
 
    // Context-aware dump_type: sets ctx.error on buffer overflow
-   template <class B>
+   export template <class B>
    GLZ_ALWAYS_INLINE void dump_type(is_context auto& ctx, auto&& value, B& b, auto& ix)
    {
       using V = std::decay_t<decltype(value)>;
@@ -92,7 +92,7 @@ export namespace glz
    }
 
    // Legacy version for internal use where context is not available
-   GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto& ix)
+   export GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto& ix)
    {
       using V = std::decay_t<decltype(value)>;
       using Buffer = std::remove_cvref_t<decltype(b)>;
@@ -508,11 +508,6 @@ export namespace glz
          serialize<BEVE>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
       }
    };
-
-   template <class T, class V>
-   constexpr std::size_t variant_index_v = []<std::size_t... I>(std::index_sequence<I...>) {
-      return ((std::is_same_v<T, std::variant_alternative_t<I, V>> * I) + ...);
-   }(std::make_index_sequence<std::variant_size_v<V>>{});
 
    template <is_variant T>
    struct to<BEVE, T> final
@@ -1532,26 +1527,26 @@ export namespace glz
       }
    };
 
-   template <write_supported<BEVE> T, class Buffer>
+   export template <write_supported<BEVE> T, class Buffer>
    [[nodiscard]] error_ctx write_beve(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <auto Opts = opts{}, write_supported<BEVE> T>
+   export template <auto Opts = opts{}, write_supported<BEVE> T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_beve(T&& value)
    {
       return write<set_beve<Opts>()>(std::forward<T>(value));
    }
 
-   template <auto& Partial, write_supported<BEVE> T, class Buffer>
+   export template <auto& Partial, write_supported<BEVE> T, class Buffer>
    [[nodiscard]] error_ctx write_beve(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    // requires file_name to be null terminated
-   template <auto Opts = opts{}, write_supported<BEVE> T>
+   export template <auto Opts = opts{}, write_supported<BEVE> T>
    [[nodiscard]] error_ctx write_file_beve(T&& value, const sv file_name, auto&& buffer)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
@@ -1573,20 +1568,20 @@ export namespace glz
       return {};
    }
 
-   template <write_supported<BEVE> T, class Buffer>
+   export template <write_supported<BEVE> T, class Buffer>
    [[nodiscard]] error_ctx write_beve_untagged(T&& value, Buffer&& buffer)
    {
       return write<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(std::forward<T>(value),
                                                                                 std::forward<Buffer>(buffer));
    }
 
-   template <write_supported<BEVE> T>
+   export template <write_supported<BEVE> T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_beve_untagged(T&& value)
    {
       return write<opt_true<opts{.format = BEVE}, structs_as_arrays_opt_tag{}>>(std::forward<T>(value));
    }
 
-   template <auto Opts = opts{}, write_supported<BEVE> T>
+   export template <auto Opts = opts{}, write_supported<BEVE> T>
    [[nodiscard]] error_ctx write_file_beve_untagged(T&& value, const std::string& file_name, auto&& buffer)
    {
       return write_file_beve<opt_true<Opts, structs_as_arrays_opt_tag{}>>(std::forward<T>(value), file_name, buffer);
@@ -1596,7 +1591,7 @@ export namespace glz
 
    // Write the BEVE delimiter byte to a buffer
    // Used to separate multiple BEVE values in a stream/buffer (like NDJSON's newline)
-   template <class Buffer>
+   export template <class Buffer>
    void write_beve_delimiter(Buffer& buffer)
    {
       buffer.push_back(static_cast<typename Buffer::value_type>(tag::delimiter));
@@ -1604,7 +1599,7 @@ export namespace glz
 
    // Append a BEVE value to an existing buffer without clearing it
    // Returns the number of bytes written via result.count
-   template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
+   export template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
       requires output_buffer<Buffer>
    [[nodiscard]] error_ctx write_beve_append(T&& value, Buffer& buffer)
    {
@@ -1631,7 +1626,7 @@ export namespace glz
 
    // Append a BEVE value to an existing buffer with a delimiter prefix
    // Useful for streaming multiple values
-   template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
+   export template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
       requires output_buffer<Buffer>
    [[nodiscard]] error_ctx write_beve_append_with_delimiter(T&& value, Buffer& buffer)
    {
@@ -1644,7 +1639,7 @@ export namespace glz
    }
 
    // Write multiple BEVE values to a buffer with delimiters between them
-   template <auto Opts = opts{}, class Container, class Buffer>
+   export template <auto Opts = opts{}, class Container, class Buffer>
       requires output_buffer<Buffer> && readable_array_t<Container>
    [[nodiscard]] error_ctx write_beve_delimited(const Container& values, Buffer& buffer)
    {
@@ -1680,7 +1675,7 @@ export namespace glz
    }
 
    // Write multiple BEVE values to a buffer with delimiters, returning the buffer
-   template <auto Opts = opts{}, class Container>
+   export template <auto Opts = opts{}, class Container>
       requires readable_array_t<Container>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_beve_delimited(const Container& values)
    {

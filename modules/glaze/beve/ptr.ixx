@@ -1,11 +1,16 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.beve.ptr;
 
-#pragma once
+import std;
 
-#include "glaze/beve/read.hpp"
-#include "glaze/beve/write.hpp"
-#include "glaze/core/ptr.hpp"
+import glaze.beve.read;
+import glaze.beve.write;
+
+import glaze.core.opts;
+import glaze.core.ptr;
+
+import glaze.util.string_literal;
 
 namespace glz
 {

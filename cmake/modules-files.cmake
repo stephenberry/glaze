@@ -6,6 +6,7 @@ target_sources(glaze_glaze
       modules/glaze/glaze.ixx
       modules/glaze/json.ixx
       modules/glaze/cbor.ixx
+      modules/glaze/beve.ixx
       modules/glaze/csv.ixx
       modules/glaze/version.ixx
 )
@@ -191,15 +192,29 @@ target_sources(glaze_glaze
     modules/glaze/reflection/requires_key.ixx
 )
 
+# base64
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/base64/base64.ixx
+)
+
 # beve
 target_sources(glaze_glaze
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/beve/header.ixx
-    modules/glaze/beve/read.ixx
+    modules/glaze/beve/beve_to_json.ixx
     modules/glaze/beve/key_traits.ixx
+    modules/glaze/beve/lazy.ixx
+    modules/glaze/beve/peek_header.ixx
+    modules/glaze/beve/ptr.ixx
+    modules/glaze/beve/read.ixx
+    modules/glaze/beve/size.ixx
     modules/glaze/beve/skip.ixx
+    modules/glaze/beve/wrappers.ixx
     modules/glaze/beve/write.ixx
 )
 

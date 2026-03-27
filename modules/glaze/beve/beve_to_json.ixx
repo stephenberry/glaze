@@ -1,10 +1,20 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.beve.beve_to_json;
 
-#pragma once
+import std;
 
-#include "glaze/beve/header.hpp"
-#include "glaze/json/write.hpp"
+import glaze.beve.header;
+
+import glaze.core.context;
+import glaze.core.opts;
+
+import glaze.concepts.container_concepts;
+
+import glaze.json.write;
+
+import glaze.util.dump;
+import glaze.util.string_literal;
 
 namespace glz
 {
@@ -607,7 +617,7 @@ namespace glz
       }
    }
 
-   template <auto Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
+   export template <auto Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx beve_to_json(const BEVEBuffer& beve, JSONBuffer& out)
    {
       std::size_t ix{}; // write index
@@ -631,4 +641,3 @@ namespace glz
       return {};
    }
 }
-

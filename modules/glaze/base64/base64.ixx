@@ -1,12 +1,8 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.base64.base64;
 
-#pragma once
-
-#include <array>
-#include <string>
-#include <string_view>
-#include <vector>
+import std;
 
 namespace glz
 {
@@ -15,7 +11,7 @@ namespace glz
       "abcdefghijklmnopqrstuvwxyz"
       "0123456789+/";
 
-   inline std::string read_base64(const std::string_view input)
+   export inline std::string read_base64(const std::string_view input)
    {
       std::string decoded_data;
       static constexpr std::array<int, 256> decode_table = [] {
@@ -41,7 +37,7 @@ namespace glz
       return decoded_data;
    }
 
-   inline std::string write_base64(const std::string_view input)
+   export inline std::string write_base64(const std::string_view input)
    {
       std::string encoded_data;
 

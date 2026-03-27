@@ -1,34 +1,37 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <bit>
-#include <bitset>
-#include <chrono>
-#include <complex>
-#include <deque>
-#include <expected>
-#include <list>
-#include <map>
-#include <numbers>
-#include <random>
-#include <set>
-#include <span>
-#include <unordered_map>
-#include <unordered_set>
+import std;
 
-#include "glaze/api/impl.hpp"
-#include "glaze/base64/base64.hpp"
-#include "glaze/beve/beve_to_json.hpp"
-#include "glaze/beve/key_traits.hpp"
-#include "glaze/beve/peek_header.hpp"
-#include "glaze/beve/read.hpp"
-#include "glaze/beve/size.hpp"
-#include "glaze/beve/write.hpp"
-#include "glaze/hardware/volatile_array.hpp"
-#include "glaze/json/json_ptr.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/trace/trace.hpp"
-#include "ut/ut.hpp"
+import glaze.api.impl;
+import glaze.base64.base64;
+import glaze.beve.beve_to_json;
+import glaze.beve.key_traits;
+import glaze.beve.peek_header;
+import glaze.beve.read;
+import glaze.beve.size;
+import glaze.beve.write;
+import glaze.core.cast;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+import glaze.core.seek;
+import glaze.core.to;
+import glaze.core.wrappers;
+import glaze.core.write;
+import glaze.hardware.volatile_array;
+import glaze.json.generic;
+import glaze.json.json_ptr;
+import glaze.json.read;
+import glaze.json.write;
+import glaze.trace;
+import glaze.tuplet;
+import glaze.util.for_each;
+
+import ut;
 
 using namespace ut;
 
@@ -93,7 +96,7 @@ namespace
       std::string buffer{};
       expect(not glz::write_beve(src, buffer));
 
-      expect(static_cast<uint8_t>(buffer[0]) == glz::beve_key_traits<ID>::header);
+      expect(static_cast<std::uint8_t>(buffer[0]) == glz::beve_key_traits<ID>::header);
 
       std::map<ID, std::string> dst{};
       expect(!glz::read_beve(dst, buffer));
@@ -985,7 +988,7 @@ void container_types()
    using namespace ut;
    "vector int roundtrip"_test = [] {
       std::vector<int> vec(100);
-      for (auto& item : vec) item = rand();
+      for (auto& item : vec) item = std::rand();
       std::string buffer{};
       std::vector<int> vec2{};
       expect(not glz::write_beve(vec, buffer));
@@ -1006,7 +1009,7 @@ void container_types()
    };
    "vector double roundtrip"_test = [] {
       std::vector<double> vec(100);
-      for (auto& item : vec) item = rand() / (1.0 + rand());
+      for (auto& item : vec) item = std::rand() / (1.0 + std::rand());
       std::string buffer{};
       std::vector<double> vec2{};
       expect(not glz::write_beve(vec, buffer));
@@ -1015,7 +1018,7 @@ void container_types()
    };
    "vector bool roundtrip"_test = [] {
       std::vector<bool> vec(100);
-      for (auto&& item : vec) item = rand() / (1.0 + rand()) > 0.5;
+      for (auto&& item : vec) item = std::rand() / (1.0 + std::rand()) > 0.5;
       std::string buffer{};
       std::vector<bool> vec2{};
       expect(not glz::write_beve(vec, buffer));
@@ -1024,7 +1027,7 @@ void container_types()
    };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
-      for (auto& item : deq) item = rand();
+      for (auto& item : deq) item = std::rand();
       std::string buffer{};
       std::vector<int> deq2{};
       expect(not glz::write_beve(deq, buffer));
@@ -1033,7 +1036,7 @@ void container_types()
    };
    "list roundtrip"_test = [] {
       std::list<int> lis(100);
-      for (auto& item : lis) item = rand();
+      for (auto& item : lis) item = std::rand();
       std::string buffer{};
       std::list<int> lis2{};
       expect(not glz::write_beve(lis, buffer));
@@ -1046,7 +1049,7 @@ void container_types()
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
          std::shuffle(str.begin(), str.end(), g);
-         map1[str] = rand();
+         map1[str] = std::rand();
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
@@ -1059,7 +1062,7 @@ void container_types()
    "map int keys roundtrip"_test = [] {
       std::map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map1[rand()] = rand();
+         map1[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::map<int, int> map2{};
@@ -1072,7 +1075,7 @@ void container_types()
    "unordered_map int keys roundtrip"_test = [] {
       std::unordered_map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map1[rand()] = rand();
+         map1[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::unordered_map<int, int> map2{};
@@ -1181,11 +1184,11 @@ suite byte_buffer = [] {
       expect(msg.val == "hello");
    };
 
-   "uint8_t buffer"_test = [] {
+   "std::uint8_t buffer"_test = [] {
       TestMsg msg{};
       msg.id = 5;
       msg.val = "hello";
-      std::vector<uint8_t> buffer{};
+      std::vector<std::uint8_t> buffer{};
       expect(not glz::write_beve(msg, buffer));
 
       buffer.emplace_back('\0');
@@ -1590,7 +1593,7 @@ struct signal_t
 {
    header_t header{};
    std::vector<double> v_f64;
-   std::vector<uint8_t> v_u8;
+   std::vector<std::uint8_t> v_u8;
 
    struct glaze
    {
@@ -1611,21 +1614,21 @@ suite signal_tests = [] {
       expect(obj.header.valid == true);
       expect(obj.header.description == "header description");
       expect(obj.v_f64 == std::vector{1.0, 2.0});
-      expect(obj.v_u8 == std::vector<uint8_t>{1, 2, 3, 4, 5});
+      expect(obj.v_u8 == std::vector<std::uint8_t>{1, 2, 3, 4, 5});
    };
 };
 
 suite vector_tests = [] {
-   "std::vector<uint8_t>"_test = [] {
-      auto scoped = trace.scope("test std::vector<uint8_t>");
+   "std::vector<std::uint8_t>"_test = [] {
+      auto scoped = trace.scope("test std::vector<std::uint8_t>");
       std::string s;
       static constexpr auto n = 10000;
-      std::vector<uint8_t> v(n);
+      std::vector<std::uint8_t> v(n);
 
       std::mt19937_64 gen{};
 
       for (auto i = 0; i < n; ++i) {
-         v[i] = uint8_t(std::uniform_int_distribution<uint16_t>{0, 255}(gen));
+         v[i] = std::uint8_t(std::uniform_int_distribution<std::uint16_t>{0, 255}(gen));
       }
 
       auto copy = v;
@@ -1639,17 +1642,17 @@ suite vector_tests = [] {
       expect(v == copy);
    };
 
-   "std::vector<uint16_t>"_test = [] {
-      auto scoped = trace.scope("test std::vector<uint16_t>");
+   "std::vector<std::uint16_t>"_test = [] {
+      auto scoped = trace.scope("test std::vector<std::uint16_t>");
       std::string s;
       static constexpr auto n = 10000;
-      std::vector<uint16_t> v(n);
+      std::vector<std::uint16_t> v(n);
 
       std::mt19937_64 gen{};
 
       for (auto i = 0; i < n; ++i) {
-         v[i] = std::uniform_int_distribution<uint16_t>{(std::numeric_limits<uint16_t>::min)(),
-                                                        (std::numeric_limits<uint16_t>::max)()}(gen);
+         v[i] = std::uniform_int_distribution<std::uint16_t>{(std::numeric_limits<std::uint16_t>::min)(),
+                                                        (std::numeric_limits<std::uint16_t>::max)()}(gen);
       }
 
       auto copy = v;
@@ -1716,12 +1719,12 @@ suite file_write_read_tests = [] {
    "file_write_read"_test = [] {
       std::string s;
       static constexpr auto n = 10000;
-      std::vector<uint8_t> v(n);
+      std::vector<std::uint8_t> v(n);
 
       std::mt19937_64 gen{};
 
       for (auto i = 0; i < n; ++i) {
-         v[i] = uint8_t(std::uniform_int_distribution<uint16_t>{0, 255}(gen));
+         v[i] = std::uint8_t(std::uniform_int_distribution<std::uint16_t>{0, 255}(gen));
       }
 
       auto copy = v;
@@ -1894,21 +1897,21 @@ namespace variants
 {
    struct A
    {
-      uint8_t a{};
+      std::uint8_t a{};
 
       auto operator<=>(const A&) const = default;
    };
 
    struct A1
    {
-      std::map<uint8_t, std::uint64_t> a{};
+      std::map<std::uint8_t, std::uint64_t> a{};
 
       auto operator<=>(const A1&) const = default;
    };
 
    struct B
    {
-      uint8_t b{};
+      std::uint8_t b{};
       A1 a{};
 
       auto operator<=>(const B&) const = default;
@@ -1917,7 +1920,7 @@ namespace variants
    struct C
    {
       bool is_a{};
-      std::map<uint8_t, std::variant<A, B>> a{};
+      std::map<std::uint8_t, std::variant<A, B>> a{};
    };
 
    class D
@@ -1928,7 +1931,7 @@ namespace variants
 
    suite variants = [] {
       "variants"_test = [] {
-         std::vector<uint8_t> out;
+         std::vector<std::uint8_t> out;
          D d{};
          expect(not glz::write<glz::opt_true<glz::opts{.format = glz::BEVE}, glz::structs_as_arrays_opt_tag{}>>(
             d, out)); // testing compilation
@@ -1956,7 +1959,7 @@ suite empty_object_test = [] {
    };
 };
 
-enum class sub : uint8_t { START, END, UPDATE_ITEM, UPDATE_PRICE };
+enum class sub : std::uint8_t { START, END, UPDATE_ITEM, UPDATE_PRICE };
 
 struct A
 {
@@ -2189,7 +2192,7 @@ suite filesystem_tests = [] {
 
 struct struct_c_arrays
 {
-   uint16_t ints[2]{1, 2};
+   std::uint16_t ints[2]{1, 2};
    float floats[1]{3.14f};
 
    struct glaze
@@ -2201,7 +2204,7 @@ struct struct_c_arrays
 
 struct struct_c_arrays_meta
 {
-   uint16_t ints[2]{1, 2};
+   std::uint16_t ints[2]{1, 2};
    float floats[1]{3.14f};
 };
 
@@ -2470,19 +2473,19 @@ suite type_conversions = [] {
       expect(pi64 == std::numbers::pi_v<float>);
    };
 
-   "int8_t -> uint8_t"_test = [] {
-      auto b = glz::write_beve(int8_t{45}).value_or("error");
-      uint8_t i{};
+   "std::int8_t -> std::uint8_t"_test = [] {
+      auto b = glz::write_beve(std::int8_t{45}).value_or("error");
+      std::uint8_t i{};
       expect(!glz::read_beve(i, b));
       expect(i == 45);
 
-      b = glz::write_beve(int8_t{-1}).value_or("error");
+      b = glz::write_beve(std::int8_t{-1}).value_or("error");
       expect(!glz::read_beve(i, b));
       expect(i == 255);
    };
 
-   "int8_t -> std::int32_t"_test = [] {
-      auto b = glz::write_beve(int8_t{127}).value_or("error");
+   "std::int8_t -> std::int32_t"_test = [] {
+      auto b = glz::write_beve(std::int8_t{127}).value_or("error");
       std::int32_t i{};
       expect(!glz::read_beve(i, b));
       expect(i == 127);
@@ -2515,7 +2518,7 @@ suite type_conversions = [] {
 
 struct struct_for_volatile
 {
-   glz::volatile_array<uint16_t, 4> a{};
+   glz::volatile_array<std::uint16_t, 4> a{};
    bool b{};
    std::int32_t c{};
    double d{};
@@ -2531,7 +2534,7 @@ struct glz::meta<struct_for_volatile>
 
 struct my_volatile_struct
 {
-   glz::volatile_array<uint16_t, 4> a{};
+   glz::volatile_array<std::uint16_t, 4> a{};
    bool b{};
    std::int32_t c{};
    double d{};
@@ -2578,7 +2581,7 @@ suite volatile_tests = [] {
       obj.e = 0;
 
       expect(!glz::read_beve(obj, s));
-      expect(obj.a == glz::volatile_array<uint16_t, 4>{1, 2, 3, 4});
+      expect(obj.a == glz::volatile_array<std::uint16_t, 4>{1, 2, 3, 4});
       expect(obj.b == true);
       expect(obj.c == -7);
       expect(obj.d == 9.9);
@@ -2597,7 +2600,7 @@ suite volatile_tests = [] {
       obj.e = 0;
 
       expect(!glz::read_beve(obj, s));
-      expect(obj.a == glz::volatile_array<uint16_t, 4>{1, 2, 3, 4});
+      expect(obj.a == glz::volatile_array<std::uint16_t, 4>{1, 2, 3, 4});
       expect(obj.b == true);
       expect(obj.c == -7);
       expect(obj.d == 9.9);
@@ -3171,14 +3174,14 @@ struct simple_obj
 suite delimited_beve_tests = [] {
    "delimiter tag value"_test = [] {
       // Verify the delimiter tag is correct: extensions type (6) with subtype 0
-      expect(glz::tag::delimiter == uint8_t(0x06));
+      expect(glz::tag::delimiter == std::uint8_t(0x06));
    };
 
    "write_beve_delimiter"_test = [] {
       std::string buffer{};
       glz::write_beve_delimiter(buffer);
       expect(buffer.size() == std::size_t(1));
-      expect(static_cast<uint8_t>(buffer[0]) == glz::tag::delimiter);
+      expect(static_cast<std::uint8_t>(buffer[0]) == glz::tag::delimiter);
    };
 
    "write_beve_append single value"_test = [] {
@@ -3209,7 +3212,7 @@ suite delimited_beve_tests = [] {
       expect(result2.count > std::size_t(0));
 
       // Check delimiter was written
-      expect(static_cast<uint8_t>(buffer[first_size]) == glz::tag::delimiter);
+      expect(static_cast<std::uint8_t>(buffer[first_size]) == glz::tag::delimiter);
    };
 
    "write_beve_delimited vector of ints"_test = [] {
@@ -4631,13 +4634,13 @@ suite beve_size_tests = [] {
       expect(glz::beve_size(false) == std::size_t(1));
 
       // Numbers: 1 byte tag + sizeof(type)
-      expect(glz::beve_size(int8_t{42}) == 1 + sizeof(int8_t));
-      expect(glz::beve_size(uint8_t{42}) == 1 + sizeof(uint8_t));
-      expect(glz::beve_size(int16_t{42}) == 1 + sizeof(int16_t));
-      expect(glz::beve_size(uint16_t{42}) == 1 + sizeof(uint16_t));
+      expect(glz::beve_size(std::int8_t{42}) == 1 + sizeof(std::int8_t));
+      expect(glz::beve_size(std::uint8_t{42}) == 1 + sizeof(std::uint8_t));
+      expect(glz::beve_size(std::int16_t{42}) == 1 + sizeof(std::int16_t));
+      expect(glz::beve_size(std::uint16_t{42}) == 1 + sizeof(std::uint16_t));
       expect(glz::beve_size(std::int32_t{42}) == 1 + sizeof(std::int32_t));
       expect(glz::beve_size(std::uint32_t{42}) == 1 + sizeof(std::uint32_t));
-      expect(glz::beve_size(int64_t{42}) == 1 + sizeof(int64_t));
+      expect(glz::beve_size(std::int64_t{42}) == 1 + sizeof(std::int64_t));
       expect(glz::beve_size(std::uint64_t{42}) == 1 + sizeof(std::uint64_t));
       expect(glz::beve_size(float{3.14f}) == 1 + sizeof(float));
       expect(glz::beve_size(double{3.14}) == 1 + sizeof(double));
@@ -4652,13 +4655,13 @@ suite beve_size_tests = [] {
 
       verify(true);
       verify(false);
-      verify(int8_t{-128});
-      verify(uint8_t{255});
-      verify(int16_t{-32768});
-      verify(uint16_t{65535});
+      verify(std::int8_t{-128});
+      verify(std::uint8_t{255});
+      verify(std::int16_t{-32768});
+      verify(std::uint16_t{65535});
       verify(std::int32_t{-2147483648});
       verify(std::uint32_t{4294967295});
-      verify(int64_t{-9223372036854775807LL});
+      verify(std::int64_t{-9223372036854775807LL});
       verify(std::uint64_t{18446744073709551615ULL});
       verify(float{3.14159f});
       verify(double{2.718281828459045});
@@ -5090,7 +5093,7 @@ suite beve_size_tests = [] {
 
    "beve_size large vector 4-byte compressed int"_test = [] {
       // Test a vector with > 16383 elements to trigger 4-byte compressed int for count
-      std::vector<uint8_t> large_vec(20000, 42);
+      std::vector<std::uint8_t> large_vec(20000, 42);
       const std::size_t predicted = glz::beve_size(large_vec);
       auto buffer = glz::write_beve(large_vec).value();
       expect(predicted == buffer.size()) << "Predicted: " << predicted << ", Actual: " << buffer.size();
@@ -5365,7 +5368,7 @@ suite beve_peek_header_tests = [] {
          expect(result->type == glz::tag::number);
       }
       {
-         int8_t val = -42;
+         std::int8_t val = -42;
          auto buffer = glz::write_beve(val).value();
          auto result = glz::beve_peek_header(buffer);
          expect(result.has_value());
@@ -5404,7 +5407,7 @@ suite beve_peek_header_tests = [] {
       // Test compressed int encoding boundaries
       // 1-byte max: 63 elements
       {
-         std::vector<uint8_t> val(63);
+         std::vector<std::uint8_t> val(63);
          auto buffer = glz::write_beve(val).value();
          auto result = glz::beve_peek_header(buffer);
          expect(result.has_value());
@@ -5413,7 +5416,7 @@ suite beve_peek_header_tests = [] {
       }
       // 2-byte min: 64 elements
       {
-         std::vector<uint8_t> val(64);
+         std::vector<std::uint8_t> val(64);
          auto buffer = glz::write_beve(val).value();
          auto result = glz::beve_peek_header(buffer);
          expect(result.has_value());
@@ -5422,7 +5425,7 @@ suite beve_peek_header_tests = [] {
       }
       // 2-byte max: 16383 elements
       {
-         std::vector<uint8_t> val(16383);
+         std::vector<std::uint8_t> val(16383);
          auto buffer = glz::write_beve(val).value();
          auto result = glz::beve_peek_header(buffer);
          expect(result.has_value());
@@ -5431,7 +5434,7 @@ suite beve_peek_header_tests = [] {
       }
       // 4-byte min: 16384 elements
       {
-         std::vector<uint8_t> val(16384);
+         std::vector<std::uint8_t> val(16384);
          auto buffer = glz::write_beve(val).value();
          auto result = glz::beve_peek_header(buffer);
          expect(result.has_value());

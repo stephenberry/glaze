@@ -1,26 +1,35 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.beve.lazy;
 
-#pragma once
+import std;
 
-#include <string_view>
+import glaze.beve.header;
+import glaze.beve.read;
+import glaze.beve.skip;
+import glaze.beve.write;
 
-#include "glaze/beve/header.hpp"
-#include "glaze/beve/read.hpp"
-#include "glaze/beve/skip.hpp"
-#include "glaze/beve/write.hpp"
-#include "glaze/util/expected.hpp"
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.opts;
+
+import glaze.concepts.container_concepts;
+
+import glaze.util.expected;
+import glaze.util.type_traits;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {
    // Forward declarations
-   template <opts Opts>
+   export template <opts Opts>
    struct lazy_beve_document;
-   template <opts Opts>
+   export template <opts Opts>
    class lazy_beve_iterator;
-   template <opts Opts>
+   export template <opts Opts>
    struct indexed_lazy_beve_view;
-   template <opts Opts>
+   export template <opts Opts>
    class indexed_lazy_beve_iterator;
 
    // ============================================================================
@@ -122,7 +131,7 @@ namespace glz
     * For objects, parse_pos_ tracks the current scan position to enable
     * efficient sequential key access (O(n) total instead of O(n²)).
     */
-   template <opts Opts = opts{}>
+   export template <opts Opts = opts{}>
    struct lazy_beve_view
    {
      private:
@@ -284,7 +293,7 @@ namespace glz
    // lazy_beve_document - Minimal container
    // ============================================================================
 
-   template <opts Opts = opts{}>
+   export template <opts Opts = opts{}>
    struct lazy_beve_document
    {
      private:
@@ -391,7 +400,7 @@ namespace glz
    // lazy_beve_iterator - Forward iterator with lazy scanning
    // ============================================================================
 
-   template <opts Opts>
+   export template <opts Opts>
    class lazy_beve_iterator
    {
      private:
@@ -442,7 +451,7 @@ namespace glz
    // indexed_lazy_beve_view - Pre-built index for O(1) access
    // ============================================================================
 
-   template <opts Opts>
+   export template <opts Opts>
    struct indexed_lazy_beve_view
    {
      private:
@@ -527,7 +536,7 @@ namespace glz
    // indexed_lazy_beve_iterator - O(1) advancement
    // ============================================================================
 
-   template <opts Opts>
+   export template <opts Opts>
    class indexed_lazy_beve_iterator
    {
      private:
@@ -1276,7 +1285,7 @@ namespace glz
     * @param buffer The BEVE buffer (must remain valid for document lifetime)
     * @return lazy_beve_document on success, error_ctx on failure
     */
-   template <opts Opts = opts{}, class Buffer>
+   export template <opts Opts = opts{}, class Buffer>
    [[nodiscard]] inline expected<lazy_beve_document<Opts>, error_ctx> lazy_beve(Buffer&& buffer)
    {
       lazy_beve_document<Opts> doc;
@@ -1309,17 +1318,16 @@ namespace glz
    // read_beve overload for lazy_beve_view
    // ============================================================================
 
-   template <class T, opts Opts>
+   export template <class T, opts Opts>
    [[nodiscard]] inline error_ctx read_beve(T& value, const lazy_beve_view<Opts>& view)
    {
       return view.template read_into<T>(value);
    }
 
-   template <class T, opts Opts>
+   export template <class T, opts Opts>
    [[nodiscard]] inline error_ctx read_beve(T& value, lazy_beve_view<Opts>&& view)
    {
       return view.template read_into<T>(value);
    }
 
 } // namespace glz
-

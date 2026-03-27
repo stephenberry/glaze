@@ -1,11 +1,16 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.beve.peek_header;
 
-#pragma once
+import std;
 
-#include "glaze/beve/header.hpp"
-#include "glaze/core/context.hpp"
-#include "glaze/util/expected.hpp"
+import glaze.beve.header;
+
+import glaze.core.context;
+
+import glaze.util.expected;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {
@@ -13,14 +18,14 @@ namespace glz
    namespace extension
    {
       constexpr std::uint8_t delimiter = 0; // Data delimiter (tag = 0x06)
-      constexpr std::uint8_t variant = 1; // Variant type (tag = 0x0E), count = variant index
-      constexpr std::uint8_t complex = 3; // Complex number/array (tag = 0x1E)
+      export constexpr std::uint8_t variant = 1; // Variant type (tag = 0x0E), count = variant index
+      export constexpr std::uint8_t complex = 3; // Complex number/array (tag = 0x1E)
       constexpr std::uint8_t complex_number = 0; // Single complex (count = 2)
       constexpr std::uint8_t complex_array = 1; // Array of complex (count = element count)
    }
 
    // Information extracted from a BEVE header without full deserialization
-   struct beve_header
+   export struct beve_header
    {
       std::uint8_t tag{}; // The raw tag byte
       std::uint8_t type{}; // Base type: null(0), number(1), string(2), object(3), typed_array(4), generic_array(5),
@@ -100,7 +105,7 @@ namespace glz
    // - Making decisions about how to process incoming data
    //
    // Returns the header information on success, or an error_ctx on failure.
-   template <class Buffer>
+   export template <class Buffer>
    [[nodiscard]] expected<beve_header, error_ctx> beve_peek_header(const Buffer& buffer) noexcept
    {
       const auto* data = reinterpret_cast<const std::uint8_t*>(buffer.data());
@@ -249,7 +254,7 @@ namespace glz
    }
 
    // Convenience overload for C-style arrays and raw pointers with size
-   [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header(const void* data, std::size_t size) noexcept
+   export [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header(const void* data, std::size_t size) noexcept
    {
       return beve_peek_header(std::string_view{reinterpret_cast<const char*>(data), size});
    }
@@ -270,7 +275,7 @@ namespace glz
    //
    // Returns the header information on success, or an error_ctx on failure.
    // The header_size in the result is relative to the offset position.
-   template <class Buffer>
+   export template <class Buffer>
    [[nodiscard]] expected<beve_header, error_ctx> beve_peek_header_at(const Buffer& buffer, std::size_t offset) noexcept
    {
       const std::size_t size = buffer.size();
@@ -285,8 +290,8 @@ namespace glz
    }
 
    // Convenience overload for raw pointers with size and offset
-   [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header_at(const void* data, std::size_t size,
-                                                                             std::size_t offset) noexcept
+   export [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header_at(const void* data, std::size_t size,
+                                                                                    std::size_t offset) noexcept
    {
       if (offset >= size) [[unlikely]] {
          return unexpected(error_ctx{offset, error_code::unexpected_end});
@@ -294,4 +299,3 @@ namespace glz
       return beve_peek_header(std::string_view{reinterpret_cast<const char*>(data) + offset, size - offset});
    }
 }
-

@@ -13,6 +13,11 @@ namespace glz
    export template <class T>
    concept is_variant = is_specialization_v<T, std::variant>;
 
+   export template <class T, class V>
+   constexpr std::size_t variant_index_v = []<std::size_t... I>(std::index_sequence<I...>) {
+      return ((std::is_same_v<T, std::variant_alternative_t<I, V>> * I) + ...);
+   }(std::make_index_sequence<std::variant_size_v<V>>{});
+
    // Check if all variant alternatives are default constructible
    export template <class T>
    concept variant_alternatives_default_constructible = []<std::size_t... I>(std::index_sequence<I...>) {

@@ -1,15 +1,19 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.beve.wrappers;
 
-#pragma once
+import std;
 
-#include <type_traits>
+import glaze.beve.read;
+import glaze.beve.write;
 
-#include "glaze/core/custom.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/wrappers.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/json/write.hpp"
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.custom;
+import glaze.core.opts;
+import glaze.core.wrappers;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {
@@ -102,4 +106,3 @@ namespace glz
       }
    };
 }
-

@@ -7,7 +7,7 @@ import std;
 import glaze.core.context;
 import glaze.core.meta;
 
-template <>
+export template <>
 struct glz::meta<glz::error_code>
 {
    static constexpr std::string_view name = "glz::error_code";
@@ -159,3 +159,4 @@ struct glz::meta<glz::error_code>
                                      buffer_overflow, //
                                      invalid_length};
 };
+

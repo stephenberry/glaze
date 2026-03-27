@@ -7,9 +7,9 @@ import std;
 import glaze.core.meta;
 import glaze.util.string_literal;
 
-export namespace glz
+namespace glz
 {
-   template<class T>
+   export template<class T>
    struct meta<std::set<T>>
    {
       static constexpr std::string_view name = join_v<chars<"std::set<">, name_v<T>, chars<">">>;
