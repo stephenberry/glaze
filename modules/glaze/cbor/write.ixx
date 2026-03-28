@@ -100,7 +100,7 @@ namespace glz
       }
 
       // Encode CBOR argument with minimal bytes (context-aware version)
-      template <class B, class IX>
+      export template <class B, class IX>
       GLZ_ALWAYS_INLINE bool encode_arg(is_context auto& ctx, std::uint8_t major_type, std::uint64_t value, B& b, IX& ix)
       {
          using namespace cbor;

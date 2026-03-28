@@ -321,4 +321,5 @@ target_sources(glaze_glaze
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/ext/cli_menu.ixx
+    modules/glaze/ext/eigen.ixx
 )

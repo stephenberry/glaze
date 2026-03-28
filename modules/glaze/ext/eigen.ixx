@@ -1,26 +1,25 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.ext.eigen;
 
-#pragma once
+import std;
 
-#if __has_include(<Eigen/Core>)
-#include <Eigen/Core>
-#else
-static_assert(false, "Eigen must be included to use glaze/ext/eigen.hpp");
-#endif
+import glaze.api.std.array;
 
-#include <span>
+import glaze.beve.read;
+import glaze.beve.write;
 
-#include "glaze/api/std/array.hpp"
-#include "glaze/beve/read.hpp"
-#include "glaze/beve/write.hpp"
-#include "glaze/cbor/read.hpp"
-#include "glaze/cbor/write.hpp"
-#include "glaze/core/common.hpp"
-#include "glaze/core/meta.hpp"
-#include "glaze/json/json_ptr.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/json/write.hpp"
+import cbor;
+
+import glaze.core.common;
+import glaze.core.meta;
+import glaze.core.context;
+
+import glaze.json.json_ptr;
+import glaze.json.read;
+import glaze.json.write;
+
+import glaze.concepts.container_concepts;
 
 namespace glz
 {

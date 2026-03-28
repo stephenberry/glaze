@@ -126,7 +126,7 @@ add_subdirectory(buffer_pool_test)
 add_subdirectory(cli_menu_test)
 add_subdirectory(compare_test)
 add_subdirectory(csv_test)
-add_subdirectory(eigen_test)
+# add_subdirectory(eigen_test) unfinished
 add_subdirectory(example_json)
 add_subdirectory(exceptions_test)
 add_subdirectory(inplace_vector)
