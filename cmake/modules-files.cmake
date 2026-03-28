@@ -8,6 +8,7 @@ target_sources(glaze_glaze
       modules/glaze/cbor.ixx
       modules/glaze/beve.ixx
       modules/glaze/csv.ixx
+      modules/glaze/chrono.ixx
       modules/glaze/version.ixx
       modules/glaze/glaze_exceptions.ixx
       modules/glaze/msgpack.ixx

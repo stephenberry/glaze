@@ -35,6 +35,7 @@ export module glaze;
 export import glaze.beve;
 export import glaze.core.ostream_buffer;
 export import glaze.csv;
+export import glaze.chrono;
 export import glaze.file.file_ops;
 export import glaze.file.read_directory;
 export import glaze.file.write_directory;
