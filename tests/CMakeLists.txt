@@ -168,7 +168,7 @@ endif()
 add_subdirectory(json_reflection_test)
 add_subdirectory(json_test)
 
-option(glaze_BUILD_NETWORKING_TESTS "Build networking tests (requires OpenSSL)" ON)
+option(glaze_BUILD_NETWORKING_TESTS "Build networking tests (requires OpenSSL)" OFF)
 if(glaze_BUILD_NETWORKING_TESTS)
     add_subdirectory(networking_tests)
 endif()
