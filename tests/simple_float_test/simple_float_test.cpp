@@ -1,31 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 // Comprehensive tests for simple_float.hpp
 // Tests roundtrip correctness of simple_float implementations
 
-#include "glaze/util/simple_float.hpp"
+import glaze.util.simple_float;
 
-#include <atomic>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <cstdint>
-#include <cstring>
-#include <iomanip>
-#include <iostream>
-#include <limits>
-#include <random>
-#include <sstream>
-#include <string>
-#include <string_view>
-#include <thread>
-#include <vector>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "glaze/util/dtoa.hpp"
-#include "glaze/util/glaze_fast_float.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import glaze.util.dtoa;
+import glaze.util.glaze_fast_float;
+
+import ut;
 
 using namespace ut;
 
@@ -78,17 +65,17 @@ inline bool doubles_roundtrip_equal(double a, double b)
 }
 
 // ULP distance calculation (useful for debugging precision issues)
-inline int64_t double_ulp_distance(double a, double b)
+inline std::int64_t double_ulp_distance(double a, double b)
 {
    if (a == b) return 0;
-   if (std::isnan(a) || std::isnan(b)) return INT64_MAX;
+   if (std::isnan(a) || std::isnan(b)) return std::numeric_limits<std::int64_t>::max();
 
-   int64_t a_bits, b_bits;
+   std::int64_t a_bits, b_bits;
    std::memcpy(&a_bits, &a, sizeof(double));
    std::memcpy(&b_bits, &b, sizeof(double));
 
    // Handle sign difference
-   if ((a_bits < 0) != (b_bits < 0)) return INT64_MAX;
+   if ((a_bits < 0) != (b_bits < 0)) return std::numeric_limits<std::int64_t>::max();
 
    return std::abs(a_bits - b_bits);
 }
@@ -269,7 +256,7 @@ suite exhaustive_float_tests = [] {
       {
          std::uint64_t passed{0};
          std::uint64_t skipped{0};
-         std::uint32_t first_failure{UINT32_MAX};
+         std::uint32_t first_failure{std::numeric_limits<std::uint32_t>::max()};
       };
       std::vector<ThreadResult> results(num_threads);
 
@@ -298,7 +285,7 @@ suite exhaustive_float_tests = [] {
             if (ec == std::errc{} && floats_roundtrip_equal(parsed, value)) {
                ++result.passed;
             }
-            else if (result.first_failure == UINT32_MAX) {
+            else if (result.first_failure == std::numeric_limits<std::uint32_t>::max()) {
                result.first_failure = static_cast<std::uint32_t>(bits);
             }
          }
@@ -324,7 +311,7 @@ suite exhaustive_float_tests = [] {
       // Aggregate results
       std::uint64_t total_passed = 0;
       std::uint64_t total_skipped = 0;
-      std::uint32_t first_failure = UINT32_MAX;
+      std::uint32_t first_failure = std::numeric_limits<std::uint32_t>::max();
 
       for (const auto& r : results) {
          total_passed += r.passed;
@@ -342,7 +329,7 @@ suite exhaustive_float_tests = [] {
       std::cout << "Time: " << duration.count() << " ms (" << (total_values * 1000 / (duration.count() + 1))
                 << " values/sec)" << std::endl;
 
-      if (failures > 0 && first_failure != UINT32_MAX) {
+      if (failures > 0 && first_failure != std::numeric_limits<std::uint32_t>::max()) {
          float fail_value = bits_to_float(first_failure);
          char buf[64]{};
          char* end = glz::simple_float::to_chars(buf, fail_value);
@@ -808,7 +795,7 @@ suite edge_case_tests = [] {
       // Test integer values that should have exact representation
       int passed = 0;
       int total = 0;
-      for (int64_t i = -10000; i <= 10000; ++i) {
+      for (std::int64_t i = -10000; i <= 10000; ++i) {
          double value = static_cast<double>(i);
          ++total;
          if (test_roundtrip(value)) {
