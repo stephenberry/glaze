@@ -5,7 +5,7 @@ import std;
 
 import glaze.api.impl;
 
-import glaze.base64.base64;
+import glaze.base64;
 
 import glaze.beve.header;
 import glaze.beve.beve_to_json;

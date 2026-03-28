@@ -125,7 +125,7 @@
       "name": "x64-build",
       "configurePreset": "x64",
       "targets": [
-         "cli_menu_test"
+         "beve_test"
       ]
    }
   ],
