@@ -1,12 +1,8 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.util.buffer_pool;
 
-#pragma once
-
-#include <memory>
-#include <mutex>
-#include <string>
-#include <vector>
+import std;
 
 namespace glz
 {
@@ -23,7 +19,7 @@ namespace glz
    ///   buf.value().resize(100);
    ///   // ... use buffer ...
    ///   // buffer automatically returned when buf goes out of scope
-   class buffer_pool final
+   export class buffer_pool final
    {
      private:
       std::vector<std::unique_ptr<std::string>> buffers_;

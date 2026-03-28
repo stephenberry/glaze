@@ -125,7 +125,7 @@
       "name": "x64-build",
       "configurePreset": "x64",
       "targets": [
-         "beve_test"
+         "buffer_pool_test"
       ]
    }
   ],
