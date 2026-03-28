@@ -1,15 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.compare.approx;
 
-#pragma once
+import std;
 
-#include "glaze/core/common.hpp"
-#include "glaze/core/reflect.hpp"
+import glaze.core.common;
+import glaze.core.reflect;
+import glaze.util.for_each;
 
 namespace glz
 {
    // Test that two meta objects are equal, with epsilon support for floating point values
-   struct approx_equal_to final
+   export struct approx_equal_to final
    {
       template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept

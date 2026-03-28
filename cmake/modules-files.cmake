@@ -1,3 +1,6 @@
+## TODO: sort in the alphabetic order
+
+
 # Top-level
 target_sources(glaze_glaze
   PUBLIC
@@ -321,5 +324,14 @@ target_sources(glaze_glaze
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/ext/cli_menu.ixx
-    modules/glaze/ext/eigen.ixx
+    # modules/glaze/ext/eigen.ixx
+)
+
+# compare
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/compare/compare.ixx
+    modules/glaze/compare/approx.ixx
 )

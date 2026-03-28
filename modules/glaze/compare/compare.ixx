@@ -1,16 +1,16 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.compare;
 
-#pragma once
+import std;
 
-#include <functional>
-
-#include "glaze/core/common.hpp"
-#include "glaze/core/reflect.hpp"
+import glaze.core.common;
+import glaze.core.reflect;
+import glaze.util.for_each;
 
 namespace glz
 {
-   struct equal_to final
+   export struct equal_to final
    {
       template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
@@ -37,7 +37,7 @@ namespace glz
       }
    };
 
-   struct less final
+   export struct less final
    {
       template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
@@ -59,7 +59,7 @@ namespace glz
       }
    };
 
-   struct less_equal final
+   export struct less_equal final
    {
       template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
@@ -81,7 +81,7 @@ namespace glz
       }
    };
 
-   struct greater final
+   export struct greater final
    {
       template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
@@ -103,7 +103,7 @@ namespace glz
       }
    };
 
-   struct greater_equal final
+   export struct greater_equal final
    {
       template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
