@@ -1,24 +1,36 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.msgpack.write;
 
-#pragma once
+import std;
 
-#include <algorithm>
-#include <chrono>
-#include <limits>
-#include <utility>
+import glaze.msgpack.common;
 
-#include "glaze/core/buffer_traits.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/core/seek.hpp"
-#include "glaze/core/to.hpp"
-#include "glaze/core/write.hpp"
-#include "glaze/msgpack/common.hpp"
-#include "glaze/util/dump.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/string_literal.hpp"
-#include "glaze/util/variant.hpp"
+import glaze.concepts.container_concepts;
+
+import glaze.core.buffer_traits;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.reflect;
+import glaze.core.seek;
+import glaze.core.to;
+import glaze.core.write;
+
+import glaze.file.file_ops;
+
+import glaze.util.dump;
+import glaze.util.expected;
+import glaze.util.for_each;
+import glaze.util.string_literal;
+import glaze.util.tuple;
+import glaze.util.type_traits;
+import glaze.util.variant;
+import glaze.reflection.to_tuple;
+import glaze.tuplet;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz::msgpack::detail
 {
@@ -370,6 +382,7 @@ namespace glz::msgpack::detail
 
 namespace glz
 {
+   // Explicit specialisations are exported through the exported primary templates. Do not add export here (P2615R1)
    template <>
    struct serialize<MSGPACK>
    {
@@ -407,7 +420,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(glaze_value_t<T> && !custom_write<T>)
    struct to<MSGPACK, T>
    {
@@ -420,7 +433,7 @@ namespace glz
       }
    };
 
-   template <always_null_t T>
+   export template <always_null_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class B, class IX>
@@ -432,7 +445,7 @@ namespace glz
       }
    };
 
-   template <nullable_like T>
+   export template <nullable_like T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -481,7 +494,7 @@ namespace glz
       }
    };
 
-   template <boolean_like T>
+   export template <boolean_like T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class B, class IX>
@@ -493,7 +506,7 @@ namespace glz
       }
    };
 
-   template <is_bitset T>
+   export template <is_bitset T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class B, class IX>
@@ -525,7 +538,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(is_named_enum<T>)
    struct to<MSGPACK, T>
    {
@@ -548,7 +561,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(num_t<T> || char_t<T>)
    struct to<MSGPACK, T>
    {
@@ -573,7 +586,7 @@ namespace glz
       }
    };
 
-   template <string_t T>
+   export template <string_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -601,7 +614,7 @@ namespace glz
       }
    };
 
-   template <str_t T>
+   export template <str_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -615,7 +628,7 @@ namespace glz
       }
    };
 
-   template <glaze_object_t T>
+   export template <glaze_object_t T>
       requires(!custom_write<T>)
    struct to<MSGPACK, T>
    {
@@ -675,7 +688,7 @@ namespace glz
       }
    };
 
-   template <reflectable T>
+   export template <reflectable T>
       requires(!custom_write<T>)
    struct to<MSGPACK, T>
    {
@@ -686,7 +699,7 @@ namespace glz
       }
    };
 
-   template <writable_map_t T>
+   export template <writable_map_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -712,7 +725,7 @@ namespace glz
 #pragma warning(push)
 #pragma warning(disable : 4702) // unreachable code from if constexpr
 #endif
-   template <writable_array_t T>
+   export template <writable_array_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -865,7 +878,7 @@ namespace glz
 
    // std::chrono::system_clock::time_point support
    // Converts to msgpack::timestamp for serialization
-   template <class T>
+   export template <class T>
       requires std::same_as<std::remove_cvref_t<T>, std::chrono::system_clock::time_point>
    struct to<MSGPACK, T>
    {
@@ -886,7 +899,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
    struct to_partial<MSGPACK, T>
    {
@@ -988,7 +1001,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(tuple_t<T> || is_std_tuple<T>)
    struct to<MSGPACK, T>
    {
@@ -1016,7 +1029,7 @@ namespace glz
       }
    };
 
-   template <is_variant T>
+   export template <is_variant T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -1037,7 +1050,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires is_specialization_v<T, arr>
    struct to<MSGPACK, T>
    {
@@ -1079,7 +1092,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires is_specialization_v<T, obj>
    struct to<MSGPACK, T>
    {
@@ -1151,19 +1164,19 @@ namespace glz
       }
    };
 
-   template <write_supported<MSGPACK> T, output_buffer Buffer>
+   export template <write_supported<MSGPACK> T, output_buffer Buffer>
    [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_supported<MSGPACK> T, raw_buffer Buffer>
+   export template <write_supported<MSGPACK> T, raw_buffer Buffer>
    [[nodiscard]] error_ctx write_msgpack(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_supported<MSGPACK> T>
+   export template <write_supported<MSGPACK> T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_msgpack(T&& value)
    {
       return write<opts{.format = MSGPACK}>(std::forward<T>(value));
@@ -1181,7 +1194,7 @@ namespace glz
       return write<Partial, opts{.format = MSGPACK}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <auto& Partial, write_supported<MSGPACK> T>
+   export template <auto& Partial, write_supported<MSGPACK> T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_msgpack(T&& value)
    {
       std::string buffer{};
@@ -1192,7 +1205,7 @@ namespace glz
       return {buffer};
    }
 
-   template <auto Opts = opts{}, write_supported<MSGPACK> T>
+   export template <auto Opts = opts{}, write_supported<MSGPACK> T>
    [[nodiscard]] error_ctx write_file_msgpack(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_msgpack<Opts>()>(std::forward<T>(value), buffer);
@@ -1205,4 +1218,3 @@ namespace glz
       return {};
    }
 }
-

@@ -1,21 +1,29 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
+// For the license information refer to glaze.ixx
+export module glaze.exceptions;
 
 #if __cpp_exceptions
 
 // These files provide convenience functions that throw C++ exceptions, which can make code cleaner for users
 
-#include "glaze/exceptions/binary_exceptions.hpp"
-#include "glaze/exceptions/cbor_exceptions.hpp"
-#include "glaze/exceptions/csv_exceptions.hpp"
-#include "glaze/exceptions/json_exceptions.hpp"
-#include "glaze/exceptions/msgpack_exceptions.hpp"
+export import glaze.exceptions.binary_exceptions;
+export import glaze.exceptions.cbor_exceptions;
+export import glaze.exceptions.csv_exceptions;
+export import glaze.exceptions.json_exceptions;
+export import glaze.exceptions.json_schema_exceptions;
+export import glaze.exceptions.msgpack_exceptions;
+
+import std;
+
+import glaze.concepts.container_concepts;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+import glaze.core.write;
 
 namespace glz::ex
 {
-   template <auto Opts>
+   export template <auto Opts>
    void read(auto& value, auto&& buffer)
    {
       auto ec = glz::read<Opts>(value, buffer);
@@ -29,13 +37,13 @@ namespace glz::ex
       }
    }
 
-   template <auto Opts, class T, output_buffer Buffer>
+   export template <auto Opts, class T, output_buffer Buffer>
    void write(T&& value, Buffer& buffer) noexcept
    {
       glz::write<Opts>(std::forward<T>(value), buffer);
    }
 
-   template <auto Opts, class T, raw_buffer Buffer>
+   export template <auto Opts, class T, raw_buffer Buffer>
    std::size_t write(T&& value, Buffer&& buffer) noexcept
    {
       return glz::write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));

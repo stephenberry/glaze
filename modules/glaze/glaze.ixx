@@ -32,16 +32,17 @@
 
 export module glaze;
 
+export import glaze.beve;
+export import glaze.core.ostream_buffer;
+export import glaze.csv;
+export import glaze.file.file_ops;
+export import glaze.file.read_directory;
+export import glaze.file.write_directory;
+export import glaze.json;
+export import glaze.msgpack;
+
 //#include "glaze/base64/base64.hpp"
-//#include "glaze/beve.hpp"
-//#include "glaze/beve/beve_to_json.hpp"
-//#include "glaze/core/ostream_buffer.hpp"
-//#include "glaze/csv.hpp"
-//#include "glaze/file/file_ops.hpp"
-//#include "glaze/file/read_directory.hpp"
-//#include "glaze/file/write_directory.hpp"
-//#include "glaze/json.hpp"
-//#include "glaze/msgpack.hpp"
+
 //#include "glaze/record/recorder.hpp"
 //#include "glaze/stencil/stencil.hpp"
 //#include "glaze/util/key_transformers.hpp"

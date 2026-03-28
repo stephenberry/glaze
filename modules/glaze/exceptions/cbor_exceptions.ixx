@@ -1,16 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
+// For the license information refer to glaze.ixx
+export module glaze.exceptions.cbor_exceptions;
 
 #if __cpp_exceptions
 
-#include "glaze/cbor.hpp"
-#include "glaze/exceptions/core_exceptions.hpp"
+import std;
+
+import glaze.cbor;
+import glaze.exceptions.core_exceptions;
+import glaze.util.string_literal;
 
 namespace glz::ex
 {
-   template <class T, class Buffer>
+   export template <class T, class Buffer>
    void read_cbor(T& value, Buffer&& buffer)
    {
       const auto ec = glz::read_cbor(value, std::forward<Buffer>(buffer));
@@ -19,7 +21,7 @@ namespace glz::ex
       }
    }
 
-   template <class T, class Buffer>
+   export template <class T, class Buffer>
    [[nodiscard]] T read_cbor(Buffer&& buffer)
    {
       const auto ex = glz::read_cbor<T>(std::forward<Buffer>(buffer));
@@ -29,7 +31,7 @@ namespace glz::ex
       return ex.value();
    }
 
-   template <auto Opts = opts{}, class T>
+   export template <auto Opts = opts{}, class T>
    void read_file_cbor(T& value, const sv file_name, auto&& buffer)
    {
       const auto ec = glz::read_file_cbor<Opts>(value, file_name, buffer);
@@ -44,7 +46,7 @@ namespace glz::ex
 
 namespace glz::ex
 {
-   template <class T, class Buffer>
+   export template <class T, class Buffer>
    void write_cbor(T&& value, Buffer&& buffer)
    {
       const auto ec = glz::write_cbor(std::forward<T>(value), std::forward<Buffer>(buffer));
@@ -53,7 +55,7 @@ namespace glz::ex
       }
    }
 
-   template <class T>
+   export template <class T>
    [[nodiscard]] auto write_cbor(T&& value)
    {
       auto result = glz::write_cbor(std::forward<T>(value));
@@ -65,7 +67,7 @@ namespace glz::ex
       }
    }
 
-   template <auto Opts = opts{}, class T>
+   export template <auto Opts = opts{}, class T>
    void write_file_cbor(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = glz::write_file_cbor<Opts>(std::forward<T>(value), file_name, buffer);

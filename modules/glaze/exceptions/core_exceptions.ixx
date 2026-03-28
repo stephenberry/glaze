@@ -1,16 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
+// For the license information refer to glaze.ixx
+export module glaze.exceptions.core_exceptions;
 
 #if __cpp_exceptions
 
-#include "glaze/core/read.hpp"
-#include "glaze/core/write.hpp"
+import glaze.core.read;
+import glaze.core.write;
+
+import glaze.util.string_literal;
 
 namespace glz::ex
 {
-   template <auto Opts, class T>
+   export template <auto Opts, class T>
       requires read_supported<T, Opts.format>
    void read(T&& value, auto&& buffer)
    {
@@ -24,7 +25,7 @@ namespace glz::ex
 namespace glz::ex
 {
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
-   template <auto Opts, class T, output_buffer Buffer>
+   export template <auto Opts, class T, output_buffer Buffer>
       requires write_supported<T, Opts.format>
    void write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
@@ -34,7 +35,7 @@ namespace glz::ex
       }
    }
 
-   template <auto& Partial, auto Opts, class T, output_buffer Buffer>
+   export template <auto& Partial, auto Opts, class T, output_buffer Buffer>
       requires write_supported<T, Opts.format>
    void write(T&& value, Buffer& buffer)
    {
@@ -44,7 +45,7 @@ namespace glz::ex
       }
    }
 
-   template <auto Opts, class T, output_buffer Buffer>
+   export template <auto Opts, class T, output_buffer Buffer>
       requires write_supported<T, Opts.format>
    void write(T&& value, Buffer& buffer)
    {
@@ -52,7 +53,7 @@ namespace glz::ex
       glz::ex::write<Opts>(std::forward<T>(value), buffer, ctx);
    }
 
-   template <auto Opts, class T>
+   export template <auto Opts, class T>
       requires write_supported<T, Opts.format>
    [[nodiscard]] std::string write(T&& value)
    {
@@ -63,7 +64,7 @@ namespace glz::ex
       return e.value();
    }
 
-   template <auto Opts, class T, raw_buffer Buffer>
+   export template <auto Opts, class T, raw_buffer Buffer>
       requires write_supported<T, Opts.format>
    [[nodiscard]] std::size_t write(T&& value, Buffer&& buffer)
    {
@@ -75,7 +76,7 @@ namespace glz::ex
    }
 
    // requires file_name to be null terminated
-   void buffer_to_file(auto&& buffer, const sv file_name)
+   export void buffer_to_file(auto&& buffer, const sv file_name)
    {
       const auto ec = buffer_to_file(buffer, file_name);
       if (bool(ec)) [[unlikely]] {

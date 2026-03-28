@@ -1,14 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.msgpack.skip;
 
-#pragma once
+import std;
 
-#include "glaze/core/opts.hpp"
-#include "glaze/msgpack/common.hpp"
+import glaze.msgpack.common;
+
+import glaze.core.opts;
+import glaze.core.context;
 
 namespace glz
 {
-   template <>
+   export template <>
    struct skip_value<MSGPACK>
    {
       template <auto Opts, class It, class End>

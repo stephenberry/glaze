@@ -1,29 +1,35 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.msgpack.read;
 
-#pragma once
+import std;
 
-#include <chrono>
-#include <cstring>
-#include <ranges>
-#include <string>
-#include <string_view>
-#include <type_traits>
-#include <utility>
-#include <vector>
+import glaze.msgpack.common;
+import glaze.msgpack.skip;
 
-#include "glaze/core/common.hpp"
-#include "glaze/core/meta.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/read.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/file/file_ops.hpp"
-#include "glaze/msgpack/common.hpp"
-#include "glaze/msgpack/skip.hpp"
-#include "glaze/util/bit_array.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/string_literal.hpp"
-#include "glaze/util/variant.hpp"
+import glaze.concepts.container_concepts;
+
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+
+import glaze.file.file_ops;
+
+import glaze.util.bit_array;
+import glaze.util.compare;
+import glaze.util.expected;
+import glaze.util.for_each;
+import glaze.util.string_literal;
+import glaze.util.tuple;
+import glaze.util.type_traits;
+import glaze.util.variant;
+import glaze.reflection.to_tuple;
+import glaze.tuplet;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz::msgpack::detail
 {
@@ -170,6 +176,7 @@ namespace glz::msgpack::detail
 
 namespace glz
 {
+   // Explicit specialisations are exported through the exported primary templates. Do not add export here (P2615R1)
    template <>
    struct parse<MSGPACK>
    {
@@ -218,7 +225,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(glaze_value_t<T> && !custom_read<T>)
    struct from<MSGPACK, T>
    {
@@ -231,7 +238,7 @@ namespace glz
       }
    };
 
-   template <always_null_t T>
+   export template <always_null_t T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -243,7 +250,7 @@ namespace glz
       }
    };
 
-   template <nullable_like T>
+   export template <nullable_like T>
       requires(!std::is_pointer_v<T>)
    struct from<MSGPACK, T>
    {
@@ -262,7 +269,7 @@ namespace glz
    };
 
    // Raw pointer support
-   template <class T>
+   export template <class T>
       requires(std::is_pointer_v<T> && !std::is_array_v<T>)
    struct from<MSGPACK, T>
    {
@@ -324,7 +331,7 @@ namespace glz
       }
    };
 
-   template <boolean_like T>
+   export template <boolean_like T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -342,7 +349,7 @@ namespace glz
       }
    };
 
-   template <is_bitset T>
+   export template <is_bitset T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -384,7 +391,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(is_named_enum<T>)
    struct from<MSGPACK, T>
    {
@@ -425,7 +432,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(num_t<T> || char_t<T>)
    struct from<MSGPACK, T>
    {
@@ -504,7 +511,7 @@ namespace glz
       }
    };
 
-   template <string_t T>
+   export template <string_t T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -536,7 +543,7 @@ namespace glz
       }
    };
 
-   template <string_view_t T>
+   export template <string_view_t T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -550,7 +557,7 @@ namespace glz
       }
    };
 
-   template <glaze_object_t T>
+   export template <glaze_object_t T>
       requires(!custom_read<T>)
    struct from<MSGPACK, T>
    {
@@ -682,7 +689,7 @@ namespace glz
       }
    };
 
-   template <reflectable T>
+   export template <reflectable T>
       requires(!custom_read<T>)
    struct from<MSGPACK, T>
    {
@@ -693,7 +700,7 @@ namespace glz
       }
    };
 
-   template <writable_map_t T>
+   export template <writable_map_t T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -739,7 +746,7 @@ namespace glz
    };
 
    // for set-like containers (emplaceable but not emplace_backable)
-   template <class T>
+   export template <class T>
       requires(writable_array_t<T> && !emplace_backable<T> && emplaceable<T>)
    struct from<MSGPACK, T>
    {
@@ -765,7 +772,7 @@ namespace glz
    };
 
    // for vector-like containers (emplace_backable) and fixed-size arrays
-   template <class T>
+   export template <class T>
       requires(writable_array_t<T> && (emplace_backable<T> || !emplaceable<T>))
    struct from<MSGPACK, T>
    {
@@ -932,7 +939,7 @@ namespace glz
 
    // std::chrono::system_clock::time_point support
    // Converts from msgpack::timestamp during deserialization
-   template <class T>
+   export template <class T>
       requires std::same_as<std::remove_cvref_t<T>, std::chrono::system_clock::time_point>
    struct from<MSGPACK, T>
    {
@@ -975,7 +982,7 @@ namespace glz
       }
    };
 
-   template <class T>
+   export template <class T>
       requires(tuple_t<T> || is_std_tuple<T>)
    struct from<MSGPACK, T>
    {
@@ -1004,7 +1011,7 @@ namespace glz
       }
    };
 
-   template <is_variant T>
+   export template <is_variant T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -1187,14 +1194,14 @@ namespace glz
       }
    };
 
-   template <read_supported<MSGPACK> T, is_buffer Buffer>
+   export template <read_supported<MSGPACK> T, is_buffer Buffer>
    [[nodiscard]] error_ctx read_msgpack(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<opts{.format = MSGPACK}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <read_supported<MSGPACK> T, is_buffer Buffer>
+   export template <read_supported<MSGPACK> T, is_buffer Buffer>
    [[nodiscard]] expected<T, error_ctx> read_msgpack(Buffer&& buffer)
    {
       T value{};
@@ -1206,7 +1213,7 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, read_supported<MSGPACK> T, is_buffer Buffer>
+   export template <auto Opts = opts{}, read_supported<MSGPACK> T, is_buffer Buffer>
    [[nodiscard]] error_ctx read_file_msgpack(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};
@@ -1221,4 +1228,3 @@ namespace glz
       return read<set_msgpack<Opts>()>(value, buffer, ctx);
    }
 }
-

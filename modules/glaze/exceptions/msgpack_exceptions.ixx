@@ -1,16 +1,16 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
+// For the license information refer to glaze.ixx
+export module glaze.exceptions.msgpack_exceptions;
 
 #if __cpp_exceptions
 
-#include "glaze/exceptions/core_exceptions.hpp"
-#include "glaze/msgpack.hpp"
+import glaze.exceptions.core_exceptions;
+import glaze.msgpack;
+import glaze.util.string_literal;
 
 namespace glz::ex
 {
-   template <class T, class Buffer>
+   export template <class T, class Buffer>
    void read_msgpack(T& value, Buffer&& buffer)
    {
       const auto ec = glz::read_msgpack(value, std::forward<Buffer>(buffer));
@@ -19,7 +19,7 @@ namespace glz::ex
       }
    }
 
-   template <class T, class Buffer>
+   export template <class T, class Buffer>
    [[nodiscard]] T read_msgpack(Buffer&& buffer)
    {
       const auto ex = glz::read_msgpack<T>(std::forward<Buffer>(buffer));
@@ -29,7 +29,7 @@ namespace glz::ex
       return ex.value();
    }
 
-   template <auto Opts = opts{}, class T>
+   export template <auto Opts = opts{}, class T>
    void read_file_msgpack(T& value, const sv file_name, auto&& buffer)
    {
       const auto ec = glz::read_file_msgpack<Opts>(value, file_name, buffer);
@@ -44,7 +44,7 @@ namespace glz::ex
 
 namespace glz::ex
 {
-   template <class T, class Buffer>
+   export template <class T, class Buffer>
    void write_msgpack(T&& value, Buffer&& buffer)
    {
       const auto ec = glz::write_msgpack(std::forward<T>(value), std::forward<Buffer>(buffer));
@@ -53,7 +53,7 @@ namespace glz::ex
       }
    }
 
-   template <class T>
+   export template <class T>
    [[nodiscard]] auto write_msgpack(T&& value)
    {
       auto result = glz::write_msgpack(std::forward<T>(value));
@@ -65,7 +65,7 @@ namespace glz::ex
       }
    }
 
-   template <auto Opts = opts{}, class T>
+   export template <auto Opts = opts{}, class T>
    void write_file_msgpack(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = glz::write_file_msgpack<Opts>(std::forward<T>(value), file_name, buffer);

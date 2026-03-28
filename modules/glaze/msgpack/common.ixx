@@ -1,105 +1,102 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.msgpack.common;
 
-#pragma once
+import std;
 
-#include <bit>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <vector>
+import glaze.core.context;
+import glaze.core.error_category;
+import glaze.util.dump;
+import glaze.concepts.container_concepts;
 
-#include "glaze/core/context.hpp"
-#include "glaze/core/error_category.hpp"
-#include "glaze/util/dump.hpp"
 #include "glaze/util/inline.hpp"
 
 namespace glz::msgpack
 {
    // Core MessagePack marker bytes
-   inline constexpr std::uint8_t nil = 0xC0;
-   inline constexpr std::uint8_t bool_false = 0xC2;
-   inline constexpr std::uint8_t bool_true = 0xC3;
+   export inline constexpr std::uint8_t nil = 0xC0;
+   export inline constexpr std::uint8_t bool_false = 0xC2;
+   export inline constexpr std::uint8_t bool_true = 0xC3;
 
-   inline constexpr std::uint8_t bin8 = 0xC4;
-   inline constexpr std::uint8_t bin16 = 0xC5;
-   inline constexpr std::uint8_t bin32 = 0xC6;
+   export inline constexpr std::uint8_t bin8 = 0xC4;
+   export inline constexpr std::uint8_t bin16 = 0xC5;
+   export inline constexpr std::uint8_t bin32 = 0xC6;
 
-   inline constexpr std::uint8_t ext8 = 0xC7;
-   inline constexpr std::uint8_t ext16 = 0xC8;
-   inline constexpr std::uint8_t ext32 = 0xC9;
+   export inline constexpr std::uint8_t ext8 = 0xC7;
+   export inline constexpr std::uint8_t ext16 = 0xC8;
+   export inline constexpr std::uint8_t ext32 = 0xC9;
 
-   inline constexpr std::uint8_t float32 = 0xCA;
-   inline constexpr std::uint8_t float64 = 0xCB;
+   export inline constexpr std::uint8_t float32 = 0xCA;
+   export inline constexpr std::uint8_t float64 = 0xCB;
 
-   inline constexpr std::uint8_t uint8 = 0xCC;
-   inline constexpr std::uint8_t uint16 = 0xCD;
-   inline constexpr std::uint8_t uint32 = 0xCE;
-   inline constexpr std::uint8_t uint64 = 0xCF;
+   export inline constexpr std::uint8_t uint8 = 0xCC;
+   export inline constexpr std::uint8_t uint16 = 0xCD;
+   export inline constexpr std::uint8_t uint32 = 0xCE;
+   export inline constexpr std::uint8_t uint64 = 0xCF;
 
-   inline constexpr std::uint8_t int8 = 0xD0;
-   inline constexpr std::uint8_t int16 = 0xD1;
-   inline constexpr std::uint8_t int32 = 0xD2;
-   inline constexpr std::uint8_t int64 = 0xD3;
+   export inline constexpr std::uint8_t int8 = 0xD0;
+   export inline constexpr std::uint8_t int16 = 0xD1;
+   export inline constexpr std::uint8_t int32 = 0xD2;
+   export inline constexpr std::uint8_t int64 = 0xD3;
 
-   inline constexpr std::uint8_t fixext1 = 0xD4;
-   inline constexpr std::uint8_t fixext2 = 0xD5;
-   inline constexpr std::uint8_t fixext4 = 0xD6;
-   inline constexpr std::uint8_t fixext8 = 0xD7;
-   inline constexpr std::uint8_t fixext16 = 0xD8;
+   export inline constexpr std::uint8_t fixext1 = 0xD4;
+   export inline constexpr std::uint8_t fixext2 = 0xD5;
+   export inline constexpr std::uint8_t fixext4 = 0xD6;
+   export inline constexpr std::uint8_t fixext8 = 0xD7;
+   export inline constexpr std::uint8_t fixext16 = 0xD8;
 
-   inline constexpr std::uint8_t str8 = 0xD9;
-   inline constexpr std::uint8_t str16 = 0xDA;
-   inline constexpr std::uint8_t str32 = 0xDB;
+   export inline constexpr std::uint8_t str8 = 0xD9;
+   export inline constexpr std::uint8_t str16 = 0xDA;
+   export inline constexpr std::uint8_t str32 = 0xDB;
 
-   inline constexpr std::uint8_t array16 = 0xDC;
-   inline constexpr std::uint8_t array32 = 0xDD;
+   export inline constexpr std::uint8_t array16 = 0xDC;
+   export inline constexpr std::uint8_t array32 = 0xDD;
 
-   inline constexpr std::uint8_t map16 = 0xDE;
-   inline constexpr std::uint8_t map32 = 0xDF;
+   export inline constexpr std::uint8_t map16 = 0xDE;
+   export inline constexpr std::uint8_t map32 = 0xDF;
 
    inline constexpr std::uint8_t positive_fixint_mask = 0x80;
    inline constexpr std::uint8_t negative_fixint_mask = 0xE0;
 
    inline constexpr std::uint8_t fixmap_mask = 0xF0;
-   inline constexpr std::uint8_t fixmap_bits = 0x80;
+   export inline constexpr std::uint8_t fixmap_bits = 0x80;
 
    inline constexpr std::uint8_t fixarray_mask = 0xF0;
-   inline constexpr std::uint8_t fixarray_bits = 0x90;
+   export inline constexpr std::uint8_t fixarray_bits = 0x90;
 
    inline constexpr std::uint8_t fixstr_mask = 0xE0;
-   inline constexpr std::uint8_t fixstr_bits = 0xA0;
+   export inline constexpr std::uint8_t fixstr_bits = 0xA0;
 
-   GLZ_ALWAYS_INLINE constexpr bool is_positive_fixint(std::uint8_t tag) noexcept
+   export GLZ_ALWAYS_INLINE constexpr bool is_positive_fixint(std::uint8_t tag) noexcept
    {
       return (tag & positive_fixint_mask) == 0;
    }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_negative_fixint(std::uint8_t tag) noexcept
+   export GLZ_ALWAYS_INLINE constexpr bool is_negative_fixint(std::uint8_t tag) noexcept
    {
       return (tag & negative_fixint_mask) == negative_fixint_mask;
    }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_fixmap(std::uint8_t tag) noexcept { return (tag & fixmap_mask) == fixmap_bits; }
+   export GLZ_ALWAYS_INLINE constexpr bool is_fixmap(std::uint8_t tag) noexcept { return (tag & fixmap_mask) == fixmap_bits; }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_fixarray(std::uint8_t tag) noexcept { return (tag & fixarray_mask) == fixarray_bits; }
+   export GLZ_ALWAYS_INLINE constexpr bool is_fixarray(std::uint8_t tag) noexcept { return (tag & fixarray_mask) == fixarray_bits; }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_fixstr(std::uint8_t tag) noexcept { return (tag & fixstr_mask) == fixstr_bits; }
+   export GLZ_ALWAYS_INLINE constexpr bool is_fixstr(std::uint8_t tag) noexcept { return (tag & fixstr_mask) == fixstr_bits; }
 
-   template <class B>
+   export template <class B>
    GLZ_ALWAYS_INLINE void dump_uint8(std::uint8_t value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
    {
       dump(static_cast<std::byte>(value), b, ix);
    }
 
-   template <class B>
+   export template <class B>
    GLZ_ALWAYS_INLINE void dump_uint16(std::uint16_t value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
    {
       dump(static_cast<std::byte>(value >> 8), b, ix);
       dump(static_cast<std::byte>(value & 0xFF), b, ix);
    }
 
-   template <class B>
+   export template <class B>
    GLZ_ALWAYS_INLINE void dump_uint32(std::uint32_t value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
    {
       dump(static_cast<std::byte>(value >> 24), b, ix);
@@ -108,7 +105,7 @@ namespace glz::msgpack
       dump(static_cast<std::byte>(value & 0xFF), b, ix);
    }
 
-   template <class B>
+   export template <class B>
    GLZ_ALWAYS_INLINE void dump_uint64(std::uint64_t value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
    {
       dump(static_cast<std::byte>(value >> 56), b, ix);
@@ -121,21 +118,21 @@ namespace glz::msgpack
       dump(static_cast<std::byte>(value & 0xFF), b, ix);
    }
 
-   template <class B>
+   export template <class B>
    GLZ_ALWAYS_INLINE void dump_float32(float value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
    {
       const std::uint32_t bits = std::bit_cast<std::uint32_t>(value);
       dump_uint32(bits, b, ix);
    }
 
-   template <class B>
+   export template <class B>
    GLZ_ALWAYS_INLINE void dump_float64(double value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
    {
       const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
       dump_uint64(bits, b, ix);
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_uint8(is_context auto& ctx, It& it, const It& end, std::uint8_t& out) noexcept
    {
       if (it >= end) [[unlikely]] {
@@ -147,7 +144,7 @@ namespace glz::msgpack
       return true;
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_uint16(is_context auto& ctx, It& it, const It& end, std::uint16_t& out) noexcept
    {
       if ((it + 2) > end) [[unlikely]] {
@@ -161,7 +158,7 @@ namespace glz::msgpack
       return true;
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_uint32(is_context auto& ctx, It& it, const It& end, std::uint32_t& out) noexcept
    {
       if ((it + 4) > end) [[unlikely]] {
@@ -178,7 +175,7 @@ namespace glz::msgpack
       return true;
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_uint64(is_context auto& ctx, It& it, const It& end, std::uint64_t& out) noexcept
    {
       if ((it + 8) > end) [[unlikely]] {
@@ -199,7 +196,7 @@ namespace glz::msgpack
       return true;
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_ext_header(is_context auto& ctx, std::uint8_t tag, It& it, const It& end, std::size_t& length,
                                           std::int8_t& type) noexcept
    {
@@ -262,7 +259,7 @@ namespace glz::msgpack
       return true;
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_float32(is_context auto& ctx, It& it, const It& end, float& out) noexcept
    {
       std::uint32_t bits{};
@@ -273,7 +270,7 @@ namespace glz::msgpack
       return true;
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_float64(is_context auto& ctx, It& it, const It& end, double& out) noexcept
    {
       std::uint64_t bits{};
@@ -284,7 +281,7 @@ namespace glz::msgpack
       return true;
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool skip_bytes(is_context auto& ctx, It& it, const It& end, std::size_t n) noexcept
    {
       if ((it + n) > end) [[unlikely]] {
@@ -295,7 +292,7 @@ namespace glz::msgpack
       return true;
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_str_length(is_context auto& ctx, std::uint8_t tag, It& it, const It& end,
                                           std::size_t& out) noexcept
    {
@@ -333,10 +330,10 @@ namespace glz::msgpack
          return false;
       }
    }
-   template <class Range>
+   export template <class Range>
    inline constexpr bool binary_range_v = contiguous_byte_range<std::remove_cvref_t<Range>>;
 
-   struct ext
+   export struct ext
    {
       std::int8_t type{};
       std::vector<std::byte> data{};
@@ -357,9 +354,9 @@ namespace glz::msgpack
    // - Timestamp 32: fixext 4, seconds only (uint32)
    // - Timestamp 64: fixext 8, nanoseconds (30-bit) + seconds (34-bit)
    // - Timestamp 96: ext 8 with 12 bytes, nanoseconds (uint32) + seconds (int64)
-   inline constexpr std::int8_t timestamp_type = -1;
+   export inline constexpr std::int8_t timestamp_type = -1;
 
-   struct timestamp
+   export struct timestamp
    {
       std::int64_t seconds{};
       std::uint32_t nanoseconds{};
@@ -372,7 +369,7 @@ namespace glz::msgpack
       auto operator<=>(const timestamp&) const = default;
    };
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_bin_length(is_context auto& ctx, std::uint8_t tag, It& it, const It& end,
                                           std::size_t& out) noexcept
    {
@@ -407,7 +404,7 @@ namespace glz::msgpack
       }
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_array_length(is_context auto& ctx, std::uint8_t tag, It& it, const It& end,
                                             std::size_t& out) noexcept
    {
@@ -438,7 +435,7 @@ namespace glz::msgpack
       }
    }
 
-   template <class It>
+   export template <class It>
    GLZ_ALWAYS_INLINE bool read_map_length(is_context auto& ctx, std::uint8_t tag, It& it, const It& end,
                                           std::size_t& out) noexcept
    {
@@ -469,4 +466,3 @@ namespace glz::msgpack
       }
    }
 }
-

@@ -1,16 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
+// For the license information refer to glaze.ixx
+export module glaze.exceptions.json_schema_exceptions;
 
 #if __cpp_exceptions
 
-#include "glaze/exceptions/core_exceptions.hpp"
-#include "glaze/json/schema.hpp"
+import std;
+
+import glaze.core.opts;
+import glaze.exceptions.core_exceptions;
+import glaze.json.schema;
 
 namespace glz::ex
 {
-   template <class T, auto Opts = opts{}, class Buffer>
+   export template <class T, auto Opts = opts{}, class Buffer>
    void write_json_schema(Buffer&& buffer)
    {
       const auto ec = glz::write_json_schema<T, Opts>(buffer);
@@ -19,7 +21,7 @@ namespace glz::ex
       }
    }
 
-   template <class T, auto Opts = opts{}>
+   export template <class T, auto Opts = opts{}>
    [[nodiscard]] std::string write_json_schema()
    {
       std::string buffer{};

@@ -9,6 +9,8 @@ target_sources(glaze_glaze
       modules/glaze/beve.ixx
       modules/glaze/csv.ixx
       modules/glaze/version.ixx
+      modules/glaze/glaze_exceptions.ixx
+      modules/glaze/msgpack.ixx
 )
 
 # core
@@ -285,4 +287,29 @@ target_sources(glaze_glaze
     modules/glaze/csv/read.ixx
     modules/glaze/csv/skip.ixx
     modules/glaze/csv/write.ixx
+)
+
+# exceptions
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/exceptions/binary_exceptions.ixx
+    modules/glaze/exceptions/cbor_exceptions.ixx
+    modules/glaze/exceptions/core_exceptions.ixx
+    modules/glaze/exceptions/csv_exceptions.ixx
+    modules/glaze/exceptions/json_exceptions.ixx
+    modules/glaze/exceptions/json_schema_exceptions.ixx
+    modules/glaze/exceptions/msgpack_exceptions.ixx
+)
+
+# msgpack
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/msgpack/common.ixx
+    modules/glaze/msgpack/read.ixx
+    modules/glaze/msgpack/skip.ixx
+    modules/glaze/msgpack/write.ixx
 )
