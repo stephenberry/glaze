@@ -125,7 +125,7 @@
       "name": "x64-build",
       "configurePreset": "x64",
       "targets": [
-         "buffer_pool_test"
+         "cli_menu_test"
       ]
    }
   ],

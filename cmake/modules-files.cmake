@@ -314,3 +314,11 @@ target_sources(glaze_glaze
     modules/glaze/msgpack/skip.ixx
     modules/glaze/msgpack/write.ixx
 )
+
+# ext (external)
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/ext/cli_menu.ixx
+)

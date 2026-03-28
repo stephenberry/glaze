@@ -1,12 +1,24 @@
-// Glaze Library
-// For the license information refer to glaze.hpp
+export module glaze.ext.cli_menu;
 
-#pragma once
+import std;
 
-#include <atomic>
-#include <cstdio>
+import glaze.core.common;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.reflect;
+import glaze.core.read;
+import glaze.core.write;
+import glaze.concepts.container_concepts;
+import glaze.reflection.to_tuple;
+import glaze.util.for_each;
+import glaze.util.help;
+import glaze.util.string_literal;
+import glaze.util.type_traits;
+import glaze.util.tuple;
 
-#include "glaze/glaze.hpp"
+import glaze.tuplet;
+
+import glaze;
 
 // The purpose of this command line interface menu is to use reflection to build the menu,
 // but also allow this menu to be registered as an RPC interface.
@@ -23,39 +35,94 @@ namespace glz
 
    namespace detail
    {
+      inline constexpr bool is_ascii_space(const char ch) noexcept
+      {
+         switch (ch) {
+         case ' ':
+         case '\t':
+         case '\n':
+         case '\r':
+         case '\f':
+         case '\v':
+            return true;
+         default:
+            return false;
+         }
+      }
+
+      inline constexpr std::string_view trim_ascii_whitespace(std::string_view sv) noexcept
+      {
+         while (!sv.empty() && is_ascii_space(sv.front())) {
+            sv.remove_prefix(1);
+         }
+         while (!sv.empty() && is_ascii_space(sv.back())) {
+            sv.remove_suffix(1);
+         }
+         return sv;
+      }
+
+      inline bool parse_long(std::string_view sv, long& value) noexcept
+      {
+         sv = trim_ascii_whitespace(sv);
+         if (sv.empty()) {
+            return false;
+         }
+
+         const auto* first = sv.data();
+         const auto* last = sv.data() + sv.size();
+
+         auto [ptr, ec] = std::from_chars(first, last, value);
+         return ec == std::errc{} && ptr == last;
+      }
+
+      template <class S>
+      inline void write_raw(std::ostream& os, const S& s)
+      {
+         os.write(s.data(), static_cast<std::streamsize>(s.size()));
+      }
+
+      template <class S>
+      inline void write_line(std::ostream& os, const S& s)
+      {
+         write_raw(os, s);
+         os.put('\n');
+      }
+
       template <class T>
       inline void print_input_type()
       {
          if constexpr (string_t<T>) {
-            std::printf("json string> ");
+            std::cout << "json string> ";
          }
          else if constexpr (num_t<T>) {
-            std::printf("json number> ");
+            std::cout << "json number> ";
          }
          else if constexpr (readable_array_t<T> || tuple_t<T> || is_std_tuple<T>) {
             if constexpr (tuple_t<T> || is_std_tuple<T>) {
-               std::printf("json array[%d]>", int(glz::tuple_size_v<T>));
+               std::cout << "json array[" << int(glz::tuple_size_v<T>) << "]>";
             }
             else {
-               std::printf("json array> ");
+               std::cout << "json array> ";
             }
          }
          else if constexpr (boolean_like<T>) {
-            std::printf("json bool> ");
+            std::cout << "json bool> ";
          }
          else if constexpr (glaze_object_t<T> || reflectable<T> || writable_map_t<T>) {
-            std::printf("json object> ");
+            std::cout << "json object> ";
          }
          else {
-            std::printf("json> ");
+            std::cout << "json> ";
          }
+
+         std::cout << std::flush;
       }
    }
 
    // When running with exceptions enabled we allow the user to provide an exceptions callback, which will be invoked
    // when an exception is thrown from running a menu item. The exception callback must take a `const std::exception&`
 
-   template <auto Opts = opts{.prettify = true}, class T, cli_menu_boolean ShowMenu = std::atomic<bool>>
+   export template <auto Opts = opts{.prettify = true}, class T, cli_menu_boolean ShowMenu = std::atomic<bool>>
       requires(glaze_object_t<T> || reflectable<T>)
 #if __cpp_exceptions
    inline void run_cli_menu(T& value, ShowMenu&& show_menu, auto&& exception_callback)
@@ -110,7 +177,7 @@ namespace glz
                         }
                         else {
                            const auto result = glz::write<Opts>((value.*func)()).value_or("result serialization error");
-                           std::printf("%.*s\n", int(result.size()), result.data());
+                           write_line(std::cout, result);
                         }
                      }
                      else if constexpr (n_args == 1) {
@@ -118,25 +185,25 @@ namespace glz
                         using P = std::decay_t<Params>;
                         constexpr auto N = glz::tuple_size_v<Tuple>;
                         static_assert(N == 1, "Only one input is allowed for your function");
-                        static thread_local std::array<char, 256> input{};
+
+                        static thread_local std::string input{};
+
                         if constexpr (is_help<P>) {
-                           std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
+                           write_line(std::cout, P::help_message);
                            print_input_type<typename P::value_type>();
                         }
                         else {
                            print_input_type<P>();
                         }
 
-                        if (fgets(input.data(), int(input.size()), stdin)) {
-                           std::string_view input_sv{input.data()};
-                           if (input_sv.back() == '\n') {
-                              input_sv = input_sv.substr(0, input_sv.size() - 1);
-                           }
+                        if (std::getline(std::cin, input)) {
+                           std::string_view input_sv{input};
+
                            P params{};
                            const auto ec = glz::read<Opts>(params, input_sv);
                            if (ec) {
                               const auto error = glz::format_error(ec, input_sv);
-                              std::printf("%.*s\n", int(error.size()), error.data());
+                              write_line(std::cout, error);
                            }
                            else {
                               if constexpr (std::same_as<Ret, void>) {
@@ -145,12 +212,12 @@ namespace glz
                               else {
                                  const auto result =
                                     glz::write<Opts>((value.*func)(params)).value_or("result serialization error");
-                                 std::printf("%.*s\n", int(result.size()), result.data());
+                                 write_line(std::cout, result);
                               }
                            }
                         }
                         else {
-                           std::fprintf(stderr, "Invalid input.\n");
+                           std::cerr << "Invalid input.\n";
                         }
                      }
                      else {
@@ -164,7 +231,7 @@ namespace glz
                      }
                      else {
                         const auto result = glz::write<Opts>(func()).value_or("result serialization error");
-                        std::printf("%.*s\n", int(result.size()), result.data());
+                        write_line(std::cout, result);
                      }
                   }
                   else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
@@ -173,26 +240,25 @@ namespace glz
                      using P = std::decay_t<Params>;
                      constexpr auto N = glz::tuple_size_v<Tuple>;
                      static_assert(N == 1, "Only one input is allowed for your function");
-                     static thread_local std::array<char, 256> input{};
+
+                     static thread_local std::string input{};
+
                      if constexpr (is_help<P>) {
-                        std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
+                        write_line(std::cout, P::help_message);
                         print_input_type<typename P::value_type>();
                      }
                      else {
                         print_input_type<P>();
                      }
 
-                     if (fgets(input.data(), int(input.size()), stdin)) {
-                        std::string_view input_sv{input.data()};
-                        if (input_sv.back() == '\n') {
-                           input_sv = input_sv.substr(0, input_sv.size() - 1);
-                        }
+                     if (std::getline(std::cin, input)) {
+                        std::string_view input_sv{input};
                         using R = std::invoke_result_t<Func, Params>;
                         P params{};
                         const auto ec = glz::read<Opts>(params, input_sv);
                         if (ec) {
                            const auto error = glz::format_error(ec, input_sv);
-                           std::printf("%.*s\n", int(error.size()), error.data());
+                           write_line(std::cout, error);
                         }
                         else {
                            if constexpr (std::same_as<R, void>) {
@@ -200,12 +266,12 @@ namespace glz
                            }
                            else {
                               const auto result = glz::write<Opts>(func(params)).value_or("result serialization error");
-                              std::printf("%.*s\n", int(result.size()), result.data());
+                              write_line(std::cout, result);
                            }
                         }
                      }
                      else {
-                        std::fprintf(stderr, "Invalid input.\n");
+                        std::cerr << "Invalid input.\n";
                      }
                   }
                   else if constexpr (glaze_object_t<E> || reflectable<E>) {
@@ -235,18 +301,19 @@ namespace glz
                item_number - 1);
          }
          else {
-            std::fprintf(stderr, "Invalid menu item.\n");
+            std::cerr << "Invalid menu item.\n";
          }
       };
 
       while (show_menu) {
-         std::printf("================================\n");
+         std::cout << "================================\n";
          for_each<N>([&]<auto I>() {
             using E = refl_t<T, I>;
             constexpr sv key = reflect<T>::keys[I];
 
             if constexpr (glaze_object_t<E> || reflectable<E>) {
-               std::printf("  %d   %.*s\n", std::uint32_t(I + 1), int(key.size()), key.data());
+               std::cout << "  " << std::uint32_t(I + 1) << "   ";
+               write_line(std::cout, key);
             }
             else {
                [[maybe_unused]] decltype(auto) t = [&] {
@@ -269,13 +336,16 @@ namespace glz
 
                using Func = decltype(func);
                if constexpr (std::is_member_function_pointer_v<std::decay_t<Func>>) {
-                  std::printf("  %d   %.*s\n", std::uint32_t(I + 1), int(key.size()), key.data());
+                  std::cout << "  " << std::uint32_t(I + 1) << "   ";
+                  write_line(std::cout, key);
                }
                else if constexpr (std::is_invocable_v<Func>) {
-                  std::printf("  %d   %.*s\n", std::uint32_t(I + 1), int(key.size()), key.data());
+                  std::cout << "  " << std::uint32_t(I + 1) << "   ";
+                  write_line(std::cout, key);
                }
                else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
-                  std::printf("  %d   %.*s\n", std::uint32_t(I + 1), int(key.size()), key.data());
+                  std::cout << "  " << std::uint32_t(I + 1) << "   ";
+                  write_line(std::cout, key);
                }
                else if constexpr (check_hide_non_invocable(Opts)) {
                   // do not print non-invocable member
@@ -285,37 +355,28 @@ namespace glz
                }
             }
          });
-         std::printf("  %d   Exit Menu\n", std::uint32_t(N + 1));
-         std::printf("--------------------------------\n");
+         std::cout << "  " << std::uint32_t(N + 1) << "   Exit Menu\n";
+         std::cout << "--------------------------------\n";
 
-         std::printf("cmd> ");
-         std::fflush(stdout);
+         std::cout << "cmd> " << std::flush;
+
       restart_input: // needed to support std::cin within user functions
-         // https://web.archive.org/web/20201112034702/http://sekrit.de/webdocs/c/beginners-guide-away-from-scanf.html
          long cmd = -1;
-         constexpr auto buffer_length = 64; // only needed to parse numbers
-         char buf[buffer_length]{};
-         if (std::fgets(buf, buffer_length, stdin)) {
-            if (buf[0] == '\n') {
+         std::string buf{};
+
+         if (std::getline(std::cin, buf)) {
+            auto str = trim_ascii_whitespace(buf);
+
+            if (str.empty()) {
                goto restart_input;
             }
 
-            auto* it = buf;
-            for (const auto* end = buf + 5; it < end; ++it) {
-               if (*it == '\n' || *it == '\0') {
-                  break;
-               }
-            }
-            std::string_view str{buf, std::size_t(it - buf)};
             if (str == "cls" || str == "clear") {
-               std::printf("\n");
+               std::cout << '\n';
                continue;
             }
 
-            char* endptr{};
-            errno = 0; // reset error number
-            cmd = std::strtol(buf, &endptr, 10);
-            if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n')) {
+            if (parse_long(str, cmd)) {
 #if __cpp_exceptions
                if constexpr (std::invocable<decltype(exception_callback), const std::exception&>) {
                   try {
@@ -335,13 +396,13 @@ namespace glz
             }
          }
 
-         std::fprintf(stderr, "Invalid input.\n");
+         std::cerr << "Invalid input.\n";
       }
    }
 
 #if __cpp_exceptions
    // Version without exception callback for platforms with exceptions enabled
-   template <auto Opts = opts{.prettify = true}, class T, cli_menu_boolean ShowMenu = std::atomic<bool>>
+   export template <auto Opts = opts{.prettify = true}, class T, cli_menu_boolean ShowMenu = std::atomic<bool>>
       requires(glaze_object_t<T> || reflectable<T>)
    inline void run_cli_menu(T& value, ShowMenu&& show_menu = true)
    {
