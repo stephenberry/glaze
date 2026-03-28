@@ -1,16 +1,13 @@
-#pragma once
-
-#include <algorithm>
+// Glaze Library
+// For the license information refer to glaze.ixx
+module;
 #include <cassert>
-#include <iterator>
-#include <memory>
-#include <mutex>
-#include <shared_mutex>
-#include <utility>
-#include <vector>
+export module glaze.thread.shared_async_map;
 
-#include "glaze/thread/value_proxy.hpp"
-#include "glaze/util/expected.hpp"
+import std;
+
+import glaze.thread.value_proxy;
+import glaze.util.expected;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -30,7 +27,7 @@
 
 namespace glz
 {
-   template <class K, class V>
+   export template <class K, class V>
    struct shared_async_map
    {
      private:

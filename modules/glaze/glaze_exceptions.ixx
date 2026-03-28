@@ -8,6 +8,7 @@ export module glaze.exceptions;
 
 export import glaze.exceptions.binary_exceptions;
 export import glaze.exceptions.cbor_exceptions;
+export import glaze.exceptions.core_exceptions;
 export import glaze.exceptions.csv_exceptions;
 export import glaze.exceptions.json_exceptions;
 export import glaze.exceptions.json_schema_exceptions;

@@ -5,6 +5,7 @@ export module glaze.compare.approx;
 import std;
 
 import glaze.core.common;
+import glaze.core.meta;
 import glaze.core.reflect;
 import glaze.util.for_each;
 

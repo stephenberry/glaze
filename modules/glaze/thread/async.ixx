@@ -1,15 +1,9 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.thread.async;
 
-#pragma once
-
-#include <concepts>
-#include <mutex>
-#include <shared_mutex>
-#include <type_traits>
-#include <utility>
-
-#include "glaze/util/type_traits.hpp"
+import std;
+import glaze.util.type_traits;
 
 // The purpose of glz::async is to create a thread-safe wrapper around a type
 // The only way to access the data is by supplying lambdas to `read` or `write`
@@ -33,7 +27,7 @@ namespace glz
    template <class Arg, class Callable>
    concept void_return = std::same_as<std::invoke_result_t<Callable, Arg>, void>;
 
-   template <class T>
+   export template <class T>
    class async
    {
       T data{};

@@ -1,16 +1,19 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.thread.value_proxy;
 
-#pragma once
-
-#include "glaze/core/common.hpp"
+import std;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.opts;
+import glaze.json.read;
 
 namespace glz
 {
-   template <class T>
+   export template <class T>
    concept is_value_proxy = requires { T::glaze_value_proxy; };
 
-   template <std::uint32_t Format, is_value_proxy T>
+   export template <std::uint32_t Format, is_value_proxy T>
    struct from<Format, T>
    {
       template <auto Opts>

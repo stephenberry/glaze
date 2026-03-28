@@ -1,23 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.thread.async_string;
 
-#pragma once
-
-#include <algorithm>
-#include <mutex>
-#include <shared_mutex>
-#include <string>
-#include <string_view>
-#include <utility>
-#include <version>
-
-#include "glaze/core/common.hpp"
+import std;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.opts;
 
 // Provides a thread safe wrapper around a std::string, which Glaze knows how to serialize/deserialize safely
 
 namespace glz
 {
-   struct async_string
+   export struct async_string
    {
      private:
       std::string str;
@@ -755,7 +749,7 @@ namespace glz
 
 }
 
-namespace glz
+export namespace glz
 {
    template <std::uint32_t Format>
    struct from<Format, glz::async_string>
@@ -783,7 +777,7 @@ namespace glz
 // Allow formatting via std::format
 #ifdef __cpp_lib_format
 #include <format>
-namespace std
+export namespace std
 {
    template <>
    struct formatter<glz::async_string>

@@ -175,8 +175,13 @@ target_sources(glaze_glaze
   PUBLIC
     FILE_SET CXX_MODULES
     FILES
-    modules/glaze/thread/threadpool.ixx
     modules/glaze/thread/atomic.ixx
+    modules/glaze/thread/async.ixx
+    modules/glaze/thread/async_string.ixx
+    modules/glaze/thread/shared_async_map.ixx
+    modules/glaze/thread/shared_async_vector.ixx
+    modules/glaze/thread/threadpool.ixx
+    modules/glaze/thread/value_proxy.ixx
 )
 
 # simd
