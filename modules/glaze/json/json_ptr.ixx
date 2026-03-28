@@ -16,6 +16,7 @@ import glaze.util.parse;
 import glaze.util.compare;
 import glaze.util.string_literal;
 import glaze.util.expected;
+import glaze.util.for_each;
 
 import glaze.concepts.container_concepts;
 

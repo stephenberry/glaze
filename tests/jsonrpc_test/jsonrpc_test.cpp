@@ -1,10 +1,12 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/ext/jsonrpc.hpp"
+import glaze.ext.jsonrpc;
+import glaze.json;
+import glaze.util.expected;
 
-#include <numeric>
-#include <string>
-
-#include "ut/ut.hpp"
+import std;
+import ut;
 
 namespace rpc = glz::rpc;
 using ut::operator""_test;
@@ -37,7 +39,7 @@ ut::suite valid_vector_test_cases_server = [] {
    for (const auto& pair : valid_requests) {
       std::tie(raw_json, resulting_request) = pair;
       auto stripped{std::make_shared<std::string>(resulting_request)};
-      stripped->erase(std::remove_if(stripped->begin(), stripped->end(), ::isspace), stripped->end());
+      stripped->erase(std::remove_if(stripped->begin(), stripped->end(), [](unsigned char ch) { return static_cast<bool>(std::isspace(ch)); }), stripped->end());
 
       test_name = "response:" + *stripped;
       ut::test(test_name) = [&server, &raw_json, stripped]() {
@@ -311,7 +313,7 @@ ut::suite struct_test_cases = [] {
       }
    };
 
-   "server batch with both invalid and valid"_test = [&server] {
+   ut::test("server batch with both invalid and valid") = [&server] {
       server.on<"foo">([](const foo_params&) -> foo_result { return {}; });
       server.on<"bar">([](const bar_params&) -> bar_result { return {}; });
 
@@ -333,7 +335,7 @@ ut::suite struct_test_cases = [] {
          << response;
    };
 
-   "server weird id values"_test = [&server] {
+   ut::test("server weird id values") = [&server] {
       server.on<"foo">([](const foo_params&) -> foo_result { return {}; });
 
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"(
@@ -348,7 +350,7 @@ ut::suite struct_test_cases = [] {
          ut::expect(response.error->code == glz::rpc::error_e::invalid_request);
       }
    };
-   "server invalid jsonrpc value"_test = [&server] {
+   ut::test("server invalid jsonrpc value") = [&server] {
       server.on<"foo">([](const foo_params&) -> foo_result { return {}; });
 
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"(
@@ -381,7 +383,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(response == R"({"jsonrpc":"2.0","result":{"foo_c":true,"foo_d":"new world"},"id":"42"})");
    };
 
-   "client request map"_test = [&client] {
+   ut::test("client request map") = [&client] {
       bool first_call{};
       std::ignore = client.request<"foo">("first_call", foo_params{}, [&first_call](auto, auto) { first_call = true; });
       bool second_call{};
@@ -400,7 +402,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(third_call);
       map.clear();
    };
-   "client request timeout"_test = [&client] {
+   ut::test("client request timeout") = [&client] {
       std::string id{"some id"};
       std::ignore = client.request<"foo">(id, foo_params{}, [](auto, auto) {});
 
@@ -411,7 +413,7 @@ ut::suite struct_test_cases = [] {
       };
       timeout();
    };
-   "client request id needs to be unique"_test = [&client] {
+   ut::test("client request id needs to be unique") = [&client] {
       std::string id{"some id"};
       bool first_called{};
       auto [unused, inserted] =
@@ -426,11 +428,11 @@ ut::suite struct_test_cases = [] {
 
       map.clear();
    };
-   "client notification"_test = [&client] {
+   ut::test("client notification") = [&client] {
       const auto notify_str{client.notify<"foo">(foo_params{})};
       ut::expect(notify_str == R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":0,"foo_b":""},"id":null})");
    };
-   "client call erases id from queue"_test = [&client, &server] {
+   ut::test("client call erases id from queue") = [&client, &server] {
       std::uint8_t call_cnt{};
       auto [request, inserted] =
          client.request<"foo">("next gen id", foo_params{}, [&call_cnt](auto, auto) { call_cnt++; });

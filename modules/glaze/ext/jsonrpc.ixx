@@ -1,15 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.ext.jsonrpc;
 
-#pragma once
+import glaze;
+import glaze.core.context;
+import glaze.tuplet;
+import glaze.util.expected;
+import glaze.util.string_literal;
+import glaze.util.type_traits;
+import glaze.concepts.container_concepts;
 
-#include <glaze/glaze.hpp>
-#include <glaze/tuplet/tuple.hpp>
-#include <glaze/util/expected.hpp>
-#include <unordered_map>
-#include <utility>
+import std;
 
-namespace glz::rpc
+export namespace glz::rpc
 {
    enum struct error_e : int {
       no_error = 0,
@@ -46,7 +49,7 @@ namespace glz::rpc
 }
 
 // jsonrpc
-namespace glz::rpc
+export namespace glz::rpc
 {
    using id_t = std::variant<glz::generic::null_t, std::string_view, std::int64_t>;
    inline constexpr std::string_view supported_version{"2.0"};
@@ -217,11 +220,11 @@ namespace glz::rpc
                      method.callback = [=](const params_t& params) -> expected_t { return callback(params); };
                   }
                   else {
-                     static_assert(false_v<result_t>, "Method return cannot construct expected<result_t, rpc::error>");
+                     static_assert(glz::false_v<result_t>, "Method return cannot construct expected<result_t, rpc::error>");
                   }
                }
                else {
-                  static_assert(false_v<M>, "Method supplied is not invocable with registered types");
+                  static_assert(glz::false_v<M>, "Method supplied is not invocable with registered types");
                }
                return true;
             }

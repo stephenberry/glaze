@@ -330,6 +330,7 @@ target_sources(glaze_glaze
     FILES
     modules/glaze/ext/cli_menu.ixx
     # modules/glaze/ext/eigen.ixx
+    modules/glaze/ext/jsonrpc.ixx
 )
 
 # compare
