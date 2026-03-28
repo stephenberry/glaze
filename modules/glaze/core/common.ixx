@@ -85,7 +85,7 @@ namespace glz
    template <class... T>
    arr(T&&...) -> arr<T...>;
 
-   template <class... T>
+   export template <class... T>
    struct arr_copy final
    {
       glz::tuple<T...> value;

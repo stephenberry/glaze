@@ -1,6 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
-export module glaze.base64.base64;
+export module glaze.base64;
 
 import std;
 

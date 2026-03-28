@@ -10,6 +10,7 @@ import glaze.concepts.container_concepts;
 import glaze.json.write;
 import glaze.util.expected;
 import glaze.util.string_literal;
+import glaze.util.dump;
 
 import std;
 
@@ -703,4 +704,3 @@ namespace glz
       return out;
    }
 }
-
