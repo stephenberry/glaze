@@ -4,13 +4,18 @@
 import std;
 
 import glaze.api.impl;
+
 import glaze.base64.base64;
+
+import glaze.beve.header;
 import glaze.beve.beve_to_json;
 import glaze.beve.key_traits;
 import glaze.beve.peek_header;
 import glaze.beve.read;
 import glaze.beve.size;
+import glaze.beve.wrappers;
 import glaze.beve.write;
+
 import glaze.core.cast;
 import glaze.core.common;
 import glaze.core.context;
@@ -22,11 +27,14 @@ import glaze.core.seek;
 import glaze.core.to;
 import glaze.core.wrappers;
 import glaze.core.write;
+
 import glaze.hardware.volatile_array;
+
 import glaze.json.generic;
 import glaze.json.json_ptr;
 import glaze.json.read;
 import glaze.json.write;
+
 import glaze.trace;
 import glaze.tuplet;
 import glaze.util.for_each;

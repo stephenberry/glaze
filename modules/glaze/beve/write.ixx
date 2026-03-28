@@ -16,6 +16,7 @@ import glaze.core.seek;
 import glaze.core.to;
 import glaze.core.meta;
 import glaze.core.write;
+import glaze.reflection.to_tuple;
 
 import glaze.util.dump;
 import glaze.util.for_each;

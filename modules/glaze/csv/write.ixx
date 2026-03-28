@@ -14,6 +14,7 @@ import glaze.core.opts;
 import glaze.core.reflect;
 import glaze.core.write;
 import glaze.core.write_chars;
+import glaze.reflection.to_tuple;
 
 import glaze.util.dump;
 import glaze.util.expected;

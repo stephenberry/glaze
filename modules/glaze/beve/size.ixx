@@ -8,17 +8,21 @@ import glaze.beve.header;
 import glaze.beve.key_traits;
 
 import glaze.core.common;
+import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.reflect;
+import glaze.reflection.to_tuple;
 
 import glaze.concepts.container_concepts;
 
 import glaze.tuplet;
 
 import glaze.util.for_each;
+import glaze.util.expected;
 import glaze.util.variant;
 import glaze.util.tuple;
 import glaze.util.string_literal;
+import glaze.util.type_traits;
 
 #include "glaze/util/inline.hpp"
 

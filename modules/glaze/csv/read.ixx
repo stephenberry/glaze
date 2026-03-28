@@ -12,6 +12,7 @@ import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.read;
 import glaze.core.reflect;
+import glaze.reflection.to_tuple;
 
 import glaze.file.file_ops;
 

@@ -23,7 +23,7 @@ import glaze.util.string_literal;
 import glaze.util.tuple;
 
 import glaze.tuplet;
-import glaze.concepts.container_concepts;
+export import glaze.concepts.container_concepts;
 import glaze.reflection.to_tuple;
 
 #include "glaze/util/inline.hpp"

@@ -12,6 +12,7 @@ import glaze.core.write;
 import glaze.core.context;
 import glaze.core.common;
 import glaze.core.meta;
+import glaze.reflection.to_tuple;
 import glaze.concepts.container_concepts;
 import glaze.util.dump;
 import glaze.util.for_each;

@@ -1094,7 +1094,7 @@ namespace glz
       }
    }
 
-   template <glaze_flags_t T>
+   export template <glaze_flags_t T>
    consteval auto byte_length() noexcept
    {
       constexpr auto N = reflect<T>::size;
