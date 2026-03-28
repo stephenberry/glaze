@@ -4,8 +4,12 @@
 export module glaze.json;
 
 export import glaze.core.as_array_wrapper;
+export import glaze.core.common;
 export import glaze.core.istream_buffer;
 export import glaze.core.manage;
+export import glaze.core.read;
+export import glaze.core.reflect;
+export import glaze.core.write;
 export import glaze.core.wrapper_traits;
 
 export import glaze.json.escape_unicode;
@@ -25,6 +29,7 @@ export import glaze.json.ptr;
 export import glaze.json.raw_string;
 export import glaze.json.read;
 export import glaze.json.schema;
+export import glaze.json.skip;
 export import glaze.json.wrappers;
 export import glaze.json.write;
 

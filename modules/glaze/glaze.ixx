@@ -32,6 +32,7 @@
 
 export module glaze;
 
+export import glaze.base64;
 export import glaze.beve;
 export import glaze.core.ostream_buffer;
 export import glaze.csv;
@@ -41,8 +42,6 @@ export import glaze.file.read_directory;
 export import glaze.file.write_directory;
 export import glaze.json;
 export import glaze.msgpack;
-
-//#include "glaze/base64/base64.hpp"
 
 //#include "glaze/record/recorder.hpp"
 //#include "glaze/stencil/stencil.hpp"
