@@ -17,6 +17,7 @@ import glaze.reflection.to_tuple;
 import glaze.file.file_ops;
 
 import glaze.util.glaze_fast_float;
+import glaze.util.for_each;
 import glaze.util.parse;
 import glaze.util.string_literal;
 import glaze.util.type_traits;

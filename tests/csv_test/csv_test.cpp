@@ -1,3 +1,6 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+
 // GCC 15's static analysis generates false positive -Warray-bounds warnings for tests that
 // deliberately use undersized buffers to verify buffer_overflow error handling.
 // The actual code calls ensure_space() before dump(), but GCC doesn't track this control flow.
@@ -5,19 +8,22 @@
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
 
-#include <array>
-#include <cstdint>
-#include <deque>
-#include <limits>
-#include <map>
-#include <span>
-#include <unordered_map>
+import std;
 
-#include "glaze/base64/base64.hpp"
-#include "glaze/csv/read.hpp"
-#include "glaze/csv/write.hpp"
-#include "glaze/record/recorder.hpp"
-#include "ut/ut.hpp"
+import glaze.base64;
+
+import glaze.core.meta_fwd;
+import glaze.core.opts;
+import glaze.core.context;
+
+import glaze.csv.read;
+import glaze.csv.write;
+
+import glaze.json;
+
+import glaze.record.recorder;
+
+import ut;
 
 // Specification: https://datatracker.ietf.org/doc/html/rfc4180
 
@@ -1213,7 +1219,7 @@ suite vector_struct_direct_read_tests = [] {
       // Append the new data
       struct colwise_append_opts : glz::opts_csv
       {
-         uint8_t layout = glz::colwise;
+         std::uint8_t layout = glz::colwise;
          bool append_arrays = true;
       };
       expect(not glz::read<colwise_append_opts{}>(data, csv_str));
@@ -1823,7 +1829,7 @@ suite fuzzfailures = [] {
          "IBCPAAoxMDY3ODg4NDUyMTMyMTA4Njk5NmUrMTEzNzI0NzEyMDQ5NDIzLjE0NTIxNTJCMzIxMDg2OTk2ZS05MTEKMzIANLaztqfgDQ==";
 
       auto input = glz::read_base64(b64);
-      std::vector<uint8_t> s;
+      std::vector<std::uint8_t> s;
       s.resize(input.size());
       std::memcpy(s.data(), input.data(), s.size());
       my_struct obj;
@@ -1835,7 +1841,7 @@ suite fuzzfailures = [] {
          "/BAACjY0OQo0OTk5OTk5MjkwMDAwODQ4MzY1M0UrMDAyNDk5OTk5OTk5Nwo5NAo5NDQ0NDQ0NDQ0NDQ0Cjk0CjkyCjYyAAAAAAA4OA==";
 
       auto input = glz::read_base64(b64);
-      std::vector<uint8_t> s;
+      std::vector<std::uint8_t> s;
       s.resize(input.size());
       std::memcpy(s.data(), input.data(), s.size());
       my_struct obj;
@@ -1845,7 +1851,7 @@ suite fuzzfailures = [] {
    "fuzz4"_test = [] {
       std::string_view b64 = "MCAgWzQsNA==";
       const auto input = glz::read_base64(b64);
-      std::vector<uint8_t> s(begin(input), end(input));
+      std::vector<std::uint8_t> s(begin(input), end(input));
       my_struct obj;
       auto ec = glz::read_csv<glz::rowwise>(obj, s);
       expect(ec == glz::error_code::unknown_key);
