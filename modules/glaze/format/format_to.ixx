@@ -1,15 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.format.format_to;
 
-#pragma once
+import glaze.core.write;
+import glaze.util.dtoa;
+import glaze.util.itoa;
+import glaze.concepts.container_concepts;
 
-#include "glaze/core/write.hpp"
-#include "glaze/util/dtoa.hpp"
-#include "glaze/util/itoa.hpp"
+import std;
 
 namespace glz
 {
-   template <num_t T>
+   export template <num_t T>
    void format_to(std::string& buffer, T&& value)
    {
       auto ix = buffer.size();

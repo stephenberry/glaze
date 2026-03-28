@@ -1,16 +1,30 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.stencil.stencilcount;
 
-#pragma once
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+import glaze.reflection.to_tuple;
+import glaze.core.write;
 
-#include "glaze/core/read.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/core/write.hpp"
-#include "glaze/format/format_to.hpp"
+import glaze.format.format_to;
+
+import glaze.util.compare;
+import glaze.util.parse;
+import glaze.util.string_literal;
+import glaze.util.expected;
+import glaze.util.for_each;
+
+import glaze.concepts.container_concepts;
+
+import std;
 
 namespace glz
 {
-   template <auto Opts = opts{}, class Template, class T, resizable Buffer>
+   export template <auto Opts = opts{}, class Template, class T, resizable Buffer>
    [[nodiscard]] error_ctx stencilcount(Template&& layout, T&& value, Buffer& buffer)
    {
       context ctx{};
@@ -170,7 +184,7 @@ namespace glz
       return {};
    }
 
-   template <auto Opts = opts{}, class Template, class T>
+   export template <auto Opts = opts{}, class Template, class T>
    [[nodiscard]] expected<std::string, error_ctx> stencilcount(Template&& layout, T&& value)
    {
       std::string buffer{};

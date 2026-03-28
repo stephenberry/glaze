@@ -341,3 +341,20 @@ target_sources(glaze_glaze
     modules/glaze/compare/compare.ixx
     modules/glaze/compare/approx.ixx
 )
+
+# stencil
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/stencil/stencil.ixx
+    modules/glaze/stencil/stencilcount.ixx
+)
+
+# format
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/format/format_to.ixx
+)

@@ -1,11 +1,26 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.stencil;
 
-#pragma once
+import glaze.concepts.container_concepts;
 
-#include "glaze/core/read.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/core/write.hpp"
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.read;
+import glaze.core.opts;
+import glaze.core.reflect;
+import glaze.reflection.to_tuple;
+import glaze.core.write;
+
+import glaze.json.write;
+
+import glaze.util.parse;
+import glaze.util.compare;
+import glaze.util.expected;
+import glaze.util.string_literal;
+import glaze.util.for_each;
+
+import std;
 
 namespace glz
 {
@@ -40,7 +55,7 @@ namespace glz
       return result;
    }
 
-   template <auto Opts = opts{.format = STENCIL}, class Template, class T, resizable Buffer>
+   export template <auto Opts = opts{.format = STENCIL}, class Template, class T, resizable Buffer>
    [[nodiscard]] error_ctx stencil(Template&& layout, T&& value, Buffer& buffer)
    {
       context ctx{};
@@ -373,7 +388,7 @@ namespace glz
       return {};
    }
 
-   template <auto Opts = opts{.format = STENCIL}, class Template, class T>
+   export template <auto Opts = opts{.format = STENCIL}, class Template, class T>
    [[nodiscard]] expected<std::string, error_ctx> stencil(Template&& layout, T&& value)
    {
       std::string buffer{};
@@ -384,14 +399,14 @@ namespace glz
       return {buffer};
    }
 
-   template <auto Opts = opts{.format = MUSTACHE}, class Template, class T, resizable Buffer>
+   export template <auto Opts = opts{.format = MUSTACHE}, class Template, class T, resizable Buffer>
       requires(Opts.format == MUSTACHE)
    [[nodiscard]] error_ctx mustache(Template&& layout, T&& value, Buffer& buffer)
    {
       return stencil<Opts>(std::forward<Template>(layout), std::forward<T>(value), buffer);
    }
 
-   template <auto Opts = opts{.format = MUSTACHE}, class Template, class T>
+   export template <auto Opts = opts{.format = MUSTACHE}, class Template, class T>
       requires(Opts.format == MUSTACHE)
    [[nodiscard]] expected<std::string, error_ctx> mustache(Template&& layout, T&& value)
    {
