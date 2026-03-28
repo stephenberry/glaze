@@ -1,14 +1,13 @@
-#include <charconv>
-#include <deque>
-#include <iostream>
-#include <map>
-#include <random>
-#include <unordered_map>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "glaze/util/itoa.hpp"
-#include "glaze/util/itoa_40kb.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze;
+import glaze.util.itoa;
+import glaze.util.itoa_40kb;
+
+import ut;
 
 using namespace ut;
 

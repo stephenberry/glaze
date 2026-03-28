@@ -14,7 +14,7 @@ import std;
 // - https://github.com/ibireme/c_numconv_benchmark/blob/master/src/itoa/itoa_yy.c
 // - https://github.com/RealTimeChris/Jsonifier (IToStr.hpp)
 
-export namespace glz
+namespace glz
 {
    namespace itoa_40kb_impl
    {
@@ -266,7 +266,7 @@ export namespace glz
    // Maximum speed integer to chars (uses 40KB digit_quads table)
    // Use to_chars from itoa.hpp for smaller binary size
 
-   template <class T>
+   export template <class T>
       requires std::same_as<std::remove_cvref_t<T>, std::uint32_t>
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
@@ -288,7 +288,7 @@ export namespace glz
       }
    }
 
-   template <class T>
+   export template <class T>
       requires std::same_as<std::remove_cvref_t<T>, std::int32_t>
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
@@ -297,7 +297,7 @@ export namespace glz
                            static_cast<std::uint32_t>((static_cast<std::uint32_t>(val) ^ (val >> 31)) - (val >> 31)));
    }
 
-   template <class T>
+   export template <class T>
       requires std::same_as<std::remove_cvref_t<T>, std::uint64_t>
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
@@ -334,7 +334,7 @@ export namespace glz
       }
    }
 
-   template <class T>
+   export template <class T>
       requires std::same_as<std::remove_cvref_t<T>, std::int64_t>
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
