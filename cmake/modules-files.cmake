@@ -117,6 +117,7 @@ target_sources(glaze_glaze
     modules/glaze/util/dragonbox.ixx
     modules/glaze/util/buffer_pool.ixx
     modules/glaze/util/progress_bar.ixx
+    modules/glaze/util/key_transformers.ixx
 )
 
 # concepts

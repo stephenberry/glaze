@@ -1,11 +1,8 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.util.key_transformers;
 
-#pragma once
-
-#include <cctype>
-#include <string>
-#include <string_view>
+import std;
 
 #include "glaze/core/feature_test.hpp"
 
@@ -32,7 +29,7 @@ namespace glz
    inline constexpr bool is_alnum(char c) noexcept { return is_alpha(c) || is_digit(c); }
 
    // Convert snake_case to camelCase
-   inline constexpr std::string to_camel_case(std::string_view sv)
+   export inline constexpr std::string to_camel_case(std::string_view sv)
    {
       std::string out;
       out.reserve(sv.size());
@@ -59,7 +56,7 @@ namespace glz
    }
 
    // Convert snake_case to PascalCase (UpperCamelCase)
-   inline constexpr std::string to_pascal_case(std::string_view sv)
+   export inline constexpr std::string to_pascal_case(std::string_view sv)
    {
       std::string out;
       out.reserve(sv.size());
@@ -83,7 +80,7 @@ namespace glz
    }
 
    // Convert camelCase/PascalCase to snake_case
-   inline constexpr std::string to_snake_case(std::string_view sv)
+   export inline constexpr std::string to_snake_case(std::string_view sv)
    {
       std::string out;
       out.reserve(sv.size() * 2); // Reserve extra space for underscores
@@ -117,7 +114,7 @@ namespace glz
    }
 
    // Convert camelCase/PascalCase/snake_case to SCREAMING_SNAKE_CASE
-   inline constexpr std::string to_screaming_snake_case(std::string_view sv)
+   export inline constexpr std::string to_screaming_snake_case(std::string_view sv)
    {
       std::string out;
       out.reserve(sv.size() * 2);
@@ -155,7 +152,7 @@ namespace glz
 
    // Convert any case to kebab-case
    // Simplified version to work around Clang constexpr limitations
-   inline constexpr std::string to_kebab_case(std::string_view sv)
+   export inline constexpr std::string to_kebab_case(std::string_view sv)
    {
       std::string out;
       out.reserve(sv.size() * 2);
@@ -188,7 +185,7 @@ namespace glz
    }
 
    // Convert any case to SCREAMING-KEBAB-CASE
-   inline constexpr std::string to_screaming_kebab_case(std::string_view sv)
+   export inline constexpr std::string to_screaming_kebab_case(std::string_view sv)
    {
       std::string out;
       out.reserve(sv.size() * 2);
@@ -225,7 +222,7 @@ namespace glz
    }
 
    // Convert to lowercase (simple case conversion)
-   inline constexpr std::string to_lower_case(std::string_view sv)
+   export inline constexpr std::string to_lower_case(std::string_view sv)
    {
       std::string out;
       out.reserve(sv.size());
@@ -236,7 +233,7 @@ namespace glz
    }
 
    // Convert to UPPERCASE (simple case conversion)
-   inline constexpr std::string to_upper_case(std::string_view sv)
+   export inline constexpr std::string to_upper_case(std::string_view sv)
    {
       std::string out;
       out.reserve(sv.size());
@@ -249,42 +246,42 @@ namespace glz
    // Struct wrappers for inheritance-based usage
    // These require constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
 #if GLZ_HAS_CONSTEXPR_STRING
-   struct camel_case
+   export struct camel_case
    {
       static constexpr std::string rename_key(const auto key) { return to_camel_case(key); }
    };
 
-   struct pascal_case
-   {
+   export struct pascal_case
+   {  
       static constexpr std::string rename_key(const auto key) { return to_pascal_case(key); }
    };
 
-   struct snake_case
+   export struct snake_case
    {
       static constexpr std::string rename_key(const auto key) { return to_snake_case(key); }
    };
 
-   struct screaming_snake_case
+   export struct screaming_snake_case
    {
       static constexpr std::string rename_key(const auto key) { return to_screaming_snake_case(key); }
    };
 
-   struct kebab_case
+   export struct kebab_case
    {
       static constexpr std::string rename_key(const auto key) { return to_kebab_case(key); }
    };
 
-   struct screaming_kebab_case
+   export struct screaming_kebab_case
    {
       static constexpr std::string rename_key(const auto key) { return to_screaming_kebab_case(key); }
    };
 
-   struct lower_case
+   export struct lower_case
    {
       static constexpr std::string rename_key(const auto key) { return to_lower_case(key); }
    };
 
-   struct upper_case
+   export struct upper_case
    {
       static constexpr std::string rename_key(const auto key) { return to_upper_case(key); }
    };
