@@ -26,7 +26,7 @@ import glaze.reflection.to_tuple;
 
 import std;
 
-#include <glaze/util/inline.hpp>
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {

@@ -15,7 +15,9 @@ import std;
 #endif
 
 import glaze.core.context;
+import glaze.core.opts;
 import glaze.thread.value_proxy;
+import glaze.util.type_traits;
 
 // Provides a thread-safe vector
 // Uses simple proxy objects with appropriate locks for read/write operations

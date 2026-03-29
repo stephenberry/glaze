@@ -1,10 +1,9 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <array>
-
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
 
 using namespace ut;
 
@@ -588,7 +587,7 @@ struct glz::meta<RandomU8Enum3>
 };
 
 // int8_t enums (signed, range -128 to 127)
-enum class RandomI8Enum1 : int8_t {
+enum class RandomI8Enum1 : std::int8_t {
    v0 = -128,
    v1 = -127,
    v2 = -124,
@@ -665,7 +664,7 @@ struct glz::meta<RandomI8Enum1>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomI8Enum2 : int8_t {
+enum class RandomI8Enum2 : std::int8_t {
    v0 = -127,
    v1 = -123,
    v2 = -120,

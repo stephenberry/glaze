@@ -26,7 +26,7 @@ namespace glz
     * @param[in] in   The input struct instance.
     * @param[out] out The output struct instance to be populated.
     */
-   template <class In, class Out>
+   export template <class In, class Out>
    void convert_struct(In&& in, Out&& out)
    {
       auto in_tuple = to_tie(std::forward<In>(in));

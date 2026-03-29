@@ -3041,7 +3041,7 @@ namespace glz
 {
    // The Callable comes second as ranges::for_each puts the callable at the end
 
-   template <class Callable, reflectable T>
+   export template <class Callable, reflectable T>
    void for_each_field(T&& value, Callable&& callable)
    {
       constexpr auto N = reflect<T>::size;
@@ -3052,7 +3052,7 @@ namespace glz
       }
    }
 
-   template <class Callable, glaze_object_t T>
+   export template <class Callable, glaze_object_t T>
    void for_each_field(T&& value, Callable&& callable)
    {
       constexpr auto N = reflect<T>::size;
@@ -3080,7 +3080,7 @@ namespace glz
 
    // Concept to check if glz::reflect<T> can be instantiated and used
    // This concept is automatically satisfied by any type that has a valid reflect<T> specialization
-   template <class T>
+   export template <class T>
    concept has_reflect = requires {
       sizeof(reflect<T>); // Ensure reflect<T> is complete
       { reflect<T>::size } -> std::convertible_to<std::size_t>;

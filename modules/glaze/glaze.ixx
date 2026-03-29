@@ -33,16 +33,25 @@
 export module glaze;
 
 export import glaze.base64;
+
 export import glaze.beve;
+
 export import glaze.core.ostream_buffer;
 export import glaze.core.context;
 export import glaze.core.meta_fwd;
+export import glaze.core.reflect;
+export import glaze.core.opts;
+
 export import glaze.csv;
+
 export import glaze.chrono;
+
 export import glaze.file.file_ops;
 export import glaze.file.read_directory;
 export import glaze.file.write_directory;
+
 export import glaze.json;
+
 export import glaze.msgpack;
 
 //#include "glaze/record/recorder.hpp"
