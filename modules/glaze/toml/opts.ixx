@@ -1,8 +1,12 @@
-#pragma once
+// Glaze Library
+// For the license information refer to glaze.ixx
+export module glaze.toml.opts;
 
-#include <glaze/core/opts.hpp>
+import glaze.core.opts;
 
-namespace glz::toml
+import std;
+
+export namespace glz::toml
 {
 
    enum struct opts_internal : std::uint32_t {

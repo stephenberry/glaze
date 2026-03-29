@@ -1,27 +1,44 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.toml.write;
 
-#pragma once
+import std;
 
-#include "glaze/core/buffer_traits.hpp"
-#include "glaze/core/chrono.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/core/to.hpp"
-#include "glaze/core/wrappers.hpp"
-#include "glaze/core/write.hpp"
-#include "glaze/core/write_chars.hpp"
-#include "glaze/util/dump.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/itoa.hpp"
-#include "glaze/util/parse.hpp"
-#include "glaze/util/variant.hpp"
+import glaze.core.buffer_traits;
+import glaze.core.chrono;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.reflect;
+import glaze.core.to;
+import glaze.core.wrappers;
+import glaze.core.write;
+import glaze.core.write_chars;
+import glaze.reflection.to_tuple;
+
+import glaze.concepts.container_concepts;
+
+import glaze.util.bit;
+import glaze.util.dump;
+import glaze.util.expected;
+import glaze.util.for_each;
+import glaze.util.itoa;
+import glaze.util.tuple;
+import glaze.util.parse;
+import glaze.util.string_literal;
+import glaze.util.type_traits;
+import glaze.util.variant;
+
+import glaze.tuplet;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {
    // TOML-specific options - inherits from opts to allow TOML-specific configuration
    // without modifying the base opts struct
-   struct toml_opts : opts
+   export struct toml_opts : opts
    {
       bool inline_arrays = false; // Use inline [{...}, {...}] instead of [[array]] syntax
 
@@ -631,7 +648,7 @@ namespace glz
    // instead of array-of-tables [[name]] syntax
    // ============================================
 
-   template <class T>
+   export template <class T>
    struct inline_table_t
    {
       static constexpr bool glaze_wrapper = true;
@@ -640,7 +657,7 @@ namespace glz
       T& val;
    };
 
-   template <class T>
+   export template <class T>
    inline_table_t(T&) -> inline_table_t<T>;
 
    // Helper to create wrapper from member pointer
@@ -651,7 +668,7 @@ namespace glz
    }
 
    // Usage: glz::inline_table<&T::member>
-   template <auto MemPtr>
+   export template <auto MemPtr>
    constexpr auto inline_table = inline_table_impl<MemPtr>();
 
    // Detect inline_table wrapper
@@ -861,7 +878,7 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       decltype(auto) t = [&]() -> decltype(auto) {
          if constexpr (reflectable<T>) {
-            return to_tie(value);
+             return glz::to_tie(value);
          }
          else {
             return nullptr;
@@ -923,7 +940,7 @@ namespace glz
          else {
             first = false;
          }
-         static constexpr auto key = glz::get<I>(reflect<T>::keys);
+         static constexpr sv key = reflect<T>::keys[I];
          std::memcpy(&b[ix], key.data(), key.size());
          ix += key.size();
 
@@ -953,7 +970,7 @@ namespace glz
          else {
             first = false;
          }
-         static constexpr auto key = glz::get<I>(reflect<T>::keys);
+         static constexpr sv key = reflect<T>::keys[I];
 
          // Write [path_prefix.key] or [key] if no prefix
          std::memcpy(&b[ix], "[", 1);
@@ -1017,7 +1034,7 @@ namespace glz
             }
          }();
 
-         static constexpr auto key = glz::get<I>(reflect<T>::keys);
+         static constexpr sv key = reflect<T>::keys[I];
 
          if (empty_range(arr)) {
             // Empty array - write as inline empty array
@@ -1367,19 +1384,19 @@ namespace glz
       }
    };
 
-   template <write_supported<TOML> T, output_buffer Buffer>
+   export template <write_supported<TOML> T, output_buffer Buffer>
    [[nodiscard]] error_ctx write_toml(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_supported<TOML> T, raw_buffer Buffer>
+   export template <write_supported<TOML> T, raw_buffer Buffer>
    [[nodiscard]] glz::expected<std::size_t, error_ctx> write_toml(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_supported<TOML> T>
+   export template <write_supported<TOML> T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_toml(T&& value)
    {
       return write<opts{.format = TOML}>(std::forward<T>(value));
@@ -1399,4 +1416,3 @@ namespace glz
       return {buffer.size(), error_code::none};
    }
 }
-

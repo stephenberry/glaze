@@ -1,25 +1,37 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.toml.read;
 
-#pragma once
+import std;
 
-#include <cctype>
-#include <charconv>
-#include <iostream>
+import glaze.toml.common;
+import glaze.toml.opts;
+import glaze.toml.skip;
 
-#include "glaze/core/chrono.hpp"
-#include "glaze/core/common.hpp"
-// #include "glaze/core/opts.hpp"
-#include "glaze/core/read.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/file/file_ops.hpp"
-#include "glaze/toml/common.hpp"
-#include "glaze/toml/opts.hpp"
-#include "glaze/toml/skip.hpp"
-#include "glaze/util/glaze_fast_float.hpp"
-#include "glaze/util/parse.hpp"
-#include "glaze/util/type_traits.hpp"
-#include "glaze/util/variant.hpp"
+import glaze.core.chrono;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+
+import glaze.concepts.container_concepts;
+
+import glaze.file.file_ops;
+
+import glaze.reflection.to_tuple;
+import glaze.tuplet;
+
+import glaze.util.expected;
+import glaze.util.for_each;
+import glaze.util.glaze_fast_float;
+import glaze.util.parse;
+import glaze.util.type_traits;
+import glaze.util.variant;
+import glaze.util.string_literal;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {
@@ -816,7 +828,7 @@ namespace glz
 
          if constexpr (N == 1) {
             // Single enum value - just verify it matches
-            static constexpr auto key = glz::get<0>(reflect<T>::keys);
+            static constexpr auto key = std::get<0>(reflect<T>::keys);
             if (n == key.size() && std::string_view(start, n) == key) {
                value = glz::get<0>(reflect<T>::values);
             }
@@ -838,7 +850,7 @@ namespace glz
             visit<N>(
                [&]<std::size_t I>() {
                   // Verify the key matches (hash collision check)
-                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                  static constexpr auto key = std::get<I>(reflect<T>::keys);
                   if (n == key.size() && std::string_view(start, n) == key) [[likely]] {
                      value = glz::get<I>(reflect<T>::values);
                   }
@@ -1477,7 +1489,7 @@ namespace glz
             const bool key_matches = index < N && key_str == reflect<U>::keys[index];
 
             if (key_matches) [[likely]] {
-               visit<N>(
+               glz::visit<N>(
                   [&]<std::size_t I>() {
                      if (I == index) {
                         decltype(auto) member_obj = [&]() -> decltype(auto) {
@@ -1570,7 +1582,7 @@ namespace glz
          const bool key_matches = index < N && path.front() == reflect<U>::keys[index];
 
          if (key_matches) [[likely]] {
-            visit<N>(
+            glz::visit<N>(
                [&]<std::size_t I>() {
                   if (I == index) {
                      decltype(auto) member_obj = [&]() -> decltype(auto) {
@@ -1628,7 +1640,7 @@ namespace glz
 
          if (key_matches) [[likely]] {
             bool success = false;
-            visit<N>(
+            glz::visit<N>(
                [&]<std::size_t I>() {
                   if (I == index) {
                      decltype(auto) member_obj = [&]() -> decltype(auto) {
@@ -2611,14 +2623,14 @@ namespace glz
       }
    };
 
-   template <read_supported<TOML> T, is_buffer Buffer>
+   export template <read_supported<TOML> T, is_buffer Buffer>
    [[nodiscard]] inline error_ctx read_toml(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<opts{.format = TOML}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <read_supported<TOML> T, is_buffer Buffer>
+   export template<read_supported<TOML> T, is_buffer Buffer>
    [[nodiscard]] inline expected<T, error_ctx> read_toml(Buffer&& buffer)
    {
       T value{};

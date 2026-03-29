@@ -15,6 +15,7 @@ target_sources(glaze_glaze
       modules/glaze/version.ixx
       modules/glaze/glaze_exceptions.ixx
       modules/glaze/msgpack.ixx
+      modules/glaze/toml.ixx
 )
 
 # core
@@ -360,4 +361,16 @@ target_sources(glaze_glaze
     FILE_SET CXX_MODULES
     FILES
     modules/glaze/format/format_to.ixx
+)
+
+# toml
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/toml/common.ixx
+    modules/glaze/toml/opts.ixx
+    modules/glaze/toml/read.ixx
+    modules/glaze/toml/skip.ixx
+    modules/glaze/toml/write.ixx
 )

@@ -1,8 +1,13 @@
-#pragma once
+// Glaze Library
+// For the license information refer to glaze.ixx
+export module glaze.toml.skip;
 
-#include "glaze/core/context.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/toml/common.hpp"
+import glaze.toml.common;
+
+import glaze.core.context;
+import glaze.core.opts;
+
+#include "glaze/util/inline.hpp"
 
 namespace glz::toml
 {
@@ -225,7 +230,7 @@ namespace glz::toml
 
 namespace glz
 {
-   template <>
+   export template <>
    struct skip_value<TOML>
    {
       template <auto Opts>

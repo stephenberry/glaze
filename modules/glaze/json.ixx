@@ -3,6 +3,8 @@
 
 export module glaze.json;
 
+export import glaze.core.context;
+export import glaze.core.common;
 export import glaze.core.as_array_wrapper;
 export import glaze.core.common;
 export import glaze.core.istream_buffer;

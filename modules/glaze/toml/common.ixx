@@ -1,13 +1,15 @@
-#pragma once
+// Glaze Library
+// For the license information refer to glaze.ixx
+export module glaze.toml.common;
 
-#include <cctype>
+import glaze.core.common;
 
-#include "glaze/core/common.hpp"
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {
    // Skip whitespace and comments
-   template <class It, class End>
+   export template <class It, class End>
    GLZ_ALWAYS_INLINE void skip_ws_and_comments(It&& it, End end) noexcept
    {
       while (it != end) {
@@ -26,7 +28,7 @@ namespace glz
    }
 
    // Skip to next line
-   template <class Ctx, class It, class End>
+   export template <class Ctx, class It, class End>
    GLZ_ALWAYS_INLINE bool skip_to_next_line(Ctx&, It&& it, End end) noexcept
    {
       while (it != end && *it != '\n' && *it != '\r') {

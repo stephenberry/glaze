@@ -1,5 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+module;
+#include <cassert>
 export module glaze.core.ostream_buffer;
 
 import std;
@@ -7,8 +9,7 @@ import std;
 import glaze.core.buffer_traits;
 
 #include "glaze/util/inline.hpp"
-#include <cassert>
-
+ 
 export namespace glz
 {
    // Concept for byte-oriented output streams

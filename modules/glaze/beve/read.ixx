@@ -10,6 +10,7 @@ import glaze.beve.skip;
 
 import glaze.util.expected;
 import glaze.util.compare;
+import glaze.util.for_each;
 import glaze.util.variant;
 import glaze.util.type_traits;
 import glaze.util.bit_array;

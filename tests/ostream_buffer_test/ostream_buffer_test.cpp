@@ -1,21 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/core/ostream_buffer.hpp"
+import std;
 
-#include <fstream>
-#include <map>
-#include <sstream>
-#include <string>
-#include <vector>
+import glaze.core.context;
+import glaze.core.opts;
+import glaze.core.ostream_buffer;
 
-#include "glaze/beve.hpp"
-#include "glaze/cbor.hpp"
-#include "glaze/csv.hpp"
-#include "glaze/json.hpp"
-#include "glaze/msgpack.hpp"
-#include "glaze/toml.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import glaze.cbor;
+import glaze.toml;
+
+import ut;
 
 using namespace ut;
 

@@ -36,8 +36,8 @@ export import glaze.base64;
 
 export import glaze.beve;
 
+export import glaze.core.buffer_traits;
 export import glaze.core.ostream_buffer;
-export import glaze.core.context;
 export import glaze.core.meta_fwd;
 export import glaze.core.reflect;
 export import glaze.core.opts;
