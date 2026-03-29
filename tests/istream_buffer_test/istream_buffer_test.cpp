@@ -1,20 +1,14 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <chrono>
-#include <condition_variable>
-#include <filesystem>
-#include <fstream>
-#include <limits>
-#include <map>
-#include <mutex>
-#include <sstream>
-#include <thread>
+import std;
 
-#include "glaze/beve.hpp"
-#include "glaze/core/ostream_buffer.hpp"
-#include "glaze/json.hpp"
-#include "ut/ut.hpp"
+
+import glaze.beve;
+import glaze.core.ostream_buffer;
+import glaze.json;
+
+import ut;
 
 using namespace ut;
 
@@ -3877,13 +3871,13 @@ suite additional_edge_cases = [] {
       std::istringstream iss("[9223372036854775807,-9223372036854775808]");
       glz::istream_buffer<> buffer(iss);
 
-      std::vector<int64_t> arr;
+      std::vector<std::int64_t> arr;
       auto ec = glz::read_json(arr, buffer);
 
       expect(!ec);
       expect(arr.size() == 2u);
-      expect(arr[0] == INT64_MAX);
-      expect(arr[1] == INT64_MIN);
+      expect(arr[0] == std::numeric_limits<std::int64_t>::max());
+      expect(arr[1] == std::numeric_limits<std::int64_t>::min());
    };
 
    "floating point edge cases"_test = [] {
