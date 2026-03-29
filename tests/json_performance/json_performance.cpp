@@ -1,11 +1,9 @@
-#include <deque>
-#include <iostream>
-#include <map>
-#include <random>
-#include <unordered_map>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
 
 static constexpr bool skip = false;
 
@@ -140,7 +138,7 @@ struct integers
 {
    std::int32_t a{};
    std::uint32_t b{};
-   int64_t c{};
+   std::int64_t c{};
    std::uint64_t d{};
 };
 
@@ -196,7 +194,7 @@ suite integers_test = [] {
       for (std::size_t i = 0; i < n; ++i) {
          v.a = std::int32_t(i);
          v.b = std::uint32_t(i);
-         v.c = int64_t(i);
+         v.c = std::int64_t(i);
          v.d = std::uint64_t(i);
          std::ignore = glz::write_json(v, buffer);
          e = glz::read_json(v, buffer);
@@ -680,9 +678,9 @@ struct test_generator
                                    (std::numeric_limits<std::uint64_t>::max)() / 2);
    };
 
-   int64_t generateInt()
+   std::int64_t generateInt()
    {
-      auto newValue = randomizeNumberNormal(int64_t{}, (std::numeric_limits<int64_t>::max)());
+      auto newValue = randomizeNumberNormal(std::int64_t{}, (std::numeric_limits<std::int64_t>::max)());
       return generateBool() ? newValue : -newValue;
    };
 
@@ -753,7 +751,7 @@ struct test_struct
    std::vector<std::string> testStrings{};
    std::vector<std::uint64_t> testUints{};
    std::vector<double> testDoubles{};
-   std::vector<int64_t> testInts{};
+   std::vector<std::int64_t> testInts{};
    std::vector<bool> testBools{};
 };
 
@@ -929,40 +927,40 @@ struct permission_overwrite
    std::string allow{};
    std::string deny{};
    std::string id{};
-   int64_t type{};
+   std::int64_t type{};
 };
 
 struct channel_data
 {
    std::vector<permission_overwrite> permission_overwrites{};
    std::optional<std::string> last_message_id{};
-   int64_t default_thread_rate_limit_per_user{};
+   std::int64_t default_thread_rate_limit_per_user{};
    std::vector<std::nullptr_t> applied_tags{};
    std::vector<std::nullptr_t> recipients{};
-   int64_t default_auto_archive_duration{};
+   std::int64_t default_auto_archive_duration{};
    std::nullptr_t status{nullptr};
    std::string last_pin_timestamp{};
    std::nullptr_t topic{nullptr};
-   int64_t rate_limit_per_user{};
+   std::int64_t rate_limit_per_user{};
    icon_emoji_data icon_emoji{};
-   int64_t total_message_sent{};
-   int64_t video_quality_mode{};
+   std::int64_t total_message_sent{};
+   std::int64_t video_quality_mode{};
    std::string application_id{};
    std::string permissions{};
-   int64_t message_count{};
+   std::int64_t message_count{};
    std::string parent_id{};
-   int64_t member_count{};
+   std::int64_t member_count{};
    std::string owner_id{};
    std::string guild_id{};
-   int64_t user_limit{};
-   int64_t position{};
+   std::int64_t user_limit{};
+   std::int64_t position{};
    std::string name{};
    std::string icon{};
-   int64_t version{};
-   int64_t bitrate{};
+   std::int64_t version{};
+   std::int64_t bitrate{};
    std::string id{};
-   int64_t flags{};
-   int64_t type{};
+   std::int64_t flags{};
+   std::int64_t type{};
    bool managed{};
    bool nsfw{};
 };
@@ -977,13 +975,13 @@ struct user_data
    std::nullptr_t locale{nullptr};
    std::string discriminator{};
    std::string user_name{};
-   int64_t accent_color{};
-   int64_t premium_type{};
-   int64_t public_flags{};
+   std::int64_t accent_color{};
+   std::int64_t premium_type{};
+   std::int64_t public_flags{};
    std::string email{};
    bool mfa_enabled{};
    std::string id{};
-   int64_t flags{};
+   std::int64_t flags{};
    bool verified{};
    bool system{};
    bool bot{};
@@ -1000,7 +998,7 @@ struct member_data
    std::string joined_at{};
    std::string guild_id{};
    user_data user{};
-   int64_t flags{};
+   std::int64_t flags{};
    bool pending{};
    bool deaf{};
    bool mute{};
@@ -1017,14 +1015,14 @@ struct role_data
    std::nullptr_t unicode_emoji{nullptr};
    std::nullptr_t icon{nullptr};
    std::string permissions{};
-   int64_t position{};
+   std::int64_t position{};
    std::string name{};
    bool mentionable{};
-   int64_t version{};
+   std::int64_t version{};
    std::string id{};
    tags_data tags{};
-   int64_t color{};
-   int64_t flags{};
+   std::int64_t color{};
+   std::int64_t flags{};
    bool managed{};
    bool hoist{};
 };
@@ -1040,49 +1038,49 @@ struct guild_data
    std::nullptr_t vanity_url_code{nullptr};
    std::nullptr_t application_id{nullptr};
    std::nullptr_t afk_channel_id{nullptr};
-   int64_t default_message_notifications{};
-   int64_t max_stage_video_channel_users{};
+   std::int64_t default_message_notifications{};
+   std::int64_t max_stage_video_channel_users{};
    std::string public_updates_channel_id{};
    std::nullptr_t description{nullptr};
    std::vector<std::nullptr_t> threads{};
    std::vector<channel_data> channels{};
-   int64_t premium_subscription_count{};
-   int64_t approximate_presence_count{};
+   std::int64_t premium_subscription_count{};
+   std::int64_t approximate_presence_count{};
    std::vector<std::string> features{};
    std::vector<std::string> stickers{};
    bool premium_progress_bar_enabled{};
    std::vector<member_data> members{};
    std::nullptr_t hub_type{nullptr};
-   int64_t approximate_member_count{};
-   int64_t explicit_content_filter{};
-   int64_t max_video_channel_users{};
+   std::int64_t approximate_member_count{};
+   std::int64_t explicit_content_filter{};
+   std::int64_t max_video_channel_users{};
    std::nullptr_t splash{nullptr};
    std::nullptr_t banner{nullptr};
    std::string system_channel_id{};
    std::string widget_channel_id{};
    std::string preferred_locale{};
-   int64_t system_channel_flags{};
+   std::int64_t system_channel_flags{};
    std::string rules_channel_id{};
    std::vector<role_data> roles{};
-   int64_t verification_level{};
+   std::int64_t verification_level{};
    std::string permissions{};
-   int64_t max_presences{};
+   std::int64_t max_presences{};
    std::string discovery{};
    std::string joined_at{};
-   int64_t member_count{};
-   int64_t premium_tier{};
+   std::int64_t member_count{};
+   std::int64_t premium_tier{};
    std::string owner_id{};
-   int64_t max_members{};
-   int64_t afk_timeout{};
+   std::int64_t max_members{};
+   std::int64_t afk_timeout{};
    bool widget_enabled{};
    std::string region{};
-   int64_t nsfw_level{};
-   int64_t mfa_level{};
+   std::int64_t nsfw_level{};
+   std::int64_t mfa_level{};
    std::string name{};
    std::string icon{};
    bool unavailable{};
    std::string id{};
-   int64_t flags{};
+   std::int64_t flags{};
    bool large{};
    bool owner{};
    bool nsfw{};
@@ -1093,8 +1091,8 @@ struct discord_message
 {
    std::string t{};
    guild_data d{};
-   int64_t op{};
-   int64_t s{};
+   std::int64_t op{};
+   std::int64_t s{};
 };
 
 template <>

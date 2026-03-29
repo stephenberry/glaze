@@ -1,11 +1,14 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+// 
 // Benchmark performance tests - split from json_performance.cpp for faster compilation
 // This file tests large objects with 26 vector fields
-#include <limits>
-#include <random>
 
-#include "glaze/glaze.hpp"
-#include "json_perf_common.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
+
+import glaze.tests.json_perf_common;
 
 using namespace ut;
 using namespace glz::perf;
@@ -72,7 +75,7 @@ struct test_struct
    std::vector<std::string> testStrings{};
    std::vector<std::uint64_t> testUints{};
    std::vector<double> testDoubles{};
-   std::vector<int64_t> testInts{};
+   std::vector<std::int64_t> testInts{};
    std::vector<bool> testBools{};
 };
 
@@ -143,9 +146,9 @@ struct test_generator
                                    (std::numeric_limits<std::uint64_t>::max)() / 2);
    };
 
-   int64_t generateInt()
+   std::int64_t generateInt()
    {
-      auto newValue = randomizeNumberNormal(int64_t{}, (std::numeric_limits<int64_t>::max)());
+      auto newValue = randomizeNumberNormal(std::int64_t{}, (std::numeric_limits<std::int64_t>::max)());
       return generateBool() ? newValue : -newValue;
    };
 

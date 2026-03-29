@@ -1,9 +1,13 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+//
 // Number performance tests - split from json_performance.cpp for faster compilation
-#include <cstring>
-#include <iostream>
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
+
+import glaze.tests.json_perf_common;
 
 using namespace ut;
 
@@ -11,7 +15,7 @@ struct integers
 {
    std::int32_t a{};
    std::uint32_t b{};
-   int64_t c{};
+   std::int64_t c{};
    std::uint64_t d{};
 };
 
@@ -31,7 +35,7 @@ suite integers_test = [] {
       for (std::size_t i = 0; i < n; ++i) {
          v.a = std::int32_t(i);
          v.b = std::uint32_t(i);
-         v.c = int64_t(i);
+         v.c = std::int64_t(i);
          v.d = std::uint64_t(i);
          std::ignore = glz::write_json(v, buffer);
          e = glz::read_json(v, buffer);

@@ -1,11 +1,9 @@
 // Common utilities for JSON performance tests
-#pragma once
+export module glaze.tests.json_perf_common;
 
-#include <iostream>
-#include <optional>
-#include <string_view>
+import std;
 
-namespace glz::perf
+export namespace glz::perf
 {
    // We scale all speeds by the minified JSON byte length, so that libraries which do not efficiently write JSON do not
    // get an unfair advantage. We want to know how fast the libraries will serialize/deserialize with respect to one
