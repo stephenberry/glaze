@@ -3,10 +3,13 @@
 import std;
 
 import glaze.api.impl;
-#include "glaze/api/std/deque.hpp"
-#include "glaze/api/std/span.hpp"
-#include "glaze/api/std/unordered_set.hpp"
-#include "ut/ut.hpp"
+import glaze.api.std.deque;
+import glaze.api.std.span;
+import glaze.api.std.unordered_set;
+
+import glaze.version;
+
+import ut;
 
 struct my_struct
 {

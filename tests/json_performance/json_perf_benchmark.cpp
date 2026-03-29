@@ -1,6 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
-// 
+
 // Benchmark performance tests - split from json_performance.cpp for faster compilation
 // This file tests large objects with 26 vector fields
 

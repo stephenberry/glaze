@@ -1,6 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
-//
+
 // String performance tests - split from json_performance.cpp for faster compilation
 
 import std;

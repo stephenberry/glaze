@@ -25,7 +25,7 @@ cl /Zc:preprocessor your_source.cpp
 
 ## Installation Methods
 
-### 1. CMake FetchContent (Recommended)
+### CMake FetchContent (Recommended)
 
 Add the following to your `CMakeLists.txt`:
 
@@ -57,7 +57,10 @@ FetchContent_Declare(
 )
 ```
 
-### 2. Conan Package Manager
+### Vcpkg Package Manager
+todo
+
+### Conan Package Manager
 
 Glaze is available in [Conan Center](https://conan.io/center/recipes/glaze).
 
@@ -84,7 +87,7 @@ cmake --preset conan-default
 cmake --build --preset conan-release
 ```
 
-### 3. build2 Package Manager
+### build2 Package Manager
 
 Glaze is available on [cppget](https://cppget.org/libglaze).
 
@@ -99,7 +102,7 @@ import libs = libglaze%lib{glaze}
 exe{myapp}: cxx{main} $libs
 ```
 
-### 4. Linux Package Managers
+### Linux Package Managers
 
 #### Arch Linux
 ```bash
@@ -124,7 +127,7 @@ cmake ..
 sudo make install
 ```
 
-### 5. Manual Installation
+### Manual Installation
 
 #### Download and Extract
 ```bash

@@ -1,6 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
-// 
+
 // Discord message performance tests - split from json_performance.cpp for faster compilation
 // This file contains large struct definitions that cause significant template instantiation
 

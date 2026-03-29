@@ -1,12 +1,11 @@
-#include <deque>
-#include <map>
-#include <optional>
-#include <unordered_map>
-#include <vector>
+// Glaze Library
+// For the license information refer to glaze.ixx
+
+import std;
+import glaze;
+import ut;
 
 #include "glaze/core/feature_test.hpp"
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -568,18 +567,18 @@ namespace testing
    struct V
    {
       Q v1;
-      uint8_t v2;
+      std::uint8_t v2;
       B v3;
       std::uint64_t v4;
-      uint8_t v5;
-      std::vector<uint8_t> v6;
+      std::uint8_t v5;
+      std::vector<std::uint8_t> v6;
    };
 
    struct VS
    {
-      uint16_t w;
-      uint16_t h;
-      uint8_t f;
+      std::uint16_t w;
+      std::uint16_t h;
+      std::uint8_t f;
    };
 
    struct VC
@@ -587,26 +586,26 @@ namespace testing
       std::string c;
       bool l;
       bool s;
-      uint8_t sn;
+      std::uint8_t sn;
       std::string sid;
       std::uint64_t time;
-      uint8_t p;
+      std::uint8_t p;
       std::uint64_t age;
       std::uint32_t gs;
       VS srs;
-      std::map<uint8_t, V> layers;
+      std::map<std::uint8_t, V> layers;
    };
 
    struct A
    {
       std::uint64_t b;
-      std::vector<uint8_t> e;
+      std::vector<std::uint8_t> e;
    };
 
    struct ASS
    {
       std::uint32_t sr;
-      uint8_t cc;
+      std::uint8_t cc;
    };
 
    struct AC
@@ -614,13 +613,13 @@ namespace testing
       std::string c;
       bool m;
       bool s;
-      uint8_t sn;
+      std::uint8_t sn;
       std::string sid;
       std::uint64_t time;
-      uint8_t p;
+      std::uint8_t p;
       std::uint64_t age;
       ASS srs;
-      std::map<uint8_t, A> layers;
+      std::map<std::uint8_t, A> layers;
    };
 
    struct C
@@ -638,8 +637,8 @@ namespace testing
       std::uint64_t o;
       bool ob;
       std::string ri;
-      std::map<uint8_t, VC> v;
-      std::map<uint8_t, AC> a;
+      std::map<std::uint8_t, VC> v;
+      std::map<std::uint8_t, AC> a;
    };
 
 };
