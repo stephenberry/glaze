@@ -55,6 +55,8 @@ export import glaze.json;
 
 export import glaze.msgpack;
 
+export import glaze.util.for_each;
+
 //#include "glaze/record/recorder.hpp"
 //#include "glaze/stencil/stencil.hpp"
 //#include "glaze/util/key_transformers.hpp"

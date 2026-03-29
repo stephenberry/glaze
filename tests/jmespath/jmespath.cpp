@@ -1,8 +1,11 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import glaze.tuplet;
+import glaze.util.tuple;
+import ut;
 
 using namespace ut;
 
@@ -10,7 +13,7 @@ struct Person
 {
    std::string first_name{};
    std::string last_name{};
-   uint16_t age{};
+   std::uint16_t age{};
 };
 
 struct Family
@@ -46,7 +49,7 @@ suite jmespath_read_tests = [] {
       expect(not ec) << glz::format_error(ec, buffer);
       expect(mother_last_name == "Fox");
 
-      uint16_t father_age{};
+      std::uint16_t father_age{};
       ec = glz::read_jmespath<"family.father.age">(father_age, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(father_age == 28);
@@ -78,7 +81,7 @@ suite jmespath_read_tests = [] {
       expect(not ec) << glz::format_error(ec, buffer);
       expect(mother_last_name == "Fox");
 
-      uint16_t father_age{};
+      std::uint16_t father_age{};
       ec = glz::read_jmespath("family.father.age", father_age, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(father_age == 28);

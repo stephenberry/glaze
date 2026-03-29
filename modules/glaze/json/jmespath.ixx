@@ -15,13 +15,14 @@ import glaze.json.skip;
 
 import glaze.util.parse;
 import glaze.util.compare;
+import glaze.util.for_each;
 import glaze.util.string_literal;
 import glaze.util.tuple;
 
 import glaze.concepts.container_concepts;
 import glaze.tuplet;
 
-export namespace glz
+namespace glz
 {
    namespace jmespath
    {
@@ -472,7 +473,7 @@ export namespace glz
          using TupleType = std::decay_t<T>;
          constexpr std::size_t N = glz::tuple_size_v<TupleType>;
 
-         for_each<N>([&]<std::size_t I>() {
+         glz::for_each<N>([&]<std::size_t I>() {
             if (bool(ctx.error)) return;
 
             std::int32_t target_idx = start_idx + I;
@@ -685,7 +686,7 @@ export namespace glz
    }
 
    // Read into a C++ type given a path denoted by a JMESPath query
-   template <string_literal Path, auto Options = opts{}, class T, contiguous Buffer>
+   export template <string_literal Path, auto Options = opts{}, class T, contiguous Buffer>
       requires(Options.format == JSON)
    [[nodiscard]] inline error_ctx read_jmespath(T&& value, Buffer&& buffer)
    {
@@ -716,7 +717,7 @@ export namespace glz
 
          skip_ws<Opts>(ctx, it, end);
 
-         for_each<N>([&]<auto I>() {
+         glz::for_each<N>([&]<auto I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -957,7 +958,7 @@ export namespace glz
    }
 
    // A "compiled" jmespath expression, which can be pre-computed for efficient traversal
-   struct jmespath_expression
+   export struct jmespath_expression
    {
       std::string_view path{};
       jmespath::tokenization_error error{};
@@ -981,7 +982,7 @@ export namespace glz
 
    // Read into a C++ type given a path denoted by a JMESPath query
    // This version supports a runtime path
-   template <auto Options = opts{}, class T, contiguous Buffer>
+   export template <auto Options = opts{}, class T, contiguous Buffer>
       requires(Options.format == JSON)
    [[nodiscard]] inline error_ctx read_jmespath(const jmespath_expression& expression, T&& value, Buffer&& buffer)
    {

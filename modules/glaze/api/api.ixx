@@ -64,22 +64,22 @@ namespace glz
 
       export using iface = std::map<std::string, std::function<std::shared_ptr<api>()>, std::less<>>;
 
-      export template <class T>
+      template <class T>
       T* api::get(const sv path) noexcept
       {
-         static constexpr auto hash = glz::hash<T>();
-         auto p = get(path);
-         if (p.first && p.second == hash) {
+         static constexpr auto type_hash = glz::hash<T>();
+         auto p = this->get(path);
+         if (p.first && p.second == type_hash) {
             return static_cast<T*>(p.first);
          }
          return nullptr;
       }
 
-      export template <class T>
+      template <class T>
       glz::expected<T, error_code> api::get_fn(const sv path) noexcept
       {
-         static constexpr auto hash = glz::hash<T>();
-         auto d = get_fn(path, hash);
+         static constexpr auto type_hash = glz::hash<T>();
+         auto d = this->get_fn(path, type_hash);
          if (d) {
             T copy = *static_cast<T*>(d.get());
             return copy;
@@ -89,14 +89,14 @@ namespace glz
          }
       }
 
-      export template <class Ret, class... Args>
+      template <class Ret, class... Args>
       glz::expected<func_return_t<Ret>, error_code> api::call(const sv path, Args&&... args) noexcept
       {
          using F = std::function<Ret(Args...)>;
-         static constexpr auto hash = glz::hash<F>();
+         static constexpr auto type_hash = glz::hash<F>();
 
          static constexpr auto N = sizeof...(Args);
-         std::array<void*, N> arguments;
+         std::array<void*, N> arguments{};
 
          auto tuple_args = std::forward_as_tuple(std::forward<Args>(args)...);
 
@@ -104,7 +104,7 @@ namespace glz
 
          if constexpr (std::is_pointer_v<Ret>) {
             void* ptr{};
-            const auto success = caller(path, hash, ptr, arguments);
+            const auto success = this->caller(path, type_hash, ptr, arguments);
 
             if (success) {
                return static_cast<Ret>(ptr);
@@ -112,7 +112,7 @@ namespace glz
          }
          else if constexpr (std::is_void_v<Ret>) {
             void* ptr = nullptr;
-            const auto success = caller(path, hash, ptr, arguments);
+            const auto success = this->caller(path, type_hash, ptr, arguments);
 
             if (success) {
                return expected<void, error_code>{};
@@ -120,7 +120,7 @@ namespace glz
          }
          else if constexpr (std::is_lvalue_reference_v<Ret>) {
             void* ptr{};
-            const auto success = caller(path, hash, ptr, arguments);
+            const auto success = this->caller(path, type_hash, ptr, arguments);
 
             if (success) {
                return std::ref(*static_cast<std::decay_t<Ret>*>(ptr));
@@ -129,7 +129,7 @@ namespace glz
          else {
             Ret value{};
             void* ptr = &value;
-            const auto success = caller(path, hash, ptr, arguments);
+            const auto success = this->caller(path, type_hash, ptr, arguments);
 
             if (success) {
                return value;
