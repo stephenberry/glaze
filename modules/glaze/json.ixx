@@ -7,6 +7,8 @@ export import glaze.core.context;
 export import glaze.core.common;
 export import glaze.core.as_array_wrapper;
 export import glaze.core.common;
+export import glaze.core.meta_fwd;
+export import glaze.core.meta;
 export import glaze.core.istream_buffer;
 export import glaze.core.manage;
 export import glaze.core.read;
@@ -27,6 +29,7 @@ export import glaze.json.max_write_precision;
 export import glaze.json.minify;
 export import glaze.json.ndjson;
 export import glaze.json.prettify;
+export import glaze.json.patch;
 export import glaze.json.ptr;
 export import glaze.json.raw_string;
 export import glaze.json.read;
@@ -34,5 +37,7 @@ export import glaze.json.schema;
 export import glaze.json.skip;
 export import glaze.json.wrappers;
 export import glaze.json.write;
+
+export import glaze.reflection.get_name;
 
 export import glaze.thread.atomic;

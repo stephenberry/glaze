@@ -31,7 +31,7 @@ bool validate_to_chars_exhaustive()
       std::string_view std_result(std_buf, std_end - std_buf);
 
       if (glz_result != std_result) {
-         std::cerr << "Mismatch for value " << int64_t(val) << ": glz='" << glz_result << "' std='" << std_result
+         std::cerr << "Mismatch for value " << std::int64_t(val) << ": glz='" << glz_result << "' std='" << std_result
                    << "'\n";
          return false;
       }
@@ -44,7 +44,7 @@ bool validate_to_chars_exhaustive()
       }
    }
    else {
-      for (int64_t i = int64_t(std::numeric_limits<T>::lowest()); i <= int64_t((std::numeric_limits<T>::max)()); ++i) {
+      for (std::int64_t i = std::int64_t(std::numeric_limits<T>::lowest()); i <= std::int64_t((std::numeric_limits<T>::max)()); ++i) {
          if (!test_value(T(i))) return false;
       }
    }
@@ -179,7 +179,7 @@ bool test_to_max_with_opts()
       }
    }
    else {
-      for (int64_t i = std::numeric_limits<T>::lowest(); i < (std::numeric_limits<T>::max)(); ++i) {
+      for (std::int64_t i = std::numeric_limits<T>::lowest(); i < (std::numeric_limits<T>::max)(); ++i) {
          if (glz::write<Opts{}>(i, buffer)) {
             valid = false;
             break;
@@ -360,7 +360,7 @@ bool test_lengths()
    else if constexpr (std::same_as<T, std::uint64_t>) {
       max_length = 20;
    }
-   else if constexpr (std::same_as<T, int64_t>) {
+   else if constexpr (std::same_as<T, std::int64_t>) {
       max_length = 19;
    }
 
@@ -384,10 +384,10 @@ bool test_lengths()
 
 suite to_chars_validation = [] {
    // Exhaustive tests for small integer types (every possible value)
-   "to_chars uint8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint8_t>()); };
-   "to_chars int8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int8_t>()); };
-   "to_chars uint16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint16_t>()); };
-   "to_chars int16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int16_t>()); };
+   "to_chars std::uint8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<std::uint8_t>()); };
+   "to_chars std::int8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<std::int8_t>()); };
+   "to_chars std::uint16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<std::uint16_t>()); };
+   "to_chars std::int16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<std::int16_t>()); };
 
    // Sample tests for larger types (exhaustive would take too long)
    "to_chars std::uint32_t samples"_test = [] {
@@ -432,18 +432,18 @@ suite to_chars_validation = [] {
    // to_chars_40kb validation for 32/64-bit types
    "to_chars_40kb std::int32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<std::int32_t>()); };
    "to_chars_40kb std::uint32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<std::uint32_t>()); };
-   "to_chars_40kb int64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<int64_t>()); };
+   "to_chars_40kb std::int64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<std::int64_t>()); };
    "to_chars_40kb std::uint64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<std::uint64_t>()); };
 };
 
 // We test parsing an array so that early termination triggers errors
 suite u8_test = [] {
-   "u8 full"_test = [] { expect(test_to_max<uint8_t>()); };
+   "u8 full"_test = [] { expect(test_to_max<std::uint8_t>()); };
 
-   "u8 lengths"_test = [] { expect(test_lengths<uint8_t>()); };
+   "u8 lengths"_test = [] { expect(test_lengths<std::uint8_t>()); };
 
    "u8"_test = [] {
-      using V = uint8_t;
+      using V = std::uint8_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -467,12 +467,12 @@ suite u8_test = [] {
 
    "u8 performance"_test = [] {
 #ifndef _MSC_VER
-      expect(test_performance<uint8_t>());
+      expect(test_performance<std::uint8_t>());
 #endif
    };
 
    "i8"_test = [] {
-      using V = int8_t;
+      using V = std::int8_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -505,12 +505,12 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[1e3]"));
    };
 
-   "i8 full"_test = [] { expect(test_to_max<int8_t>()); };
+   "i8 full"_test = [] { expect(test_to_max<std::int8_t>()); };
 
-   "i8 lengths"_test = [] { expect(test_lengths<int8_t>()); };
+   "i8 lengths"_test = [] { expect(test_lengths<std::int8_t>()); };
 
    "u16"_test = [] {
-      using V = uint16_t;
+      using V = std::uint16_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -538,12 +538,12 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[1e7]"));
    };
 
-   "u16 sample"_test = [] { expect(test_to_max<uint16_t>()); };
+   "u16 sample"_test = [] { expect(test_to_max<std::uint16_t>()); };
 
-   "u16 lengths"_test = [] { expect(test_lengths<uint16_t>()); };
+   "u16 lengths"_test = [] { expect(test_lengths<std::uint16_t>()); };
 
    "i16"_test = [] {
-      using V = int16_t;
+      using V = std::int16_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -575,9 +575,9 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[1e7]"));
    };
 
-   "i16 full"_test = [] { expect(test_to_max<int16_t>()); };
+   "i16 full"_test = [] { expect(test_to_max<std::int16_t>()); };
 
-   "i16 lengths"_test = [] { expect(test_lengths<int16_t>()); };
+   "i16 lengths"_test = [] { expect(test_lengths<std::int16_t>()); };
 
    "u32"_test = [] {
       using V = std::uint32_t;
@@ -696,7 +696,7 @@ suite u8_test = [] {
    "u64 array minified"_test = [] { test_struct_with_array_minified<std::uint64_t>(); };
 
    "i64"_test = [] {
-      using V = int64_t;
+      using V = std::int64_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -740,17 +740,17 @@ suite u8_test = [] {
 
    "i64 samples"_test = [] {
 #ifndef _MSC_VER
-      expect(test_samples<int64_t>());
+      expect(test_samples<std::int64_t>());
 #endif
    };
 
-   "i64 lengths"_test = [] { expect(test_lengths<int64_t>()); };
+   "i64 lengths"_test = [] { expect(test_lengths<std::int64_t>()); };
 
-   "i64 performance"_test = [] { expect(test_performance<int64_t>()); };
+   "i64 performance"_test = [] { expect(test_performance<std::int64_t>()); };
 
-   "i64 single char performance"_test = [] { expect(test_single_char_performance<int64_t>()); };
+   "i64 single char performance"_test = [] { expect(test_single_char_performance<std::int64_t>()); };
 
-   "i64 array minified"_test = [] { test_struct_with_array_minified<int64_t>(); };
+   "i64 array minified"_test = [] { test_struct_with_array_minified<std::int64_t>(); };
 };
 
 int main() { return 0; }

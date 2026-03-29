@@ -94,7 +94,7 @@ struct glz::meta<my_api2>
    static constexpr glz::version_t version{0, 0, 1};
 };
 
-glz::iface_fn glz_iface() noexcept { return glz::make_iface<my_api, my_api2>(); }
+extern "C" glz::iface_fn glz_iface() noexcept { return glz::make_iface<my_api, my_api2>(); }
 
 void tests()
 {

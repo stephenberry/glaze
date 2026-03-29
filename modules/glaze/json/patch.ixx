@@ -18,6 +18,7 @@ import glaze.util.string_literal;
 // RFC 6902 JSON Patch implementation
 // https://datatracker.ietf.org/doc/html/rfc6902
 
+// todo: export only what is necessary. 
 export namespace glz
 {
    // RFC 6902 operation types

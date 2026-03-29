@@ -4,7 +4,7 @@
 
 import std;
 
-import glaze.container.flat_map;
+import glaze.containers.flat_map;
 import glaze.json;
 import glaze.tests.json.json_test_shared_types;
 import ut;
@@ -58,7 +58,7 @@ struct glz::meta<tagged_variant2>
 };
 
 // Test array based variant (experimental, not meant for external usage since api might change)
-using num_variant = std::variant<double, std::int32_t, std::uint64_t, int8_t, float>;
+using num_variant = std::variant<double, std::int32_t, std::uint64_t, std::int8_t, float>;
 struct holds_some_num
 {
    num_variant num{};
@@ -170,8 +170,8 @@ suite tagged_variant_tests = [] {
       expect(std::get<float>(obj.num) == 3.14f);
       expect(not glz::read_json(obj, R"({"num":["std::uint64_t", 5]})"));
       expect(std::get<std::uint64_t>(obj.num) == 5);
-      expect(not glz::read_json(obj, R"({"num":["int8_t", -3]})"));
-      expect(std::get<int8_t>(obj.num) == -3);
+      expect(not glz::read_json(obj, R"({"num":["std::int8_t", -3]})"));
+      expect(std::get<std::int8_t>(obj.num) == -3);
       expect(not glz::read_json(obj, R"({"num":["std::int32_t", -2]})"));
       expect(std::get<std::int32_t>(obj.num) == -2);
 
@@ -182,9 +182,9 @@ suite tagged_variant_tests = [] {
       obj.num = std::uint64_t{3};
       expect(not glz::write_json(obj, s));
       expect(s == R"({"num":["std::uint64_t",3]})");
-      obj.num = int8_t{-5};
+      obj.num = std::int8_t{-5};
       expect(not glz::write_json(obj, s));
-      expect(s == R"({"num":["int8_t",-5]})");
+      expect(s == R"({"num":["std::int8_t",-5]})");
    };
 
    "shared_ptr variant schema"_test = [] {

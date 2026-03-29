@@ -209,8 +209,8 @@ struct glz::meta<TwoElementLargeU64>
    static constexpr auto value = enumerate(Low, High);
 };
 
-// Two-element enum with negative int64_t values
-enum class TwoElementNegative : int64_t { Negative = -9223372036854775807ll, Positive = 9223372036854775807ll };
+// Two-element enum with negative std::int64_t values
+enum class TwoElementNegative : std::int64_t { Negative = -9223372036854775807ll, Positive = 9223372036854775807ll };
 
 template <>
 struct glz::meta<TwoElementNegative>
@@ -285,7 +285,7 @@ suite two_element_enum_tests = [] {
    };
 
    "two_element_negative_roundtrip"_test = [] {
-      // Test with extreme int64_t values (near min/max)
+      // Test with extreme std::int64_t values (near min/max)
       for (auto val : {TwoElementNegative::Negative, TwoElementNegative::Positive}) {
          std::string json;
          expect(not glz::write_json(val, json));
@@ -354,8 +354,8 @@ suite two_element_enum_tests = [] {
 // Tests that the hash algorithm finds seeds for various enum configurations
 // ============================================================================
 
-// uint8_t enums (should use small_range strategy since range <= 256)
-enum class RandomU8Enum1 : uint8_t {
+// std::uint8_t enums (should use small_range strategy since range <= 256)
+enum class RandomU8Enum1 : std::uint8_t {
    v0 = 1,
    v1 = 6,
    v2 = 7,
@@ -432,7 +432,7 @@ struct glz::meta<RandomU8Enum1>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomU8Enum2 : uint8_t {
+enum class RandomU8Enum2 : std::uint8_t {
    v0 = 8,
    v1 = 11,
    v2 = 14,
@@ -509,7 +509,7 @@ struct glz::meta<RandomU8Enum2>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomU8Enum3 : uint8_t {
+enum class RandomU8Enum3 : std::uint8_t {
    v0 = 2,
    v1 = 12,
    v2 = 16,
@@ -973,8 +973,8 @@ struct glz::meta<RandomU32Enum3>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-// int64_t enums (large sparse values including negatives)
-enum class RandomI64Enum1 : int64_t {
+// std::int64_t enums (large sparse values including negatives)
+enum class RandomI64Enum1 : std::int64_t {
    v0 = -4564365332251179056ll,
    v1 = -4462304907209975628ll,
    v2 = -4359436676892473058ll,
@@ -1051,7 +1051,7 @@ struct glz::meta<RandomI64Enum1>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomI64Enum2 : int64_t {
+enum class RandomI64Enum2 : std::int64_t {
    v0 = -4320576372119261223ll,
    v1 = -4077594026428631998ll,
    v2 = -4037058126392169589ll,
