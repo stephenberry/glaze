@@ -2,7 +2,7 @@
 out/
 **/bin/
 **/build*/
-**/lib*/
+**/lib/
 **/_build*/
 
 # CMake spesific settings
