@@ -1,8 +1,9 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
 
 using namespace ut;
 
@@ -38,7 +39,7 @@ namespace lazy_beve_test
    {
       std::int32_t int_val{42};
       double float_val{3.14};
-      int64_t negative{-100};
+      std::int64_t negative{-100};
       std::uint64_t big{9007199254740993ULL};
    };
 

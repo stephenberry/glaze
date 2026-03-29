@@ -90,7 +90,7 @@ if(glaze_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-option(glaze_EETF_FORMAT "Enable Erlang external term format parsing" OFF)
+option(glaze_EETF_FORMAT "Enable Erlang external term format parsing" OFF) # TODO: Convert
 
 if(glaze_EETF_FORMAT)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
