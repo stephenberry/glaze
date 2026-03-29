@@ -1,10 +1,12 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <ut/ut.hpp>
+import std;
 
-#include "glaze/base64/base64.hpp"
-#include "glaze/util/progress_bar.hpp"
+import glaze.base64;
+import glaze.util.progress_bar;
+
+import ut;
 
 using namespace ut;
 

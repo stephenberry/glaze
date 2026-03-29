@@ -1,15 +1,12 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.util.progress_bar;
 
-#pragma once
-
-#include <cmath>
-#include <iostream>
-#include <string>
+import std;
 
 namespace glz
 {
-   struct progress_bar final
+   export struct progress_bar final
    {
       std::size_t width{};
       std::size_t completed{};
@@ -62,7 +59,7 @@ namespace glz
       }
    };
 
-   inline std::ostream& operator<<(std::ostream& o, const progress_bar& bar)
+   export inline std::ostream& operator<<(std::ostream& o, const progress_bar& bar)
    {
       o << bar.string();
       return o;

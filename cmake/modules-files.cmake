@@ -115,6 +115,7 @@ target_sources(glaze_glaze
     modules/glaze/util/itoa_40kb.ixx
     modules/glaze/util/dragonbox.ixx
     modules/glaze/util/buffer_pool.ixx
+    modules/glaze/util/progress_bar.ixx
 )
 
 # concepts
