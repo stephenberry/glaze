@@ -2,7 +2,7 @@
 // For the license information refer to glaze.ixx
 import std;
 
-import glaze.api:impl;
+import glaze.api.impl;
 #include "glaze/api/std/deque.hpp"
 #include "glaze/api/std/span.hpp"
 #include "glaze/api/std/unordered_set.hpp"

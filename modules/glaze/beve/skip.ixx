@@ -25,7 +25,7 @@ namespace glz
       inline static void op(is_context auto&& ctx, auto&& it, auto end) noexcept;
    };
 
-   inline void skip_string_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
+   export inline void skip_string_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       ++it;
       const auto n = int_from_compressed(ctx, it, end);
@@ -39,7 +39,7 @@ namespace glz
       it += n;
    }
 
-   GLZ_ALWAYS_INLINE void skip_number_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
+   export GLZ_ALWAYS_INLINE void skip_number_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       const auto tag = std::uint8_t(*it);
       const std::uint8_t byte_count = byte_count_lookup[tag >> 5];
@@ -51,7 +51,7 @@ namespace glz
       it += byte_count;
    }
 
-   template <auto Opts>
+   export template <auto Opts>
    inline void skip_object_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if (invalid_end(ctx, it, end)) {
@@ -107,7 +107,7 @@ namespace glz
       }
    }
 
-   template <auto Opts>
+   export template <auto Opts>
    inline void skip_typed_array_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       const auto tag = std::uint8_t(*it);
@@ -173,7 +173,7 @@ namespace glz
       }
    }
 
-   template <auto Opts>
+   export template <auto Opts>
    inline void skip_untyped_array_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       ++it;
@@ -187,7 +187,7 @@ namespace glz
       }
    }
 
-   template <auto Opts>
+   export template <auto Opts>
       requires(Opts.format == BEVE)
    void skip_array(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
@@ -205,7 +205,7 @@ namespace glz
       }
    }
 
-   template <auto Opts>
+   export template <auto Opts>
    GLZ_ALWAYS_INLINE void skip_additional_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       ++it;

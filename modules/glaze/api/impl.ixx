@@ -4,7 +4,7 @@ export module glaze.api.impl;
 
 import std;
 
-import glaze.api.api;
+export import glaze.api.api;
 import glaze.api.tuplet;
 import glaze.api.type_support;
 import glaze.api.trait;
@@ -36,12 +36,13 @@ import glaze.core.context;
 import glaze.core.opts;
 import glaze.core.meta;
 
+import glaze.util.for_each;
 import glaze.util.type_traits;
 import glaze.util.tuple;
 
 import glaze.tuplet;
 
-import glaze;
+export import glaze;
 
 import glaze.util.string_literal;
 
@@ -66,8 +67,8 @@ namespace glz
 
          if (format == JSON) {
             success = seek([&](auto&& val) { pe = glz::read<opts{}>(val, data); }, user, path);
-         }
-         else {
+                  }
+                  else {
             success = seek([&](auto&& val) { pe = glz::read<opts{.format = BEVE}>(val, data); }, user, path);
          }
 
@@ -313,7 +314,7 @@ namespace glz
       return std::shared_ptr<impl<T>>{new impl<T>{}, [](impl<T>* ptr) { delete ptr; }};
    }
 
-   template <class... Args>
+   export template <class... Args>
    iface_fn make_iface()
    {
       return [] {

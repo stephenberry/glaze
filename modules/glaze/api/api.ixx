@@ -15,7 +15,7 @@ import glaze.util.expected;
 import glaze.util.for_each;
 import glaze.util.string_literal;
 
-export namespace glz
+namespace glz
 {
    inline namespace v0_0_3
    {
@@ -23,7 +23,7 @@ export namespace glz
       using func_return_t =
          std::conditional_t<std::is_lvalue_reference_v<R>, std::reference_wrapper<std::decay_t<R>>, R>;
 
-      struct api
+      export struct api
       {
          api() noexcept = default;
          api(const api&) noexcept = default;
@@ -62,9 +62,9 @@ export namespace glz
          std::string error{};
       };
 
-      using iface = std::map<std::string, std::function<std::shared_ptr<api>()>, std::less<>>;
+      export using iface = std::map<std::string, std::function<std::shared_ptr<api>()>, std::less<>>;
 
-      template <class T>
+      export template <class T>
       T* api::get(const sv path) noexcept
       {
          static constexpr auto hash = glz::hash<T>();
@@ -75,7 +75,7 @@ export namespace glz
          return nullptr;
       }
 
-      template <class T>
+      export template <class T>
       glz::expected<T, error_code> api::get_fn(const sv path) noexcept
       {
          static constexpr auto hash = glz::hash<T>();
@@ -89,7 +89,7 @@ export namespace glz
          }
       }
 
-      template <class Ret, class... Args>
+      export template <class Ret, class... Args>
       glz::expected<func_return_t<Ret>, error_code> api::call(const sv path, Args&&... args) noexcept
       {
          using F = std::function<Ret(Args...)>;
@@ -139,7 +139,7 @@ export namespace glz
          return glz::unexpected(error_code::invalid_call);
       }
 
-      using iface_fn = std::shared_ptr<glz::iface> (*)();
+      export using iface_fn = std::shared_ptr<glz::iface> (*)();
    }
 }
 
@@ -149,4 +149,4 @@ export namespace glz
 #define DLL_EXPORT
 #endif
 
-extern "C" DLL_EXPORT glz::iface_fn glz_iface() noexcept;
+export extern "C" DLL_EXPORT glz::iface_fn glz_iface() noexcept;

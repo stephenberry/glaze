@@ -128,6 +128,21 @@ target_sources(glaze_glaze
     modules/glaze/concepts/container_concepts.ixx
 )
 
+# api
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/api/hash.ixx
+    modules/glaze/api/tuplet.ixx
+    modules/glaze/api/type_support.ixx
+    modules/glaze/api/xxh64.ixx
+    modules/glaze/api/impl.ixx
+    modules/glaze/api/api.ixx
+    modules/glaze/api/trait.ixx
+    modules/glaze/api/lib.ixx
+)
+
 # api/std
 target_sources(glaze_glaze
   PUBLIC
@@ -149,20 +164,6 @@ target_sources(glaze_glaze
     modules/glaze/api/std/unordered_set.ixx
     modules/glaze/api/std/variant.ixx
     modules/glaze/api/std/vector.ixx
-)
-
-# api
-target_sources(glaze_glaze
-  PUBLIC
-    FILE_SET CXX_MODULES
-    FILES
-    modules/glaze/api/hash.ixx
-    modules/glaze/api/tuplet.ixx
-    modules/glaze/api/type_support.ixx
-    modules/glaze/api/xxh64.ixx
-    modules/glaze/api/impl.ixx
-    modules/glaze/api/api.ixx
-    modules/glaze/api/trait.ixx
 )
 
 # tuplet
