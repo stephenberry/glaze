@@ -1,7 +1,6 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
+// For the license information refer to glaze.ixx
+export module glaze.thread.guard;
 
 /**
  * @class guard
@@ -45,14 +44,12 @@
  * @endcode
  */
 
-#include <atomic>
-#include <concepts>
-
-#include "glaze/thread/atomic.hpp"
+import std;
+import glaze.thread.atomic;
 
 namespace glz
 {
-   template <typename T>
+   export template <typename T>
    class guard
    {
      private:
@@ -237,37 +234,37 @@ namespace glz
    };
 
    // Non-member comparison operators
-   template <typename T>
+   export template <typename T>
    bool operator==(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs == rhs.load();
    }
 
-   template <typename T>
+   export template <typename T>
    bool operator!=(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs != rhs.load();
    }
 
-   template <typename T>
+   export template <typename T>
    bool operator<(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs < rhs.load();
    }
 
-   template <typename T>
+   export template <typename T>
    bool operator<=(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs <= rhs.load();
    }
 
-   template <typename T>
+   export template <typename T>
    bool operator>(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs > rhs.load();
    }
 
-   template <typename T>
+   export template <typename T>
    bool operator>=(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs >= rhs.load();

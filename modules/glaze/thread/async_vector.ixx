@@ -1,10 +1,8 @@
-#pragma once
+// Glaze Library
+// For the license information refer to glaze.ixx
+export module glaze.thread.async_vector;
 
-#include <algorithm>
-#include <mutex>
-#include <shared_mutex>
-#include <utility>
-#include <vector>
+import std;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -16,14 +14,15 @@
 #endif
 #endif
 
-#include "glaze/thread/value_proxy.hpp"
+import glaze.core.context;
+import glaze.thread.value_proxy;
 
 // Provides a thread-safe vector
 // Uses simple proxy objects with appropriate locks for read/write operations
 
 namespace glz
 {
-   template <class T>
+   export template <class T>
    struct async_vector
    {
      private:

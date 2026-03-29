@@ -178,10 +178,12 @@ target_sources(glaze_glaze
     modules/glaze/thread/atomic.ixx
     modules/glaze/thread/async.ixx
     modules/glaze/thread/async_string.ixx
+    modules/glaze/thread/async_vector.ixx
     modules/glaze/thread/shared_async_map.ixx
     modules/glaze/thread/shared_async_vector.ixx
     modules/glaze/thread/threadpool.ixx
     modules/glaze/thread/value_proxy.ixx
+    modules/glaze/thread/guard.ixx
 )
 
 # simd

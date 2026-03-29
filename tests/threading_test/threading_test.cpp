@@ -1,15 +1,16 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <cstdint>
-#include <random>
-#include <thread>
+import std;
 
-#include "glaze/glaze_exceptions.hpp"
-#include "glaze/thread/async_string.hpp"
-#include "glaze/thread/async_vector.hpp"
-#include "glaze/thread/guard.hpp"
-#include "ut/ut.hpp"
+import glaze.json;
+import glaze.beve;
+import glaze.exceptions;
+import glaze.thread.async_string;
+import glaze.thread.async_vector;
+import glaze.thread.guard;
+
+import ut;
 
 using namespace ut;
 
@@ -1581,11 +1582,11 @@ suite additional_async_vector_tests = [] {
       threads.emplace_back([&]() {
          while (!stop) {
             try {
-               int64_t sum = 0; // use wider type to avoid overflow on fast machines
+               std::int64_t sum = 0; // use wider type to avoid overflow on fast machines
                {
                   auto proxy = vec.read();
                   for (auto it = proxy.begin(); it != proxy.end(); ++it) {
-                     sum += static_cast<int64_t>(*it);
+                     sum += static_cast<std::int64_t>(*it);
                   }
                }
 
