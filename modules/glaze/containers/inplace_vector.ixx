@@ -412,14 +412,14 @@ namespace glz
    }
 
    // Non-member functions
-   template <class T, std::size_t N>
+   export template <class T, std::size_t N>
    constexpr void swap(detail::inplace_vector::inplace_vector_base<T, N>& x,
                        detail::inplace_vector::inplace_vector_base<T, N>& y) noexcept(noexcept(x.swap(y)))
    {
       x.swap(y);
    }
 
-   template <class T, std::size_t N, class U>
+   export template <class T, std::size_t N, class U>
    constexpr typename detail::inplace_vector::inplace_vector_base<T, N>::size_type erase(
       detail::inplace_vector::inplace_vector_base<T, N>& c, const U& value)
    {
@@ -429,7 +429,7 @@ namespace glz
       return r;
    }
 
-   template <class T, std::size_t N, class Predicate>
+   export template <class T, std::size_t N, class Predicate>
    constexpr typename detail::inplace_vector::inplace_vector_base<T, N>::size_type erase_if(
       detail::inplace_vector::inplace_vector_base<T, N>& c, Predicate pred)
    {
@@ -439,7 +439,7 @@ namespace glz
       return r;
    }
 
-   template <class T, std::size_t N>
+   export template <class T, std::size_t N>
    class inplace_vector : public detail::inplace_vector::inplace_vector_base<T, N>
    {
      public:
@@ -970,7 +970,7 @@ namespace glz
 
    namespace freestanding
    {
-      template <class T, std::size_t N>
+      export template <class T, std::size_t N>
       class inplace_vector : public detail::inplace_vector::inplace_vector_base<T, N>
       {
         public:

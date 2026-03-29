@@ -1,10 +1,12 @@
-#include "glaze/containers/inplace_vector.hpp"
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include <compare>
-#include <numeric>
+import std;
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import glaze;
+import glaze.containers.inplace_vector;
+
+import ut;
 
 using namespace ut;
 
