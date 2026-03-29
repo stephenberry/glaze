@@ -1,9 +1,10 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/compare/approx.hpp"
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import glaze.compare.approx;
+import glaze;
+import ut;
+import std;
 
 using namespace ut;
 
@@ -129,7 +130,7 @@ struct user_t
    std::uint64_t listed_count{};
    std::string created_at{};
    std::uint64_t favourites_count{};
-   std::optional<int64_t> utc_offset{};
+   std::optional<std::int64_t> utc_offset{};
    std::optional<std::string> time_zone{};
    bool geo_enabled{};
    bool verified{};
