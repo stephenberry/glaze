@@ -369,6 +369,38 @@ namespace glz
       template <class T>
       constexpr bool is_schema_default_convertible = is_schema_default_convertible_raw<std::decay_t<T>>;
 
+      // Per-member extraction helpers (avoids nested lambdas in fold expressions, which ICE GCC 13)
+      template <size_t I, class Tied>
+      consteval auto extract_default_from_tie(Tied& tied) -> std::optional<schema::schema_any>
+      {
+         using val_t = std::decay_t<decltype(get<I>(tied))>;
+         if constexpr (is_schema_default_convertible<val_t>) {
+            return to_schema_default(get<I>(tied));
+         }
+         else {
+            return std::nullopt;
+         }
+      }
+
+      template <class T, size_t I>
+      consteval auto extract_default_from_member(T& instance) -> std::optional<schema::schema_any>
+      {
+         using member_type = std::decay_t<decltype(get<I>(reflect<T>::values))>;
+         if constexpr (std::is_member_object_pointer_v<member_type>) {
+            constexpr auto member_ptr = get<I>(reflect<T>::values);
+            using val_t = std::decay_t<decltype(instance.*member_ptr)>;
+            if constexpr (is_schema_default_convertible<val_t>) {
+               return to_schema_default(instance.*member_ptr);
+            }
+            else {
+               return std::nullopt;
+            }
+         }
+         else {
+            return std::nullopt;
+         }
+      }
+
       // Extract all primitive defaults from a reflectable type in one T{} construction
       template <class T>
          requires(reflectable<T> && std::default_initializable<T>)
@@ -379,13 +411,7 @@ namespace glz
          T instance{};
          auto tied = to_tie(instance);
          [&]<size_t... Is>(std::index_sequence<Is...>) {
-            (([&] {
-                using val_t = std::decay_t<decltype(get<Is>(tied))>;
-                if constexpr (is_schema_default_convertible<val_t>) {
-                   result[Is] = to_schema_default(get<Is>(tied));
-                }
-             }()),
-             ...);
+            ((result[Is] = extract_default_from_tie<Is>(tied)), ...);
          }(std::make_index_sequence<N>{});
          return result;
       }
@@ -399,17 +425,7 @@ namespace glz
          std::array<std::optional<schema::schema_any>, N> result{};
          T instance{};
          [&]<size_t... Is>(std::index_sequence<Is...>) {
-            (([&] {
-                using member_type = std::decay_t<decltype(get<Is>(reflect<T>::values))>;
-                if constexpr (std::is_member_object_pointer_v<member_type>) {
-                   constexpr auto member_ptr = get<Is>(reflect<T>::values);
-                   using val_t = std::decay_t<decltype(instance.*member_ptr)>;
-                   if constexpr (is_schema_default_convertible<val_t>) {
-                      result[Is] = to_schema_default(instance.*member_ptr);
-                   }
-                }
-             }()),
-             ...);
+            ((result[Is] = extract_default_from_member<T, Is>(instance)), ...);
          }(std::make_index_sequence<N>{});
          return result;
       }
