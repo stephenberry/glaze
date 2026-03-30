@@ -34,6 +34,7 @@
 #include "glaze/file/raw_or_file.hpp"
 #include "glaze/hardware/volatile_array.hpp"
 #include "glaze/json.hpp"
+#include "glaze/json/flatten_map.hpp"
 #include "glaze/json/study.hpp"
 #include "glaze/record/recorder.hpp"
 #include "glaze/trace/trace.hpp"
@@ -997,6 +998,27 @@ struct opts_concatenate : glz::opts
    bool concatenate = true;
 };
 
+struct pair_hash
+{
+   std::size_t operator()(const std::pair<int, int>& value) const noexcept
+   {
+      return std::hash<int>{}(value.first) ^ (std::hash<int>{}(value.second) << 1);
+   }
+};
+
+template <class Map>
+struct flatten_map_box
+{
+   Map map{};
+};
+
+template <class Map>
+struct glz::meta<flatten_map_box<Map>>
+{
+   using T = flatten_map_box<Map>;
+   static constexpr auto value = glz::object("map", glz::flatten_map<&T::map>);
+};
+
 suite container_types = [] {
    using namespace ut;
    "vector int roundtrip"_test = [] {
@@ -1081,6 +1103,60 @@ suite container_types = [] {
    "1": 2,
    "3": 4
 })") << s;
+   };
+   "unordered_map pair key raw array roundtrip"_test = [] {
+      using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+      flatten_map_box<map_t> box{};
+      box.map[{1, 2}] = "example";
+
+      std::string buffer{};
+      expect(not glz::write_json(glz::flatten_map<&flatten_map_box<map_t>::map>(box), buffer));
+      expect(buffer == R"([1,2,"example"])") << buffer;
+
+      flatten_map_box<map_t> parsed{};
+      auto wrapped = glz::flatten_map<&flatten_map_box<map_t>::map>(parsed);
+      expect(not glz::read_json(wrapped, buffer));
+      expect(parsed.map == box.map);
+   };
+   "flatten_map wrapper direct roundtrip"_test = [] {
+      using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+      struct payload
+      {
+         map_t map{};
+      };
+
+      payload value{};
+      value.map[{1, 2}] = "example";
+
+      std::string buffer{};
+      expect(not glz::write_json(glz::flatten_map<&payload::map>(value), buffer));
+      expect(buffer == R"([1,2,"example"])") << buffer;
+
+      payload parsed{};
+      auto wrapped = glz::flatten_map<&payload::map>(parsed);
+      expect(not glz::read_json(wrapped, buffer));
+      expect(parsed.map == value.map);
+   };
+   "unordered_map pair key raw array multi entry roundtrip"_test = [] {
+      using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+      flatten_map_box<map_t> parsed{};
+      auto wrapped = glz::flatten_map<&flatten_map_box<map_t>::map>(parsed);
+      expect(not glz::read_json(wrapped, R"([1,2,"a",3,4,"b"])"));
+      expect(parsed.map.size() == size_t{2});
+      expect(parsed.map.at({1, 2}) == "a");
+      expect(parsed.map.at({3, 4}) == "b");
+
+      std::vector<std::pair<std::pair<int, int>, std::string>> entries(parsed.map.begin(), parsed.map.end());
+      std::sort(entries.begin(), entries.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+
+      flatten_map_box<decltype(entries)> vec_box{entries};
+
+      std::string buffer{};
+      expect(not glz::write_json(glz::flatten_map<&flatten_map_box<decltype(entries)>::map>(vec_box), buffer));
+      expect(buffer == R"([1,2,"a",3,4,"b"])") << buffer;
    };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
