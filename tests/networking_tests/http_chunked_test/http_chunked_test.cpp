@@ -714,6 +714,10 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/single-chunk",
+         .on_disconnect =
+            [&] {
+               done_promise.set_value();
+            },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -721,10 +725,6 @@ suite chunked_streaming_tests = [] {
                ++chunk_count;
             },
          .on_error = [](std::error_code) {},
-         .on_disconnect =
-            [&] {
-               done_promise.set_value();
-            },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(5));
@@ -750,6 +750,10 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/multi-chunk",
+         .on_disconnect =
+            [&] {
+               done_promise.set_value();
+            },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -757,10 +761,6 @@ suite chunked_streaming_tests = [] {
                ++chunk_count;
             },
          .on_error = [](std::error_code) {},
-         .on_disconnect =
-            [&] {
-               done_promise.set_value();
-            },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(5));
@@ -785,16 +785,16 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/large-chunked",
+         .on_disconnect =
+            [&] {
+               done_promise.set_value();
+            },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
                received_data.append(data);
             },
          .on_error = [](std::error_code) {},
-         .on_disconnect =
-            [&] {
-               done_promise.set_value();
-            },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(10));
@@ -819,16 +819,16 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/empty-chunked",
+         .on_disconnect =
+            [&] {
+               done_promise.set_value();
+            },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
                received_data.append(data);
             },
          .on_error = [](std::error_code) {},
-         .on_disconnect =
-            [&] {
-               done_promise.set_value();
-            },
       });
 
       auto status = done_future.wait_for(std::chrono::seconds(5));
