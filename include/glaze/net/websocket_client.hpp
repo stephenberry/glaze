@@ -223,7 +223,33 @@ namespace glz
                resolver_.reset();
             }
 
-            // Reset socket pointers (sockets already closed via force_close above)
+            // Cancel pending operations on raw sockets before destroying them.
+            // During the connection/handshake phase, the websocket_connection doesn't
+            // exist yet, so force_close() above is a no-op. We must cancel any pending
+            // async_connect/async_handshake operations on the raw sockets to prevent
+            // IOCP completions from referencing destroyed socket internals.
+            {
+               asio::error_code ec;
+               if (tcp_socket_) {
+                  tcp_socket_->cancel(ec);
+                  tcp_socket_->close(ec);
+               }
+#ifdef GLZ_ENABLE_SSL
+               if (ssl_socket_) {
+                  ssl_socket_->lowest_layer().cancel(ec);
+                  ssl_socket_->lowest_layer().close(ec);
+               }
+#endif
+            }
+
+            // Drain any pending completion handlers (e.g. IOCP cancellation completions)
+            // so they are processed before the io_context or sockets are destroyed.
+            if (ctx) {
+               ctx->restart();
+               ctx->poll();
+            }
+
+            // Now safe to reset socket pointers - all pending operations have completed
             tcp_socket_.reset();
 #ifdef GLZ_ENABLE_SSL
             ssl_socket_.reset();
@@ -304,8 +330,20 @@ namespace glz
             std::weak_ptr<impl> weak_self = weak_from_this();
             auto& socket_ref = get_tcp_socket_ref();
 
+            // Capture socket shared_ptr to keep it alive for the duration of async_connect.
+            // Without this, cancel_all() could destroy the socket while the IOCP operation
+            // is still pending, causing an access violation when the completion fires.
+#ifdef GLZ_ENABLE_SSL
+            auto socket_lifetime = ssl_socket_ ? std::static_pointer_cast<void>(ssl_socket_)
+                                               : std::static_pointer_cast<void>(tcp_socket_);
+#else
+            auto socket_lifetime = std::static_pointer_cast<void>(tcp_socket_);
+#endif
+
             asio::async_connect(socket_ref, results,
-                                [weak_self, url](std::error_code ec, const asio::ip::tcp::endpoint&) {
+                                [weak_self, url, socket_lifetime](std::error_code ec,
+                                                                  const asio::ip::tcp::endpoint&) {
+                                   (void)socket_lifetime; // prevent premature destruction
                                    auto self = weak_self.lock();
                                    if (!self) return; // Client was destroyed
 
@@ -323,16 +361,22 @@ namespace glz
 #ifdef GLZ_ENABLE_SSL
                std::weak_ptr<impl> weak_self = weak_from_this();
 
-               ssl_socket_->async_handshake(asio::ssl::stream_base::client, [weak_self, url](std::error_code ec) {
-                  auto self = weak_self.lock();
-                  if (!self) return; // Client was destroyed
+               // Capture ssl_socket_ shared_ptr to keep it alive during the async handshake.
+               // The SSL handshake is a composed operation involving multiple internal
+               // async reads/writes. The socket must remain valid for all of them.
+               auto socket = ssl_socket_;
 
-                  if (ec) {
-                     if (self->on_error && *self->on_error) (*self->on_error)(ec);
-                     return;
-                  }
-                  self->perform_handshake(self->ssl_socket_, url);
-               });
+               socket->async_handshake(
+                  asio::ssl::stream_base::client, [weak_self, url, socket](std::error_code ec) {
+                     auto self = weak_self.lock();
+                     if (!self) return; // Client was destroyed
+
+                     if (ec) {
+                        if (self->on_error && *self->on_error) (*self->on_error)(ec);
+                        return;
+                     }
+                     self->perform_handshake(socket, url);
+                  });
 #endif
             }
             else {
@@ -452,16 +496,18 @@ namespace glz
                                       ws_conn->set_client_mode(true);
                                       ws_conn->set_max_message_size(self->max_message_size);
 
+                                      // Set handlers before processing initial data, so that any
+                                      // frames in the initial data are properly dispatched.
+                                      if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
+                                      if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
+                                      if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
+
                                       if (response_buf->size() > 0) {
                                          std::string_view initial_data{
                                             static_cast<const char*>(response_buf->data().data()),
                                             response_buf->size()};
                                          ws_conn->set_initial_data(initial_data);
                                       }
-
-                                      if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
-                                      if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
-                                      if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
 
                                       ws_conn->start_read();
 
