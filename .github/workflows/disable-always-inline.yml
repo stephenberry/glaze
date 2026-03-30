@@ -45,7 +45,7 @@ jobs:
           python3
         update-ca-certificates
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Configure CMake
       run: |
@@ -77,7 +77,7 @@ jobs:
       LLVM_VERSION: 19
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install Clang 19
       run: |

@@ -44,7 +44,7 @@ jobs:
         apt-get update
         apt-get install -y gcc-16 g++-16
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Verify GCC version and reflection support
       run: |
