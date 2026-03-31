@@ -960,14 +960,17 @@ namespace glz
 
       // Set maximum response body size in bytes (0 = unlimited).
       // Responses exceeding this return http_client_error::response_too_large.
+      // Must be configured before issuing requests; not safe to change while requests are in flight.
       http_client& max_response_body_size(size_t max_size)
       {
          max_response_body_size_ = max_size;
          return *this;
       }
 
+      size_t max_response_body_size() const { return max_response_body_size_; }
+
      private:
-      size_t max_response_body_size_ = 100 * 1024 * 1024;
+      size_t max_response_body_size_ = http_default_max_body_size;
       // For async operations only when no io_executor is provided
       std::shared_ptr<asio::io_context> async_io_context;
       asio::any_io_executor io_executor;
@@ -1761,7 +1764,7 @@ namespace glz
 
                   // Check accumulated body size against limit before reading chunk data
                   if (max_response_body_size_ > 0 &&
-                      chunk_size > max_response_body_size_ - response_body.size()) {
+                      response_body.size() + chunk_size > max_response_body_size_) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
                      return std::unexpected(make_error_code(http_client_error::response_too_large));
                   }
@@ -2135,7 +2138,7 @@ namespace glz
                                  CompletionHandler&& handler)
       {
          // Check accumulated body size against limit before reading chunk data
-         if (max_response_body_size_ > 0 && chunk_size > max_response_body_size_ - body->size()) {
+         if (max_response_body_size_ > 0 && body->size() + chunk_size > max_response_body_size_) {
             detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
             handler(std::unexpected(make_error_code(http_client_error::response_too_large)));
             return;

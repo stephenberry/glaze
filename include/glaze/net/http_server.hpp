@@ -516,7 +516,7 @@ namespace glz
        * Set to 0 for no limit.
        * Default: 100 MB
        */
-      size_t max_request_body_size = 100 * 1024 * 1024;
+      size_t max_request_body_size = http_default_max_body_size;
    };
 
    // Server implementation using non-blocking asio with WebSocket support
@@ -1372,11 +1372,14 @@ namespace glz
 
       // Set maximum request body size in bytes (0 = unlimited).
       // Requests exceeding this are rejected with HTTP 413.
+      // Must be configured before starting the server; not safe to change while serving.
       inline http_server& max_request_body_size(size_t max_size)
       {
          conn_config_.max_request_body_size = max_size;
          return *this;
       }
+
+      size_t max_request_body_size() const { return conn_config_.max_request_body_size; }
 
       /**
        * @brief Wait for a shutdown signal

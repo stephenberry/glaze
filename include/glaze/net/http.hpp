@@ -18,6 +18,9 @@
 
 namespace glz
 {
+   // Default maximum body size for HTTP client and server (100 MB)
+   inline constexpr size_t http_default_max_body_size = 100 * 1024 * 1024;
+
    enum struct http_method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
 
    namespace detail
