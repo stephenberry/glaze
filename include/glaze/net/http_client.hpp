@@ -1763,8 +1763,7 @@ namespace glz
                   }
 
                   // Check accumulated body size against limit before reading chunk data
-                  if (max_response_body_size_ > 0 &&
-                      response_body.size() + chunk_size > max_response_body_size_) {
+                  if (max_response_body_size_ > 0 && response_body.size() + chunk_size > max_response_body_size_) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
                      return std::unexpected(make_error_code(http_client_error::response_too_large));
                   }
