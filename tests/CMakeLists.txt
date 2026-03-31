@@ -64,8 +64,10 @@ else()
         FetchContent_MakeAvailable(asio)
 
         # Apply IOCP fix for issue #312 (Windows crash in op->complete)
-        include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/asio-iocp-fix.cmake)
-        apply_asio_iocp_fix("${asio_SOURCE_DIR}/asio/include")
+        if(WIN32)
+            include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/asio-iocp-fix.cmake)
+            apply_asio_iocp_fix("${asio_SOURCE_DIR}/asio/include")
+        endif()
 
         add_library(glz_asio INTERFACE)
         target_include_directories(glz_asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
