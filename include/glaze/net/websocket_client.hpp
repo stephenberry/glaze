@@ -65,6 +65,7 @@ namespace glz
          std::atomic<header_validation_error> last_header_validation_error_{header_validation_error::none};
 
          size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
+         std::chrono::seconds connect_timeout_{30}; // Timeout for the synchronous connect/handshake phase
 #ifdef GLZ_ENABLE_SSL
          asio::ssl::verify_mode ssl_verify_mode_{asio::ssl::verify_peer}; // Default to verify peer
 #endif
@@ -325,68 +326,75 @@ namespace glz
                });
          }
 
+         // Dispatch an I/O operation to the correct socket type (SSL or TCP).
+         // Reduces #ifdef repetition for synchronous read/write calls.
+         template <typename Op>
+         auto socket_io(Op&& op)
+         {
+#ifdef GLZ_ENABLE_SSL
+            if (ssl_socket_) {
+               return op(*ssl_socket_);
+            }
+#endif
+            return op(*tcp_socket_);
+         }
+
+         // Set SO_RCVTIMEO/SO_SNDTIMEO on the TCP socket so synchronous operations
+         // cannot block indefinitely. Called before the synchronous connect/handshake phase.
+         void set_socket_timeouts(std::chrono::seconds timeout)
+         {
+            auto& sock = get_tcp_socket_ref();
+#ifdef _WIN32
+            DWORD ms = static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count());
+            setsockopt(sock.native_handle(), SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&ms), sizeof(ms));
+            setsockopt(sock.native_handle(), SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&ms), sizeof(ms));
+#else
+            struct timeval tv;
+            tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeout.count());
+            tv.tv_usec = 0;
+            setsockopt(sock.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            setsockopt(sock.native_handle(), SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+#endif
+         }
+
+         // Clear socket timeouts (set to 0 = no timeout) so subsequent async
+         // operations are not affected by the connect-phase timeouts.
+         void clear_socket_timeouts()
+         {
+            set_socket_timeouts(std::chrono::seconds{0});
+         }
+
+         // Perform TCP connect, SSL handshake, and HTTP upgrade synchronously.
+         // This avoids deeply composed async operations on IOCP (Windows) which can
+         // cause access violations with certain MinGW/OpenSSL/ASIO combinations.
+         // Only the WebSocket message read loop uses async I/O.
          void on_resolved(const url_parts& url, const asio::ip::tcp::resolver::results_type& results)
          {
-            std::weak_ptr<impl> weak_self = weak_from_this();
-            auto& socket_ref = get_tcp_socket_ref();
+            asio::error_code ec;
 
-            // Capture socket shared_ptr to keep it alive for the duration of async_connect.
-            // Without this, cancel_all() could destroy the socket while the IOCP operation
-            // is still pending, causing an access violation when the completion fires.
+            // --- TCP connect (synchronous) ---
+            asio::connect(get_tcp_socket_ref(), results, ec);
+            if (ec) {
+               if (on_error && *on_error) (*on_error)(ec);
+               return;
+            }
+
+            // Set socket-level timeouts so the synchronous handshake phase
+            // cannot block indefinitely on slow or unresponsive servers.
+            set_socket_timeouts(connect_timeout_);
+
+            // --- SSL handshake (synchronous, if WSS) ---
 #ifdef GLZ_ENABLE_SSL
-            auto socket_lifetime = ssl_socket_ ? std::static_pointer_cast<void>(ssl_socket_)
-                                               : std::static_pointer_cast<void>(tcp_socket_);
-#else
-            auto socket_lifetime = std::static_pointer_cast<void>(tcp_socket_);
+            if (url.protocol == "wss" && ssl_socket_) {
+               ssl_socket_->handshake(asio::ssl::stream_base::client, ec);
+               if (ec) {
+                  if (on_error && *on_error) (*on_error)(ec);
+                  return;
+               }
+            }
 #endif
 
-            asio::async_connect(socket_ref, results,
-                                [weak_self, url, socket_lifetime](std::error_code ec,
-                                                                  const asio::ip::tcp::endpoint&) {
-                                   (void)socket_lifetime; // prevent premature destruction
-                                   auto self = weak_self.lock();
-                                   if (!self) return; // Client was destroyed
-
-                                   if (ec) {
-                                      if (self->on_error && *self->on_error) (*self->on_error)(ec);
-                                      return;
-                                   }
-                                   self->on_connected(url);
-                                });
-         }
-
-         void on_connected(const url_parts& url)
-         {
-            if (url.protocol == "wss") {
-#ifdef GLZ_ENABLE_SSL
-               std::weak_ptr<impl> weak_self = weak_from_this();
-
-               // Capture ssl_socket_ shared_ptr to keep it alive during the async handshake.
-               // The SSL handshake is a composed operation involving multiple internal
-               // async reads/writes. The socket must remain valid for all of them.
-               auto socket = ssl_socket_;
-
-               socket->async_handshake(
-                  asio::ssl::stream_base::client, [weak_self, url, socket](std::error_code ec) {
-                     auto self = weak_self.lock();
-                     if (!self) return; // Client was destroyed
-
-                     if (ec) {
-                        if (self->on_error && *self->on_error) (*self->on_error)(ec);
-                        return;
-                     }
-                     self->perform_handshake(socket, url);
-                  });
-#endif
-            }
-            else {
-               perform_handshake(tcp_socket_, url);
-            }
-         }
-
-         template <typename SocketType>
-         void perform_handshake(std::shared_ptr<SocketType> socket, const url_parts& url)
-         {
+            // --- WebSocket HTTP upgrade handshake (synchronous) ---
             // Generate random Sec-WebSocket-Key
             std::string key_bytes(16, '\0');
             std::mt19937 rng(std::random_device{}());
@@ -403,121 +411,117 @@ namespace glz
             }
             handshake += "\r\n";
 
-            auto req_buf = std::make_shared<std::string>(std::move(handshake));
-            std::weak_ptr<impl> weak_self = weak_from_this();
+            socket_io([&](auto& sock) { asio::write(sock, asio::buffer(handshake), ec); });
+            if (ec) {
+               if (on_error && *on_error) (*on_error)(ec);
+               return;
+            }
 
-            asio::async_write(*socket, asio::buffer(*req_buf),
-                              [weak_self, socket, req_buf, key](std::error_code ec, std::size_t) {
-                                 auto self = weak_self.lock();
-                                 if (!self) return; // Client was destroyed
+            // --- Read HTTP upgrade response (synchronous) ---
+            asio::streambuf response_buf(1024 * 16);
 
-                                 if (ec) {
-                                    if (self->on_error && *self->on_error) (*self->on_error)(ec);
-                                    return;
-                                 }
-                                 self->read_handshake_response(socket, key);
-                              });
+            socket_io([&](auto& sock) { asio::read_until(sock, response_buf, "\r\n\r\n", ec); });
+            if (ec) {
+               if (on_error && *on_error) (*on_error)(ec);
+               return;
+            }
+
+            // Clear timeouts before entering the async read loop
+            clear_socket_timeouts();
+
+            // --- Parse HTTP response ---
+            std::istream response_stream(&response_buf);
+            std::string http_version;
+            unsigned int status_code{};
+            std::string status_message;
+
+            response_stream >> http_version >> status_code;
+            std::getline(response_stream, status_message);
+
+            if (!response_stream || status_code != 101) {
+               if (on_error && *on_error) (*on_error)(std::make_error_code(std::errc::protocol_error));
+               return;
+            }
+
+            std::string header;
+            bool upgrade_websocket = false;
+            bool connection_upgrade = false;
+            bool accept_key_valid = false;
+
+            std::string expected_accept = ws_util::generate_accept_key(key);
+
+            while (std::getline(response_stream, header) && header != "\r") {
+               if (!header.empty() && header.back() == '\r') header.pop_back();
+
+               auto colon = header.find(':');
+               if (colon != std::string::npos) {
+                  std::string name = header.substr(0, colon);
+                  std::string value = header.substr(colon + 1);
+
+                  while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
+                  while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) value.pop_back();
+
+                  if (strncasecmp(name.c_str(), "Upgrade", 7) == 0 &&
+                      ws_util::header_contains(value, "websocket")) {
+                     upgrade_websocket = true;
+                  }
+                  else if (strncasecmp(name.c_str(), "Connection", 10) == 0 &&
+                           ws_util::header_contains(value, "upgrade")) {
+                     connection_upgrade = true;
+                  }
+                  else if (strncasecmp(name.c_str(), "Sec-WebSocket-Accept", 20) == 0) {
+                     if (value == expected_accept) accept_key_valid = true;
+                  }
+               }
+            }
+
+            if (!upgrade_websocket || !connection_upgrade || !accept_key_valid) {
+               if (on_error && *on_error) (*on_error)(std::make_error_code(std::errc::protocol_error));
+               return;
+            }
+
+            // --- Handshake successful: create WebSocket connection and start async read loop ---
+            socket_io([&](auto& sock) {
+               // Get the shared_ptr that owns this socket
+               using sock_type = std::decay_t<decltype(sock)>;
+               if constexpr (std::is_same_v<sock_type, tcp_socket>) {
+                  establish_ws_connection(tcp_socket_, response_buf);
+               }
+               else {
+#ifdef GLZ_ENABLE_SSL
+                  establish_ws_connection(ssl_socket_, response_buf);
+#endif
+               }
+            });
          }
 
          template <typename SocketType>
-         void read_handshake_response(std::shared_ptr<SocketType> socket, const std::string& expected_key)
+         void establish_ws_connection(std::shared_ptr<SocketType> socket, asio::streambuf& response_buf)
          {
-            static constexpr size_t max_handshake_size = 1024 * 16;
-            auto response_buf = std::make_shared<asio::streambuf>(max_handshake_size);
-            std::weak_ptr<impl> weak_self = weak_from_this();
+            auto ws_conn = std::make_shared<websocket_connection<SocketType>>(socket);
+            ws_conn->set_client_mode(true);
+            ws_conn->set_max_message_size(max_message_size);
 
-            asio::async_read_until(*socket, *response_buf, "\r\n\r\n",
-                                   [weak_self, socket, response_buf, expected_key](std::error_code ec, std::size_t) {
-                                      auto self = weak_self.lock();
-                                      if (!self) return; // Client was destroyed
+            // Set handlers before processing initial data
+            if (on_message && *on_message) ws_conn->on_message(*on_message);
+            if (on_close && *on_close) ws_conn->on_close(*on_close);
+            if (on_error && *on_error) ws_conn->on_error(*on_error);
 
-                                      if (ec) {
-                                         if (self->on_error && *self->on_error) (*self->on_error)(ec);
-                                         return;
-                                      }
+            if (response_buf.size() > 0) {
+               std::string_view initial_data{static_cast<const char*>(response_buf.data().data()),
+                                             response_buf.size()};
+               ws_conn->set_initial_data(initial_data);
+            }
 
-                                      std::istream response_stream(response_buf.get());
-                                      std::string http_version;
-                                      unsigned int status_code;
-                                      std::string status_message;
+            // Start the async WebSocket read loop (only async operation)
+            ws_conn->start_read();
 
-                                      response_stream >> http_version >> status_code;
-                                      std::getline(response_stream, status_message);
+            {
+               std::lock_guard<std::mutex> lock(connection_mutex);
+               connection = ws_conn;
+            }
 
-                                      if (!response_stream || status_code != 101) {
-                                         if (self->on_error && *self->on_error)
-                                            (*self->on_error)(std::make_error_code(std::errc::protocol_error));
-                                         return;
-                                      }
-
-                                      // Parse headers to verify upgrade and accept key
-                                      std::string header;
-                                      bool upgrade_websocket = false;
-                                      bool connection_upgrade = false;
-                                      bool accept_key_valid = false;
-
-                                      std::string expected_accept = ws_util::generate_accept_key(expected_key);
-
-                                      while (std::getline(response_stream, header) && header != "\r") {
-                                         if (!header.empty() && header.back() == '\r') header.pop_back();
-
-                                         auto colon = header.find(':');
-                                         if (colon != std::string::npos) {
-                                            std::string name = header.substr(0, colon);
-                                            std::string value = header.substr(colon + 1);
-
-                                            while (!value.empty() && (value.front() == ' ' || value.front() == '\t'))
-                                               value.erase(0, 1);
-                                            while (!value.empty() && (value.back() == ' ' || value.back() == '\t'))
-                                               value.pop_back();
-
-                                            if (strncasecmp(name.c_str(), "Upgrade", 7) == 0 &&
-                                                ws_util::header_contains(value, "websocket")) {
-                                               upgrade_websocket = true;
-                                            }
-                                            else if (strncasecmp(name.c_str(), "Connection", 10) == 0 &&
-                                                     ws_util::header_contains(value, "upgrade")) {
-                                               connection_upgrade = true;
-                                            }
-                                            else if (strncasecmp(name.c_str(), "Sec-WebSocket-Accept", 20) == 0) {
-                                               if (value == expected_accept) accept_key_valid = true;
-                                            }
-                                         }
-                                      }
-
-                                      if (!upgrade_websocket || !connection_upgrade || !accept_key_valid) {
-                                         if (self->on_error && *self->on_error)
-                                            (*self->on_error)(std::make_error_code(std::errc::protocol_error));
-                                         return;
-                                      }
-
-                                      // Handshake successful. Transfer socket to websocket_connection.
-                                      auto ws_conn = std::make_shared<websocket_connection<SocketType>>(socket);
-                                      ws_conn->set_client_mode(true);
-                                      ws_conn->set_max_message_size(self->max_message_size);
-
-                                      // Set handlers before processing initial data, so that any
-                                      // frames in the initial data are properly dispatched.
-                                      if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
-                                      if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
-                                      if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
-
-                                      if (response_buf->size() > 0) {
-                                         std::string_view initial_data{
-                                            static_cast<const char*>(response_buf->data().data()),
-                                            response_buf->size()};
-                                         ws_conn->set_initial_data(initial_data);
-                                      }
-
-                                      ws_conn->start_read();
-
-                                      {
-                                         std::lock_guard<std::mutex> lock(self->connection_mutex);
-                                         self->connection = ws_conn;
-                                      }
-
-                                      if (self->on_open && *self->on_open) (*self->on_open)();
-                                   });
+            if (on_open && *on_open) (*on_open)();
          }
 
          void send_text(std::string_view msg)
@@ -594,6 +598,11 @@ namespace glz
       }
 
       void set_max_message_size(size_t size) { impl_->max_message_size = size; }
+
+      // Set the timeout for the synchronous connect/handshake phase (default: 30s).
+      // Applies to TCP connect, SSL handshake, and HTTP upgrade combined.
+      // Set before calling connect().
+      void set_connect_timeout(std::chrono::seconds timeout) { impl_->connect_timeout_ = timeout; }
 
 #ifdef GLZ_ENABLE_SSL
       // Set SSL verification mode before calling connect()
