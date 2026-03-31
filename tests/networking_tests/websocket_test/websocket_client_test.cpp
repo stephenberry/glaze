@@ -669,29 +669,23 @@ suite websocket_client_tests = [] {
       // Run shared io_context
       std::thread io_thread([io_ctx]() { io_ctx->run(); });
 
-      // Wait for all clients to receive messages.
-      // Use a longer timeout because on a shared io_context the synchronous
-      // connect/handshake phase serializes the clients.
-      bool all_received = wait_for_condition(
-         [&] {
-            for (int i = 0; i < num_clients; ++i) {
-               if (!messages_received[i].load()) return false;
-            }
-            return true;
-         },
-         std::chrono::milliseconds(30000));
+      // Wait for all clients to receive messages
+      bool all_received = wait_for_condition([&] {
+         for (int i = 0; i < num_clients; ++i) {
+            if (!messages_received[i].load()) return false;
+         }
+         return true;
+      });
 
       expect(all_received) << "Not all clients received messages";
 
       // Wait for all clients to complete close handshake
-      bool all_closed = wait_for_condition(
-         [&] {
-            for (int i = 0; i < num_clients; ++i) {
-               if (!clients_closed[i].load()) return false;
-            }
-            return true;
-         },
-         std::chrono::milliseconds(30000));
+      bool all_closed = wait_for_condition([&] {
+         for (int i = 0; i < num_clients; ++i) {
+            if (!clients_closed[i].load()) return false;
+         }
+         return true;
+      });
 
       expect(all_closed) << "Not all clients closed cleanly";
 

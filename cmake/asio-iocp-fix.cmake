@@ -1,0 +1,84 @@
+# Patch for ASIO issue #312: IOCP out-of-resources error reporting.
+# https://github.com/chriskohlhoff/asio/issues/312
+#
+# When PostQueuedCompletionStatus fails due to resource exhaustion, the
+# completion key (overlapped_contains_result) is lost. The operation falls
+# back to an internal queue but do_one() dispatches it with the wrong
+# error code and bytes_transferred, causing undefined behavior / crashes.
+#
+# Fix: store the completion key on the operation object before posting,
+# so it survives the fallback path.
+#
+# Based on MongoDB's patch:
+# https://github.com/mongodb-forks/asio/commit/d03c2e7002131305645374e735a8ece4191f2fc5
+
+function(apply_asio_iocp_fix asio_include_dir)
+    set(OP_HEADER "${asio_include_dir}/asio/detail/win_iocp_operation.hpp")
+    set(CTX_IMPL "${asio_include_dir}/asio/detail/impl/win_iocp_io_context.ipp")
+
+    if(NOT EXISTS "${OP_HEADER}" OR NOT EXISTS "${CTX_IMPL}")
+        message(WARNING "ASIO IOCP fix: headers not found at ${asio_include_dir}, skipping patch")
+        return()
+    endif()
+
+    # Check if already patched (look for our added member)
+    file(READ "${OP_HEADER}" op_content)
+    if(op_content MATCHES "completionKey_")
+        message(STATUS "ASIO IOCP fix: already applied")
+        return()
+    endif()
+
+    message(STATUS "Applying ASIO IOCP fix (issue #312)")
+
+    # --- Patch win_iocp_operation.hpp ---
+    # Add completionKey_ member and accessor
+
+    # Add member after "long ready_;"
+    string(REPLACE
+        "long ready_;"
+        "long ready_;\n  ULONG_PTR completionKey_;"
+        op_content "${op_content}")
+
+    # Initialize in constructor: find "ready_(0)" and add completionKey_(0)
+    string(REPLACE
+        "ready_(0)"
+        "ready_(0), completionKey_(0)"
+        op_content "${op_content}")
+
+    # Add accessor method before the "private:" or "protected:" section
+    # Find "func_type func_;" and add the accessor before the member block
+    string(REPLACE
+        "win_iocp_operation* next_;"
+        "ULONG_PTR& completionKey() { return completionKey_; }\n\n  win_iocp_operation* next_;"
+        op_content "${op_content}")
+
+    file(WRITE "${OP_HEADER}" "${op_content}")
+
+    # --- Patch win_iocp_io_context.ipp ---
+    file(READ "${CTX_IMPL}" ctx_content)
+
+    # Fix post_deferred_completion: pass op->completionKey() instead of 0 for the key
+    # Original: PostQueuedCompletionStatus(iocp_.handle, 0, 0, op)
+    # Fixed:    PostQueuedCompletionStatus(iocp_.handle, 0, op->completionKey(), op)
+    string(REPLACE
+        "::PostQueuedCompletionStatus(iocp_.handle, 0, 0, op)"
+        "::PostQueuedCompletionStatus(iocp_.handle, 0, op->completionKey(), op)"
+        ctx_content "${ctx_content}")
+
+    # Fix on_pending/on_completion: store key on op before posting
+    # Original pattern:
+    #   if (!::PostQueuedCompletionStatus(iocp_.handle,
+    #         0, overlapped_contains_result, op))
+    # Fixed pattern:
+    #   op->completionKey() = overlapped_contains_result;
+    #   if (!::PostQueuedCompletionStatus(iocp_.handle,
+    #         0, op->completionKey(), op))
+    string(REPLACE
+        "if (!::PostQueuedCompletionStatus(iocp_.handle,\n          0, overlapped_contains_result, op))"
+        "op->completionKey() = overlapped_contains_result;\n      if (!::PostQueuedCompletionStatus(iocp_.handle,\n          0, op->completionKey(), op))"
+        ctx_content "${ctx_content}")
+
+    file(WRITE "${CTX_IMPL}" "${ctx_content}")
+
+    message(STATUS "ASIO IOCP fix applied successfully")
+endfunction()
