@@ -1,8 +1,6 @@
 // Tests for chunked transfer-encoding support in glz::http_client
 // Covers synchronous, asynchronous, and streaming paths
 
-#include "glaze/net/http_client.hpp"
-
 #include <atomic>
 #include <chrono>
 #include <future>
@@ -11,6 +9,7 @@
 #include <string>
 #include <thread>
 
+#include "glaze/net/http_client.hpp"
 #include "glaze/net/http_server.hpp"
 #include "ut/ut.hpp"
 
@@ -85,8 +84,7 @@ struct chunked_test_server
    void setup_routes()
    {
       server_.on_error([this](std::error_code ec, std::source_location) {
-         if (running_ && ec != asio::error::eof &&
-             ec != asio::error::operation_aborted) {
+         if (running_ && ec != asio::error::eof && ec != asio::error::operation_aborted) {
             std::fprintf(stderr, "Server error: %s\n", ec.message().c_str());
          }
       });
@@ -178,11 +176,11 @@ struct chunked_test_server
       // --- Varying chunk sizes ---
       server_.stream_get("/varying-sizes", [](glz::request&, glz::streaming_response& res) {
          res.start_stream(200, {{"Content-Type", "text/plain"}});
-         res.send("A");                         // 1 byte
-         res.send(std::string(10, 'B'));         // 10 bytes
-         res.send(std::string(100, 'C'));        // 100 bytes
-         res.send(std::string(1000, 'D'));       // 1000 bytes
-         res.send("E");                         // 1 byte
+         res.send("A"); // 1 byte
+         res.send(std::string(10, 'B')); // 10 bytes
+         res.send(std::string(100, 'C')); // 100 bytes
+         res.send(std::string(1000, 'D')); // 1000 bytes
+         res.send("E"); // 1 byte
          res.close();
       });
    }
@@ -271,8 +269,8 @@ suite chunked_sync_tests = [] {
          expect(result->status_code == 200) << "Status should be 200";
          expect(result->response_body.size() == 100'000u) << "Body should be 100KB (100 * 1000)";
          // Verify content is all 'X'
-         bool all_x = std::all_of(result->response_body.begin(), result->response_body.end(),
-                                  [](char c) { return c == 'X'; });
+         bool all_x =
+            std::all_of(result->response_body.begin(), result->response_body.end(), [](char c) { return c == 'X'; });
          expect(all_x) << "All bytes should be 'X'";
       }
 
@@ -465,8 +463,7 @@ suite chunked_sync_tests = [] {
          threads.emplace_back([&server, &success_count] {
             glz::http_client client;
             auto result = client.get(server.base_url() + "/multi-chunk");
-            if (result.has_value() && result->status_code == 200 &&
-                result->response_body == "chunk1chunk2chunk3") {
+            if (result.has_value() && result->status_code == 200 && result->response_body == "chunk1chunk2chunk3") {
                ++success_count;
             }
          });
@@ -547,8 +544,8 @@ suite chunked_async_tests = [] {
       if (result) {
          expect(result->status_code == 200);
          expect(result->response_body.size() == 100'000u);
-         bool all_x = std::all_of(result->response_body.begin(), result->response_body.end(),
-                                  [](char c) { return c == 'X'; });
+         bool all_x =
+            std::all_of(result->response_body.begin(), result->response_body.end(), [](char c) { return c == 'X'; });
          expect(all_x) << "All bytes should be 'X'";
       }
 
@@ -714,10 +711,7 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/single-chunk",
-         .on_disconnect =
-            [&] {
-               done_promise.set_value();
-            },
+         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -750,10 +744,7 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/multi-chunk",
-         .on_disconnect =
-            [&] {
-               done_promise.set_value();
-            },
+         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -785,10 +776,7 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/large-chunked",
-         .on_disconnect =
-            [&] {
-               done_promise.set_value();
-            },
+         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -819,10 +807,7 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/empty-chunked",
-         .on_disconnect =
-            [&] {
-               done_promise.set_value();
-            },
+         .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
                std::lock_guard lock(data_mutex);
@@ -983,7 +968,8 @@ suite chunked_raw_socket_tests = [] {
 
       expect(result.has_value());
       if (result) {
-         expect(result->response_body == "0123456789abcdefghij") << "Hex chunk sizes (uppercase/lowercase) should parse";
+         expect(result->response_body == "0123456789abcdefghij")
+            << "Hex chunk sizes (uppercase/lowercase) should parse";
       }
    };
 

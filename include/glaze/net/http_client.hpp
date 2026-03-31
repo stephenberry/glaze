@@ -1654,11 +1654,8 @@ namespace glz
                for (;;) {
                   // Read chunk size line (hex digits followed by CRLF)
                   asio::error_code read_ec;
-                  std::visit(
-                     [&](auto& sock) {
-                        asio::read_until(*sock, response_buffer, "\r\n", read_ec);
-                     },
-                     socket_var);
+                  std::visit([&](auto& sock) { asio::read_until(*sock, response_buffer, "\r\n", read_ec); },
+                             socket_var);
                   if (read_ec) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
                      return std::unexpected(read_ec);
@@ -1680,8 +1677,8 @@ namespace glz
                   }
 
                   size_t chunk_size = 0;
-                  auto [ptr, parse_ec] =
-                     std::from_chars(chunk_size_str.data(), chunk_size_str.data() + chunk_size_str.size(), chunk_size, 16);
+                  auto [ptr, parse_ec] = std::from_chars(chunk_size_str.data(),
+                                                         chunk_size_str.data() + chunk_size_str.size(), chunk_size, 16);
                   if (parse_ec != std::errc{}) {
                      return std::unexpected(std::make_error_code(std::errc::protocol_error));
                   }
@@ -1692,11 +1689,8 @@ namespace glz
                   if (chunk_size == 0) {
                      // Terminal chunk; skip optional trailers and final CRLF (RFC 7230 §4.1)
                      for (;;) {
-                        std::visit(
-                           [&](auto& sock) {
-                              asio::read_until(*sock, response_buffer, "\r\n", read_ec);
-                           },
-                           socket_var);
+                        std::visit([&](auto& sock) { asio::read_until(*sock, response_buffer, "\r\n", read_ec); },
+                                   socket_var);
                         if (read_ec) {
                            connection_close = true;
                            break;
@@ -1975,9 +1969,8 @@ namespace glz
                asio::async_read_until(
                   *sock, *buffer, "\r\n",
                   [this, socket_var, buffer, body = std::move(body), url, use_https, status_code,
-                   response_headers = std::move(response_headers),
-                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
-                                                                       std::size_t bytes_transferred) mutable {
+                   response_headers = std::move(response_headers), handler = std::forward<CompletionHandler>(handler)](
+                     asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec) {
                         // Body is complete; deliver what we have but don't pool the connection
                         response resp;
@@ -2029,9 +2022,8 @@ namespace glz
                asio::async_read_until(
                   *sock, *buffer, "\r\n",
                   [this, socket_var, buffer, body, url, use_https, status_code,
-                   response_headers = std::move(response_headers),
-                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
-                                                                       std::size_t bytes_transferred) mutable {
+                   response_headers = std::move(response_headers), handler = std::forward<CompletionHandler>(handler)](
+                     asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec) {
                         handler(std::unexpected(ec));
                         return;
@@ -2090,8 +2082,8 @@ namespace glz
             buffer->consume(total_needed);
 
             // Continue reading next chunk
-            async_read_chunked_body(socket_var, buffer, body, url, use_https, status_code,
-                                    std::move(response_headers), std::forward<CompletionHandler>(handler));
+            async_read_chunked_body(socket_var, buffer, body, url, use_https, status_code, std::move(response_headers),
+                                    std::forward<CompletionHandler>(handler));
             return;
          }
 
