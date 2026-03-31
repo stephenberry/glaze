@@ -513,9 +513,10 @@ namespace glz
        * HTTP 413 (Payload Too Large) before the body is allocated or read.
        * Only applies to Content-Length-based requests (the server does not
        * currently support chunked request Transfer-Encoding).
-       * Default: 0 (unlimited)
+       * Set to 0 for no limit.
+       * Default: 100 MB
        */
-      size_t max_request_body_size = 0;
+      size_t max_request_body_size = 100 * 1024 * 1024;
    };
 
    // Server implementation using non-blocking asio with WebSocket support

@@ -1,6 +1,6 @@
 # Body Size Limits
 
-Glaze provides configurable maximum body size limits for both the HTTP server and client to prevent memory exhaustion from oversized or malicious payloads.
+Glaze provides configurable maximum body size limits for both the HTTP server and client to prevent memory exhaustion from oversized or malicious payloads. Both default to **100 MB**.
 
 ## Server: `max_request_body_size`
 
@@ -19,7 +19,7 @@ server.connection_settings({
 });
 ```
 
-Set to `0` (the default) for no limit.
+Set to `0` for no limit. Default: `100 * 1024 * 1024` (100 MB).
 
 > **Note:** This applies to `Content-Length`-based requests. The server does not currently support chunked request `Transfer-Encoding`.
 
@@ -37,7 +37,7 @@ if (!result && result.error() == glz::http_client_error::response_too_large) {
 }
 ```
 
-Set to `0` (the default) for no limit.
+Set to `0` for no limit. Default: `100 * 1024 * 1024` (100 MB).
 
 The limit is enforced in all non-streaming response paths:
 

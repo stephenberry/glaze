@@ -967,7 +967,7 @@ namespace glz
       }
 
      private:
-      size_t max_response_body_size_ = 0;
+      size_t max_response_body_size_ = 100 * 1024 * 1024;
       // For async operations only when no io_executor is provided
       std::shared_ptr<asio::io_context> async_io_context;
       asio::any_io_executor io_executor;
