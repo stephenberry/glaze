@@ -126,11 +126,50 @@ namespace glz
    {
       return {static_cast<int>(e), get_ssl_error_category()};
    }
+   // HTTP client error codes
+   enum class http_client_error {
+      success = 0,
+      response_too_large, // Response body exceeds max_response_body_size
+   };
+
+   // HTTP client error category for std::error_code integration
+   class http_client_error_category : public std::error_category
+   {
+     public:
+      const char* name() const noexcept override { return "glaze.http_client"; }
+
+      std::string message(int ev) const override
+      {
+         switch (static_cast<http_client_error>(ev)) {
+         case http_client_error::success:
+            return "Success";
+         case http_client_error::response_too_large:
+            return "Response body size exceeds configured maximum";
+         default:
+            return "Unknown HTTP client error";
+         }
+      }
+   };
+
+   inline const http_client_error_category& get_http_client_error_category() noexcept
+   {
+      static http_client_error_category instance;
+      return instance;
+   }
+
+   inline std::error_code make_error_code(http_client_error e) noexcept
+   {
+      return {static_cast<int>(e), get_http_client_error_category()};
+   }
 } // namespace glz
 
 // Enable automatic conversion from glz::ssl_error to std::error_code
 template <>
 struct std::is_error_code_enum<glz::ssl_error> : std::true_type
+{};
+
+template <>
+struct std::is_error_code_enum<glz::http_client_error> : std::true_type
 {};
 
 namespace glz
@@ -919,7 +958,19 @@ namespace glz
       // Get executor for async operations (timers, etc.)
       asio::any_io_executor get_executor() const { return io_executor; }
 
+      // Set maximum response body size in bytes (0 = unlimited).
+      // Responses exceeding this return http_client_error::response_too_large.
+      // Must be configured before issuing requests; not safe to change while requests are in flight.
+      http_client& max_response_body_size(size_t max_size)
+      {
+         max_response_body_size_ = max_size;
+         return *this;
+      }
+
+      size_t max_response_body_size() const { return max_response_body_size_; }
+
      private:
+      size_t max_response_body_size_ = http_default_max_body_size;
       // For async operations only when no io_executor is provided
       std::shared_ptr<asio::io_context> async_io_context;
       asio::any_io_executor io_executor;
@@ -1647,6 +1698,12 @@ namespace glz
             // Consume header data, leaving only the over-read body part.
             response_buffer.consume(header_bytes);
 
+            // Reject responses that exceed the configured body size limit
+            if (max_response_body_size_ > 0 && !is_chunked && content_length > max_response_body_size_) {
+               detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
+               return std::unexpected(make_error_code(http_client_error::response_too_large));
+            }
+
             std::string response_body;
 
             if (is_chunked) {
@@ -1703,6 +1760,13 @@ namespace glz
                         if (empty_line) break; // end of trailers
                      }
                      break;
+                  }
+
+                  // Check accumulated body size against limit before reading chunk data
+                  if (max_response_body_size_ > 0 &&
+                      response_body.size() + chunk_size > max_response_body_size_) {
+                     detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
+                     return std::unexpected(make_error_code(http_client_error::response_too_large));
                   }
 
                   // Read chunk data + trailing CRLF
@@ -2073,6 +2137,13 @@ namespace glz
                                  std::unordered_map<std::string, std::string> response_headers,
                                  CompletionHandler&& handler)
       {
+         // Check accumulated body size against limit before reading chunk data
+         if (max_response_body_size_ > 0 && body->size() + chunk_size > max_response_body_size_) {
+            detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
+            handler(std::unexpected(make_error_code(http_client_error::response_too_large)));
+            return;
+         }
+
          size_t total_needed = chunk_size + 2; // chunk data + trailing CRLF
 
          if (buffer->size() >= total_needed) {
@@ -2173,6 +2244,13 @@ namespace glz
          // Consume the entire header block from the streambuf.
          // This efficiently discards the header data we've just parsed, leaving only body data.
          buffer->consume(header_size);
+
+         // Reject responses that exceed the configured body size limit
+         if (max_response_body_size_ > 0 && !is_chunked && content_length > max_response_body_size_) {
+            detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
+            handler(std::unexpected(make_error_code(http_client_error::response_too_large)));
+            return;
+         }
 
          if (is_chunked) {
             auto body = std::make_shared<std::string>();
