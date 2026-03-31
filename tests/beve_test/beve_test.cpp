@@ -19,6 +19,7 @@ import glaze.beve.write;
 import glaze.core.cast;
 import glaze.core.common;
 import glaze.core.context;
+import glaze.core.custom;
 import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.read;
