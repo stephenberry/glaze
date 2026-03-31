@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <thread>
 #include <variant>
 #include <vector>
 
@@ -66,6 +67,13 @@ namespace glz
 
          size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
          std::chrono::seconds connect_timeout_{30}; // Timeout for the synchronous connect/handshake phase
+         std::thread connect_thread_; // Background thread for synchronous connect/handshake
+
+         // Work guard to keep io_context::run() alive while the background
+         // connect thread is doing the synchronous handshake. Released once
+         // the connection is established or an error occurs.
+         using work_guard_t = asio::executor_work_guard<asio::io_context::executor_type>;
+         std::unique_ptr<work_guard_t> connect_work_guard_;
 #ifdef GLZ_ENABLE_SSL
          asio::ssl::verify_mode ssl_verify_mode_{asio::ssl::verify_peer}; // Default to verify peer
 #endif
@@ -224,11 +232,8 @@ namespace glz
                resolver_.reset();
             }
 
-            // Cancel pending operations on raw sockets before destroying them.
-            // During the connection/handshake phase, the websocket_connection doesn't
-            // exist yet, so force_close() above is a no-op. We must cancel any pending
-            // async_connect/async_handshake operations on the raw sockets to prevent
-            // IOCP completions from referencing destroyed socket internals.
+            // Cancel pending operations on raw sockets. Closing the socket also
+            // unblocks the background connect thread if it's in a synchronous call.
             {
                asio::error_code ec;
                if (tcp_socket_) {
@@ -242,6 +247,15 @@ namespace glz
                }
 #endif
             }
+
+            // Wait for the background connect thread to finish. The socket close
+            // above unblocks any synchronous I/O it may be stuck in.
+            if (connect_thread_.joinable()) {
+               connect_thread_.join();
+            }
+
+            // Release work guard so io_context::run() can return
+            connect_work_guard_.reset();
 
             // Drain any pending completion handlers (e.g. IOCP cancellation completions)
             // so they are processed before the io_context or sockets are destroyed.
@@ -339,63 +353,68 @@ namespace glz
             return op(*tcp_socket_);
          }
 
-         // Set SO_RCVTIMEO/SO_SNDTIMEO on the TCP socket so synchronous operations
-         // cannot block indefinitely. Called before the synchronous connect/handshake phase.
-         void set_socket_timeouts(std::chrono::seconds timeout)
-         {
-            auto& sock = get_tcp_socket_ref();
-#ifdef _WIN32
-            DWORD ms = static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count());
-            setsockopt(sock.native_handle(), SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&ms), sizeof(ms));
-            setsockopt(sock.native_handle(), SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&ms), sizeof(ms));
-#else
-            struct timeval tv;
-            tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeout.count());
-            tv.tv_usec = 0;
-            setsockopt(sock.native_handle(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-            setsockopt(sock.native_handle(), SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-#endif
-         }
-
-         // Clear socket timeouts (set to 0 = no timeout) so subsequent async
-         // operations are not affected by the connect-phase timeouts.
-         void clear_socket_timeouts()
-         {
-            set_socket_timeouts(std::chrono::seconds{0});
-         }
-
-         // Perform TCP connect, SSL handshake, and HTTP upgrade synchronously.
+         // Perform TCP connect, SSL handshake, and HTTP upgrade synchronously on a
+         // background thread, then post the result back to the io_context.
+         //
          // This avoids deeply composed async operations on IOCP (Windows) which can
          // cause access violations with certain MinGW/OpenSSL/ASIO combinations.
-         // Only the WebSocket message read loop uses async I/O.
+         // Running on a background thread keeps the io_context free for other clients
+         // sharing the same context.
          void on_resolved(const url_parts& url, const asio::ip::tcp::resolver::results_type& results)
+         {
+            auto self = shared_from_this();
+
+            // Copy results so they outlive this handler
+            auto results_copy = results;
+
+            // Keep io_context::run() alive while the background thread runs.
+            // Without this, run() would return after this handler completes
+            // (no more pending async work), and the post() callback from the
+            // background thread would never be processed.
+            connect_work_guard_ = std::make_unique<work_guard_t>(ctx->get_executor());
+
+            // Join any previous connect thread (e.g. if connect() is called again)
+            if (connect_thread_.joinable()) {
+               connect_thread_.join();
+            }
+
+            connect_thread_ = std::thread([self, url, results_copy]() {
+               self->sync_connect_and_handshake(url, results_copy);
+            });
+         }
+
+         // Helper to post an error to the io_context and release the work guard.
+         void post_error(std::error_code ec)
+         {
+            asio::post(*ctx, [self = shared_from_this(), ec]() {
+               self->connect_work_guard_.reset();
+               if (self->on_error && *self->on_error) (*self->on_error)(ec);
+            });
+         }
+
+         void sync_connect_and_handshake(const url_parts& url, const asio::ip::tcp::resolver::results_type& results)
          {
             asio::error_code ec;
 
             // --- TCP connect (synchronous) ---
             asio::connect(get_tcp_socket_ref(), results, ec);
             if (ec) {
-               if (on_error && *on_error) (*on_error)(ec);
+               post_error(ec);
                return;
             }
-
-            // Set socket-level timeouts so the synchronous handshake phase
-            // cannot block indefinitely on slow or unresponsive servers.
-            set_socket_timeouts(connect_timeout_);
 
             // --- SSL handshake (synchronous, if WSS) ---
 #ifdef GLZ_ENABLE_SSL
             if (url.protocol == "wss" && ssl_socket_) {
                ssl_socket_->handshake(asio::ssl::stream_base::client, ec);
                if (ec) {
-                  if (on_error && *on_error) (*on_error)(ec);
+                  post_error(ec);
                   return;
                }
             }
 #endif
 
             // --- WebSocket HTTP upgrade handshake (synchronous) ---
-            // Generate random Sec-WebSocket-Key
             std::string key_bytes(16, '\0');
             std::mt19937 rng(std::random_device{}());
             std::uniform_int_distribution<uint16_t> dist(0, 255);
@@ -413,24 +432,21 @@ namespace glz
 
             socket_io([&](auto& sock) { asio::write(sock, asio::buffer(handshake), ec); });
             if (ec) {
-               if (on_error && *on_error) (*on_error)(ec);
+               post_error(ec);
                return;
             }
 
             // --- Read HTTP upgrade response (synchronous) ---
-            asio::streambuf response_buf(1024 * 16);
+            auto response_buf = std::make_shared<asio::streambuf>(1024 * 16);
 
-            socket_io([&](auto& sock) { asio::read_until(sock, response_buf, "\r\n\r\n", ec); });
+            socket_io([&](auto& sock) { asio::read_until(sock, *response_buf, "\r\n\r\n", ec); });
             if (ec) {
-               if (on_error && *on_error) (*on_error)(ec);
+               post_error(ec);
                return;
             }
 
-            // Clear timeouts before entering the async read loop
-            clear_socket_timeouts();
-
             // --- Parse HTTP response ---
-            std::istream response_stream(&response_buf);
+            std::istream response_stream(response_buf.get());
             std::string http_version;
             unsigned int status_code{};
             std::string status_message;
@@ -439,7 +455,7 @@ namespace glz
             std::getline(response_stream, status_message);
 
             if (!response_stream || status_code != 101) {
-               if (on_error && *on_error) (*on_error)(std::make_error_code(std::errc::protocol_error));
+               post_error(std::make_error_code(std::errc::protocol_error));
                return;
             }
 
@@ -476,21 +492,25 @@ namespace glz
             }
 
             if (!upgrade_websocket || !connection_upgrade || !accept_key_valid) {
-               if (on_error && *on_error) (*on_error)(std::make_error_code(std::errc::protocol_error));
+               post_error(std::make_error_code(std::errc::protocol_error));
                return;
             }
 
-            // --- Handshake successful: create WebSocket connection and start async read loop ---
-            socket_io([&](auto& sock) {
-               // Get the shared_ptr that owns this socket
-               using sock_type = std::decay_t<decltype(sock)>;
-               if constexpr (std::is_same_v<sock_type, tcp_socket>) {
-                  establish_ws_connection(tcp_socket_, response_buf);
-               }
-               else {
+            // --- Handshake successful: post back to io_context to set up WebSocket ---
+            // All callback invocations and async operations must happen on the io_context
+            // thread to maintain the single-threaded guarantee for ASIO objects.
+            asio::post(*ctx, [self = shared_from_this(), response_buf]() {
+               // Release work guard — the async read loop will keep io_context alive
+               self->connect_work_guard_.reset();
+
 #ifdef GLZ_ENABLE_SSL
-                  establish_ws_connection(ssl_socket_, response_buf);
+               if (self->ssl_socket_) {
+                  self->establish_ws_connection(self->ssl_socket_, *response_buf);
+               }
+               else
 #endif
+               {
+                  self->establish_ws_connection(self->tcp_socket_, *response_buf);
                }
             });
          }
