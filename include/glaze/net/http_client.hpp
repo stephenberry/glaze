@@ -1659,6 +1659,7 @@ namespace glz
             // Parse headers from the view
             std::unordered_map<std::string, std::string> response_headers;
             size_t content_length = 0;
+            bool has_content_length = false;
             bool connection_close = false;
             bool is_chunked = false;
 
@@ -1678,6 +1679,7 @@ namespace glz
 
                   if (name.length() == 14 && glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
                      std::from_chars(value.data(), value.data() + value.size(), content_length);
+                     has_content_length = true;
                   }
                   else if (name.length() == 17 && glz::strncasecmp(name.data(), "Transfer-Encoding", 17) == 0) {
                      if (value.find("chunked") != std::string_view::npos) {
@@ -1708,7 +1710,7 @@ namespace glz
 
             if (is_chunked) {
                // Read chunked transfer-encoded body
-               for (;;) {
+               while (true) {
                   // Read chunk size line (hex digits followed by CRLF)
                   asio::error_code read_ec;
                   std::visit([&](auto& sock) { asio::read_until(*sock, response_buffer, "\r\n", read_ec); },
@@ -1745,7 +1747,7 @@ namespace glz
 
                   if (chunk_size == 0) {
                      // Terminal chunk; skip optional trailers and final CRLF (RFC 7230 §4.1)
-                     for (;;) {
+                     while (true) {
                         std::visit([&](auto& sock) { asio::read_until(*sock, response_buffer, "\r\n", read_ec); },
                                    socket_var);
                         if (read_ec) {
@@ -1790,6 +1792,32 @@ namespace glz
                   // Consume chunk data + trailing CRLF
                   response_buffer.consume(total_needed);
                }
+            }
+            else if (!has_content_length && connection_close) {
+               // No Content-Length and not chunked: read until connection close (RFC 7230 §3.3.3)
+               // Read incrementally to enforce max_response_body_size_ without unbounded allocation
+               asio::error_code read_ec;
+               while (true) {
+                  std::visit(
+                     [&](auto& sock) {
+                        asio::read(*sock, response_buffer, asio::transfer_at_least(1), read_ec);
+                     },
+                     socket_var);
+                  if (read_ec) break;
+                  if (max_response_body_size_ > 0 && response_buffer.size() > max_response_body_size_) {
+                     detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
+                     return std::unexpected(make_error_code(http_client_error::response_too_large));
+                  }
+               }
+
+               if (read_ec != asio::error::eof) {
+                  detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
+                  return std::unexpected(read_ec);
+               }
+
+               response_body.assign(static_cast<const char*>(response_buffer.data().data()),
+                                    response_buffer.size());
+               connection_close = true;
             }
             else {
                // Read body based on content-length
@@ -2182,6 +2210,53 @@ namespace glz
             *socket_var);
       }
 
+      // Async EOF-delimited body reading: reads incrementally until connection close,
+      // checking max_response_body_size_ after each read to prevent unbounded allocation.
+      template <typename CompletionHandler>
+      void async_read_eof_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
+                               const url_parts& url, bool use_https, int status_code,
+                               std::unordered_map<std::string, std::string> response_headers,
+                               CompletionHandler&& handler)
+      {
+         std::visit(
+            [&, this](auto& sock) {
+               asio::async_read(
+                  *sock, *buffer, asio::transfer_at_least(1),
+                  [this, socket_var, buffer, url, use_https, status_code,
+                   response_headers = std::move(response_headers),
+                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
+                     if (ec && ec != asio::error::eof) {
+                        handler(std::unexpected(ec));
+                        return;
+                     }
+
+                     if (max_response_body_size_ > 0 && buffer->size() > max_response_body_size_) {
+                        detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
+                        handler(std::unexpected(make_error_code(http_client_error::response_too_large)));
+                        return;
+                     }
+
+                     if (ec == asio::error::eof) {
+                        // Connection closed — body is complete
+                        std::string body(static_cast<const char*>(buffer->data().data()), buffer->size());
+
+                        response resp;
+                        resp.status_code = status_code;
+                        resp.response_headers = std::move(response_headers);
+                        resp.response_body = std::move(body);
+
+                        handler(std::move(resp));
+                        return;
+                     }
+
+                     // More data available — continue reading
+                     async_read_eof_body(socket_var, buffer, url, use_https, status_code,
+                                         std::move(response_headers), std::move(handler));
+                  });
+            },
+            *socket_var);
+      }
+
       template <typename CompletionHandler>
       void parse_and_read_body(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<asio::streambuf> buffer,
                                size_t header_size, const url_parts& url, bool use_https, CompletionHandler&& handler)
@@ -2206,6 +2281,8 @@ namespace glz
          // Parse all header fields from the view.
          std::unordered_map<std::string, std::string> response_headers;
          size_t content_length = 0;
+         bool has_content_length = false;
+         bool connection_close = false;
          bool is_chunked = false;
          // The header section ends with an empty line ("\r\n"), which means our view will start with it.
          while (!header_section.starts_with("\r\n")) {
@@ -2228,11 +2305,18 @@ namespace glz
                if (name.size() == 14 && (name[0] == 'C' || name[0] == 'c') &&
                    glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
                   std::from_chars(value.data(), value.data() + value.size(), content_length);
+                  has_content_length = true;
                }
                else if (name.size() == 17 && (name[0] == 'T' || name[0] == 't') &&
                         glz::strncasecmp(name.data(), "Transfer-Encoding", 17) == 0) {
                   if (value.find("chunked") != std::string_view::npos) {
                      is_chunked = true;
+                  }
+               }
+               else if (name.size() == 10 && (name[0] == 'C' || name[0] == 'c') &&
+                        glz::strncasecmp(name.data(), "Connection", 10) == 0) {
+                  if (value.find("close") != std::string_view::npos) {
+                     connection_close = true;
                   }
                }
                // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
@@ -2256,8 +2340,13 @@ namespace glz
             async_read_chunked_body(socket_var, buffer, body, url, use_https, parsed_status->status_code,
                                     std::move(response_headers), std::forward<CompletionHandler>(handler));
          }
+         else if (!has_content_length && connection_close) {
+            // No Content-Length and not chunked: read until connection close (RFC 7230 §3.3.3)
+            async_read_eof_body(socket_var, buffer, url, use_https, parsed_status->status_code,
+                                std::move(response_headers), std::forward<CompletionHandler>(handler));
+         }
          else {
-            // Read the rest of the body, if any is still needed.
+            // Read the rest of the body based on content-length.
             size_t body_already_in_buffer = buffer->size();
             size_t remaining_to_read =
                (content_length > body_already_in_buffer) ? (content_length - body_already_in_buffer) : 0;
