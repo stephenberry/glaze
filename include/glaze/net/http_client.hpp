@@ -1799,9 +1799,7 @@ namespace glz
                asio::error_code read_ec;
                while (true) {
                   std::visit(
-                     [&](auto& sock) {
-                        asio::read(*sock, response_buffer, asio::transfer_at_least(1), read_ec);
-                     },
+                     [&](auto& sock) { asio::read(*sock, response_buffer, asio::transfer_at_least(1), read_ec); },
                      socket_var);
                   if (read_ec) break;
                   if (max_response_body_size_ > 0 && response_buffer.size() > max_response_body_size_) {
@@ -1815,8 +1813,7 @@ namespace glz
                   return std::unexpected(read_ec);
                }
 
-               response_body.assign(static_cast<const char*>(response_buffer.data().data()),
-                                    response_buffer.size());
+               response_body.assign(static_cast<const char*>(response_buffer.data().data()), response_buffer.size());
                connection_close = true;
             }
             else {
@@ -2250,8 +2247,8 @@ namespace glz
                      }
 
                      // More data available — continue reading
-                     async_read_eof_body(socket_var, buffer, url, use_https, status_code,
-                                         std::move(response_headers), std::move(handler));
+                     async_read_eof_body(socket_var, buffer, url, use_https, status_code, std::move(response_headers),
+                                         std::move(handler));
                   });
             },
             *socket_var);

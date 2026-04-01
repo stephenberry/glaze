@@ -1212,8 +1212,9 @@ suite eof_delimited_tests = [] {
       std::promise<glz::expected<glz::response, std::error_code>> promise;
       auto future = promise.get_future();
 
-      client.get_async(server.base_url() + "/api/0/config", {},
-                       [&](glz::expected<glz::response, std::error_code> result) { promise.set_value(std::move(result)); });
+      client.get_async(
+         server.base_url() + "/api/0/config", {},
+         [&](glz::expected<glz::response, std::error_code> result) { promise.set_value(std::move(result)); });
 
       auto status = future.wait_for(std::chrono::seconds(5));
       expect(status == std::future_status::ready) << "Async GET should complete";
@@ -1256,8 +1257,9 @@ suite eof_delimited_tests = [] {
       std::promise<glz::expected<glz::response, std::error_code>> promise;
       auto future = promise.get_future();
 
-      client.get_async(server.base_url() + "/api/0/config", {},
-                       [&](glz::expected<glz::response, std::error_code> result) { promise.set_value(std::move(result)); });
+      client.get_async(
+         server.base_url() + "/api/0/config", {},
+         [&](glz::expected<glz::response, std::error_code> result) { promise.set_value(std::move(result)); });
 
       auto status = future.wait_for(std::chrono::seconds(5));
       expect(status == std::future_status::ready) << "Async GET should complete";
