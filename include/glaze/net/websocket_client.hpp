@@ -243,6 +243,9 @@ namespace glz
 
             // Drain any pending completion handlers (e.g. IOCP cancellation completions)
             // so they are processed before the io_context or sockets are destroyed.
+            // Safety: handler shared_ptrs (on_error, on_message, etc.) are already cleared
+            // above, so any completion handlers that fire during poll() will find null
+            // handler pointers and skip user callbacks.
             if (ctx) {
                ctx->restart();
                ctx->poll();
