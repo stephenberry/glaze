@@ -1793,7 +1793,7 @@ namespace glz
                   response_buffer.consume(total_needed);
                }
             }
-            else if (!has_content_length) {
+            else if (!has_content_length && connection_close) {
                // No Content-Length and not chunked: read until connection close (RFC 7230 §3.3.3)
                // Read incrementally to enforce max_response_body_size_ without unbounded allocation
                asio::error_code read_ec;
@@ -2231,6 +2231,7 @@ namespace glz
                      }
 
                      if (max_response_body_size_ > 0 && buffer->size() > max_response_body_size_) {
+                        detail::close_socket(*socket_var, connection_pool->graceful_ssl_shutdown());
                         handler(std::unexpected(make_error_code(http_client_error::response_too_large)));
                         return;
                      }
@@ -2281,6 +2282,7 @@ namespace glz
          std::unordered_map<std::string, std::string> response_headers;
          size_t content_length = 0;
          bool has_content_length = false;
+         bool connection_close = false;
          bool is_chunked = false;
          // The header section ends with an empty line ("\r\n"), which means our view will start with it.
          while (!header_section.starts_with("\r\n")) {
@@ -2311,6 +2313,12 @@ namespace glz
                      is_chunked = true;
                   }
                }
+               else if (name.size() == 10 && (name[0] == 'C' || name[0] == 'c') &&
+                        glz::strncasecmp(name.data(), "Connection", 10) == 0) {
+                  if (value.find("close") != std::string_view::npos) {
+                     connection_close = true;
+                  }
+               }
                // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
                response_headers.emplace(to_lower_case(name), value);
             }
@@ -2332,7 +2340,7 @@ namespace glz
             async_read_chunked_body(socket_var, buffer, body, url, use_https, parsed_status->status_code,
                                     std::move(response_headers), std::forward<CompletionHandler>(handler));
          }
-         else if (!has_content_length) {
+         else if (!has_content_length && connection_close) {
             // No Content-Length and not chunked: read until connection close (RFC 7230 §3.3.3)
             async_read_eof_body(socket_var, buffer, url, use_https, parsed_status->status_code,
                                 std::move(response_headers), std::forward<CompletionHandler>(handler));
