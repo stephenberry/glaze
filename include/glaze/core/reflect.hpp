@@ -265,7 +265,10 @@ namespace glz
 
       static constexpr auto values = [] {
          return [&]<size_t... I>(std::index_sequence<I...>) { //
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
             return tuple{get<value_indices[I]>(meta_v<T>)...}; //
+#pragma clang diagnostic pop
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
 
