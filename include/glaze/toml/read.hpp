@@ -375,6 +375,14 @@ namespace glz
          return is_any_toml_digit(c);
       }
 
+      constexpr int char_to_digit(char c) noexcept
+      {
+         if (c >= '0' && c <= '9') return c - '0';
+         if (c >= 'a' && c <= 'z') return c - 'a' + 10;
+         if (c >= 'A' && c <= 'Z') return c - 'A' + 10;
+         return -1;
+      }
+
       struct unsigned_accumulator
       {
         private:
