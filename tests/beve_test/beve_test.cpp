@@ -6413,7 +6413,6 @@ struct NewDiag
 };
 
 suite beve_skip_variant_suite = [] {
-
    "skip variant string when key removed"_test = [] {
       OldDiag old_diag{.rule_id = "RULE_001", .args = std::string{"field overlap"}, .severity = "error"};
       std::string buffer{};
@@ -6491,7 +6490,6 @@ struct SkipSimple
 };
 
 suite beve_skip_complex_suite = [] {
-
    "skip complex<double> when key removed"_test = [] {
       WithComplex src{.id = 1, .value = {3.14, 2.71}, .name = "test"};
       std::string buffer{};
