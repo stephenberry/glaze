@@ -1397,8 +1397,6 @@ namespace glz
 
    inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings)
    {
-      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
-#if !defined(_MSC_VER)
       const auto N = input_strings.size();
       if (N == 0) {
          return {};
@@ -1463,9 +1461,6 @@ namespace glz
       }
 
       return info;
-#else
-      return {};
-#endif
    }
 
    template <class T>
