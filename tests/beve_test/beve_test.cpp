@@ -6396,6 +6396,168 @@ suite expected_tests = [] {
    };
 };
 
+// Test for https://github.com/stephenberry/glaze/issues/2422
+// BEVE skip of variant-encoded values when error_on_unknown_keys is false
+struct OldDiag
+{
+   std::string rule_id{};
+   std::variant<std::monostate, std::string, int> args{};
+   std::string severity{};
+};
+
+struct NewDiag
+{
+   std::string rule_id{};
+   std::string message{};
+   std::string severity{};
+};
+
+suite beve_skip_variant_suite = [] {
+
+   "skip variant string when key removed"_test = [] {
+      OldDiag old_diag{.rule_id = "RULE_001", .args = std::string{"field overlap"}, .severity = "error"};
+      std::string buffer{};
+      expect(not glz::write_beve(old_diag, buffer));
+
+      NewDiag new_diag{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(new_diag, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(new_diag.rule_id == "RULE_001");
+      expect(new_diag.severity == "error");
+      expect(new_diag.message.empty());
+   };
+
+   "skip variant monostate when key removed"_test = [] {
+      OldDiag old_diag{.rule_id = "R2", .args = std::monostate{}, .severity = "warn"};
+      std::string buffer{};
+      expect(not glz::write_beve(old_diag, buffer));
+
+      NewDiag new_diag{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(new_diag, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(new_diag.rule_id == "R2");
+      expect(new_diag.severity == "warn");
+   };
+
+   "skip variant int when key removed"_test = [] {
+      OldDiag old_diag{.rule_id = "R3", .args = 42, .severity = "info"};
+      std::string buffer{};
+      expect(not glz::write_beve(old_diag, buffer));
+
+      NewDiag new_diag{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(new_diag, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(new_diag.rule_id == "R3");
+      expect(new_diag.severity == "info");
+   };
+};
+
+// Test BEVE skip of complex extension types when error_on_unknown_keys is false
+struct WithComplex
+{
+   int id{};
+   std::complex<double> value{};
+   std::string name{};
+};
+
+struct WithComplexFloat
+{
+   int id{};
+   std::complex<float> value{};
+   std::string name{};
+};
+
+struct WithComplexArray
+{
+   int id{};
+   std::vector<std::complex<double>> values{};
+   std::string name{};
+};
+
+struct WithComplexFloatArray
+{
+   int id{};
+   std::vector<std::complex<float>> values{};
+   std::string name{};
+};
+
+struct SkipSimple
+{
+   int id{};
+   std::string name{};
+};
+
+suite beve_skip_complex_suite = [] {
+
+   "skip complex<double> when key removed"_test = [] {
+      WithComplex src{.id = 1, .value = {3.14, 2.71}, .name = "test"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 1);
+      expect(dst.name == "test");
+   };
+
+   "skip complex<float> when key removed"_test = [] {
+      WithComplexFloat src{.id = 2, .value = {1.0f, 0.5f}, .name = "float"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 2);
+      expect(dst.name == "float");
+   };
+
+   "skip vector<complex<double>> when key removed"_test = [] {
+      WithComplexArray src{.id = 3, .values = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}}, .name = "array"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 3);
+      expect(dst.name == "array");
+   };
+
+   "skip vector<complex<float>> when key removed"_test = [] {
+      WithComplexFloatArray src{.id = 4, .values = {{1.0f, 2.0f}}, .name = "farray"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 4);
+      expect(dst.name == "farray");
+   };
+
+   "skip empty vector<complex<double>> when key removed"_test = [] {
+      WithComplexArray src{.id = 5, .values = {}, .name = "empty"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 5);
+      expect(dst.name == "empty");
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");
