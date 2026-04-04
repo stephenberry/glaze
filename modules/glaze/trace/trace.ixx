@@ -28,7 +28,7 @@ namespace glz
       ns // nanoseconds
    };
 
-   export template <>
+   template <>
    struct meta<display_time_unit>
    {
       static constexpr sv name = "glz::display_time_unit";
@@ -224,14 +224,14 @@ namespace glz
       async_scoper async_scope(const std::string_view name) { return {*this, name}; }
    };
 
-   export template <>
+   template <>
    struct meta<trace<true>>
    {
       using T = trace<true>;
       static constexpr auto value = object(&T::traceEvents, &T::displayTimeUnit);
    };
 
-   export template <>
+   template <>
    struct meta<trace<false>>
    {
       using T = trace<false>;

@@ -17,7 +17,7 @@ import glaze.core.wrappers;
 
 namespace glz
 {
-   export template <is_opts_wrapper T>
+   template <is_opts_wrapper T>
    struct from<BEVE, T>
    {
       template <auto Opts>
@@ -27,7 +27,7 @@ namespace glz
       }
    };
 
-   export template <is_opts_wrapper T>
+   template <is_opts_wrapper T>
    struct to<BEVE, T>
    {
       template <auto Opts>
@@ -38,7 +38,7 @@ namespace glz
    };
 
    // max_length wrapper for limiting string/array sizes when reading
-   export template <class T, std::size_t MaxLen>
+   template <class T, std::size_t MaxLen>
    struct from<BEVE, max_length_t<T, MaxLen>>
    {
      private:
@@ -96,7 +96,7 @@ namespace glz
    };
 
    // max_length wrapper for writing (just passes through without modification)
-   export template <class T, std::size_t MaxLen>
+   template <class T, std::size_t MaxLen>
    struct to<BEVE, max_length_t<T, MaxLen>>
    {
       template <auto Opts>

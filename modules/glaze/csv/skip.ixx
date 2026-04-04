@@ -2,14 +2,14 @@
 // For the license information refer to glaze.ixx
 export module glaze.csv.skip;
 
-import glaze.core.context;
+export import glaze.core.context;
 import glaze.core.opts;
 
 #include "glaze/util/inline.hpp"
 
 namespace glz
 {
-   export template <>
+   template <>
    struct skip_value<CSV>
    {
       template <auto Opts>

@@ -51,7 +51,7 @@ namespace glz
          using type = void;
       };
 
-      export template <class T>
+      template <class T>
       struct custom_read_input_type<
          T,
          std::enable_if_t<has_custom_meta_v<T> &&

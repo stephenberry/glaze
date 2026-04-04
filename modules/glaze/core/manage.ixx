@@ -31,7 +31,7 @@ namespace glz
    export template <class T, class Member, class From, class To>
    manage_t(T&, Member, From, To) -> manage_t<T, Member, From, To>;
 
-   export template <std::uint32_t Format, class T>
+   template <std::uint32_t Format, class T>
       requires(is_specialization_v<T, manage_t>)
    struct from<Format, T>
    {
@@ -76,7 +76,7 @@ namespace glz
       }
    };
 
-   export template <std::uint32_t Format, class T>
+   template <std::uint32_t Format, class T>
       requires(is_specialization_v<T, manage_t>)
    struct to<Format, T>
    {

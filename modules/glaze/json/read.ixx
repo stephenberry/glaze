@@ -53,7 +53,7 @@ namespace glz
 {
    // Note: custom_num_t, custom_str_t, custom_bool_t concepts are defined in core/custom_meta.hpp
 
-   export template <>
+   template <>
    struct parse<JSON>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
@@ -153,7 +153,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
    struct from<JSON, quoted_t<T>>
    {
       template <auto Opts>

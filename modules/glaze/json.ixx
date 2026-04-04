@@ -5,6 +5,8 @@ export module glaze.json;
 
 export import glaze.core.context;
 export import glaze.core.common;
+export import glaze.core.custom;
+export import glaze.core.custom_meta;
 export import glaze.core.as_array_wrapper;
 export import glaze.core.common;
 export import glaze.core.meta_fwd;

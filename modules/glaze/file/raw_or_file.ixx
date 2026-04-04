@@ -26,7 +26,7 @@ namespace glz
       std::string str = R"("")";
    };
 
-   export template <>
+   template <>
    struct from<JSON, raw_or_file>
    {
       template <auto Options>
@@ -81,7 +81,7 @@ namespace glz
       }
    };
 
-   export template <>
+   template <>
    struct to<JSON, raw_or_file>
    {
       template <auto Opts>

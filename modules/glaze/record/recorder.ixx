@@ -71,7 +71,7 @@ namespace glz
    export template <class T>
    concept is_recorder = is_specialization_v<T, recorder>;
 
-   export template <is_recorder T>
+   template <is_recorder T>
    struct to<JSON, T>
    {
       template <auto Opts, class... Args>
@@ -115,7 +115,7 @@ namespace glz
       }
    };
 
-   export template <is_recorder T>
+   template <is_recorder T>
    struct from<JSON, T>
    {
       template <auto Options>
@@ -191,7 +191,7 @@ namespace glz
       }
    };
 
-   export template <is_recorder T>
+   template <is_recorder T>
    struct to<CSV, T>
    {
       template <auto Opts>

@@ -13,7 +13,7 @@ namespace glz
    export template <class T>
    concept is_value_proxy = requires { T::glaze_value_proxy; };
 
-   export template <std::uint32_t Format, is_value_proxy T>
+   template <std::uint32_t Format, is_value_proxy T>
    struct from<Format, T>
    {
       template <auto Opts>

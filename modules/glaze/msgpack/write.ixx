@@ -420,7 +420,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(glaze_value_t<T> && !custom_write<T>)
    struct to<MSGPACK, T>
    {
@@ -433,7 +433,7 @@ namespace glz
       }
    };
 
-   export template <always_null_t T>
+   template <always_null_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class B, class IX>
@@ -445,7 +445,7 @@ namespace glz
       }
    };
 
-   export template <nullable_like T>
+   template <nullable_like T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -494,7 +494,7 @@ namespace glz
       }
    };
 
-   export template <boolean_like T>
+   template <boolean_like T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class B, class IX>
@@ -506,7 +506,7 @@ namespace glz
       }
    };
 
-   export template <is_bitset T>
+   template <is_bitset T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class B, class IX>
@@ -538,7 +538,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(is_named_enum<T>)
    struct to<MSGPACK, T>
    {
@@ -561,7 +561,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(num_t<T> || char_t<T>)
    struct to<MSGPACK, T>
    {
@@ -586,7 +586,7 @@ namespace glz
       }
    };
 
-   export template <string_t T>
+   template <string_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -614,7 +614,7 @@ namespace glz
       }
    };
 
-   export template <str_t T>
+   template <str_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -628,7 +628,7 @@ namespace glz
       }
    };
 
-   export template <glaze_object_t T>
+   template <glaze_object_t T>
       requires(!custom_write<T>)
    struct to<MSGPACK, T>
    {
@@ -688,7 +688,7 @@ namespace glz
       }
    };
 
-   export template <reflectable T>
+   template <reflectable T>
       requires(!custom_write<T>)
    struct to<MSGPACK, T>
    {
@@ -699,7 +699,7 @@ namespace glz
       }
    };
 
-   export template <writable_map_t T>
+   template <writable_map_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -725,7 +725,7 @@ namespace glz
 #pragma warning(push)
 #pragma warning(disable : 4702) // unreachable code from if constexpr
 #endif
-   export template <writable_array_t T>
+   template <writable_array_t T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -878,7 +878,7 @@ namespace glz
 
    // std::chrono::system_clock::time_point support
    // Converts to msgpack::timestamp for serialization
-   export template <class T>
+   template <class T>
       requires std::same_as<std::remove_cvref_t<T>, std::chrono::system_clock::time_point>
    struct to<MSGPACK, T>
    {
@@ -899,7 +899,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
    struct to_partial<MSGPACK, T>
    {
@@ -1001,7 +1001,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(tuple_t<T> || is_std_tuple<T>)
    struct to<MSGPACK, T>
    {
@@ -1029,7 +1029,7 @@ namespace glz
       }
    };
 
-   export template <is_variant T>
+   template <is_variant T>
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -1050,7 +1050,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires is_specialization_v<T, arr>
    struct to<MSGPACK, T>
    {
@@ -1092,7 +1092,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires is_specialization_v<T, obj>
    struct to<MSGPACK, T>
    {

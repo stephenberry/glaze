@@ -313,7 +313,7 @@ namespace glz
       return ret;
    }
 
-   export template <class T>
+   template <class T>
       requires(meta_keys<T> && glaze_t<T>)
    struct reflect<T>
    {
@@ -331,12 +331,12 @@ namespace glz
       using type = member_t<V, decltype(get<I>(values))>;
    };
 
-   export template <class T>
+   template <class T>
       requires(is_memory_object<T>)
    struct reflect<T> : reflect<memory_type<T>>
    {};
 
-   export template <class T>
+   template <class T>
       requires(glaze_array_t<T>)
    struct reflect<T>
    {
@@ -353,7 +353,7 @@ namespace glz
       using type = member_t<V, decltype(get<I>(values))>;
    };
 
-   export template <class T>
+   template <class T>
       requires reflectable<T>
    struct reflect<T>
    {
@@ -370,7 +370,7 @@ namespace glz
       using type = member_t<V, decltype(get<I>(std::declval<tie_type>()))>;
    };
 
-   export template <class T>
+   template <class T>
       requires readable_map_t<T>
    struct reflect<T>
    {
@@ -2832,7 +2832,7 @@ namespace glz
    struct variant_id_to_index;
 
    // Specialization for string IDs
-   export template <is_variant T>
+   template <is_variant T>
    struct variant_id_to_index<T, false>
    {
       using keys_t = keys_wrapper<ids_v<T>>;
@@ -2854,7 +2854,7 @@ namespace glz
    };
 
    // Specialization for integral IDs
-   export template <is_variant T>
+   template <is_variant T>
    struct variant_id_to_index<T, true>
    {
       using U = std::decay_t<decltype(ids_v<T>[0])>;

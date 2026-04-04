@@ -9,7 +9,7 @@ import glaze.core.reflect;
 
 export enum class Color { Red, Green, Blue };
 
-export template <>
+template <>
 struct glz::meta<Color>
 {
    static constexpr std::string_view name = "Color";
@@ -29,7 +29,7 @@ export struct xy_t
    int y{};
 };
 
-export template <>
+template <>
 struct glz::meta<xy_t>
 {
    using T = xy_t;

@@ -14,7 +14,7 @@ import glaze.core.chrono;
 import glaze.core.buffer_traits;
 import glaze.core.common;
 import glaze.core.context;
-import glaze.core.custom;
+export import glaze.core.custom;
 import glaze.core.custom_meta;
 import glaze.core.meta;
 import glaze.core.opts;
@@ -62,7 +62,7 @@ namespace glz
    // It is recommended to directly call to<JSON, std::remove_cvref_t<T>> to reduce compilation overhead.
    // TODO: Long term this can probably be [[deprecated]]
    // but it is useful for when getting the value type would be verbose
-   export template <>
+   template <>
    struct serialize<JSON>
    {
       template <auto Opts, class T, is_context Ctx, class B, class IX>
@@ -73,7 +73,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
    struct to<JSON, quoted_t<T>>
    {
       template <auto Opts>
@@ -94,7 +94,7 @@ namespace glz
          std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
    };
 
-   export template <>
+   template <>
    struct serialize_partial<JSON>
    {
       template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>

@@ -11,6 +11,7 @@ import glaze.toml.skip;
 import glaze.core.chrono;
 import glaze.core.common;
 import glaze.core.context;
+import glaze.core.custom;
 import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.read;

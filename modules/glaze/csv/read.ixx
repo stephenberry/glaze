@@ -30,7 +30,7 @@ import std;
 
 namespace glz
 {
-   export template <>
+   template <>
    struct parse<CSV>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
@@ -72,7 +72,7 @@ namespace glz
       return false;
    }
 
-   export template <glaze_value_t T>
+   template <glaze_value_t T>
    struct from<CSV, T>
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
@@ -84,7 +84,7 @@ namespace glz
       }
    };
 
-   export template <num_t T>
+   template <num_t T>
    struct from<CSV, T>
    {
       template <auto Opts, class It>
@@ -140,7 +140,7 @@ namespace glz
    // CSV spec: https://www.ietf.org/rfc/rfc4180.txt
    // Quotes are escaped via double quotes
 
-   export template <string_t T>
+   template <string_t T>
    struct from<CSV, T>
    {
       template <auto Opts, class It>
@@ -222,7 +222,7 @@ namespace glz
       }
    };
 
-   export template <char_t T>
+   template <char_t T>
    struct from<CSV, T>
    {
       template <auto Opts, class It>
@@ -341,7 +341,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(is_named_enum<T>)
    struct from<CSV, T>
    {
@@ -395,7 +395,7 @@ namespace glz
       }
    };
 
-   export template <bool_t T>
+   template <bool_t T>
    struct from<CSV, T>
    {
       template <auto Opts, class It>
@@ -453,7 +453,7 @@ namespace glz
       }
    };
 
-   export template <>
+   template <>
    struct from<CSV, skip>
    {
       template <auto Opts, class It0, class It1>
@@ -463,7 +463,7 @@ namespace glz
       }
    };
 
-   export template <readable_array_t T>
+   template <readable_array_t T>
    struct from<CSV, T>
    {
       template <auto Opts, class It>
@@ -501,7 +501,7 @@ namespace glz
    }
 
    // Specialization for 2D arrays (e.g., std::vector<std::vector<T>>)
-   export template <readable_array_t T>
+   template <readable_array_t T>
       requires(readable_array_t<typename T::value_type>)
    struct from<CSV, T>
    {
@@ -885,7 +885,7 @@ namespace glz
       return keys;
    }
 
-   export template <readable_map_t T>
+   template <readable_map_t T>
    struct from<CSV, T>
    {
       template <auto Opts, class It>
@@ -1074,7 +1074,7 @@ namespace glz
    };
 
    // For types like std::vector<T> where T is a struct/object
-   export template <readable_array_t T>
+   template <readable_array_t T>
       requires(glaze_object_t<typename T::value_type> || reflectable<typename T::value_type>)
    struct from<CSV, T>
    {
@@ -1299,7 +1299,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<CSV, T>
    {

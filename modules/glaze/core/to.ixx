@@ -14,7 +14,7 @@ import glaze.util.type_traits;
 
 namespace glz
 {
-   export template <std::uint32_t Format>
+   template <std::uint32_t Format>
    struct to<Format, hidden>
    {
       template <auto Opts>
@@ -24,7 +24,7 @@ namespace glz
       }
    };
 
-   export template <std::uint32_t Format>
+   template <std::uint32_t Format>
    struct to<Format, skip>
    {
       template <auto Opts>
@@ -34,7 +34,7 @@ namespace glz
       }
    };
 
-   export template <std::uint32_t Format, filesystem_path T>
+   template <std::uint32_t Format, filesystem_path T>
    struct to<Format, T>
    {
       template <auto Opts, class... Args>

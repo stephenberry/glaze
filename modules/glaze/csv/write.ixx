@@ -24,7 +24,7 @@ import glaze.util.type_traits;
 
 namespace glz
 {
-   export template <>
+   template <>
    struct serialize<CSV>
    {
       template <auto Opts, class T, is_context Ctx, class B, class IX>
@@ -35,7 +35,7 @@ namespace glz
       }
    };
 
-   export template <glaze_value_t T>
+   template <glaze_value_t T>
    struct to<CSV, T>
    {
       template <auto Opts, is_context Ctx, class B, class IX>
@@ -47,7 +47,7 @@ namespace glz
       }
    };
 
-   export template <num_t T>
+   template <num_t T>
    struct to<CSV, T>
    {
       template <auto Opts, class B>
@@ -57,7 +57,7 @@ namespace glz
       }
    };
 
-   export template <bool_t T>
+   template <bool_t T>
    struct to<CSV, T>
    {
       template <auto Opts, class B>
@@ -75,7 +75,7 @@ namespace glz
       }
    };
 
-   export template <writable_array_t T>
+   template <writable_array_t T>
    struct to<CSV, T>
    {
       template <auto Opts, class B>
@@ -128,7 +128,7 @@ namespace glz
    };
 
    // Specialization for 2D arrays (e.g., std::vector<std::vector<T>>)
-   export template <writable_array_t T>
+   template <writable_array_t T>
       requires(writable_array_t<typename T::value_type>)
    struct to<CSV, T>
    {
@@ -312,7 +312,7 @@ namespace glz
       }
    }
 
-   export template <class T>
+   template <class T>
       requires str_t<T> || char_t<T>
    struct to<CSV, T>
    {
@@ -328,7 +328,7 @@ namespace glz
       }
    };
 
-   export template <writable_map_t T>
+   template <writable_map_t T>
    struct to<CSV, T>
    {
       template <auto Opts, class B>
@@ -439,7 +439,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && not custom_write<T>)
    struct to<CSV, T>
    {
@@ -661,7 +661,7 @@ namespace glz
    };
 
    // For types like std::vector<T> where T is a struct/object
-   export template <writable_array_t T>
+   template <writable_array_t T>
       requires(glaze_object_t<typename T::value_type> || reflectable<typename T::value_type>)
    struct to<CSV, T>
    {

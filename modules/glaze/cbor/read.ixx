@@ -99,7 +99,7 @@ namespace glz
       }
    }
 
-   export template <>
+   template <>
    struct parse<CBOR>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
@@ -122,7 +122,7 @@ namespace glz
    };
 
    // Null
-   export template <always_null_t T>
+   template <always_null_t T>
    struct from<CBOR, T>
    {
       template <auto Opts>
@@ -147,7 +147,7 @@ namespace glz
    };
 
    // Skip type
-   export template <>
+   template <>
    struct from<CBOR, skip>
    {
       template <auto Opts>
@@ -158,7 +158,7 @@ namespace glz
    };
 
    // Bitset - read from byte string
-   export template <is_bitset T>
+   template <is_bitset T>
    struct from<CBOR, T>
    {
       template <auto Opts>
@@ -210,7 +210,7 @@ namespace glz
    };
 
    // Complex numbers - tag 43000 with 2-element array [real, imag]
-   export template <class T>
+   template <class T>
       requires complex_t<T>
    struct from<CBOR, T>
    {
@@ -282,7 +282,7 @@ namespace glz
    };
 
    // Boolean
-   export template <boolean_like T>
+   template <boolean_like T>
    struct from<CBOR, T>
    {
       template <auto Opts>
@@ -312,7 +312,7 @@ namespace glz
    };
 
    // Unsigned integers
-   export template <class T>
+   template <class T>
       requires(std::unsigned_integral<T> && !std::same_as<T, bool>)
    struct from<CBOR, T>
    {
@@ -347,7 +347,7 @@ namespace glz
    };
 
    // Signed integers
-   export template <class T>
+   template <class T>
       requires(std::signed_integral<T> && !std::same_as<T, bool>)
    struct from<CBOR, T>
    {
@@ -406,7 +406,7 @@ namespace glz
    };
 
    // Floating-point
-   export template <std::floating_point T>
+   template <std::floating_point T>
    struct from<CBOR, T>
    {
       template <auto Opts>
@@ -485,7 +485,7 @@ namespace glz
    };
 
    // Text strings (UTF-8)
-   export template <str_t T>
+   template <str_t T>
    struct from<CBOR, T> final
    {
       template <auto Opts>
@@ -599,7 +599,7 @@ namespace glz
    };
 
    // Byte strings - std::vector<std::byte>
-   export template <class T>
+   template <class T>
       requires(std::same_as<typename T::value_type, std::byte> && resizable<T>)
    struct from<CBOR, T>
    {
@@ -702,7 +702,7 @@ namespace glz
    };
 
    // Byte strings - std::vector<std::uint8_t>
-   export template <>
+   template <>
    struct from<CBOR, std::vector<std::uint8_t>>
    {
       template <auto Opts>
@@ -804,7 +804,7 @@ namespace glz
 
    // Arrays (std::vector, std::deque, etc.)
    // Note: eigen_t types have their own specialization in glaze/ext/eigen.hpp
-   export template <readable_array_t T>
+   template <readable_array_t T>
       requires(!eigen_t<T>)
    struct from<CBOR, T> final
    {
@@ -1187,7 +1187,7 @@ namespace glz
    };
 
    // Maps (std::map, std::unordered_map, etc.)
-   export template <readable_map_t T>
+   template <readable_map_t T>
    struct from<CBOR, T> final
    {
       template <auto Opts>
@@ -1281,7 +1281,7 @@ namespace glz
    };
 
    // Pairs
-   export template <pair_t T>
+   template <pair_t T>
    struct from<CBOR, T> final
    {
       template <auto Opts>
@@ -1327,7 +1327,7 @@ namespace glz
 #pragma warning(disable : 4702) // unreachable code from if constexpr
 #endif
    // Glaze objects (structs with reflection)
-   export template <class T>
+   template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)
    struct from<CBOR, T> final
    {
@@ -1476,7 +1476,7 @@ namespace glz
 #endif
 
    // Tuples
-   export template <class T>
+   template <class T>
       requires(tuple_t<T> || is_std_tuple<T>)
    struct from<CBOR, T> final
    {
@@ -1524,7 +1524,7 @@ namespace glz
    };
 
    // Glaze arrays
-   export template <class T>
+   template <class T>
       requires glaze_array_t<T>
    struct from<CBOR, T> final
    {
@@ -1568,7 +1568,7 @@ namespace glz
    };
 
    // Expected types
-   export template <is_expected T>
+   template <is_expected T>
    struct from<CBOR, T> final
    {
       template <auto Opts>
@@ -1687,7 +1687,7 @@ namespace glz
    };
 
    // Nullable types
-   export template <nullable_t T>
+   template <nullable_t T>
       requires(!std::is_array_v<T> && not is_expected<T>)
    struct from<CBOR, T> final
    {
@@ -1746,7 +1746,7 @@ namespace glz
    };
 
    // C-style arrays
-   export template <nullable_t T>
+   template <nullable_t T>
       requires(std::is_array_v<T>)
    struct from<CBOR, T> final
    {
@@ -1758,7 +1758,7 @@ namespace glz
    };
 
    // Variants
-   export template <is_variant T>
+   template <is_variant T>
    struct from<CBOR, T>
    {
       template <auto Opts>
@@ -1824,7 +1824,7 @@ namespace glz
    };
 
    // Glaze value wrapper
-   export template <class T>
+   template <class T>
       requires(glaze_value_t<T> && !custom_read<T>)
    struct from<CBOR, T>
    {
@@ -1838,7 +1838,7 @@ namespace glz
    };
 
    // Enums with glaze reflection
-   export template <glaze_enum_t T>
+   template <glaze_enum_t T>
    struct from<CBOR, T>
    {
       template <auto Opts>
@@ -1877,7 +1877,7 @@ namespace glz
    };
 
    // Plain enums
-   export template <class T>
+   template <class T>
       requires(std::is_enum_v<T> && !glaze_enum_t<T>)
    struct from<CBOR, T>
    {
@@ -1917,7 +1917,7 @@ namespace glz
    };
 
    // Member function pointers (no-op)
-   export template <is_member_function_pointer T>
+   template <is_member_function_pointer T>
    struct from<CBOR, T>
    {
       template <auto Opts>
@@ -1926,7 +1926,7 @@ namespace glz
    };
 
    // Hidden type
-   export template <>
+   template <>
    struct from<CBOR, hidden>
    {
       template <auto Opts>
@@ -1937,7 +1937,7 @@ namespace glz
    };
 
    // Nullable value types
-   export template <class T>
+   template <class T>
       requires(nullable_value_t<T> && !nullable_like<T> && !is_expected<T> && !custom_read<T>)
    struct from<CBOR, T> final
    {
@@ -1979,7 +1979,7 @@ namespace glz
    };
 
    // Filesystem paths
-   export template <filesystem_path T>
+   template <filesystem_path T>
    struct from<CBOR, T>
    {
       template <auto Opts>

@@ -26,14 +26,14 @@ namespace glz
    export template <class T>
    struct invoke_t;
 
-   export template <class T>
+   template <class T>
       requires(!std::is_member_function_pointer_v<T>)
    struct invoke_t<T> final
    {
       T& val;
    };
 
-   export template <class T>
+   template <class T>
       requires(std::is_member_function_pointer_v<T>)
    struct invoke_t<T> final
    {
@@ -43,7 +43,7 @@ namespace glz
       mem_fun ptr;
    };
 
-   export template <class T>
+   template <class T>
    struct from<JSON, invoke_t<T>>
    {
       template <auto Opts>
@@ -106,7 +106,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
    struct to<JSON, invoke_t<T>>
    {
       template <auto Opts>

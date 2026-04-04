@@ -39,7 +39,7 @@ namespace glz
       typename T::constraint_t;
    };
 
-   export template <std::uint32_t Format, is_read_constraint T>
+   template <std::uint32_t Format, is_read_constraint T>
    struct from<Format, T>
    {
       template <auto Opts>
@@ -170,7 +170,7 @@ namespace glz
       }
    };
 
-   export template <std::uint32_t Format, is_read_constraint T>
+   template <std::uint32_t Format, is_read_constraint T>
    struct to<Format, T>
    {
       template <auto Opts>
@@ -230,7 +230,7 @@ namespace glz
       t.val;
    };
 
-   export template <std::uint32_t Format, is_self_constraint T>
+   template <std::uint32_t Format, is_self_constraint T>
    struct from<Format, T>
    {
       template <auto Opts>

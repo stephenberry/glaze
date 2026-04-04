@@ -4,10 +4,10 @@ export module glaze.core.error_category;
 
 import std;
 
-import glaze.core.context;
-import glaze.core.meta;
+export import glaze.core.context;
+export import glaze.core.meta;
 
-export template <>
+template <>
 struct glz::meta<glz::error_code>
 {
    static constexpr std::string_view name = "glz::error_code";

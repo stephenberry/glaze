@@ -230,7 +230,7 @@ namespace glz::toml
 
 namespace glz
 {
-   export template <>
+   template <>
    struct skip_value<TOML>
    {
       template <auto Opts>

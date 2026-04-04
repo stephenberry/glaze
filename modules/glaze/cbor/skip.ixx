@@ -13,7 +13,7 @@ import std;
 
 namespace glz
 {
-   export template <>
+   template <>
    struct skip_value<CBOR>
    {
       // Skip argument bytes and return the argument value

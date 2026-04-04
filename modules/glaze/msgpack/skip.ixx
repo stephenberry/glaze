@@ -11,7 +11,7 @@ import glaze.core.context;
 
 namespace glz
 {
-   export template <>
+   template <>
    struct skip_value<MSGPACK>
    {
       template <auto Opts, class It, class End>

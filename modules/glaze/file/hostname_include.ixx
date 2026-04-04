@@ -38,7 +38,7 @@ namespace glz
       };
    }
 
-   export template <class T>
+   template <class T>
    struct meta<detail::hostname_includer<T>>
    {
       static constexpr std::string_view name = join_v<chars<"hostname_includer<">, name_v<T>, chars<">">>;
@@ -92,7 +92,7 @@ namespace glz
       return {hostname};
    }
 
-   export template <class T>
+   template <class T>
    struct from<JSON, detail::hostname_includer<T>>
    {
       template <auto Options>
@@ -140,7 +140,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
    struct to<JSON, detail::hostname_includer<T>>
    {
       template <auto Opts>

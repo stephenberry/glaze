@@ -336,7 +336,7 @@ namespace glz
          return (bool(func(static_cast<T&&>(B::value))) && ...);
       }
    };
-   export template<>
+   template<>
    struct tuple<> : tuplet::tuple_base_t<>
    {
       constexpr static std::size_t N = 0;

@@ -15,7 +15,7 @@ import glaze.core.common;
 
 namespace glz
 {
-   export template <std::uint32_t Format, class T>
+   template <std::uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
    struct from<Format, T>
    {
@@ -160,7 +160,7 @@ namespace glz
       }
    };
 
-   export template <std::uint32_t Format, class T>
+   template <std::uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
    struct to<Format, T>
    {

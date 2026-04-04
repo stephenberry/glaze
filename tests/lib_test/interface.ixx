@@ -5,7 +5,7 @@ export module glaze.tests.interface;
 import std;
 
 import glaze.core.common;
-import glaze.core.meta;
+export import glaze.core.meta;
 import glaze.version;
 
 export struct my_api
@@ -18,7 +18,7 @@ export struct my_api
    std::function<void()> init = [] { std::cout << "init!\n"; };
 };
 
-export template <>
+template <>
 struct glz::meta<my_api>
 {
    using T = my_api;

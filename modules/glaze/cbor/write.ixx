@@ -30,7 +30,7 @@ import std;
 
 namespace glz
 {
-   export template <>
+   template <>
    struct serialize<CBOR>
    {
       template <auto Opts, class T, is_context Ctx, class B, class IX>
@@ -209,7 +209,7 @@ namespace glz
    }
 
    // Null
-   export template <always_null_t T>
+   template <always_null_t T>
    struct to<CBOR, T>
    {
       template <auto Opts>
@@ -220,7 +220,7 @@ namespace glz
    };
 
    // Bitset - stored as byte string
-   export template <is_bitset T>
+   template <is_bitset T>
    struct to<CBOR, T>
    {
       template <auto Opts>
@@ -247,7 +247,7 @@ namespace glz
    };
 
    // Complex numbers - tag 43000 with 2-element array [real, imag]
-   export template <class T>
+   template <class T>
       requires complex_t<T>
    struct to<CBOR, T> final
    {
@@ -273,7 +273,7 @@ namespace glz
    };
 
    // Boolean
-   export template <boolean_like T>
+   template <boolean_like T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -287,7 +287,7 @@ namespace glz
    };
 
    // Unsigned integers
-   export template <class T>
+   template <class T>
       requires(std::unsigned_integral<T> && !std::same_as<T, bool>)
    struct to<CBOR, T> final
    {
@@ -299,7 +299,7 @@ namespace glz
    };
 
    // Signed integers
-   export template <class T>
+   template <class T>
       requires(std::signed_integral<T> && !std::same_as<T, bool>)
    struct to<CBOR, T> final
    {
@@ -320,7 +320,7 @@ namespace glz
    };
 
    // Floating-point with preferred serialization (smallest representation)
-   export template <std::floating_point T>
+   template <std::floating_point T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -363,7 +363,7 @@ namespace glz
    };
 
    // Text strings (UTF-8)
-   export template <str_t T>
+   template <str_t T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -395,7 +395,7 @@ namespace glz
    };
 
    // Byte strings (std::vector<std::byte>, std::span<std::byte>, etc.)
-   export template <class T>
+   template <class T>
       requires(std::same_as<typename T::value_type, std::byte> && !str_t<T>)
    struct to<CBOR, T> final
    {
@@ -418,7 +418,7 @@ namespace glz
    };
 
    // std::vector<std::uint8_t> as byte string
-   export template <>
+   template <>
    struct to<CBOR, std::vector<std::uint8_t>> final
    {
       template <auto Opts>
@@ -440,7 +440,7 @@ namespace glz
    };
 
    // std::array<std::byte, N> as byte string
-   export template <std::size_t N>
+   template <std::size_t N>
    struct to<CBOR, std::array<std::byte, N>> final
    {
       template <auto Opts>
@@ -461,7 +461,7 @@ namespace glz
    };
 
    // std::array<std::uint8_t, N> as byte string
-   export template <std::size_t N>
+   template <std::size_t N>
    struct to<CBOR, std::array<std::uint8_t, N>> final
    {
       template <auto Opts>
@@ -483,7 +483,7 @@ namespace glz
 
    // Arrays (std::vector, std::array, std::deque, etc.)
    // Note: eigen_t types have their own specialization in glaze/ext/eigen.hpp
-   export template <writable_array_t T>
+   template <writable_array_t T>
       requires(!eigen_t<T>)
    struct to<CBOR, T> final
    {
@@ -570,7 +570,7 @@ namespace glz
    };
 
    // Maps (std::map, std::unordered_map, etc.)
-   export template <writable_map_t T>
+   template <writable_map_t T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -595,7 +595,7 @@ namespace glz
    };
 
    // Pairs
-   export template <pair_t T>
+   template <pair_t T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -613,7 +613,7 @@ namespace glz
    };
 
    // Glaze objects (structs with reflection)
-   export template <class T>
+   template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
    struct to<CBOR, T> final
    {
@@ -824,7 +824,7 @@ namespace glz
    };
 
    // Tuples
-   export template <class T>
+   template <class T>
       requires(tuple_t<T> || is_std_tuple<T>)
    struct to<CBOR, T> final
    {
@@ -850,7 +850,7 @@ namespace glz
    };
 
    // Glaze arrays
-   export template <class T>
+   template <class T>
       requires glaze_array_t<T>
    struct to<CBOR, T> final
    {
@@ -871,7 +871,7 @@ namespace glz
    };
 
    // Expected types
-   export template <is_expected T>
+   template <is_expected T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -893,7 +893,7 @@ namespace glz
    };
 
    // Nullable types (std::optional, std::unique_ptr, std::shared_ptr)
-   export template <nullable_t T>
+   template <nullable_t T>
       requires(!std::is_array_v<T> && not is_expected<T>)
    struct to<CBOR, T> final
    {
@@ -910,7 +910,7 @@ namespace glz
    };
 
    // C-style arrays
-   export template <nullable_t T>
+   template <nullable_t T>
       requires(std::is_array_v<T>)
    struct to<CBOR, T>
    {
@@ -922,7 +922,7 @@ namespace glz
    };
 
    // Variants
-   export template <is_variant T>
+   template <is_variant T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -952,7 +952,7 @@ namespace glz
    };
 
    // Glaze value wrapper
-   export template <class T>
+   template <class T>
       requires(glaze_value_t<T> && !custom_write<T>)
    struct to<CBOR, T>
    {
@@ -966,7 +966,7 @@ namespace glz
    };
 
    // Enums with glaze reflection
-   export template <glaze_enum_t T>
+   template <glaze_enum_t T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -989,7 +989,7 @@ namespace glz
    };
 
    // Plain enums (non-glaze)
-   export template <class T>
+   template <class T>
       requires(std::is_enum_v<T> && !glaze_enum_t<T>)
    struct to<CBOR, T> final
    {
@@ -1013,7 +1013,7 @@ namespace glz
    };
 
    // Member function pointers (no-op)
-   export template <is_member_function_pointer T>
+   template <is_member_function_pointer T>
    struct to<CBOR, T>
    {
       template <auto Opts>
@@ -1022,7 +1022,7 @@ namespace glz
    };
 
    // Includers (write as empty string)
-   export template <is_includer T>
+   template <is_includer T>
    struct to<CBOR, T>
    {
       template <auto Opts>
@@ -1033,7 +1033,7 @@ namespace glz
    };
 
    // Function type names
-   export template <func_t T>
+   template <func_t T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -1044,7 +1044,7 @@ namespace glz
    };
 
    // Raw JSON (write as text string)
-   export template <class T>
+   template <class T>
    struct to<CBOR, basic_raw_json<T>> final
    {
       template <auto Opts>
@@ -1055,7 +1055,7 @@ namespace glz
    };
 
    // Text (write as text string)
-   export template <class T>
+   template <class T>
    struct to<CBOR, basic_text<T>> final
    {
       template <auto Opts>
@@ -1066,7 +1066,7 @@ namespace glz
    };
 
    // Nullable value types
-   export template <class T>
+   template <class T>
       requires(nullable_value_t<T> && !nullable_like<T> && !is_expected<T>)
    struct to<CBOR, T> final
    {

@@ -225,7 +225,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(glaze_value_t<T> && !custom_read<T>)
    struct from<MSGPACK, T>
    {
@@ -238,7 +238,7 @@ namespace glz
       }
    };
 
-   export template <always_null_t T>
+   template <always_null_t T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -250,7 +250,7 @@ namespace glz
       }
    };
 
-   export template <nullable_like T>
+   template <nullable_like T>
       requires(!std::is_pointer_v<T>)
    struct from<MSGPACK, T>
    {
@@ -269,7 +269,7 @@ namespace glz
    };
 
    // Raw pointer support
-   export template <class T>
+   template <class T>
       requires(std::is_pointer_v<T> && !std::is_array_v<T>)
    struct from<MSGPACK, T>
    {
@@ -331,7 +331,7 @@ namespace glz
       }
    };
 
-   export template <boolean_like T>
+   template <boolean_like T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -349,7 +349,7 @@ namespace glz
       }
    };
 
-   export template <is_bitset T>
+   template <is_bitset T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -391,7 +391,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(is_named_enum<T>)
    struct from<MSGPACK, T>
    {
@@ -432,7 +432,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(num_t<T> || char_t<T>)
    struct from<MSGPACK, T>
    {
@@ -511,7 +511,7 @@ namespace glz
       }
    };
 
-   export template <string_t T>
+   template <string_t T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -543,7 +543,7 @@ namespace glz
       }
    };
 
-   export template <string_view_t T>
+   template <string_view_t T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -557,7 +557,7 @@ namespace glz
       }
    };
 
-   export template <glaze_object_t T>
+   template <glaze_object_t T>
       requires(!custom_read<T>)
    struct from<MSGPACK, T>
    {
@@ -689,7 +689,7 @@ namespace glz
       }
    };
 
-   export template <reflectable T>
+   template <reflectable T>
       requires(!custom_read<T>)
    struct from<MSGPACK, T>
    {
@@ -700,7 +700,7 @@ namespace glz
       }
    };
 
-   export template <writable_map_t T>
+   template <writable_map_t T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -746,7 +746,7 @@ namespace glz
    };
 
    // for set-like containers (emplaceable but not emplace_backable)
-   export template <class T>
+   template <class T>
       requires(writable_array_t<T> && !emplace_backable<T> && emplaceable<T>)
    struct from<MSGPACK, T>
    {
@@ -772,7 +772,7 @@ namespace glz
    };
 
    // for vector-like containers (emplace_backable) and fixed-size arrays
-   export template <class T>
+   template <class T>
       requires(writable_array_t<T> && (emplace_backable<T> || !emplaceable<T>))
    struct from<MSGPACK, T>
    {
@@ -939,7 +939,7 @@ namespace glz
 
    // std::chrono::system_clock::time_point support
    // Converts from msgpack::timestamp during deserialization
-   export template <class T>
+   template <class T>
       requires std::same_as<std::remove_cvref_t<T>, std::chrono::system_clock::time_point>
    struct from<MSGPACK, T>
    {
@@ -982,7 +982,7 @@ namespace glz
       }
    };
 
-   export template <class T>
+   template <class T>
       requires(tuple_t<T> || is_std_tuple<T>)
    struct from<MSGPACK, T>
    {
@@ -1011,7 +1011,7 @@ namespace glz
       }
    };
 
-   export template <is_variant T>
+   template <is_variant T>
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
