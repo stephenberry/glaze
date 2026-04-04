@@ -10,11 +10,13 @@ import glaze.tuplet;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
 
+using std::size_t;
+
 export namespace glz
 {
    namespace detail
    {
-      template <const std::string_view& Str, class Tuple, std::size_t I = 0>
+      template <const std::string_view& Str, class Tuple, size_t I = 0>
       struct expander
       {
          static constexpr auto impl() noexcept

@@ -13,6 +13,9 @@
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
+using std::uint8_t;
+using std::uint64_t;
+
 using namespace glz::eetf;
 
 using namespace ut;
@@ -25,19 +28,19 @@ T = #{a => atom_term, arr => [9,8,7], d => 3.1415926, hello => "Hello Erlang Ter
 io:format("~p", [erlang:term_to_binary(T)]).
 */
 
-std::array<std::uint8_t, 81> term_map_001{
+std::array<uint8_t, 81> term_map_001{
    131, 116, 0,   0,   0,  5,   100, 0,   1,   97,  100, 0,   9,   97,  116, 111, 109, 95,  116, 101, 114,
    109, 100, 0,   3,   97, 114, 114, 107, 0,   3,   9,   8,   7,   100, 0,   1,   100, 70,  64,  9,   33,
    251, 77,  18,  216, 74, 100, 0,   5,   104, 101, 108, 108, 111, 107, 0,   17,  72,  101, 108, 108, 111,
    32,  69,  114, 108, 97, 110, 103, 32,  84,  101, 114, 109, 100, 0,   1,   105, 97,  1};
 
-std::array<std::uint8_t, 92> term_proplist_001{
+std::array<uint8_t, 92> term_proplist_001{
    131, 108, 0,   0,   0,   5,   104, 2,   100, 0,   1,  97,  100, 0,   9,   97,  116, 111, 109, 95,  116, 101, 114,
    109, 104, 2,   100, 0,   3,   97,  114, 114, 107, 0,  3,   9,   8,   7,   104, 2,   100, 0,   1,   100, 70,  64,
    9,   33,  251, 77,  18,  216, 74,  104, 2,   100, 0,  5,   104, 101, 108, 108, 111, 107, 0,   17,  72,  101, 108,
    108, 111, 32,  69,  114, 108, 97,  110, 103, 32,  84, 101, 114, 109, 104, 2,   100, 0,   1,   105, 97,  1,   106};
 
-std::array<std::uint8_t, 16> term_atom{131, 116, 0, 0, 0, 1, 100, 0, 1, 97, 100, 0, 3, 113, 119, 101};
+std::array<uint8_t, 16> term_atom{131, 116, 0, 0, 0, 1, 100, 0, 1, 97, 100, 0, 3, 113, 119, 101};
 
 struct my_struct
 {
@@ -45,20 +48,20 @@ struct my_struct
    double d = 3.14;
    std::string hello = "Hello World";
    glz::eetf::atom a = "elang_atom_field"_atom;
-   std::array<std::uint64_t, 3> arr = {1, 2, 3};
+   std::array<uint64_t, 3> arr = {1, 2, 3};
 };
 
 struct my_struct_meta
 {
    my_struct_meta() : val_i{287}, val_d{3.14}, val_str{"Hello World"}, val_arr{1, 2, 3} {}
-   my_struct_meta(int i, double d, std::string s, std::vector<std::uint64_t> v)
+   my_struct_meta(int i, double d, std::string s, std::vector<uint64_t> v)
       : val_i{i}, val_d{d}, val_str{s}, val_arr{std::move(v)}
    {}
 
    int val_i;
    double val_d;
    std::string val_str;
-   std::vector<std::uint64_t> val_arr;
+   std::vector<uint64_t> val_arr;
 };
 
 template <>
@@ -143,7 +146,7 @@ suite etf_tests = [] {
    "write_term"_test = [] {
       trace.begin("write_term");
       my_struct sw{.i = 123, .d = 2.71827, .hello = "Hello write", .a = "qwe"_atom, .arr = {45, 67, 89}};
-      std::vector<std::uint8_t> buff;
+      std::vector<uint8_t> buff;
       auto ec = glz::write_term(sw, buff);
       trace.end("write_term");
 
@@ -163,7 +166,7 @@ suite etf_tests = [] {
    "write_term_meta"_test = [] {
       trace.begin("write_term");
       my_struct_meta sw(123, 2.71827, "Hello write meta", {45, 67, 89});
-      std::vector<std::uint8_t> buff;
+      std::vector<uint8_t> buff;
       auto ec = glz::write_term(sw, buff);
       trace.end("write_term");
 
@@ -182,7 +185,7 @@ suite etf_tests = [] {
    "write_proplist_term"_test = [] {
       trace.begin("write_term");
       my_struct sw{.i = 123, .d = 2.71827, .hello = "Hello write", .a = "qwe"_atom, .arr = {45, 67, 89}};
-      std::vector<std::uint8_t> buff;
+      std::vector<uint8_t> buff;
       auto ec = glz::write_term<glz::eetf::proplist_layout>(sw, buff);
       trace.end("write_term");
 
@@ -202,7 +205,7 @@ suite etf_tests = [] {
    "write_proplist_term_meta"_test = [] {
       trace.begin("write_term");
       my_struct_meta sw(123, 2.71827, "Hello write meta", {45, 67, 89});
-      std::vector<std::uint8_t> buff;
+      std::vector<uint8_t> buff;
       auto ec = glz::write_term<glz::eetf::proplist_layout>(sw, buff);
       trace.end("write_term");
 
@@ -225,7 +228,7 @@ suite etf_tests = [] {
       expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.a == "qwe");
 
-      std::vector<std::uint8_t> out{};
+      std::vector<uint8_t> out{};
       expect(not glz::write_term(s, out)) << "can't write";
       expect(not glz::read_term(r, out)) << "can't read again";
       expect(r.a == "qwe");

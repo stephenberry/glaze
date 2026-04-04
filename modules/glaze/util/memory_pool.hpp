@@ -6,6 +6,8 @@
 #include <mutex>
 #include <vector>
 
+using std::size_t;
+
 namespace glz
 {
    template <class T>
@@ -24,9 +26,9 @@ namespace glz
       struct handle final
       {
          memory_pool<T>* pool;
-         std::size_t index;
+         size_t index;
 
-         handle(memory_pool<T>* p, std::size_t i) : pool(p), index(i) {}
+         handle(memory_pool<T>* p, size_t i) : pool(p), index(i) {}
          ~handle() { pool->release(index); }
       };
 
@@ -37,7 +39,7 @@ namespace glz
             const auto current_size = values.size();
             const auto new_size = values.size() * 2;
             values.resize(new_size);
-            for (std::size_t i = current_size; i < new_size; ++i) {
+            for (size_t i = current_size; i < new_size; ++i) {
                available.emplace_back(i);
             }
          }
@@ -50,20 +52,20 @@ namespace glz
          return std::shared_ptr<T>{std::make_shared<handle>(this, index), &values[index]};
       }
 
-      std::size_t size() const
+      size_t size() const
       {
          std::lock_guard lock{mtx};
          return values.size();
       }
 
-      std::size_t available_size() const
+      size_t available_size() const
       {
          std::lock_guard lock{mtx};
          return available.size();
       }
 
      private:
-      void release(std::size_t index)
+      void release(size_t index)
       {
          std::lock_guard lock{mtx};
          available.emplace_back(index);
@@ -71,6 +73,6 @@ namespace glz
 
       mutable std::mutex mtx{};
       std::deque<T> values{2};
-      std::vector<std::size_t> available{0, 1}; // indices of available values
+      std::vector<size_t> available{0, 1}; // indices of available values
    };
 }

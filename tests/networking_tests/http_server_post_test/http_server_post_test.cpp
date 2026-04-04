@@ -9,6 +9,9 @@
 #include "glaze/net/http_server.hpp"
 
 #if defined(GLZ_USING_BOOST_ASIO)
+
+using std::size_t;
+
 namespace asio
 {
    using namespace boost::asio;
@@ -58,7 +61,7 @@ namespace
    }
 
    // Build HTTP headers with many custom headers to simulate the original bug scenario
-   std::string build_headers(std::size_t content_length)
+   std::string build_headers(size_t content_length)
    {
       std::ostringstream req;
       req << "POST " << test_route << " HTTP/1.1\r\n"
@@ -88,7 +91,7 @@ namespace
       std::array<char, 4096> buf{};
       asio::error_code ec;
       for (;;) {
-         std::size_t n = socket.read_some(asio::buffer(buf), ec);
+         size_t n = socket.read_some(asio::buffer(buf), ec);
          if (n == 0 || ec) break;
          resp.append(buf.data(), n);
       }

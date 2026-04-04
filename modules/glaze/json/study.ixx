@@ -18,6 +18,8 @@ import glaze.core.seek;
 import glaze.thread.threadpool;
 import glaze.concepts.container_concepts;
 
+using std::size_t;
+
 export namespace glz
 {
    using basic = std::variant<bool, char, char8_t, unsigned char, signed char, short, unsigned short, float, int,
@@ -44,7 +46,7 @@ export namespace glz
             states{}; //!< map of pointer syntax and json representation
          std::unordered_map<std::string, raw_json> overwrite{}; //!< pointer syntax and json representation
          std::default_random_engine::result_type seed{}; //!< Seed for randomized study
-         std::size_t random_samples{}; //!< Number of runs to perform in randomized study.
+         size_t random_samples{}; //!< Number of runs to perform in randomized study.
                                   //! If zero it will run a full
                                   //!< factorial ignoring random distributions
                                   //!< instead instead of a randomized study
@@ -86,8 +88,8 @@ export namespace glz
       {
          State state{};
          std::vector<param_set> param_sets;
-         std::size_t index{};
-         std::size_t max_index{};
+         size_t index{};
+         size_t max_index{};
 
          full_factorial(State _state, const design& design) : state(std::move(_state))
          {
@@ -108,13 +110,13 @@ export namespace glz
 
          bool done() const { return index >= max_index; }
 
-         std::size_t size() const { return max_index; }
+         size_t size() const { return max_index; }
 
-         [[nodiscard]] expected<State, error_code> generate(const std::size_t i)
+         [[nodiscard]] expected<State, error_code> generate(const size_t i)
          {
-            std::size_t deconst_index = i;
+            size_t deconst_index = i;
             for (auto& param_set : param_sets) {
-               const auto this_size = (std::max)(param_set.elements.size(), std::size_t{1});
+               const auto this_size = (std::max)(param_set.elements.size(), size_t{1});
                const auto this_index = deconst_index % this_size;
                deconst_index /= this_size;
                const auto ec = std::visit(
@@ -236,7 +238,7 @@ export namespace glz
       void run_study(generator auto& g, auto&& f)
       {
          glz::pool pool{};
-         std::size_t job_num = 0;
+         size_t job_num = 0;
          while (!g.done()) {
             // generate mutates
             // TODO: maybe save states and mutate them across threads
@@ -252,7 +254,7 @@ export namespace glz
       {
          glz::pool pool{};
          const auto n = states.size();
-         for (std::size_t i = 0; i < n; ++i) {
+         for (size_t i = 0; i < n; ++i) {
             pool.emplace_back([=, state = states[i]](const auto) { f(std::move(state), i); });
          }
          pool.wait();
@@ -276,11 +278,11 @@ export namespace glz
          State state{};
 
          std::default_random_engine::result_type seed{};
-         std::size_t random_samples{};
+         size_t random_samples{};
 
          std::default_random_engine engine{};
-         std::vector<std::size_t> resample_indices{};
-         std::size_t index = 0;
+         std::vector<size_t> resample_indices{};
+         size_t index = 0;
 
          std::vector<std::vector<random_param>> params_per_state{};
 
@@ -293,12 +295,12 @@ export namespace glz
             std::iota(std::begin(resample_indices), std::end(resample_indices), 0);
 
             params_per_state.resize(random_samples);
-            const std::size_t dim = design.params.size();
+            const size_t dim = design.params.size();
 
             if (params_per_state.size() > 0) {
                auto& params = params_per_state.front();
                params.resize(dim);
-               for (std::size_t i = 0; i < dim; i++) {
+               for (size_t i = 0; i < dim; i++) {
                   // TODO: Fix this. It is unsafe to derefrence this but we cant return an error code.
                   params[i] = *param_from_dist(design.params[i]);
                }
@@ -309,7 +311,7 @@ export namespace glz
 
          bool done() const { return index >= params_per_state.size(); }
 
-         const State& generate(const std::size_t i)
+         const State& generate(const size_t i)
          {
             auto& params = params_per_state[i];
             for (auto& param : params) {
@@ -323,14 +325,14 @@ export namespace glz
 
          void reset() { index = 0; }
 
-         std::size_t size() { return params_per_state.size(); }
+         size_t size() { return params_per_state.size(); }
 
          void resample(double ratio)
          {
             std::shuffle(std::begin(resample_indices), std::end(resample_indices), engine);
-            std::size_t to_resample = static_cast<std::size_t>(std::ceil(ratio * params_per_state.size()));
+            size_t to_resample = static_cast<size_t>(std::ceil(ratio * params_per_state.size()));
 
-            for (std::size_t i = 0; i < to_resample; ++i) {
+            for (size_t i = 0; i < to_resample; ++i) {
                auto& params = params_per_state[resample_indices[i]];
                for (auto& param : params) {
                   param.value = param.gen();
@@ -379,9 +381,9 @@ export namespace glz
                      }
                   },
                   result.param_ptr);
-               result.gen = [this, dist = std::uniform_int_distribution<std::size_t>(0, dist.range.size() - 1),
+               result.gen = [this, dist = std::uniform_int_distribution<size_t>(0, dist.range.size() - 1),
                              elements = std::move(elements)]() mutable {
-                  std::size_t element_index = dist(this->engine);
+                  size_t element_index = dist(this->engine);
                   return elements[element_index];
                };
             }

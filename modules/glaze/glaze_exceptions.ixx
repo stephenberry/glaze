@@ -22,6 +22,8 @@ import glaze.core.read;
 import glaze.core.reflect;
 import glaze.core.write;
 
+using std::size_t;
+
 namespace glz::ex
 {
    export template <auto Opts>
@@ -45,7 +47,7 @@ namespace glz::ex
    }
 
    export template <auto Opts, class T, raw_buffer Buffer>
-   std::size_t write(T&& value, Buffer&& buffer) noexcept
+   size_t write(T&& value, Buffer&& buffer) noexcept
    {
       return glz::write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }

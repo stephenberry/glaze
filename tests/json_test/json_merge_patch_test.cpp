@@ -7,6 +7,8 @@ import glaze.json;
 
 import ut;
 
+using std::size_t;
+
 using namespace ut;
 
 suite json_merge_patch_tests = [] {
@@ -253,7 +255,7 @@ suite json_merge_patch_tests = [] {
 
       // Build a deeply nested patch exceeding max_recursive_depth_limit (256)
       glz::generic* current = &patch;
-      for (std::size_t i = 0; i < glz::max_recursive_depth_limit + 10; ++i) {
+      for (size_t i = 0; i < glz::max_recursive_depth_limit + 10; ++i) {
          current->get_object()["nested"].data = glz::generic::object_t{};
          current = &current->get_object()["nested"];
       }

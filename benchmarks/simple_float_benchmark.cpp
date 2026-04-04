@@ -9,16 +9,21 @@
 #include "glaze/util/simple_float.hpp"
 
 // Generate test data
-std::vector<float> generate_random_floats(std::size_t count, std::uint32_t seed = 12345)
+
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
+
+std::vector<float> generate_random_floats(size_t count, uint32_t seed = 12345)
 {
    std::mt19937 rng(seed);
-   std::uniform_int_distribution<std::uint32_t> dist;
+   std::uniform_int_distribution<uint32_t> dist;
 
    std::vector<float> result;
    result.reserve(count);
 
-   for (std::size_t i = 0; i < count; ++i) {
-      std::uint32_t bits = dist(rng);
+   for (size_t i = 0; i < count; ++i) {
+      uint32_t bits = dist(rng);
       float value;
       std::memcpy(&value, &bits, sizeof(float));
 
@@ -33,16 +38,16 @@ std::vector<float> generate_random_floats(std::size_t count, std::uint32_t seed 
    return result;
 }
 
-std::vector<double> generate_random_doubles(std::size_t count, std::uint32_t seed = 12345)
+std::vector<double> generate_random_doubles(size_t count, uint32_t seed = 12345)
 {
    std::mt19937_64 rng(seed);
-   std::uniform_int_distribution<std::uint64_t> dist;
+   std::uniform_int_distribution<uint64_t> dist;
 
    std::vector<double> result;
    result.reserve(count);
 
-   for (std::size_t i = 0; i < count; ++i) {
-      std::uint64_t bits = dist(rng);
+   for (size_t i = 0; i < count; ++i) {
+      uint64_t bits = dist(rng);
       double value;
       std::memcpy(&value, &bits, sizeof(double));
 
@@ -82,7 +87,7 @@ std::vector<std::string> serialize_doubles(const std::vector<double>& doubles)
 
 int main()
 {
-   constexpr std::size_t N = 100000;
+   constexpr size_t N = 100000;
 
    // Pre-generate test data
    auto floats = generate_random_floats(N);
@@ -97,7 +102,7 @@ int main()
 
       stage.run("simple_float::to_chars (float)", [&] {
          char buf[32];
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (float f : floats) {
             char* end = glz::simple_float::to_chars(buf, f);
             total_bytes += (end - buf);
@@ -108,7 +113,7 @@ int main()
 
       stage.run("std::to_chars (float)", [&] {
          char buf[32];
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (float f : floats) {
             auto [ptr, ec] = std::to_chars(buf, buf + 32, f);
             total_bytes += (ptr - buf);
@@ -127,7 +132,7 @@ int main()
 
       stage.run("simple_float::from_chars (float)", [&] {
          float value;
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (const auto& s : float_strings) {
             glz::simple_float::from_chars<false>(s.data(), s.data() + s.size(), value);
             total_bytes += s.size();
@@ -138,7 +143,7 @@ int main()
 
       stage.run("glz::from_chars/fast_float (float)", [&] {
          float value;
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (const auto& s : float_strings) {
             glz::from_chars<false>(s.data(), s.data() + s.size(), value);
             total_bytes += s.size();
@@ -149,7 +154,7 @@ int main()
 
       stage.run("std::from_chars (float)", [&] {
          float value;
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (const auto& s : float_strings) {
             std::from_chars(s.data(), s.data() + s.size(), value);
             total_bytes += s.size();
@@ -168,7 +173,7 @@ int main()
 
       stage.run("simple_float::to_chars (double)", [&] {
          char buf[32];
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (double d : doubles) {
             char* end = glz::simple_float::to_chars(buf, d);
             total_bytes += (end - buf);
@@ -179,7 +184,7 @@ int main()
 
       stage.run("std::to_chars (double)", [&] {
          char buf[32];
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (double d : doubles) {
             auto [ptr, ec] = std::to_chars(buf, buf + 32, d);
             total_bytes += (ptr - buf);
@@ -198,7 +203,7 @@ int main()
 
       stage.run("simple_float::from_chars (double)", [&] {
          double value;
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (const auto& s : double_strings) {
             glz::simple_float::from_chars<false>(s.data(), s.data() + s.size(), value);
             total_bytes += s.size();
@@ -209,7 +214,7 @@ int main()
 
       stage.run("glz::from_chars/fast_float (double)", [&] {
          double value;
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (const auto& s : double_strings) {
             glz::from_chars<false>(s.data(), s.data() + s.size(), value);
             total_bytes += s.size();
@@ -220,7 +225,7 @@ int main()
 
       stage.run("std::from_chars (double)", [&] {
          double value;
-         std::size_t total_bytes = 0;
+         size_t total_bytes = 0;
          for (const auto& s : double_strings) {
             std::from_chars(s.data(), s.data() + s.size(), value);
             total_bytes += s.size();
@@ -240,7 +245,7 @@ int main()
 
       // Just decimal parsing
       stage.run("parse_decimal_strict only", [&] {
-         std::size_t total = 0;
+         size_t total = 0;
          for (const auto& s : float_strings) {
             glz::simple_float::detail::decimal_number dec{};
             const char* end =
@@ -253,7 +258,7 @@ int main()
 
       // Full parsing
       stage.run("full from_chars", [&] {
-         std::size_t total = 0;
+         size_t total = 0;
          float value;
          for (const auto& s : float_strings) {
             auto [ptr, ec] = glz::simple_float::from_chars<false>(s.data(), s.data() + s.size(), value);

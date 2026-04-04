@@ -12,6 +12,8 @@ import glaze.tuplet;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
 
+using std::uint32_t;
+
 namespace glz
 {
    // read_constraint allows a user to register a contraint lambda or member function
@@ -39,7 +41,7 @@ namespace glz
       typename T::constraint_t;
    };
 
-   template <std::uint32_t Format, is_read_constraint T>
+   template <uint32_t Format, is_read_constraint T>
    struct from<Format, T>
    {
       template <auto Opts>
@@ -170,7 +172,7 @@ namespace glz
       }
    };
 
-   template <std::uint32_t Format, is_read_constraint T>
+   template <uint32_t Format, is_read_constraint T>
    struct to<Format, T>
    {
       template <auto Opts>
@@ -230,7 +232,7 @@ namespace glz
       t.val;
    };
 
-   template <std::uint32_t Format, is_self_constraint T>
+   template <uint32_t Format, is_self_constraint T>
    struct from<Format, T>
    {
       template <auto Opts>

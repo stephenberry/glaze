@@ -5,6 +5,12 @@ import std;
 import glaze;
 import ut;
 
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 static constexpr bool skip = false;
 
 #define SKIP             \
@@ -21,12 +27,12 @@ static constexpr std::string_view charset{
 
 inline std::string generate_string()
 {
-   auto length = std::uniform_int_distribution<std::uint32_t>{0, 512}(gen);
+   auto length = std::uniform_int_distribution<uint32_t>{0, 512}(gen);
    const auto charsetSize = charset.size();
-   std::uniform_int_distribution<std::uint32_t> distribution(0, charsetSize - 1);
+   std::uniform_int_distribution<uint32_t> distribution(0, charsetSize - 1);
    std::string result{};
    result.reserve(length);
-   for (std::uint32_t x = 0; x < length; ++x) {
+   for (uint32_t x = 0; x < length; ++x) {
       result += charset[distribution(gen)];
    }
    return result;
@@ -37,12 +43,12 @@ static constexpr std::string_view basic_charset{
 
 inline std::string generate_basic_string()
 {
-   auto length = std::uniform_int_distribution<std::uint32_t>{0, 512}(gen);
+   auto length = std::uniform_int_distribution<uint32_t>{0, 512}(gen);
    const auto charsetSize = basic_charset.size();
-   std::uniform_int_distribution<std::uint32_t> distribution(0, charsetSize - 1);
+   std::uniform_int_distribution<uint32_t> distribution(0, charsetSize - 1);
    std::string result{};
    result.reserve(length);
-   for (std::uint32_t x = 0; x < length; ++x) {
+   for (uint32_t x = 0; x < length; ++x) {
       result += basic_charset[distribution(gen)];
    }
    return result;
@@ -53,15 +59,15 @@ suite string_performance = [] {
       SKIP;
 
 #ifdef NDEBUG
-      constexpr std::size_t n = 10000;
+      constexpr size_t n = 10000;
 #else
-      constexpr std::size_t n = 100;
+      constexpr size_t n = 100;
 #endif
 
       std::vector<std::string> vec;
       vec.reserve(n);
 
-      for (std::size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i) {
          vec.emplace_back(generate_string());
       }
 
@@ -96,15 +102,15 @@ suite basic_string_performance = [] {
       SKIP;
 
 #ifdef NDEBUG
-      constexpr std::size_t n = 10000;
+      constexpr size_t n = 10000;
 #else
-      constexpr std::size_t n = 100;
+      constexpr size_t n = 100;
 #endif
 
       std::vector<std::string> vec;
       vec.reserve(n);
 
-      for (std::size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i) {
          vec.emplace_back(generate_basic_string());
       }
 
@@ -136,10 +142,10 @@ suite basic_string_performance = [] {
 
 struct integers
 {
-   std::int32_t a{};
-   std::uint32_t b{};
-   std::int64_t c{};
-   std::uint64_t d{};
+   int32_t a{};
+   uint32_t b{};
+   int64_t c{};
+   uint64_t d{};
 };
 
 /*suite default_numerics = [] {
@@ -181,9 +187,9 @@ suite integers_test = [] {
       SKIP;
 
 #ifdef NDEBUG
-      constexpr std::size_t n = 10000000;
+      constexpr size_t n = 10000000;
 #else
-      constexpr std::size_t n = 100000;
+      constexpr size_t n = 100000;
 #endif
 
       integers v{};
@@ -191,11 +197,11 @@ suite integers_test = [] {
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
-      for (std::size_t i = 0; i < n; ++i) {
-         v.a = std::int32_t(i);
-         v.b = std::uint32_t(i);
-         v.c = std::int64_t(i);
-         v.d = std::uint64_t(i);
+      for (size_t i = 0; i < n; ++i) {
+         v.a = int32_t(i);
+         v.b = uint32_t(i);
+         v.c = int64_t(i);
+         v.d = uint64_t(i);
          std::ignore = glz::write_json(v, buffer);
          e = glz::read_json(v, buffer);
       }
@@ -210,16 +216,16 @@ suite uint64_t_test = [] {
       SKIP;
 
 #ifdef NDEBUG
-      constexpr std::size_t n = 100000000;
+      constexpr size_t n = 100000000;
 #else
-      constexpr std::size_t n = 100000;
+      constexpr size_t n = 100000;
 #endif
 
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
-      for (std::size_t i = 0; i < n; ++i) {
-         auto v = std::uint64_t(i);
+      for (size_t i = 0; i < n; ++i) {
+         auto v = uint64_t(i);
          std::ignore = glz::write_json(v, buffer);
          e = glz::read_json(v, buffer);
          if (bool(e)) {
@@ -238,9 +244,9 @@ suite float_tests = [] {
       SKIP;
 
 #ifdef NDEBUG
-      constexpr std::size_t n = 10000000;
+      constexpr size_t n = 10000000;
 #else
-      constexpr std::size_t n = 100000;
+      constexpr size_t n = 100000;
 #endif
 
       float v{};
@@ -248,7 +254,7 @@ suite float_tests = [] {
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
-      for (std::uint32_t i = 0; i < n; ++i) {
+      for (uint32_t i = 0; i < n; ++i) {
          std::ignore = glz::write_json(v, buffer);
          e = glz::read_json(v, buffer);
          std::memcpy(&v, &i, sizeof(float));
@@ -356,25 +362,25 @@ struct glz::meta<obj_t>
 
 // We scale all speeds by the minified JSON byte length, so that libraries which do not efficiently write JSON do not
 // get an unfair advantage We want to know how fast the libraries will serialize/deserialize with repsect to one another
-[[maybe_unused]] std::size_t minified_byte_length{};
+[[maybe_unused]] size_t minified_byte_length{};
 #ifdef NDEBUG
-[[maybe_unused]] constexpr std::size_t iterations = 1'000'000;
+[[maybe_unused]] constexpr size_t iterations = 1'000'000;
 #else
-[[maybe_unused]] constexpr std::size_t iterations = 100'000;
+[[maybe_unused]] constexpr size_t iterations = 100'000;
 #endif
 
 struct results
 {
    std::string_view name{};
    std::string_view url{};
-   std::size_t iterations{};
+   size_t iterations{};
 
-   std::optional<std::size_t> json_byte_length{};
+   std::optional<size_t> json_byte_length{};
    std::optional<double> json_read{};
    std::optional<double> json_write{};
    std::optional<double> json_roundtrip{};
 
-   std::optional<std::size_t> binary_byte_length{};
+   std::optional<size_t> binary_byte_length{};
    std::optional<double> beve_write{};
    std::optional<double> beve_read{};
    std::optional<double> beve_roundtrip{};
@@ -453,7 +459,7 @@ auto glaze_test()
 
    auto t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -472,7 +478,7 @@ auto glaze_test()
    // write performance
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::write<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -489,7 +495,7 @@ auto glaze_test()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_json(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -504,7 +510,7 @@ auto glaze_test()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -520,7 +526,7 @@ auto glaze_test()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -535,7 +541,7 @@ auto glaze_test()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -576,18 +582,18 @@ inline std::string emoji_unicode(auto& generator)
    };
 
    // Calculate total number of emojis
-   std::size_t total_emojis = 0;
+   size_t total_emojis = 0;
    for (const auto& range : emoji_ranges) {
       total_emojis += range.second - range.first + 1;
    }
 
    // Generate a random emoji code point
-   std::uniform_int_distribution<std::size_t> dis(0, total_emojis - 1);
-   std::size_t random_index = dis(generator);
+   std::uniform_int_distribution<size_t> dis(0, total_emojis - 1);
+   size_t random_index = dis(generator);
 
    char32_t cpoint = 0;
    for (const auto& range : emoji_ranges) {
-      std::size_t range_size = range.second - range.first + 1;
+      size_t range_size = range.second - range.first + 1;
       if (random_index < range_size) {
          cpoint = char32_t(range.first + random_index);
          break;
@@ -643,7 +649,7 @@ struct test_generator
    template <class V>
    V randomizeNumberUniform(V range)
    {
-      std::uniform_int_distribution<std::uint64_t> dis(0, std::uint64_t(range));
+      std::uniform_int_distribution<uint64_t> dis(0, uint64_t(range));
       return static_cast<V>(dis(gen));
    }
 
@@ -655,8 +661,8 @@ struct test_generator
       static constexpr auto charsetSize = charset.size();
       auto unicodeCount = randomizeNumberUniform(length / 8);
       std::string result{};
-      for (std::int32_t ix = 0; ix < length; ++ix) {
-         if (ix == static_cast<std::int32_t>(length / unicodeCount)) {
+      for (int32_t ix = 0; ix < length; ++ix) {
+         if (ix == static_cast<int32_t>(length / unicodeCount)) {
             insertUnicodeInJSON(result);
          }
          result += charset[randomizeNumberUniform(charsetSize - 1)];
@@ -672,15 +678,15 @@ struct test_generator
 
    bool generateBool() { return static_cast<bool>(randomizeNumberNormal(50.0f, 50.0f) >= 50.0f); };
 
-   std::uint64_t generateUint()
+   uint64_t generateUint()
    {
-      return randomizeNumberNormal((std::numeric_limits<std::uint64_t>::max)() / 2,
-                                   (std::numeric_limits<std::uint64_t>::max)() / 2);
+      return randomizeNumberNormal((std::numeric_limits<uint64_t>::max)() / 2,
+                                   (std::numeric_limits<uint64_t>::max)() / 2);
    };
 
-   std::int64_t generateInt()
+   int64_t generateInt()
    {
-      auto newValue = randomizeNumberNormal(std::int64_t{}, (std::numeric_limits<std::int64_t>::max)());
+      auto newValue = randomizeNumberNormal(int64_t{}, (std::numeric_limits<int64_t>::max)());
       return generateBool() ? newValue : -newValue;
    };
 
@@ -691,27 +697,27 @@ struct test_generator
          auto arraySize02 = randomizeNumberNormal(15ull, 10ull);
          auto arraySize03 = randomizeNumberNormal(5ull, 1ull);
          v.resize(arraySize01);
-         for (std::uint64_t x = 0; x < arraySize01; ++x) {
+         for (uint64_t x = 0; x < arraySize01; ++x) {
             auto arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                auto newString = generateString();
                v[x].testStrings.emplace_back(newString);
             }
             arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testUints.emplace_back(generateUint());
             }
             arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testInts.emplace_back(generateInt());
             }
             arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                auto newBool = generateBool();
                v[x].testBools.emplace_back(newBool);
             }
             arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testDoubles.emplace_back(generateDouble());
             }
          }
@@ -749,9 +755,9 @@ struct test_generator
 struct test_struct
 {
    std::vector<std::string> testStrings{};
-   std::vector<std::uint64_t> testUints{};
+   std::vector<uint64_t> testUints{};
    std::vector<double> testDoubles{};
-   std::vector<std::int64_t> testInts{};
+   std::vector<int64_t> testInts{};
    std::vector<bool> testBools{};
 };
 
@@ -794,9 +800,9 @@ auto benchmark_tester()
    std::string buffer{};
    test_generator<test_struct> obj{};
 #ifdef NDEBUG
-   constexpr std::size_t N = 300;
+   constexpr size_t N = 300;
 #else
-   constexpr std::size_t N = 30;
+   constexpr size_t N = 30;
 #endif
 
    expect(!glz::write_file_json(obj, "benchmark_minified.json", std::string{}));
@@ -807,7 +813,7 @@ auto benchmark_tester()
 
    auto t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::read<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -826,7 +832,7 @@ auto benchmark_tester()
    // write performance
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::write<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -843,7 +849,7 @@ auto benchmark_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::read_json(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -858,7 +864,7 @@ auto benchmark_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -874,7 +880,7 @@ auto benchmark_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -889,7 +895,7 @@ auto benchmark_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -927,40 +933,40 @@ struct permission_overwrite
    std::string allow{};
    std::string deny{};
    std::string id{};
-   std::int64_t type{};
+   int64_t type{};
 };
 
 struct channel_data
 {
    std::vector<permission_overwrite> permission_overwrites{};
    std::optional<std::string> last_message_id{};
-   std::int64_t default_thread_rate_limit_per_user{};
+   int64_t default_thread_rate_limit_per_user{};
    std::vector<std::nullptr_t> applied_tags{};
    std::vector<std::nullptr_t> recipients{};
-   std::int64_t default_auto_archive_duration{};
+   int64_t default_auto_archive_duration{};
    std::nullptr_t status{nullptr};
    std::string last_pin_timestamp{};
    std::nullptr_t topic{nullptr};
-   std::int64_t rate_limit_per_user{};
+   int64_t rate_limit_per_user{};
    icon_emoji_data icon_emoji{};
-   std::int64_t total_message_sent{};
-   std::int64_t video_quality_mode{};
+   int64_t total_message_sent{};
+   int64_t video_quality_mode{};
    std::string application_id{};
    std::string permissions{};
-   std::int64_t message_count{};
+   int64_t message_count{};
    std::string parent_id{};
-   std::int64_t member_count{};
+   int64_t member_count{};
    std::string owner_id{};
    std::string guild_id{};
-   std::int64_t user_limit{};
-   std::int64_t position{};
+   int64_t user_limit{};
+   int64_t position{};
    std::string name{};
    std::string icon{};
-   std::int64_t version{};
-   std::int64_t bitrate{};
+   int64_t version{};
+   int64_t bitrate{};
    std::string id{};
-   std::int64_t flags{};
-   std::int64_t type{};
+   int64_t flags{};
+   int64_t type{};
    bool managed{};
    bool nsfw{};
 };
@@ -975,13 +981,13 @@ struct user_data
    std::nullptr_t locale{nullptr};
    std::string discriminator{};
    std::string user_name{};
-   std::int64_t accent_color{};
-   std::int64_t premium_type{};
-   std::int64_t public_flags{};
+   int64_t accent_color{};
+   int64_t premium_type{};
+   int64_t public_flags{};
    std::string email{};
    bool mfa_enabled{};
    std::string id{};
-   std::int64_t flags{};
+   int64_t flags{};
    bool verified{};
    bool system{};
    bool bot{};
@@ -998,7 +1004,7 @@ struct member_data
    std::string joined_at{};
    std::string guild_id{};
    user_data user{};
-   std::int64_t flags{};
+   int64_t flags{};
    bool pending{};
    bool deaf{};
    bool mute{};
@@ -1015,14 +1021,14 @@ struct role_data
    std::nullptr_t unicode_emoji{nullptr};
    std::nullptr_t icon{nullptr};
    std::string permissions{};
-   std::int64_t position{};
+   int64_t position{};
    std::string name{};
    bool mentionable{};
-   std::int64_t version{};
+   int64_t version{};
    std::string id{};
    tags_data tags{};
-   std::int64_t color{};
-   std::int64_t flags{};
+   int64_t color{};
+   int64_t flags{};
    bool managed{};
    bool hoist{};
 };
@@ -1038,49 +1044,49 @@ struct guild_data
    std::nullptr_t vanity_url_code{nullptr};
    std::nullptr_t application_id{nullptr};
    std::nullptr_t afk_channel_id{nullptr};
-   std::int64_t default_message_notifications{};
-   std::int64_t max_stage_video_channel_users{};
+   int64_t default_message_notifications{};
+   int64_t max_stage_video_channel_users{};
    std::string public_updates_channel_id{};
    std::nullptr_t description{nullptr};
    std::vector<std::nullptr_t> threads{};
    std::vector<channel_data> channels{};
-   std::int64_t premium_subscription_count{};
-   std::int64_t approximate_presence_count{};
+   int64_t premium_subscription_count{};
+   int64_t approximate_presence_count{};
    std::vector<std::string> features{};
    std::vector<std::string> stickers{};
    bool premium_progress_bar_enabled{};
    std::vector<member_data> members{};
    std::nullptr_t hub_type{nullptr};
-   std::int64_t approximate_member_count{};
-   std::int64_t explicit_content_filter{};
-   std::int64_t max_video_channel_users{};
+   int64_t approximate_member_count{};
+   int64_t explicit_content_filter{};
+   int64_t max_video_channel_users{};
    std::nullptr_t splash{nullptr};
    std::nullptr_t banner{nullptr};
    std::string system_channel_id{};
    std::string widget_channel_id{};
    std::string preferred_locale{};
-   std::int64_t system_channel_flags{};
+   int64_t system_channel_flags{};
    std::string rules_channel_id{};
    std::vector<role_data> roles{};
-   std::int64_t verification_level{};
+   int64_t verification_level{};
    std::string permissions{};
-   std::int64_t max_presences{};
+   int64_t max_presences{};
    std::string discovery{};
    std::string joined_at{};
-   std::int64_t member_count{};
-   std::int64_t premium_tier{};
+   int64_t member_count{};
+   int64_t premium_tier{};
    std::string owner_id{};
-   std::int64_t max_members{};
-   std::int64_t afk_timeout{};
+   int64_t max_members{};
+   int64_t afk_timeout{};
    bool widget_enabled{};
    std::string region{};
-   std::int64_t nsfw_level{};
-   std::int64_t mfa_level{};
+   int64_t nsfw_level{};
+   int64_t mfa_level{};
    std::string name{};
    std::string icon{};
    bool unavailable{};
    std::string id{};
-   std::int64_t flags{};
+   int64_t flags{};
    bool large{};
    bool owner{};
    bool nsfw{};
@@ -1091,8 +1097,8 @@ struct discord_message
 {
    std::string t{};
    guild_data d{};
-   std::int64_t op{};
-   std::int64_t s{};
+   int64_t op{};
+   int64_t s{};
 };
 
 template <>
@@ -1212,7 +1218,7 @@ auto generic_tester()
 
    auto t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -1231,7 +1237,7 @@ auto generic_tester()
    // write performance
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::write<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -1248,7 +1254,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_json(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -1263,7 +1269,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::validate_json(buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -1279,7 +1285,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -1295,7 +1301,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -1310,7 +1316,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;

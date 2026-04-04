@@ -15,6 +15,8 @@ import glaze.api.std.span;
 import glaze.util.parse;
 import glaze.concepts.container_concepts;
 
+using std::size_t;
+
 namespace glz
 {
    export template <auto Opts, bool Padded = false>
@@ -51,7 +53,7 @@ namespace glz
 
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Opts);
 
-      [[maybe_unused]] std::size_t original_size{};
+      [[maybe_unused]] size_t original_size{};
       if constexpr (use_padded) {
          // Pad the buffer for SWAR
          original_size = buffer.size();
@@ -111,7 +113,7 @@ namespace glz
          buffer.resize(original_size);
       }
 
-      return {std::size_t(it - start), ctx.error, ctx.custom_error_message};
+      return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
    export template <auto Opts, class T>
@@ -184,7 +186,7 @@ namespace glz
       // Calculate final consumed bytes
       // Note: During streaming, the buffer may have been refilled multiple times,
       // so we use bytes_consumed() which tracks total consumption
-      const std::size_t final_consumed = static_cast<std::size_t>(it - ctx.stream.data());
+      const size_t final_consumed = static_cast<size_t>(it - ctx.stream.data());
       consume_buffer(buffer, final_consumed);
 
       // Handle end_reached as success when parsing completed at depth 0

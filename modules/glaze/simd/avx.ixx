@@ -12,10 +12,14 @@ import glaze.util.bit;
 
 #if defined(GLZ_USE_AVX2)
 
+using std::int8_t;
+using std::uint32_t;
+using std::size_t;
+
 namespace glz::detail
 {
    template <class Data, class WriteEscape>
-   export GLZ_ALWAYS_INLINE void avx2_string_escape(const char*& c, const char* e, Data*& data, std::size_t n,
+   export GLZ_ALWAYS_INLINE void avx2_string_escape(const char*& c, const char* e, Data*& data, size_t n,
                                              WriteEscape&& write_escape)
    {
       // AVX2: 32 bytes at a time with direct comparison instructions
@@ -23,14 +27,14 @@ namespace glz::detail
          const __m256i quote_vec = _mm256_set1_epi8('"');
          const __m256i bs_vec = _mm256_set1_epi8('\\');
          // Control char detection: (v & 0xE0) == 0 iff v is 0x00-0x1F
-         const __m256i ctrl_mask = _mm256_set1_epi8(static_cast<std::int8_t>(0xE0));
+         const __m256i ctrl_mask = _mm256_set1_epi8(static_cast<int8_t>(0xE0));
          const __m256i zero = _mm256_setzero_si256();
 
          for (const char* end_m31 = e - 31; c < end_m31;) {
             __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(c));
             _mm256_storeu_si256(reinterpret_cast<__m256i*>(data), v);
 
-            const std::uint32_t mask = _mm256_movemask_epi8(
+            const uint32_t mask = _mm256_movemask_epi8(
                _mm256_or_si256(_mm256_or_si256(_mm256_cmpeq_epi8(v, quote_vec), _mm256_cmpeq_epi8(v, bs_vec)),
                                _mm256_cmpeq_epi8(_mm256_and_si256(v, ctrl_mask), zero)));
 
@@ -40,7 +44,7 @@ namespace glz::detail
                continue;
             }
 
-            const std::uint32_t length = countr_zero(mask);
+            const uint32_t length = countr_zero(mask);
             c += length;
             data += length;
             write_escape();

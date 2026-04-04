@@ -6,6 +6,8 @@ import std;
 import glaze;
 import ut;
 
+using std::uint32_t;
+
 using namespace ut;
 
 struct simple_struct
@@ -40,7 +42,7 @@ struct glz::meta<optional_struct>
 // Custom options with skip_null_members_on_read enabled for BEVE
 struct opts_skip_null_beve : glz::opts
 {
-   std::uint32_t format = glz::BEVE;
+   uint32_t format = glz::BEVE;
    bool skip_null_members_on_read = true;
 };
 

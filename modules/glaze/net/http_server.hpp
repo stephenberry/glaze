@@ -34,6 +34,11 @@
 #undef DELETE
 #endif
 
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::size_t;
+
 namespace glz
 {
    namespace detail
@@ -78,7 +83,7 @@ namespace glz
 
       // Get remote endpoint info
       virtual std::string remote_address() const = 0;
-      virtual std::uint16_t remote_port() const = 0;
+      virtual uint16_t remote_port() const = 0;
 
       // Check if headers have been sent
       virtual bool is_headers_sent() const = 0;
@@ -155,7 +160,7 @@ namespace glz
          auto buffer = std::make_shared<std::string>(std::move(response_str));
          auto self = this->shared_from_this();
 
-         asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code ec, std::size_t) {
+         asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code ec, size_t) {
             if (handler) handler(ec);
          });
       }
@@ -184,7 +189,7 @@ namespace glz
 
             auto buffer = std::make_shared<std::string>(std::move(chunk));
             asio::async_write(*socket_, asio::buffer(*buffer),
-                              [self, buffer, handler](std::error_code ec, std::size_t) {
+                              [self, buffer, handler](std::error_code ec, size_t) {
                                  if (handler) handler(ec);
                               });
          }
@@ -192,7 +197,7 @@ namespace glz
             // Send raw data
             auto buffer = std::make_shared<std::string>(data);
             asio::async_write(*socket_, asio::buffer(*buffer),
-                              [self, buffer, handler](std::error_code ec, std::size_t) {
+                              [self, buffer, handler](std::error_code ec, size_t) {
                                  if (handler) handler(ec);
                               });
          }
@@ -237,7 +242,7 @@ namespace glz
             std::string final_chunk = "0\r\n\r\n";
             auto buffer = std::make_shared<std::string>(std::move(final_chunk));
 
-            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](asio::error_code, std::size_t) {
+            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](asio::error_code, size_t) {
                if (handler) handler();
                asio::error_code close_ec;
                self->socket_->lowest_layer().close(close_ec);
@@ -273,7 +278,7 @@ namespace glz
          return "";
       }
 
-      std::uint16_t remote_port() const override
+      uint16_t remote_port() const override
       {
          if (socket_) {
             try {
@@ -328,9 +333,9 @@ namespace glz
          }
          else {
             // For TCP sockets, use async_receive with message_peek for more responsive detection
-            auto buffer = std::make_shared<std::array<std::uint8_t, 1>>();
+            auto buffer = std::make_shared<std::array<uint8_t, 1>>();
             socket_->async_receive(
-               asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, std::size_t) {
+               asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, size_t) {
                   if (ec && self->disconnect_handler_) {
                      self->is_closed_ = true;
                      self->disconnect_handler_();
@@ -494,7 +499,7 @@ namespace glz
        * the connection is closed. Set to 0 to disable timeout (not recommended).
        * Default: 60 seconds
        */
-      std::uint32_t keep_alive_timeout = 60;
+      uint32_t keep_alive_timeout = 60;
 
       /**
        * @brief Maximum requests allowed per connection
@@ -503,7 +508,7 @@ namespace glz
        * Connection: close and closes the connection. Set to 0 for unlimited.
        * Default: 0 (unlimited)
        */
-      std::uint32_t max_requests_per_connection = 0;
+      uint32_t max_requests_per_connection = 0;
    };
 
    // Server implementation using non-blocking asio with WebSocket support
@@ -674,7 +679,7 @@ namespace glz
          // deregistered from the reactor BEFORE io_context is destroyed.
       }
 
-      inline http_server& bind(std::string_view address, std::uint16_t port)
+      inline http_server& bind(std::string_view address, uint16_t port)
       {
          try {
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(address), port);
@@ -686,9 +691,9 @@ namespace glz
          return *this;
       }
 
-      inline http_server& bind(std::uint16_t port) { return bind("0.0.0.0", port); }
+      inline http_server& bind(uint16_t port) { return bind("0.0.0.0", port); }
 
-      inline std::uint16_t port(asio::error_code& ec) const
+      inline uint16_t port(asio::error_code& ec) const
       {
          if (!acceptor) {
             ec = asio::error::not_connected;
@@ -701,7 +706,7 @@ namespace glz
          return endpoint.port();
       }
 
-      inline std::uint16_t port() const
+      inline uint16_t port() const
       {
          if (!acceptor) {
             throw std::runtime_error("Server not bound");
@@ -753,7 +758,7 @@ namespace glz
        * io_thread.join();
        * @endcode
        */
-      inline void start(std::optional<std::size_t> num_threads = std::nullopt)
+      inline void start(std::optional<size_t> num_threads = std::nullopt)
       {
          if (running || !acceptor) {
             return;
@@ -762,7 +767,7 @@ namespace glz
          running = true;
 
          // Determine number of threads
-         std::size_t actual_threads;
+         size_t actual_threads;
          if (num_threads.has_value()) {
             // Use the explicitly specified value (including 0)
             actual_threads = *num_threads;
@@ -780,7 +785,7 @@ namespace glz
          // Start worker threads (unless explicitly set to 0)
          if (io_context && actual_threads > 0) {
             threads.reserve(actual_threads);
-            for (std::size_t i = 0; i < actual_threads; ++i) {
+            for (size_t i = 0; i < actual_threads; ++i) {
                threads.emplace_back([this] {
                   io_context->run();
                   // Don't report errors during shutdown
@@ -1038,10 +1043,10 @@ namespace glz
             for (const auto& [route_path, method_handlers] : root_router.routes) {
                // Convert router path /:param to OpenAPI path /{param}
                std::string openapi_path = route_path;
-               std::size_t pos = 0;
+               size_t pos = 0;
                while ((pos = openapi_path.find(':', pos)) != std::string::npos) {
                   openapi_path.replace(pos, 1, "{");
-                  std::size_t end_pos = openapi_path.find('/', pos);
+                  size_t end_pos = openapi_path.find('/', pos);
                   if (end_pos == std::string::npos) {
                      openapi_path.push_back('}');
                   }
@@ -1339,7 +1344,7 @@ namespace glz
        * @param timeout_seconds Seconds to wait for a new request before closing
        * @return Reference to this server for method chaining
        */
-      inline http_server& keep_alive_timeout(std::uint32_t timeout_seconds)
+      inline http_server& keep_alive_timeout(uint32_t timeout_seconds)
       {
          conn_config_.keep_alive_timeout = timeout_seconds;
          return *this;
@@ -1351,7 +1356,7 @@ namespace glz
        * @param max_requests Maximum requests before closing (0 = unlimited)
        * @return Reference to this server for method chaining
        */
-      inline http_server& max_requests_per_connection(std::uint32_t max_requests)
+      inline http_server& max_requests_per_connection(uint32_t max_requests)
       {
          conn_config_.max_requests_per_connection = max_requests;
          return *this;
@@ -1413,7 +1418,7 @@ namespace glz
          request request_;
          asio::ip::tcp::endpoint remote_endpoint;
          std::shared_ptr<asio::steady_timer> idle_timer;
-         std::uint32_t request_count = 0;
+         uint32_t request_count = 0;
          bool should_close = false;
 
          connection_state(std::shared_ptr<socket_type> sock, asio::ip::tcp::endpoint endpoint)
@@ -1425,7 +1430,7 @@ namespace glz
       };
 
       // Helper for executing wrapping middleware chain
-      void execute_middleware_chain(std::size_t index, request& req, response& res, const handler& h)
+      void execute_middleware_chain(size_t index, request& req, response& res, const handler& h)
       {
          if (index >= wrapping_middlewares_.size()) {
             h(req, res);
@@ -1536,7 +1541,7 @@ namespace glz
          }
 
          asio::async_read_until(*conn->socket, *conn->buffer, "\r\n\r\n",
-                                [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
+                                [this, conn](asio::error_code ec, size_t /*bytes_transferred*/) {
                                    // Cancel idle timer since we received data
                                    cancel_idle_timer(conn);
 
@@ -1560,16 +1565,16 @@ namespace glz
          const char* data_ptr = static_cast<const char*>(conn->buffer->data().data());
          std::string_view request_view(data_ptr, data_size);
 
-         std::size_t headers_end_pos = request_view.find("\r\n\r\n");
+         size_t headers_end_pos = request_view.find("\r\n\r\n");
          if (headers_end_pos == std::string_view::npos) {
             send_error_response_with_close(conn, 400, "Bad Request");
             return;
          }
          std::string_view headers_part = request_view.substr(0, headers_end_pos);
-         std::size_t body_start_offset = headers_end_pos + 4;
+         size_t body_start_offset = headers_end_pos + 4;
 
          // Parse request line
-         std::size_t request_line_end_pos = headers_part.find("\r\n");
+         size_t request_line_end_pos = headers_part.find("\r\n");
          std::string_view request_line;
          if (request_line_end_pos == std::string_view::npos) {
             request_line = headers_part; // Request line is the entire headers_part
@@ -1581,7 +1586,7 @@ namespace glz
          }
 
          // Parse method, target, and HTTP version from the request line
-         std::size_t first_space = request_line.find(' ');
+         size_t first_space = request_line.find(' ');
          if (first_space == std::string_view::npos) {
             send_error_response_with_close(conn, 400, "Bad Request");
             return;
@@ -1593,7 +1598,7 @@ namespace glz
             return;
          }
 
-         std::size_t second_space = request_line.find(' ', first_space + 1);
+         size_t second_space = request_line.find(' ', first_space + 1);
          if (second_space == std::string_view::npos) {
             send_error_response_with_close(conn, 400, "Bad Request");
             return;
@@ -1613,7 +1618,7 @@ namespace glz
             return;
          }
          std::string_view version_number = http_version_part.substr(5);
-         std::size_t dot_pos = version_number.find('.');
+         size_t dot_pos = version_number.find('.');
          if (dot_pos == std::string_view::npos || dot_pos == 0 || dot_pos == version_number.length() - 1) {
             send_error_response_with_close(conn, 400, "Bad Request");
             return;
@@ -1640,7 +1645,7 @@ namespace glz
          // Parse headers
          std::unordered_map<std::string, std::string>& headers = conn->request_.headers;
          while (!headers_part.empty()) {
-            std::size_t line_end = headers_part.find("\r\n");
+            size_t line_end = headers_part.find("\r\n");
             std::string_view line = headers_part.substr(0, line_end);
 
             auto colon_pos = line.find(':');
@@ -1672,7 +1677,7 @@ namespace glz
             return;
          }
 
-         std::size_t content_length = 0;
+         size_t content_length = 0;
          if (auto it = headers.find("content-length"); it != headers.end()) {
             try {
                content_length = std::stoul(it->second);
@@ -1686,13 +1691,13 @@ namespace glz
          if (content_length > 0) {
             conn->request_.body.resize(content_length);
             // Copy what's already in the buffer to the body
-            const std::size_t initial_body_size = std::min(content_length, conn->buffer->size());
+            const size_t initial_body_size = std::min(content_length, conn->buffer->size());
             const auto missing_bytes = content_length - initial_body_size;
             std::memcpy(conn->request_.body.data(), conn->buffer->data().data(), initial_body_size);
             conn->buffer->consume(initial_body_size);
             if (initial_body_size < content_length) {
                asio::async_read(*conn->socket, asio::buffer(&conn->request_.body[initial_body_size], missing_bytes),
-                                asio::transfer_exactly(missing_bytes), [this, conn](std::error_code ec, std::size_t) {
+                                asio::transfer_exactly(missing_bytes), [this, conn](std::error_code ec, size_t) {
                                    if (ec) {
                                       error_handler(ec, std::source_location::current());
                                       return;
@@ -1847,7 +1852,7 @@ namespace glz
 
                   std::string allow_header;
                   allow_header.reserve(allowed_methods.size() * 8);
-                  for (std::size_t i = 0; i < allowed_methods.size(); ++i) {
+                  for (size_t i = 0; i < allowed_methods.size(); ++i) {
                      if (i > 0) allow_header.append(", ");
                      allow_header.append(std::string{to_string(allowed_methods[i])});
                   }
@@ -1939,7 +1944,7 @@ namespace glz
       // Send response with keep-alive support
       inline void send_response_with_conn(std::shared_ptr<connection_state> conn, const response& response)
       {
-         std::size_t estimated_size = 64;
+         size_t estimated_size = 64;
 
          for (const auto& [name, value] : response.response_headers) {
             estimated_size += name.size() + value.size() + 4;
@@ -2005,7 +2010,7 @@ namespace glz
          auto response_buffer = std::make_shared<std::string>(std::move(response_str));
 
          asio::async_write(*conn->socket, asio::buffer(*response_buffer),
-                           [this, conn, response_buffer](asio::error_code ec, std::size_t /*bytes_transferred*/) {
+                           [this, conn, response_buffer](asio::error_code ec, size_t /*bytes_transferred*/) {
                               if (ec) {
                                  // Write error - connection is dead
                                  return;
@@ -2165,7 +2170,7 @@ namespace glz
       // Uses enable_shared_from_this to avoid circular reference memory leaks
       template <typename T>
       void send_periodic_data(std::shared_ptr<streaming_connection_interface> conn, std::function<T()> data_generator,
-                              std::chrono::milliseconds interval, std::size_t max_events = 0)
+                              std::chrono::milliseconds interval, size_t max_events = 0)
       {
          if (!conn || !conn->is_open()) return;
 
@@ -2175,11 +2180,11 @@ namespace glz
             std::shared_ptr<asio::steady_timer> timer;
             std::function<T()> data_generator;
             std::chrono::milliseconds interval;
-            std::size_t max_events;
-            std::size_t counter = 0;
+            size_t max_events;
+            size_t counter = 0;
 
             periodic_sender(std::shared_ptr<streaming_connection_interface> c, std::function<T()> gen,
-                            std::chrono::milliseconds intv, std::size_t max_ev)
+                            std::chrono::milliseconds intv, size_t max_ev)
                : conn(std::move(c)),
                  timer(std::make_shared<asio::steady_timer>(conn->get_executor())),
                  data_generator(std::move(gen)),

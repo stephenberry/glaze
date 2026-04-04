@@ -10,6 +10,9 @@ import std;
 // _like
 // Avoid the use of _t as that makes it seem like a type and not a concept
 
+using std::uint8_t;
+using std::size_t;
+
 export namespace glz
 {
    template <class T, class... U>
@@ -45,7 +48,7 @@ export namespace glz
    concept has_data = requires(T v) { v.data(); };
 
    template <class T>
-   concept has_reserve = requires(T t) { t.reserve(std::size_t(1)); };
+   concept has_reserve = requires(T t) { t.reserve(size_t(1)); };
 
    template <class T>
    concept has_capacity = requires(T t) {
@@ -61,7 +64,7 @@ export namespace glz
    template <class T>
    concept byte_like =
       std::same_as<std::remove_cvref_t<T>, std::byte> || std::same_as<std::remove_cvref_t<T>, unsigned char> ||
-      std::same_as<std::remove_cvref_t<T>, std::uint8_t>;
+      std::same_as<std::remove_cvref_t<T>, uint8_t>;
 }
 
 export namespace glz
@@ -133,7 +136,7 @@ export namespace glz
    template <class T1, class T2>
    pair(T1, T2) -> pair<T1, T2>;
 
-   template <std::size_t I, pair_t T>
+   template <size_t I, pair_t T>
    constexpr decltype(auto) get(T&& p) noexcept
    {
       if constexpr (I == 0) {
@@ -175,7 +178,7 @@ export namespace glz
 
    template <class T>
    concept accessible = requires(T container) {
-      { container[std::size_t{}] } -> std::same_as<typename T::reference>;
+      { container[size_t{}] } -> std::same_as<typename T::reference>;
    };
 
    template <class T>
@@ -204,7 +207,7 @@ export namespace glz
       bitset.flip();
       bitset.set(0);
       requires string_like<decltype(bitset.to_string())>;
-      { bitset.count() } -> std::same_as<std::size_t>;
+      { bitset.count() } -> std::same_as<size_t>;
    };
 
    template <class T>
@@ -214,7 +217,7 @@ export namespace glz
    };
 
    template <class T>
-   concept is_dynamic_span = T::extent == static_cast<std::size_t>(-1);
+   concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
 
    template <class Map, class Key>
    concept findable = requires(Map& map, const Key& key) { map.find(key); };
@@ -279,9 +282,9 @@ export namespace glz
          return rng.empty();
       }
       else if constexpr (requires() {
-                            { rng.size() } -> std::same_as<std::size_t>;
+                            { rng.size() } -> std::same_as<size_t>;
                          }) {
-         return rng.size() == std::size_t{0};
+         return rng.size() == size_t{0};
       }
       else {
          return std::cbegin(rng) == std::cend(rng);

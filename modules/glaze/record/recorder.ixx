@@ -18,6 +18,8 @@ import glaze.util.string_literal;
 import glaze.util.type_traits;
 import glaze.util.variant;
 
+using std::size_t;
+
 namespace glz
 {
    namespace detail
@@ -85,8 +87,8 @@ namespace glz
             dumpn(check_indentation_char(Opts), ctx.depth, args...);
          }
 
-         const std::size_t n = value.data.size();
-         for (std::size_t i = 0; i < n; ++i) {
+         const size_t n = value.data.size();
+         for (size_t i = 0; i < n; ++i) {
             auto& [name, v] = value.data[i];
             serialize<JSON>::op<Opts>(name, ctx, args...); // write name as key
 
@@ -141,8 +143,8 @@ namespace glz
          }
 
          // we read into available containers, we do not intialize here
-         const std::size_t n = value.data.size();
-         for (std::size_t i = 0; i < n; ++i) {
+         const size_t n = value.data.size();
+         for (size_t i = 0; i < n; ++i) {
             if (*it == '}') [[unlikely]] {
                ctx.error = error_code::expected_brace;
             }
@@ -198,8 +200,8 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          if constexpr (Opts.layout == rowwise) {
-            const std::size_t n = value.data.size();
-            for (std::size_t i = 0; i < n; ++i) {
+            const size_t n = value.data.size();
+            for (size_t i = 0; i < n; ++i) {
                auto& [name, v] = value.data[i];
                dump_maybe_empty(name, args...);
 
@@ -219,7 +221,7 @@ namespace glz
          else {
             // dump titles
             const auto n = value.data.size();
-            std::size_t i = 0;
+            size_t i = 0;
             for (auto& [name, data] : value.data) {
                dump_maybe_empty(name, args...);
                ++i;
@@ -230,7 +232,7 @@ namespace glz
 
             dump('\n', args...);
 
-            std::size_t row = 0;
+            size_t row = 0;
             bool end = false;
             while (true) {
                i = 0;

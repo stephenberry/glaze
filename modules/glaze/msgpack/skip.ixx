@@ -9,6 +9,10 @@ import glaze.msgpack.common;
 import glaze.core.opts;
 import glaze.core.context;
 
+using std::int8_t;
+using std::uint8_t;
+using std::size_t;
+
 namespace glz
 {
    template <>
@@ -22,13 +26,13 @@ namespace glz
             return;
          }
 
-         const std::uint8_t tag = static_cast<std::uint8_t>(*it++);
+         const uint8_t tag = static_cast<uint8_t>(*it++);
          skip_with_tag<Opts>(ctx, tag, it, end);
       }
 
      private:
       template <auto Opts, class It, class End>
-      static void skip_with_tag(is_context auto& ctx, const std::uint8_t tag, It& it, const End& end) noexcept
+      static void skip_with_tag(is_context auto& ctx, const uint8_t tag, It& it, const End& end) noexcept
       {
          if (msgpack::is_positive_fixint(tag) || msgpack::is_negative_fixint(tag)) {
             return;
@@ -69,7 +73,7 @@ namespace glz
          }
 
          if (msgpack::is_fixstr(tag) || tag == msgpack::str8 || tag == msgpack::str16 || tag == msgpack::str32) {
-            std::size_t len{};
+            size_t len{};
             if (!msgpack::read_str_length(ctx, tag, it, end, len)) {
                return;
             }
@@ -78,7 +82,7 @@ namespace glz
          }
 
          if (tag == msgpack::bin8 || tag == msgpack::bin16 || tag == msgpack::bin32) {
-            std::size_t len{};
+            size_t len{};
             if (!msgpack::read_bin_length(ctx, tag, it, end, len)) {
                return;
             }
@@ -87,22 +91,22 @@ namespace glz
          }
 
          if (msgpack::is_fixarray(tag) || tag == msgpack::array16 || tag == msgpack::array32) {
-            std::size_t len{};
+            size_t len{};
             if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
                return;
             }
-            for (std::size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                op<Opts>(ctx, it, end);
             }
             return;
          }
 
          if (msgpack::is_fixmap(tag) || tag == msgpack::map16 || tag == msgpack::map32) {
-            std::size_t len{};
+            size_t len{};
             if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
                return;
             }
-            for (std::size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                op<Opts>(ctx, it, end); // key
                if (ctx.error != error_code::none) {
                   return;
@@ -133,8 +137,8 @@ namespace glz
             return;
          }
          if (tag == msgpack::ext8 || tag == msgpack::ext16 || tag == msgpack::ext32) {
-            std::size_t len{};
-            std::int8_t type{};
+            size_t len{};
+            int8_t type{};
             if (!msgpack::read_ext_header(ctx, tag, it, end, len, type)) {
                return;
             }

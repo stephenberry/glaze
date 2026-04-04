@@ -5,6 +5,12 @@ import std;
 import glaze;
 import ut;
 
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 
 // Structs for deserialization tests - must be at namespace scope for reflection
@@ -37,10 +43,10 @@ namespace lazy_beve_test
 
    struct Numbers
    {
-      std::int32_t int_val{42};
+      int32_t int_val{42};
       double float_val{3.14};
-      std::int64_t negative{-100};
-      std::uint64_t big{9007199254740993ULL};
+      int64_t negative{-100};
+      uint64_t big{9007199254740993ULL};
    };
 
    struct StringData
@@ -117,7 +123,7 @@ suite lazy_beve_tests = [] {
       expect(doc["name"].get<std::string>().value() == "John");
 
       expect(doc["age"].is_number());
-      expect(doc["age"].get<std::int64_t>().value() == 30);
+      expect(doc["age"].get<int64_t>().value() == 30);
 
       expect(doc["active"].is_boolean());
       expect(doc["active"].get<bool>().value() == true);
@@ -222,10 +228,10 @@ suite lazy_beve_tests = [] {
       expect(result.has_value());
 
       auto& doc = *result;
-      expect(doc["int_val"].get<std::int32_t>().value() == 42);
+      expect(doc["int_val"].get<int32_t>().value() == 42);
       expect(std::abs(doc["float_val"].get<double>().value() - 3.14) < 0.001);
-      expect(doc["negative"].get<std::int64_t>().value() == -100);
-      expect(doc["big"].get<std::uint64_t>().value() == 9007199254740993ULL);
+      expect(doc["negative"].get<int64_t>().value() == -100);
+      expect(doc["big"].get<uint64_t>().value() == 9007199254740993ULL);
    };
 
    "lazy_beve_string_view"_test = [] {
@@ -282,7 +288,7 @@ suite lazy_beve_tests = [] {
       auto& doc = *result;
 
       // Trying to get string as number should fail
-      auto num_result = doc["str"].get<std::int64_t>();
+      auto num_result = doc["str"].get<int64_t>();
       expect(!num_result.has_value());
       expect(num_result.error().ec == glz::error_code::get_wrong_type);
 
@@ -304,15 +310,15 @@ suite lazy_beve_tests = [] {
       auto& doc = *result;
 
       // Sequential access should use progressive scanning
-      expect(doc["a"].get<std::int64_t>().value() == 1);
-      expect(doc["b"].get<std::int64_t>().value() == 2);
-      expect(doc["c"].get<std::int64_t>().value() == 3);
-      expect(doc["d"].get<std::int64_t>().value() == 4);
-      expect(doc["e"].get<std::int64_t>().value() == 5);
+      expect(doc["a"].get<int64_t>().value() == 1);
+      expect(doc["b"].get<int64_t>().value() == 2);
+      expect(doc["c"].get<int64_t>().value() == 3);
+      expect(doc["d"].get<int64_t>().value() == 4);
+      expect(doc["e"].get<int64_t>().value() == 5);
 
       // Accessing earlier key should still work (wrap-around)
-      expect(doc["a"].get<std::int64_t>().value() == 1);
-      expect(doc["c"].get<std::int64_t>().value() == 3);
+      expect(doc["a"].get<int64_t>().value() == 1);
+      expect(doc["c"].get<int64_t>().value() == 3);
 
       // Non-existent key should return error
       auto missing = doc["z"];
@@ -331,14 +337,14 @@ suite lazy_beve_tests = [] {
       auto& doc = *result;
 
       // Access z first (advances parse_pos to end)
-      expect(doc["z"].get<std::int64_t>().value() == 30);
+      expect(doc["z"].get<int64_t>().value() == 30);
 
       // Access x (should wrap around)
-      expect(doc["x"].get<std::int64_t>().value() == 10);
+      expect(doc["x"].get<int64_t>().value() == 10);
 
       // Reset and access again
       doc.reset_parse_pos();
-      expect(doc["y"].get<std::int64_t>().value() == 20);
+      expect(doc["y"].get<int64_t>().value() == 20);
    };
 
    // ============================================================================
@@ -377,9 +383,9 @@ suite lazy_beve_tests = [] {
       expect(!indexed.empty());
 
       // Key lookup
-      expect(indexed["a"].get<std::int64_t>().value() == 1);
-      expect(indexed["b"].get<std::int64_t>().value() == 2);
-      expect(indexed["c"].get<std::int64_t>().value() == 3);
+      expect(indexed["a"].get<int64_t>().value() == 1);
+      expect(indexed["b"].get<int64_t>().value() == 2);
+      expect(indexed["c"].get<int64_t>().value() == 3);
       expect(indexed["missing"].has_error());
 
       // Contains
@@ -398,9 +404,9 @@ suite lazy_beve_tests = [] {
       expect(result.has_value());
 
       auto indexed = result->root().index();
-      std::vector<std::pair<std::string_view, std::int64_t>> items;
+      std::vector<std::pair<std::string_view, int64_t>> items;
       for (auto& item : indexed) {
-         auto val = item.get<std::int64_t>();
+         auto val = item.get<int64_t>();
          if (val) {
             items.emplace_back(item.key(), *val);
          }
@@ -673,10 +679,10 @@ suite lazy_beve_tests = [] {
       auto result = glz::lazy_beve(buffer);
       expect(result.has_value());
 
-      std::int64_t sum = 0;
-      std::size_t count = 0;
+      int64_t sum = 0;
+      size_t count = 0;
       for (auto& item : result->root()) {
-         auto val = item.get<std::int64_t>();
+         auto val = item.get<int64_t>();
          if (val) sum += *val;
          ++count;
       }
@@ -694,7 +700,7 @@ suite lazy_beve_tests = [] {
       auto result = glz::lazy_beve(buffer);
       expect(result.has_value());
 
-      std::size_t count = 0;
+      size_t count = 0;
       for ([[maybe_unused]] auto& item : result->root()) {
          ++count;
       }
@@ -755,9 +761,9 @@ suite lazy_beve_tests = [] {
       expect(doc.root().size() == 100u);
 
       // Access specific keys
-      expect(doc["key0"].get<std::int64_t>().value() == 0);
-      expect(doc["key50"].get<std::int64_t>().value() == 50);
-      expect(doc["key99"].get<std::int64_t>().value() == 99);
+      expect(doc["key0"].get<int64_t>().value() == 0);
+      expect(doc["key50"].get<int64_t>().value() == 50);
+      expect(doc["key99"].get<int64_t>().value() == 99);
    };
 
    "lazy_beve_large_array"_test = [] {
@@ -792,7 +798,7 @@ suite lazy_beve_tests = [] {
       // Test copy
       auto doc_copy = *result;
       expect(doc_copy["name"].get<std::string>().value() == "Alice");
-      expect(doc_copy["age"].get<std::int64_t>().value() == 30);
+      expect(doc_copy["age"].get<int64_t>().value() == 30);
    };
 
    "lazy_beve_document_move"_test = [] {
@@ -807,7 +813,7 @@ suite lazy_beve_tests = [] {
       // Test move
       auto doc_moved = std::move(*result);
       expect(doc_moved["name"].get<std::string>().value() == "Bob");
-      expect(doc_moved["age"].get<std::int64_t>().value() == 25);
+      expect(doc_moved["age"].get<int64_t>().value() == 25);
    };
 
    // ============================================================================
@@ -824,7 +830,7 @@ suite lazy_beve_tests = [] {
       expect(result.has_value());
 
       // Iterate over number-keyed map
-      std::size_t count = 0;
+      size_t count = 0;
       for (auto& item : result->root()) {
          auto val = item.get<std::string_view>();
          expect(val.has_value());
@@ -934,14 +940,14 @@ suite lazy_beve_tests = [] {
       auto indexed = result->root().index();
 
       // Random access by position
-      expect(indexed[0].get<std::int64_t>().value() == 10);
-      expect(indexed[2].get<std::int64_t>().value() == 30);
-      expect(indexed[4].get<std::int64_t>().value() == 50);
+      expect(indexed[0].get<int64_t>().value() == 10);
+      expect(indexed[2].get<int64_t>().value() == 30);
+      expect(indexed[4].get<int64_t>().value() == 50);
 
       // Out of order access
-      expect(indexed[4].get<std::int64_t>().value() == 50);
-      expect(indexed[1].get<std::int64_t>().value() == 20);
-      expect(indexed[3].get<std::int64_t>().value() == 40);
+      expect(indexed[4].get<int64_t>().value() == 50);
+      expect(indexed[1].get<int64_t>().value() == 20);
+      expect(indexed[3].get<int64_t>().value() == 40);
    };
 
    "indexed_lazy_beve_iterator_arithmetic"_test = [] {
@@ -965,13 +971,13 @@ suite lazy_beve_tests = [] {
       // Test iterator arithmetic
       it += 3;
       // Values depend on map ordering, just verify no crash
-      expect((*it).get<std::int64_t>().has_value());
+      expect((*it).get<int64_t>().has_value());
 
       it -= 2;
-      expect((*it).get<std::int64_t>().has_value());
+      expect((*it).get<int64_t>().has_value());
 
       auto it2 = it + 5;
-      expect((*it2).get<std::int64_t>().has_value());
+      expect((*it2).get<int64_t>().has_value());
 
       auto dist = indexed.end() - indexed.begin();
       expect(dist == 10);
@@ -1024,7 +1030,7 @@ suite lazy_beve_tests = [] {
    // ============================================================================
 
    "lazy_beve_uint_array"_test = [] {
-      std::vector<std::uint32_t> uints{100u, 200u, 300u};
+      std::vector<uint32_t> uints{100u, 200u, 300u};
       std::vector<std::byte> buffer;
       auto ec = glz::write_beve(uints, buffer);
       expect(ec == glz::error_code::none);
@@ -1038,7 +1044,7 @@ suite lazy_beve_tests = [] {
    };
 
    "lazy_beve_uint64_array"_test = [] {
-      std::vector<std::uint64_t> uints{1ULL << 40, 1ULL << 50, 1ULL << 60};
+      std::vector<uint64_t> uints{1ULL << 40, 1ULL << 50, 1ULL << 60};
       std::vector<std::byte> buffer;
       auto ec = glz::write_beve(uints, buffer);
       expect(ec == glz::error_code::none);

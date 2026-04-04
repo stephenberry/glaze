@@ -14,6 +14,11 @@ import std;
 // - https://github.com/ibireme/c_numconv_benchmark/blob/master/src/itoa/itoa_yy.c
 // - https://github.com/RealTimeChris/Jsonifier (IToStr.hpp)
 
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+
 namespace glz
 {
    namespace itoa_40kb_impl
@@ -25,12 +30,12 @@ namespace glz
       // 4-digit std::uint32_t table for direct 4-byte memcpy (10000 × 4 = 40KB)
       // Generated at compile-time with correct byte order for target endianness
       inline constexpr auto digit_quads = []() consteval {
-         std::array<std::uint32_t, 10000> table{};
-         for (std::uint32_t i = 0; i < 10000; ++i) {
-            const auto d0 = std::uint32_t('0' + i / 1000);
-            const auto d1 = std::uint32_t('0' + (i / 100) % 10);
-            const auto d2 = std::uint32_t('0' + (i / 10) % 10);
-            const auto d3 = std::uint32_t('0' + i % 10);
+         std::array<uint32_t, 10000> table{};
+         for (uint32_t i = 0; i < 10000; ++i) {
+            const auto d0 = uint32_t('0' + i / 1000);
+            const auto d1 = uint32_t('0' + (i / 100) % 10);
+            const auto d2 = uint32_t('0' + (i / 10) % 10);
+            const auto d3 = uint32_t('0' + i % 10);
             if constexpr (std::endian::native == std::endian::little) {
                table[i] = d0 | (d1 << 8) | (d2 << 16) | (d3 << 24);
             }
@@ -43,52 +48,52 @@ namespace glz
 
       // 128-bit multiplication for efficient division by 100000000
 #if defined(__SIZEOF_INT128__)
-      GLZ_ALWAYS_INLINE std::uint64_t div_1e8(std::uint64_t value) noexcept
+      GLZ_ALWAYS_INLINE uint64_t div_1e8(uint64_t value) noexcept
       {
          constexpr __uint128_t multiplier = 0xabcc77118461cefdULL;
-         constexpr std::uint64_t shift = 90;
-         return static_cast<std::uint64_t>((static_cast<__uint128_t>(value) * multiplier) >> shift);
+         constexpr uint64_t shift = 90;
+         return static_cast<uint64_t>((static_cast<__uint128_t>(value) * multiplier) >> shift);
       }
 #else
-      GLZ_ALWAYS_INLINE std::uint64_t div_1e8(std::uint64_t value) noexcept { return value / 100000000ULL; }
+      GLZ_ALWAYS_INLINE uint64_t div_1e8(uint64_t value) noexcept { return value / 100000000ULL; }
 #endif
 
       // ==================== std::uint32_t implementations ====================
 
-      GLZ_ALWAYS_INLINE char* u32_2(char* buf, std::uint32_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u32_2(char* buf, uint32_t val) noexcept
       {
-         const std::uint64_t lz = val < 10;
+         const uint64_t lz = val < 10;
          // Use OR since val*2 is always even (bit 0 is 0)
          std::memcpy(buf, char_table + ((val * 2) | lz), 2);
          buf -= lz;
          return buf + 2;
       }
 
-      GLZ_ALWAYS_INLINE char* u32_4(char* buf, std::uint32_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u32_4(char* buf, uint32_t val) noexcept
       {
-         const std::uint32_t aa = (val * 5243) >> 19;
-         const std::uint64_t lz = val < 1000;
+         const uint32_t aa = (val * 5243) >> 19;
+         const uint64_t lz = val < 1000;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_pairs[val - aa * 100], 2);
          return buf + 4;
       }
 
-      GLZ_ALWAYS_INLINE char* u32_6(char* buf, std::uint32_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u32_6(char* buf, uint32_t val) noexcept
       {
-         const std::uint32_t aa = static_cast<std::uint32_t>((static_cast<std::uint64_t>(val) * 429497ULL) >> 32);
-         const std::uint64_t lz = val < 100000;
+         const uint32_t aa = static_cast<uint32_t>((static_cast<uint64_t>(val) * 429497ULL) >> 32);
+         const uint64_t lz = val < 100000;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_quads[val - aa * 10000], 4);
          return buf + 6;
       }
 
-      GLZ_ALWAYS_INLINE char* u32_8(char* buf, std::uint32_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u32_8(char* buf, uint32_t val) noexcept
       {
-         const std::uint64_t aabb = (static_cast<std::uint64_t>(val) * 109951163ULL) >> 40;
-         const std::uint64_t aa = (aabb * 5243ULL) >> 19;
-         const std::uint64_t lz = val < 10000000;
+         const uint64_t aabb = (static_cast<uint64_t>(val) * 109951163ULL) >> 40;
+         const uint64_t aa = (aabb * 5243ULL) >> 19;
+         const uint64_t lz = val < 10000000;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_pairs[aabb - aa * 100], 2);
@@ -96,15 +101,15 @@ namespace glz
          return buf + 8;
       }
 
-      GLZ_ALWAYS_INLINE char* u32_10(char* buf, std::uint32_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u32_10(char* buf, uint32_t val) noexcept
       {
-         const std::uint64_t high = div_1e8(val);
-         const std::uint64_t low = val - high * 100000000;
-         const std::uint64_t lz = high < 10;
+         const uint64_t high = div_1e8(val);
+         const uint64_t low = val - high * 100000000;
+         const uint64_t lz = high < 10;
          std::memcpy(buf, char_table + ((high * 2) | lz), 2);
          buf -= lz;
-         const std::uint64_t aabb = (low * 109951163ULL) >> 40;
-         const std::uint64_t ccdd = low - aabb * 10000;
+         const uint64_t aabb = (low * 109951163ULL) >> 40;
+         const uint64_t ccdd = low - aabb * 10000;
          std::memcpy(buf + 2, &digit_quads[aabb], 4);
          std::memcpy(buf + 6, &digit_quads[ccdd], 4);
          return buf + 10;
@@ -112,39 +117,39 @@ namespace glz
 
       // ==================== std::uint64_t implementations ====================
 
-      GLZ_ALWAYS_INLINE char* u64_2(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_2(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t lz = val < 10;
+         const uint64_t lz = val < 10;
          std::memcpy(buf, char_table + ((val * 2) | lz), 2);
          buf -= lz;
          return buf + 2;
       }
 
-      GLZ_ALWAYS_INLINE char* u64_4(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_4(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t aa = (val * 5243ULL) >> 19;
-         const std::uint64_t lz = val < 1000;
+         const uint64_t aa = (val * 5243ULL) >> 19;
+         const uint64_t lz = val < 1000;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_pairs[val - aa * 100], 2);
          return buf + 4;
       }
 
-      GLZ_ALWAYS_INLINE char* u64_6(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_6(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t aa = (val * 429497ULL) >> 32;
-         const std::uint64_t lz = val < 100000;
+         const uint64_t aa = (val * 429497ULL) >> 32;
+         const uint64_t lz = val < 100000;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_quads[val - aa * 10000], 4);
          return buf + 6;
       }
 
-      GLZ_ALWAYS_INLINE char* u64_8(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_8(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t aabb = (val * 109951163ULL) >> 40;
-         const std::uint64_t aa = (aabb * 5243ULL) >> 19;
-         const std::uint64_t lz = val < 10000000;
+         const uint64_t aabb = (val * 109951163ULL) >> 40;
+         const uint64_t aa = (aabb * 5243ULL) >> 19;
+         const uint64_t lz = val < 10000000;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_pairs[aabb - aa * 100], 2);
@@ -152,62 +157,62 @@ namespace glz
          return buf + 8;
       }
 
-      GLZ_ALWAYS_INLINE char* u64_10(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_10(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t high = div_1e8(val);
-         const std::uint64_t low = val - high * 100000000;
-         const std::uint64_t lz = high < 10;
+         const uint64_t high = div_1e8(val);
+         const uint64_t low = val - high * 100000000;
+         const uint64_t lz = high < 10;
          std::memcpy(buf, char_table + ((high * 2) | lz), 2);
          buf -= lz;
-         const std::uint64_t aabb = (low * 109951163ULL) >> 40;
-         const std::uint64_t ccdd = low - aabb * 10000;
+         const uint64_t aabb = (low * 109951163ULL) >> 40;
+         const uint64_t ccdd = low - aabb * 10000;
          std::memcpy(buf + 2, &digit_quads[aabb], 4);
          std::memcpy(buf + 6, &digit_quads[ccdd], 4);
          return buf + 10;
       }
 
-      GLZ_ALWAYS_INLINE char* u64_12(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_12(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t high = div_1e8(val);
-         const std::uint64_t low = val - high * 100000000;
-         const std::uint64_t aa = (high * 5243ULL) >> 19;
-         const std::uint64_t lz = aa < 10;
+         const uint64_t high = div_1e8(val);
+         const uint64_t low = val - high * 100000000;
+         const uint64_t aa = (high * 5243ULL) >> 19;
+         const uint64_t lz = aa < 10;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_pairs[high - aa * 100], 2);
-         const std::uint64_t aabb = (low * 109951163ULL) >> 40;
-         const std::uint64_t ccdd = low - aabb * 10000;
+         const uint64_t aabb = (low * 109951163ULL) >> 40;
+         const uint64_t ccdd = low - aabb * 10000;
          std::memcpy(buf + 4, &digit_quads[aabb], 4);
          std::memcpy(buf + 8, &digit_quads[ccdd], 4);
          return buf + 12;
       }
 
-      GLZ_ALWAYS_INLINE char* u64_14(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_14(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t high = div_1e8(val);
-         const std::uint64_t low = val - high * 100000000;
-         const std::uint64_t aa = (high * 429497ULL) >> 32;
-         const std::uint64_t lz = aa < 10;
-         const std::uint64_t bbcc = high - aa * 10000;
+         const uint64_t high = div_1e8(val);
+         const uint64_t low = val - high * 100000000;
+         const uint64_t aa = (high * 429497ULL) >> 32;
+         const uint64_t lz = aa < 10;
+         const uint64_t bbcc = high - aa * 10000;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_quads[bbcc], 4);
-         const std::uint64_t aabb = (low * 109951163ULL) >> 40;
-         const std::uint64_t ccdd = low - aabb * 10000;
+         const uint64_t aabb = (low * 109951163ULL) >> 40;
+         const uint64_t ccdd = low - aabb * 10000;
          std::memcpy(buf + 6, &digit_quads[aabb], 4);
          std::memcpy(buf + 10, &digit_quads[ccdd], 4);
          return buf + 14;
       }
 
-      GLZ_ALWAYS_INLINE char* u64_16(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_16(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t high = div_1e8(val);
-         const std::uint64_t low = val - high * 100000000;
-         std::uint64_t aabb = (high * 109951163ULL) >> 40;
-         std::uint64_t ccdd = high - aabb * 10000;
-         const std::uint64_t aa = (aabb * 5243ULL) >> 19;
-         const std::uint64_t lz = aa < 10;
-         const std::uint64_t bb = aabb - aa * 100;
+         const uint64_t high = div_1e8(val);
+         const uint64_t low = val - high * 100000000;
+         uint64_t aabb = (high * 109951163ULL) >> 40;
+         uint64_t ccdd = high - aabb * 10000;
+         const uint64_t aa = (aabb * 5243ULL) >> 19;
+         const uint64_t lz = aa < 10;
+         const uint64_t bb = aabb - aa * 100;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_pairs[bb], 2);
@@ -219,17 +224,17 @@ namespace glz
          return buf + 16;
       }
 
-      GLZ_ALWAYS_INLINE char* u64_18(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_18(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t high = div_1e8(val);
-         const std::uint64_t low = val - high * 100000000;
-         const std::uint64_t high10 = div_1e8(high);
-         const std::uint64_t low10 = high - high10 * 100000000;
-         const std::uint64_t lz = high10 < 10;
+         const uint64_t high = div_1e8(val);
+         const uint64_t low = val - high * 100000000;
+         const uint64_t high10 = div_1e8(high);
+         const uint64_t low10 = high - high10 * 100000000;
+         const uint64_t lz = high10 < 10;
          std::memcpy(buf, char_table + ((high10 * 2) | lz), 2);
          buf -= lz;
-         std::uint64_t aabb = (low10 * 109951163ULL) >> 40;
-         std::uint64_t ccdd = low10 - aabb * 10000;
+         uint64_t aabb = (low10 * 109951163ULL) >> 40;
+         uint64_t ccdd = low10 - aabb * 10000;
          std::memcpy(buf + 2, &digit_quads[aabb], 4);
          std::memcpy(buf + 6, &digit_quads[ccdd], 4);
          aabb = (low * 109951163ULL) >> 40;
@@ -239,19 +244,19 @@ namespace glz
          return buf + 18;
       }
 
-      GLZ_ALWAYS_INLINE char* u64_20(char* buf, std::uint64_t val) noexcept
+      GLZ_ALWAYS_INLINE char* u64_20(char* buf, uint64_t val) noexcept
       {
-         const std::uint64_t high = div_1e8(val);
-         const std::uint64_t low = val - high * 100000000;
-         const std::uint64_t high12 = div_1e8(high);
-         const std::uint64_t low12 = high - high12 * 100000000;
-         const std::uint64_t aa = (high12 * 5243ULL) >> 19;
-         const std::uint64_t lz = aa < 10;
+         const uint64_t high = div_1e8(val);
+         const uint64_t low = val - high * 100000000;
+         const uint64_t high12 = div_1e8(high);
+         const uint64_t low12 = high - high12 * 100000000;
+         const uint64_t aa = (high12 * 5243ULL) >> 19;
+         const uint64_t lz = aa < 10;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
          buf -= lz;
          std::memcpy(buf + 2, &digit_pairs[high12 - aa * 100], 2);
-         std::uint64_t aabb = (low12 * 109951163ULL) >> 40;
-         std::uint64_t ccdd = low12 - aabb * 10000;
+         uint64_t aabb = (low12 * 109951163ULL) >> 40;
+         uint64_t ccdd = low12 - aabb * 10000;
          std::memcpy(buf + 4, &digit_quads[aabb], 4);
          std::memcpy(buf + 8, &digit_quads[ccdd], 4);
          aabb = (low * 109951163ULL) >> 40;
@@ -267,7 +272,7 @@ namespace glz
    // Use to_chars from itoa.hpp for smaller binary size
 
    export template <class T>
-      requires std::same_as<std::remove_cvref_t<T>, std::uint32_t>
+      requires std::same_as<std::remove_cvref_t<T>, uint32_t>
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
       using namespace itoa_40kb_impl;
@@ -289,16 +294,16 @@ namespace glz
    }
 
    export template <class T>
-      requires std::same_as<std::remove_cvref_t<T>, std::int32_t>
+      requires std::same_as<std::remove_cvref_t<T>, int32_t>
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
       *buf = '-';
       return to_chars_40kb(buf + (val < 0),
-                           static_cast<std::uint32_t>((static_cast<std::uint32_t>(val) ^ (val >> 31)) - (val >> 31)));
+                           static_cast<uint32_t>((static_cast<uint32_t>(val) ^ (val >> 31)) - (val >> 31)));
    }
 
    export template <class T>
-      requires std::same_as<std::remove_cvref_t<T>, std::uint64_t>
+      requires std::same_as<std::remove_cvref_t<T>, uint64_t>
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
       using namespace itoa_40kb_impl;
@@ -335,12 +340,12 @@ namespace glz
    }
 
    export template <class T>
-      requires std::same_as<std::remove_cvref_t<T>, std::int64_t>
+      requires std::same_as<std::remove_cvref_t<T>, int64_t>
    GLZ_ALWAYS_INLINE char* to_chars_40kb(char* buf, T val) noexcept
    {
       *buf = '-';
       return to_chars_40kb(buf + (val < 0),
-                           static_cast<std::uint64_t>((static_cast<std::uint64_t>(val) ^ (val >> 63)) - (val >> 63)));
+                           static_cast<uint64_t>((static_cast<uint64_t>(val) ^ (val >> 63)) - (val >> 63)));
    }
 
 } // namespace glz

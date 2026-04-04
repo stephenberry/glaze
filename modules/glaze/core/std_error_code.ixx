@@ -16,13 +16,15 @@ import glaze.core.context;
 import glaze.core.error_category;
 import glaze.core.meta;
 
+using std::uint32_t;
+
 export namespace glz
 {
    struct glaze_error_category : public std::error_category
    {
       const char* name() const noexcept override { return "glaze"; }
 
-      std::string message(int ev) const override { return {meta<error_code>::keys[std::uint32_t(ev)]}; }
+      std::string message(int ev) const override { return {meta<error_code>::keys[uint32_t(ev)]}; }
    };
 
    inline glaze_error_category error_category{};

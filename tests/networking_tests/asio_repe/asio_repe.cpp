@@ -3,6 +3,8 @@
 
 #include "ut/ut.hpp"
 
+using std::size_t;
+
 using namespace ut;
 
 #include <iostream>
@@ -170,11 +172,11 @@ void asio_client_test()
       std::vector<std::future<void>> threads;
       threads.reserve(N);
 
-      for (std::size_t i = 0; i < N; ++i) {
+      for (size_t i = 0; i < N; ++i) {
          clients.emplace_back(glz::asio_client{"localhost", std::to_string(port)});
       }
 
-      for (std::size_t i = 0; i < N; ++i) {
+      for (size_t i = 0; i < N; ++i) {
          threads.emplace_back(std::async([&, i] {
             auto& client = clients[i];
             if (auto ec = client.init(); bool(ec)) {

@@ -10,6 +10,8 @@ import glaze.util.type_traits;
 
 #include "glaze/util/inline.hpp"
 
+using std::size_t;
+
 export namespace glz
 {
    namespace detail
@@ -51,10 +53,10 @@ export namespace glz
          }
       }();
 
-      constexpr std::size_t max_pure_reflection_count = 128;
+      constexpr size_t max_pure_reflection_count = 128;
    }
 
-   template <class T, std::size_t N = detail::count_members<T>>
+   template <class T, size_t N = detail::count_members<T>>
    requires(N <= detail::max_pure_reflection_count)
    GLZ_ALWAYS_INLINE constexpr decltype(auto) to_tie(T&& t)
    {
@@ -1271,7 +1273,7 @@ export namespace glz
          const T* ptr;
       };
 
-      template <std::size_t N, class T>
+      template <size_t N, class T>
       constexpr auto get_ptr(T&& t) noexcept
       {
          auto& p = get<N>(to_tie(t));

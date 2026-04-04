@@ -20,7 +20,7 @@ extern "C" {
 typedef struct repe_buffer
 {
    const char* data;
-   std::uint64_t size;
+   uint64_t size;
 } repe_buffer;
 
 // Result codes for plugin operations
@@ -45,7 +45,7 @@ typedef struct repe_plugin_data
 //
 // NOTE: This is kept as a standalone function (not in the struct) for ABI safety.
 // The version must be checked BEFORE interpreting the struct layout.
-std::uint32_t repe_plugin_interface_version(void);
+uint32_t repe_plugin_interface_version(void);
 
 // ---------------------------------------------------------------------------
 // Plugin Information (required)
@@ -101,7 +101,7 @@ void repe_plugin_shutdown(void);
 //
 // WARNING: Do not store the returned buffer pointer for later use.
 // The memory will be overwritten by subsequent calls.
-repe_buffer repe_plugin_call(const char* request, std::uint64_t request_size);
+repe_buffer repe_plugin_call(const char* request, uint64_t request_size);
 
 #ifdef __cplusplus
 }

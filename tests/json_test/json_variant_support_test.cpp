@@ -9,6 +9,12 @@ import glaze.json;
 import glaze.tests.json.json_test_shared_types;
 import ut;
 
+using std::int8_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 
 struct put_action
@@ -58,7 +64,7 @@ struct glz::meta<tagged_variant2>
 };
 
 // Test array based variant (experimental, not meant for external usage since api might change)
-using num_variant = std::variant<double, std::int32_t, std::uint64_t, std::int8_t, float>;
+using num_variant = std::variant<double, int32_t, uint64_t, int8_t, float>;
 struct holds_some_num
 {
    num_variant num{};
@@ -169,20 +175,20 @@ suite tagged_variant_tests = [] {
       expect(ec == glz::error_code::none) << glz::format_error(ec, b);
       expect(std::get<float>(obj.num) == 3.14f);
       expect(not glz::read_json(obj, R"({"num":["std::uint64_t", 5]})"));
-      expect(std::get<std::uint64_t>(obj.num) == 5);
+      expect(std::get<uint64_t>(obj.num) == 5);
       expect(not glz::read_json(obj, R"({"num":["std::int8_t", -3]})"));
-      expect(std::get<std::int8_t>(obj.num) == -3);
+      expect(std::get<int8_t>(obj.num) == -3);
       expect(not glz::read_json(obj, R"({"num":["std::int32_t", -2]})"));
-      expect(std::get<std::int32_t>(obj.num) == -2);
+      expect(std::get<int32_t>(obj.num) == -2);
 
       obj.num = 5.0;
       std::string s{};
       expect(not glz::write_json(obj, s));
       expect(s == R"({"num":["double",5]})");
-      obj.num = std::uint64_t{3};
+      obj.num = uint64_t{3};
       expect(not glz::write_json(obj, s));
       expect(s == R"({"num":["std::uint64_t",3]})");
-      obj.num = std::int8_t{-5};
+      obj.num = int8_t{-5};
       expect(not glz::write_json(obj, s));
       expect(s == R"({"num":["std::int8_t",-5]})");
    };
@@ -238,9 +244,9 @@ suite variant_tests = [] {
    };
 
    "variant_read_"_test = [] {
-      std::variant<std::int32_t, double> x = 44;
+      std::variant<int32_t, double> x = 44;
       expect(glz::read_json(x, "33") == glz::error_code::none);
-      expect(std::get<std::int32_t>(x) == 33);
+      expect(std::get<int32_t>(x) == 33);
    };
 
    // TODO: Make reading into the active element work here
@@ -301,10 +307,10 @@ suite variant_tests = [] {
    };
 
    "variant write/read enum"_test = [] {
-      std::variant<Color, std::uint16_t> var{Color::Red};
+      std::variant<Color, uint16_t> var{Color::Red};
       auto res{glz::write_json(var).value_or("error")};
       expect(res == "\"Red\"") << res;
-      auto read{glz::read_json<std::variant<Color, std::uint16_t>>(res)};
+      auto read{glz::read_json<std::variant<Color, uint16_t>>(res)};
       expect(read.has_value());
       expect(std::holds_alternative<Color>(read.value()));
       expect(std::get<Color>(read.value()) == Color::Red);
@@ -490,7 +496,7 @@ suite vector_variant_reflection_tests = [] {
 
       expect(decoded.size() == original.size());
 
-      for (std::size_t i = 0; i < original.size(); ++i) {
+      for (size_t i = 0; i < original.size(); ++i) {
          expect(original[i].index() == decoded[i].index());
       }
    };

@@ -5,6 +5,11 @@ import std;
 import glaze.json;
 import ut;
 
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::size_t;
+
 using namespace ut;
 
 // Structs for deserialization tests (must be at namespace scope for reflection)
@@ -51,7 +56,7 @@ suite lazy_json_tests = [] {
       expect(doc["name"].get<std::string>().value() == "John");
 
       expect(doc["age"].is_number());
-      expect(doc["age"].get<std::int64_t>().value() == 30);
+      expect(doc["age"].get<int64_t>().value() == 30);
 
       expect(doc["active"].is_boolean());
       expect(doc["active"].get<bool>().value() == true);
@@ -69,9 +74,9 @@ suite lazy_json_tests = [] {
       expect(doc.is_array());
       expect(doc.root().size() == 6u);
 
-      expect(doc[0].get<std::int64_t>().value() == 1);
-      expect(doc[1].get<std::int64_t>().value() == 2);
-      expect(doc[2].get<std::int64_t>().value() == 3);
+      expect(doc[0].get<int64_t>().value() == 1);
+      expect(doc[1].get<int64_t>().value() == 2);
+      expect(doc[2].get<int64_t>().value() == 3);
       expect(doc[3].get<std::string>().value() == "hello");
       expect(doc[4].get<bool>().value() == true);
       expect(doc[5].is_null());
@@ -86,7 +91,7 @@ suite lazy_json_tests = [] {
       expect(doc["person"]["name"].get<std::string>().value() == "Alice");
       expect(doc["person"]["friends"][0].get<std::string>().value() == "Bob");
       expect(doc["person"]["friends"][1].get<std::string>().value() == "Charlie");
-      expect(doc["count"].get<std::int64_t>().value() == 2);
+      expect(doc["count"].get<int64_t>().value() == 2);
    };
 
    "lazy_json_escaped_string"_test = [] {
@@ -168,16 +173,16 @@ suite lazy_json_tests = [] {
       expect(result.has_value());
 
       auto& doc = *result;
-      expect(doc["int"].get<std::int32_t>().value() == 42);
-      expect(doc["int"].get<std::uint32_t>().value() == 42u);
-      expect(doc["int"].get<std::int64_t>().value() == 42);
+      expect(doc["int"].get<int32_t>().value() == 42);
+      expect(doc["int"].get<uint32_t>().value() == 42u);
+      expect(doc["int"].get<int64_t>().value() == 42);
       expect(doc["int"].get<double>().value() == 42.0);
 
       expect(std::abs(doc["float"].get<double>().value() - 3.14) < 0.001);
-      expect(doc["negative"].get<std::int64_t>().value() == -100);
+      expect(doc["negative"].get<int64_t>().value() == -100);
 
       // Big integers
-      expect(doc["big"].get<std::int64_t>().value() == 9007199254740993);
+      expect(doc["big"].get<int64_t>().value() == 9007199254740993);
    };
 
    "lazy_json_raw_string_view"_test = [] {
@@ -224,7 +229,7 @@ suite lazy_json_tests = [] {
       auto& doc = *result;
 
       // Trying to get string as number should fail
-      auto num_result = doc["str"].get<std::int64_t>();
+      auto num_result = doc["str"].get<int64_t>();
       expect(!num_result.has_value());
       expect(num_result.error().ec == glz::error_code::get_wrong_type);
 
@@ -252,8 +257,8 @@ suite lazy_json_tests = [] {
 
       auto& doc = *result;
       expect(doc.root().size() == 20u);
-      for (std::size_t i = 0; i < 20; ++i) {
-         expect(doc[i].get<std::int64_t>().value() == static_cast<std::int64_t>(i));
+      for (size_t i = 0; i < 20; ++i) {
+         expect(doc[i].get<int64_t>().value() == static_cast<int64_t>(i));
       }
    };
 
@@ -286,15 +291,15 @@ suite lazy_json_tests = [] {
       auto& doc = *result;
 
       // Sequential access should use progressive scanning
-      expect(doc["a"].get<std::int64_t>().value() == 1);
-      expect(doc["b"].get<std::int64_t>().value() == 2);
-      expect(doc["c"].get<std::int64_t>().value() == 3);
-      expect(doc["d"].get<std::int64_t>().value() == 4);
-      expect(doc["e"].get<std::int64_t>().value() == 5);
+      expect(doc["a"].get<int64_t>().value() == 1);
+      expect(doc["b"].get<int64_t>().value() == 2);
+      expect(doc["c"].get<int64_t>().value() == 3);
+      expect(doc["d"].get<int64_t>().value() == 4);
+      expect(doc["e"].get<int64_t>().value() == 5);
 
       // Accessing earlier key should still work (wrap-around)
-      expect(doc["a"].get<std::int64_t>().value() == 1);
-      expect(doc["c"].get<std::int64_t>().value() == 3);
+      expect(doc["a"].get<int64_t>().value() == 1);
+      expect(doc["c"].get<int64_t>().value() == 3);
 
       // Non-existent key should return error
       auto missing = doc["z"];
@@ -309,14 +314,14 @@ suite lazy_json_tests = [] {
       auto& doc = *result;
 
       // Access z first (advances parse_pos to end)
-      expect(doc["z"].get<std::int64_t>().value() == 30);
+      expect(doc["z"].get<int64_t>().value() == 30);
 
       // Access x (should wrap around)
-      expect(doc["x"].get<std::int64_t>().value() == 10);
+      expect(doc["x"].get<int64_t>().value() == 10);
 
       // Reset and access again
       doc.reset_parse_pos();
-      expect(doc["y"].get<std::int64_t>().value() == 20);
+      expect(doc["y"].get<int64_t>().value() == 20);
    };
 
    "lazy_json_unicode_direct_utf8"_test = [] {
@@ -472,9 +477,9 @@ suite lazy_json_tests = [] {
       expect(!indexed.empty());
 
       // O(1) random access
-      expect(indexed[0].get<std::int64_t>().value() == 1);
-      expect(indexed[2].get<std::int64_t>().value() == 3);
-      expect(indexed[4].get<std::int64_t>().value() == 5);
+      expect(indexed[0].get<int64_t>().value() == 1);
+      expect(indexed[2].get<int64_t>().value() == 3);
+      expect(indexed[4].get<int64_t>().value() == 5);
 
       // Out of bounds
       expect(indexed[10].has_error());
@@ -486,10 +491,10 @@ suite lazy_json_tests = [] {
       expect(result.has_value());
 
       auto indexed = result->root().index();
-      std::int64_t sum = 0;
-      std::size_t count = 0;
+      int64_t sum = 0;
+      size_t count = 0;
       for (auto& item : indexed) {
-         auto val = item.get<std::int64_t>();
+         auto val = item.get<int64_t>();
          if (val) sum += *val;
          ++count;
       }
@@ -509,17 +514,17 @@ suite lazy_json_tests = [] {
       expect(!indexed.empty());
 
       // Random access by index
-      expect(indexed[0].get<std::int64_t>().value() == 1);
+      expect(indexed[0].get<int64_t>().value() == 1);
       expect(indexed[0].key() == "a");
-      expect(indexed[1].get<std::int64_t>().value() == 2);
+      expect(indexed[1].get<int64_t>().value() == 2);
       expect(indexed[1].key() == "b");
-      expect(indexed[2].get<std::int64_t>().value() == 3);
+      expect(indexed[2].get<int64_t>().value() == 3);
       expect(indexed[2].key() == "c");
 
       // Key lookup (O(n) linear search)
-      expect(indexed["a"].get<std::int64_t>().value() == 1);
-      expect(indexed["b"].get<std::int64_t>().value() == 2);
-      expect(indexed["c"].get<std::int64_t>().value() == 3);
+      expect(indexed["a"].get<int64_t>().value() == 1);
+      expect(indexed["b"].get<int64_t>().value() == 2);
+      expect(indexed["c"].get<int64_t>().value() == 3);
       expect(indexed["missing"].has_error());
 
       // Contains
@@ -534,9 +539,9 @@ suite lazy_json_tests = [] {
       expect(result.has_value());
 
       auto indexed = result->root().index();
-      std::vector<std::pair<std::string_view, std::int64_t>> items;
+      std::vector<std::pair<std::string_view, int64_t>> items;
       for (auto& item : indexed) {
-         auto val = item.get<std::int64_t>();
+         auto val = item.get<int64_t>();
          if (val) {
             items.emplace_back(item.key(), *val);
          }
@@ -561,10 +566,10 @@ suite lazy_json_tests = [] {
       expect(indexed.size() == 2u);
 
       // Nested access is still lazy
-      expect(indexed[0]["id"].get<std::int64_t>().value() == 1);
-      expect(indexed[0]["data"]["value"].get<std::int64_t>().value() == 100);
-      expect(indexed[1]["id"].get<std::int64_t>().value() == 2);
-      expect(indexed[1]["data"]["value"].get<std::int64_t>().value() == 200);
+      expect(indexed[0]["id"].get<int64_t>().value() == 1);
+      expect(indexed[0]["data"]["value"].get<int64_t>().value() == 100);
+      expect(indexed[1]["id"].get<int64_t>().value() == 2);
+      expect(indexed[1]["data"]["value"].get<int64_t>().value() == 200);
    };
 
    "indexed_lazy_view_empty"_test = [] {
@@ -592,12 +597,12 @@ suite lazy_json_tests = [] {
       auto it = indexed.begin();
 
       // Test iterator arithmetic
-      expect((*it).get<std::int64_t>().value() == 0);
-      expect((*(it + 3)).get<std::int64_t>().value() == 3);
-      expect((*(it + 9)).get<std::int64_t>().value() == 9);
+      expect((*it).get<int64_t>().value() == 0);
+      expect((*(it + 3)).get<int64_t>().value() == 3);
+      expect((*(it + 9)).get<int64_t>().value() == 9);
 
       // Test operator[]
-      expect(it[5].get<std::int64_t>().value() == 5);
+      expect(it[5].get<int64_t>().value() == 5);
 
       // Test distance
       auto end = indexed.end();
@@ -605,15 +610,15 @@ suite lazy_json_tests = [] {
 
       // Test increment/decrement
       ++it;
-      expect((*it).get<std::int64_t>().value() == 1);
+      expect((*it).get<int64_t>().value() == 1);
       --it;
-      expect((*it).get<std::int64_t>().value() == 0);
+      expect((*it).get<int64_t>().value() == 0);
 
       // Test +=/-=
       it += 5;
-      expect((*it).get<std::int64_t>().value() == 5);
+      expect((*it).get<int64_t>().value() == 5);
       it -= 2;
-      expect((*it).get<std::int64_t>().value() == 3);
+      expect((*it).get<int64_t>().value() == 3);
    };
 
    "indexed_lazy_view_large_array"_test = [] {
@@ -632,14 +637,14 @@ suite lazy_json_tests = [] {
       expect(indexed.size() == 1000u);
 
       // O(1) random access to any element
-      expect(indexed[0].get<std::int64_t>().value() == 0);
-      expect(indexed[500].get<std::int64_t>().value() == 500);
-      expect(indexed[999].get<std::int64_t>().value() == 999);
+      expect(indexed[0].get<int64_t>().value() == 0);
+      expect(indexed[500].get<int64_t>().value() == 500);
+      expect(indexed[999].get<int64_t>().value() == 999);
 
       // Iteration and sum
-      std::int64_t sum = 0;
+      int64_t sum = 0;
       for (auto& item : indexed) {
-         auto val = item.get<std::int64_t>();
+         auto val = item.get<int64_t>();
          if (val) sum += *val;
       }
       expect(sum == 499500); // Sum of 0..999
@@ -658,7 +663,7 @@ suite lazy_json_tests = [] {
 
       auto& doc = *result;
       expect(doc["name"].get<std::string>().value() == "John");
-      expect(doc["age"].get<std::int64_t>().value() == 30);
+      expect(doc["age"].get<int64_t>().value() == 30);
       expect(doc["active"].get<bool>().value() == true);
    };
 
@@ -679,9 +684,9 @@ suite lazy_json_tests = [] {
       expect(result.has_value());
 
       auto& doc = *result;
-      std::int64_t sum = 0;
+      int64_t sum = 0;
       for (auto& item : doc["items"]) {
-         auto id = item["id"].get<std::int64_t>();
+         auto id = item["id"].get<int64_t>();
          if (id) sum += *id;
       }
       expect(sum == 6);
@@ -695,9 +700,9 @@ suite lazy_json_tests = [] {
 
       auto indexed = result->root().index();
       expect(indexed.size() == 10u);
-      expect(indexed[0].get<std::int64_t>().value() == 0);
-      expect(indexed[5].get<std::int64_t>().value() == 5);
-      expect(indexed[9].get<std::int64_t>().value() == 9);
+      expect(indexed[0].get<int64_t>().value() == 0);
+      expect(indexed[5].get<int64_t>().value() == 5);
+      expect(indexed[9].get<int64_t>().value() == 9);
    };
 
    // ============================================================================

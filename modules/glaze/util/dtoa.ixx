@@ -10,21 +10,27 @@ import glaze.util.itoa;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::int32_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
+
 export namespace glz
 {
 
-   inline constexpr std::uint64_t digit_count_table[] = {
+   inline constexpr uint64_t digit_count_table[] = {
       4294967296,  8589934582,  8589934582,  8589934582,  12884901788, 12884901788, 12884901788, 17179868184,
       17179868184, 17179868184, 21474826480, 21474826480, 21474826480, 21474826480, 25769703776, 25769703776,
       25769703776, 30063771072, 30063771072, 30063771072, 34349738368, 34349738368, 34349738368, 34349738368,
       38554705664, 38554705664, 38554705664, 41949672960, 41949672960, 41949672960, 42949672960, 42949672960};
 
    // https://lemire.me/blog/2021/06/03/computing-the-number-of-digits-of-an-integer-even-faster/
-   constexpr int fast_digit_count(const std::uint32_t x) noexcept { return (x + digit_count_table[int_log2(x)]) >> 32; }
+   constexpr int fast_digit_count(const uint32_t x) noexcept { return (x + digit_count_table[int_log2(x)]) >> 32; }
 
    /** Trailing zero count table for number 0 to 99.
     (generate with misc/make_tables.c) */
-   inline constexpr std::uint8_t dec_trailing_zero_table[] = {
+   inline constexpr uint8_t dec_trailing_zero_table[] = {
       2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
       0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
       0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -34,21 +40,21 @@ export namespace glz
     These digits are named as "aabbccddeeffgghhii" here.
     For example, input 1234567890123000, output "1234567890123".
     */
-   inline auto* write_u64_len_15_to_17_trim(auto* buf, std::uint64_t sig) noexcept
+   inline auto* write_u64_len_15_to_17_trim(auto* buf, uint64_t sig) noexcept
    {
-      std::uint32_t tz1, tz2, tz; /* trailing zero */
+      uint32_t tz1, tz2, tz; /* trailing zero */
 
-      std::uint32_t abbccddee = std::uint32_t(sig / 100000000);
-      std::uint32_t ffgghhii = std::uint32_t(sig - std::uint64_t(abbccddee) * 100000000);
-      std::uint32_t abbcc = abbccddee / 10000; /* (abbccddee / 10000) */
-      std::uint32_t ddee = abbccddee - abbcc * 10000; /* (abbccddee % 10000) */
-      std::uint32_t abb = std::uint32_t((std::uint64_t(abbcc) * 167773) >> 24); /* (abbcc / 100) */
-      std::uint32_t a = (abb * 41) >> 12; /* (abb / 100) */
-      std::uint32_t bb = abb - a * 100; /* (abb % 100) */
-      std::uint32_t cc = abbcc - abb * 100; /* (abbcc % 100) */
+      uint32_t abbccddee = uint32_t(sig / 100000000);
+      uint32_t ffgghhii = uint32_t(sig - uint64_t(abbccddee) * 100000000);
+      uint32_t abbcc = abbccddee / 10000; /* (abbccddee / 10000) */
+      uint32_t ddee = abbccddee - abbcc * 10000; /* (abbccddee % 10000) */
+      uint32_t abb = uint32_t((uint64_t(abbcc) * 167773) >> 24); /* (abbcc / 100) */
+      uint32_t a = (abb * 41) >> 12; /* (abb / 100) */
+      uint32_t bb = abb - a * 100; /* (abb % 100) */
+      uint32_t cc = abbcc - abb * 100; /* (abbcc % 100) */
 
       /* write abbcc */
-      buf[0] = std::uint8_t(a + '0');
+      buf[0] = uint8_t(a + '0');
       buf += a > 0;
       bool lz = bb < 10 && a == 0; /* leading zero */
       std::memcpy(buf, char_table + (bb * 2 + lz), 2);
@@ -56,19 +62,19 @@ export namespace glz
       std::memcpy(buf + 2, char_table + 2 * cc, 2);
 
       if (ffgghhii) {
-         std::uint32_t dd = (ddee * 5243) >> 19; /* (ddee / 100) */
-         std::uint32_t ee = ddee - dd * 100; /* (ddee % 100) */
-         std::uint32_t ffgg = std::uint32_t((std::uint64_t(ffgghhii) * 109951163) >> 40); /* (val / 10000) */
-         std::uint32_t hhii = ffgghhii - ffgg * 10000; /* (val % 10000) */
-         std::uint32_t ff = (ffgg * 5243) >> 19; /* (aabb / 100) */
-         std::uint32_t gg = ffgg - ff * 100; /* (aabb % 100) */
+         uint32_t dd = (ddee * 5243) >> 19; /* (ddee / 100) */
+         uint32_t ee = ddee - dd * 100; /* (ddee % 100) */
+         uint32_t ffgg = uint32_t((uint64_t(ffgghhii) * 109951163) >> 40); /* (val / 10000) */
+         uint32_t hhii = ffgghhii - ffgg * 10000; /* (val % 10000) */
+         uint32_t ff = (ffgg * 5243) >> 19; /* (aabb / 100) */
+         uint32_t gg = ffgg - ff * 100; /* (aabb % 100) */
          std::memcpy(buf + 4, char_table + 2 * dd, 2);
          std::memcpy(buf + 6, char_table + 2 * ee, 2);
          std::memcpy(buf + 8, char_table + 2 * ff, 2);
          std::memcpy(buf + 10, char_table + 2 * gg, 2);
          if (hhii) {
-            std::uint32_t hh = (hhii * 5243) >> 19; /* (ccdd / 100) */
-            std::uint32_t ii = hhii - hh * 100; /* (ccdd % 100) */
+            uint32_t hh = (hhii * 5243) >> 19; /* (ccdd / 100) */
+            uint32_t ii = hhii - hh * 100; /* (ccdd % 100) */
             std::memcpy(buf + 12, char_table + 2 * hh, 2);
             std::memcpy(buf + 14, char_table + 2 * ii, 2);
             tz1 = dec_trailing_zero_table[hh];
@@ -87,8 +93,8 @@ export namespace glz
       }
       else {
          if (ddee) {
-            std::uint32_t dd = (ddee * 5243) >> 19; /* (ddee / 100) */
-            std::uint32_t ee = ddee - dd * 100; /* (ddee % 100) */
+            uint32_t dd = (ddee * 5243) >> 19; /* (ddee / 100) */
+            uint32_t ee = ddee - dd * 100; /* (ddee % 100) */
             std::memcpy(buf + 4, char_table + 2 * dd, 2);
             std::memcpy(buf + 6, char_table + 2 * ee, 2);
             tz1 = dec_trailing_zero_table[dd];
@@ -107,10 +113,10 @@ export namespace glz
       }
    }
 
-   inline auto* write_u32_len_1_to_9(auto* buf, std::uint32_t val) noexcept
+   inline auto* write_u32_len_1_to_9(auto* buf, uint32_t val) noexcept
    {
       if (val < 10) {
-         *buf = std::uint8_t(val + '0');
+         *buf = uint8_t(val + '0');
          return buf + 1;
       }
 
@@ -119,21 +125,21 @@ export namespace glz
          return buf + 2;
       }
 
-      const std::uint32_t digits = fast_digit_count(val);
+      const uint32_t digits = fast_digit_count(val);
 
       // Write digits in reverse order
       auto* end = buf + digits;
       auto* p = end;
       while (val >= 100) {
-         const std::uint32_t q = val / 100;
-         const std::uint32_t r = val % 100;
+         const uint32_t q = val / 100;
+         const uint32_t r = val % 100;
          val = q;
          std::memcpy(p - 2, char_table + (r * 2), 2);
          p -= 2;
       }
 
       if (val < 10) {
-         *--p = std::uint8_t(val + '0');
+         *--p = uint8_t(val + '0');
       }
       else {
          std::memcpy(p - 2, char_table + (val * 2), 2);
@@ -142,7 +148,7 @@ export namespace glz
       return end;
    }
 
-   consteval std::uint32_t numbits(std::uint32_t x) noexcept { return x < 2 ? x : 1 + numbits(x >> 1); }
+   consteval uint32_t numbits(uint32_t x) noexcept { return x < 2 ? x : 1 + numbits(x >> 1); }
 
    template <std::floating_point T>
    inline auto* to_chars(auto* buf, T val) noexcept
@@ -152,7 +158,7 @@ export namespace glz
       static_assert(std::is_same_v<float, T> || std::is_same_v<double, T>);
       static_assert(sizeof(float) == 4 && sizeof(double) == 8);
       constexpr bool is_float = std::is_same_v<float, T>;
-      using Raw = std::conditional_t<std::is_same_v<float, T>, std::uint32_t, std::uint64_t>;
+      using Raw = std::conditional_t<std::is_same_v<float, T>, uint32_t, uint64_t>;
 
       if (val == 0.0) {
          *buf = '-';
@@ -164,14 +170,14 @@ export namespace glz
       using Conversion = glz::jkj::dragonbox::default_float_bit_carrier_conversion_traits<T>;
       using FormatTraits =
          glz::jkj::dragonbox::ieee754_binary_traits<typename Conversion::format, typename Conversion::carrier_uint>;
-      static constexpr std::uint32_t exp_bits_count =
+      static constexpr uint32_t exp_bits_count =
          numbits(std::numeric_limits<T>::max_exponent - std::numeric_limits<T>::min_exponent + 1);
       const auto float_bits = glz::jkj::dragonbox::make_float_bits<T, Conversion, FormatTraits>(val);
       const auto exp_bits = float_bits.extract_exponent_bits();
       const auto s = float_bits.remove_exponent_bits();
 
       // NaN or Infinity
-      if (exp_bits == (std::uint32_t(1) << exp_bits_count) - 1) [[unlikely]] {
+      if (exp_bits == (uint32_t(1) << exp_bits_count) - 1) [[unlikely]] {
          std::memcpy(buf, "null", 4);
          return buf + 4;
       }
@@ -184,10 +190,10 @@ export namespace glz
          const auto v = glz::jkj::dragonbox::to_decimal_ex(s, exp_bits, glz::jkj::dragonbox::policy::sign::ignore,
                                                            glz::jkj::dragonbox::policy::trailing_zero::remove);
 
-         std::uint32_t sig_dec = std::uint32_t(v.significand);
-         std::int32_t exp_dec = v.exponent;
-         const std::int32_t num_digits = std::int32_t(fast_digit_count(sig_dec));
-         std::int32_t dot_pos = num_digits + exp_dec; // the decimal point position relative to the first digit
+         uint32_t sig_dec = uint32_t(v.significand);
+         int32_t exp_dec = v.exponent;
+         const int32_t num_digits = int32_t(fast_digit_count(sig_dec));
+         int32_t dot_pos = num_digits + exp_dec; // the decimal point position relative to the first digit
 
          if (-6 < dot_pos && dot_pos <= 9) {
             // no need to write exponent part
@@ -202,7 +208,7 @@ export namespace glz
             }
             else {
                auto num_end = write_u32_len_1_to_9(buf, sig_dec);
-               std::int32_t digits_written = std::int32_t(num_end - buf);
+               int32_t digits_written = int32_t(num_end - buf);
                if (dot_pos < digits_written) {
                   std::memmove(buf + dot_pos + 1, buf + dot_pos, digits_written - dot_pos);
                   buf[dot_pos] = '.';
@@ -220,7 +226,7 @@ export namespace glz
          else {
             // write with scientific notation
             auto end = write_u32_len_1_to_9(buf + 1, sig_dec);
-            exp_dec += std::int32_t(end - (buf + 1)) - 1; // Adjust exponent based on actual digits written
+            exp_dec += int32_t(end - (buf + 1)) - 1; // Adjust exponent based on actual digits written
             buf[0] = buf[1];
             buf[1] = '.';
             if (end == buf + 2) { // Only one digit was written
@@ -235,7 +241,7 @@ export namespace glz
                exp_dec = -exp_dec;
             }
             exp_dec = std::abs(exp_dec);
-            std::uint32_t lz = exp_dec < 10;
+            uint32_t lz = exp_dec < 10;
             std::memcpy(buf, char_table + (exp_dec * 2 + lz), 2);
             return buf + 2 - lz;
          }
@@ -244,13 +250,13 @@ export namespace glz
          const auto v = glz::jkj::dragonbox::to_decimal_ex(s, exp_bits, glz::jkj::dragonbox::policy::sign::ignore,
                                                            glz::jkj::dragonbox::policy::trailing_zero::ignore);
 
-         std::uint64_t sig_dec = v.significand;
-         std::int32_t exp_dec = v.exponent;
+         uint64_t sig_dec = v.significand;
+         int32_t exp_dec = v.exponent;
 
-         std::int32_t sig_len = 17;
+         int32_t sig_len = 17;
          sig_len -= (sig_dec < 100000000ull * 100000000ull);
          sig_len -= (sig_dec < 100000000ull * 10000000ull);
-         std::int32_t dot_pos = sig_len + exp_dec;
+         int32_t dot_pos = sig_len + exp_dec;
 
          if (-6 < dot_pos && dot_pos <= 21) {
             // no need to write exponent part
@@ -260,7 +266,7 @@ export namespace glz
                buf[0] = '0';
                buf[1] = '.';
                buf += 2;
-               std::memset(buf, '0', std::size_t(num_hdr - buf));
+               std::memset(buf, '0', size_t(num_hdr - buf));
                return num_end;
             }
             else {
@@ -269,7 +275,7 @@ export namespace glz
                std::memset(buf, '0', 24);
                auto num_hdr = buf + 1;
                auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               std::memmove(buf, buf + 1, std::size_t(dot_pos));
+               std::memmove(buf, buf + 1, size_t(dot_pos));
                buf[dot_pos] = '.';
                return ((num_end - num_hdr) <= dot_pos) ? buf + dot_pos : num_end;
             }
@@ -287,14 +293,14 @@ export namespace glz
             buf += exp_dec < 0;
             exp_dec = std::abs(exp_dec);
             if (exp_dec < 100) {
-               std::uint32_t lz = exp_dec < 10;
+               uint32_t lz = exp_dec < 10;
                std::memcpy(buf, char_table + (exp_dec * 2 + lz), 2);
                return buf + 2 - lz;
             }
             else {
-               const std::uint32_t hi = (std::uint32_t(exp_dec) * 656) >> 16; // exp / 100
-               const std::uint32_t lo = std::uint32_t(exp_dec) - hi * 100; // exp % 100
-               buf[0] = std::uint8_t(hi) + '0';
+               const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; // exp / 100
+               const uint32_t lo = uint32_t(exp_dec) - hi * 100; // exp % 100
+               buf[0] = uint8_t(hi) + '0';
                std::memcpy(&buf[1], char_table + (lo * 2), 2);
                return buf + 3;
             }

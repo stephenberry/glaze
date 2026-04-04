@@ -23,6 +23,9 @@ import glaze.util.expected;
 // This shared_async_vector allows multiple instances to share the same data and mutex
 // It ensures thread safety during read and write operations
 
+using std::ptrdiff_t;
+using std::size_t;
+
 namespace glz
 {
    export template <class V>
@@ -39,8 +42,8 @@ namespace glz
 
      public:
       using value_type = V;
-      using size_type = std::size_t;
-      using difference_type = std::ptrdiff_t;
+      using size_type = size_t;
+      using difference_type = ptrdiff_t;
       using reference = V&;
       using const_reference = const V&;
       using pointer = V*;
@@ -56,7 +59,7 @@ namespace glz
         public:
          using iterator_category = std::random_access_iterator_tag;
          using value_type = V;
-         using difference_type = std::ptrdiff_t;
+         using difference_type = ptrdiff_t;
          using pointer = V*;
          using reference = V&;
 
@@ -185,7 +188,7 @@ namespace glz
         public:
          using iterator_category = std::random_access_iterator_tag;
          using value_type = V;
-         using difference_type = std::ptrdiff_t;
+         using difference_type = ptrdiff_t;
          using pointer = const V*;
          using reference = const V&;
 

@@ -31,11 +31,21 @@ import glaze.tuplet;
 
 #include "glaze/util/inline.hpp"
 
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz::msgpack::detail
 {
    template <class It>
-   GLZ_ALWAYS_INLINE bool read_integer_value(is_context auto& ctx, std::uint8_t tag, It& it, const It& end, bool& is_signed,
-                                             std::int64_t& signed_value, std::uint64_t& unsigned_value) noexcept
+   GLZ_ALWAYS_INLINE bool read_integer_value(is_context auto& ctx, uint8_t tag, It& it, const It& end, bool& is_signed,
+                                             int64_t& signed_value, uint64_t& unsigned_value) noexcept
    {
       if (is_positive_fixint(tag)) {
          is_signed = false;
@@ -44,13 +54,13 @@ namespace glz::msgpack::detail
       }
       if (is_negative_fixint(tag)) {
          is_signed = true;
-         signed_value = static_cast<std::int8_t>(tag);
+         signed_value = static_cast<int8_t>(tag);
          return true;
       }
 
       switch (tag) {
       case uint8: {
-         std::uint8_t v{};
+         uint8_t v{};
          if (!read_uint8(ctx, it, end, v)) {
             return false;
          }
@@ -59,7 +69,7 @@ namespace glz::msgpack::detail
          return true;
       }
       case uint16: {
-         std::uint16_t v{};
+         uint16_t v{};
          if (!read_uint16(ctx, it, end, v)) {
             return false;
          }
@@ -68,7 +78,7 @@ namespace glz::msgpack::detail
          return true;
       }
       case uint32: {
-         std::uint32_t v{};
+         uint32_t v{};
          if (!read_uint32(ctx, it, end, v)) {
             return false;
          }
@@ -77,7 +87,7 @@ namespace glz::msgpack::detail
          return true;
       }
       case uint64: {
-         std::uint64_t v{};
+         uint64_t v{};
          if (!read_uint64(ctx, it, end, v)) {
             return false;
          }
@@ -86,39 +96,39 @@ namespace glz::msgpack::detail
          return true;
       }
       case int8: {
-         std::uint8_t v{};
+         uint8_t v{};
          if (!read_uint8(ctx, it, end, v)) {
             return false;
          }
          is_signed = true;
-         signed_value = static_cast<std::int8_t>(v);
+         signed_value = static_cast<int8_t>(v);
          return true;
       }
       case int16: {
-         std::uint16_t v{};
+         uint16_t v{};
          if (!read_uint16(ctx, it, end, v)) {
             return false;
          }
          is_signed = true;
-         signed_value = static_cast<std::int16_t>(v);
+         signed_value = static_cast<int16_t>(v);
          return true;
       }
       case int32: {
-         std::uint32_t v{};
+         uint32_t v{};
          if (!read_uint32(ctx, it, end, v)) {
             return false;
          }
          is_signed = true;
-         signed_value = static_cast<std::int32_t>(v);
+         signed_value = static_cast<int32_t>(v);
          return true;
       }
       case int64: {
-         std::uint64_t v{};
+         uint64_t v{};
          if (!read_uint64(ctx, it, end, v)) {
             return false;
          }
          is_signed = true;
-         signed_value = static_cast<std::int64_t>(v);
+         signed_value = static_cast<int64_t>(v);
          return true;
       }
       default:
@@ -128,10 +138,10 @@ namespace glz::msgpack::detail
    }
 
    template <class It>
-   GLZ_ALWAYS_INLINE bool read_string_view(is_context auto& ctx, std::uint8_t tag, It& it, const It& end,
+   GLZ_ALWAYS_INLINE bool read_string_view(is_context auto& ctx, uint8_t tag, It& it, const It& end,
                                            std::string_view& out) noexcept
    {
-      std::size_t len{};
+      size_t len{};
       if (!read_str_length(ctx, tag, it, end, len)) {
          return false;
       }
@@ -145,10 +155,10 @@ namespace glz::msgpack::detail
    }
 
    template <class It>
-   GLZ_ALWAYS_INLINE bool read_binary_view(is_context auto& ctx, std::uint8_t tag, It& it, const It& end,
+   GLZ_ALWAYS_INLINE bool read_binary_view(is_context auto& ctx, uint8_t tag, It& it, const It& end,
                                            std::string_view& out) noexcept
    {
-      std::size_t len{};
+      size_t len{};
       if (!read_bin_length(ctx, tag, it, end, len)) {
          return false;
       }
@@ -220,7 +230,7 @@ namespace glz
             return;
          }
 
-         const std::uint8_t tag = static_cast<std::uint8_t>(*it++);
+         const uint8_t tag = static_cast<uint8_t>(*it++);
          from<MSGPACK, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), tag, ctx, it, end);
       }
    };
@@ -230,7 +240,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<MSGPACK, V>::template op<no_header_on<Opts>()>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
@@ -242,7 +252,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&&, std::uint8_t tag, Ctx&& ctx, It&, const End&) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&&, uint8_t tag, Ctx&& ctx, It&, const End&) noexcept
       {
          if (tag != msgpack::nil) {
             ctx.error = error_code::syntax_error;
@@ -255,7 +265,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          if (tag == msgpack::nil) {
             value.reset();
@@ -274,7 +284,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          if (tag == msgpack::nil) {
             // null pointer - do nothing (can't reset a raw pointer safely)
@@ -300,7 +310,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          if (tag == msgpack::nil) {
             value.reset();
@@ -318,7 +328,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          if (tag == msgpack::nil) {
             value.val.reset();
@@ -335,7 +345,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It&, const End&) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It&, const End&) noexcept
       {
          if (tag == msgpack::bool_true) {
             value = true;
@@ -353,9 +363,9 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_bin_length(ctx, tag, it, end, len)) {
             return;
          }
@@ -366,10 +376,10 @@ namespace glz
             return;
          }
 
-         for (std::size_t byte_i{}, i{}; byte_i < num_bytes && it < end; ++byte_i, ++it) {
-            std::uint8_t byte = static_cast<std::uint8_t>(*it);
-            for (std::size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
-               value[i] = (byte >> bit_i) & std::uint8_t(1);
+         for (size_t byte_i{}, i{}; byte_i < num_bytes && it < end; ++byte_i, ++it) {
+            uint8_t byte = static_cast<uint8_t>(*it);
+            for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
+               value[i] = (byte >> bit_i) & uint8_t(1);
             }
          }
       }
@@ -380,7 +390,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          using U = std::underlying_type_t<std::decay_t<T>>;
          U temp{};
@@ -396,7 +406,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          std::string_view sv{};
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
@@ -427,7 +437,7 @@ namespace glz
                return;
             }
 
-            visit<N>([&]<std::size_t I>() { value = get<I>(reflect<T>::values); }, index);
+            visit<N>([&]<size_t I>() { value = get<I>(reflect<T>::values); }, index);
          }
       }
    };
@@ -437,7 +447,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          using V = std::remove_cvref_t<decltype(value)>;
          if constexpr (std::floating_point<V>) {
@@ -459,8 +469,8 @@ namespace glz
             }
 
             bool is_signed{};
-            std::int64_t signed_value{};
-            std::uint64_t unsigned_value{};
+            int64_t signed_value{};
+            uint64_t unsigned_value{};
             if (!msgpack::detail::read_integer_value(ctx, tag, it, end, is_signed, signed_value, unsigned_value)) {
                return;
             }
@@ -473,14 +483,14 @@ namespace glz
          }
          else {
             bool is_signed{};
-            std::int64_t signed_value{};
-            std::uint64_t unsigned_value{};
+            int64_t signed_value{};
+            uint64_t unsigned_value{};
             if (!msgpack::detail::read_integer_value(ctx, tag, it, end, is_signed, signed_value, unsigned_value)) {
                return;
             }
 
             if constexpr (std::is_signed_v<V>) {
-               std::int64_t temp = is_signed ? signed_value : static_cast<std::int64_t>(unsigned_value);
+               int64_t temp = is_signed ? signed_value : static_cast<int64_t>(unsigned_value);
                if (temp < std::numeric_limits<V>::min() || temp > std::numeric_limits<V>::max()) {
                   ctx.error = error_code::dump_int_error;
                   return;
@@ -493,7 +503,7 @@ namespace glz
                      ctx.error = error_code::dump_int_error;
                      return;
                   }
-                  if (static_cast<std::uint64_t>(signed_value) > std::numeric_limits<V>::max()) {
+                  if (static_cast<uint64_t>(signed_value) > std::numeric_limits<V>::max()) {
                      ctx.error = error_code::dump_int_error;
                      return;
                   }
@@ -515,7 +525,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          std::string_view sv{};
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
@@ -529,7 +539,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          std::string_view sv{};
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
@@ -547,7 +557,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          std::string_view sv{};
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
@@ -564,16 +574,16 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
 
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          if constexpr (check_structs_as_arrays(Opts)) {
-            std::size_t len{};
+            size_t len{};
             if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
                return;
             }
 
-            std::size_t idx = 0;
-            for_each<N>([&]<std::size_t I>() {
+            size_t idx = 0;
+            for_each<N>([&]<size_t I>() {
                if (ctx.error != error_code::none) {
                   return;
                }
@@ -593,7 +603,7 @@ namespace glz
             }
          }
          else {
-            std::size_t len{};
+            size_t len{};
             if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
                return;
             }
@@ -601,7 +611,7 @@ namespace glz
             static constexpr bit_array<N> tracked_fields = [] {
                bit_array<N> arr{};
                if constexpr (N > 0) {
-                  for_each<N>([&]<std::size_t I>() {
+                  for_each<N>([&]<size_t I>() {
                      if constexpr (!msgpack::detail::should_skip_field<field_t<T, I>>()) {
                         arr[I] = true;
                      }
@@ -621,13 +631,13 @@ namespace glz
 
             static constexpr auto HashInfo = hash_info<T>;
 
-            for (std::size_t pair_i = 0; pair_i < len && ctx.error == error_code::none; ++pair_i) {
+            for (size_t pair_i = 0; pair_i < len && ctx.error == error_code::none; ++pair_i) {
                if (it >= end) {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
 
-               const std::uint8_t key_tag = static_cast<std::uint8_t>(*it++);
+               const uint8_t key_tag = static_cast<uint8_t>(*it++);
                std::string_view key{};
                if (!msgpack::detail::read_string_view(ctx, key_tag, it, end, key)) {
                   return;
@@ -648,7 +658,7 @@ namespace glz
                }
 
                visit<N>(
-                  [&]<std::size_t I>() {
+                  [&]<size_t I>() {
                      if constexpr (msgpack::detail::should_skip_field<field_t<T, I>>()) {
                         skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
                      }
@@ -675,7 +685,7 @@ namespace glz
             if constexpr (Opts.error_on_missing_keys) {
                constexpr auto req_fields = required_fields<T, Opts>();
                if ((req_fields & fields) != req_fields) {
-                  for (std::size_t i = 0; i < N; ++i) {
+                  for (size_t i = 0; i < N; ++i) {
                      if (not fields[i] && req_fields[i]) {
                         ctx.custom_error_message = reflect<T>::keys[i];
                         break;
@@ -694,7 +704,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          from<MSGPACK, decltype(to_tie(value))>::template op<Opts>(to_tie(value), tag, ctx, it, end);
       }
@@ -704,9 +714,9 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return;
          }
@@ -717,7 +727,7 @@ namespace glz
                value.reserve(len);
             }
 
-            for (std::size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                typename std::decay_t<Value>::key_type key{};
                parse<MSGPACK>::template op<Opts>(key, ctx, it, end);
                if (ctx.error != error_code::none) {
@@ -728,7 +738,7 @@ namespace glz
             }
          }
          else {
-            for (std::size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                typename std::decay_t<Value>::key_type key{};
                parse<MSGPACK>::template op<Opts>(key, ctx, it, end);
                if (ctx.error != error_code::none) {
@@ -751,15 +761,15 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
 
          value.clear();
-         for (std::size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+         for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
             using V = range_value_t<std::decay_t<Value>>;
             V v{};
             parse<MSGPACK>::template op<Opts>(v, ctx, it, end);
@@ -777,7 +787,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          using Range = std::remove_reference_t<Value>;
          if constexpr (msgpack::binary_range_v<Range>) {
@@ -788,7 +798,7 @@ namespace glz
                   if (!msgpack::detail::read_binary_view(ctx, tag, it, end, payload)) {
                      return;
                   }
-                  const std::size_t len = payload.size();
+                  const size_t len = payload.size();
                   if constexpr (resizable<std::remove_cvref_t<Range>>) {
                      value.clear();
                      if constexpr (has_reserve<std::remove_cvref_t<Range>>) {
@@ -806,7 +816,7 @@ namespace glz
                      std::memcpy(value.data(), payload.data(), len);
                   }
                   if constexpr (!resizable<std::remove_cvref_t<Range>>) {
-                     for (std::size_t i = len; i < value.size(); ++i) {
+                     for (size_t i = len; i < value.size(); ++i) {
                         value[i] = {};
                      }
                   }
@@ -815,7 +825,7 @@ namespace glz
             }
          }
 
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
@@ -825,7 +835,7 @@ namespace glz
             if constexpr (has_reserve<std::decay_t<Value>>) {
                value.reserve(len);
             }
-            for (std::size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                value.emplace_back();
                parse<MSGPACK>::template op<Opts>(value.back(), ctx, it, end);
                if (ctx.error != error_code::none) {
@@ -839,7 +849,7 @@ namespace glz
                ctx.error = error_code::exceeded_static_array_size;
                return;
             }
-            std::size_t i = 0;
+            size_t i = 0;
             for (; i < len && ctx.error == error_code::none; ++i) {
                parse<MSGPACK>::template op<Opts>(value[i], ctx, it, end);
             }
@@ -854,10 +864,10 @@ namespace glz
    struct from<MSGPACK, msgpack::ext>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
-         std::int8_t type{};
+         size_t len{};
+         int8_t type{};
          if (!msgpack::read_ext_header(ctx, tag, it, end, len, type)) {
             return;
          }
@@ -879,10 +889,10 @@ namespace glz
    struct from<MSGPACK, msgpack::timestamp>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
-         std::int8_t type{};
+         size_t len{};
+         int8_t type{};
          if (!msgpack::read_ext_header(ctx, tag, it, end, len, type)) {
             return;
          }
@@ -895,7 +905,7 @@ namespace glz
          switch (len) {
          case 4: {
             // Timestamp 32: 4 bytes, seconds only (uint32)
-            std::uint32_t sec32{};
+            uint32_t sec32{};
             if (!msgpack::read_uint32(ctx, it, end, sec32)) {
                return;
             }
@@ -906,28 +916,28 @@ namespace glz
          case 8: {
             // Timestamp 64: 8 bytes
             // Upper 30 bits: nanoseconds, lower 34 bits: seconds
-            std::uint64_t val64{};
+            uint64_t val64{};
             if (!msgpack::read_uint64(ctx, it, end, val64)) {
                return;
             }
-            value.nanoseconds = static_cast<std::uint32_t>(val64 >> 34);
-            value.seconds = static_cast<std::int64_t>(val64 & 0x3FFFFFFFF);
+            value.nanoseconds = static_cast<uint32_t>(val64 >> 34);
+            value.seconds = static_cast<int64_t>(val64 & 0x3FFFFFFFF);
             break;
          }
          case 12: {
             // Timestamp 96: 12 bytes
             // First 4 bytes: nanoseconds (uint32)
             // Next 8 bytes: seconds (int64)
-            std::uint32_t nsec{};
+            uint32_t nsec{};
             if (!msgpack::read_uint32(ctx, it, end, nsec)) {
                return;
             }
-            std::uint64_t sec64{};
+            uint64_t sec64{};
             if (!msgpack::read_uint64(ctx, it, end, sec64)) {
                return;
             }
             value.nanoseconds = nsec;
-            value.seconds = static_cast<std::int64_t>(sec64);
+            value.seconds = static_cast<int64_t>(sec64);
             break;
          }
          default:
@@ -944,7 +954,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          msgpack::timestamp ts;
          from<MSGPACK, msgpack::timestamp>::template op<Opts>(ts, tag, ctx, it, end);
@@ -963,9 +973,9 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
@@ -974,7 +984,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (ctx.error == error_code::none) {
                parse<MSGPACK>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
             }
@@ -987,9 +997,9 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
@@ -999,12 +1009,12 @@ namespace glz
             return;
          }
          if constexpr (is_std_tuple<T>) {
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
+            [&]<size_t... I>(std::index_sequence<I...>) {
                (parse<MSGPACK>::template op<Opts>(std::get<I>(value), ctx, it, end), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
+            [&]<size_t... I>(std::index_sequence<I...>) {
                (parse<MSGPACK>::template op<Opts>(glz::get<I>(value), ctx, it, end), ...);
             }(std::make_index_sequence<N>{});
          }
@@ -1015,15 +1025,15 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
          if (len != 2) {
             ctx.error = error_code::invalid_variant_array;
-            for (std::size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
+            for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
                skip_value<MSGPACK>::template op<Opts>(ctx, it, end);
             }
             return;
@@ -1033,15 +1043,15 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
-         const std::uint8_t key_tag = static_cast<std::uint8_t>(*it++);
+         const uint8_t key_tag = static_cast<uint8_t>(*it++);
          std::string_view type_sv{};
          if (!msgpack::detail::read_string_view(ctx, key_tag, it, end, type_sv)) {
             return;
          }
 
          static constexpr auto ids = ids_v<T>;
-         std::size_t variant_index = static_cast<std::size_t>(-1);
-         for (std::size_t i = 0; i < ids.size(); ++i) {
+         size_t variant_index = static_cast<size_t>(-1);
+         for (size_t i = 0; i < ids.size(); ++i) {
             if (type_sv == ids[i]) {
                variant_index = i;
                break;
@@ -1056,15 +1066,15 @@ namespace glz
 
          bool parsed = false;
          auto try_parse = [&](auto index_constant) {
-            constexpr std::size_t I = decltype(index_constant)::value;
+            constexpr size_t I = decltype(index_constant)::value;
             if (variant_index == I) {
                value.template emplace<I>();
                parse<MSGPACK>::template op<Opts>(std::get<I>(value), ctx, it, end);
                parsed = true;
             }
          };
-         [&]<std::size_t... I>(std::index_sequence<I...>) {
-            (try_parse(std::integral_constant<std::size_t, I>{}), ...);
+         [&]<size_t... I>(std::index_sequence<I...>) {
+            (try_parse(std::integral_constant<size_t, I>{}), ...);
          }(std::make_index_sequence<std::variant_size_v<T>>{});
 
          if (!parsed && ctx.error == error_code::none) {
@@ -1078,9 +1088,9 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
@@ -1090,7 +1100,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (ctx.error == error_code::none) {
                parse<MSGPACK>::template op<Opts>(glz::get<I>(value.value), ctx, it, end);
             }
@@ -1103,9 +1113,9 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
@@ -1115,7 +1125,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (ctx.error == error_code::none) {
                parse<MSGPACK>::template op<Opts>(glz::get<I>(value.value), ctx, it, end);
             }
@@ -1128,9 +1138,9 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return;
          }
@@ -1140,7 +1150,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (ctx.error == error_code::none) {
                parse<MSGPACK>::template op<Opts>(glz::get<2 * I>(value.value), ctx, it, end);
                if (ctx.error == error_code::none) {
@@ -1156,9 +1166,9 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&& value, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
-         std::size_t len{};
+         size_t len{};
          if (!msgpack::read_map_length(ctx, tag, it, end, len)) {
             return;
          }
@@ -1168,7 +1178,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (ctx.error == error_code::none) {
                parse<MSGPACK>::template op<Opts>(glz::get<2 * I>(value.value), ctx, it, end);
                if (ctx.error == error_code::none) {
@@ -1184,7 +1194,7 @@ namespace glz
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(Value&&, std::uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(Value&&, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
       {
          // consume the string but ignore value
          std::string_view sv{};

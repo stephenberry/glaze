@@ -15,6 +15,9 @@ import glaze.core.wrappers;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::size_t;
+
 namespace glz
 {
    template <is_opts_wrapper T>
@@ -38,7 +41,7 @@ namespace glz
    };
 
    // max_length wrapper for limiting string/array sizes when reading
-   template <class T, std::size_t MaxLen>
+   template <class T, size_t MaxLen>
    struct from<BEVE, max_length_t<T, MaxLen>>
    {
      private:
@@ -54,7 +57,7 @@ namespace glz
             else {
                struct extended : std::decay_t<decltype(Opts)>
                {
-                  std::size_t max_string_length = MaxLen;
+                  size_t max_string_length = MaxLen;
                };
                return extended{Opts};
             }
@@ -68,7 +71,7 @@ namespace glz
             else {
                struct extended : std::decay_t<decltype(Opts)>
                {
-                  std::size_t max_array_size = MaxLen;
+                  size_t max_array_size = MaxLen;
                };
                return extended{Opts};
             }
@@ -88,7 +91,7 @@ namespace glz
 
       template <auto Opts>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, const std::uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
+      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, const uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto limited = make_limited_opts<Opts>();
          from<BEVE, T>::template op<limited>(wrapper.val, tag, ctx, it, end);
@@ -96,7 +99,7 @@ namespace glz
    };
 
    // max_length wrapper for writing (just passes through without modification)
-   template <class T, std::size_t MaxLen>
+   template <class T, size_t MaxLen>
    struct to<BEVE, max_length_t<T, MaxLen>>
    {
       template <auto Opts>

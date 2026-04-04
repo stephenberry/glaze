@@ -13,6 +13,9 @@ import glaze.version;
 
 import glaze.util.string_literal;
 
+using std::uint64_t;
+using std::size_t;
+
 export namespace glz
 {
    template <class T>
@@ -22,7 +25,7 @@ export namespace glz
       static constexpr sv type_name_unhashed = name_v<T>;
       static constexpr sv type_name_hash = hash128_v<type_name_unhashed>; // must hash for consistent length
 
-      static constexpr sv type_size_hash = hash128_v<int_to_sv_v<std::size_t, sizeof(T)>>; // must hash for consistent length
+      static constexpr sv type_size_hash = hash128_v<int_to_sv_v<size_t, sizeof(T)>>; // must hash for consistent length
 
       static constexpr sv major_version = hash128_i_v<version_v<T>.major>; // must hash for consistent length
       static constexpr sv minor_version = hash128_i_v<version_v<T>.minor>; // must hash for consistent length
@@ -121,13 +124,13 @@ export namespace glz
 
    namespace detail
    {
-      template <std::unsigned_integral T, std::size_t N>
+      template <std::unsigned_integral T, size_t N>
       constexpr std::array<T, N> uint_array_from_sv(sv str)
       {
          std::array<T, N> res{};
          constexpr auto bytes = sizeof(T);
-         for (std::size_t i = 0; i < N; ++i) {
-            for (std::size_t j = 0; j < bytes; ++j) {
+         for (size_t i = 0; i < N; ++i) {
+            for (size_t j = 0; j < bytes; ++j) {
                res[i] |= T(str[i * bytes + j]) << (8 * j);
             }
          }
@@ -135,10 +138,10 @@ export namespace glz
       }
    }
 
-   using hash_t = std::array<std::uint64_t, 2>;
+   using hash_t = std::array<uint64_t, 2>;
    template <class T>
    consteval hash_t hash()
    {
-      return detail::uint_array_from_sv<std::uint64_t, 2>(trait<T>::hash);
+      return detail::uint_array_from_sv<uint64_t, 2>(trait<T>::hash);
    }
 }

@@ -16,6 +16,8 @@ import glaze.util.dump;
 
 #include "glaze/util/inline.hpp"
 
+using std::size_t;
+
 namespace glz
 {
    // Register this with an object to allow loading a file when a valid file path is given as a string
@@ -76,7 +78,7 @@ namespace glz
             skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            value.str = {it_start, static_cast<std::size_t>(it - it_start)};
+            value.str = {it_start, static_cast<size_t>(it - it_start)};
          }
       }
    };

@@ -19,6 +19,11 @@
 #include "glaze/yaml/opts.hpp"
 #include "glaze/yaml/skip.hpp"
 
+using std::uint8_t;
+using std::int32_t;
+using std::uint32_t;
+using std::size_t;
+
 namespace glz
 {
    template <>
@@ -232,7 +237,7 @@ namespace glz
          if (name.empty()) return false;
          skip_inline_ws(it, end);
          return (it != end && *it == ':') &&
-                ((it + 1) == end || whitespace_or_line_end_table[static_cast<std::uint8_t>(*(it + 1))]);
+                ((it + 1) == end || whitespace_or_line_end_table[static_cast<uint8_t>(*(it + 1))]);
       }
 
       struct node_property_state
@@ -240,7 +245,7 @@ namespace glz
          bool has_anchor = false;
          std::string anchor_name{};
          const char* anchor_start{};
-         std::int32_t anchor_indent = 0;
+         int32_t anchor_indent = 0;
       };
 
       struct node_property_policy
@@ -315,7 +320,7 @@ namespace glz
       template <class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_double_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
       {
-         static constexpr std::size_t string_padding_bytes = 8;
+         static constexpr size_t string_padding_bytes = 8;
          auto skip_folded_line_indent = [&](const char*& src, const char* src_end) -> bool {
             bool saw_space = false;
             int indent_count = 0;
@@ -364,7 +369,7 @@ namespace glz
 
          // Allocate buffer with room for potential expansion and SWAR padding
          // Some YAML escapes expand: \L, \P -> 3 bytes UTF-8
-         const auto input_len = static_cast<std::size_t>(it - start);
+         const auto input_len = static_cast<size_t>(it - start);
          value.resize(input_len + (input_len / 2) + string_padding_bytes);
          auto* dst = value.data();
          auto* const dst_start = dst;
@@ -451,12 +456,12 @@ namespace glz
                   switch (esc) {
                   case 'x': {
                      // \xXX - 2 hex digits
-                     if (static_cast<std::size_t>(src_end - src) < 2) [[unlikely]] {
+                     if (static_cast<size_t>(src_end - src) < 2) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     const std::uint32_t hi = digit_hex_table[static_cast<unsigned char>(src[0])];
-                     const std::uint32_t lo = digit_hex_table[static_cast<unsigned char>(src[1])];
+                     const uint32_t hi = digit_hex_table[static_cast<unsigned char>(src[0])];
+                     const uint32_t lo = digit_hex_table[static_cast<unsigned char>(src[1])];
                      if ((hi | lo) & 0xF0) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
@@ -467,11 +472,11 @@ namespace glz
                   }
                   case 'u': {
                      // \uXXXX - 4 hex digits
-                     if (static_cast<std::size_t>(src_end - src) < 4) [[unlikely]] {
+                     if (static_cast<size_t>(src_end - src) < 4) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     const std::uint32_t codepoint = hex_to_u32(src);
+                     const uint32_t codepoint = hex_to_u32(src);
                      if (codepoint == 0xFFFFFFFFu) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
@@ -482,17 +487,17 @@ namespace glz
                   }
                   case 'U': {
                      // \UXXXXXXXX - 8 hex digits
-                     if (static_cast<std::size_t>(src_end - src) < 8) [[unlikely]] {
+                     if (static_cast<size_t>(src_end - src) < 8) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     const std::uint32_t hi = hex_to_u32(src);
-                     const std::uint32_t lo = hex_to_u32(src + 4);
+                     const uint32_t hi = hex_to_u32(src);
+                     const uint32_t lo = hex_to_u32(src + 4);
                      if ((hi | lo) == 0xFFFFFFFFu) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     const std::uint32_t codepoint = (hi << 16) | lo;
+                     const uint32_t codepoint = (hi << 16) | lo;
                      src += 8;
                      if (codepoint <= 0x10FFFF) {
                         dst += code_point_to_utf8(codepoint, dst);
@@ -541,7 +546,7 @@ namespace glz
          }
 
          // Resize to actual length
-         value.resize(static_cast<std::size_t>(dst - dst_start));
+         value.resize(static_cast<size_t>(dst - dst_start));
          ++it; // skip closing quote
       }
 
@@ -551,7 +556,7 @@ namespace glz
       template <class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_single_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
       {
-         static constexpr std::size_t string_padding_bytes = 8;
+         static constexpr size_t string_padding_bytes = 8;
          auto skip_folded_line_indent = [&](const char*& src, const char* src_end) -> bool {
             bool saw_space = false;
             int indent_count = 0;
@@ -601,7 +606,7 @@ namespace glz
             return;
          }
 
-         const auto input_len = static_cast<std::size_t>(it - start);
+         const auto input_len = static_cast<size_t>(it - start);
          value.resize(input_len + string_padding_bytes);
          auto* dst = value.data();
          auto* const dst_start = dst;
@@ -661,7 +666,7 @@ namespace glz
             }
          }
 
-         value.resize(static_cast<std::size_t>(dst - dst_start));
+         value.resize(static_cast<size_t>(dst - dst_start));
          ++it; // skip closing quote
       }
 
@@ -906,7 +911,7 @@ namespace glz
       // - Blank lines are preserved as literal newlines
       template <class Ctx, class It, class End>
       GLZ_ALWAYS_INLINE void parse_plain_scalar_multiline(std::string& value, Ctx& ctx, It& it, End end,
-                                                          std::int32_t base_indent)
+                                                          int32_t base_indent)
       {
          value.clear();
 
@@ -937,7 +942,7 @@ namespace glz
                   }
 
                   // Check if this is a blank line or comment-only line
-                  std::int32_t line_indent = 0;
+                  int32_t line_indent = 0;
 
                   while (lookahead != end && *lookahead == ' ') {
                      ++line_indent;
@@ -1070,7 +1075,7 @@ namespace glz
 
       // Parse a block scalar (| or >)
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_block_scalar(std::string& value, Ctx& ctx, It& it, End end, std::int32_t base_indent)
+      GLZ_ALWAYS_INLINE void parse_block_scalar(std::string& value, Ctx& ctx, It& it, End end, int32_t base_indent)
       {
          if (it == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
@@ -1142,15 +1147,15 @@ namespace glz
          value.clear();
 
          // Determine content indentation
-         std::int32_t content_indent = -1;
-         std::int32_t leading_blank_indent_max = -1;
+         int32_t content_indent = -1;
+         int32_t leading_blank_indent_max = -1;
          bool first_line = true;
          bool previous_line_starts_with_tab = false;
          std::string trailing_newlines;
 
          while (it != end) {
             auto line_start = it;
-            std::int32_t line_indent = measure_indent<false>(it, end, ctx);
+            int32_t line_indent = measure_indent<false>(it, end, ctx);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1197,7 +1202,7 @@ namespace glz
 
             // Skip to content_indent level
             it = line_start;
-            for (std::int32_t i = 0; i < content_indent && it != end && *it == ' '; ++i) {
+            for (int32_t i = 0; i < content_indent && it != end && *it == ' '; ++i) {
                ++it;
             }
 
@@ -1212,13 +1217,13 @@ namespace glz
                else {
                   // Folded: single newline becomes space, paragraph breaks keep one newline.
                   // When a paragraph break is adjacent to a tab-leading line, preserve it fully.
-                  const std::size_t break_count = trailing_newlines.size();
+                  const size_t break_count = trailing_newlines.size();
                   if (break_count == 1) {
                      value.push_back(' ');
                   }
                   else if (break_count > 1) {
                      const bool preserve_all = previous_line_starts_with_tab || current_line_starts_with_tab;
-                     const std::size_t preserve_count = preserve_all ? break_count : (break_count - 1);
+                     const size_t preserve_count = preserve_all ? break_count : (break_count - 1);
                      value.append(preserve_count, '\n');
                   }
                }
@@ -1407,7 +1412,7 @@ namespace glz
 
                   auto continuation = it;
                   skip_newline(continuation, end);
-                  std::int32_t continuation_indent = 0;
+                  int32_t continuation_indent = 0;
                   while (continuation != end && (*continuation == ' ' || *continuation == '\t')) {
                      if (*continuation == ' ') ++continuation_indent;
                      ++continuation;
@@ -1585,7 +1590,7 @@ namespace glz
                }
                else {
                   // Top-level plain scalars may continue on same-indent or indented lines.
-                  yaml::parse_plain_scalar_multiline(str, ctx, it, end, std::int32_t(0));
+                  yaml::parse_plain_scalar_multiline(str, ctx, it, end, int32_t(0));
                }
             }
             else {
@@ -1774,7 +1779,7 @@ namespace glz
             ++it;
          }
 
-         const std::string_view num_str(&*start, static_cast<std::size_t>(it - start));
+         const std::string_view num_str(&*start, static_cast<size_t>(it - start));
 
          if (num_str.empty()) {
             ctx.error = error_code::parse_number_failure;
@@ -1785,7 +1790,7 @@ namespace glz
          if constexpr (std::integral<std::remove_cvref_t<T>>) {
             if (num_str.size() > 2 && num_str[0] == '0') {
                int base = 10;
-               std::size_t offset = 0;
+               size_t offset = 0;
 
                if (num_str[1] == 'x' || num_str[1] == 'X') {
                   base = 16;
@@ -1909,7 +1914,7 @@ namespace glz
          if (tag == yaml::yaml_tag::null_tag) {
             yaml::skip_inline_ws(it, end);
             // Skip the null value if present
-            if (it != end && !yaml::flow_context_end_table[static_cast<std::uint8_t>(*it)]) {
+            if (it != end && !yaml::flow_context_end_table[static_cast<uint8_t>(*it)]) {
                std::string str;
                yaml::parse_plain_scalar(str, ctx, it, end, yaml::check_flow_context(Opts));
             }
@@ -1983,11 +1988,11 @@ namespace glz
 
          // Parse as plain scalar and check if it's a null keyword
          auto start = it;
-         while (it != end && !yaml::plain_scalar_end_table[static_cast<std::uint8_t>(*it)]) {
+         while (it != end && !yaml::plain_scalar_end_table[static_cast<uint8_t>(*it)]) {
             ++it;
          }
 
-         std::string_view str{start, static_cast<std::size_t>(it - start)};
+         std::string_view str{start, static_cast<size_t>(it - start)};
          if (!yaml::is_yaml_null(str)) {
             ctx.error = error_code::syntax_error;
          }
@@ -2072,7 +2077,7 @@ namespace glz
             }
 
             visit<N>(
-               [&]<std::size_t I>() {
+               [&]<size_t I>() {
                   static constexpr auto key = glz::get<I>(reflect<T>::keys);
                   if (str == key) [[likely]] {
                      value = glz::get<I>(reflect<T>::values);
@@ -2263,7 +2268,7 @@ namespace glz
          else if constexpr (!resizable<V>) {
             // Fixed-size containers (std::array)
             const auto n = value.size();
-            std::size_t i = 0;
+            size_t i = 0;
 
             while (it != end && i < n) {
                skip_flow_ws_and_newlines(ctx, it, end);
@@ -2443,7 +2448,7 @@ namespace glz
 
             if (key_matches) [[likely]] {
                visit<N>(
-                  [&]<std::size_t I>() {
+                  [&]<size_t I>() {
                      if (I == index) {
                         decltype(auto) member = [&]() -> decltype(auto) {
                            if constexpr (reflectable<U>) {
@@ -2553,18 +2558,18 @@ namespace glz
       // - item1
       // - item2
       template <auto Opts, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_block_sequence(T&& value, Ctx& ctx, It& it, End end, std::int32_t sequence_indent)
+      GLZ_ALWAYS_INLINE void parse_block_sequence(T&& value, Ctx& ctx, It& it, End end, int32_t sequence_indent)
       {
          using V = std::remove_cvref_t<T>;
          using value_type = typename V::value_type;
 
-         [[maybe_unused]] std::size_t index = 0;
-         [[maybe_unused]] const std::size_t max_size = []() {
+         [[maybe_unused]] size_t index = 0;
+         [[maybe_unused]] const size_t max_size = []() {
             if constexpr (!resizable<V>) {
                return std::tuple_size_v<V>;
             }
             else {
-               return std::size_t(0); // unused for resizable containers
+               return size_t(0); // unused for resizable containers
             }
          }();
 
@@ -2572,7 +2577,7 @@ namespace glz
          bool first_item = true;
          bool has_pending_item_anchor = false;
          std::string pending_item_anchor_name{};
-         std::int32_t pending_item_anchor_indent = sequence_indent;
+         int32_t pending_item_anchor_indent = sequence_indent;
 
          while (it != end) {
             // For fixed-size arrays, stop when we've filled all elements
@@ -2583,7 +2588,7 @@ namespace glz
             }
 
             // Skip blank lines and comments, track indent
-            std::int32_t line_indent = 0;
+            int32_t line_indent = 0;
             auto line_start = it;
 
             while (it != end) {
@@ -2649,7 +2654,7 @@ namespace glz
                      if constexpr (std::is_pointer_v<std::decay_t<It>>) {
                         if (ctx.stream_begin && it > ctx.stream_begin) {
                            auto probe = it;
-                           std::int32_t leading_ws = 0;
+                           int32_t leading_ws = 0;
                            bool saw_tab = false;
                            while (probe > ctx.stream_begin && (*(probe - 1) == ' ' || *(probe - 1) == '\t')) {
                               --probe;
@@ -2720,7 +2725,7 @@ namespace glz
             ++it; // Skip '-'
 
             // Check for valid sequence item indicator (- followed by space or newline)
-            if (it != end && !yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*it)]) {
+            if (it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)]) {
                // Not a sequence item (could be a number like -5)
                it = line_start;
                return;
@@ -2734,7 +2739,7 @@ namespace glz
             // A tab-separated nested "- " marker is not valid block indentation.
             if (saw_tab_after_dash && it != end && *it == '-') {
                const auto after_dash = it + 1;
-               if (after_dash == end || yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*after_dash)]) {
+               if (after_dash == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_dash)]) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -2745,7 +2750,7 @@ namespace glz
                const char* element_start = (it != end) ? &*it : nullptr;
 
                // Check what follows
-               if (it != end && !yaml::line_end_or_comment_table[static_cast<std::uint8_t>(*it)]) {
+               if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                   // Content on same line as dash - set indent to one less than content column
                   // This allows nested block mappings to continue parsing keys at the content indent
                   // For "- key: val", if dash is at column 0, content is at column 2
@@ -2765,7 +2770,7 @@ namespace glz
 
                   // Get indent of nested content
                   auto nested_start = it;
-                  std::int32_t nested_indent = measure_indent(it, end, ctx);
+                  int32_t nested_indent = measure_indent(it, end, ctx);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   it = nested_start;
@@ -2773,7 +2778,7 @@ namespace glz
                   // Content is nested only if indented more than the current line.
                   // When line_indent is negative (root level), use 0 as the baseline.
                   // This prevents content at column 0 from being treated as nested.
-                  const std::int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
+                  const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
                   if (nested_indent > effective_line_indent) {
                      // Save and set indent for nested parsing
                      // Set parent indent to one less than content indent so items at
@@ -2834,7 +2839,7 @@ namespace glz
       // 3) Measure indent and validate tab/structural edge cases.
       // 4) Return nested indent when content is truly nested, otherwise -1.
       template <class Ctx, class It, class End>
-      std::int32_t detect_nested_value_indent(Ctx& ctx, It& it, End end, std::int32_t line_indent)
+      int32_t detect_nested_value_indent(Ctx& ctx, It& it, End end, int32_t line_indent)
       {
          skip_ws_and_comment(it, end);
          if (it == end || (*it != '\n' && *it != '\r')) {
@@ -2916,7 +2921,7 @@ namespace glz
          }
 
          // Measure indent of the content line
-         std::int32_t content_indent = measure_indent<false>(peek, end, ctx);
+         int32_t content_indent = measure_indent<false>(peek, end, ctx);
          if (bool(ctx.error)) [[unlikely]]
             return -1;
 
@@ -2928,16 +2933,16 @@ namespace glz
             if (probe != end && *probe != '\n' && *probe != '\r' && *probe != '#') {
                const bool looks_sequence_entry =
                   (*probe == '-') &&
-                  ((probe + 1) == end || yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*(probe + 1))]);
+                  ((probe + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(probe + 1))]);
                const bool looks_explicit_entry =
                   (*probe == '?' || *probe == ':') &&
-                  ((probe + 1) == end || yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*(probe + 1))]);
+                  ((probe + 1) == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(probe + 1))]);
                bool looks_mapping_key = false;
                auto scan = probe;
                while (scan != end && *scan != '\n' && *scan != '\r') {
                   if (*scan == ':') {
                      const auto after = scan + 1;
-                     if (after == end || yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*after)]) {
+                     if (after == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after)]) {
                         looks_mapping_key = true;
                         break;
                      }
@@ -2951,7 +2956,7 @@ namespace glz
             }
          }
 
-         const std::int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
+         const int32_t effective_line_indent = (line_indent < 0) ? 0 : line_indent;
          if (content_indent > effective_line_indent && peek != end && *peek != '\n' && *peek != '\r') {
             it = content_start;
             return content_indent;
@@ -2962,7 +2967,7 @@ namespace glz
          // - item
          if (content_indent == effective_line_indent && peek != end && *peek == '-') {
             const auto after_dash = peek + 1;
-            if (after_dash == end || yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*after_dash)]) {
+            if (after_dash == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_dash)]) {
                it = content_start;
                return content_indent;
             }
@@ -3011,17 +3016,17 @@ namespace glz
       // mapping_indent >= 0: caller knows the key indent (struct case, first key may be mid-line)
       // mapping_indent < 0: discover from first key (map case)
       template <auto Opts, class Ctx, class It, class End, class ProcessEntry>
-      void parse_block_mapping_loop(Ctx& ctx, It& it, End end, std::int32_t mapping_indent, ProcessEntry&& process_entry)
+      void parse_block_mapping_loop(Ctx& ctx, It& it, End end, int32_t mapping_indent, ProcessEntry&& process_entry)
       {
-         const std::int32_t parent_indent = ctx.current_indent();
+         const int32_t parent_indent = ctx.current_indent();
          const bool discover_indent = (mapping_indent < 0);
          bool first_key = !discover_indent;
          bool discovered_first_key_mid_line = false;
-         std::int32_t discovered_first_key_visual_indent = 0;
+         int32_t discovered_first_key_visual_indent = 0;
 
          while (it != end) {
             auto line_start = it;
-            std::int32_t line_indent = first_key ? mapping_indent : 0;
+            int32_t line_indent = first_key ? mapping_indent : 0;
 
             // Skip blank lines and comments, measure indent
             while (it != end) {
@@ -3117,7 +3122,7 @@ namespace glz
                if constexpr (std::is_pointer_v<std::decay_t<It>>) {
                   if (ctx.stream_begin && line_start > ctx.stream_begin) {
                      auto probe = line_start;
-                     std::int32_t leading_ws = 0;
+                     int32_t leading_ws = 0;
                      while (probe > ctx.stream_begin && (*(probe - 1) == ' ' || *(probe - 1) == '\t')) {
                         --probe;
                         ++leading_ws;
@@ -3236,7 +3241,7 @@ namespace glz
       // key1: value1
       // key2: value2
       template <auto Opts, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_block_mapping(T&& value, Ctx& ctx, It& it, End end, std::int32_t mapping_indent)
+      GLZ_ALWAYS_INLINE void parse_block_mapping(T&& value, Ctx& ctx, It& it, End end, int32_t mapping_indent)
       {
          using U = std::remove_cvref_t<T>;
          static constexpr auto N = reflect<U>::size;
@@ -3246,7 +3251,7 @@ namespace glz
          if (mapping_indent < 0) mapping_indent = 0;
 
          parse_block_mapping_loop<Opts>(
-            ctx, it, end, mapping_indent, [&](Ctx& ctx, It& it, End end, std::int32_t line_indent) -> bool {
+            ctx, it, end, mapping_indent, [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
                // Parse key using thread-local buffer to avoid allocation
                auto& key = string_buffer();
                key.clear();
@@ -3272,7 +3277,7 @@ namespace glz
 
                if (key_matches) [[likely]] {
                   visit<N>(
-                     [&]<std::size_t I>() {
+                     [&]<size_t I>() {
                         if (I == index) {
                            decltype(auto) member = [&]() -> decltype(auto) {
                               if constexpr (reflectable<U>) {
@@ -3286,14 +3291,14 @@ namespace glz
                            using member_type = std::decay_t<decltype(member)>;
 
                            // Check if value is on same line or next line
-                           if (it != end && !yaml::line_end_or_comment_table[static_cast<std::uint8_t>(*it)]) {
+                           if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                               if (!ctx.push_indent(line_indent + 1)) [[unlikely]]
                                  return false;
                               from<YAML, member_type>::template op<Opts>(member, ctx, it, end);
                               ctx.pop_indent();
                            }
                            else {
-                              std::int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
+                              int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
                               if (nested_indent >= 0) {
                                  skip_to_content(it, end);
                                  if constexpr (readable_map_t<member_type>) {
@@ -3320,7 +3325,7 @@ namespace glz
                   }
                   else { // else used to fix MSVC unreachable code warning
                      // Skip unknown value
-                     if (it != end && !yaml::line_end_or_comment_table[static_cast<std::uint8_t>(*it)]) {
+                     if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                         skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
                      }
                   }
@@ -3443,14 +3448,14 @@ namespace glz
       // - item1
       // - item2
       template <auto Opts, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_block_sequence_set(T&& value, Ctx& ctx, It& it, End end, std::int32_t sequence_indent)
+      GLZ_ALWAYS_INLINE void parse_block_sequence_set(T&& value, Ctx& ctx, It& it, End end, int32_t sequence_indent)
       {
          using V = std::remove_cvref_t<T>;
          using value_type = typename V::value_type;
 
          while (it != end) {
             // Skip blank lines and comments, track indent
-            std::int32_t line_indent = 0;
+            int32_t line_indent = 0;
             auto line_start = it;
 
             while (it != end) {
@@ -3502,7 +3507,7 @@ namespace glz
             ++it; // Skip '-'
 
             // Check for valid sequence item indicator (- followed by space or newline)
-            if (it != end && !yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*it)]) {
+            if (it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)]) {
                // Not a sequence item (could be a number like -5)
                it = line_start;
                return;
@@ -3513,7 +3518,7 @@ namespace glz
             value_type element{};
 
             // Check what follows
-            if (it != end && !yaml::line_end_or_comment_table[static_cast<std::uint8_t>(*it)]) {
+            if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                // Content on same line as dash
                if (!ctx.push_indent(line_indent + 2)) [[unlikely]]
                   return;
@@ -3527,7 +3532,7 @@ namespace glz
 
                // Get indent of nested content
                auto nested_start = it;
-               std::int32_t nested_indent = measure_indent(it, end, ctx);
+               int32_t nested_indent = measure_indent(it, end, ctx);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                it = nested_start;
@@ -3605,7 +3610,7 @@ namespace glz
             if (tag != yaml::yaml_tag::none || node_props.has_anchor) {
                it = peek;
             }
-            std::int32_t seq_indent = ctx.current_indent();
+            int32_t seq_indent = ctx.current_indent();
             if (*it == '-' && ctx.current_indent() >= 0) {
                seq_indent = ctx.allow_indentless_sequence ? (ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : 0)
                                                           : (ctx.current_indent() + 1);
@@ -3676,7 +3681,7 @@ namespace glz
             if (tag != yaml::yaml_tag::none || node_props.has_anchor) {
                it = peek;
             }
-            std::int32_t seq_indent = ctx.current_indent();
+            int32_t seq_indent = ctx.current_indent();
             if (*it == '-' && ctx.current_indent() >= 0) {
                seq_indent = ctx.allow_indentless_sequence ? (ctx.current_indent() > 0 ? (ctx.current_indent() - 1) : 0)
                                                           : (ctx.current_indent() + 1);
@@ -3742,7 +3747,7 @@ namespace glz
             // Skip whitespace and newlines (YAML allows multi-line flow sequences)
             yaml::skip_ws_and_newlines(it, end);
 
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -3787,7 +3792,7 @@ namespace glz
          }
          else if (*it == '-') {
             // Block sequence
-            std::size_t index = 0;
+            size_t index = 0;
 
             while (it != end && index < N) {
                // Skip whitespace and measure indent
@@ -3810,7 +3815,7 @@ namespace glz
                ++it; // Skip '-'
 
                // Check valid sequence indicator
-               if (it != end && !yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*it)]) {
+               if (it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)]) {
                   it = line_start;
                   break;
                }
@@ -3818,9 +3823,9 @@ namespace glz
                yaml::skip_inline_ws(it, end);
 
                // Parse element at current index
-               [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+               [&]<size_t... Is>(std::index_sequence<Is...>) {
                   (
-                     [&]<std::size_t I>() {
+                     [&]<size_t I>() {
                         if (I == index) {
                            if constexpr (is_std_tuple<T>) {
                               using element_t = std::tuple_element_t<I, std::remove_cvref_t<T>>;
@@ -4124,7 +4129,7 @@ namespace glz
                yaml::skip_inline_ws(explicit_probe, end);
                if (explicit_probe != end && *explicit_probe == '?') {
                   const auto after_q = explicit_probe + 1;
-                  if (after_q == end || yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*after_q)] ||
+                  if (after_q == end || yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*after_q)] ||
                       *after_q == ',' || *after_q == '}') {
                      explicit_flow_key = true;
                      it = explicit_probe + 1;
@@ -4286,7 +4291,7 @@ namespace glz
                // require an explicit separator after ':' (spaces, line break, comment,
                // omitted value delimiter, or end). Adjacent values like ":bar" are
                // malformed in this layout.
-               if (saw_key_linebreak && it != end && !yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*it)] &&
+               if (saw_key_linebreak && it != end && !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*it)] &&
                    *it != '#' && *it != ',' && *it != '}') {
                   ctx.error = error_code::syntax_error;
                   return;
@@ -4367,9 +4372,9 @@ namespace glz
          else {
             // Block mapping - use shared loop with map-specific callback
             yaml::parse_block_mapping_loop<Opts>(
-               ctx, it, end, std::int32_t(-1), [&](auto& ctx, auto& it, auto end, std::int32_t line_indent) -> bool {
+               ctx, it, end, int32_t(-1), [&](auto& ctx, auto& it, auto end, int32_t line_indent) -> bool {
                   auto parse_map_value = [&](val_t& val) -> bool {
-                     if (it != end && !yaml::line_end_or_comment_table[static_cast<std::uint8_t>(*it)]) {
+                     if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                         // Inline mapping values in block context cannot start with a
                         // plain "key: value" pair on the same line (e.g. "a: b: c").
                         // Such constructs are malformed unless wrapped in flow
@@ -4416,7 +4421,7 @@ namespace glz
                         ctx.pop_indent();
                      }
                      else {
-                        std::int32_t nested_indent = yaml::detect_nested_value_indent(ctx, it, end, line_indent);
+                        int32_t nested_indent = yaml::detect_nested_value_indent(ctx, it, end, line_indent);
                         if (nested_indent >= 0) {
                            yaml::skip_to_content(it, end);
                            if (it != end && *it == ':' && (it + 1) != end && *(it + 1) == '\t') {
@@ -4490,7 +4495,7 @@ namespace glz
                                  if (value_indicator != end && (*value_indicator == '\n' || *value_indicator == '\r')) {
                                     yaml::skip_newline(value_indicator, end);
                                     auto value_line = value_indicator;
-                                    std::int32_t value_indent = yaml::measure_indent(value_line, end, ctx);
+                                    int32_t value_indent = yaml::measure_indent(value_line, end, ctx);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return false;
                                     if (value_line != end && *value_line == ':' && value_indent >= line_indent) {
@@ -4544,7 +4549,7 @@ namespace glz
                         }
                      }
                      else {
-                        if (it != end && !yaml::line_end_or_comment_table[static_cast<std::uint8_t>(*it)]) {
+                        if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
                            from<YAML, key_t>::template op<Opts>(key, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return false;
@@ -4559,7 +4564,7 @@ namespace glz
                         auto probe = it;
                         yaml::skip_newline(probe, end);
                         auto value_line = probe;
-                        std::int32_t value_indent = yaml::measure_indent(value_line, end, ctx);
+                        int32_t value_indent = yaml::measure_indent(value_line, end, ctx);
                         if (bool(ctx.error)) [[unlikely]]
                            return false;
                         if (value_line != end && *value_line == ':' && value_indent == line_indent) {
@@ -4700,11 +4705,11 @@ namespace glz
    template <template <class> class Trait, class... Ts>
    struct yaml_variant_count_impl<std::variant<Ts...>, Trait>
    {
-      static constexpr std::size_t value = (std::size_t(Trait<Ts>::value) + ... + 0);
+      static constexpr size_t value = (size_t(Trait<Ts>::value) + ... + 0);
    };
 
    template <class Variant, template <class> class Trait>
-   constexpr std::size_t yaml_variant_count_v = yaml_variant_count_impl<Variant, Trait>::value;
+   constexpr size_t yaml_variant_count_v = yaml_variant_count_impl<Variant, Trait>::value;
 
    // Get first index matching trait (or variant_npos if none)
    template <class Variant, template <class> class Trait>
@@ -4713,18 +4718,18 @@ namespace glz
    template <template <class> class Trait, class... Ts>
    struct yaml_variant_first_index_impl<std::variant<Ts...>, Trait>
    {
-      static constexpr std::size_t find()
+      static constexpr size_t find()
       {
-         std::size_t result = std::variant_npos;
-         std::size_t idx = 0;
+         size_t result = std::variant_npos;
+         size_t idx = 0;
          ((Trait<Ts>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx), ...);
          return result;
       }
-      static constexpr std::size_t value = find();
+      static constexpr size_t value = find();
    };
 
    template <class Variant, template <class> class Trait>
-   constexpr std::size_t yaml_variant_first_index_v = yaml_variant_first_index_impl<Variant, Trait>::value;
+   constexpr size_t yaml_variant_first_index_v = yaml_variant_first_index_impl<Variant, Trait>::value;
 
    // Precomputed type counts for a variant (similar to JSON's variant_type_count)
    template <class T>
@@ -4770,9 +4775,9 @@ namespace glz
             // Multiple types in this category, try each one
             constexpr auto N = std::variant_size_v<Variant>;
             bool found_match{};
-            std::size_t match_idx = 0;
+            size_t match_idx = 0;
 
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (found_match) {
                   return;
                }
@@ -5116,9 +5121,9 @@ namespace glz
                // malformed and must not be treated as a plain scalar.
                if (ctx.current_indent() < 0 && (end - it >= 3)) {
                   const bool malformed_doc_start = (it[0] == '-' && it[1] == '-' && it[2] == '-' && (end - it > 3) &&
-                                                    !yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(it[3])]);
+                                                    !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
                   const bool malformed_doc_end = (it[0] == '.' && it[1] == '.' && it[2] == '.' && (end - it > 3) &&
-                                                  !yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(it[3])]);
+                                                  !yaml::whitespace_or_line_end_table[static_cast<uint8_t>(it[3])]);
                   if (malformed_doc_start || malformed_doc_end) {
                      ctx.error = error_code::syntax_error;
                      return;
@@ -5154,7 +5159,7 @@ namespace glz
                auto look = word_end;
                yaml::skip_newline(look, end);
                while (look != end) {
-                  std::int32_t line_indent = 0;
+                  int32_t line_indent = 0;
                   while (look != end && *look == ' ') {
                      ++line_indent;
                      ++look;
@@ -5240,7 +5245,7 @@ namespace glz
                            yaml::skip_newline(peek, end);
                         }
                         // Measure indent of next content line
-                        std::int32_t next_indent = 0;
+                        int32_t next_indent = 0;
                         while (peek != end && *peek == ' ') {
                            ++next_indent;
                            ++peek;
@@ -5250,7 +5255,7 @@ namespace glz
                               (!ctx.sequence_item_value_context) && (next_indent == ctx.current_indent()) &&
                               (*peek == '-') &&
                               ((peek + 1) == end ||
-                               yaml::whitespace_or_line_end_table[static_cast<std::uint8_t>(*(peek + 1))]);
+                               yaml::whitespace_or_line_end_table[static_cast<uint8_t>(*(peek + 1))]);
                            value_is_indentless_sequence = indentless_sequence;
                            const bool same_indent_property_node =
                               (next_indent == ctx.current_indent()) &&
@@ -5284,7 +5289,7 @@ namespace glz
                   return;
                }
                const char* anchor_start = &*it;
-               const std::int32_t anchor_indent = ctx.current_indent();
+               const int32_t anchor_indent = ctx.current_indent();
 
                if constexpr (!yaml::check_flow_context(Opts)) {
                   // Check if the anchor is on a block-mapping key (&name key: value).
@@ -5706,7 +5711,7 @@ namespace glz
          // For non-auto-deducible variants or fallback, try each type until one succeeds
          constexpr auto N = std::variant_size_v<std::remove_cvref_t<T>>;
 
-         auto try_parse = [&]<std::size_t I>() -> bool {
+         auto try_parse = [&]<size_t I>() -> bool {
             using V = std::variant_alternative_t<I, std::remove_cvref_t<T>>;
             auto start = it;
 
@@ -5727,7 +5732,7 @@ namespace glz
          };
 
          bool parsed = false;
-         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+         [&]<size_t... Is>(std::index_sequence<Is...>) {
             ((parsed = parsed || try_parse.template operator()<Is>()), ...);
          }(std::make_index_sequence<N>{});
 

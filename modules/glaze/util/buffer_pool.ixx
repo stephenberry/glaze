@@ -4,6 +4,8 @@ export module glaze.util.buffer_pool;
 
 import std;
 
+using std::size_t;
+
 namespace glz
 {
    /// Thread-safe buffer pool for coroutine-based servers.
@@ -24,8 +26,8 @@ namespace glz
      private:
       std::vector<std::unique_ptr<std::string>> buffers_;
       mutable std::mutex mutex_;
-      std::size_t max_buffers_;
-      std::size_t max_buffer_size_;
+      size_t max_buffers_;
+      size_t max_buffer_size_;
 
      public:
       /// RAII handle for borrowed buffer - automatically returns to pool on destruction
@@ -91,10 +93,10 @@ namespace glz
       /// Construct a buffer pool
       /// @param max_buffers Maximum number of buffers to keep in pool (default 1024)
       /// @param max_buffer_size Buffers larger than this are shrunk when returned (default 1MB)
-      explicit buffer_pool(std::size_t max_buffers = 1024, std::size_t max_buffer_size = 1024 * 1024) noexcept
+      explicit buffer_pool(size_t max_buffers = 1024, size_t max_buffer_size = 1024 * 1024) noexcept
          : max_buffers_(max_buffers), max_buffer_size_(max_buffer_size)
       {
-         buffers_.reserve(std::min(max_buffers, std::size_t{64})); // Pre-allocate some capacity
+         buffers_.reserve(std::min(max_buffers, size_t{64})); // Pre-allocate some capacity
       }
 
       // Non-copyable, non-movable (due to mutex and pointers in scoped_buffers)
@@ -125,17 +127,17 @@ namespace glz
       }
 
       /// Get current number of buffers in the pool
-      [[nodiscard]] std::size_t size() const noexcept
+      [[nodiscard]] size_t size() const noexcept
       {
          std::lock_guard lock{mutex_};
          return buffers_.size();
       }
 
       /// Get maximum number of buffers the pool will hold
-      [[nodiscard]] std::size_t max_size() const noexcept { return max_buffers_; }
+      [[nodiscard]] size_t max_size() const noexcept { return max_buffers_; }
 
       /// Get maximum buffer size before shrinking
-      [[nodiscard]] std::size_t max_buffer_size() const noexcept { return max_buffer_size_; }
+      [[nodiscard]] size_t max_buffer_size() const noexcept { return max_buffer_size_; }
 
      private:
       void release(std::unique_ptr<std::string> buf)

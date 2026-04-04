@@ -34,6 +34,9 @@ import glaze.util.string_literal;
 
 #include "glaze/util/inline.hpp"
 
+using std::int64_t;
+using std::size_t;
+
 namespace glz
 {
    template <>
@@ -822,7 +825,7 @@ namespace glz
             return;
          }
 
-         const auto n = static_cast<std::size_t>(it - start);
+         const auto n = static_cast<size_t>(it - start);
          ++it; // skip closing quote
 
          constexpr auto N = reflect<T>::size;
@@ -849,7 +852,7 @@ namespace glz
 
             // Use visit to convert runtime index to compile-time index
             visit<N>(
-               [&]<std::size_t I>() {
+               [&]<size_t I>() {
                   // Verify the key matches (hash collision check)
                   static constexpr auto key = std::get<I>(reflect<T>::keys);
                   if (n == key.size() && std::string_view(start, n) == key) [[likely]] {
@@ -924,9 +927,9 @@ namespace glz
          const auto start = it;
 
          // Helper to parse N digits starting at given pointer
-         auto parse_digits = [](const auto* s, std::size_t count) -> int {
+         auto parse_digits = [](const auto* s, size_t count) -> int {
             int val = 0;
-            for (std::size_t i = 0; i < count; ++i) {
+            for (size_t i = 0; i < count; ++i) {
                const char c = s[i];
                if (c < '0' || c > '9') return -1;
                val = val * 10 + (c - '0');
@@ -946,7 +949,7 @@ namespace glz
             }
          }
 
-         const auto n = static_cast<std::size_t>(it - start);
+         const auto n = static_cast<size_t>(it - start);
 
          // Minimum: YYYY-MM-DDTHH:MM = 16 chars (seconds optional in TOML)
          if (n < 16) [[unlikely]] {
@@ -977,7 +980,7 @@ namespace glz
          }
 
          // Parse optional seconds
-         std::size_t pos = 16;
+         size_t pos = 16;
          int sc = 0;
          if (pos < n && s[pos] == ':') {
             ++pos;
@@ -994,10 +997,10 @@ namespace glz
          }
 
          // Parse optional fractional seconds
-         std::int64_t subsec_nanos = 0;
+         int64_t subsec_nanos = 0;
          if (pos < n && s[pos] == '.') {
             ++pos;
-            std::int64_t frac = 0;
+            int64_t frac = 0;
             int digits = 0;
             while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
                if (digits < 9) {
@@ -1007,7 +1010,7 @@ namespace glz
                ++pos;
             }
             // Scale to nanoseconds
-            static constexpr std::int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
+            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
                                                 10000,      1000,      100,      10,      1};
             if (digits > 0 && digits <= 9) {
                subsec_nanos = frac * scale[digits];
@@ -1081,9 +1084,9 @@ namespace glz
          }
 
          // Helper to parse N digits
-         auto parse_digits = [](const auto* s, std::size_t count) -> int {
+         auto parse_digits = [](const auto* s, size_t count) -> int {
             int val = 0;
-            for (std::size_t i = 0; i < count; ++i) {
+            for (size_t i = 0; i < count; ++i) {
                const char c = s[i];
                if (c < '0' || c > '9') return -1;
                val = val * 10 + (c - '0');
@@ -1104,7 +1107,7 @@ namespace glz
             }
          }
 
-         const auto n = static_cast<std::size_t>(it - start);
+         const auto n = static_cast<size_t>(it - start);
 
          // Minimum: YYYY-MM-DD = 10 chars
          if (n < 10) [[unlikely]] {
@@ -1157,9 +1160,9 @@ namespace glz
          }
 
          // Helper to parse N digits
-         auto parse_digits = [](const auto* s, std::size_t count) -> int {
+         auto parse_digits = [](const auto* s, size_t count) -> int {
             int val = 0;
-            for (std::size_t i = 0; i < count; ++i) {
+            for (size_t i = 0; i < count; ++i) {
                const char c = s[i];
                if (c < '0' || c > '9') return -1;
                val = val * 10 + (c - '0');
@@ -1180,7 +1183,7 @@ namespace glz
             }
          }
 
-         const auto n = static_cast<std::size_t>(it - start);
+         const auto n = static_cast<size_t>(it - start);
 
          // Minimum: HH:MM = 5 chars (seconds optional per TOML spec)
          if (n < 5) [[unlikely]] {
@@ -1204,7 +1207,7 @@ namespace glz
          }
 
          // Parse optional seconds
-         std::size_t pos = 5;
+         size_t pos = 5;
          int sc = 0;
          if (pos < n && s[pos] == ':') {
             ++pos;
@@ -1221,10 +1224,10 @@ namespace glz
          }
 
          // Parse optional fractional seconds
-         std::int64_t subsec_nanos = 0;
+         int64_t subsec_nanos = 0;
          if (pos < n && s[pos] == '.') {
             ++pos;
-            std::int64_t frac = 0;
+            int64_t frac = 0;
             int digits = 0;
             while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
                if (digits < 9) {
@@ -1233,7 +1236,7 @@ namespace glz
                }
                ++pos;
             }
-            static constexpr std::int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
+            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
                                                 10000,      1000,      100,      10,      1};
             if (digits > 0 && digits <= 9) {
                subsec_nanos = frac * scale[digits];
@@ -1375,7 +1378,7 @@ namespace glz
             return;
          }
 
-         std::size_t index = 0;
+         size_t index = 0;
          while (it != end) {
             using value_type = typename std::remove_cvref_t<T>::value_type;
 
@@ -1491,7 +1494,7 @@ namespace glz
 
             if (key_matches) [[likely]] {
                glz::visit<N>(
-                  [&]<std::size_t I>() {
+                  [&]<size_t I>() {
                      if (I == index) {
                         decltype(auto) member_obj = [&]() -> decltype(auto) {
                            if constexpr (reflectable<U>) {
@@ -1584,7 +1587,7 @@ namespace glz
 
          if (key_matches) [[likely]] {
             glz::visit<N>(
-               [&]<std::size_t I>() {
+               [&]<size_t I>() {
                   if (I == index) {
                      decltype(auto) member_obj = [&]() -> decltype(auto) {
                         if constexpr (reflectable<U>) {
@@ -1642,7 +1645,7 @@ namespace glz
          if (key_matches) [[likely]] {
             bool success = false;
             glz::visit<N>(
-               [&]<std::size_t I>() {
+               [&]<size_t I>() {
                   if (I == index) {
                      decltype(auto) member_obj = [&]() -> decltype(auto) {
                         if constexpr (reflectable<U>) {
@@ -1720,8 +1723,8 @@ namespace glz
          requires { requires is_variant<std::remove_cvref_t<decltype(std::declval<T>().data)>>; };
 
       // Find the index of the first map alternative in a variant
-      template <class Variant, std::size_t I = 0>
-      constexpr std::size_t find_map_alternative_index()
+      template <class Variant, size_t I = 0>
+      constexpr size_t find_map_alternative_index()
       {
          if constexpr (I >= std::variant_size_v<Variant>) {
             return std::variant_npos;
@@ -2240,11 +2243,11 @@ namespace glz
       template <template <class> class Trait, class... Ts>
       struct toml_variant_count_impl<std::variant<Ts...>, Trait>
       {
-         static constexpr std::size_t value = (std::size_t(Trait<Ts>::value) + ... + 0);
+         static constexpr size_t value = (size_t(Trait<Ts>::value) + ... + 0);
       };
 
       template <class Variant, template <class> class Trait>
-      constexpr std::size_t toml_variant_count_v = toml_variant_count_impl<Variant, Trait>::value;
+      constexpr size_t toml_variant_count_v = toml_variant_count_impl<Variant, Trait>::value;
 
       // Get first index matching trait (or variant_npos if none)
       template <class Variant, template <class> class Trait>
@@ -2253,18 +2256,18 @@ namespace glz
       template <template <class> class Trait, class... Ts>
       struct toml_variant_first_index_impl<std::variant<Ts...>, Trait>
       {
-         static constexpr std::size_t find()
+         static constexpr size_t find()
          {
-            std::size_t result = std::variant_npos;
-            std::size_t idx = 0;
+            size_t result = std::variant_npos;
+            size_t idx = 0;
             ((Trait<Ts>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx), ...);
             return result;
          }
-         static constexpr std::size_t value = find();
+         static constexpr size_t value = find();
       };
 
       template <class Variant, template <class> class Trait>
-      constexpr std::size_t toml_variant_first_index_v = toml_variant_first_index_impl<Variant, Trait>::value;
+      constexpr size_t toml_variant_first_index_v = toml_variant_first_index_impl<Variant, Trait>::value;
 
       // Detect if a TOML number is a float by scanning ahead
       // Returns true if the number contains float indicators (., e, E, inf, nan)

@@ -34,6 +34,10 @@ import glaze.tuplet;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    // TOML-specific options - inherits from opts to allow TOML-specific configuration
@@ -246,7 +250,7 @@ namespace glz
          const auto sc = static_cast<unsigned>(tod.seconds().count());
 
          // Calculate fractional digits based on duration precision
-         constexpr std::size_t frac_digits = []() constexpr {
+         constexpr size_t frac_digits = []() constexpr {
             using Period = typename Duration::period;
             if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
                return 0; // seconds or coarser
@@ -263,14 +267,14 @@ namespace glz
          }();
 
          // Max size: YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ = 30 (no quotes for TOML)
-         constexpr std::size_t max_size = 21 + (frac_digits > 0 ? 1 + frac_digits : 0);
+         constexpr size_t max_size = 21 + (frac_digits > 0 ? 1 + frac_digits : 0);
          if (!ensure_space(ctx, b, ix + max_size + write_padding_bytes)) [[unlikely]] {
             return;
          }
 
          // Helper to write N-digit zero-padded number
-         auto write_digits = [&]<std::size_t N>(std::uint64_t val) {
-            for (std::size_t i = N; i > 0; --i) {
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
                b[ix + i - 1] = static_cast<char>('0' + val % 10);
                val /= 10;
             }
@@ -278,7 +282,7 @@ namespace glz
          };
 
          // Write datetime without quotes (TOML native format)
-         write_digits.template operator()<4>(static_cast<std::uint64_t>(yr));
+         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
          b[ix++] = '-';
          write_digits.template operator()<2>(mo);
          b[ix++] = '-';
@@ -295,13 +299,13 @@ namespace glz
             b[ix++] = '.';
             const auto subsec = tod.subseconds();
             if constexpr (frac_digits == 3) {
-               write_digits.template operator()<3>(static_cast<std::uint64_t>(duration_cast<milliseconds>(subsec).count()));
+               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
             }
             else if constexpr (frac_digits == 6) {
-               write_digits.template operator()<6>(static_cast<std::uint64_t>(duration_cast<microseconds>(subsec).count()));
+               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
             }
             else {
-               write_digits.template operator()<9>(static_cast<std::uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
             }
          }
 
@@ -324,21 +328,21 @@ namespace glz
          const unsigned dy = static_cast<unsigned>(value.day());
 
          // YYYY-MM-DD = 10 chars
-         constexpr std::size_t max_size = 10;
+         constexpr size_t max_size = 10;
          if (!ensure_space(ctx, b, ix + max_size + write_padding_bytes)) [[unlikely]] {
             return;
          }
 
          // Helper to write N-digit zero-padded number
-         auto write_digits = [&]<std::size_t N>(std::uint64_t val) {
-            for (std::size_t i = N; i > 0; --i) {
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
                b[ix + i - 1] = static_cast<char>('0' + val % 10);
                val /= 10;
             }
             ix += N;
          };
 
-         write_digits.template operator()<4>(static_cast<std::uint64_t>(yr));
+         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
          b[ix++] = '-';
          write_digits.template operator()<2>(mo);
          b[ix++] = '-';
@@ -362,7 +366,7 @@ namespace glz
          const auto sc = static_cast<unsigned>(value.seconds().count());
 
          // Calculate fractional digits based on precision
-         constexpr std::size_t frac_digits = []() constexpr {
+         constexpr size_t frac_digits = []() constexpr {
             using Period = typename Precision::period;
             if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
                return 0; // seconds or coarser
@@ -379,14 +383,14 @@ namespace glz
          }();
 
          // HH:MM:SS.nnnnnnnnn = max 18 chars
-         constexpr std::size_t max_size = 8 + (frac_digits > 0 ? 1 + frac_digits : 0);
+         constexpr size_t max_size = 8 + (frac_digits > 0 ? 1 + frac_digits : 0);
          if (!ensure_space(ctx, b, ix + max_size + write_padding_bytes)) [[unlikely]] {
             return;
          }
 
          // Helper to write N-digit zero-padded number
-         auto write_digits = [&]<std::size_t N>(std::uint64_t val) {
-            for (std::size_t i = N; i > 0; --i) {
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
                b[ix + i - 1] = static_cast<char>('0' + val % 10);
                val /= 10;
             }
@@ -404,13 +408,13 @@ namespace glz
             b[ix++] = '.';
             const auto subsec = value.subseconds();
             if constexpr (frac_digits == 3) {
-               write_digits.template operator()<3>(static_cast<std::uint64_t>(duration_cast<milliseconds>(subsec).count()));
+               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
             }
             else if constexpr (frac_digits == 6) {
-               write_digits.template operator()<6>(static_cast<std::uint64_t>(duration_cast<microseconds>(subsec).count()));
+               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
             }
             else {
-               write_digits.template operator()<9>(static_cast<std::uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
             }
          }
       }
@@ -485,7 +489,7 @@ namespace glz
 
                std::memcpy(&b[ix], "\"", 1);
                ++ix;
-               if (const auto escaped = char_escape_table[std::uint8_t(value)]; escaped) {
+               if (const auto escaped = char_escape_table[uint8_t(value)]; escaped) {
                   std::memcpy(&b[ix], &escaped, 2);
                   ix += 2;
                }
@@ -561,18 +565,18 @@ namespace glz
                   if (n > 7) {
                      for (const auto end_m7 = e - 7; c < end_m7;) {
                         std::memcpy(data, c, 8);
-                        std::uint64_t swar;
+                        uint64_t swar;
                         std::memcpy(&swar, c, 8);
                         if constexpr (std::endian::native == std::endian::big) {
                            swar = std::byteswap(swar);
                         }
 
-                        constexpr std::uint64_t lo7_mask = repeat_byte8(0b01111111);
-                        const std::uint64_t lo7 = swar & lo7_mask;
-                        const std::uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
-                        const std::uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                        const std::uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                        std::uint64_t next = ~((quote & backslash & less_32) | swar);
+                        constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                        const uint64_t lo7 = swar & lo7_mask;
+                        const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
+                        const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                        const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                        uint64_t next = ~((quote & backslash & less_32) | swar);
 
                         next &= repeat_byte8(0b10000000);
                         if (next == 0) {
@@ -585,14 +589,14 @@ namespace glz
                         c += length;
                         data += length;
 
-                        std::memcpy(data, &char_escape_table[std::uint8_t(*c)], 2);
+                        std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
                         data += 2;
                         ++c;
                      }
                   }
 
                   for (; c < e; ++c) {
-                     if (const auto escaped = char_escape_table[std::uint8_t(*c)]; escaped) {
+                     if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
                         std::memcpy(data, &escaped, 2);
                         data += 2;
                      }
@@ -602,7 +606,7 @@ namespace glz
                      }
                   }
 
-                  ix += std::size_t(data - start);
+                  ix += size_t(data - start);
 
                   std::memcpy(&b[ix], "\"", 1);
                   ++ix;
@@ -760,7 +764,7 @@ namespace glz
       dump('{', b, ix);
 
       bool first = true;
-      for_each<N>([&]<std::size_t I>() {
+      for_each<N>([&]<size_t I>() {
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -889,14 +893,14 @@ namespace glz
       bool first = true;
 
       // Helper lambda to check if a field should be skipped
-      auto should_skip_field = [&]<std::size_t I>() constexpr {
+      auto should_skip_field = [&]<size_t I>() constexpr {
          using val_t = field_t<T, I>;
          constexpr bool write_function_pointers = check_write_function_pointers(Options);
          return always_skipped<val_t> || (!write_function_pointers && is_member_function_pointer<val_t>);
       };
 
       // Helper lambda to check if nullable field is null
-      auto is_null_field = [&]<std::size_t I>() -> bool {
+      auto is_null_field = [&]<size_t I>() -> bool {
          using val_t = field_t<T, I>;
          if constexpr (null_t<val_t>) {
             if constexpr (always_null_t<val_t>) {
@@ -926,7 +930,7 @@ namespace glz
       };
 
       // Helper lambda to write a scalar key-value pair
-      auto write_scalar_field = [&]<std::size_t I>() {
+      auto write_scalar_field = [&]<size_t I>() {
          using val_t = field_t<T, I>;
 
          if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
@@ -956,7 +960,7 @@ namespace glz
       };
 
       // Helper lambda to write a nested table [table] - not used when inside array-of-tables context
-      auto write_table_field = [&]<std::size_t I>() {
+      auto write_table_field = [&]<size_t I>() {
          using val_t = field_t<T, I>;
 
          if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
@@ -1021,7 +1025,7 @@ namespace glz
       };
 
       // Helper lambda to write an array of tables [[array]]
-      auto write_array_of_tables_field = [&]<std::size_t I>() {
+      auto write_array_of_tables_field = [&]<size_t I>() {
          using val_t = field_t<T, I>;
          using element_t = range_value_t<val_t>;
 
@@ -1112,7 +1116,7 @@ namespace glz
 
       // PASS 1: Write all scalar fields first (TOML spec conformance)
       // In inline_mode, arrays of objects are treated as scalars (written inline)
-      for_each<N>([&]<std::size_t I>() {
+      for_each<N>([&]<size_t I>() {
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -1138,7 +1142,7 @@ namespace glz
 
       // PASS 2: Write nested tables [table] and arrays of tables [[array]]
       // In inline_mode, arrays of objects are skipped here (already written in pass 1)
-      for_each<N>([&]<std::size_t I>() {
+      for_each<N>([&]<size_t I>() {
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -1296,7 +1300,7 @@ namespace glz
       requires(std::is_array_v<T>)
    struct to<TOML, T>
    {
-      template <auto Opts, class V, std::size_t N, class... Args>
+      template <auto Opts, class V, size_t N, class... Args>
       GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
       {
          serialize<TOML>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
@@ -1324,7 +1328,7 @@ namespace glz
          }
          dump('[', b, ix);
          using V = std::decay_t<T>;
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1391,7 +1395,7 @@ namespace glz
    }
 
    export template <write_supported<TOML> T, raw_buffer Buffer>
-   [[nodiscard]] glz::expected<std::size_t, error_ctx> write_toml(T&& value, Buffer&& buffer)
+   [[nodiscard]] glz::expected<size_t, error_ctx> write_toml(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }

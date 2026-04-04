@@ -32,16 +32,26 @@ import glaze.tuplet;
 
 #include "glaze/util/inline.hpp"
 
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz::msgpack::detail
 {
    template <class B>
-   GLZ_ALWAYS_INLINE void write_nil(B& b, std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE void write_nil(B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       dump(std::byte{nil}, b, ix);
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool write_nil(is_context auto& ctx, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE bool write_nil(is_context auto& ctx, B& b, size_t& ix)
    {
       if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
          return false;
@@ -51,38 +61,38 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void write_bool(const bool value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE void write_bool(const bool value, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
-      dump(std::byte{static_cast<std::uint8_t>(value ? bool_true : bool_false)}, b, ix);
+      dump(std::byte{static_cast<uint8_t>(value ? bool_true : bool_false)}, b, ix);
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool write_bool(is_context auto& ctx, const bool value, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE bool write_bool(is_context auto& ctx, const bool value, B& b, size_t& ix)
    {
       if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
          return false;
       }
-      dump(std::byte{static_cast<std::uint8_t>(value ? bool_true : bool_false)}, b, ix);
+      dump(std::byte{static_cast<uint8_t>(value ? bool_true : bool_false)}, b, ix);
       return true;
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void write_unsigned(std::uint64_t value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE void write_unsigned(uint64_t value, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if (value <= 0x7F) {
-         dump(std::byte{static_cast<std::uint8_t>(value)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(value)}, b, ix);
       }
-      else if (value <= std::numeric_limits<std::uint8_t>::max()) {
+      else if (value <= std::numeric_limits<uint8_t>::max()) {
          dump(std::byte{uint8}, b, ix);
-         dump_uint8(static_cast<std::uint8_t>(value), b, ix);
+         dump_uint8(static_cast<uint8_t>(value), b, ix);
       }
-      else if (value <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (value <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{uint16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(value), b, ix);
+         dump_uint16(static_cast<uint16_t>(value), b, ix);
       }
-      else if (value <= std::numeric_limits<std::uint32_t>::max()) {
+      else if (value <= std::numeric_limits<uint32_t>::max()) {
          dump(std::byte{uint32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(value), b, ix);
+         dump_uint32(static_cast<uint32_t>(value), b, ix);
       }
       else {
          dump(std::byte{uint64}, b, ix);
@@ -91,26 +101,26 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool write_unsigned(is_context auto& ctx, std::uint64_t value, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE bool write_unsigned(is_context auto& ctx, uint64_t value, B& b, size_t& ix)
    {
       // Max size is 9 bytes (1 byte type + 8 bytes value)
       if (!ensure_space(ctx, b, ix + 9 + write_padding_bytes)) [[unlikely]] {
          return false;
       }
       if (value <= 0x7F) {
-         dump(std::byte{static_cast<std::uint8_t>(value)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(value)}, b, ix);
       }
-      else if (value <= std::numeric_limits<std::uint8_t>::max()) {
+      else if (value <= std::numeric_limits<uint8_t>::max()) {
          dump(std::byte{uint8}, b, ix);
-         dump_uint8(static_cast<std::uint8_t>(value), b, ix);
+         dump_uint8(static_cast<uint8_t>(value), b, ix);
       }
-      else if (value <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (value <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{uint16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(value), b, ix);
+         dump_uint16(static_cast<uint16_t>(value), b, ix);
       }
-      else if (value <= std::numeric_limits<std::uint32_t>::max()) {
+      else if (value <= std::numeric_limits<uint32_t>::max()) {
          dump(std::byte{uint32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(value), b, ix);
+         dump_uint32(static_cast<uint32_t>(value), b, ix);
       }
       else {
          dump(std::byte{uint64}, b, ix);
@@ -120,60 +130,60 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void write_signed(std::int64_t value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE void write_signed(int64_t value, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if (value >= -32 && value <= 127) {
-         dump(std::byte{static_cast<std::uint8_t>(value)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(value)}, b, ix);
       }
-      else if (value >= std::numeric_limits<std::int8_t>::min() && value <= std::numeric_limits<std::int8_t>::max()) {
+      else if (value >= std::numeric_limits<int8_t>::min() && value <= std::numeric_limits<int8_t>::max()) {
          dump(std::byte{int8}, b, ix);
-         dump_uint8(static_cast<std::uint8_t>(value), b, ix);
+         dump_uint8(static_cast<uint8_t>(value), b, ix);
       }
-      else if (value >= std::numeric_limits<std::int16_t>::min() && value <= std::numeric_limits<std::int16_t>::max()) {
+      else if (value >= std::numeric_limits<int16_t>::min() && value <= std::numeric_limits<int16_t>::max()) {
          dump(std::byte{int16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(value), b, ix);
+         dump_uint16(static_cast<uint16_t>(value), b, ix);
       }
-      else if (value >= std::numeric_limits<std::int32_t>::min() && value <= std::numeric_limits<std::int32_t>::max()) {
+      else if (value >= std::numeric_limits<int32_t>::min() && value <= std::numeric_limits<int32_t>::max()) {
          dump(std::byte{int32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(value), b, ix);
+         dump_uint32(static_cast<uint32_t>(value), b, ix);
       }
       else {
          dump(std::byte{int64}, b, ix);
-         dump_uint64(static_cast<std::uint64_t>(value), b, ix);
+         dump_uint64(static_cast<uint64_t>(value), b, ix);
       }
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool write_signed(is_context auto& ctx, std::int64_t value, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE bool write_signed(is_context auto& ctx, int64_t value, B& b, size_t& ix)
    {
       // Max size is 9 bytes (1 byte type + 8 bytes value)
       if (!ensure_space(ctx, b, ix + 9 + write_padding_bytes)) [[unlikely]] {
          return false;
       }
       if (value >= -32 && value <= 127) {
-         dump(std::byte{static_cast<std::uint8_t>(value)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(value)}, b, ix);
       }
-      else if (value >= std::numeric_limits<std::int8_t>::min() && value <= std::numeric_limits<std::int8_t>::max()) {
+      else if (value >= std::numeric_limits<int8_t>::min() && value <= std::numeric_limits<int8_t>::max()) {
          dump(std::byte{int8}, b, ix);
-         dump_uint8(static_cast<std::uint8_t>(value), b, ix);
+         dump_uint8(static_cast<uint8_t>(value), b, ix);
       }
-      else if (value >= std::numeric_limits<std::int16_t>::min() && value <= std::numeric_limits<std::int16_t>::max()) {
+      else if (value >= std::numeric_limits<int16_t>::min() && value <= std::numeric_limits<int16_t>::max()) {
          dump(std::byte{int16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(value), b, ix);
+         dump_uint16(static_cast<uint16_t>(value), b, ix);
       }
-      else if (value >= std::numeric_limits<std::int32_t>::min() && value <= std::numeric_limits<std::int32_t>::max()) {
+      else if (value >= std::numeric_limits<int32_t>::min() && value <= std::numeric_limits<int32_t>::max()) {
          dump(std::byte{int32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(value), b, ix);
+         dump_uint32(static_cast<uint32_t>(value), b, ix);
       }
       else {
          dump(std::byte{int64}, b, ix);
-         dump_uint64(static_cast<std::uint64_t>(value), b, ix);
+         dump_uint64(static_cast<uint64_t>(value), b, ix);
       }
       return true;
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void write_floating(const auto value, B& b, std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE void write_floating(const auto value, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       using T = std::decay_t<decltype(value)>;
       if constexpr (sizeof(T) <= sizeof(float)) {
@@ -187,7 +197,7 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool write_floating(is_context auto& ctx, const auto value, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE bool write_floating(is_context auto& ctx, const auto value, B& b, size_t& ix)
    {
       using T = std::decay_t<decltype(value)>;
       // Max size is 9 bytes (1 byte type + 8 bytes value)
@@ -206,166 +216,166 @@ namespace glz::msgpack::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void write_str_header(std::size_t size, B& b, std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE void write_str_header(size_t size, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if (size <= 31) {
-         dump(std::byte{static_cast<std::uint8_t>(fixstr_bits | size)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(fixstr_bits | size)}, b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint8_t>::max()) {
+      else if (size <= std::numeric_limits<uint8_t>::max()) {
          dump(std::byte{str8}, b, ix);
-         dump_uint8(static_cast<std::uint8_t>(size), b, ix);
+         dump_uint8(static_cast<uint8_t>(size), b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{str16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(size), b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
       }
       else {
          dump(std::byte{str32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(size), b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
       }
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool write_str_header(is_context auto& ctx, std::size_t size, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE bool write_str_header(is_context auto& ctx, size_t size, B& b, size_t& ix)
    {
       // Max header size is 5 bytes (1 byte type + 4 bytes length)
       if (!ensure_space(ctx, b, ix + 5 + write_padding_bytes)) [[unlikely]] {
          return false;
       }
       if (size <= 31) {
-         dump(std::byte{static_cast<std::uint8_t>(fixstr_bits | size)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(fixstr_bits | size)}, b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint8_t>::max()) {
+      else if (size <= std::numeric_limits<uint8_t>::max()) {
          dump(std::byte{str8}, b, ix);
-         dump_uint8(static_cast<std::uint8_t>(size), b, ix);
+         dump_uint8(static_cast<uint8_t>(size), b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{str16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(size), b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
       }
       else {
          dump(std::byte{str32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(size), b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
       }
       return true;
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void write_array_header(std::size_t size, B& b, std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE void write_array_header(size_t size, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if (size <= 15) {
-         dump(std::byte{static_cast<std::uint8_t>(fixarray_bits | size)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(fixarray_bits | size)}, b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{array16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(size), b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
       }
       else {
          dump(std::byte{array32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(size), b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
       }
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool write_array_header(is_context auto& ctx, std::size_t size, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE bool write_array_header(is_context auto& ctx, size_t size, B& b, size_t& ix)
    {
       // Max header size is 5 bytes (1 byte type + 4 bytes length)
       if (!ensure_space(ctx, b, ix + 5 + write_padding_bytes)) [[unlikely]] {
          return false;
       }
       if (size <= 15) {
-         dump(std::byte{static_cast<std::uint8_t>(fixarray_bits | size)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(fixarray_bits | size)}, b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{array16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(size), b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
       }
       else {
          dump(std::byte{array32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(size), b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
       }
       return true;
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void write_map_header(std::size_t size, B& b, std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE void write_map_header(size_t size, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if (size <= 15) {
-         dump(std::byte{static_cast<std::uint8_t>(fixmap_bits | size)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(fixmap_bits | size)}, b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{map16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(size), b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
       }
       else {
          dump(std::byte{map32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(size), b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
       }
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool write_map_header(is_context auto& ctx, std::size_t size, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE bool write_map_header(is_context auto& ctx, size_t size, B& b, size_t& ix)
    {
       // Max header size is 5 bytes (1 byte type + 4 bytes length)
       if (!ensure_space(ctx, b, ix + 5 + write_padding_bytes)) [[unlikely]] {
          return false;
       }
       if (size <= 15) {
-         dump(std::byte{static_cast<std::uint8_t>(fixmap_bits | size)}, b, ix);
+         dump(std::byte{static_cast<uint8_t>(fixmap_bits | size)}, b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{map16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(size), b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
       }
       else {
          dump(std::byte{map32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(size), b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
       }
       return true;
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void write_binary_header(std::size_t size, B& b, std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE void write_binary_header(size_t size, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
-      if (size <= std::numeric_limits<std::uint8_t>::max()) {
+      if (size <= std::numeric_limits<uint8_t>::max()) {
          dump(std::byte{bin8}, b, ix);
-         dump_uint8(static_cast<std::uint8_t>(size), b, ix);
+         dump_uint8(static_cast<uint8_t>(size), b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{bin16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(size), b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
       }
       else {
          dump(std::byte{bin32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(size), b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
       }
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool write_binary_header(is_context auto& ctx, std::size_t size, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE bool write_binary_header(is_context auto& ctx, size_t size, B& b, size_t& ix)
    {
       // Max header size is 5 bytes (1 byte type + 4 bytes length)
       if (!ensure_space(ctx, b, ix + 5 + write_padding_bytes)) [[unlikely]] {
          return false;
       }
-      if (size <= std::numeric_limits<std::uint8_t>::max()) {
+      if (size <= std::numeric_limits<uint8_t>::max()) {
          dump(std::byte{bin8}, b, ix);
-         dump_uint8(static_cast<std::uint8_t>(size), b, ix);
+         dump_uint8(static_cast<uint8_t>(size), b, ix);
       }
-      else if (size <= std::numeric_limits<std::uint16_t>::max()) {
+      else if (size <= std::numeric_limits<uint16_t>::max()) {
          dump(std::byte{bin16}, b, ix);
-         dump_uint16(static_cast<std::uint16_t>(size), b, ix);
+         dump_uint16(static_cast<uint16_t>(size), b, ix);
       }
       else {
          dump(std::byte{bin32}, b, ix);
-         dump_uint32(static_cast<std::uint32_t>(size), b, ix);
+         dump_uint32(static_cast<uint32_t>(size), b, ix);
       }
       return true;
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE bool dump_raw_bytes(is_context auto& ctx, const char* data, std::size_t size, B& b,
-                                         std::size_t& ix) noexcept(not vector_like<B>)
+   GLZ_ALWAYS_INLINE bool dump_raw_bytes(is_context auto& ctx, const char* data, size_t size, B& b,
+                                         size_t& ix) noexcept(not vector_like<B>)
    {
       if (size == 0) {
          return true;
@@ -513,10 +523,10 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, B&& b, IX&& ix)
       {
          const auto num_bytes = (value.size() + 7) / 8;
-         std::vector<std::uint8_t> bytes(num_bytes);
-         for (std::size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
-            for (std::size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
-               bytes[byte_i] |= std::uint8_t(value[i]) << std::uint8_t(bit_i);
+         std::vector<uint8_t> bytes(num_bytes);
+         for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
+            for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
+               bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
             }
          }
          if (!msgpack::detail::write_binary_header(ctx, bytes.size(), b, ix)) [[unlikely]] {
@@ -574,12 +584,12 @@ namespace glz
             }
          }
          else if constexpr (std::is_signed_v<std::remove_cvref_t<decltype(value)>>) {
-            if (!msgpack::detail::write_signed(ctx, static_cast<std::int64_t>(value), b, ix)) [[unlikely]] {
+            if (!msgpack::detail::write_signed(ctx, static_cast<int64_t>(value), b, ix)) [[unlikely]] {
                return;
             }
          }
          else {
-            if (!msgpack::detail::write_unsigned(ctx, static_cast<std::uint64_t>(value), b, ix)) [[unlikely]] {
+            if (!msgpack::detail::write_unsigned(ctx, static_cast<uint64_t>(value), b, ix)) [[unlikely]] {
                return;
             }
          }
@@ -635,11 +645,11 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
 
       template <auto Opts>
-      static consteval std::size_t count_members()
+      static consteval size_t count_members()
       {
-         return []<std::size_t... I>(std::index_sequence<I...>) consteval {
-            return (std::size_t{} + ... +
-                    (std::same_as<field_t<T, I>, hidden> || std::same_as<field_t<T, I>, skip> ? std::size_t{} : std::size_t{1}));
+         return []<size_t... I>(std::index_sequence<I...>) consteval {
+            return (size_t{} + ... +
+                    (std::same_as<field_t<T, I>, hidden> || std::same_as<field_t<T, I>, skip> ? size_t{} : size_t{1}));
          }(std::make_index_sequence<N>{});
       }
 
@@ -650,7 +660,7 @@ namespace glz
             if (!msgpack::detail::write_array_header(ctx, count_members<Opts>(), b, ix)) [[unlikely]] {
                return;
             }
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -666,7 +676,7 @@ namespace glz
             if (!msgpack::detail::write_map_header(ctx, count_members<Opts>(), b, ix)) [[unlikely]] {
                return;
             }
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -732,7 +742,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          if constexpr (msgpack::binary_range_v<Value>) {
-            const std::size_t size = value.size();
+            const size_t size = value.size();
             if (!msgpack::detail::write_binary_header(ctx, size, b, ix)) [[unlikely]] {
                return;
             }
@@ -768,8 +778,8 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         const std::size_t len = value.data.size();
-         const auto type_byte = static_cast<std::uint8_t>(value.type);
+         const size_t len = value.data.size();
+         const auto type_byte = static_cast<uint8_t>(value.type);
 
          // Calculate max header + data size and check upfront
          // Max header is 6 bytes (ext32: 1 byte type + 4 bytes len + 1 byte ext type)
@@ -807,22 +817,22 @@ namespace glz
             break;
          }
 
-         if (len <= std::numeric_limits<std::uint8_t>::max()) {
+         if (len <= std::numeric_limits<uint8_t>::max()) {
             dump_payload([&] {
                dump(std::byte{msgpack::ext8}, b, ix);
-               msgpack::dump_uint8(static_cast<std::uint8_t>(len), b, ix);
+               msgpack::dump_uint8(static_cast<uint8_t>(len), b, ix);
             });
          }
-         else if (len <= std::numeric_limits<std::uint16_t>::max()) {
+         else if (len <= std::numeric_limits<uint16_t>::max()) {
             dump_payload([&] {
                dump(std::byte{msgpack::ext16}, b, ix);
-               msgpack::dump_uint16(static_cast<std::uint16_t>(len), b, ix);
+               msgpack::dump_uint16(static_cast<uint16_t>(len), b, ix);
             });
          }
-         else if (len <= std::numeric_limits<std::uint32_t>::max()) {
+         else if (len <= std::numeric_limits<uint32_t>::max()) {
             dump_payload([&] {
                dump(std::byte{msgpack::ext32}, b, ix);
-               msgpack::dump_uint32(static_cast<std::uint32_t>(len), b, ix);
+               msgpack::dump_uint32(static_cast<uint32_t>(len), b, ix);
             });
          }
          else {
@@ -847,22 +857,22 @@ namespace glz
             return;
          }
 
-         const auto type_byte = static_cast<std::uint8_t>(msgpack::timestamp_type);
+         const auto type_byte = static_cast<uint8_t>(msgpack::timestamp_type);
 
          // Timestamp 32: seconds only, fits in uint32, no nanoseconds
          if (value.nanoseconds == 0 && value.seconds >= 0 &&
-             value.seconds <= static_cast<std::int64_t>(std::numeric_limits<std::uint32_t>::max())) {
+             value.seconds <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
             dump(std::byte{msgpack::fixext4}, b, ix);
             dump(std::byte{type_byte}, b, ix);
-            msgpack::dump_uint32(static_cast<std::uint32_t>(value.seconds), b, ix);
+            msgpack::dump_uint32(static_cast<uint32_t>(value.seconds), b, ix);
          }
          // Timestamp 64: 30-bit nanoseconds + 34-bit seconds
          else if (value.seconds >= 0 && value.seconds <= 0x3FFFFFFFF) {
             dump(std::byte{msgpack::fixext8}, b, ix);
             dump(std::byte{type_byte}, b, ix);
             // Upper 30 bits: nanoseconds, lower 34 bits: seconds
-            const std::uint64_t val64 =
-               (static_cast<std::uint64_t>(value.nanoseconds) << 34) | static_cast<std::uint64_t>(value.seconds);
+            const uint64_t val64 =
+               (static_cast<uint64_t>(value.nanoseconds) << 34) | static_cast<uint64_t>(value.seconds);
             msgpack::dump_uint64(val64, b, ix);
          }
          // Timestamp 96: full range with signed seconds
@@ -871,7 +881,7 @@ namespace glz
             msgpack::dump_uint8(12, b, ix); // 12 bytes payload
             dump(std::byte{type_byte}, b, ix);
             msgpack::dump_uint32(value.nanoseconds, b, ix);
-            msgpack::dump_uint64(static_cast<std::uint64_t>(value.seconds), b, ix);
+            msgpack::dump_uint64(static_cast<uint64_t>(value.seconds), b, ix);
          }
       }
    };
@@ -892,7 +902,7 @@ namespace glz
 
          msgpack::timestamp ts;
          ts.seconds = secs.count();
-         ts.nanoseconds = static_cast<std::uint32_t>(nsecs.count());
+         ts.nanoseconds = static_cast<uint32_t>(nsecs.count());
 
          to<MSGPACK, msgpack::timestamp>::template op<Opts>(ts, std::forward<Ctx>(ctx), std::forward<B>(b),
                                                             std::forward<IX>(ix));
@@ -992,7 +1002,7 @@ namespace glz
          if (!msgpack::detail::write_array_header(ctx, N, b, ix)) [[unlikely]] {
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1013,14 +1023,14 @@ namespace glz
             return;
          }
          if constexpr (is_std_tuple<T>) {
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
+            [&]<size_t... I>(std::index_sequence<I...>) {
                ((void)(bool(ctx.error) ? void()
                                        : (serialize<MSGPACK>::op<Opts>(std::get<I>(value), ctx, b, ix), void())),
                 ...);
             }(std::make_index_sequence<N>{});
          }
          else {
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
+            [&]<size_t... I>(std::index_sequence<I...>) {
                ((void)(bool(ctx.error) ? void()
                                        : (serialize<MSGPACK>::op<Opts>(glz::get<I>(value), ctx, b, ix), void())),
                 ...);
@@ -1062,7 +1072,7 @@ namespace glz
          if (!msgpack::detail::write_array_header(ctx, N, b, ix)) [[unlikely]] {
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1083,7 +1093,7 @@ namespace glz
          if (!msgpack::detail::write_array_header(ctx, N, b, ix)) [[unlikely]] {
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1104,7 +1114,7 @@ namespace glz
          if (!msgpack::detail::write_map_header(ctx, N, b, ix)) [[unlikely]] {
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1126,7 +1136,7 @@ namespace glz
          if (!msgpack::detail::write_map_header(ctx, N, b, ix)) [[unlikely]] {
             return;
          }
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }

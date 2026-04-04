@@ -13,6 +13,8 @@ import glaze.concepts.container_concepts;
 import glaze.util.expected;
 import glaze.util.string_literal;
 
+using std::size_t;
+
 namespace glz
 {
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
@@ -28,7 +30,7 @@ namespace glz
             buffer.resize(2 * write_padding_bytes);
          }
       }
-      std::size_t ix = 0; // overwrite index
+      size_t ix = 0; // overwrite index
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
@@ -52,7 +54,7 @@ namespace glz
          }
       }
       context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
       serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
@@ -68,7 +70,7 @@ namespace glz
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
       serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return {ix, ctx.error, ctx.custom_error_message};
@@ -101,7 +103,7 @@ namespace glz
       requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
-      std::size_t ix = 0;
+      size_t ix = 0;
       to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return {ix, ctx.error, ctx.custom_error_message};

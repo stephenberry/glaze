@@ -16,6 +16,10 @@ import glaze.file.file_ops;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    template <>
@@ -32,7 +36,7 @@ namespace glz
       if (bool(ctx.error)) [[unlikely]] {
          return;
       }
-      if (std::uint64_t(end - it) < n) [[unlikely]] {
+      if (uint64_t(end - it) < n) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return;
       }
@@ -41,8 +45,8 @@ namespace glz
 
    export GLZ_ALWAYS_INLINE void skip_number_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      const auto tag = std::uint8_t(*it);
-      const std::uint8_t byte_count = byte_count_lookup[tag >> 5];
+      const auto tag = uint8_t(*it);
+      const uint8_t byte_count = byte_count_lookup[tag >> 5];
       ++it;
       if ((it + byte_count) > end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -57,7 +61,7 @@ namespace glz
       if (invalid_end(ctx, it, end)) {
          return;
       }
-      const auto tag = std::uint8_t(*it);
+      const auto tag = uint8_t(*it);
       ++it;
 
       const auto n_keys = int_from_compressed(ctx, it, end);
@@ -68,16 +72,16 @@ namespace glz
       // Check key type from bits 3-4:
       // - For string keys: key_type bits are 0 (header = tag::object | 0 = 3)
       // - For number keys: key_type bits are non-zero (header = tag::object | 8 or 16)
-      const std::uint8_t key_type_bits = tag & 0b000'11'000;
+      const uint8_t key_type_bits = tag & 0b000'11'000;
 
       if (key_type_bits == 0) {
          // String keys
-         for (std::size_t i = 0; i < n_keys; ++i) {
+         for (size_t i = 0; i < n_keys; ++i) {
             const auto string_length = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (std::uint64_t(end - it) < string_length) [[unlikely]] {
+            if (uint64_t(end - it) < string_length) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -91,9 +95,9 @@ namespace glz
       }
       else {
          // Number keys: each key is just byte_count bytes (no length prefix)
-         const std::uint8_t byte_count = byte_count_lookup[tag >> 5];
-         for (std::size_t i = 0; i < n_keys; ++i) {
-            if (std::uint64_t(end - it) < byte_count) [[unlikely]] {
+         const uint8_t byte_count = byte_count_lookup[tag >> 5];
+         for (size_t i = 0; i < n_keys; ++i) {
+            if (uint64_t(end - it) < byte_count) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -110,8 +114,8 @@ namespace glz
    export template <auto Opts>
    inline void skip_typed_array_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      const auto tag = std::uint8_t(*it);
-      const std::uint8_t type = (tag & 0b000'11'000) >> 3;
+      const auto tag = uint8_t(*it);
+      const uint8_t type = (tag & 0b000'11'000) >> 3;
       switch (type) {
       case 0: // floating point (fallthrough)
       case 1: // signed integer (fallthrough)
@@ -121,8 +125,8 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         const std::uint8_t byte_count = byte_count_lookup[tag >> 5];
-         if (std::uint64_t(end - it) < byte_count * n) [[unlikely]] {
+         const uint8_t byte_count = byte_count_lookup[tag >> 5];
+         if (uint64_t(end - it) < byte_count * n) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
@@ -140,12 +144,12 @@ namespace glz
                return;
             }
 
-            for (std::size_t i = 0; i < n; ++i) {
+            for (size_t i = 0; i < n; ++i) {
                const auto length = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if (std::uint64_t(end - it) < length) [[unlikely]] {
+               if (uint64_t(end - it) < length) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -160,7 +164,7 @@ namespace glz
             }
 
             const auto num_bytes = (n + 7) / 8;
-            if (std::uint64_t(end - it) < num_bytes) [[unlikely]] {
+            if (uint64_t(end - it) < num_bytes) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -182,7 +186,7 @@ namespace glz
          return;
       }
 
-      for (std::size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i) {
          skip_value<BEVE>::op<Opts>(ctx, it, end);
       }
    }
@@ -191,7 +195,7 @@ namespace glz
       requires(Opts.format == BEVE)
    void skip_array(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      switch (std::uint8_t(*it) & 0b00000'111) {
+      switch (uint8_t(*it) & 0b00000'111) {
       case tag::typed_array: {
          skip_typed_array_beve<Opts>(ctx, it, end);
          break;
@@ -218,7 +222,7 @@ namespace glz
       if (invalid_end(ctx, it, end)) {
          return;
       }
-      switch (std::uint8_t(*it) & 0b00000'111) {
+      switch (uint8_t(*it) & 0b00000'111) {
       case tag::null: {
          ++it;
          break;

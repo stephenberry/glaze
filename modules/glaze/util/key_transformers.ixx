@@ -6,6 +6,8 @@ import std;
 
 #include "glaze/core/feature_test.hpp"
 
+using std::size_t;
+
 namespace glz
 {
    inline constexpr char ascii_toupper(char c) noexcept
@@ -34,7 +36,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size());
       bool upper_next = false;
-      for (std::size_t i = 0; i < sv.size(); ++i) {
+      for (size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
          if (c == '_') {
             // Skip underscore and set flag to uppercase next letter
@@ -61,7 +63,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size());
       bool upper_next = true; // Start with uppercase
-      for (std::size_t i = 0; i < sv.size(); ++i) {
+      for (size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
          if (c == '_' && i + 1 < sv.size()) {
             upper_next = true;
@@ -85,7 +87,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size() * 2); // Reserve extra space for underscores
 
-      for (std::size_t i = 0; i < sv.size(); ++i) {
+      for (size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
 
          if (is_upper(c)) {
@@ -119,7 +121,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size() * 2);
 
-      for (std::size_t i = 0; i < sv.size(); ++i) {
+      for (size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
 
          if (c == '_') {
@@ -158,7 +160,7 @@ namespace glz
       out.reserve(sv.size() * 2);
 
       char prev = '\0';
-      for (std::size_t i = 0; i < sv.size(); ++i) {
+      for (size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
 
          if (c == '_') {
@@ -190,7 +192,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size() * 2);
 
-      for (std::size_t i = 0; i < sv.size(); ++i) {
+      for (size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
 
          if (c == '_') {

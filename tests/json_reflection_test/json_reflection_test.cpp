@@ -7,6 +7,12 @@ import ut;
 
 #include "glaze/core/feature_test.hpp"
 
+using std::uint8_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::uint64_t;
+
 using namespace ut;
 
 struct my_struct
@@ -14,7 +20,7 @@ struct my_struct
    int i{};
    double d{};
    std::string hello{};
-   std::array<std::uint64_t, 3> arr{};
+   std::array<uint64_t, 3> arr{};
 };
 
 static_assert(glz::reflectable<my_struct>);
@@ -122,7 +128,7 @@ struct server_status
 {
    std::string name{};
    std::string region{};
-   std::uint64_t active_sessions{};
+   uint64_t active_sessions{};
    std::optional<std::string> maintenance{};
    double cpu_percent{};
 };
@@ -157,7 +163,7 @@ suite reflection = [] {
       expect(obj.i == 287);
       expect(obj.d == 3.14);
       expect(obj.hello == "Hello World");
-      expect(obj.arr == std::array<std::uint64_t, 3>{1, 2, 3});
+      expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
 
       buffer.clear();
       expect(not glz::write_json(obj, buffer));
@@ -358,7 +364,7 @@ suite nested_reflection = [] {
       expect(obj.thing.i == 287);
       expect(obj.thing.d == 3.14);
       expect(obj.thing.hello == "Hello World");
-      expect(obj.thing.arr == std::array<std::uint64_t, 3>{1, 2, 3});
+      expect(obj.thing.arr == std::array<uint64_t, 3>{1, 2, 3});
 
       buffer.clear();
       expect(not glz::write_json(obj, buffer));
@@ -567,18 +573,18 @@ namespace testing
    struct V
    {
       Q v1;
-      std::uint8_t v2;
+      uint8_t v2;
       B v3;
-      std::uint64_t v4;
-      std::uint8_t v5;
-      std::vector<std::uint8_t> v6;
+      uint64_t v4;
+      uint8_t v5;
+      std::vector<uint8_t> v6;
    };
 
    struct VS
    {
-      std::uint16_t w;
-      std::uint16_t h;
-      std::uint8_t f;
+      uint16_t w;
+      uint16_t h;
+      uint8_t f;
    };
 
    struct VC
@@ -586,26 +592,26 @@ namespace testing
       std::string c;
       bool l;
       bool s;
-      std::uint8_t sn;
+      uint8_t sn;
       std::string sid;
-      std::uint64_t time;
-      std::uint8_t p;
-      std::uint64_t age;
-      std::uint32_t gs;
+      uint64_t time;
+      uint8_t p;
+      uint64_t age;
+      uint32_t gs;
       VS srs;
-      std::map<std::uint8_t, V> layers;
+      std::map<uint8_t, V> layers;
    };
 
    struct A
    {
-      std::uint64_t b;
-      std::vector<std::uint8_t> e;
+      uint64_t b;
+      std::vector<uint8_t> e;
    };
 
    struct ASS
    {
-      std::uint32_t sr;
-      std::uint8_t cc;
+      uint32_t sr;
+      uint8_t cc;
    };
 
    struct AC
@@ -613,13 +619,13 @@ namespace testing
       std::string c;
       bool m;
       bool s;
-      std::uint8_t sn;
+      uint8_t sn;
       std::string sid;
-      std::uint64_t time;
-      std::uint8_t p;
-      std::uint64_t age;
+      uint64_t time;
+      uint8_t p;
+      uint64_t age;
       ASS srs;
-      std::map<std::uint8_t, A> layers;
+      std::map<uint8_t, A> layers;
    };
 
    struct C
@@ -634,11 +640,11 @@ namespace testing
       std::string n;
       std::string e;
       std::string aid;
-      std::uint64_t o;
+      uint64_t o;
       bool ob;
       std::string ri;
-      std::map<std::uint8_t, VC> v;
-      std::map<std::uint8_t, AC> a;
+      std::map<uint8_t, VC> v;
+      std::map<uint8_t, AC> a;
    };
 
 };
@@ -953,7 +959,7 @@ suite modify_unknown_keys = [] {
 struct empty_optional_t
 {
    std::string value{};
-   std::optional<std::uint64_t> opt{};
+   std::optional<uint64_t> opt{};
 };
 
 suite empty_optional_tests = [] {
@@ -1043,7 +1049,7 @@ namespace glz
       template <auto Opts>
       static void op(std::chrono::seconds& value, is_context auto&& ctx, auto&&... args)
       {
-         std::int32_t sec_count{};
+         int32_t sec_count{};
          parse<JSON>::op<Opts>(sec_count, ctx, args...);
          if (glz::error_code::none == ctx.error) value = std::chrono::seconds{sec_count};
       }
@@ -1140,22 +1146,22 @@ suite hash_tests = [] {
 
 struct custom_state
 {
-   std::array<std::uint32_t, 8> statuses() { return {}; }
+   std::array<uint32_t, 8> statuses() { return {}; }
 };
 
 template <>
 struct glz::meta<custom_state>
 {
    using T = custom_state;
-   static constexpr auto read = [](T&, const std::array<std::uint32_t, 8>&) {};
+   static constexpr auto read = [](T&, const std::array<uint32_t, 8>&) {};
    static constexpr auto value = custom<read, &T::statuses>;
 };
 
 struct custom_holder
 {
-   std::uint32_t x{};
-   std::uint32_t y{};
-   std::uint32_t z{};
+   uint32_t x{};
+   uint32_t y{};
+   uint32_t z{};
    custom_state state{};
 };
 

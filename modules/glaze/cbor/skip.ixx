@@ -11,6 +11,11 @@ import std;
 
 #include <glaze/util/inline.hpp>
 
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+
 namespace glz
 {
    template <>
@@ -18,7 +23,7 @@ namespace glz
    {
       // Skip argument bytes and return the argument value
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static std::uint64_t skip_argument(is_context auto& ctx, auto& it, auto end, std::uint8_t additional_info) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static uint64_t skip_argument(is_context auto& ctx, auto& it, auto end, uint8_t additional_info) noexcept
       {
          using namespace cbor;
 
@@ -32,7 +37,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint8_t val;
+            uint8_t val;
             std::memcpy(&val, it, 1);
             ++it;
             return val;
@@ -42,7 +47,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint16_t val;
+            uint16_t val;
             std::memcpy(&val, it, 2);
             if constexpr (std::endian::native == std::endian::little) {
                val = std::byteswap(val);
@@ -55,7 +60,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint32_t val;
+            uint32_t val;
             std::memcpy(&val, it, 4);
             if constexpr (std::endian::native == std::endian::little) {
                val = std::byteswap(val);
@@ -68,7 +73,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint64_t val;
+            uint64_t val;
             std::memcpy(&val, it, 8);
             if constexpr (std::endian::native == std::endian::little) {
                val = std::byteswap(val);
@@ -95,12 +100,12 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          switch (major_type) {
          case major::uint:
@@ -120,7 +125,7 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  std::uint8_t chunk_initial;
+                  uint8_t chunk_initial;
                   std::memcpy(&chunk_initial, it, 1);
 
                   if (chunk_initial == initial_byte(major::simple, simple::break_code)) {
@@ -129,8 +134,8 @@ namespace glz
                   }
 
                   ++it;
-                  const std::uint8_t chunk_major = get_major_type(chunk_initial);
-                  const std::uint8_t chunk_info = get_additional_info(chunk_initial);
+                  const uint8_t chunk_major = get_major_type(chunk_initial);
+                  const uint8_t chunk_info = get_additional_info(chunk_initial);
 
                   // Chunks must be same major type and definite length
                   if (chunk_major != major_type) [[unlikely]] {
@@ -142,11 +147,11 @@ namespace glz
                      return;
                   }
 
-                  std::uint64_t chunk_len = skip_argument<Opts>(ctx, it, end, chunk_info);
+                  uint64_t chunk_len = skip_argument<Opts>(ctx, it, end, chunk_info);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  if (static_cast<std::uint64_t>(end - it) < chunk_len) [[unlikely]] {
+                  if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
@@ -154,11 +159,11 @@ namespace glz
                }
             }
             else {
-               std::uint64_t length = skip_argument<Opts>(ctx, it, end, additional_info);
+               uint64_t length = skip_argument<Opts>(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (static_cast<std::uint64_t>(end - it) < length) [[unlikely]] {
+               if (static_cast<uint64_t>(end - it) < length) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -175,7 +180,7 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  std::uint8_t peek;
+                  uint8_t peek;
                   std::memcpy(&peek, it, 1);
 
                   if (peek == initial_byte(major::simple, simple::break_code)) {
@@ -188,11 +193,11 @@ namespace glz
                }
             }
             else {
-               std::uint64_t count = skip_argument<Opts>(ctx, it, end, additional_info);
+               uint64_t count = skip_argument<Opts>(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               for (std::uint64_t i = 0; i < count; ++i) {
+               for (uint64_t i = 0; i < count; ++i) {
                   op<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
@@ -209,7 +214,7 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  std::uint8_t peek;
+                  uint8_t peek;
                   std::memcpy(&peek, it, 1);
 
                   if (peek == initial_byte(major::simple, simple::break_code)) {
@@ -225,11 +230,11 @@ namespace glz
                }
             }
             else {
-               std::uint64_t count = skip_argument<Opts>(ctx, it, end, additional_info);
+               uint64_t count = skip_argument<Opts>(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               for (std::uint64_t i = 0; i < count; ++i) {
+               for (uint64_t i = 0; i < count; ++i) {
                   op<Opts>(ctx, it, end); // Skip key
                   if (bool(ctx.error)) [[unlikely]]
                      return;

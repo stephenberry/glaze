@@ -25,6 +25,9 @@ import glaze;
 // So, either the command line interface can be used or another program can call the same
 // functions over RPC.
 
+using std::uint32_t;
+using std::size_t;
+
 namespace glz
 {
    // To support bool and std::atomic<bool> and other custom boolean types
@@ -151,11 +154,11 @@ namespace glz
 
          if (item_number > 0 && item_number <= long(N)) {
             visit<N>(
-               [&]<std::size_t I>() {
+               [&]<size_t I>() {
                   using E = refl_t<T, I>;
 
                   // MSVC bug requires Index alias here
-                  decltype(auto) func = [&]<std::size_t J>() -> decltype(auto) {
+                  decltype(auto) func = [&]<size_t J>() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return get_member(value, get<J>(t));
                      }
@@ -312,7 +315,7 @@ namespace glz
             constexpr sv key = reflect<T>::keys[I];
 
             if constexpr (glaze_object_t<E> || reflectable<E>) {
-               std::cout << "  " << std::uint32_t(I + 1) << "   ";
+               std::cout << "  " << uint32_t(I + 1) << "   ";
                write_line(std::cout, key);
             }
             else {
@@ -336,15 +339,15 @@ namespace glz
 
                using Func = decltype(func);
                if constexpr (std::is_member_function_pointer_v<std::decay_t<Func>>) {
-                  std::cout << "  " << std::uint32_t(I + 1) << "   ";
+                  std::cout << "  " << uint32_t(I + 1) << "   ";
                   write_line(std::cout, key);
                }
                else if constexpr (std::is_invocable_v<Func>) {
-                  std::cout << "  " << std::uint32_t(I + 1) << "   ";
+                  std::cout << "  " << uint32_t(I + 1) << "   ";
                   write_line(std::cout, key);
                }
                else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
-                  std::cout << "  " << std::uint32_t(I + 1) << "   ";
+                  std::cout << "  " << uint32_t(I + 1) << "   ";
                   write_line(std::cout, key);
                }
                else if constexpr (check_hide_non_invocable(Opts)) {
@@ -355,7 +358,7 @@ namespace glz
                }
             }
          });
-         std::cout << "  " << std::uint32_t(N + 1) << "   Exit Menu\n";
+         std::cout << "  " << uint32_t(N + 1) << "   Exit Menu\n";
          std::cout << "--------------------------------\n";
 
          std::cout << "cmd> " << std::flush;

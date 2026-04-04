@@ -13,18 +13,20 @@ import glaze.core.write_chars;
 import glaze.core.opts;
 import glaze.core.context;
 
+using std::size_t;
+
 namespace glz
 {
    namespace detail
    {
       export struct source_info final
       {
-         std::size_t line{};
-         std::size_t column{};
+         size_t line{};
+         size_t column{};
          std::string context{};
-         std::size_t index{};
-         std::size_t front_truncation{};
-         std::size_t rear_truncation{};
+         size_t index{};
+         size_t front_truncation{};
+         size_t rear_truncation{};
       };
 
       // We convert to only single spaces for error messages in order to keep the source info
@@ -38,7 +40,7 @@ namespace glz
          }
       }
 
-      export inline source_info get_source_info(const has_size auto& buffer, const std::size_t index)
+      export inline source_info get_source_info(const has_size auto& buffer, const size_t index)
       {
          using V = std::decay_t<decltype(buffer[0])>;
 
@@ -51,11 +53,11 @@ namespace glz
             }
 
             const auto start = std::begin(buffer) + index;
-            const auto line = std::size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
+            const auto line = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
             const auto rstart = std::rbegin(buffer) + buffer.size() - index - 1;
             const auto prev_new_line =
                std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
-            const auto column = std::size_t(std::distance(rstart, prev_new_line));
+            const auto column = size_t(std::distance(rstart, prev_new_line));
             const auto next_new_line =
                std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
 
@@ -63,8 +65,8 @@ namespace glz
             auto context_begin = std::begin(buffer) + offset;
             auto context_end = next_new_line;
 
-            std::size_t front_truncation = 0;
-            std::size_t rear_truncation = 0;
+            size_t front_truncation = 0;
+            size_t rear_truncation = 0;
 
             if (std::distance(context_begin, context_end) > 64) {
                // reduce the context length so that we can more easily see errors, especially for non-prettified buffers
@@ -90,7 +92,7 @@ namespace glz
 
       export template <class B>
          requires(!has_size<B>)
-      inline source_info get_source_info(const B* buffer, const std::size_t index)
+      inline source_info get_source_info(const B* buffer, const size_t index)
       {
          return get_source_info(sv{buffer}, index);
       }
@@ -100,7 +102,7 @@ namespace glz
       {
          std::string b{};
          b.resize(error.size() + info.context.size() + filename.size() + 128);
-         std::size_t ix{};
+         size_t ix{};
 
          if (not filename.empty()) {
             dump_not_empty(filename, b, ix);

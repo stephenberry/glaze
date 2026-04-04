@@ -9,6 +9,10 @@ import glaze.core.write;
 
 import glaze.util.string_literal;
 
+import std;
+
+using std::size_t;
+
 namespace glz::ex
 {
    export template <auto Opts, class T>
@@ -66,7 +70,7 @@ namespace glz::ex
 
    export template <auto Opts, class T, raw_buffer Buffer>
       requires write_supported<T, Opts.format>
-   [[nodiscard]] std::size_t write(T&& value, Buffer&& buffer)
+   [[nodiscard]] size_t write(T&& value, Buffer&& buffer)
    {
       const auto e = write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
       if (not e) [[unlikely]] {

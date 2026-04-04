@@ -24,6 +24,8 @@ import glaze.json.read;
 import glaze.util.string_literal;
 import glaze.util.type_traits;
 
+using std::size_t;
+
 namespace glz
 {
    namespace detail
@@ -63,7 +65,7 @@ namespace glz
    {
       static constexpr std::string_view braces = "{}";
 
-      if (std::size_t pos = original.find(braces); pos != std::string::npos) {
+      if (size_t pos = original.find(braces); pos != std::string::npos) {
          original.replace(pos, braces.size(), replacement);
       }
    }

@@ -11,6 +11,8 @@ import glaze.util.utility;
 // We do not mark these functions noexcept so that it can be used in exception contexts
 // Furthermore, adding noexcept can increase assembly size because exceptions need to cause termination
 
+using std::size_t;
+
 export namespace glz
 {
    // There is no benefit to perfectly forward the lambda (in the internal lambda) because it is immediately invoked
@@ -19,7 +21,7 @@ export namespace glz
    // the approach that passes std::integral_constant
 
    // Compile time iterate over I indices
-   template <std::size_t N>
+   template <size_t N>
    inline constexpr void for_each(auto&& lambda)
    {
       if constexpr (N > 0) {
@@ -44,7 +46,7 @@ export namespace glz
             lambda.template operator()<3>();
          }
          else {
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
+            [&]<size_t... I>(std::index_sequence<I...>) {
                (void)(lambda.template operator()<I>(), ...);
             }(std::make_index_sequence<N>{});
          }
@@ -52,11 +54,11 @@ export namespace glz
    }
 
    // Runtime short circuiting if function returns true, return false to continue evaluation
-   template <std::size_t N>
+   template <size_t N>
    constexpr void for_each_short_circuit(auto&& lambda)
    {
       if constexpr (N > 0) {
-         [&]<std::size_t... I>(std::index_sequence<I...>) {
+         [&]<size_t... I>(std::index_sequence<I...>) {
             (lambda.template operator()<I>() || ...);
          }(std::make_index_sequence<N>{});
       }
@@ -65,19 +67,19 @@ export namespace glz
    template <class Func, class Tuple>
    constexpr void for_each_apply(Func&& f, Tuple&& t)
    {
-      constexpr std::size_t N = std::tuple_size_v<std::decay_t<Tuple>>;
-      [&]<std::size_t... I>(std::index_sequence<I...>) { (f(std::get<I>(t)), ...); }(std::make_index_sequence<N>{});
+      constexpr size_t N = std::tuple_size_v<std::decay_t<Tuple>>;
+      [&]<size_t... I>(std::index_sequence<I...>) { (f(std::get<I>(t)), ...); }(std::make_index_sequence<N>{});
    }
 
-   template <std::size_t I, class Lambda>
+   template <size_t I, class Lambda>
    constexpr auto make_jump_function()
    {
       return +[](Lambda& l) { l.template operator()<I>(); };
    }
 
    // Important: index must be less than N
-   template <std::size_t N>
-   inline constexpr void visit(auto&& lambda, const std::size_t index)
+   template <size_t N>
+   inline constexpr void visit(auto&& lambda, const size_t index)
    {
       if constexpr (N > 0) {
          // Explicit sizes for small N to help the compiler and make debugging easier
@@ -304,11 +306,11 @@ export namespace glz
          else {
 #ifdef _MSC_VER
             using Lambda = std::decay_t<decltype(lambda)>;
-            static const auto jump_table = []<std::size_t... I>(std::index_sequence<I...>) {
+            static const auto jump_table = []<size_t... I>(std::index_sequence<I...>) {
                return std::array{make_jump_function<I, Lambda>()...};
             }(std::make_index_sequence<N>{});
 #else
-            static constexpr auto jump_table = []<std::size_t... I>(std::index_sequence<I...>) {
+            static constexpr auto jump_table = []<size_t... I>(std::index_sequence<I...>) {
                return std::array{+[](std::decay_t<decltype(lambda)>& l) { l.template operator()<I>(); }...};
             }(std::make_index_sequence<N>{});
 #endif

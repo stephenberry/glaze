@@ -2,12 +2,14 @@
 
 #include <glaze/glaze.hpp>
 
+using std::uint32_t;
+
 namespace example
 {
    struct person
    {
       std::string first_name{};
       std::string last_name{};
-      std::uint32_t age{};
+      uint32_t age{};
    };
 }

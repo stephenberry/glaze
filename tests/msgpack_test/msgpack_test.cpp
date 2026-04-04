@@ -12,6 +12,9 @@ import glaze.core.common;
 import std;
 import ut;
 
+using std::int32_t;
+using std::uint64_t;
+
 using namespace ut;
 
 namespace
@@ -74,7 +77,7 @@ namespace
 
    struct cast_device_id
    {
-      std::uint64_t value{};
+      uint64_t value{};
 
       bool operator==(const cast_device_id&) const = default;
    };
@@ -109,7 +112,7 @@ struct glz::meta<device_mode>
 template <>
 struct glz::meta<cast_device_id>
 {
-   static constexpr auto value = glz::cast<&cast_device_id::value, std::uint64_t>;
+   static constexpr auto value = glz::cast<&cast_device_id::value, uint64_t>;
 };
 
 template <>
@@ -288,8 +291,8 @@ int main()
 {
    "msgpack primitive roundtrip"_test = [] {
       expect_roundtrip_equal(int8_t{-8});
-      expect_roundtrip_equal(std::int32_t{123456});
-      expect_roundtrip_equal(std::uint64_t{999999999999ULL});
+      expect_roundtrip_equal(int32_t{123456});
+      expect_roundtrip_equal(uint64_t{999999999999ULL});
       expect_roundtrip_equal(true);
       expect_roundtrip_equal(false);
       expect_roundtrip_equal(3.141592653589793);

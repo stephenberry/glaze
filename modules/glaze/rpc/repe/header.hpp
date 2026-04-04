@@ -10,31 +10,36 @@
 
 #include "glaze/core/context.hpp"
 
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+
 namespace glz::repe
 {
    // REPE protocol magic bytes (0x1507 = 5383)
-   inline constexpr std::uint16_t repe_magic = 0x1507;
+   inline constexpr uint16_t repe_magic = 0x1507;
 
    // REPE Reserved Query Formats (0-4095 are reserved)
-   enum class query_format : std::uint16_t { RAW_BINARY = 0, JSON_POINTER = 1 };
+   enum class query_format : uint16_t { RAW_BINARY = 0, JSON_POINTER = 1 };
 
    // REPE Reserved Body Formats (0-4095 are reserved)
-   enum class body_format : std::uint16_t { RAW_BINARY = 0, BEVE = 1, JSON = 2, UTF8 = 3 };
+   enum class body_format : uint16_t { RAW_BINARY = 0, BEVE = 1, JSON = 2, UTF8 = 3 };
 
    struct header
    {
-      std::uint64_t length{}; // Total length of [header, query, body]
+      uint64_t length{}; // Total length of [header, query, body]
       //
-      std::uint16_t spec{repe_magic}; // Magic two bytes to denote the REPE specification
-      std::uint8_t version = 1; // REPE version
-      std::uint8_t notify{}; // 1 (true) for no response from server
-      std::uint32_t reserved{}; // Must be zero, receivers must ignore this field
+      uint16_t spec{repe_magic}; // Magic two bytes to denote the REPE specification
+      uint8_t version = 1; // REPE version
+      uint8_t notify{}; // 1 (true) for no response from server
+      uint32_t reserved{}; // Must be zero, receivers must ignore this field
       //
-      std::uint64_t id{}; // Identifier
+      uint64_t id{}; // Identifier
       //
-      std::uint64_t query_length{}; // The total length of the query
+      uint64_t query_length{}; // The total length of the query
       //
-      std::uint64_t body_length{}; // The total length of the body
+      uint64_t body_length{}; // The total length of the body
       //
       repe::query_format query_format{};
       repe::body_format body_format{};
@@ -59,7 +64,7 @@ namespace glz::repe
    struct user_header final
    {
       std::string_view query = ""; // The JSON pointer path to call or member to access/assign
-      std::uint64_t id{}; // Identifier
+      uint64_t id{}; // Identifier
       error_code ec{};
       bool notify{};
    };

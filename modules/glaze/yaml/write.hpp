@@ -17,6 +17,10 @@
 #include "glaze/yaml/common.hpp"
 #include "glaze/yaml/opts.hpp"
 
+using std::uint8_t;
+using std::int32_t;
+using std::size_t;
+
 namespace glz
 {
    template <>
@@ -227,7 +231,7 @@ namespace glz
       // Write a literal block scalar (|)
       template <class B>
       GLZ_ALWAYS_INLINE void write_literal_block(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                                 std::int32_t indent_level, std::uint8_t indent_width, char chomping)
+                                                 int32_t indent_level, uint8_t indent_width, char chomping)
       {
          if (!ensure_space(ctx, b, ix + str.size() + 64 + write_padding_bytes)) [[unlikely]] {
             return;
@@ -243,25 +247,25 @@ namespace glz
          }
 
          // Write each line with proper indentation
-         std::size_t pos = 0;
+         size_t pos = 0;
          while (pos < str.size()) {
             // Write indentation
-            const std::int32_t spaces = (indent_level + 1) * indent_width;
+            const int32_t spaces = (indent_level + 1) * indent_width;
             if (!ensure_space(ctx, b, ix + spaces + 256)) [[unlikely]] {
                return;
             }
-            for (std::int32_t i = 0; i < spaces; ++i) {
+            for (int32_t i = 0; i < spaces; ++i) {
                b[ix++] = ' ';
             }
 
             // Find end of line
-            std::size_t eol = str.find('\n', pos);
+            size_t eol = str.find('\n', pos);
             if (eol == std::string_view::npos) {
                eol = str.size();
             }
 
             // Write line content
-            const std::size_t line_len = eol - pos;
+            const size_t line_len = eol - pos;
             if (!ensure_space(ctx, b, ix + line_len + 8)) [[unlikely]] {
                return;
             }
@@ -276,9 +280,9 @@ namespace glz
       // Write string with appropriate style
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE void write_yaml_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                               std::int32_t indent_level = 0)
+                                               int32_t indent_level = 0)
       {
-         constexpr std::uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
          // Use literal block style for multiline strings
          if (str.find('\n') != std::string_view::npos) {
@@ -289,8 +293,8 @@ namespace glz
                return;
             }
 
-            std::size_t trailing_newlines = 0;
-            for (std::size_t i = str.size(); i > 0; --i) {
+            size_t trailing_newlines = 0;
+            for (size_t i = str.size(); i > 0; --i) {
                if (str[i - 1] == '\n') {
                   ++trailing_newlines;
                }
@@ -378,7 +382,7 @@ namespace glz
       // Forward declaration for nested object helper used in block sequences
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                        std::int32_t indent_level);
+                                                        int32_t indent_level);
 
       // Helper to check if a type is "simple" (writes on same line)
       template <class T>
@@ -429,9 +433,9 @@ namespace glz
       // Write block-style sequence
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                  std::int32_t indent_level)
+                                                  int32_t indent_level)
       {
-         constexpr std::uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
          bool is_empty = false;
          if constexpr (requires { value.empty(); }) {
@@ -445,11 +449,11 @@ namespace glz
          }
 
          if (is_empty) {
-            const std::int32_t spaces = indent_level * indent_width;
+            const int32_t spaces = indent_level * indent_width;
             if (!ensure_space(ctx, b, ix + spaces + 8)) [[unlikely]] {
                return;
             }
-            for (std::int32_t i = 0; i < spaces; ++i) {
+            for (int32_t i = 0; i < spaces; ++i) {
                b[ix++] = ' ';
             }
             dump("[]", b, ix);
@@ -472,11 +476,11 @@ namespace glz
             first = false;
 
             // Write indentation and dash
-            const std::int32_t spaces = indent_level * indent_width;
+            const int32_t spaces = indent_level * indent_width;
             if (!ensure_space(ctx, b, ix + spaces + 8)) [[unlikely]] {
                return;
             }
-            for (std::int32_t i = 0; i < spaces; ++i) {
+            for (int32_t i = 0; i < spaces; ++i) {
                b[ix++] = ' ';
             }
             dump("- ", b, ix);
@@ -546,7 +550,7 @@ namespace glz
          }
          else {
             // Get indent level from context if available, otherwise 0
-            std::int32_t indent_level = 0;
+            int32_t indent_level = 0;
             if constexpr (requires { ctx.indent_level; }) {
                indent_level = ctx.indent_level;
             }
@@ -580,7 +584,7 @@ namespace glz
             dump('[', b, ix);
 
             using V = std::decay_t<T>;
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -606,23 +610,23 @@ namespace glz
          }
          else {
             // Block style: - a\n- b\n- c
-            constexpr std::uint8_t indent_width = yaml::check_indent_width(yaml::yaml_opts{});
-            std::int32_t indent_level = 0;
+            constexpr uint8_t indent_width = yaml::check_indent_width(yaml::yaml_opts{});
+            int32_t indent_level = 0;
             if constexpr (requires { ctx.indent_level; }) {
                indent_level = ctx.indent_level;
             }
 
             using V = std::decay_t<T>;
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
                // Write indentation and dash
-               const std::int32_t spaces = indent_level * indent_width;
+               const int32_t spaces = indent_level * indent_width;
                if (!ensure_space(ctx, b, ix + spaces + 8)) [[unlikely]] {
                   return;
                }
-               for (std::int32_t i = 0; i < spaces; ++i) {
+               for (int32_t i = 0; i < spaces; ++i) {
                   b[ix++] = ' ';
                }
                dump("- ", b, ix);
@@ -701,18 +705,18 @@ namespace glz
          }
          else {
             // Block style: key: value
-            constexpr std::uint8_t indent_width = yaml::check_indent_width(yaml::yaml_opts{});
-            std::int32_t indent_level = 0;
+            constexpr uint8_t indent_width = yaml::check_indent_width(yaml::yaml_opts{});
+            int32_t indent_level = 0;
             if constexpr (requires { ctx.indent_level; }) {
                indent_level = ctx.indent_level;
             }
 
             // Write indentation
-            const std::int32_t spaces = indent_level * indent_width;
+            const int32_t spaces = indent_level * indent_width;
             if (!ensure_space(ctx, b, ix + spaces + 64)) [[unlikely]] {
                return;
             }
-            for (std::int32_t i = 0; i < spaces; ++i) {
+            for (int32_t i = 0; i < spaces; ++i) {
                b[ix++] = ' ';
             }
 
@@ -744,18 +748,18 @@ namespace glz
       // Forward declaration for nested object helper
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                        std::int32_t indent_level);
+                                                        int32_t indent_level);
 
       // Write block-style mapping
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                 std::int32_t indent_level)
+                                                 int32_t indent_level)
       {
          using V = std::remove_cvref_t<T>;
          constexpr auto N = reflect<V>::size;
-         constexpr std::uint8_t indent_width = check_indent_width(yaml_opts{});
+         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -782,11 +786,11 @@ namespace glz
             }
 
             // Write indentation
-            const std::int32_t spaces = indent_level * indent_width;
+            const int32_t spaces = indent_level * indent_width;
             if (!ensure_space(ctx, b, ix + spaces + key.size() + 8)) [[unlikely]] {
                return;
             }
-            for (std::int32_t i = 0; i < spaces; ++i) {
+            for (int32_t i = 0; i < spaces; ++i) {
                b[ix++] = ' ';
             }
 
@@ -846,7 +850,7 @@ namespace glz
       // Helper for nested objects
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                        std::int32_t indent_level)
+                                                        int32_t indent_level)
       {
          using V = std::remove_cvref_t<T>;
 
@@ -866,18 +870,18 @@ namespace glz
          }
          else if constexpr (writable_map_t<V>) {
             // Map handling
-            constexpr std::uint8_t indent_width = check_indent_width(yaml_opts{});
+            constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
             for (auto&& [k, v] : value) {
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
                // Write indentation and key
-               const std::int32_t spaces = indent_level * indent_width;
+               const int32_t spaces = indent_level * indent_width;
                if (!ensure_space(ctx, b, ix + spaces + 64)) [[unlikely]] {
                   return;
                }
-               for (std::int32_t i = 0; i < spaces; ++i) {
+               for (int32_t i = 0; i < spaces; ++i) {
                   b[ix++] = ' ';
                }
 
@@ -940,7 +944,7 @@ namespace glz
          dump('{', b, ix);
 
          bool first = true;
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -996,7 +1000,7 @@ namespace glz
             yaml::write_flow_mapping<Opts>(value, ctx, b, ix);
          }
          else {
-            std::int32_t indent_level = 0;
+            int32_t indent_level = 0;
             if constexpr (requires { ctx.indent_level; }) {
                indent_level = ctx.indent_level;
             }
@@ -1044,7 +1048,7 @@ namespace glz
          }
          else {
             // Block style
-            std::int32_t indent_level = 0;
+            int32_t indent_level = 0;
             if constexpr (requires { ctx.indent_level; }) {
                indent_level = ctx.indent_level;
             }

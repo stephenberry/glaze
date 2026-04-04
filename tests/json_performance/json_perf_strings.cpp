@@ -9,6 +9,9 @@ import ut;
 
 import glaze.tests.json_perf_common;
 
+using std::uint32_t;
+using std::size_t;
+
 using namespace ut;
 
 std::mt19937 gen{};
@@ -18,12 +21,12 @@ static constexpr std::string_view charset{
 
 inline std::string generate_string()
 {
-   auto length = std::uniform_int_distribution<std::uint32_t>{0, 512}(gen);
+   auto length = std::uniform_int_distribution<uint32_t>{0, 512}(gen);
    const auto charsetSize = charset.size();
-   std::uniform_int_distribution<std::uint32_t> distribution(0, charsetSize - 1);
+   std::uniform_int_distribution<uint32_t> distribution(0, charsetSize - 1);
    std::string result{};
    result.reserve(length);
-   for (std::uint32_t x = 0; x < length; ++x) {
+   for (uint32_t x = 0; x < length; ++x) {
       result += charset[distribution(gen)];
    }
    return result;
@@ -34,12 +37,12 @@ static constexpr std::string_view basic_charset{
 
 inline std::string generate_basic_string()
 {
-   auto length = std::uniform_int_distribution<std::uint32_t>{0, 512}(gen);
+   auto length = std::uniform_int_distribution<uint32_t>{0, 512}(gen);
    const auto charsetSize = basic_charset.size();
-   std::uniform_int_distribution<std::uint32_t> distribution(0, charsetSize - 1);
+   std::uniform_int_distribution<uint32_t> distribution(0, charsetSize - 1);
    std::string result{};
    result.reserve(length);
-   for (std::uint32_t x = 0; x < length; ++x) {
+   for (uint32_t x = 0; x < length; ++x) {
       result += basic_charset[distribution(gen)];
    }
    return result;
@@ -48,15 +51,15 @@ inline std::string generate_basic_string()
 suite string_performance = [] {
    "string_performance"_test = [] {
 #ifdef NDEBUG
-      constexpr std::size_t n = 10000;
+      constexpr size_t n = 10000;
 #else
-      constexpr std::size_t n = 100;
+      constexpr size_t n = 100;
 #endif
 
       std::vector<std::string> vec;
       vec.reserve(n);
 
-      for (std::size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i) {
          vec.emplace_back(generate_string());
       }
 
@@ -89,15 +92,15 @@ suite string_performance = [] {
 suite basic_string_performance = [] {
    "basic_string_performance"_test = [] {
 #ifdef NDEBUG
-      constexpr std::size_t n = 10000;
+      constexpr size_t n = 10000;
 #else
-      constexpr std::size_t n = 100;
+      constexpr size_t n = 100;
 #endif
 
       std::vector<std::string> vec;
       vec.reserve(n);
 
-      for (std::size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i) {
          vec.emplace_back(generate_basic_string());
       }
 

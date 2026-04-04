@@ -6,11 +6,14 @@ import std;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint32_t;
+using std::uint64_t;
+
 export namespace glz
 {
    // std::countr_zero uses another branch check whether the input is zero,
    // we use this function when we know that x > 0
-   GLZ_ALWAYS_INLINE auto countr_zero(const std::uint32_t x) noexcept
+   GLZ_ALWAYS_INLINE auto countr_zero(const uint32_t x) noexcept
    {
 #ifdef _MSC_VER
       return std::countr_zero(x);
@@ -23,7 +26,7 @@ export namespace glz
 #endif
    }
 
-   GLZ_ALWAYS_INLINE auto countr_zero(const std::uint64_t x) noexcept
+   GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept
    {
 #ifdef _MSC_VER
       return std::countr_zero(x);
@@ -39,12 +42,12 @@ export namespace glz
 #if defined(__SIZEOF_INT128__)
    GLZ_ALWAYS_INLINE auto countr_zero(__uint128_t x) noexcept
    {
-      std::uint64_t low = std::uint64_t(x);
+      uint64_t low = uint64_t(x);
       if (low != 0) {
          return countr_zero(low);
       }
       else {
-         std::uint64_t high = std::uint64_t(x >> 64);
+         uint64_t high = uint64_t(x >> 64);
          return countr_zero(high) + 64;
       }
    }
@@ -52,7 +55,7 @@ export namespace glz
 
    // std::countl_zero uses another branch check whether the input is zero,
    // we use this function when we know that x > 0
-   GLZ_ALWAYS_INLINE constexpr auto countl_zero(const std::uint32_t x) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto countl_zero(const uint32_t x) noexcept
    {
 #ifdef _MSC_VER
       return std::countl_zero(x);
@@ -65,5 +68,5 @@ export namespace glz
 #endif
    }
 
-   constexpr int int_log2(std::uint32_t x) noexcept { return 31 - glz::countl_zero(x | 1); }
+   constexpr int int_log2(uint32_t x) noexcept { return 31 - glz::countl_zero(x | 1); }
 }

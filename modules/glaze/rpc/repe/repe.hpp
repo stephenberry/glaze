@@ -10,10 +10,14 @@
 #include "glaze/json/write.hpp"
 #include "glaze/rpc/repe/header.hpp"
 
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    // Single template storage for all protocol-specific storage
-   template <std::uint32_t P>
+   template <uint32_t P>
    struct protocol_storage
    {};
 }
@@ -23,9 +27,9 @@ namespace glz::detail
    struct string_hash
    {
       using is_transparent = void;
-      [[nodiscard]] std::size_t operator()(const char* txt) const { return std::hash<std::string_view>{}(txt); }
-      [[nodiscard]] std::size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
-      [[nodiscard]] std::size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
+      [[nodiscard]] size_t operator()(const char* txt) const { return std::hash<std::string_view>{}(txt); }
+      [[nodiscard]] size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
+      [[nodiscard]] size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
    };
 }
 
@@ -111,7 +115,7 @@ namespace glz::repe
 
    // returns 0 on error
    template <auto Opts, class Value>
-   std::size_t read_params(Value&& value, auto&& state)
+   size_t read_params(Value&& value, auto&& state)
    {
       glz::context ctx{};
       auto [b, e] = read_iterators<Opts>(state.in.body);
@@ -127,13 +131,13 @@ namespace glz::repe
 
       if (bool(ctx.error)) {
          state.out.header.ec = ctx.error;
-         error_ctx ec{std::size_t(b - start), ctx.error, ctx.custom_error_message};
+         error_ctx ec{size_t(b - start), ctx.error, ctx.custom_error_message};
 
          auto& in = state.in;
          auto& out = state.out;
 
          std::string error_message = format_error(ec, in.body);
-         out.header.body_length = std::uint32_t(error_message.size());
+         out.header.body_length = uint32_t(error_message.size());
          out.header.body_format = repe::body_format::UTF8; // Error messages are UTF-8
          out.body = error_message;
 
@@ -141,7 +145,7 @@ namespace glz::repe
          return 0;
       }
 
-      return std::size_t(b - start);
+      return size_t(b - start);
    }
 
    namespace detail
@@ -230,7 +234,7 @@ namespace glz::repe
       std::string_view body{}; // View into buffer
 
       // Convenience accessors
-      [[nodiscard]] std::uint64_t id() const noexcept { return hdr.id; }
+      [[nodiscard]] uint64_t id() const noexcept { return hdr.id; }
       [[nodiscard]] bool is_notify() const noexcept { return hdr.notify != 0; }
       [[nodiscard]] error_code error() const noexcept { return hdr.ec; }
       [[nodiscard]] body_format format() const noexcept { return hdr.body_format; }
@@ -273,7 +277,7 @@ namespace glz::repe
       }
 
       const auto& hdr = result.request.hdr;
-      const std::size_t expected_length = sizeof(header) + hdr.query_length + hdr.body_length;
+      const size_t expected_length = sizeof(header) + hdr.query_length + hdr.body_length;
 
       // Validate header.length field matches expected value
       if (hdr.length != expected_length) {
@@ -287,8 +291,8 @@ namespace glz::repe
       }
 
       // Set up views into the original buffer
-      result.request.query = {buffer.data() + sizeof(header), static_cast<std::size_t>(hdr.query_length)};
-      result.request.body = {buffer.data() + sizeof(header) + hdr.query_length, static_cast<std::size_t>(hdr.body_length)};
+      result.request.query = {buffer.data() + sizeof(header), static_cast<size_t>(hdr.query_length)};
+      result.request.body = {buffer.data() + sizeof(header) + hdr.query_length, static_cast<size_t>(hdr.body_length)};
       result.ec = error_code::none;
 
       return result;
@@ -308,7 +312,7 @@ namespace glz::repe
       message* msg_{};
       header hdr_{}; // Tracks header state for buffer mode
 
-      void init_header(header& hdr, std::uint64_t id) noexcept
+      void init_header(header& hdr, uint64_t id) noexcept
       {
          hdr = {};
          hdr.spec = repe_magic;
@@ -329,7 +333,7 @@ namespace glz::repe
       response_builder& operator=(response_builder&&) = default;
 
       /// Reset for new response, optionally copying ID from request
-      void reset(std::uint64_t id = 0) noexcept
+      void reset(uint64_t id = 0) noexcept
       {
          if (msg_) {
             init_header(msg_->header, id);
@@ -536,7 +540,7 @@ namespace glz::repe
    /// Read parameters from state_view (zero-copy from input buffer)
    /// Returns number of bytes read, or 0 on error (error set in state.out)
    template <auto Opts, class Value>
-   std::size_t read_params(Value&& value, state_view& state)
+   size_t read_params(Value&& value, state_view& state)
    {
       glz::context ctx{};
       auto body = state.in.body;
@@ -554,14 +558,14 @@ namespace glz::repe
       glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
       if (bool(ctx.error)) {
-         error_ctx ec{std::size_t(b - start), ctx.error, ctx.custom_error_message};
+         error_ctx ec{size_t(b - start), ctx.error, ctx.custom_error_message};
          std::string error_message = format_error(ec, body);
          state.out.reset(state.in);
          state.out.set_error(ctx.error, error_message);
          return 0;
       }
 
-      return std::size_t(b - start);
+      return size_t(b - start);
    }
 
    /// Write response with a value (zero-copy to output buffer)

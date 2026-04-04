@@ -28,6 +28,8 @@
 #undef DELETE
 #endif
 
+using std::size_t;
+
 using namespace ut;
 using namespace glz;
 
@@ -497,7 +499,7 @@ suite wss_server_tests = [] {
       auto ws_server = std::make_shared<websocket_server>();
 
       std::atomic<bool> large_received{false};
-      std::atomic<std::size_t> received_size{0};
+      std::atomic<size_t> received_size{0};
 
       ws_server->on_open([](auto, const request&) {});
       ws_server->on_message([&](auto conn, std::string_view msg, ws_opcode opcode) {
@@ -546,10 +548,10 @@ suite wss_server_tests = [] {
       expect(client_open.load()) << "WSS client should connect\n";
 
       // Create a large message (256 KB)
-      constexpr std::size_t large_size = 256 * 1024;
+      constexpr size_t large_size = 256 * 1024;
       std::string large_message(large_size, 'X');
       // Add some variation to the content
-      for (std::size_t i = 0; i < large_size; i += 1000) {
+      for (size_t i = 0; i < large_size; i += 1000) {
          large_message[i] = static_cast<char>('A' + (i % 26));
       }
 

@@ -9,22 +9,28 @@ import ut;
 
 import glaze.tests.json_perf_common;
 
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 
 struct integers
 {
-   std::int32_t a{};
-   std::uint32_t b{};
-   std::int64_t c{};
-   std::uint64_t d{};
+   int32_t a{};
+   uint32_t b{};
+   int64_t c{};
+   uint64_t d{};
 };
 
 suite integers_test = [] {
    "integers"_test = [] {
 #ifdef NDEBUG
-      constexpr std::size_t n = 10000000;
+      constexpr size_t n = 10000000;
 #else
-      constexpr std::size_t n = 100000;
+      constexpr size_t n = 100000;
 #endif
 
       integers v{};
@@ -32,11 +38,11 @@ suite integers_test = [] {
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
-      for (std::size_t i = 0; i < n; ++i) {
-         v.a = std::int32_t(i);
-         v.b = std::uint32_t(i);
-         v.c = std::int64_t(i);
-         v.d = std::uint64_t(i);
+      for (size_t i = 0; i < n; ++i) {
+         v.a = int32_t(i);
+         v.b = uint32_t(i);
+         v.c = int64_t(i);
+         v.d = uint64_t(i);
          std::ignore = glz::write_json(v, buffer);
          e = glz::read_json(v, buffer);
       }
@@ -49,16 +55,16 @@ suite integers_test = [] {
 suite uint64_t_test = [] {
    "std::uint64_t"_test = [] {
 #ifdef NDEBUG
-      constexpr std::size_t n = 100000000;
+      constexpr size_t n = 100000000;
 #else
-      constexpr std::size_t n = 100000;
+      constexpr size_t n = 100000;
 #endif
 
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
-      for (std::size_t i = 0; i < n; ++i) {
-         auto v = std::uint64_t(i);
+      for (size_t i = 0; i < n; ++i) {
+         auto v = uint64_t(i);
          std::ignore = glz::write_json(v, buffer);
          e = glz::read_json(v, buffer);
          if (bool(e)) {
@@ -75,9 +81,9 @@ suite uint64_t_test = [] {
 suite float_tests = [] {
    "float"_test = [] {
 #ifdef NDEBUG
-      constexpr std::size_t n = 10000000;
+      constexpr size_t n = 10000000;
 #else
-      constexpr std::size_t n = 100000;
+      constexpr size_t n = 100000;
 #endif
 
       float v{};
@@ -85,7 +91,7 @@ suite float_tests = [] {
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
-      for (std::uint32_t i = 0; i < n; ++i) {
+      for (uint32_t i = 0; i < n; ++i) {
          std::ignore = glz::write_json(v, buffer);
          e = glz::read_json(v, buffer);
          std::memcpy(&v, &i, sizeof(float));

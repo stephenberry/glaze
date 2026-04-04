@@ -7,6 +7,8 @@ import std;
 import glaze.core.meta;
 import glaze.util.string_literal;
 
+using std::size_t;
+
 export namespace glz
 {
    namespace detail
@@ -30,7 +32,7 @@ export namespace glz
    struct num_to_string : detail::explode<num>
    {};
 
-   template <class T, std::size_t N>
+   template <class T, size_t N>
    struct meta<std::array<T, N>>
    {
       static constexpr std::string_view name =

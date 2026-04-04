@@ -11,6 +11,8 @@ import glaze.core.cast;
 import glaze.core.meta;
 import glaze.concepts.container_concepts;
 
+using std::uint8_t;
+
 namespace glz
 {
    template <class Member, bool = is_cast<std::remove_cvref_t<Member>>>
@@ -64,16 +66,16 @@ namespace glz
       static constexpr bool as_string = str_t<underlying> || !numeric;
       static constexpr bool as_number = !as_string;
 
-      static constexpr std::uint8_t type =
-         as_string ? std::uint8_t(0)
-                   : (std::is_signed_v<numeric_type> ? std::uint8_t(0b000'01'000) : std::uint8_t(0b000'10'000));
+      static constexpr uint8_t type =
+         as_string ? uint8_t(0)
+                   : (std::is_signed_v<numeric_type> ? uint8_t(0b000'01'000) : uint8_t(0b000'10'000));
 
-      static constexpr std::uint8_t width =
-         as_string ? std::uint8_t(0) : glz::byte_count<numeric_type>;
+      static constexpr uint8_t width =
+         as_string ? uint8_t(0) : glz::byte_count<numeric_type>;
 
-      static constexpr std::uint8_t header = std::uint8_t(tag::object | type | (width << 5));
+      static constexpr uint8_t header = uint8_t(tag::object | type | (width << 5));
 
-      static constexpr std::uint8_t key_tag =
-         as_string ? std::uint8_t(tag::string) : std::uint8_t(tag::number | type | (width << 5));
+      static constexpr uint8_t key_tag =
+         as_string ? uint8_t(tag::string) : uint8_t(tag::number | type | (width << 5));
    };
 }

@@ -9,11 +9,13 @@ import glaze.api.hash;
 import glaze.core.meta;
 import glaze.util.string_literal;
 
+using std::size_t;
+
 export namespace glz
 {
-   template <class, template <class, std::size_t> class>
+   template <class, template <class, size_t> class>
    inline constexpr bool is_span_v = false;
-   template <template <class, std::size_t> class T, class Element, std::size_t Extent>
+   template <template <class, size_t> class T, class Element, size_t Extent>
    inline constexpr bool is_span_v<T<Element, Extent>, T> = true;
 
    template<class T>

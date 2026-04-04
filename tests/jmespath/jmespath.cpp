@@ -7,13 +7,15 @@ import glaze.tuplet;
 import glaze.util.tuple;
 import ut;
 
+using std::uint16_t;
+
 using namespace ut;
 
 struct Person
 {
    std::string first_name{};
    std::string last_name{};
-   std::uint16_t age{};
+   uint16_t age{};
 };
 
 struct Family
@@ -49,7 +51,7 @@ suite jmespath_read_tests = [] {
       expect(not ec) << glz::format_error(ec, buffer);
       expect(mother_last_name == "Fox");
 
-      std::uint16_t father_age{};
+      uint16_t father_age{};
       ec = glz::read_jmespath<"family.father.age">(father_age, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(father_age == 28);
@@ -81,7 +83,7 @@ suite jmespath_read_tests = [] {
       expect(not ec) << glz::format_error(ec, buffer);
       expect(mother_last_name == "Fox");
 
-      std::uint16_t father_age{};
+      uint16_t father_age{};
       ec = glz::read_jmespath("family.father.age", father_age, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(father_age == 28);

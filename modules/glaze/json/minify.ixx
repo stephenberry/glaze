@@ -15,6 +15,10 @@ import glaze.util.parse;
 
 // Minified JSONC only works with /**/ style comments, so we only supports this
 
+using std::uint8_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    namespace detail
@@ -26,36 +30,36 @@ namespace glz
          using enum json_type;
 
          auto ws_start = it;
-         std::uint64_t ws_size{};
+         uint64_t ws_size{};
 
          auto skip_expected_whitespace = [&] {
             auto new_ws_start = it;
-            if (ws_size && ws_size < std::size_t(end - it)) [[likely]] {
+            if (ws_size && ws_size < size_t(end - it)) [[likely]] {
                skip_matching_ws(ws_start, it, ws_size);
             }
 
             if constexpr (Opts.null_terminated) {
-               while (whitespace_table[std::uint8_t(*it)]) {
+               while (whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
             }
             else {
-               while ((it < end) && whitespace_table[std::uint8_t(*it)]) {
+               while ((it < end) && whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
             }
             ws_start = new_ws_start;
-            ws_size = std::size_t(it - new_ws_start);
+            ws_size = size_t(it - new_ws_start);
          };
 
          auto skip_whitespace = [&] {
             if constexpr (Opts.null_terminated) {
-               while (whitespace_table[std::uint8_t(*it)]) {
+               while (whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
             }
             else {
-               while ((it < end) && whitespace_table[std::uint8_t(*it)]) {
+               while ((it < end) && whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
             }
@@ -71,7 +75,7 @@ namespace glz
                return it < end;
             }
          }()) {
-             switch (json_types[std::uint8_t(*it)]) {
+             switch (json_types[uint8_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
                dump_maybe_empty<false>(value, b, ix);
@@ -173,7 +177,7 @@ namespace glz
          if constexpr (resizable<Out>) {
             out.resize(in.size() + padding_bytes);
          }
-         std::size_t ix = 0;
+         size_t ix = 0;
          auto [it, end] = read_iterators<Opts, true>(in);
          if (bool(ctx.error)) [[unlikely]] {
             return;

@@ -28,13 +28,19 @@ import std;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    namespace cbor_detail
    {
       // Decode CBOR argument (variable-length unsigned integer)
-      export [[nodiscard]] GLZ_ALWAYS_INLINE std::uint64_t decode_arg(is_context auto& ctx, auto& it, auto end,
-                                                                      std::uint8_t additional_info) noexcept
+      export [[nodiscard]] GLZ_ALWAYS_INLINE uint64_t decode_arg(is_context auto& ctx, auto& it, auto end,
+                                                                      uint8_t additional_info) noexcept
       {
          using namespace cbor;
 
@@ -48,7 +54,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint8_t val;
+            uint8_t val;
             std::memcpy(&val, it, 1);
             ++it;
             return val;
@@ -58,7 +64,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint16_t val;
+            uint16_t val;
             std::memcpy(&val, it, 2);
             if constexpr (std::endian::native == std::endian::little) {
                val = std::byteswap(val);
@@ -71,7 +77,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint32_t val;
+            uint32_t val;
             std::memcpy(&val, it, 4);
             if constexpr (std::endian::native == std::endian::little) {
                val = std::byteswap(val);
@@ -84,7 +90,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint64_t val;
+            uint64_t val;
             std::memcpy(&val, it, 8);
             if constexpr (std::endian::native == std::endian::little) {
                val = std::byteswap(val);
@@ -135,7 +141,7 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
 
          if (initial != initial_byte(major::simple, simple::null_value)) [[unlikely]] {
@@ -171,19 +177,19 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::bstr) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
 
-         const std::uint64_t num_bytes = cbor_detail::decode_arg(ctx, it, end, additional_info);
+         const uint64_t num_bytes = cbor_detail::decode_arg(ctx, it, end, additional_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -193,17 +199,17 @@ namespace glz
             return;
          }
 
-         if (static_cast<std::uint64_t>(end - it) < num_bytes) [[unlikely]] {
+         if (static_cast<uint64_t>(end - it) < num_bytes) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
 
          // Unpack bytes into bits (LSB first within each byte)
-         for (std::size_t byte_i = 0, bit_idx = 0; byte_i < num_bytes; ++byte_i, ++it) {
-            std::uint8_t byte_val;
+         for (size_t byte_i = 0, bit_idx = 0; byte_i < num_bytes; ++byte_i, ++it) {
+            uint8_t byte_val;
             std::memcpy(&byte_val, it, 1);
-            for (std::size_t bit_i = 0; bit_i < 8 && bit_idx < value.size(); ++bit_i, ++bit_idx) {
-               value[bit_idx] = (byte_val >> bit_i) & std::uint8_t(1);
+            for (size_t bit_i = 0; bit_i < 8 && bit_idx < value.size(); ++bit_i, ++bit_idx) {
+               value[bit_idx] = (byte_val >> bit_i) & uint8_t(1);
             }
          }
       }
@@ -224,7 +230,7 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
@@ -234,7 +240,7 @@ namespace glz
             return;
          }
 
-         const std::uint64_t tag = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
+         const uint64_t tag = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -258,7 +264,7 @@ namespace glz
          }
 
          // Expect exactly 2 elements
-         std::uint64_t count = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
+         uint64_t count = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -295,7 +301,7 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
@@ -326,19 +332,19 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::uint) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
 
-         std::uint64_t result = cbor_detail::decode_arg(ctx, it, end, additional_info);
+         uint64_t result = cbor_detail::decode_arg(ctx, it, end, additional_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -361,20 +367,20 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type == major::uint) {
-            std::uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
             // Range check: n must fit in T's positive range
-            constexpr auto max_val = static_cast<std::uint64_t>(std::numeric_limits<T>::max());
+            constexpr auto max_val = static_cast<uint64_t>(std::numeric_limits<T>::max());
             if (n > max_val) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
                return;
@@ -382,13 +388,13 @@ namespace glz
             value = static_cast<T>(n);
          }
          else if (major_type == major::nint) {
-            std::uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
             // CBOR negative value = -1 - n
             // For T's range [-2^(bits-1), 2^(bits-1)-1], max valid n = 2^(bits-1) - 1
-            constexpr auto max_n = static_cast<std::uint64_t>(std::numeric_limits<T>::max());
+            constexpr auto max_n = static_cast<uint64_t>(std::numeric_limits<T>::max());
 
             if (n > max_n) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
@@ -419,12 +425,12 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::simple) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -437,7 +443,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return;
             }
-            std::uint16_t half;
+            uint16_t half;
             std::memcpy(&half, it, 2);
             if constexpr (std::endian::native == std::endian::little) {
                half = std::byteswap(half);
@@ -451,7 +457,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return;
             }
-            std::uint32_t bits;
+            uint32_t bits;
             std::memcpy(&bits, it, 4);
             if constexpr (std::endian::native == std::endian::little) {
                bits = std::byteswap(bits);
@@ -467,7 +473,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return;
             }
-            std::uint64_t bits;
+            uint64_t bits;
             std::memcpy(&bits, it, 8);
             if constexpr (std::endian::native == std::endian::little) {
                bits = std::byteswap(bits);
@@ -498,12 +504,12 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::tstr) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -525,7 +531,7 @@ namespace glz
                      return;
                   }
 
-                  std::uint8_t chunk_initial;
+                  uint8_t chunk_initial;
                   std::memcpy(&chunk_initial, it, 1);
 
                   // Check for break code
@@ -534,8 +540,8 @@ namespace glz
                      break;
                   }
 
-                  const std::uint8_t chunk_major = get_major_type(chunk_initial);
-                  const std::uint8_t chunk_info = get_additional_info(chunk_initial);
+                  const uint8_t chunk_major = get_major_type(chunk_initial);
+                  const uint8_t chunk_info = get_additional_info(chunk_initial);
 
                   // Chunks must be text strings with definite length
                   if (chunk_major != major::tstr) [[unlikely]] {
@@ -548,11 +554,11 @@ namespace glz
                   }
 
                   ++it;
-                  std::uint64_t chunk_len = cbor_detail::decode_arg(ctx, it, end, chunk_info);
+                  uint64_t chunk_len = cbor_detail::decode_arg(ctx, it, end, chunk_info);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  if (static_cast<std::uint64_t>(end - it) < chunk_len) [[unlikely]] {
+                  if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
@@ -564,11 +570,11 @@ namespace glz
          }
          else {
             // Definite-length text string
-            std::uint64_t length = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t length = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            if (static_cast<std::uint64_t>(end - it) < length) [[unlikely]] {
+            if (static_cast<uint64_t>(end - it) < length) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -588,7 +594,7 @@ namespace glz
             }
 
             if constexpr (string_view_t<T>) {
-               value = {reinterpret_cast<const char*>(it), static_cast<std::size_t>(length)};
+               value = {reinterpret_cast<const char*>(it), static_cast<size_t>(length)};
             }
             else {
                value.assign(reinterpret_cast<const char*>(it), length);
@@ -613,12 +619,12 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::bstr) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -634,7 +640,7 @@ namespace glz
                   return;
                }
 
-               std::uint8_t chunk_initial;
+               uint8_t chunk_initial;
                std::memcpy(&chunk_initial, it, 1);
 
                if (chunk_initial == initial_byte(major::simple, simple::break_code)) {
@@ -642,8 +648,8 @@ namespace glz
                   break;
                }
 
-               const std::uint8_t chunk_major = get_major_type(chunk_initial);
-               const std::uint8_t chunk_info = get_additional_info(chunk_initial);
+               const uint8_t chunk_major = get_major_type(chunk_initial);
+               const uint8_t chunk_info = get_additional_info(chunk_initial);
 
                if (chunk_major != major::bstr) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
@@ -655,27 +661,27 @@ namespace glz
                }
 
                ++it;
-               std::uint64_t chunk_len = cbor_detail::decode_arg(ctx, it, end, chunk_info);
+               uint64_t chunk_len = cbor_detail::decode_arg(ctx, it, end, chunk_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (static_cast<std::uint64_t>(end - it) < chunk_len) [[unlikely]] {
+               if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
 
-               const std::size_t old_size = value.size();
-               value.resize(old_size + static_cast<std::size_t>(chunk_len));
+               const size_t old_size = value.size();
+               value.resize(old_size + static_cast<size_t>(chunk_len));
                std::memcpy(value.data() + old_size, it, chunk_len);
                it += chunk_len;
             }
          }
          else {
-            std::uint64_t length = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t length = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            if (static_cast<std::uint64_t>(end - it) < length) [[unlikely]] {
+            if (static_cast<uint64_t>(end - it) < length) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -694,7 +700,7 @@ namespace glz
                }
             }
 
-            value.resize(static_cast<std::size_t>(length));
+            value.resize(static_cast<size_t>(length));
             std::memcpy(value.data(), it, length);
             it += length;
          }
@@ -703,7 +709,7 @@ namespace glz
 
    // Byte strings - std::vector<std::uint8_t>
    template <>
-   struct from<CBOR, std::vector<std::uint8_t>>
+   struct from<CBOR, std::vector<uint8_t>>
    {
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
@@ -715,12 +721,12 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::bstr) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -735,7 +741,7 @@ namespace glz
                   return;
                }
 
-               std::uint8_t chunk_initial;
+               uint8_t chunk_initial;
                std::memcpy(&chunk_initial, it, 1);
 
                if (chunk_initial == initial_byte(major::simple, simple::break_code)) {
@@ -743,8 +749,8 @@ namespace glz
                   break;
                }
 
-               const std::uint8_t chunk_major = get_major_type(chunk_initial);
-               const std::uint8_t chunk_info = get_additional_info(chunk_initial);
+               const uint8_t chunk_major = get_major_type(chunk_initial);
+               const uint8_t chunk_info = get_additional_info(chunk_initial);
 
                if (chunk_major != major::bstr) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
@@ -756,27 +762,27 @@ namespace glz
                }
 
                ++it;
-               std::uint64_t chunk_len = cbor_detail::decode_arg(ctx, it, end, chunk_info);
+               uint64_t chunk_len = cbor_detail::decode_arg(ctx, it, end, chunk_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (static_cast<std::uint64_t>(end - it) < chunk_len) [[unlikely]] {
+               if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
 
-               const std::size_t old_size = value.size();
-               value.resize(old_size + static_cast<std::size_t>(chunk_len));
+               const size_t old_size = value.size();
+               value.resize(old_size + static_cast<size_t>(chunk_len));
                std::memcpy(value.data() + old_size, it, chunk_len);
                it += chunk_len;
             }
          }
          else {
-            std::uint64_t length = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t length = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            if (static_cast<std::uint64_t>(end - it) < length) [[unlikely]] {
+            if (static_cast<uint64_t>(end - it) < length) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -795,7 +801,7 @@ namespace glz
                }
             }
 
-            value.resize(static_cast<std::size_t>(length));
+            value.resize(static_cast<size_t>(length));
             std::memcpy(value.data(), it, length);
             it += length;
          }
@@ -819,11 +825,11 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          // Check for RFC 8746 typed array (tag + byte string)
          if constexpr (num_t<V> && !std::same_as<V, bool> && contiguous<T>) {
@@ -831,7 +837,7 @@ namespace glz
                ++it; // consume the tag initial byte
 
                // Decode the tag number
-               const std::uint64_t tag_num = cbor_detail::decode_arg(ctx, it, end, additional_info);
+               const uint64_t tag_num = cbor_detail::decode_arg(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -844,7 +850,7 @@ namespace glz
                      return;
                   }
 
-                  std::uint8_t bstr_initial;
+                  uint8_t bstr_initial;
                   std::memcpy(&bstr_initial, it, 1);
                   ++it;
 
@@ -853,7 +859,7 @@ namespace glz
                      return;
                   }
 
-                  const std::uint64_t byte_len = cbor_detail::decode_arg(ctx, it, end, get_additional_info(bstr_initial));
+                  const uint64_t byte_len = cbor_detail::decode_arg(ctx, it, end, get_additional_info(bstr_initial));
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
@@ -862,12 +868,12 @@ namespace glz
                      return;
                   }
 
-                  if (static_cast<std::uint64_t>(end - it) < byte_len) [[unlikely]] {
+                  if (static_cast<uint64_t>(end - it) < byte_len) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
 
-                  const std::size_t count = byte_len / sizeof(V);
+                  const size_t count = byte_len / sizeof(V);
 
                   // Check user-configured array size limit
                   if constexpr (check_max_array_size(Opts) > 0) {
@@ -901,23 +907,23 @@ namespace glz
 
                   if (need_swap && sizeof(V) > 1) {
                      // Need to byteswap each element
-                     for (std::size_t i = 0; i < count; ++i) {
+                     for (size_t i = 0; i < count; ++i) {
                         V elem;
                         std::memcpy(&elem, it, sizeof(V));
                         if constexpr (sizeof(V) == 2) {
-                           std::uint16_t bits;
+                           uint16_t bits;
                            std::memcpy(&bits, &elem, sizeof(V));
                            bits = std::byteswap(bits);
                            std::memcpy(&elem, &bits, sizeof(V));
                         }
                         else if constexpr (sizeof(V) == 4) {
-                           std::uint32_t bits;
+                           uint32_t bits;
                            std::memcpy(&bits, &elem, sizeof(V));
                            bits = std::byteswap(bits);
                            std::memcpy(&elem, &bits, sizeof(V));
                         }
                         else if constexpr (sizeof(V) == 8) {
-                           std::uint64_t bits;
+                           uint64_t bits;
                            std::memcpy(&bits, &elem, sizeof(V));
                            bits = std::byteswap(bits);
                            std::memcpy(&elem, &bits, sizeof(V));
@@ -949,7 +955,7 @@ namespace glz
                ++it; // consume the tag initial byte
 
                // Decode the tag number
-               const std::uint64_t tag_num = cbor_detail::decode_arg(ctx, it, end, additional_info);
+               const uint64_t tag_num = cbor_detail::decode_arg(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -963,7 +969,7 @@ namespace glz
                      return;
                   }
 
-                  std::uint8_t ta_initial;
+                  uint8_t ta_initial;
                   std::memcpy(&ta_initial, it, 1);
                   ++it;
 
@@ -972,7 +978,7 @@ namespace glz
                      return;
                   }
 
-                  const std::uint64_t scalar_tag = cbor_detail::decode_arg(ctx, it, end, get_additional_info(ta_initial));
+                  const uint64_t scalar_tag = cbor_detail::decode_arg(ctx, it, end, get_additional_info(ta_initial));
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
@@ -989,7 +995,7 @@ namespace glz
                      return;
                   }
 
-                  std::uint8_t bstr_initial;
+                  uint8_t bstr_initial;
                   std::memcpy(&bstr_initial, it, 1);
                   ++it;
 
@@ -998,23 +1004,23 @@ namespace glz
                      return;
                   }
 
-                  const std::uint64_t byte_len = cbor_detail::decode_arg(ctx, it, end, get_additional_info(bstr_initial));
+                  const uint64_t byte_len = cbor_detail::decode_arg(ctx, it, end, get_additional_info(bstr_initial));
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
                   // Each complex has 2 scalars
-                  constexpr std::size_t complex_byte_size = sizeof(V); // sizeof(complex<T>) = 2 * sizeof(T)
+                  constexpr size_t complex_byte_size = sizeof(V); // sizeof(complex<T>) = 2 * sizeof(T)
                   if (byte_len % complex_byte_size != 0) [[unlikely]] {
                      ctx.error = error_code::syntax_error;
                      return;
                   }
 
-                  if (static_cast<std::uint64_t>(end - it) < byte_len) [[unlikely]] {
+                  if (static_cast<uint64_t>(end - it) < byte_len) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
 
-                  const std::size_t count = byte_len / complex_byte_size;
+                  const size_t count = byte_len / complex_byte_size;
 
                   // Check user-configured array size limit
                   if constexpr (check_max_array_size(Opts) > 0) {
@@ -1049,24 +1055,24 @@ namespace glz
                   if (need_swap && sizeof(Scalar) > 1) {
                      // Need to byteswap each scalar in the interleaved data
                      auto* dest = reinterpret_cast<Scalar*>(value.data());
-                     const std::size_t num_scalars = count * 2; // 2 scalars per complex
-                     for (std::size_t i = 0; i < num_scalars; ++i) {
+                     const size_t num_scalars = count * 2; // 2 scalars per complex
+                     for (size_t i = 0; i < num_scalars; ++i) {
                         Scalar elem;
                         std::memcpy(&elem, it, sizeof(Scalar));
                         if constexpr (sizeof(Scalar) == 2) {
-                           std::uint16_t bits;
+                           uint16_t bits;
                            std::memcpy(&bits, &elem, sizeof(Scalar));
                            bits = std::byteswap(bits);
                            std::memcpy(&elem, &bits, sizeof(Scalar));
                         }
                         else if constexpr (sizeof(Scalar) == 4) {
-                           std::uint32_t bits;
+                           uint32_t bits;
                            std::memcpy(&bits, &elem, sizeof(Scalar));
                            bits = std::byteswap(bits);
                            std::memcpy(&elem, &bits, sizeof(Scalar));
                         }
                         else if constexpr (sizeof(Scalar) == 8) {
-                           std::uint64_t bits;
+                           uint64_t bits;
                            std::memcpy(&bits, &elem, sizeof(Scalar));
                            bits = std::byteswap(bits);
                            std::memcpy(&elem, &bits, sizeof(Scalar));
@@ -1105,14 +1111,14 @@ namespace glz
             if constexpr (resizable<T>) {
                value.clear();
             }
-            std::size_t i = 0;
+            size_t i = 0;
             while (true) {
                if (it >= end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
 
-               std::uint8_t peek;
+               uint8_t peek;
                std::memcpy(&peek, it, 1);
 
                if (peek == initial_byte(major::simple, simple::break_code)) {
@@ -1139,12 +1145,12 @@ namespace glz
          }
          else {
             // Definite-length array
-            std::uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
             // Validate count against remaining buffer size (minimum 1 byte per element)
-            if (count > static_cast<std::uint64_t>(end - it)) [[unlikely]] {
+            if (count > static_cast<uint64_t>(end - it)) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -1164,7 +1170,7 @@ namespace glz
             }
 
             if constexpr (resizable<T>) {
-               value.resize(static_cast<std::size_t>(count));
+               value.resize(static_cast<size_t>(count));
 
                if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
@@ -1177,7 +1183,7 @@ namespace glz
                }
             }
 
-            for (std::size_t i = 0; i < count; ++i) {
+            for (size_t i = 0; i < count; ++i) {
                parse<CBOR>::op<Opts>(value[i], ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -1201,12 +1207,12 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::map) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -1223,7 +1229,7 @@ namespace glz
                   return;
                }
 
-               std::uint8_t peek;
+               uint8_t peek;
                std::memcpy(&peek, it, 1);
 
                if (peek == initial_byte(major::simple, simple::break_code)) {
@@ -1242,12 +1248,12 @@ namespace glz
             }
          }
          else {
-            std::uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
             // Validate count against remaining buffer size (minimum 2 bytes per key-value pair)
-            if (count * 2 > static_cast<std::uint64_t>(end - it)) [[unlikely]] {
+            if (count * 2 > static_cast<uint64_t>(end - it)) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -1266,7 +1272,7 @@ namespace glz
                }
             }
 
-            for (std::size_t i = 0; i < count; ++i) {
+            for (size_t i = 0; i < count; ++i) {
                Key key{};
                parse<CBOR>::op<Opts>(key, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -1294,19 +1300,19 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::map) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
 
-         std::uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
+         uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -1341,12 +1347,12 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::map) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -1358,10 +1364,10 @@ namespace glz
             (void)value;
          }
 
-         std::uint64_t n_keys;
+         uint64_t n_keys;
          if (additional_info == info::indefinite) {
             // Handle indefinite map by counting as we go
-            n_keys = std::numeric_limits<std::uint64_t>::max();
+            n_keys = std::numeric_limits<uint64_t>::max();
          }
          else {
             n_keys = cbor_detail::decode_arg(ctx, it, end, additional_info);
@@ -1369,7 +1375,7 @@ namespace glz
                return;
          }
 
-         for (std::uint64_t key_idx = 0; key_idx < n_keys; ++key_idx) {
+         for (uint64_t key_idx = 0; key_idx < n_keys; ++key_idx) {
             if (it >= end) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
@@ -1377,7 +1383,7 @@ namespace glz
 
             // Check for break in indefinite map
             if (additional_info == info::indefinite) {
-               std::uint8_t peek;
+               uint8_t peek;
                std::memcpy(&peek, it, 1);
                if (peek == initial_byte(major::simple, simple::break_code)) {
                   ++it;
@@ -1386,23 +1392,23 @@ namespace glz
             }
 
             // Read key
-            std::uint8_t key_initial;
+            uint8_t key_initial;
             std::memcpy(&key_initial, it, 1);
             ++it;
 
-            const std::uint8_t key_major = get_major_type(key_initial);
-            const std::uint8_t key_info = get_additional_info(key_initial);
+            const uint8_t key_major = get_major_type(key_initial);
+            const uint8_t key_info = get_additional_info(key_initial);
 
             if (key_major != major::tstr) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
 
-            std::uint64_t key_len = cbor_detail::decode_arg(ctx, it, end, key_info);
+            uint64_t key_len = cbor_detail::decode_arg(ctx, it, end, key_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            if (static_cast<std::uint64_t>(end - it) < key_len) [[unlikely]] {
+            if (static_cast<uint64_t>(end - it) < key_len) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -1413,11 +1419,11 @@ namespace glz
                const auto index = decode_hash_with_size<CBOR, T, HashInfo, HashInfo.type>::op(it, end, key_len);
 
                if (index < N) [[likely]] {
-                  const sv key{reinterpret_cast<const char*>(it), static_cast<std::size_t>(key_len)};
+                  const sv key{reinterpret_cast<const char*>(it), static_cast<size_t>(key_len)};
                   it += key_len;
 
                   visit<N>(
-                     [&]<std::size_t I>() {
+                     [&]<size_t I>() {
                         static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                         static constexpr auto Length = TargetKey.size();
                         if ((Length == key_len) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
@@ -1490,12 +1496,12 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type != major::array) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -1505,7 +1511,7 @@ namespace glz
          using V = std::decay_t<T>;
          static constexpr auto N = glz::tuple_size_v<V>;
 
-         std::uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
+         uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -1515,10 +1521,10 @@ namespace glz
          }
 
          if constexpr (is_std_tuple<T>) {
-            for_each<N>([&]<std::size_t I>() { parse<CBOR>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            for_each<N>([&]<size_t I>() { parse<CBOR>::op<Opts>(std::get<I>(value), ctx, it, end); });
          }
          else {
-            for_each<N>([&]<std::size_t I>() { parse<CBOR>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+            for_each<N>([&]<size_t I>() { parse<CBOR>::op<Opts>(glz::get<I>(value), ctx, it, end); });
          }
       }
    };
@@ -1538,21 +1544,21 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
          if (initial != (major::array << 5 | reflect<T>::size)) [[unlikely]] {
             // Allow longer forms too
-            const std::uint8_t major_type = get_major_type(initial);
-            const std::uint8_t additional_info = get_additional_info(initial);
+            const uint8_t major_type = get_major_type(initial);
+            const uint8_t additional_info = get_additional_info(initial);
 
             if (major_type != major::array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
 
-            std::uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1563,7 +1569,7 @@ namespace glz
          }
 
          for_each<reflect<T>::size>(
-            [&]<std::size_t I>() { parse<CBOR>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end); });
+            [&]<size_t I>() { parse<CBOR>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end); });
       }
    };
 
@@ -1596,16 +1602,16 @@ namespace glz
             }
          };
 
-         std::uint8_t peek;
+         uint8_t peek;
          std::memcpy(&peek, it, 1);
-         const std::uint8_t major_type = get_major_type(peek);
+         const uint8_t major_type = get_major_type(peek);
 
          if (major_type == major::map) {
             auto start = it;
             ++it;
 
-            const std::uint8_t additional_info = get_additional_info(peek);
-            const std::uint64_t n_pairs = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            const uint8_t additional_info = get_additional_info(peek);
+            const uint64_t n_pairs = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1629,21 +1635,21 @@ namespace glz
                   return;
                }
 
-               std::uint8_t key_initial;
+               uint8_t key_initial;
                std::memcpy(&key_initial, it, 1);
-               const std::uint8_t key_major = get_major_type(key_initial);
+               const uint8_t key_major = get_major_type(key_initial);
 
                if (key_major == major::tstr) {
                   ++it;
 
-                  const std::uint8_t key_info = get_additional_info(key_initial);
-                  const std::uint64_t key_len = cbor_detail::decode_arg(ctx, it, end, key_info);
+                  const uint8_t key_info = get_additional_info(key_initial);
+                  const uint64_t key_len = cbor_detail::decode_arg(ctx, it, end, key_info);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
 
                   static constexpr sv unexpected_key = "unexpected";
-                  if (key_len == unexpected_key.size() && std::uint64_t(end - it) >= key_len) {
+                  if (key_len == unexpected_key.size() && uint64_t(end - it) >= key_len) {
                      if (std::memcmp(it, unexpected_key.data(), key_len) == 0) {
                         // this is an unexpected wrapper
                         it += key_len;
@@ -1701,7 +1707,7 @@ namespace glz
             return;
          }
 
-         std::uint8_t peek;
+         uint8_t peek;
          std::memcpy(&peek, it, 1);
 
          if (peek == initial_byte(major::simple, simple::null_value)) {
@@ -1750,7 +1756,7 @@ namespace glz
       requires(std::is_array_v<T>)
    struct from<CBOR, T> final
    {
-      template <auto Opts, class V, std::size_t N>
+      template <auto Opts, class V, size_t N>
       GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto& ctx, auto& it, auto end) noexcept
       {
          parse<CBOR>::op<Opts>(std::span{value, N}, ctx, it, end);
@@ -1771,12 +1777,12 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          // Expect array of [index, value]
          if (major_type != major::array) [[unlikely]] {
@@ -1784,7 +1790,7 @@ namespace glz
             return;
          }
 
-         std::uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
+         uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -1799,19 +1805,19 @@ namespace glz
             return;
          }
 
-         std::uint8_t idx_initial;
+         uint8_t idx_initial;
          std::memcpy(&idx_initial, it, 1);
          ++it;
 
-         const std::uint8_t idx_major = get_major_type(idx_initial);
-         const std::uint8_t idx_info = get_additional_info(idx_initial);
+         const uint8_t idx_major = get_major_type(idx_initial);
+         const uint8_t idx_info = get_additional_info(idx_initial);
 
          if (idx_major != major::uint) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
 
-         std::uint64_t type_index = cbor_detail::decode_arg(ctx, it, end, idx_info);
+         uint64_t type_index = cbor_detail::decode_arg(ctx, it, end, idx_info);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -1851,21 +1857,21 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type == major::uint) {
-            std::uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
             value = static_cast<std::decay_t<T>>(n);
          }
          else if (major_type == major::nint) {
-            std::uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
             value = static_cast<std::decay_t<T>>(~n);
@@ -1891,21 +1897,21 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          if (major_type == major::uint) {
-            std::uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
             value = static_cast<std::decay_t<T>>(n);
          }
          else if (major_type == major::nint) {
-            std::uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
+            uint64_t n = cbor_detail::decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
             value = static_cast<std::decay_t<T>>(~n);
@@ -1951,7 +1957,7 @@ namespace glz
             return;
          }
 
-         std::uint8_t peek;
+         uint8_t peek;
          std::memcpy(&peek, it, 1);
 
          if (peek == initial_byte(major::simple, simple::null_value)) {

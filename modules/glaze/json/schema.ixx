@@ -48,11 +48,16 @@ import glaze.util.string_literal;
 
 import glaze.concepts.container_concepts;
 
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 export namespace glz
 {
    namespace detail
    {
-      enum struct defined_formats : std::uint32_t;
+      enum struct defined_formats : uint32_t;
       struct ExtUnits final
       {
          std::optional<std::string_view> unitAscii{}; // ascii representation of the unit, e.g. "m^2" for square meters
@@ -65,8 +70,8 @@ export namespace glz
    {
       bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
       std::optional<std::string_view> ref{};
-      using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
-      using schema_any = std::variant<std::monostate, bool, std::int64_t, std::uint64_t, double, std::string_view>;
+      using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
+      using schema_any = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
       std::optional<std::string_view> title{};
       std::optional<std::string_view> description{};
@@ -78,8 +83,8 @@ export namespace glz
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
       std::optional<schema_any> constant{};
       // string only keywords
-      std::optional<std::uint64_t> minLength{};
-      std::optional<std::uint64_t> maxLength{};
+      std::optional<uint64_t> minLength{};
+      std::optional<uint64_t> maxLength{};
       std::optional<std::string_view> pattern{};
       // https://www.learnjsonschema.com/2020-12/format-annotation/format/
       std::optional<detail::defined_formats> format{};
@@ -90,15 +95,15 @@ export namespace glz
       schema_number exclusiveMaximum{};
       schema_number multipleOf{};
       // object only keywords
-      std::optional<std::uint64_t> minProperties{};
-      std::optional<std::uint64_t> maxProperties{};
+      std::optional<uint64_t> minProperties{};
+      std::optional<uint64_t> maxProperties{};
       // std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
       std::optional<std::vector<std::string_view>> required{};
       // array only keywords
-      std::optional<std::uint64_t> minItems{};
-      std::optional<std::uint64_t> maxItems{};
-      std::optional<std::uint64_t> minContains{};
-      std::optional<std::uint64_t> maxContains{};
+      std::optional<uint64_t> minItems{};
+      std::optional<uint64_t> maxItems{};
+      std::optional<uint64_t> minContains{};
+      std::optional<uint64_t> maxContains{};
       std::optional<bool> uniqueItems{};
       // properties
       std::optional<std::vector<std::string_view>> enumeration{}; // enum
@@ -201,7 +206,7 @@ export namespace glz
          schema attributes{};
       };
 
-      enum struct defined_formats : std::uint32_t {
+      enum struct defined_formats : uint32_t {
          datetime, //
          date, //
          time, //
@@ -414,8 +419,8 @@ export namespace glz
             using V = std::decay_t<T>;
             if constexpr (std::integral<V>) {
                s.type = {"integer"};
-               s.attributes.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
-               s.attributes.maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
+               s.attributes.minimum = static_cast<int64_t>(std::numeric_limits<V>::lowest());
+               s.attributes.maximum = static_cast<uint64_t>((std::numeric_limits<V>::max)());
             }
             else {
                s.type = {"number"};
@@ -693,7 +698,7 @@ export namespace glz
                   // Instead we just loop over the keys, looking for a match:
 
                   constexpr auto schema_index = [] {
-                     std::size_t i{};
+                     size_t i{};
                      const auto& schema_keys = reflect<json_schema_type<T>>::keys;
                      for (; i < json_schema_size; ++i) {
                         if (schema_keys[i] == key) {

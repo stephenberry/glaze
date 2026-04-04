@@ -11,6 +11,8 @@ import glaze.core.opts;
 
 // Supports serialization/deserialization of std::atomic
 
+using std::uint32_t;
+
 export namespace glz
 {
    template <typename T>
@@ -24,7 +26,7 @@ export namespace glz
       { a.compare_exchange_strong(expected, desired) } -> std::convertible_to<bool>;
    };
 
-   template <std::uint32_t Format, is_atomic T>
+   template <uint32_t Format, is_atomic T>
       requires(not custom_read<T>)
    struct from<Format, T>
    {
@@ -38,7 +40,7 @@ export namespace glz
       }
    };
 
-   template <std::uint32_t Format, is_atomic T>
+   template <uint32_t Format, is_atomic T>
       requires(not custom_write<T>)
    struct to<Format, T>
    {

@@ -8,6 +8,9 @@
 #include "ei.hpp"
 #include "opts.hpp"
 
+using std::uint8_t;
+using std::size_t;
+
 namespace glz
 {
 
@@ -142,12 +145,12 @@ namespace glz
          }
 
          if constexpr (is_std_tuple<T>) {
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
+            [&]<size_t... I>(std::index_sequence<I...>) {
                (serialize<EETF>::op<Opts>(std::get<I>(value), ctx, args...), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
+            [&]<size_t... I>(std::index_sequence<I...>) {
                (serialize<EETF>::op<Opts>(glz::get<I>(value), ctx, args...), ...);
             }(std::make_index_sequence<N>{});
          }
@@ -167,7 +170,7 @@ namespace glz
 
       template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, std::size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
       {
          const auto n = value.size();
          encode_list_header(n, ctx, b, ix);
@@ -199,7 +202,7 @@ namespace glz
 
       template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, std::size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
       {
          const auto n = value.size();
          encode_map_header(n, ctx, b, ix);
@@ -231,7 +234,7 @@ namespace glz
 
       template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, std::size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
       {
          static constexpr auto N = reflect<T>::size;
 
@@ -255,7 +258,7 @@ namespace glz
             }
          }();
 
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if constexpr (Opts.layout == eetf::proplist_layout) {
                encode_tuple_header(2, ctx, b, ix);
             }
@@ -286,15 +289,15 @@ namespace glz
       // empty for compilation error if use unsupported value type
    };
 
-   template <std::uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, output_buffer Buffer>
+   template <uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, output_buffer Buffer>
    [[nodiscard]] error_ctx write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value),
                                                                       std::forward<Buffer>(buffer));
    }
 
-   template <std::uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, raw_buffer Buffer>
-   [[nodiscard]] expected<std::size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
+   template <uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, raw_buffer Buffer>
+   [[nodiscard]] expected<size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value),
                                                                       std::forward<Buffer>(buffer));

@@ -12,6 +12,8 @@
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
 
+using std::size_t;
+
 using namespace ut;
 
 // Test structures from Basic REST API Server example
@@ -112,7 +114,7 @@ class UserAPI
       return false;
    }
 
-   std::size_t user_count() const { return users_.size(); }
+   size_t user_count() const { return users_.size(); }
 };
 
 // Task structures from Auto-Generated REST API example
@@ -224,7 +226,7 @@ class TaskService
       return completed;
    }
 
-   std::size_t task_count() const { return tasks_.size(); }
+   size_t task_count() const { return tasks_.size(); }
 };
 
 // Chat structures from WebSocket Chat Server example
@@ -296,7 +298,7 @@ class ChatRoom
       }
    }
 
-   std::size_t get_user_count() const { return connection_ids_.size(); }
+   size_t get_user_count() const { return connection_ids_.size(); }
 
    std::vector<ChatMessage> get_message_history() const
    {
@@ -367,7 +369,7 @@ class SimpleAuthService
 
    void logout(const std::string& token) { active_tokens_.erase(token); }
 
-   std::size_t active_token_count() const { return active_tokens_.size(); }
+   size_t active_token_count() const { return active_tokens_.size(); }
 
   private:
    std::string generate_token()
@@ -460,7 +462,7 @@ class ProductService
       return result;
    }
 
-   std::size_t product_count() const { return products_.size(); }
+   size_t product_count() const { return products_.size(); }
 };
 
 // HealthChecker from Microservice Template example

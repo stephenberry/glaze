@@ -8,12 +8,14 @@ import glaze.core.context;
 import glaze.core.opts;
 import glaze.json.read;
 
+using std::uint32_t;
+
 namespace glz
 {
    export template <class T>
    concept is_value_proxy = requires { T::glaze_value_proxy; };
 
-   template <std::uint32_t Format, is_value_proxy T>
+   template <uint32_t Format, is_value_proxy T>
    struct from<Format, T>
    {
       template <auto Opts>

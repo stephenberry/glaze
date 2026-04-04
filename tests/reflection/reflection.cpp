@@ -6,12 +6,15 @@ import glaze;
 import glaze.core.convert_struct;
 import ut;
 
+using std::int32_t;
+using std::int64_t;
+
 using namespace ut;
 
 struct test_type
 {
-   std::int32_t int1{};
-   std::int64_t int2{};
+   int32_t int1{};
+   int64_t int2{};
 };
 
 suite reflect_test_type = [] {
@@ -30,8 +33,8 @@ suite reflect_test_type = [] {
 
 struct test_type_meta
 {
-   std::int32_t int1{};
-   std::int64_t int2{};
+   int32_t int1{};
+   int64_t int2{};
 };
 
 template <>

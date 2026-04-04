@@ -12,6 +12,10 @@ import glaze.thread.guard;
 
 import ut;
 
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 
 static_assert(glz::is_atomic<glz::guard<int>>);
@@ -643,7 +647,7 @@ suite async_string_tests = [] {
          expected_final_string += append_str;
       }
       std::string sorted_appends_expected;
-      for (std::size_t i = initial_string.length(); i < expected_final_string.length(); ++i) {
+      for (size_t i = initial_string.length(); i < expected_final_string.length(); ++i) {
          sorted_appends_expected += expected_final_string[i];
       }
       std::sort(sorted_appends_expected.begin(), sorted_appends_expected.end());
@@ -1077,7 +1081,7 @@ suite async_vector_tests = [] {
       glz::async_vector<int> vec_with_size;
       vec_with_size.resize(5, 42);
       expect(vec_with_size.size() == 5) << "Size should match requested size";
-      for (std::size_t i = 0; i < vec_with_size.size(); ++i) {
+      for (size_t i = 0; i < vec_with_size.size(); ++i) {
          expect(vec_with_size.read()[i] == 42) << "All elements should be initialized with the provided value";
       }
    };
@@ -1091,7 +1095,7 @@ suite async_vector_tests = [] {
       // Test copy constructor
       glz::async_vector<int> copy_constructed = original;
       expect(copy_constructed.size() == original.size()) << "Copy constructed vector should have same size";
-      for (std::size_t i = 0; i < original.size(); ++i) {
+      for (size_t i = 0; i < original.size(); ++i) {
          expect(copy_constructed.read()[i] == original.read()[i]) << "Elements should match after copy construction";
       }
 
@@ -1103,7 +1107,7 @@ suite async_vector_tests = [] {
       glz::async_vector<int> copy_assigned;
       copy_assigned = original;
       expect(copy_assigned.size() == original.size()) << "Copy assigned vector should have same size";
-      for (std::size_t i = 0; i < original.size(); ++i) {
+      for (size_t i = 0; i < original.size(); ++i) {
          expect(copy_assigned.read()[i] == original.read()[i]) << "Elements should match after copy assignment";
       }
 
@@ -1203,7 +1207,7 @@ suite async_vector_tests = [] {
       vec.resize(3);
       expect(vec.size() == 3) << "Resize to smaller should reduce size";
 
-      std::size_t cap_before = vec.capacity();
+      size_t cap_before = vec.capacity();
       vec.write().shrink_to_fit();
       expect(vec.capacity() <= cap_before) << "Shrink to fit should not increase capacity";
    };
@@ -1405,7 +1409,7 @@ suite async_vector_tests = [] {
       }
 
       std::vector<int> actual_values;
-      for (std::size_t i = 0; i < vec.size(); ++i) {
+      for (size_t i = 0; i < vec.size(); ++i) {
          actual_values.push_back(vec.read()[i]);
       }
 
@@ -1425,11 +1429,11 @@ suite async_vector_tests = [] {
       std::deque<std::thread> threads;
 
       // Reader threads
-      std::atomic<std::size_t> sum = 0;
+      std::atomic<size_t> sum = 0;
       for (int i = 0; i < 5; ++i) {
          threads.emplace_back([&vec, &stop, &sum]() {
             while (!stop) {
-               for (std::size_t j = 0; j < vec.size(); ++j) {
+               for (size_t j = 0; j < vec.size(); ++j) {
                   sum += vec.read()[j];
                }
             }
@@ -1582,11 +1586,11 @@ suite additional_async_vector_tests = [] {
       threads.emplace_back([&]() {
          while (!stop) {
             try {
-               std::int64_t sum = 0; // use wider type to avoid overflow on fast machines
+               int64_t sum = 0; // use wider type to avoid overflow on fast machines
                {
                   auto proxy = vec.read();
                   for (auto it = proxy.begin(); it != proxy.end(); ++it) {
-                     sum += static_cast<std::int64_t>(*it);
+                     sum += static_cast<int64_t>(*it);
                   }
                }
 
@@ -1645,9 +1649,9 @@ suite additional_async_vector_tests = [] {
                try {
                   // Pick a random position
                   thread_local std::mt19937 rng(std::random_device{}());
-                  std::size_t upper = vec.size();
-                  std::uniform_int_distribution<std::size_t> pos_dist(0, upper);
-                  std::size_t pos = pos_dist(rng);
+                  size_t upper = vec.size();
+                  std::uniform_int_distribution<size_t> pos_dist(0, upper);
+                  size_t pos = pos_dist(rng);
                   {
                      auto proxy = vec.write();
                      auto insert_pos = proxy.begin();
@@ -1668,9 +1672,9 @@ suite additional_async_vector_tests = [] {
 
                   // Pick another random position for erasure
                   if (vec.size() > 0) {
-                     std::size_t cur = vec.size();
-                     std::uniform_int_distribution<std::size_t> erase_dist(0, cur - 1);
-                     std::size_t erase_pos = erase_dist(rng);
+                     size_t cur = vec.size();
+                     std::uniform_int_distribution<size_t> erase_dist(0, cur - 1);
+                     size_t erase_pos = erase_dist(rng);
                      auto proxy = vec.write();
                      auto erase_iter = proxy.begin();
                      std::advance(erase_iter, erase_pos);
@@ -1709,9 +1713,9 @@ suite additional_async_vector_tests = [] {
                try {
                   // Pick a random position
                   thread_local std::mt19937 rng(std::random_device{}());
-                  std::size_t upper = vec.size();
-                  std::uniform_int_distribution<std::size_t> pos_dist(0, upper);
-                  std::size_t pos = pos_dist(rng);
+                  size_t upper = vec.size();
+                  std::uniform_int_distribution<size_t> pos_dist(0, upper);
+                  size_t pos = pos_dist(rng);
                   {
                      auto proxy = vec.write();
                      auto insert_pos = proxy.begin();
@@ -1868,7 +1872,7 @@ suite additional_async_vector_tests = [] {
                }
                else if (vec.size() > 0) {
                   // Replace middle
-                  std::size_t mid = vec.size() / 2;
+                  size_t mid = vec.size() / 2;
                   auto proxy = vec.write();
                   auto mid_it = proxy.begin() + mid;
                   std::vector<double> values{static_cast<double>(counter * 10)};
@@ -1933,15 +1937,15 @@ suite additional_async_vector_tests = [] {
       });
 
       // Threads that read the vector during resizing
-      std::atomic<std::uint64_t> sum = 0;
+      std::atomic<uint64_t> sum = 0;
       for (int t = 0; t < 3; ++t) {
          threads.emplace_back([&]() {
             while (!stop) {
                try {
-                  std::size_t current_size = vec.size();
+                  size_t current_size = vec.size();
                   auto proxy = vec.read();
-                  for (std::size_t i = 0; i < current_size && i < proxy.size(); ++i) {
-                     sum.fetch_add(static_cast<std::uint64_t>(proxy[i]), std::memory_order_relaxed);
+                  for (size_t i = 0; i < current_size && i < proxy.size(); ++i) {
+                     sum.fetch_add(static_cast<uint64_t>(proxy[i]), std::memory_order_relaxed);
                   }
                }
                catch (const std::exception&) {
@@ -1957,9 +1961,9 @@ suite additional_async_vector_tests = [] {
             int counter = 0;
             while (!stop) {
                try {
-                  std::size_t current_size = vec.size();
+                  size_t current_size = vec.size();
                   if (current_size > 0) {
-                     std::size_t idx = counter % current_size;
+                     size_t idx = counter % current_size;
                      auto proxy = vec.write();
                      if (idx < proxy.size()) {
                         proxy[idx] = counter;
@@ -1986,11 +1990,11 @@ suite additional_async_vector_tests = [] {
    };
 
    "massive_parallel_operations"_test = [] {
-      glz::async_vector<std::size_t> vec;
+      glz::async_vector<size_t> vec;
 
       std::atomic<bool> stop{false};
       std::deque<std::thread> threads;
-      std::atomic<std::size_t> operation_count{0};
+      std::atomic<size_t> operation_count{0};
 
       // Create numerous threads performing different operations
       for (int t = 0; t < 20; ++t) {
@@ -2016,22 +2020,22 @@ suite additional_async_vector_tests = [] {
                   case 2: { // Read random element
                      auto proxy = vec.read();
                      if (!proxy.empty()) {
-                        std::size_t idx = gen() % proxy.size();
-                        [[maybe_unused]] volatile std::size_t val = proxy[idx]; // Force read
+                        size_t idx = gen() % proxy.size();
+                        [[maybe_unused]] volatile size_t val = proxy[idx]; // Force read
                      }
                      break;
                   }
                   case 3: { // Modify random element
                      auto proxy = vec.write();
                      if (!proxy.empty()) {
-                        std::size_t idx = gen() % proxy.size();
+                        size_t idx = gen() % proxy.size();
                         proxy[idx] = t;
                      }
                      break;
                   }
                   case 4: { // Insert at random position
                      auto proxy = vec.write();
-                     std::size_t pos = proxy.empty() ? 0 : (gen() % proxy.size());
+                     size_t pos = proxy.empty() ? 0 : (gen() % proxy.size());
                      auto it = proxy.begin();
                      std::advance(it, (std::min)(pos, proxy.size()));
                      proxy.insert(it, t);
@@ -2040,7 +2044,7 @@ suite additional_async_vector_tests = [] {
                   case 5: { // Erase at random position
                      auto proxy = vec.write();
                      if (!proxy.empty()) {
-                        std::size_t pos = gen() % proxy.size();
+                        size_t pos = gen() % proxy.size();
                         auto it = proxy.begin();
                         std::advance(it, pos);
                         proxy.erase(it);
@@ -2048,19 +2052,19 @@ suite additional_async_vector_tests = [] {
                      break;
                   }
                   case 6: { // Iterate through
-                     [[maybe_unused]] volatile std::size_t count = 0;
+                     [[maybe_unused]] volatile size_t count = 0;
                      for (const auto& val : vec.read()) {
                         count += (val > 0 ? 1 : 0); // Simple operation to ensure compiler doesn't optimize away
                      }
                      break;
                   }
                   case 7: { // Resize
-                     std::size_t new_size = 500 + (gen() % 500);
+                     size_t new_size = 500 + (gen() % 500);
                      vec.resize(new_size, t);
                      break;
                   }
                   case 8: { // Reserve
-                     std::size_t new_cap = 1000 + (gen() % 1000);
+                     size_t new_cap = 1000 + (gen() % 1000);
                      vec.reserve(new_cap);
                      break;
                   }

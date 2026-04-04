@@ -7,10 +7,12 @@
 #include "glaze/ext/jsonrpc.hpp"
 #include "glaze/glaze.hpp"
 
+using std::uint32_t;
+
 namespace glz
 {
    // Forward declaration of the registry template
-   template <auto Opts, std::uint32_t Proto>
+   template <auto Opts, uint32_t Proto>
    struct registry;
 
    namespace jsonrpc

@@ -22,6 +22,10 @@ import glaze.util.type_traits;
 // Provides a thread-safe vector
 // Uses simple proxy objects with appropriate locks for read/write operations
 
+using std::uint32_t;
+using std::ptrdiff_t;
+using std::size_t;
+
 namespace glz
 {
    export template <class T>
@@ -33,8 +37,8 @@ namespace glz
 
      public:
       using value_type = T;
-      using size_type = std::size_t;
-      using difference_type = std::ptrdiff_t;
+      using size_type = size_t;
+      using difference_type = ptrdiff_t;
       using reference = T&;
       using const_reference = const T&;
 
@@ -392,7 +396,7 @@ namespace glz
 
 namespace glz
 {
-   template <std::uint32_t Format, class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, glz::async_vector>)
    struct from<Format, T>
    {
@@ -404,7 +408,7 @@ namespace glz
       }
    };
 
-   template <std::uint32_t Format, class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, glz::async_vector>)
    struct to<Format, T>
    {

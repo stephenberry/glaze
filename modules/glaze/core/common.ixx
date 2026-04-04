@@ -28,6 +28,8 @@ import glaze.util.variant;
 #include "glaze/core/feature_test.hpp"
 #include "glaze/util/inline.hpp"
 
+using std::size_t;
+
 namespace glz
 {
    // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup, etc.
@@ -341,7 +343,7 @@ namespace glz
 
    template <class T>
    constexpr bool is_std_array = false;
-   template <class T, std::size_t N>
+   template <class T, size_t N>
    constexpr bool is_std_array<std::array<T, N>> = true;
 
    export template <class T>
@@ -350,7 +352,7 @@ namespace glz
    static_assert(has_fixed_size_container<int[54]>);
 
    export template <class T>
-   constexpr std::size_t get_size() noexcept
+   constexpr size_t get_size() noexcept
    {
       if constexpr (is_span<T>) {
          return T::extent;

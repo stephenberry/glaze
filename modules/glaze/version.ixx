@@ -4,6 +4,8 @@ export module glaze.version;
 
 import std;
 
+using std::uint8_t;
+
 namespace glz
 {
    /**
@@ -14,9 +16,9 @@ namespace glz
     */
    export struct version_t
    {
-      std::uint8_t major = 7;
-      std::uint8_t minor = 0;
-      std::uint8_t patch = 2;
+      uint8_t major = 7;
+      uint8_t minor = 0;
+      uint8_t patch = 2;
 
       constexpr auto operator<=>(const version_t& other) const noexcept = default;
 

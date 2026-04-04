@@ -15,6 +15,8 @@ import glaze.util.expected;
 import glaze.util.for_each;
 import glaze.util.string_literal;
 
+using std::uint32_t;
+
 namespace glz
 {
    inline namespace v0_0_3
@@ -44,9 +46,9 @@ namespace glz
 
          [[nodiscard]] virtual bool contains(const sv path) noexcept = 0;
 
-         virtual bool read(const std::uint32_t /*format*/, const sv /*path*/, const sv /*data*/) noexcept = 0;
+         virtual bool read(const uint32_t /*format*/, const sv /*path*/, const sv /*data*/) noexcept = 0;
 
-         virtual bool write(const std::uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) noexcept = 0;
+         virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) noexcept = 0;
 
          [[nodiscard]] virtual const sv last_error() const noexcept { return error; }
 

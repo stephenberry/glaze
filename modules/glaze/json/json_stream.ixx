@@ -12,6 +12,9 @@ import glaze.core.streaming_state;
 
 import glaze.json.read;
 
+using std::ptrdiff_t;
+using std::size_t;
+
 export namespace glz
 {
    // A streaming JSON reader that reads complete values one at a time from an input stream.
@@ -35,7 +38,7 @@ export namespace glz
    //   T - The type to deserialize each value into
    //   Stream - Byte-oriented input stream (default: std::istream)
 
-   template <class T, byte_input_stream Stream = std::istream, std::size_t BufferCapacity = 65536>
+   template <class T, byte_input_stream Stream = std::istream, size_t BufferCapacity = 65536>
    class json_stream_reader
    {
       basic_istream_buffer<Stream, BufferCapacity> buffer_;
@@ -91,7 +94,7 @@ export namespace glz
       error_ctx last_error() const noexcept { return last_error_; }
 
       // Total bytes consumed from the stream
-      std::size_t bytes_consumed() const noexcept { return buffer_.bytes_consumed(); }
+      size_t bytes_consumed() const noexcept { return buffer_.bytes_consumed(); }
 
       // Access to underlying buffer for advanced use
       basic_istream_buffer<Stream, BufferCapacity>& buffer() noexcept { return buffer_; }
@@ -107,7 +110,7 @@ export namespace glz
         public:
          using iterator_category = std::input_iterator_tag;
          using value_type = T;
-         using difference_type = std::ptrdiff_t;
+         using difference_type = ptrdiff_t;
          using pointer = const T*;
          using reference = const T&;
 
@@ -159,8 +162,8 @@ export namespace glz
          while (!buffer_.eof()) {
             bool found_non_ws = false;
             const char* data = buffer_.data();
-            std::size_t size = buffer_.size();
-            std::size_t i = 0;
+            size_t size = buffer_.size();
+            size_t i = 0;
 
             for (; i < size; ++i) {
                char c = data[i];

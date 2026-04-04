@@ -32,6 +32,12 @@ import glaze.tuplet;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    template <>
@@ -140,23 +146,23 @@ namespace glz
       }
    }
 
-   template <std::uint64_t i, class... Args>
+   template <uint64_t i, class... Args>
    GLZ_ALWAYS_INLINE void dump_compressed_int(Args&&... args)
    {
       if constexpr (i < 64) {
-         const std::uint8_t c = std::uint8_t(i) << 2;
+         const uint8_t c = uint8_t(i) << 2;
          dump_type(c, args...);
       }
       else if constexpr (i < 16384) {
-         const std::uint16_t c = std::uint16_t(1) | (std::uint16_t(i) << 2);
+         const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
          dump_type(c, args...);
       }
       else if constexpr (i < 1073741824) {
-         const std::uint32_t c = std::uint32_t(2) | (std::uint32_t(i) << 2);
+         const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
          dump_type(c, args...);
       }
       else if constexpr (i < 4611686018427387904) {
-         const std::uint64_t c = std::uint64_t(3) | (std::uint64_t(i) << 2);
+         const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
          dump_type(c, args...);
       }
       else {
@@ -166,23 +172,23 @@ namespace glz
 
    // Context-aware version of dump_compressed_int (compile-time known size)
    // Sets ctx.error on buffer overflow
-   template <std::uint64_t i, class B>
-   GLZ_ALWAYS_INLINE void dump_compressed_int(is_context auto& ctx, B& b, std::size_t& ix)
+   template <uint64_t i, class B>
+   GLZ_ALWAYS_INLINE void dump_compressed_int(is_context auto& ctx, B& b, size_t& ix)
    {
       if constexpr (i < 64) {
-         const std::uint8_t c = std::uint8_t(i) << 2;
+         const uint8_t c = uint8_t(i) << 2;
          dump_type(ctx, c, b, ix);
       }
       else if constexpr (i < 16384) {
-         const std::uint16_t c = std::uint16_t(1) | (std::uint16_t(i) << 2);
+         const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
          dump_type(ctx, c, b, ix);
       }
       else if constexpr (i < 1073741824) {
-         const std::uint32_t c = std::uint32_t(2) | (std::uint32_t(i) << 2);
+         const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
          dump_type(ctx, c, b, ix);
       }
       else if constexpr (i < 4611686018427387904) {
-         const std::uint64_t c = std::uint64_t(3) | (std::uint64_t(i) << 2);
+         const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
          dump_type(ctx, c, b, ix);
       }
       else {
@@ -193,22 +199,22 @@ namespace glz
    // Context-aware version of dump_compressed_int (runtime size)
    // Sets ctx.error on buffer overflow
    template <class B>
-   GLZ_ALWAYS_INLINE void dump_compressed_int(is_context auto& ctx, std::uint64_t i, B& b, std::size_t& ix)
+   GLZ_ALWAYS_INLINE void dump_compressed_int(is_context auto& ctx, uint64_t i, B& b, size_t& ix)
    {
       if (i < 64) {
-         const std::uint8_t c = std::uint8_t(i) << 2;
+         const uint8_t c = uint8_t(i) << 2;
          dump_type(ctx, c, b, ix);
       }
       else if (i < 16384) {
-         const std::uint16_t c = std::uint16_t(1) | (std::uint16_t(i) << 2);
+         const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
          dump_type(ctx, c, b, ix);
       }
       else if (i < 1073741824) {
-         const std::uint32_t c = std::uint32_t(2) | (std::uint32_t(i) << 2);
+         const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
          dump_type(ctx, c, b, ix);
       }
       else if (i < 4611686018427387904) {
-         const std::uint64_t c = std::uint64_t(3) | (std::uint64_t(i) << 2);
+         const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
          dump_type(ctx, c, b, ix);
       }
       else {
@@ -217,22 +223,22 @@ namespace glz
    }
 
    template <auto Opts, class... Args>
-   GLZ_ALWAYS_INLINE void dump_compressed_int(std::uint64_t i, Args&&... args)
+   GLZ_ALWAYS_INLINE void dump_compressed_int(uint64_t i, Args&&... args)
    {
       if (i < 64) {
-         const std::uint8_t c = std::uint8_t(i) << 2;
+         const uint8_t c = uint8_t(i) << 2;
          dump_type(c, args...);
       }
       else if (i < 16384) {
-         const std::uint16_t c = std::uint16_t(1) | (std::uint16_t(i) << 2);
+         const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
          dump_type(c, args...);
       }
       else if (i < 1073741824) {
-         const std::uint32_t c = std::uint32_t(2) | (std::uint32_t(i) << 2);
+         const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
          dump_type(c, args...);
       }
       else if (i < 4611686018427387904) {
-         const std::uint64_t c = std::uint64_t(3) | (std::uint64_t(i) << 2);
+         const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
          dump_type(c, args...);
       }
       else {
@@ -277,8 +283,8 @@ namespace glz
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
 
-         constexpr std::uint8_t type = 0; // string
-         constexpr std::uint8_t tag = tag::object | type;
+         constexpr uint8_t type = 0; // string
+         constexpr uint8_t tag = tag::object | type;
          dump_type(tag, b, ix);
 
          dump_compressed_int<N>(b, ix);
@@ -375,7 +381,7 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
       {
-         dump_type(ctx, std::uint8_t{0}, b, ix);
+         dump_type(ctx, uint8_t{0}, b, ix);
       }
    };
 
@@ -385,8 +391,8 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         constexpr std::uint8_t type = std::uint8_t(3) << 3;
-         constexpr std::uint8_t tag = tag::typed_array | type;
+         constexpr uint8_t type = uint8_t(3) << 3;
+         constexpr uint8_t tag = tag::typed_array | type;
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -399,11 +405,11 @@ namespace glz
          // constexpr auto num_bytes = (value.size() + 7) / 8;
          const auto num_bytes = (value.size() + 7) / 8;
          // .size() should be constexpr, but clang doesn't support this
-         std::vector<std::uint8_t> bytes(num_bytes);
+         std::vector<uint8_t> bytes(num_bytes);
          // std::array<std::uint8_t, num_bytes> bytes{};
-         for (std::size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
-            for (std::size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
-               bytes[byte_i] |= std::uint8_t(value[i]) << std::uint8_t(bit_i);
+         for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
+            for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
+               bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
             }
          }
          if (!ensure_space(ctx, b, ix + bytes.size() + write_padding_bytes)) [[unlikely]] {
@@ -422,10 +428,10 @@ namespace glz
          static constexpr auto N = reflect<T>::size;
          static constexpr auto data_size = byte_length<T>();
 
-         std::array<std::uint8_t, data_size> data{};
+         std::array<uint8_t, data_size> data{};
 
-         for_each<N>([&]<std::size_t I>() {
-            data[I / 8] |= static_cast<std::uint8_t>(get_member(value, get<I>(reflect<T>::values))) << (7 - (I % 8));
+         for_each<N>([&]<size_t I>() {
+            data[I / 8] |= static_cast<uint8_t>(get_member(value, get<I>(reflect<T>::values))) << (7 - (I % 8));
          });
 
          if (!ensure_space(ctx, b, ix + data_size + write_padding_bytes)) [[unlikely]] {
@@ -460,7 +466,7 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
       {
-         constexpr std::uint8_t tag = tag::string;
+         constexpr uint8_t tag = tag::string;
 
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
@@ -522,9 +528,9 @@ namespace glz
             [&](auto&& v) {
                using V = std::decay_t<decltype(v)>;
 
-               static constexpr std::uint64_t index = variant_index_v<V, Variant>;
+               static constexpr uint64_t index = variant_index_v<V, Variant>;
 
-               constexpr std::uint8_t tag = tag::extensions | 0b00001'000;
+               constexpr uint8_t tag = tag::extensions | 0b00001'000;
 
                dump_type(ctx, tag, b, ix);
                if (bool(ctx.error)) [[unlikely]] {
@@ -547,8 +553,8 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         constexpr std::uint8_t type = std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
-         constexpr std::uint8_t tag = tag::number | type | (byte_count<T> << 5);
+         constexpr uint8_t type = std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
+         constexpr uint8_t tag = tag::number | type | (byte_count<T> << 5);
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -572,8 +578,8 @@ namespace glz
       {
          using V = std::underlying_type_t<std::decay_t<T>>;
 
-         constexpr std::uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-         constexpr std::uint8_t tag = tag::number | type | (byte_count<V> << 5);
+         constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+         constexpr uint8_t tag = tag::number | type | (byte_count<V> << 5);
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -595,16 +601,16 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         constexpr std::uint8_t tag = tag::extensions | 0b00011'000;
+         constexpr uint8_t tag = tag::extensions | 0b00011'000;
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
          using V = typename T::value_type;
-         constexpr std::uint8_t complex_number = 0;
-         constexpr std::uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-         constexpr std::uint8_t complex_header = complex_number | type | (byte_count<V> << 5);
+         constexpr uint8_t complex_number = 0;
+         constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+         constexpr uint8_t complex_header = complex_number | type | (byte_count<V> << 5);
          dump_type(ctx, complex_header, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -642,7 +648,7 @@ namespace glz
             }
          }();
 
-         constexpr std::uint8_t tag = tag::string;
+         constexpr uint8_t tag = tag::string;
 
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
@@ -684,7 +690,7 @@ namespace glz
       }
 
       // Compile-time optimized version for known string sizes
-      template <std::uint64_t N, class B>
+      template <uint64_t N, class B>
       GLZ_ALWAYS_INLINE static void no_header_cx(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          dump_compressed_int<N>(ctx, b, ix);
@@ -715,8 +721,8 @@ namespace glz
          using V = range_value_t<std::decay_t<T>>;
 
          if constexpr (boolean_like<V>) {
-            constexpr std::uint8_t type = std::uint8_t(3) << 3;
-            constexpr std::uint8_t tag = tag::typed_array | type;
+            constexpr uint8_t type = uint8_t(3) << 3;
+            constexpr uint8_t tag = tag::typed_array | type;
             dump_type(ctx, tag, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -730,10 +736,10 @@ namespace glz
             if constexpr (has_static_size<T>) {
                constexpr auto N = std::tuple_size_v<std::decay_t<T>>;
                constexpr auto num_bytes = (N + 7) / 8;
-               std::array<std::uint8_t, num_bytes> bytes{};
-               for (std::size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
-                  for (std::size_t bit_i = 7; bit_i < 8 && i < N; --bit_i, ++i) {
-                     bytes[byte_i] |= std::uint8_t(value[i]) << std::uint8_t(bit_i);
+               std::array<uint8_t, num_bytes> bytes{};
+               for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
+                  for (size_t bit_i = 7; bit_i < 8 && i < N; --bit_i, ++i) {
+                     bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
                }
                if (!ensure_space(ctx, b, ix + num_bytes + write_padding_bytes)) [[unlikely]] {
@@ -746,10 +752,10 @@ namespace glz
                if (!ensure_space(ctx, b, ix + num_bytes + write_padding_bytes)) [[unlikely]] {
                   return;
                }
-               for (std::size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
-                  std::uint8_t byte{};
-                  for (std::size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
-                     byte |= std::uint8_t(value[i]) << std::uint8_t(bit_i);
+               for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
+                  uint8_t byte{};
+                  for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
+                     byte |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
                   dump_type(ctx, byte, b, ix);
                }
@@ -759,8 +765,8 @@ namespace glz
             }
          }
          else if constexpr (num_t<V>) {
-            constexpr std::uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-            constexpr std::uint8_t tag = tag::typed_array | type | (byte_count<V> << 5);
+            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t tag = tag::typed_array | type | (byte_count<V> << 5);
             dump_type(ctx, tag, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -781,7 +787,7 @@ namespace glz
 
                if constexpr (is_volatile) {
                   const auto n_elements = value.size();
-                  for (std::size_t i = 0; i < n_elements; ++i) {
+                  for (size_t i = 0; i < n_elements; ++i) {
                      V temp = value[i];
                      if constexpr (std::endian::native == std::endian::big) {
                         byteswap_le(temp);
@@ -792,8 +798,8 @@ namespace glz
                }
                else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
                   // On big endian, swap each element
-                  const auto n_elements = static_cast<std::size_t>(value.size());
-                  for (std::size_t i = 0; i < n_elements; ++i) {
+                  const auto n_elements = static_cast<size_t>(value.size());
+                  for (size_t i = 0; i < n_elements; ++i) {
                      V temp = value[i];
                      byteswap_le(temp);
                      std::memcpy(&b[ix], &temp, sizeof(V));
@@ -819,9 +825,9 @@ namespace glz
             }
          }
          else if constexpr (str_t<V>) {
-            constexpr std::uint8_t type = std::uint8_t(3) << 3;
-            constexpr std::uint8_t string_indicator = std::uint8_t(1) << 5;
-            constexpr std::uint8_t tag = tag::typed_array | type | string_indicator;
+            constexpr uint8_t type = uint8_t(3) << 3;
+            constexpr uint8_t string_indicator = uint8_t(1) << 5;
+            constexpr uint8_t tag = tag::typed_array | type | string_indicator;
             dump_type(ctx, tag, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -849,16 +855,16 @@ namespace glz
             }
          }
          else if constexpr (complex_t<V>) {
-            constexpr std::uint8_t tag = tag::extensions | 0b00011'000;
+            constexpr uint8_t tag = tag::extensions | 0b00011'000;
             dump_type(ctx, tag, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
             using X = typename V::value_type;
-            constexpr std::uint8_t complex_array = 1;
-            constexpr std::uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
-            constexpr std::uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
+            constexpr uint8_t complex_array = 1;
+            constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
             dump_type(ctx, complex_header, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -906,7 +912,7 @@ namespace glz
             }
          }
          else {
-            constexpr std::uint8_t tag = tag::generic_array;
+            constexpr uint8_t tag = tag::generic_array;
             dump_type(ctx, tag, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -935,7 +941,7 @@ namespace glz
          using Element = typename T::value_type;
          using Key = typename Element::first_type;
 
-         constexpr std::uint8_t tag = beve_key_traits<Key>::header;
+         constexpr uint8_t tag = beve_key_traits<Key>::header;
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -966,7 +972,7 @@ namespace glz
       {
          using Key = typename T::first_type;
 
-         constexpr std::uint8_t tag = beve_key_traits<Key>::header;
+         constexpr uint8_t tag = beve_key_traits<Key>::header;
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -993,7 +999,7 @@ namespace glz
       {
          using Key = typename T::key_type;
 
-         constexpr std::uint8_t tag = beve_key_traits<Key>::header;
+         constexpr uint8_t tag = beve_key_traits<Key>::header;
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -1031,8 +1037,8 @@ namespace glz
             }
             else {
                // void value type: serialize as empty object
-               constexpr std::uint8_t type = 0; // string key
-               constexpr std::uint8_t tag = tag::object | type;
+               constexpr uint8_t type = 0; // string key
+               constexpr uint8_t tag = tag::object | type;
                dump_type(ctx, tag, b, ix);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -1050,7 +1056,7 @@ namespace glz
       requires(std::is_array_v<T>)
    struct to<BEVE, T>
    {
-      template <auto Opts, class V, std::size_t N, class... Args>
+      template <auto Opts, class V, size_t N, class... Args>
       GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
       {
          serialize<BEVE>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
@@ -1106,8 +1112,8 @@ namespace glz
          static constexpr auto N = glz::tuple_size_v<V> / 2;
 
          if constexpr (!check_opening_handled(Options)) {
-            constexpr std::uint8_t type = 0; // string key
-            constexpr std::uint8_t tag = tag::object | type;
+            constexpr uint8_t type = 0; // string key
+            constexpr uint8_t tag = tag::object | type;
             dump_type(ctx, tag, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -1118,7 +1124,7 @@ namespace glz
             }
          }
 
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1136,7 +1142,7 @@ namespace glz
       requires is_specialization_v<T, glz::merge>
    struct to<BEVE, T>
    {
-      template <auto Opts, class Value, std::size_t I>
+      template <auto Opts, class Value, size_t I>
       static consteval bool should_skip_field()
       {
          using V = field_t<Value, I>;
@@ -1153,18 +1159,18 @@ namespace glz
       }
 
       template <auto Opts, class Value>
-      static consteval std::size_t count_fields_for_type()
+      static consteval size_t count_fields_for_type()
       {
          constexpr auto N = reflect<Value>::size;
-         return []<std::size_t... I>(std::index_sequence<I...>) {
-            return (std::size_t{} + ... + (should_skip_field<Opts, Value, I>() ? std::size_t{} : std::size_t{1}));
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return (size_t{} + ... + (should_skip_field<Opts, Value, I>() ? size_t{} : size_t{1}));
          }(std::make_index_sequence<N>{});
       }
 
       template <auto Opts>
-      static consteval std::size_t merge_element_count()
+      static consteval size_t merge_element_count()
       {
-         std::size_t count{};
+         size_t count{};
          using Tuple = std::decay_t<decltype(std::declval<T>().value)>;
          for_each<glz::tuple_size_v<Tuple>>([&]<auto I>() constexpr {
             using Value = std::decay_t<glz::tuple_element_t<I, Tuple>>;
@@ -1184,8 +1190,8 @@ namespace glz
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
 
-         constexpr std::uint8_t type = 0; // string key
-         constexpr std::uint8_t tag = tag::object | type;
+         constexpr uint8_t type = 0; // string key
+         constexpr uint8_t tag = tag::object | type;
          dump_type(ctx, tag, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -1195,7 +1201,7 @@ namespace glz
             return;
          }
 
-         [&]<std::size_t... I>(std::index_sequence<I...>) {
+         [&]<size_t... I>(std::index_sequence<I...>) {
             ((serialize<BEVE>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix),
               bool(ctx.error) ? void() : void()),
              ...);
@@ -1209,7 +1215,7 @@ namespace glz
    {
       static constexpr auto N = reflect<T>::size;
 
-      template <auto Opts, std::size_t I>
+      template <auto Opts, size_t I>
       static consteval bool should_skip_field()
       {
          using V = field_t<T, I>;
@@ -1226,10 +1232,10 @@ namespace glz
       }
 
       template <auto Opts>
-      static consteval std::size_t count_to_write()
+      static consteval size_t count_to_write()
       {
-         return []<std::size_t... I>(std::index_sequence<I...>) {
-            return (std::size_t{} + ... + (should_skip_field<Opts, I>() ? std::size_t{} : std::size_t{1}));
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return (size_t{} + ... + (should_skip_field<Opts, I>() ? size_t{} : size_t{1}));
          }(std::make_index_sequence<N>{});
       }
 
@@ -1255,7 +1261,7 @@ namespace glz
             }
          }();
 
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1290,10 +1296,10 @@ namespace glz
 
          if constexpr (maybe_skipped<Options, T>) {
             // Dynamic path: count members at runtime to handle skip_null_members
-            std::size_t member_count = 0;
+            size_t member_count = 0;
 
             // First pass: count members that will be written
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if constexpr (should_skip_field<Options, I>()) {
                   return;
                }
@@ -1338,8 +1344,8 @@ namespace glz
 
             // Write header with dynamic count
             if constexpr (!check_opening_handled(Options)) {
-               constexpr std::uint8_t type = 0; // string key
-               constexpr std::uint8_t tag = tag::object | type;
+               constexpr uint8_t type = 0; // string key
+               constexpr uint8_t tag = tag::object | type;
                dump_type(ctx, tag, b, ix);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -1356,7 +1362,7 @@ namespace glz
 #pragma warning(push)
 #pragma warning(disable : 4702) // unreachable code from if constexpr
 #endif
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1425,8 +1431,8 @@ namespace glz
          else {
             // Static path: use compile-time count for better performance
             if constexpr (!check_opening_handled(Options)) {
-               constexpr std::uint8_t type = 0; // string key
-               constexpr std::uint8_t tag = tag::object | type;
+               constexpr uint8_t type = 0; // string key
+               constexpr uint8_t tag = tag::object | type;
                dump_type(ctx, tag, b, ix);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -1437,7 +1443,7 @@ namespace glz
                }
             }
 
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1488,7 +1494,7 @@ namespace glz
             return;
          }
 
-         for_each<reflect<T>::size>([&]<std::size_t I>() {
+         for_each<reflect<T>::size>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1516,12 +1522,12 @@ namespace glz
          }
 
          if constexpr (is_std_tuple<T>) {
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
+            [&]<size_t... I>(std::index_sequence<I...>) {
                ((serialize<BEVE>::op<Opts>(std::get<I>(value), ctx, b, ix), bool(ctx.error) ? void() : void()), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
-            [&]<std::size_t... I>(std::index_sequence<I...>) {
+            [&]<size_t... I>(std::index_sequence<I...>) {
                ((serialize<BEVE>::op<Opts>(glz::get<I>(value), ctx, b, ix), bool(ctx.error) ? void() : void()), ...);
             }(std::make_index_sequence<N>{});
          }
@@ -1605,7 +1611,7 @@ namespace glz
    [[nodiscard]] error_ctx write_beve_append(T&& value, Buffer& buffer)
    {
       using traits = buffer_traits<std::remove_cvref_t<Buffer>>;
-      const std::size_t start_ix = buffer.size();
+      const size_t start_ix = buffer.size();
 
       if constexpr (traits::is_resizable) {
          if (buffer.size() < start_ix + 2 * write_padding_bytes) {
@@ -1614,7 +1620,7 @@ namespace glz
       }
 
       context ctx{};
-      std::size_t ix = start_ix;
+      size_t ix = start_ix;
       to<BEVE, std::remove_cvref_t<T>>::template op<set_beve<Opts>()>(std::forward<T>(value), ctx, buffer, ix);
 
       if (bool(ctx.error)) [[unlikely]] {
@@ -1653,7 +1659,7 @@ namespace glz
          }
       }
 
-      std::size_t ix = 0;
+      size_t ix = 0;
       bool first = true;
 
       for (const auto& value : values) {

@@ -11,35 +11,39 @@ import glaze.util.type_traits;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::uint32_t;
+using std::size_t;
+
 export namespace glz
 {
    // Formats
    // Built in formats must be less than 65536
    // User defined formats can be 65536 to 4294967296
-   inline constexpr std::uint32_t INVALID = 0;
-   inline constexpr std::uint32_t BEVE = 1;
-   inline constexpr std::uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
-   inline constexpr std::uint32_t JSON = 10;
-   inline constexpr std::uint32_t JSON_PTR = 20;
-   inline constexpr std::uint32_t MSGPACK = 30;
-   inline constexpr std::uint32_t NDJSON = 100; // new line delimited JSON
-   inline constexpr std::uint32_t TOML = 400;
-   inline constexpr std::uint32_t YAML = 450;
-   inline constexpr std::uint32_t STENCIL = 500;
-   inline constexpr std::uint32_t MUSTACHE = 501;
-   inline constexpr std::uint32_t CSV = 10000;
-   inline constexpr std::uint32_t EETF = 20000;
+   inline constexpr uint32_t INVALID = 0;
+   inline constexpr uint32_t BEVE = 1;
+   inline constexpr uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
+   inline constexpr uint32_t JSON = 10;
+   inline constexpr uint32_t JSON_PTR = 20;
+   inline constexpr uint32_t MSGPACK = 30;
+   inline constexpr uint32_t NDJSON = 100; // new line delimited JSON
+   inline constexpr uint32_t TOML = 400;
+   inline constexpr uint32_t YAML = 450;
+   inline constexpr uint32_t STENCIL = 500;
+   inline constexpr uint32_t MUSTACHE = 501;
+   inline constexpr uint32_t CSV = 10000;
+   inline constexpr uint32_t EETF = 20000;
 
    // Protocol formats
-   inline constexpr std::uint32_t REPE = 30000;
-   inline constexpr std::uint32_t REST = 30100;
-   inline constexpr std::uint32_t JSONRPC = 30200;
+   inline constexpr uint32_t REPE = 30000;
+   inline constexpr uint32_t REST = 30100;
+   inline constexpr uint32_t JSONRPC = 30200;
 
    // layout
-   inline constexpr std::uint8_t rowwise = 0;
-   inline constexpr std::uint8_t colwise = 1;
+   inline constexpr uint8_t rowwise = 0;
+   inline constexpr uint8_t colwise = 1;
 
-   enum struct float_precision : std::uint8_t { //
+   enum struct float_precision : uint8_t { //
       full, //
       float32 = 4, //
       float64 = 8, //
@@ -48,10 +52,10 @@ export namespace glz
 
    // We use 16 padding bytes because surrogate unicode pairs require 12 bytes
    // and we want a power of 2 buffer
-   inline constexpr std::uint32_t padding_bytes = 16;
+   inline constexpr uint32_t padding_bytes = 16;
 
    // Write padding bytes simplifies our dump calculations by making sure we have significant excess
-   inline constexpr std::size_t write_padding_bytes = 256;
+   inline constexpr size_t write_padding_bytes = 256;
 
    // This macro exists so that Glaze tests can change the default behavior
    // to easily run tests as if strings were not null terminated
@@ -59,7 +63,7 @@ export namespace glz
 #define GLZ_NULL_TERMINATED true
 #endif
 
-   enum struct opts_internal : std::uint32_t {
+   enum struct opts_internal : uint32_t {
       none = 0,
       opening_handled = 1 << 0, // the opening character has been handled
       closing_handled = 1 << 1, // the closing character has been handled
@@ -85,7 +89,7 @@ export namespace glz
    struct opts
    {
       // USER CONFIGURABLE
-      std::uint32_t format = JSON;
+      uint32_t format = JSON;
       bool null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
       bool comments = false; // Support reading in JSONC style comments
       bool error_on_unknown_keys = true; // Error when an unknown key is encountered
@@ -99,7 +103,7 @@ export namespace glz
          false; // Reads into the deepest structural object and then exits without parsing the rest of the input
 
       // INTERNAL OPTIONS
-      std::uint32_t internal{}; // default should be 0
+      uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
@@ -108,9 +112,9 @@ export namespace glz
    // Note: You can always create your own options struct if you want to share it between formats
    struct opts_csv
    {
-      std::uint32_t format = CSV;
+      uint32_t format = CSV;
       static constexpr bool null_terminated = true; // Whether the input buffer is null terminated
-      std::uint8_t layout = rowwise; // CSV row wise output/input
+      uint8_t layout = rowwise; // CSV row wise output/input
       bool use_headers = true; // Whether to write column/row headers in CSV format
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
 
@@ -120,7 +124,7 @@ export namespace glz
       bool validate_rectangular = false; // Ensure all rows have the same column count when reading 2D arrays
 
       // INTERNAL OPTIONS
-      std::uint32_t internal{}; // default should be 0
+      uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts_csv&) const noexcept = default;
    };
@@ -566,7 +570,7 @@ export namespace glz
       }
    }
 
-   consteval std::uint8_t check_layout(auto&& Opts)
+   consteval uint8_t check_layout(auto&& Opts)
    {
       if constexpr (requires { Opts.layout; }) {
          return Opts.layout;
@@ -586,7 +590,7 @@ export namespace glz
       }
    }
 
-   consteval std::uint8_t check_indentation_width(auto&& Opts)
+   consteval uint8_t check_indentation_width(auto&& Opts)
    {
       if constexpr (requires { Opts.indentation_width; }) {
          return Opts.indentation_width;
@@ -650,7 +654,7 @@ export namespace glz
       }
    }
 
-   consteval std::size_t check_max_string_length(auto&& Opts)
+   consteval size_t check_max_string_length(auto&& Opts)
    {
       if constexpr (requires { Opts.max_string_length; }) {
          return Opts.max_string_length;
@@ -660,7 +664,7 @@ export namespace glz
       }
    }
 
-   consteval std::size_t check_max_array_size(auto&& Opts)
+   consteval size_t check_max_array_size(auto&& Opts)
    {
       if constexpr (requires { Opts.max_array_size; }) {
          return Opts.max_array_size;
@@ -670,7 +674,7 @@ export namespace glz
       }
    }
 
-   consteval std::size_t check_max_map_size(auto&& Opts)
+   consteval size_t check_max_map_size(auto&& Opts)
    {
       if constexpr (requires { Opts.max_map_size; }) {
          return Opts.max_map_size;
@@ -731,33 +735,33 @@ export namespace glz
       }
    }
 
-   consteval bool check_opening_handled(auto&& o) { return o.internal & std::uint32_t(opts_internal::opening_handled); }
+   consteval bool check_opening_handled(auto&& o) { return o.internal & uint32_t(opts_internal::opening_handled); }
 
-   consteval bool check_closing_handled(auto&& o) { return o.internal & std::uint32_t(opts_internal::closing_handled); }
+   consteval bool check_closing_handled(auto&& o) { return o.internal & uint32_t(opts_internal::closing_handled); }
 
-   consteval bool check_ws_handled(auto&& o) { return o.internal & std::uint32_t(opts_internal::ws_handled); }
+   consteval bool check_ws_handled(auto&& o) { return o.internal & uint32_t(opts_internal::ws_handled); }
 
-   consteval bool check_no_header(auto&& o) { return o.internal & std::uint32_t(opts_internal::no_header); }
+   consteval bool check_no_header(auto&& o) { return o.internal & uint32_t(opts_internal::no_header); }
 
    consteval bool check_disable_write_unknown(auto&& o)
    {
-      return o.internal & std::uint32_t(opts_internal::disable_write_unknown);
+      return o.internal & uint32_t(opts_internal::disable_write_unknown);
    }
 
-   consteval bool check_is_padded(auto&& o) { return o.internal & std::uint32_t(opts_internal::is_padded); }
+   consteval bool check_is_padded(auto&& o) { return o.internal & uint32_t(opts_internal::is_padded); }
 
    consteval bool check_disable_padding(auto&& o)
    {
-      return o.internal & std::uint32_t(opts_internal::disable_padding);
+      return o.internal & uint32_t(opts_internal::disable_padding);
    }
 
-   consteval bool check_write_unchecked(auto&& o) { return o.internal & std::uint32_t(opts_internal::write_unchecked); }
+   consteval bool check_write_unchecked(auto&& o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
 
    template <auto Opts>
    constexpr auto opening_handled()
    {
       auto ret = Opts;
-      ret.internal |= std::uint32_t(opts_internal::opening_handled);
+      ret.internal |= uint32_t(opts_internal::opening_handled);
       return ret;
    }
 
@@ -765,7 +769,7 @@ export namespace glz
    constexpr auto opening_and_closing_handled()
    {
       auto ret = Opts;
-      ret.internal |= (std::uint32_t(opts_internal::opening_handled) | std::uint32_t(opts_internal::closing_handled));
+      ret.internal |= (uint32_t(opts_internal::opening_handled) | uint32_t(opts_internal::closing_handled));
       return ret;
    }
 
@@ -773,7 +777,7 @@ export namespace glz
    constexpr auto opening_handled_off()
    {
       auto ret = Opts;
-      ret.internal &= ~std::uint32_t(opts_internal::opening_handled);
+      ret.internal &= ~uint32_t(opts_internal::opening_handled);
       return ret;
    }
 
@@ -781,7 +785,7 @@ export namespace glz
    constexpr auto opening_and_closing_handled_off()
    {
       auto ret = Opts;
-      ret.internal &= ~(std::uint32_t(opts_internal::opening_handled) | std::uint32_t(opts_internal::closing_handled));
+      ret.internal &= ~(uint32_t(opts_internal::opening_handled) | uint32_t(opts_internal::closing_handled));
       return ret;
    }
 
@@ -794,7 +798,7 @@ export namespace glz
       }
       else {
          auto ret = Opts;
-         ret.internal |= std::uint32_t(opts_internal::ws_handled);
+         ret.internal |= uint32_t(opts_internal::ws_handled);
          return ret;
       }
    }
@@ -803,7 +807,7 @@ export namespace glz
    constexpr auto ws_handled_off()
    {
       auto ret = Opts;
-      ret.internal &= ~std::uint32_t(opts_internal::ws_handled);
+      ret.internal &= ~uint32_t(opts_internal::ws_handled);
       return ret;
    }
 
@@ -811,7 +815,7 @@ export namespace glz
    constexpr auto no_header_on()
    {
       auto ret = Opts;
-      ret.internal |= std::uint32_t(opts_internal::no_header);
+      ret.internal |= uint32_t(opts_internal::no_header);
       return ret;
    }
 
@@ -819,7 +823,7 @@ export namespace glz
    constexpr auto no_header_off()
    {
       auto ret = Opts;
-      ret.internal &= ~std::uint32_t(opts_internal::no_header);
+      ret.internal &= ~uint32_t(opts_internal::no_header);
       return ret;
    }
 
@@ -827,7 +831,7 @@ export namespace glz
    constexpr auto is_padded_on()
    {
       auto ret = Opts;
-      ret.internal |= std::uint32_t(opts_internal::is_padded);
+      ret.internal |= uint32_t(opts_internal::is_padded);
       return ret;
    }
 
@@ -835,7 +839,7 @@ export namespace glz
    constexpr auto is_padded_off()
    {
       auto ret = Opts;
-      ret.internal &= ~std::uint32_t(opts_internal::is_padded);
+      ret.internal &= ~uint32_t(opts_internal::is_padded);
       return ret;
    }
 
@@ -843,7 +847,7 @@ export namespace glz
    constexpr auto disable_padding_on()
    {
       auto ret = Opts;
-      ret.internal |= std::uint32_t(opts_internal::disable_padding);
+      ret.internal |= uint32_t(opts_internal::disable_padding);
       return ret;
    }
 
@@ -851,7 +855,7 @@ export namespace glz
    constexpr auto disable_padding_off()
    {
       auto ret = Opts;
-      ret.internal &= ~std::uint32_t(opts_internal::disable_padding);
+      ret.internal &= ~uint32_t(opts_internal::disable_padding);
       return ret;
    }
 
@@ -859,7 +863,7 @@ export namespace glz
    constexpr auto write_unchecked_on()
    {
       auto ret = Opts;
-      ret.internal |= std::uint32_t(opts_internal::write_unchecked);
+      ret.internal |= uint32_t(opts_internal::write_unchecked);
       return ret;
    }
 
@@ -867,7 +871,7 @@ export namespace glz
    constexpr auto write_unchecked_off()
    {
       auto ret = Opts;
-      ret.internal &= ~std::uint32_t(opts_internal::write_unchecked);
+      ret.internal &= ~uint32_t(opts_internal::write_unchecked);
       return ret;
    }
 
@@ -1275,7 +1279,7 @@ export namespace glz
    constexpr auto disable_write_unknown_off()
    {
       auto ret = Opts;
-      ret.internal &= ~std::uint32_t(opts_internal::disable_write_unknown);
+      ret.internal &= ~uint32_t(opts_internal::disable_write_unknown);
       return ret;
    }
 
@@ -1283,7 +1287,7 @@ export namespace glz
    constexpr auto disable_write_unknown_on()
    {
       auto ret = Opts;
-      ret.internal |= std::uint32_t(opts_internal::disable_write_unknown);
+      ret.internal |= uint32_t(opts_internal::disable_write_unknown);
       return ret;
    }
 
@@ -1338,36 +1342,36 @@ export namespace glz
 
 export namespace glz
 {
-   template <std::uint32_t Format = INVALID, class T = void>
+   template <uint32_t Format = INVALID, class T = void>
    struct to;
 
-   template <std::uint32_t Format = INVALID, class T = void>
+   template <uint32_t Format = INVALID, class T = void>
    struct from;
 
-   template <std::uint32_t Format = INVALID, class T = void>
+   template <uint32_t Format = INVALID, class T = void>
    struct to_partial;
 
-   template <std::uint32_t Format = INVALID>
+   template <uint32_t Format = INVALID>
    struct skip_value;
 
-   template <class T, std::uint32_t Format>
+   template <class T, uint32_t Format>
    concept write_supported = requires { to<Format, std::remove_cvref_t<T>>{}; };
 
-   template <class T, std::uint32_t Format>
+   template <class T, uint32_t Format>
    concept read_supported = requires { from<Format, std::remove_cvref_t<T>>{}; };
 
    // These templates save typing by determining the core type used to select the proper to/from specialization
    // Long term I would like to remove these detail indirections.
 
-   template <std::uint32_t Format>
+   template <uint32_t Format>
    struct parse
    {};
 
-   template <std::uint32_t Format>
+   template <uint32_t Format>
    struct serialize
    {};
 
-   template <std::uint32_t Format>
+   template <uint32_t Format>
    struct serialize_partial
    {};
 

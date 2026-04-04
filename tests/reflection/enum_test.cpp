@@ -5,6 +5,13 @@ import std;
 import glaze;
 import ut;
 
+using std::int8_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 
 // ============================================================================
@@ -39,7 +46,7 @@ struct glz::meta<SparseEnumPow2>
 };
 
 // Issue #2262: Sparse enum with adjacent values where shift doesn't help
-enum class SparseEnumXor : std::uint32_t { no_error = 0, invalid_version = 400000000, unsupported_version = 400000001 };
+enum class SparseEnumXor : uint32_t { no_error = 0, invalid_version = 400000000, unsupported_version = 400000001 };
 
 template <>
 struct glz::meta<SparseEnumXor>
@@ -200,7 +207,7 @@ struct glz::meta<TwoElementSmall>
 };
 
 // Two-element enum with large std::uint64_t values (tests std::uint64_t casting)
-enum class TwoElementLargeU64 : std::uint64_t { Low = 0, High = 0xFFFFFFFFFFFFFFFFull };
+enum class TwoElementLargeU64 : uint64_t { Low = 0, High = 0xFFFFFFFFFFFFFFFFull };
 
 template <>
 struct glz::meta<TwoElementLargeU64>
@@ -210,7 +217,7 @@ struct glz::meta<TwoElementLargeU64>
 };
 
 // Two-element enum with negative std::int64_t values
-enum class TwoElementNegative : std::int64_t { Negative = -9223372036854775807ll, Positive = 9223372036854775807ll };
+enum class TwoElementNegative : int64_t { Negative = -9223372036854775807ll, Positive = 9223372036854775807ll };
 
 template <>
 struct glz::meta<TwoElementNegative>
@@ -355,7 +362,7 @@ suite two_element_enum_tests = [] {
 // ============================================================================
 
 // std::uint8_t enums (should use small_range strategy since range <= 256)
-enum class RandomU8Enum1 : std::uint8_t {
+enum class RandomU8Enum1 : uint8_t {
    v0 = 1,
    v1 = 6,
    v2 = 7,
@@ -432,7 +439,7 @@ struct glz::meta<RandomU8Enum1>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomU8Enum2 : std::uint8_t {
+enum class RandomU8Enum2 : uint8_t {
    v0 = 8,
    v1 = 11,
    v2 = 14,
@@ -509,7 +516,7 @@ struct glz::meta<RandomU8Enum2>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomU8Enum3 : std::uint8_t {
+enum class RandomU8Enum3 : uint8_t {
    v0 = 2,
    v1 = 12,
    v2 = 16,
@@ -587,7 +594,7 @@ struct glz::meta<RandomU8Enum3>
 };
 
 // int8_t enums (signed, range -128 to 127)
-enum class RandomI8Enum1 : std::int8_t {
+enum class RandomI8Enum1 : int8_t {
    v0 = -128,
    v1 = -127,
    v2 = -124,
@@ -664,7 +671,7 @@ struct glz::meta<RandomI8Enum1>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomI8Enum2 : std::int8_t {
+enum class RandomI8Enum2 : int8_t {
    v0 = -127,
    v1 = -123,
    v2 = -120,
@@ -742,7 +749,7 @@ struct glz::meta<RandomI8Enum2>
 };
 
 // std::uint32_t enums (sparse, needs hash)
-enum class RandomU32Enum1 : std::uint32_t {
+enum class RandomU32Enum1 : uint32_t {
    v0 = 15228622,
    v1 = 41531046,
    v2 = 106456634,
@@ -819,7 +826,7 @@ struct glz::meta<RandomU32Enum1>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomU32Enum2 : std::uint32_t {
+enum class RandomU32Enum2 : uint32_t {
    v0 = 1743499,
    v1 = 104906255,
    v2 = 116402431,
@@ -896,7 +903,7 @@ struct glz::meta<RandomU32Enum2>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomU32Enum3 : std::uint32_t {
+enum class RandomU32Enum3 : uint32_t {
    v0 = 11492154,
    v1 = 220661337,
    v2 = 230249217,
@@ -974,7 +981,7 @@ struct glz::meta<RandomU32Enum3>
 };
 
 // std::int64_t enums (large sparse values including negatives)
-enum class RandomI64Enum1 : std::int64_t {
+enum class RandomI64Enum1 : int64_t {
    v0 = -4564365332251179056ll,
    v1 = -4462304907209975628ll,
    v2 = -4359436676892473058ll,
@@ -1051,7 +1058,7 @@ struct glz::meta<RandomI64Enum1>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-enum class RandomI64Enum2 : std::int64_t {
+enum class RandomI64Enum2 : int64_t {
    v0 = -4320576372119261223ll,
    v1 = -4077594026428631998ll,
    v2 = -4037058126392169589ll,
@@ -1132,7 +1139,7 @@ struct glz::meta<RandomI64Enum2>
 template <typename E>
 void test_enum_roundtrip()
 {
-   glz::for_each<glz::reflect<E>::size>([&]<std::size_t I>() {
+   glz::for_each<glz::reflect<E>::size>([&]<size_t I>() {
       E val = static_cast<E>(glz::get<I>(glz::reflect<E>::values));
       std::string json;
       expect(not glz::write_json(val, json));

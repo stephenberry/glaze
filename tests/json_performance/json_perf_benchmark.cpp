@@ -10,6 +10,11 @@ import ut;
 
 import glaze.tests.json_perf_common;
 
+using std::int32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 using namespace glz::perf;
 
@@ -27,18 +32,18 @@ inline std::string emoji_unicode(auto& generator)
    };
 
    // Calculate total number of emojis
-   std::size_t total_emojis = 0;
+   size_t total_emojis = 0;
    for (const auto& range : emoji_ranges) {
       total_emojis += range.second - range.first + 1;
    }
 
    // Generate a random emoji code point
-   std::uniform_int_distribution<std::size_t> dis(0, total_emojis - 1);
-   std::size_t random_index = dis(generator);
+   std::uniform_int_distribution<size_t> dis(0, total_emojis - 1);
+   size_t random_index = dis(generator);
 
    char32_t cpoint = 0;
    for (const auto& range : emoji_ranges) {
-      std::size_t range_size = range.second - range.first + 1;
+      size_t range_size = range.second - range.first + 1;
       if (random_index < range_size) {
          cpoint = char32_t(range.first + random_index);
          break;
@@ -73,9 +78,9 @@ inline std::string emoji_unicode(auto& generator)
 struct test_struct
 {
    std::vector<std::string> testStrings{};
-   std::vector<std::uint64_t> testUints{};
+   std::vector<uint64_t> testUints{};
    std::vector<double> testDoubles{};
-   std::vector<std::int64_t> testInts{};
+   std::vector<int64_t> testInts{};
    std::vector<bool> testBools{};
 };
 
@@ -111,7 +116,7 @@ struct test_generator
    template <class V>
    V randomizeNumberUniform(V range)
    {
-      std::uniform_int_distribution<std::uint64_t> dis(0, std::uint64_t(range));
+      std::uniform_int_distribution<uint64_t> dis(0, uint64_t(range));
       return static_cast<V>(dis(gen));
    }
 
@@ -123,8 +128,8 @@ struct test_generator
       static constexpr auto charsetSize = charset.size();
       auto unicodeCount = randomizeNumberUniform(length / 8);
       std::string result{};
-      for (std::int32_t ix = 0; ix < length; ++ix) {
-         if (ix == static_cast<std::int32_t>(length / unicodeCount)) {
+      for (int32_t ix = 0; ix < length; ++ix) {
+         if (ix == static_cast<int32_t>(length / unicodeCount)) {
             insertUnicodeInJSON(result);
          }
          result += charset[randomizeNumberUniform(charsetSize - 1)];
@@ -140,15 +145,15 @@ struct test_generator
 
    bool generateBool() { return static_cast<bool>(randomizeNumberNormal(50.0f, 50.0f) >= 50.0f); };
 
-   std::uint64_t generateUint()
+   uint64_t generateUint()
    {
-      return randomizeNumberNormal((std::numeric_limits<std::uint64_t>::max)() / 2,
-                                   (std::numeric_limits<std::uint64_t>::max)() / 2);
+      return randomizeNumberNormal((std::numeric_limits<uint64_t>::max)() / 2,
+                                   (std::numeric_limits<uint64_t>::max)() / 2);
    };
 
-   std::int64_t generateInt()
+   int64_t generateInt()
    {
-      auto newValue = randomizeNumberNormal(std::int64_t{}, (std::numeric_limits<std::int64_t>::max)());
+      auto newValue = randomizeNumberNormal(int64_t{}, (std::numeric_limits<int64_t>::max)());
       return generateBool() ? newValue : -newValue;
    };
 
@@ -159,27 +164,27 @@ struct test_generator
          auto arraySize02 = randomizeNumberNormal(15ull, 10ull);
          auto arraySize03 = randomizeNumberNormal(5ull, 1ull);
          v.resize(arraySize01);
-         for (std::uint64_t x = 0; x < arraySize01; ++x) {
+         for (uint64_t x = 0; x < arraySize01; ++x) {
             auto arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                auto newString = generateString();
                v[x].testStrings.emplace_back(newString);
             }
             arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testUints.emplace_back(generateUint());
             }
             arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testInts.emplace_back(generateInt());
             }
             arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                auto newBool = generateBool();
                v[x].testBools.emplace_back(newBool);
             }
             arr = randomizeNumberNormal(arraySize02, arraySize03);
-            for (std::uint64_t y = 0; y < arr; ++y) {
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testDoubles.emplace_back(generateDouble());
             }
          }
@@ -230,9 +235,9 @@ auto benchmark_tester()
    std::string buffer{};
    test_generator<test_struct> obj{};
 #ifdef NDEBUG
-   constexpr std::size_t N = 300;
+   constexpr size_t N = 300;
 #else
-   constexpr std::size_t N = 30;
+   constexpr size_t N = 30;
 #endif
 
    expect(!glz::write_file_json(obj, "benchmark_minified.json", std::string{}));
@@ -243,7 +248,7 @@ auto benchmark_tester()
 
    auto t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::read<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -262,7 +267,7 @@ auto benchmark_tester()
    // write performance
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::write<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -279,7 +284,7 @@ auto benchmark_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::read_json(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -294,7 +299,7 @@ auto benchmark_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -310,7 +315,7 @@ auto benchmark_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -325,7 +330,7 @@ auto benchmark_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < N; ++i) {
+   for (size_t i = 0; i < N; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;

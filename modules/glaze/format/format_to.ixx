@@ -9,6 +9,8 @@ import glaze.concepts.container_concepts;
 
 import std;
 
+using std::size_t;
+
 namespace glz
 {
    export template <num_t T>
@@ -19,7 +21,7 @@ namespace glz
 
       const auto start = buffer.data() + ix;
       const auto end = glz::to_chars(start, std::forward<T>(value));
-      ix += std::size_t(end - start);
+      ix += size_t(end - start);
       buffer.resize(ix);
    }
 }

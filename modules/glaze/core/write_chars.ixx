@@ -34,26 +34,36 @@ import glaze.util.type_traits;
 #endif
 
 
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 export namespace glz
 {
    namespace detail
    {
       // Result type for compile-time format string conversion (std::format -> printf)
-      template <std::size_t N>
+      template <size_t N>
       struct printf_fmt_t
       {
          char data[N + 4]{}; // Extra space for '%' and safety margin
-         std::size_t len = 0;
+         size_t len = 0;
       };
 
       // Converts std::format float spec to printf format at compile time
       // Only supports JSON-relevant formatting: precision and type specifier
       // Examples: "{:.2f}" -> "%.2f", "{:.6g}" -> "%.6g", "{}" -> "%g"
-      template <std::size_t N>
+      template <size_t N>
       consteval auto to_printf_fmt(const char (&fmt)[N]) -> printf_fmt_t<N>
       {
          printf_fmt_t<N> result;
-         std::size_t i = 0;
+         size_t i = 0;
 
          // Skip opening brace
          if (i < N && fmt[i] == '{') ++i;
@@ -112,8 +122,8 @@ export namespace glz
       consteval auto to_printf_fmt(std::string_view fmt) -> printf_fmt_t<32>
       {
          printf_fmt_t<32> result;
-         std::size_t i = 0;
-         const std::size_t N = fmt.size();
+         size_t i = 0;
+         const size_t N = fmt.size();
 
          // Skip opening brace
          if (i < N && fmt[i] == '{') ++i;
@@ -173,30 +183,30 @@ export namespace glz
    GLZ_ALWAYS_INLINE constexpr auto sized_integer_conversion() noexcept
    {
       if constexpr (std::is_signed_v<T>) {
-         if constexpr (sizeof(T) <= sizeof(std::int32_t)) {
-            return std::int32_t{};
+         if constexpr (sizeof(T) <= sizeof(int32_t)) {
+            return int32_t{};
          }
-         else if constexpr (sizeof(T) <= sizeof(std::int64_t)) {
-            return std::int64_t{};
+         else if constexpr (sizeof(T) <= sizeof(int64_t)) {
+            return int64_t{};
          }
          else {
             static_assert(false_v<T>, "type is not supported");
          }
       }
       else {
-         if constexpr (sizeof(T) <= sizeof(std::uint32_t)) {
-            return std::uint32_t{};
+         if constexpr (sizeof(T) <= sizeof(uint32_t)) {
+            return uint32_t{};
          }
-         else if constexpr (sizeof(T) <= sizeof(std::uint64_t)) {
-            return std::uint64_t{};
+         else if constexpr (sizeof(T) <= sizeof(uint64_t)) {
+            return uint64_t{};
          }
          else {
             static_assert(false_v<T>, "type is not supported");
          }
       }
    }
-   static_assert(std::is_same_v<decltype(sized_integer_conversion<long long>()), std::int64_t>);
-   static_assert(std::is_same_v<decltype(sized_integer_conversion<unsigned long long>()), std::uint64_t>);
+   static_assert(std::is_same_v<decltype(sized_integer_conversion<long long>()), int64_t>);
+   static_assert(std::is_same_v<decltype(sized_integer_conversion<unsigned long long>()), uint64_t>);
 
    struct write_chars
    {
@@ -233,7 +243,7 @@ export namespace glz
                   // Caller guarantees buffer has enough space
                   const auto start = reinterpret_cast<char*>(&b[ix]);
                   auto result = std::format_to(start, fmt, V(value));
-                  ix += std::size_t(result - start);
+                  ix += size_t(result - start);
                }
                else {
                   // format_to_n writes up to 'available' chars and returns total size needed.
@@ -243,7 +253,7 @@ export namespace glz
                   const auto available = b.size() - ix;
                   auto [out, size] = std::format_to_n(start, available, fmt, V(value));
 
-                  if (static_cast<std::size_t>(size) > available) {
+                  if (static_cast<size_t>(size) > available) {
                      // Output was truncated - size tells us exactly how much space we need
                      if constexpr (resizable<B>) {
                         b.resize(2 * (ix + size));
@@ -262,7 +272,7 @@ export namespace glz
                constexpr auto printf_fmt = detail::to_printf_fmt(opts_type::float_format);
 
                const auto start = reinterpret_cast<char*>(&b[ix]);
-               const auto available = check_write_unchecked(Opts) ? std::size_t(64) : (b.size() - ix);
+               const auto available = check_write_unchecked(Opts) ? size_t(64) : (b.size() - ix);
 
                // snprintf returns chars that would be written (excluding null), or negative on error
                const int len = std::snprintf(start, available, printf_fmt.data, static_cast<double>(value));
@@ -272,11 +282,11 @@ export namespace glz
                   return;
                }
 
-               if (static_cast<std::size_t>(len) >= available) {
+               if (static_cast<size_t>(len) >= available) {
                   // Output was truncated, need to resize and retry
                   if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
-                     b.resize(2 * (ix + static_cast<std::size_t>(len) + 1));
-                     std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<std::size_t>(len) + 1, printf_fmt.data,
+                     b.resize(2 * (ix + static_cast<size_t>(len) + 1));
+                     std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<size_t>(len) + 1, printf_fmt.data,
                                    static_cast<double>(value));
                   }
                   else {
@@ -284,23 +294,23 @@ export namespace glz
                      return;
                   }
                }
-               ix += static_cast<std::size_t>(len);
+               ix += static_cast<size_t>(len);
 #endif
             }
-            else if constexpr (std::uint8_t(check_float_max_write_precision(Opts)) > 0 &&
-                               std::uint8_t(check_float_max_write_precision(Opts)) < sizeof(V)) {
+            else if constexpr (uint8_t(check_float_max_write_precision(Opts)) > 0 &&
+                               uint8_t(check_float_max_write_precision(Opts)) < sizeof(V)) {
                // we cast to a lower precision floating point value before writing out
-               if constexpr (std::uint8_t(check_float_max_write_precision(Opts)) == 8) {
+               if constexpr (uint8_t(check_float_max_write_precision(Opts)) == 8) {
                   const auto reduced = static_cast<double>(value);
                   const auto start = reinterpret_cast<char*>(&b[ix]);
                   const auto end = glz::to_chars(start, reduced);
-                  ix += std::size_t(end - start);
+                  ix += size_t(end - start);
                }
-               else if constexpr (std::uint8_t(check_float_max_write_precision(Opts)) == 4) {
+               else if constexpr (uint8_t(check_float_max_write_precision(Opts)) == 4) {
                   const auto reduced = static_cast<float>(value);
                   const auto start = reinterpret_cast<char*>(&b[ix]);
                   const auto end = glz::to_chars(start, reduced);
-                  ix += std::size_t(end - start);
+                  ix += size_t(end - start);
                }
                else {
                   static_assert(false_v<V>, "invalid float_max_write_precision");
@@ -311,12 +321,12 @@ export namespace glz
             else if constexpr (is_size_optimized(Opts) && is_any_of<V, float, double>) {
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto end = simple_float::to_chars(start, V(value));
-               ix += std::size_t(end - start);
+               ix += size_t(end - start);
             }
             else if constexpr (is_any_of<V, float, double>) {
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto end = glz::to_chars(start, value);
-               ix += std::size_t(end - start);
+               ix += size_t(end - start);
             }
 // float128_t requires std::to_chars for floating-point, unavailable on older Apple platforms (iOS < 16.3)
 #if !defined(_LIBCPP_VERSION) || _LIBCPP_AVAILABILITY_HAS_TO_CHARS_FLOATING_POINT
@@ -327,31 +337,31 @@ export namespace glz
                   ctx.error = error_code::unexpected_end;
                   return;
                }
-               ix += std::size_t(ptr - start);
+               ix += size_t(ptr - start);
             }
 #endif
             else {
                static_assert(false_v<V>, "type is not supported");
             }
          }
-         else if constexpr (is_any_of<V, std::int8_t, std::uint8_t, std::int16_t, std::uint16_t>) {
+         else if constexpr (is_any_of<V, int8_t, uint8_t, int16_t, uint16_t>) {
             // Small integers: always use to_chars (400B tables)
             // The 40KB digit_quads table doesn't help for these small ranges
             const auto start = reinterpret_cast<char*>(&b[ix]);
             const auto end = glz::to_chars(start, value);
-            ix += std::size_t(end - start);
+            ix += size_t(end - start);
          }
-         else if constexpr (is_any_of<V, std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>) {
+         else if constexpr (is_any_of<V, int32_t, uint32_t, int64_t, uint64_t>) {
             const auto start = reinterpret_cast<char*>(&b[ix]);
             if constexpr (is_size_optimized(Opts)) {
                // Size mode: use glz::to_chars (400B lookup tables)
                const auto end = glz::to_chars(start, value);
-               ix += std::size_t(end - start);
+               ix += size_t(end - start);
             }
             else {
                // Normal mode: use to_chars_40kb (40KB digit_quads table)
                const auto end = glz::to_chars_40kb(start, value);
-               ix += std::size_t(end - start);
+               ix += size_t(end - start);
             }
          }
          else if constexpr (std::integral<V>) {
@@ -361,12 +371,12 @@ export namespace glz
             if constexpr (is_size_optimized(Opts)) {
                // Size mode: use glz::to_chars (400B lookup tables)
                const auto end = glz::to_chars(start, static_cast<X>(value));
-               ix += std::size_t(end - start);
+               ix += size_t(end - start);
             }
             else {
                // Normal mode: use to_chars_40kb
                const auto end = glz::to_chars_40kb(start, static_cast<X>(value));
-               ix += std::size_t(end - start);
+               ix += size_t(end - start);
             }
          }
          else {

@@ -20,6 +20,8 @@ import glaze.util.type_traits;
 
 import glaze.tuplet;
 
+using std::size_t;
+
 namespace glz
 {
    // invoker_t is intended to cause a funtion invocation when read
@@ -191,7 +193,7 @@ export namespace glz
             skip_array<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            const sv input = {start, std::size_t(it - start)};
+            const sv input = {start, size_t(it - start)};
             if (value.initialized) {
                if (input != value.prev) {
                   value.func();
@@ -207,7 +209,7 @@ export namespace glz
             skip_array<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            const sv input = {start, std::size_t(it - start)};
+            const sv input = {start, size_t(it - start)};
             if (value.initialized) {
                if (input != value.prev) {
                   Tuple inputs{};

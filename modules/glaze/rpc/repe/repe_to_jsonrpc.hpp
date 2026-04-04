@@ -7,6 +7,9 @@
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe/header.hpp"
 
+using std::int64_t;
+using std::uint64_t;
+
 namespace glz::repe
 {
    // Convert REPE error codes to JSON-RPC error codes
@@ -171,8 +174,8 @@ namespace glz::repe
       }
 
       // Set id
-      if (std::holds_alternative<std::int64_t>(req->id)) {
-         msg.header.id = static_cast<std::uint64_t>(std::get<std::int64_t>(req->id));
+      if (std::holds_alternative<int64_t>(req->id)) {
+         msg.header.id = static_cast<uint64_t>(std::get<int64_t>(req->id));
          msg.header.notify = false;
       }
       else if (std::holds_alternative<glz::generic::null_t>(req->id)) {
@@ -214,8 +217,8 @@ namespace glz::repe
       message msg{};
 
       // Set id
-      if (std::holds_alternative<std::int64_t>(resp->id)) {
-         msg.header.id = static_cast<std::uint64_t>(std::get<std::int64_t>(resp->id));
+      if (std::holds_alternative<int64_t>(resp->id)) {
+         msg.header.id = static_cast<uint64_t>(std::get<int64_t>(resp->id));
       }
       else if (std::holds_alternative<std::string_view>(resp->id)) {
          // Try to parse string as number, otherwise use hash

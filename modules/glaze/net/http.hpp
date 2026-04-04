@@ -16,6 +16,8 @@
 #undef DELETE
 #endif
 
+using std::size_t;
+
 namespace glz
 {
    enum struct http_method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
@@ -248,12 +250,12 @@ namespace glz
       }
 
       // Find the positions of the spaces that separate the components
-      const std::size_t first_space = status_line.find(' ', http_prefix.length());
+      const size_t first_space = status_line.find(' ', http_prefix.length());
       if (first_space == std::string_view::npos || first_space >= status_line.size() - 1) {
          return std::unexpected(std::make_error_code(std::errc::protocol_error));
       }
 
-      const std::size_t second_space = status_line.find(' ', first_space + 1);
+      const size_t second_space = status_line.find(' ', first_space + 1);
       const bool has_status_message = second_space != std::string_view::npos;
 
       // Extract the components as views instead of creating new strings
@@ -283,7 +285,7 @@ namespace glz
       }
 
       // Validate HTTP version (must be digits.digits)
-      const std::size_t dot_pos = version.find('.');
+      const size_t dot_pos = version.find('.');
       if (dot_pos == std::string_view::npos || dot_pos == 0 || dot_pos == version.length() - 1) {
          return std::unexpected(std::make_error_code(std::errc::protocol_error));
       }
@@ -298,7 +300,7 @@ namespace glz
       }
 
       // Validate status code (must be all digits and not too long)
-      constexpr std::size_t max_status_code_length = 3; // HTTP status codes are 3 digits
+      constexpr size_t max_status_code_length = 3; // HTTP status codes are 3 digits
       if (status_code_str.empty() || status_code_str.length() > max_status_code_length ||
           !std::all_of(status_code_str.begin(), status_code_str.end(),
                        [](unsigned char ch) { return std::isdigit(ch); })) {

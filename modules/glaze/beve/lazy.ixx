@@ -20,6 +20,17 @@ import glaze.util.type_traits;
 
 #include "glaze/util/inline.hpp"
 
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::ptrdiff_t;
+using std::size_t;
+
 namespace glz
 {
    // Forward declarations
@@ -51,20 +62,20 @@ namespace glz
       }
 
       // Read compressed integer without modifying iterator, returns {value, bytes_consumed}
-      GLZ_ALWAYS_INLINE std::pair<std::size_t, std::size_t> peek_compressed_int(const char* p, const char* end) noexcept
+      GLZ_ALWAYS_INLINE std::pair<size_t, size_t> peek_compressed_int(const char* p, const char* end) noexcept
       {
          if (p >= end) return {0, 0};
 
-         std::uint8_t header;
+         uint8_t header;
          std::memcpy(&header, p, 1);
-         const std::uint8_t config = header & 0b000000'11;
+         const uint8_t config = header & 0b000000'11;
 
          switch (config) {
          case 0:
             return {header >> 2, 1};
          case 1: {
             if (p + 2 > end) return {0, 0};
-            std::uint16_t h;
+            uint16_t h;
             std::memcpy(&h, p, 2);
             if constexpr (std::endian::native == std::endian::big) {
                h = std::byteswap(h);
@@ -73,7 +84,7 @@ namespace glz
          }
          case 2: {
             if (p + 4 > end) return {0, 0};
-            std::uint32_t h;
+            uint32_t h;
             std::memcpy(&h, p, 4);
             if constexpr (std::endian::native == std::endian::big) {
                h = std::byteswap(h);
@@ -81,14 +92,14 @@ namespace glz
             return {h >> 2, 4};
          }
          case 3: {
-            if constexpr (sizeof(std::size_t) > sizeof(std::uint32_t)) {
+            if constexpr (sizeof(size_t) > sizeof(uint32_t)) {
                if (p + 8 > end) return {0, 0};
-               std::uint64_t h;
+               uint64_t h;
                std::memcpy(&h, p, 8);
                if constexpr (std::endian::native == std::endian::big) {
                   h = std::byteswap(h);
                }
-               return {static_cast<std::size_t>(h >> 2), 8};
+               return {static_cast<size_t>(h >> 2), 8};
             }
             else {
                return {0, 0};
@@ -100,7 +111,7 @@ namespace glz
       }
 
       // Read compressed integer and advance pointer
-      GLZ_ALWAYS_INLINE std::size_t read_compressed_int(const char*& p, const char* end) noexcept
+      GLZ_ALWAYS_INLINE size_t read_compressed_int(const char*& p, const char* end) noexcept
       {
          auto [value, bytes] = peek_compressed_int(p, end);
          p += bytes;
@@ -111,12 +122,12 @@ namespace glz
       GLZ_ALWAYS_INLINE const char* skip_string_content(const char* p, const char* end) noexcept
       {
          const auto len = read_compressed_int(p, end);
-         if (static_cast<std::size_t>(end - p) < len) return end;
+         if (static_cast<size_t>(end - p) < len) return end;
          return p + len;
       }
 
       // Get size of a BEVE number based on tag
-      GLZ_ALWAYS_INLINE std::size_t number_size_from_tag(std::uint8_t t) noexcept { return byte_count_lookup[t >> 5]; }
+      GLZ_ALWAYS_INLINE size_t number_size_from_tag(uint8_t t) noexcept { return byte_count_lookup[t >> 5]; }
    } // namespace detail
 
    // ============================================================================
@@ -140,7 +151,7 @@ namespace glz
       mutable const char* parse_pos_{}; // Current scan position (advances on key access)
       std::string_view key_{};
       error_code error_{error_code::none};
-      std::uint8_t synthetic_tag_{}; // Non-zero for typed array elements (tag info without tag byte in data)
+      uint8_t synthetic_tag_{}; // Non-zero for typed array elements (tag info without tag byte in data)
 
       lazy_beve_view(error_code ec) noexcept : error_(ec) {}
 
@@ -157,7 +168,7 @@ namespace glz
       [[nodiscard]] bool is_null() const noexcept
       {
          if (has_error() || !data_) return true;
-         const std::uint8_t t = std::uint8_t(*data_);
+         const uint8_t t = uint8_t(*data_);
          // null tag is 0, but boolean also uses low bits differently
          // null: tag == 0
          return t == tag::null;
@@ -166,7 +177,7 @@ namespace glz
       [[nodiscard]] bool is_boolean() const noexcept
       {
          if (has_error() || !data_) return false;
-         const std::uint8_t t = std::uint8_t(*data_);
+         const uint8_t t = uint8_t(*data_);
          // boolean: (tag & 0b0000'1111) == tag::boolean (which is 0b00001'000)
          return (t & 0b0000'1111) == tag::boolean;
       }
@@ -174,42 +185,42 @@ namespace glz
       [[nodiscard]] bool is_number() const noexcept
       {
          if (has_error() || !data_) return false;
-         const std::uint8_t t = std::uint8_t(*data_) & 0b00000'111;
+         const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::number;
       }
 
       [[nodiscard]] bool is_string() const noexcept
       {
          if (has_error() || !data_) return false;
-         const std::uint8_t t = std::uint8_t(*data_) & 0b00000'111;
+         const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::string;
       }
 
       [[nodiscard]] bool is_object() const noexcept
       {
          if (has_error() || !data_) return false;
-         const std::uint8_t t = std::uint8_t(*data_) & 0b00000'111;
+         const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::object;
       }
 
       [[nodiscard]] bool is_array() const noexcept
       {
          if (has_error() || !data_) return false;
-         const std::uint8_t t = std::uint8_t(*data_) & 0b00000'111;
+         const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::typed_array || t == tag::generic_array;
       }
 
       [[nodiscard]] bool is_typed_array() const noexcept
       {
          if (has_error() || !data_) return false;
-         const std::uint8_t t = std::uint8_t(*data_) & 0b00000'111;
+         const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::typed_array;
       }
 
       [[nodiscard]] bool is_generic_array() const noexcept
       {
          if (has_error() || !data_) return false;
-         const std::uint8_t t = std::uint8_t(*data_) & 0b00000'111;
+         const uint8_t t = uint8_t(*data_) & 0b00000'111;
          return t == tag::generic_array;
       }
 
@@ -223,7 +234,7 @@ namespace glz
       {
          if (has_error() || !data_) return {};
          const char* end_ptr = detail::skip_value_beve_lazy<Opts>(data_, beve_end());
-         return {data_, static_cast<std::size_t>(end_ptr - data_)};
+         return {data_, static_cast<size_t>(end_ptr - data_)};
       }
 
       /// @brief Parse this value directly into a C++ type
@@ -241,7 +252,7 @@ namespace glz
          auto end = beve_end();
          parse<BEVE>::op<Opts>(value, ctx, it, end);
          if (bool(ctx.error)) {
-            return error_ctx{static_cast<std::size_t>(it - data_), ctx.error};
+            return error_ctx{static_cast<size_t>(it - data_), ctx.error};
          }
          return {};
       }
@@ -249,10 +260,10 @@ namespace glz
       template <class T>
       [[nodiscard]] expected<T, error_ctx> get() const;
 
-      [[nodiscard]] lazy_beve_view operator[](std::size_t index) const;
+      [[nodiscard]] lazy_beve_view operator[](size_t index) const;
       [[nodiscard]] lazy_beve_view operator[](std::string_view key) const;
       [[nodiscard]] bool contains(std::string_view key) const;
-      [[nodiscard]] std::size_t size() const;
+      [[nodiscard]] size_t size() const;
       [[nodiscard]] bool empty() const noexcept;
 
       // Key access for object iteration
@@ -277,15 +288,15 @@ namespace glz
 
       // Constructor with synthetic tag for typed array elements
       lazy_beve_view(const lazy_beve_document<Opts>* doc, const char* data, std::string_view key,
-                     std::uint8_t synthetic_tag) noexcept
+                     uint8_t synthetic_tag) noexcept
          : doc_(doc), data_(data), key_(key), synthetic_tag_(synthetic_tag)
       {}
 
-      void set_synthetic_tag(std::uint8_t tag) noexcept { synthetic_tag_ = tag; }
+      void set_synthetic_tag(uint8_t tag) noexcept { synthetic_tag_ = tag; }
 
       // Helper to read numeric value directly given tag info (for typed array elements)
       template <class T>
-      [[nodiscard]] expected<T, error_ctx> read_numeric_from_tag(std::uint8_t tag, const char* value_ptr,
+      [[nodiscard]] expected<T, error_ctx> read_numeric_from_tag(uint8_t tag, const char* value_ptr,
                                                                  const char* end) const;
    };
 
@@ -298,7 +309,7 @@ namespace glz
    {
      private:
       const char* beve_{};
-      std::size_t len_{};
+      size_t len_{};
       const char* root_data_{};
       mutable lazy_beve_view<Opts> root_view_{};
 
@@ -357,28 +368,28 @@ namespace glz
       [[nodiscard]] const lazy_beve_view<Opts>& root() const noexcept { return root_view_; }
 
       [[nodiscard]] lazy_beve_view<Opts> operator[](std::string_view key) const { return root_view_[key]; }
-      [[nodiscard]] lazy_beve_view<Opts> operator[](std::size_t index) const { return root_view_[index]; }
+      [[nodiscard]] lazy_beve_view<Opts> operator[](size_t index) const { return root_view_[index]; }
 
-      [[nodiscard]] bool is_null() const noexcept { return !root_data_ || std::uint8_t(*root_data_) == tag::null; }
+      [[nodiscard]] bool is_null() const noexcept { return !root_data_ || uint8_t(*root_data_) == tag::null; }
 
       [[nodiscard]] bool is_array() const noexcept
       {
          if (!root_data_) return false;
-         const std::uint8_t t = std::uint8_t(*root_data_) & 0b00000'111;
+         const uint8_t t = uint8_t(*root_data_) & 0b00000'111;
          return t == tag::typed_array || t == tag::generic_array;
       }
 
       [[nodiscard]] bool is_object() const noexcept
       {
          if (!root_data_) return false;
-         const std::uint8_t t = std::uint8_t(*root_data_) & 0b00000'111;
+         const uint8_t t = uint8_t(*root_data_) & 0b00000'111;
          return t == tag::object;
       }
 
       explicit operator bool() const noexcept { return !is_null(); }
 
       [[nodiscard]] const char* beve_data() const noexcept { return beve_; }
-      [[nodiscard]] std::size_t beve_size() const noexcept { return len_; }
+      [[nodiscard]] size_t beve_size() const noexcept { return len_; }
 
       void reset_parse_pos() noexcept { root_view_.parse_pos_ = nullptr; }
 
@@ -388,9 +399,9 @@ namespace glz
       {
          const lazy_beve_document* doc;
 
-         [[nodiscard]] std::size_t operator[](std::string_view key) const { return doc->root_view_[key].size(); }
+         [[nodiscard]] size_t operator[](std::string_view key) const { return doc->root_view_[key].size(); }
 
-         [[nodiscard]] std::size_t operator[](std::size_t index) const { return doc->root_view_[index].size(); }
+         [[nodiscard]] size_t operator[](size_t index) const { return doc->root_view_[index].size(); }
       };
 
       size_accessor size{this};
@@ -407,19 +418,19 @@ namespace glz
       const lazy_beve_document<Opts>* doc_{};
       const char* beve_end_{};
       const char* current_pos_{}; // Current position in iteration
-      std::size_t remaining_count_{}; // Elements remaining
+      size_t remaining_count_{}; // Elements remaining
       bool is_object_{};
       bool is_typed_array_{};
       bool has_string_keys_{true}; // For objects: string keys (default) vs number keys
-      std::uint8_t key_byte_count_{}; // For number-keyed objects: bytes per key
-      std::uint8_t element_size_{}; // For typed arrays
+      uint8_t key_byte_count_{}; // For number-keyed objects: bytes per key
+      uint8_t element_size_{}; // For typed arrays
       bool at_end_{true};
       lazy_beve_view<Opts> current_view_{};
 
      public:
       using iterator_category = std::forward_iterator_tag;
       using value_type = lazy_beve_view<Opts>;
-      using difference_type = std::ptrdiff_t;
+      using difference_type = ptrdiff_t;
       using pointer = void;
       using reference = lazy_beve_view<Opts>&;
 
@@ -461,20 +472,20 @@ namespace glz
       std::vector<std::string_view> keys_;
       bool is_object_{};
       bool is_typed_array_{}; // True if indexing a typed array
-      std::uint8_t element_tag_{}; // Synthetic element tag for typed arrays
+      uint8_t element_tag_{}; // Synthetic element tag for typed arrays
 
       friend class indexed_lazy_beve_iterator<Opts>;
 
      public:
       indexed_lazy_beve_view() = default;
 
-      [[nodiscard]] std::size_t size() const noexcept { return value_starts_.size(); }
+      [[nodiscard]] size_t size() const noexcept { return value_starts_.size(); }
       [[nodiscard]] bool empty() const noexcept { return value_starts_.empty(); }
       [[nodiscard]] bool is_object() const noexcept { return is_object_; }
       [[nodiscard]] bool is_array() const noexcept { return !is_object_; }
       [[nodiscard]] bool is_typed_array() const noexcept { return is_typed_array_; }
 
-      [[nodiscard]] lazy_beve_view<Opts> operator[](std::size_t index) const
+      [[nodiscard]] lazy_beve_view<Opts> operator[](size_t index) const
       {
          if (index >= value_starts_.size()) {
             return lazy_beve_view<Opts>::make_error(error_code::exceeded_static_array_size);
@@ -488,7 +499,7 @@ namespace glz
          if (!is_object_) {
             return lazy_beve_view<Opts>::make_error(error_code::get_wrong_type);
          }
-         for (std::size_t i = 0; i < keys_.size(); ++i) {
+         for (size_t i = 0; i < keys_.size(); ++i) {
             if (keys_[i] == key) {
                return lazy_beve_view<Opts>{doc_, value_starts_[i], keys_[i]};
             }
@@ -515,7 +526,7 @@ namespace glz
          : doc_(doc), beve_end_(beve_end), is_object_(is_object)
       {}
 
-      void reserve(std::size_t n)
+      void reserve(size_t n)
       {
          value_starts_.reserve(n);
          if (is_object_) {
@@ -541,18 +552,18 @@ namespace glz
    {
      private:
       const indexed_lazy_beve_view<Opts>* parent_{};
-      std::size_t index_{};
+      size_t index_{};
       mutable lazy_beve_view<Opts> current_view_{};
 
      public:
       using iterator_category = std::random_access_iterator_tag;
       using value_type = lazy_beve_view<Opts>;
-      using difference_type = std::ptrdiff_t;
+      using difference_type = ptrdiff_t;
       using pointer = void;
       using reference = lazy_beve_view<Opts>&;
 
       indexed_lazy_beve_iterator() = default;
-      indexed_lazy_beve_iterator(const indexed_lazy_beve_view<Opts>* parent, std::size_t index)
+      indexed_lazy_beve_iterator(const indexed_lazy_beve_view<Opts>* parent, size_t index)
          : parent_(parent), index_(index)
       {}
 
@@ -598,24 +609,24 @@ namespace glz
 
       indexed_lazy_beve_iterator& operator+=(difference_type n)
       {
-         index_ = static_cast<std::size_t>(static_cast<difference_type>(index_) + n);
+         index_ = static_cast<size_t>(static_cast<difference_type>(index_) + n);
          return *this;
       }
 
       indexed_lazy_beve_iterator& operator-=(difference_type n)
       {
-         index_ = static_cast<std::size_t>(static_cast<difference_type>(index_) - n);
+         index_ = static_cast<size_t>(static_cast<difference_type>(index_) - n);
          return *this;
       }
 
       indexed_lazy_beve_iterator operator+(difference_type n) const
       {
-         return {parent_, static_cast<std::size_t>(static_cast<difference_type>(index_) + n)};
+         return {parent_, static_cast<size_t>(static_cast<difference_type>(index_) + n)};
       }
 
       indexed_lazy_beve_iterator operator-(difference_type n) const
       {
-         return {parent_, static_cast<std::size_t>(static_cast<difference_type>(index_) - n)};
+         return {parent_, static_cast<size_t>(static_cast<difference_type>(index_) - n)};
       }
 
       difference_type operator-(const indexed_lazy_beve_iterator& other) const
@@ -626,9 +637,9 @@ namespace glz
       reference operator[](difference_type n) const
       {
          std::string_view key =
-            parent_->is_object_ ? parent_->keys_[index_ + static_cast<std::size_t>(n)] : std::string_view{};
+            parent_->is_object_ ? parent_->keys_[index_ + static_cast<size_t>(n)] : std::string_view{};
          current_view_ =
-            lazy_beve_view<Opts>{parent_->doc_, parent_->value_starts_[index_ + static_cast<std::size_t>(n)], key};
+            lazy_beve_view<Opts>{parent_->doc_, parent_->value_starts_[index_ + static_cast<size_t>(n)], key};
          return current_view_;
       }
 
@@ -656,15 +667,15 @@ namespace glz
    }
 
    template <opts Opts>
-   inline lazy_beve_view<Opts> lazy_beve_view<Opts>::operator[](std::size_t index) const
+   inline lazy_beve_view<Opts> lazy_beve_view<Opts>::operator[](size_t index) const
    {
       if (has_error()) return *this;
       if (!is_array()) return make_error(error_code::get_wrong_type);
 
       const char* end = beve_end();
       const char* p = data_;
-      const std::uint8_t t = std::uint8_t(*p);
-      const std::uint8_t type_bits = t & 0b00000'111;
+      const uint8_t t = uint8_t(*p);
+      const uint8_t type_bits = t & 0b00000'111;
       ++p;
 
       const auto count = detail::read_compressed_int(p, end);
@@ -674,21 +685,21 @@ namespace glz
 
       if (type_bits == tag::generic_array) {
          // Generic array - each element has its own tag
-         for (std::size_t i = 0; i < index; ++i) {
+         for (size_t i = 0; i < index; ++i) {
             p = detail::skip_value_beve_lazy<Opts>(p, end);
          }
          return {doc_, p};
       }
       else {
          // Typed array - homogeneous elements
-         const std::uint8_t element_type = (t & 0b000'11'000) >> 3;
+         const uint8_t element_type = (t & 0b000'11'000) >> 3;
 
          if (element_type == 3) {
             // Bool or string array
             const bool is_string = (t & 0b00'1'00'000) >> 5;
             if (is_string) {
                // String array - variable length elements
-               for (std::size_t i = 0; i < index; ++i) {
+               for (size_t i = 0; i < index; ++i) {
                   const auto len = detail::read_compressed_int(p, end);
                   p += len;
                }
@@ -703,10 +714,10 @@ namespace glz
          }
          else {
             // Numeric typed array - fixed size elements
-            const std::size_t elem_size = byte_count_lookup[t >> 5];
+            const size_t elem_size = byte_count_lookup[t >> 5];
             p += index * elem_size;
             // Return view with synthetic numeric tag
-            const std::uint8_t synthetic_tag = tag::number | (t & 0b11111000);
+            const uint8_t synthetic_tag = tag::number | (t & 0b11111000);
             return {doc_, p, {}, synthetic_tag};
          }
       }
@@ -720,11 +731,11 @@ namespace glz
 
       const char* end = beve_end();
       const char* p = data_;
-      const std::uint8_t t = std::uint8_t(*p);
+      const uint8_t t = uint8_t(*p);
       ++p;
 
       // Check for string-keyed object (key_type bits should be 0 for string keys)
-      const std::uint8_t key_type = t & 0b000'11'000;
+      const uint8_t key_type = t & 0b000'11'000;
       if (key_type != 0) {
          // Number-keyed object - string lookup not supported
          return make_error(error_code::get_wrong_type);
@@ -734,7 +745,7 @@ namespace glz
 
       // Determine search start position for progressive scanning
       const char* search_start = p;
-      std::size_t start_index = 0;
+      size_t start_index = 0;
 
       if (parse_pos_ && parse_pos_ > data_) {
          // Skip past the last found value
@@ -754,7 +765,7 @@ namespace glz
 
       // Forward pass: search from current position
       const char* iter = search_start;
-      for (std::size_t i = start_index; i < n_keys; ++i) {
+      for (size_t i = start_index; i < n_keys; ++i) {
          const auto key_len = detail::read_compressed_int(iter, end);
          std::string_view current_key{iter, key_len};
          iter += key_len;
@@ -770,7 +781,7 @@ namespace glz
       // Wrap-around pass: search from beginning to where we started
       if (start_index > 0) {
          iter = p;
-         for (std::size_t i = 0; i < start_index; ++i) {
+         for (size_t i = 0; i < start_index; ++i) {
             const auto key_len = detail::read_compressed_int(iter, end);
             std::string_view current_key{iter, key_len};
             iter += key_len;
@@ -795,13 +806,13 @@ namespace glz
    }
 
    template <opts Opts>
-   inline std::size_t lazy_beve_view<Opts>::size() const
+   inline size_t lazy_beve_view<Opts>::size() const
    {
       if (has_error() || !data_) return 0;
 
       // Handle synthetic tags (typed array elements)
       if (synthetic_tag_ != 0) {
-         const std::uint8_t base_type = synthetic_tag_ & 0b00000'111;
+         const uint8_t base_type = synthetic_tag_ & 0b00000'111;
          if (base_type == tag::string) {
             // String element in typed string array - length prefixed
             auto [len, bytes] = detail::peek_compressed_int(data_, beve_end());
@@ -810,7 +821,7 @@ namespace glz
          return 0;
       }
 
-      const std::uint8_t t = std::uint8_t(*data_) & 0b00000'111;
+      const uint8_t t = uint8_t(*data_) & 0b00000'111;
 
       if (t == tag::string) {
          const char* p = data_ + 1; // Skip tag
@@ -848,7 +859,7 @@ namespace glz
       : doc_(doc), beve_end_(end), is_object_(is_object), is_typed_array_(is_typed_array), at_end_(false)
    {
       const char* p = container_start;
-      const std::uint8_t t = std::uint8_t(*p);
+      const uint8_t t = uint8_t(*p);
       ++p;
 
       remaining_count_ = detail::read_compressed_int(p, end);
@@ -860,18 +871,18 @@ namespace glz
 
       if (is_object_) {
          // Check key type from bits 3-4 of tag
-         const std::uint8_t key_type_bits = t & 0b000'11'000;
+         const uint8_t key_type_bits = t & 0b000'11'000;
          has_string_keys_ = (key_type_bits == 0);
          if (!has_string_keys_) {
-            key_byte_count_ = static_cast<std::uint8_t>(byte_count_lookup[t >> 5]);
+            key_byte_count_ = static_cast<uint8_t>(byte_count_lookup[t >> 5]);
          }
       }
 
       if (is_typed_array_) {
          // For typed arrays, calculate element size
-         const std::uint8_t element_type = (t & 0b000'11'000) >> 3;
+         const uint8_t element_type = (t & 0b000'11'000) >> 3;
          if (element_type < 3) {
-            element_size_ = static_cast<std::uint8_t>(byte_count_lookup[t >> 5]);
+            element_size_ = static_cast<uint8_t>(byte_count_lookup[t >> 5]);
          }
          else {
             // Bool or string array - variable handling needed
@@ -933,7 +944,7 @@ namespace glz
       if (has_error() || !data_) return end();
       if (!is_array() && !is_object()) return end();
 
-      const std::uint8_t t = std::uint8_t(*data_) & 0b00000'111;
+      const uint8_t t = uint8_t(*data_) & 0b00000'111;
       const bool is_typed = (t == tag::typed_array);
       return lazy_beve_iterator<Opts>{doc_, data_, beve_end(), is_object(), is_typed};
    }
@@ -971,8 +982,8 @@ namespace glz
       indexed_lazy_beve_view<Opts> result{doc_, end, is_object()};
 
       const char* p = data_;
-      const std::uint8_t t = std::uint8_t(*p);
-      const std::uint8_t type_bits = t & 0b00000'111;
+      const uint8_t t = uint8_t(*p);
+      const uint8_t type_bits = t & 0b00000'111;
       ++p;
 
       const auto count = detail::read_compressed_int(p, end);
@@ -982,12 +993,12 @@ namespace glz
 
       if (type_bits == tag::object) {
          // Check key type from bits 3-4 of tag
-         const std::uint8_t key_type_bits = t & 0b000'11'000;
+         const uint8_t key_type_bits = t & 0b000'11'000;
          const bool has_string_keys = (key_type_bits == 0);
 
          if (has_string_keys) {
             // Object with string keys
-            for (std::size_t i = 0; i < count; ++i) {
+            for (size_t i = 0; i < count; ++i) {
                const auto key_len = detail::read_compressed_int(p, end);
                std::string_view key{p, key_len};
                p += key_len;
@@ -998,8 +1009,8 @@ namespace glz
          }
          else {
             // Object with number keys
-            const std::size_t key_size = byte_count_lookup[t >> 5];
-            for (std::size_t i = 0; i < count; ++i) {
+            const size_t key_size = byte_count_lookup[t >> 5];
+            for (size_t i = 0; i < count; ++i) {
                p += key_size; // Skip the number key
                result.add_element(p); // No key stored for number keys
                p = detail::skip_value_beve_lazy<Opts>(p, end);
@@ -1008,22 +1019,22 @@ namespace glz
       }
       else if (type_bits == tag::generic_array) {
          // Generic array
-         for (std::size_t i = 0; i < count; ++i) {
+         for (size_t i = 0; i < count; ++i) {
             result.add_element(p);
             p = detail::skip_value_beve_lazy<Opts>(p, end);
          }
       }
       else if (type_bits == tag::typed_array) {
          // Typed array
-         const std::uint8_t element_type = (t & 0b000'11'000) >> 3;
+         const uint8_t element_type = (t & 0b000'11'000) >> 3;
          result.is_typed_array_ = true;
 
          if (element_type < 3) {
             // Numeric typed array - fixed size elements
             // Synthesize element tag: number base type + same type/width bits from array tag
             result.element_tag_ = tag::number | (t & 0b11111000);
-            const std::size_t elem_size = byte_count_lookup[t >> 5];
-            for (std::size_t i = 0; i < count; ++i) {
+            const size_t elem_size = byte_count_lookup[t >> 5];
+            for (size_t i = 0; i < count; ++i) {
                result.add_element(p);
                p += elem_size;
             }
@@ -1034,7 +1045,7 @@ namespace glz
             if (is_string_arr) {
                // String array - elements are length-prefixed strings without tag
                result.element_tag_ = tag::string;
-               for (std::size_t i = 0; i < count; ++i) {
+               for (size_t i = 0; i < count; ++i) {
                   result.add_element(p);
                   const auto len = detail::read_compressed_int(p, end);
                   p += len;
@@ -1068,7 +1079,7 @@ namespace glz
       // For typed array elements, synthetic_tag_ is non-zero and data_ points directly to value
       // For normal values, tag is read from data_ and value starts at data_+1
       const bool has_synthetic_tag = (synthetic_tag_ != 0);
-      const std::uint8_t tag = has_synthetic_tag ? synthetic_tag_ : std::uint8_t(*data_);
+      const uint8_t tag = has_synthetic_tag ? synthetic_tag_ : uint8_t(*data_);
       const char* value_ptr = has_synthetic_tag ? data_ : data_ + 1;
 
       if constexpr (std::is_same_v<T, bool>) {
@@ -1079,7 +1090,7 @@ namespace glz
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
          // Boolean value is in bit 4 of the tag
-         return (std::uint8_t(*data_) >> 4) & 1;
+         return (uint8_t(*data_) >> 4) & 1;
       }
       else if constexpr (std::is_same_v<T, std::nullptr_t>) {
          if (has_synthetic_tag || !is_null()) {
@@ -1088,7 +1099,7 @@ namespace glz
          return nullptr;
       }
       else if constexpr (std::is_same_v<T, std::string>) {
-         const std::uint8_t base_type = tag & 0b00000'111;
+         const uint8_t base_type = tag & 0b00000'111;
          if (base_type != tag::string) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
@@ -1096,25 +1107,25 @@ namespace glz
          // For normal strings, we already skipped the tag
          const char* p = value_ptr;
          const auto len = detail::read_compressed_int(p, end);
-         if (static_cast<std::size_t>(end - p) < len) {
+         if (static_cast<size_t>(end - p) < len) {
             return unexpected(error_ctx{0, error_code::unexpected_end});
          }
          return std::string{p, len};
       }
       else if constexpr (std::is_same_v<T, std::string_view>) {
-         const std::uint8_t base_type = tag & 0b00000'111;
+         const uint8_t base_type = tag & 0b00000'111;
          if (base_type != tag::string) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
          const char* p = value_ptr;
          const auto len = detail::read_compressed_int(p, end);
-         if (static_cast<std::size_t>(end - p) < len) {
+         if (static_cast<size_t>(end - p) < len) {
             return unexpected(error_ctx{0, error_code::unexpected_end});
          }
          return std::string_view{p, len};
       }
       else if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
-         const std::uint8_t base_type = tag & 0b00000'111;
+         const uint8_t base_type = tag & 0b00000'111;
          if (base_type != tag::number) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
@@ -1143,12 +1154,12 @@ namespace glz
    // Helper to read numeric value directly given tag info (for typed array elements)
    template <opts Opts>
    template <class T>
-   [[nodiscard]] inline expected<T, error_ctx> lazy_beve_view<Opts>::read_numeric_from_tag(std::uint8_t tag,
+   [[nodiscard]] inline expected<T, error_ctx> lazy_beve_view<Opts>::read_numeric_from_tag(uint8_t tag,
                                                                                            const char* value_ptr,
                                                                                            const char* end) const
    {
-      const std::uint8_t type = (tag & 0b000'11'000) >> 3; // 0=float, 1=signed, 2=unsigned
-      const std::size_t byte_count = byte_count_lookup[tag >> 5];
+      const uint8_t type = (tag & 0b000'11'000) >> 3; // 0=float, 1=signed, 2=unsigned
+      const size_t byte_count = byte_count_lookup[tag >> 5];
 
       if (value_ptr + byte_count > end) {
          return unexpected(error_ctx{0, error_code::unexpected_end});
@@ -1169,22 +1180,22 @@ namespace glz
       }
       else if (type == 1) {
          // Signed integer
-         std::int64_t val = 0;
+         int64_t val = 0;
          switch (byte_count) {
          case 1: {
-            std::int8_t v;
+            int8_t v;
             std::memcpy(&v, value_ptr, 1);
             val = v;
             break;
          }
          case 2: {
-            std::int16_t v;
+            int16_t v;
             std::memcpy(&v, value_ptr, 2);
             val = v;
             break;
          }
          case 4: {
-            std::int32_t v;
+            int32_t v;
             std::memcpy(&v, value_ptr, 4);
             val = v;
             break;
@@ -1198,22 +1209,22 @@ namespace glz
       }
       else if (type == 2) {
          // Unsigned integer
-         std::uint64_t val = 0;
+         uint64_t val = 0;
          switch (byte_count) {
          case 1: {
-            std::uint8_t v;
+            uint8_t v;
             std::memcpy(&v, value_ptr, 1);
             val = v;
             break;
          }
          case 2: {
-            std::uint16_t v;
+            uint16_t v;
             std::memcpy(&v, value_ptr, 2);
             val = v;
             break;
          }
          case 4: {
-            std::uint32_t v;
+            uint32_t v;
             std::memcpy(&v, value_ptr, 4);
             val = v;
             break;
@@ -1257,7 +1268,7 @@ namespace glz
             return;
          }
 
-         const std::size_t n = static_cast<std::size_t>(it - view.data());
+         const size_t n = static_cast<size_t>(it - view.data());
          if constexpr (resizable<B>) {
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));
@@ -1297,8 +1308,8 @@ namespace glz
       }
 
       // Validate first byte is a valid BEVE tag
-      const std::uint8_t first_byte = static_cast<std::uint8_t>(buffer[0]);
-      const std::uint8_t type_bits = first_byte & 0b00000'111;
+      const uint8_t first_byte = static_cast<uint8_t>(buffer[0]);
+      const uint8_t type_bits = first_byte & 0b00000'111;
 
       // Valid types: null(0), number(1), string(2), object(3), typed_array(4), generic_array(5), extensions(6)
       // Also boolean has tag::boolean pattern

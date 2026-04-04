@@ -7,6 +7,9 @@
 #include "glaze/json.hpp"
 
 // Struct for deserialization benchmarks
+
+using std::size_t;
+
 struct BenchUser
 {
    int64_t id{};
@@ -53,10 +56,10 @@ inline const std::string array_json = R"({
 })";
 
 // Generate a larger JSON for throughput testing
-inline std::string generate_large_json(std::size_t count)
+inline std::string generate_large_json(size_t count)
 {
    std::string json = R"({"users":[)";
-   for (std::size_t i = 0; i < count; ++i) {
+   for (size_t i = 0; i < count; ++i) {
       if (i > 0) json += ",";
       json += R"({"id":)";
       json += std::to_string(i);
@@ -79,10 +82,10 @@ inline std::string generate_large_json(std::size_t count)
 }
 
 // Generate JSON with whitespace (pretty-printed style)
-inline std::string generate_large_json_with_whitespace(std::size_t count)
+inline std::string generate_large_json_with_whitespace(size_t count)
 {
    std::string json = "{\n  \"users\": [\n";
-   for (std::size_t i = 0; i < count; ++i) {
+   for (size_t i = 0; i < count; ++i) {
       if (i > 0) json += ",\n";
       json += "    { \"id\": ";
       json += std::to_string(i);
@@ -423,7 +426,7 @@ int main()
          auto result = glz::lazy_json(large_json);
          auto users = (*result)["users"];
          int64_t sum = 0;
-         std::size_t count = 0;
+         size_t count = 0;
          for (auto& user : users) {
             BenchUser u{};
             // raw_json() scans to find value end, then read_json parses again
@@ -441,7 +444,7 @@ int main()
          auto result = glz::lazy_json(large_json);
          auto users = (*result)["users"];
          int64_t sum = 0;
-         std::size_t count = 0;
+         size_t count = 0;
          for (auto& user : users) {
             BenchUser u{};
             // read_into directly parses from value start to doc end - no pre-scan

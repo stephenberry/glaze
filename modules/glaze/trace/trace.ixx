@@ -19,9 +19,12 @@ import glaze.util.string_literal;
 // trace.end("my event name");
 // ```
 
+using std::uint32_t;
+using std::uint64_t;
+
 namespace glz
 {
-   export enum struct display_time_unit : std::uint32_t {
+   export enum struct display_time_unit : uint32_t {
       s, // seconds
       ms, // milliseconds
       us, // microseconds
@@ -45,11 +48,11 @@ namespace glz
       std::optional<std::string_view>
          cat{}; // The event categories. A comma separated list of categories for the event.
       char ph{}; // The event type.
-      std::uint64_t ts{}; // The tracing clock timestamp of the event. Provided at microsecond granularity.
-      std::optional<std::uint64_t> tts{}; // The thread clock timestamp of the event. Provided at microsecond granularity.
-      std::uint64_t pid{}; // The process ID for the process that output this event.
-      std::uint64_t tid{}; // The thread ID for the thread that output this event.
-      std::optional<std::uint64_t>
+      uint64_t ts{}; // The tracing clock timestamp of the event. Provided at microsecond granularity.
+      std::optional<uint64_t> tts{}; // The thread clock timestamp of the event. Provided at microsecond granularity.
+      uint64_t pid{}; // The process ID for the process that output this event.
+      uint64_t tid{}; // The thread ID for the thread that output this event.
+      std::optional<uint64_t>
          id{}; // For async events. Events with the same category and id are treated as from the same event tree.
       glz::raw_json args = "{}"; // metadata
    };

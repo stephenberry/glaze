@@ -4,17 +4,20 @@ export module glaze.core.array_apply;
 
 import std;
 
+using std::ptrdiff_t;
+using std::size_t;
+
 export namespace glz
 {
    template <class Adapter>
    struct array_apply_t
    {
       Adapter adapter{};
-      std::size_t m_size{};
+      size_t m_size{};
 
       struct dummy_iterator
       {
-         using difference_type = std::ptrdiff_t;
+         using difference_type = ptrdiff_t;
          using value_type = Adapter;
 
          Adapter& operator*() const { return *adapter; }
@@ -32,15 +35,15 @@ export namespace glz
             return dummy_iterator{adapter, position - 1};
          }
          Adapter* adapter{};
-         std::size_t position{};
+         size_t position{};
       };
 
       using reference = Adapter&;
 
       void clear() {};
-      void resize(std::size_t newSize) { m_size = newSize; }
+      void resize(size_t newSize) { m_size = newSize; }
       reference emplace_back() { return adapter; }
-      std::size_t size() const { return m_size; }
+      size_t size() const { return m_size; }
 
       dummy_iterator begin() { return dummy_iterator{&adapter, 0}; }
       dummy_iterator end() { return dummy_iterator{&adapter, m_size}; }

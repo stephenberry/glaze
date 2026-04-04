@@ -12,6 +12,9 @@ import glaze.concepts.container_concepts;
 
 import std;
 
+using std::int64_t;
+using std::size_t;
+
 export namespace glz::rpc
 {
    enum struct error_e : int {
@@ -51,7 +54,7 @@ export namespace glz::rpc
 // jsonrpc
 export namespace glz::rpc
 {
-   using id_t = std::variant<glz::generic::null_t, std::string_view, std::int64_t>;
+   using id_t = std::variant<glz::generic::null_t, std::string_view, int64_t>;
    inline constexpr std::string_view supported_version{"2.0"};
 
    struct error final
@@ -241,19 +244,19 @@ export namespace glz::rpc
       template <class T, T value, class... Ts>
       struct index_of_name<T, value, T, Ts...>
       {
-         static constexpr std::size_t index = 0;
+         static constexpr size_t index = 0;
       };
 
       template <class T, T value, class U, class... Ts>
       struct index_of_name<T, value, U, Ts...>
       {
-         static constexpr std::size_t index = (value == U::name_v) ? 0 : 1 + index_of_name<T, value, Ts...>::index;
+         static constexpr size_t index = (value == U::name_v) ? 0 : 1 + index_of_name<T, value, Ts...>::index;
       };
 
       template <class T, T value>
       struct index_of_name<T, value>
       {
-         static constexpr std::size_t index = (std::numeric_limits<std::size_t>::max)();
+         static constexpr size_t index = (std::numeric_limits<size_t>::max)();
       };
 
       template <class Map, string_literal Name, class... Method>

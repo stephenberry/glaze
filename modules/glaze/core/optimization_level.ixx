@@ -4,6 +4,8 @@ export module glaze.core.optimization_level;
 
 import std;
 
+using std::uint8_t;
+
 namespace glz
 {
    // ============================================================================
@@ -17,7 +19,7 @@ namespace glz
    //
    // ============================================================================
 
-   export enum struct optimization_level : std::uint8_t {
+   export enum struct optimization_level : uint8_t {
       // -------------------------------------------------------------------------
       // SIZE (Level 0)
       // -------------------------------------------------------------------------

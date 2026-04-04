@@ -16,10 +16,12 @@ import glaze.util.dump;
 
 #include "glaze/util/inline.hpp"
 
+using std::size_t;
+
 export namespace glz
 {
    // Compile-time string for use as template parameter
-   template <std::size_t N>
+   template <size_t N>
    struct format_str
    {
       char data[N]{};
@@ -71,7 +73,7 @@ export namespace glz
             // Caller guarantees buffer has enough space
             const auto start = reinterpret_cast<char*>(&b[ix]);
             auto result = std::format_to(start, fmt, V(wrapper.val));
-            ix += std::size_t(result - start);
+            ix += size_t(result - start);
          }
          else {
             // format_to_n writes up to 'available' chars and returns total size needed.
@@ -81,7 +83,7 @@ export namespace glz
             const auto available = b.size() - ix;
             auto [out, size] = std::format_to_n(start, available, fmt, V(wrapper.val));
 
-            if (static_cast<std::size_t>(size) > available) {
+            if (static_cast<size_t>(size) > available) {
                // Output was truncated - size tells us exactly how much space we need
                if constexpr (resizable<B>) {
                   b.resize(2 * (ix + size));
@@ -99,7 +101,7 @@ export namespace glz
          constexpr auto printf_fmt = detail::to_printf_fmt(Fmt.data);
 
          const auto start = reinterpret_cast<char*>(&b[ix]);
-         const auto available = check_write_unchecked(Opts) ? std::size_t(64) : (b.size() - ix);
+         const auto available = check_write_unchecked(Opts) ? size_t(64) : (b.size() - ix);
 
          const int len = std::snprintf(start, available, printf_fmt.data, static_cast<double>(wrapper.val));
 
@@ -108,10 +110,10 @@ export namespace glz
             return;
          }
 
-         if (static_cast<std::size_t>(len) >= available) {
+         if (static_cast<size_t>(len) >= available) {
             if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
-               b.resize(2 * (ix + static_cast<std::size_t>(len) + 1));
-               std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<std::size_t>(len) + 1, printf_fmt.data,
+               b.resize(2 * (ix + static_cast<size_t>(len) + 1));
+               std::snprintf(reinterpret_cast<char*>(&b[ix]), static_cast<size_t>(len) + 1, printf_fmt.data,
                              static_cast<double>(wrapper.val));
             }
             else {
@@ -119,7 +121,7 @@ export namespace glz
                return;
             }
          }
-         ix += static_cast<std::size_t>(len);
+         ix += static_cast<size_t>(len);
 #endif
 
          if constexpr (check_quoted_num(Opts)) {

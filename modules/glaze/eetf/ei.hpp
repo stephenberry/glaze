@@ -9,6 +9,9 @@
 #include "defs.hpp"
 #include "types.hpp"
 
+using std::uint8_t;
+using std::size_t;
+
 namespace glz
 {
 
@@ -18,7 +21,7 @@ namespace glz
       return;                                 \
    }
 
-   using header_pair = std::pair<std::size_t, std::size_t>;
+   using header_pair = std::pair<size_t, size_t>;
 
    namespace detail
    {
@@ -38,8 +41,8 @@ namespace glz
       template <output_buffer B, class IX>
       [[nodiscard]] GLZ_ALWAYS_INLINE int resize_buffer(B&& b, IX&& ix, int index)
       {
-         if (b.size() < static_cast<std::size_t>(index)) {
-            b.resize((std::max)(b.size() * 2, static_cast<std::size_t>(index)));
+         if (b.size() < static_cast<size_t>(index)) {
+            b.resize((std::max)(b.size() * 2, static_cast<size_t>(index)));
          }
 
          return static_cast<int>(ix);
@@ -179,11 +182,11 @@ namespace glz
    }
 
    template <auto Opts, class T, class It0>
-   void decode_binary(T&& value, std::size_t sz, is_context auto&& ctx, It0&& it, auto end)
+   void decode_binary(T&& value, size_t sz, is_context auto&& ctx, It0&& it, auto end)
    {
       using namespace std::placeholders;
 
-      CHECK_OFFSET(sz * sizeof(std::uint8_t));
+      CHECK_OFFSET(sz * sizeof(uint8_t));
 
       using V = range_value_t<std::decay_t<T>>;
 
@@ -201,11 +204,11 @@ namespace glz
       }
 
       [[maybe_unused]] long szl{};
-      if constexpr (sizeof(V) == sizeof(std::uint8_t)) {
+      if constexpr (sizeof(V) == sizeof(uint8_t)) {
          detail::decode_impl(std::bind(ei_decode_binary, _1, _2, value.data(), &szl), ctx, it, end);
       }
       else {
-         std::vector<std::uint8_t> buff(sz);
+         std::vector<uint8_t> buff(sz);
          detail::decode_impl(std::bind(ei_decode_binary, _1, _2, buff.data(), &szl), ctx, it, end);
          std::copy(buff.begin(), buff.end(), value.begin());
       }
@@ -221,7 +224,7 @@ namespace glz
          return header_pair(-1ull, -1ull);
       }
 
-      return header_pair(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
+      return header_pair(static_cast<size_t>(arity), static_cast<size_t>(index));
    }
 
    template <auto Opts, class T>
@@ -241,7 +244,7 @@ namespace glz
          }
       }
       else {
-         if (static_cast<std::size_t>(arity) > value.size()) {
+         if (static_cast<size_t>(arity) > value.size()) {
             ctx.error = error_code::syntax_error;
             return;
          }
@@ -250,7 +253,7 @@ namespace glz
       CHECK_OFFSET(index);
       std::advance(it, index);
 
-      for (std::size_t idx = 0; idx < arity; idx++) {
+      for (size_t idx = 0; idx < arity; idx++) {
          V v;
          from<EETF, V>::template op<Opts>(v, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
@@ -275,7 +278,7 @@ namespace glz
       }
 
       if (eetf::is_binary(type)) {
-         decode_binary<Opts>(std::forward<T>(value), static_cast<std::size_t>(sz), std::forward<Ctx>(ctx),
+         decode_binary<Opts>(std::forward<T>(value), static_cast<size_t>(sz), std::forward<Ctx>(ctx),
                              std::forward<It0>(it), end);
       }
       else if (eetf::is_list(type)) {
@@ -289,7 +292,7 @@ namespace glz
                }
             }
             else {
-               if (static_cast<std::size_t>(sz) > value.size()) {
+               if (static_cast<size_t>(sz) > value.size()) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -316,7 +319,7 @@ namespace glz
          return header_pair(-1ull, -1ull);
       }
 
-      return header_pair(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
+      return header_pair(static_cast<size_t>(arity), static_cast<size_t>(index));
    }
 
    template <is_context Ctx, class It>
@@ -329,7 +332,7 @@ namespace glz
          return header_pair(-1ull, -1ull);
       }
 
-      return header_pair(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
+      return header_pair(static_cast<size_t>(arity), static_cast<size_t>(index));
    }
 
    template <class B, class IX>
@@ -386,7 +389,7 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void encode_atom_len(auto&& value, std::size_t sz, Args&&... args)
+   GLZ_ALWAYS_INLINE void encode_atom_len(auto&& value, size_t sz, Args&&... args)
    {
       using namespace std::placeholders;
       detail::encode_impl(std::bind(ei_encode_atom_len, _1, _2, value.data(), static_cast<int>(sz)),
@@ -401,7 +404,7 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void encode_tuple_header(std::size_t arity, Args&&... args)
+   GLZ_ALWAYS_INLINE void encode_tuple_header(size_t arity, Args&&... args)
    {
       using namespace std::placeholders;
       detail::encode_impl(std::bind(ei_encode_tuple_header, _1, _2, static_cast<int>(arity)),
@@ -409,7 +412,7 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void encode_list_header(std::size_t arity, Args&&... args)
+   GLZ_ALWAYS_INLINE void encode_list_header(size_t arity, Args&&... args)
    {
       using namespace std::placeholders;
       detail::encode_impl(std::bind(ei_encode_list_header, _1, _2, static_cast<int>(arity)),
@@ -424,7 +427,7 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void encode_map_header(std::size_t arity, Args&&... args)
+   GLZ_ALWAYS_INLINE void encode_map_header(size_t arity, Args&&... args)
    {
       using namespace std::placeholders;
       detail::encode_impl(std::bind(ei_encode_map_header, _1, _2, static_cast<int>(arity)),

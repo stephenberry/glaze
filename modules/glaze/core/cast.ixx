@@ -13,6 +13,9 @@ import glaze.tuplet;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::uint32_t;
+
 export namespace glz
 {
    // `cast` allows a user to register a type that Glaze will deserialize/serialize to
@@ -36,7 +39,7 @@ export namespace glz
       typename T::cast_type;
    };
 
-   template <std::uint32_t Format, is_cast T>
+   template <uint32_t Format, is_cast T>
    struct from<Format, T>
    {
       template <class Value, class Temp>
@@ -84,7 +87,7 @@ export namespace glz
 
       template <auto Opts>
          requires(check_no_header(Opts))
-      static void op(auto&& value, const std::uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
+      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = std::decay_t<decltype(value)>;
          using Cast = typename V::cast_type;
@@ -104,7 +107,7 @@ export namespace glz
       }
    };
 
-   template <std::uint32_t Format, is_cast T>
+   template <uint32_t Format, is_cast T>
    struct to<Format, T>
    {
       template <auto Opts>

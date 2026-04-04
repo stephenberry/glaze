@@ -7,6 +7,9 @@
 #include <vector>
 
 // must be outside test() to work in gcc<14
+
+using std::size_t;
+
 template <typename T>
 struct Value
 {
@@ -14,7 +17,7 @@ struct Value
 };
 
 template <typename T>
-void test(const uint8_t* Data, std::size_t Size)
+void test(const uint8_t* Data, size_t Size)
 {
    using S = Value<T>;
    S s{};
@@ -35,7 +38,7 @@ void test(const uint8_t* Data, std::size_t Size)
    assert(restored.value().value == s.value);
 }
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, std::size_t Size)
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
 {
    if (Size < 2) {
       return 0;

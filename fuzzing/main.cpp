@@ -11,7 +11,9 @@
  * and feeding it to a program with this main function.
  */
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, std::size_t Size);
+using std::size_t;
+
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size);
 
 void handle_file(std::filesystem::path file)
 {

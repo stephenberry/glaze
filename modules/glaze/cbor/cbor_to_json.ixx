@@ -14,12 +14,22 @@ import glaze.util.dump;
 
 import std;
 
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    namespace detail
    {
       // Decode CBOR argument (variable-length unsigned integer)
-      inline std::uint64_t cbor_to_json_decode_arg(is_context auto& ctx, auto& it, auto end, std::uint8_t additional_info) noexcept
+      inline uint64_t cbor_to_json_decode_arg(is_context auto& ctx, auto& it, auto end, uint8_t additional_info) noexcept
       {
          using namespace cbor;
 
@@ -33,7 +43,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint8_t val;
+            uint8_t val;
             std::memcpy(&val, it, 1);
             ++it;
             return val;
@@ -43,7 +53,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint16_t val;
+            uint16_t val;
             std::memcpy(&val, it, 2);
             if constexpr (std::endian::native == std::endian::little) {
                val = std::byteswap(val);
@@ -56,7 +66,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint32_t val;
+            uint32_t val;
             std::memcpy(&val, it, 4);
             if constexpr (std::endian::native == std::endian::little) {
                val = std::byteswap(val);
@@ -69,7 +79,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return 0;
             }
-            std::uint64_t val;
+            uint64_t val;
             std::memcpy(&val, it, 8);
             if constexpr (std::endian::native == std::endian::little) {
                val = std::byteswap(val);
@@ -85,7 +95,7 @@ namespace glz
 
       template <auto Opts, class Buffer>
       inline void cbor_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix,
-                                     std::uint32_t recursive_depth)
+                                     uint32_t recursive_depth)
       {
          using namespace cbor;
 
@@ -100,31 +110,31 @@ namespace glz
             return;
          }
 
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const std::uint8_t major_type = get_major_type(initial);
-         const std::uint8_t additional_info = get_additional_info(initial);
+         const uint8_t major_type = get_major_type(initial);
+         const uint8_t additional_info = get_additional_info(initial);
 
          switch (major_type) {
          case major::uint: {
             // Unsigned integer
-            const std::uint64_t value = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+            const uint64_t value = cbor_to_json_decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            to<JSON, std::uint64_t>::template op<Opts>(value, ctx, out, ix);
+            to<JSON, uint64_t>::template op<Opts>(value, ctx, out, ix);
             break;
          }
 
          case major::nint: {
             // Negative integer: -1 - n
-            const std::uint64_t n = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+            const uint64_t n = cbor_to_json_decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
             // Use two's complement trick for safe conversion
-            const std::int64_t value = static_cast<std::int64_t>(~n);
-            to<JSON, std::int64_t>::template op<Opts>(value, ctx, out, ix);
+            const int64_t value = static_cast<int64_t>(~n);
+            to<JSON, int64_t>::template op<Opts>(value, ctx, out, ix);
             break;
          }
 
@@ -132,13 +142,13 @@ namespace glz
             // Byte string - encode as base64 in JSON
             if (additional_info == info::indefinite) {
                // Indefinite-length byte string - collect chunks first
-               std::vector<std::uint8_t> bytes;
+               std::vector<uint8_t> bytes;
                while (true) {
                   if (it >= end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  std::uint8_t chunk_initial;
+                  uint8_t chunk_initial;
                   std::memcpy(&chunk_initial, it, 1);
 
                   if (chunk_initial == initial_byte(major::simple, simple::break_code)) {
@@ -147,25 +157,25 @@ namespace glz
                   }
 
                   ++it;
-                  const std::uint8_t chunk_major = get_major_type(chunk_initial);
-                  const std::uint8_t chunk_info = get_additional_info(chunk_initial);
+                  const uint8_t chunk_major = get_major_type(chunk_initial);
+                  const uint8_t chunk_info = get_additional_info(chunk_initial);
 
                   if (chunk_major != major::bstr || chunk_info == info::indefinite) [[unlikely]] {
                      ctx.error = error_code::syntax_error;
                      return;
                   }
 
-                  const std::uint64_t chunk_len = cbor_to_json_decode_arg(ctx, it, end, chunk_info);
+                  const uint64_t chunk_len = cbor_to_json_decode_arg(ctx, it, end, chunk_info);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  if (static_cast<std::uint64_t>(end - it) < chunk_len) [[unlikely]] {
+                  if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
 
                   if (chunk_len > 0) {
-                     const std::size_t old_size = bytes.size();
+                     const size_t old_size = bytes.size();
                      bytes.resize(old_size + chunk_len);
                      std::memcpy(bytes.data() + old_size, it, chunk_len);
                      it += chunk_len;
@@ -174,7 +184,7 @@ namespace glz
                // Write as base64-encoded string
                dump('"', out, ix);
                // Simple hex encoding for now (TODO: proper base64)
-               for (std::uint8_t b : bytes) {
+               for (uint8_t b : bytes) {
                   static constexpr char hex[] = "0123456789abcdef";
                   dump(hex[(b >> 4) & 0xf], out, ix);
                   dump(hex[b & 0xf], out, ix);
@@ -182,20 +192,20 @@ namespace glz
                dump('"', out, ix);
             }
             else {
-               const std::uint64_t length = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+               const uint64_t length = cbor_to_json_decode_arg(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (static_cast<std::uint64_t>(end - it) < length) [[unlikely]] {
+               if (static_cast<uint64_t>(end - it) < length) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
 
                // Write as hex-encoded string
                dump('"', out, ix);
-               for (std::uint64_t i = 0; i < length; ++i) {
+               for (uint64_t i = 0; i < length; ++i) {
                   static constexpr char hex[] = "0123456789abcdef";
-                  std::uint8_t b;
+                  uint8_t b;
                   std::memcpy(&b, it + i, 1);
                   dump(hex[(b >> 4) & 0xf], out, ix);
                   dump(hex[b & 0xf], out, ix);
@@ -216,7 +226,7 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  std::uint8_t chunk_initial;
+                  uint8_t chunk_initial;
                   std::memcpy(&chunk_initial, it, 1);
 
                   if (chunk_initial == initial_byte(major::simple, simple::break_code)) {
@@ -225,19 +235,19 @@ namespace glz
                   }
 
                   ++it;
-                  const std::uint8_t chunk_major = get_major_type(chunk_initial);
-                  const std::uint8_t chunk_info = get_additional_info(chunk_initial);
+                  const uint8_t chunk_major = get_major_type(chunk_initial);
+                  const uint8_t chunk_info = get_additional_info(chunk_initial);
 
                   if (chunk_major != major::tstr || chunk_info == info::indefinite) [[unlikely]] {
                      ctx.error = error_code::syntax_error;
                      return;
                   }
 
-                  const std::uint64_t chunk_len = cbor_to_json_decode_arg(ctx, it, end, chunk_info);
+                  const uint64_t chunk_len = cbor_to_json_decode_arg(ctx, it, end, chunk_info);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  if (static_cast<std::uint64_t>(end - it) < chunk_len) [[unlikely]] {
+                  if (static_cast<uint64_t>(end - it) < chunk_len) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
@@ -248,16 +258,16 @@ namespace glz
                to<JSON, std::string_view>::template op<Opts>(str, ctx, out, ix);
             }
             else {
-               const std::uint64_t length = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+               const uint64_t length = cbor_to_json_decode_arg(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (static_cast<std::uint64_t>(end - it) < length) [[unlikely]] {
+               if (static_cast<uint64_t>(end - it) < length) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
 
-               const sv value{reinterpret_cast<const char*>(it), static_cast<std::size_t>(length)};
+               const sv value{reinterpret_cast<const char*>(it), static_cast<size_t>(length)};
                to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
                it += length;
             }
@@ -275,7 +285,7 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  std::uint8_t peek;
+                  uint8_t peek;
                   std::memcpy(&peek, it, 1);
 
                   if (peek == initial_byte(major::simple, simple::break_code)) {
@@ -297,11 +307,11 @@ namespace glz
                }
             }
             else {
-               const std::uint64_t count = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+               const uint64_t count = cbor_to_json_decode_arg(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               for (std::uint64_t i = 0; i < count; ++i) {
+               for (uint64_t i = 0; i < count; ++i) {
                   if (i > 0) {
                      dump(',', out, ix);
                      if constexpr (Opts.prettify) {
@@ -332,7 +342,7 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  std::uint8_t peek;
+                  uint8_t peek;
                   std::memcpy(&peek, it, 1);
 
                   if (peek == initial_byte(major::simple, simple::break_code)) {
@@ -368,11 +378,11 @@ namespace glz
                }
             }
             else {
-               const std::uint64_t count = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+               const uint64_t count = cbor_to_json_decode_arg(ctx, it, end, additional_info);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               for (std::uint64_t i = 0; i < count; ++i) {
+               for (uint64_t i = 0; i < count; ++i) {
                   if (i > 0) {
                      dump(',', out, ix);
                   }
@@ -414,7 +424,7 @@ namespace glz
          case major::tag: {
             // Semantic tag - for JSON output, we skip the tag and output the content
             // Some tags could have special handling (e.g., datetime)
-            const std::uint64_t tag_num = cbor_to_json_decode_arg(ctx, it, end, additional_info);
+            const uint64_t tag_num = cbor_to_json_decode_arg(ctx, it, end, additional_info);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -427,7 +437,7 @@ namespace glz
                   return;
                }
 
-               std::uint8_t bstr_initial;
+               uint8_t bstr_initial;
                std::memcpy(&bstr_initial, it, 1);
                ++it;
 
@@ -436,11 +446,11 @@ namespace glz
                   return;
                }
 
-               const std::uint64_t byte_len = cbor_to_json_decode_arg(ctx, it, end, get_additional_info(bstr_initial));
+               const uint64_t byte_len = cbor_to_json_decode_arg(ctx, it, end, get_additional_info(bstr_initial));
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               if (static_cast<std::uint64_t>(end - it) < byte_len) [[unlikely]] {
+               if (static_cast<uint64_t>(end - it) < byte_len) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -450,12 +460,12 @@ namespace glz
                   return;
                }
 
-               const std::size_t count = byte_len / ta_info.element_size;
+               const size_t count = byte_len / ta_info.element_size;
                const bool need_swap = typed_array::needs_byteswap(tag_num);
 
                dump('[', out, ix);
 
-               for (std::size_t i = 0; i < count; ++i) {
+               for (size_t i = 0; i < count; ++i) {
                   if (i > 0) {
                      dump(',', out, ix);
                   }
@@ -466,7 +476,7 @@ namespace glz
                         float val;
                         std::memcpy(&val, it, 4);
                         if (need_swap) {
-                           std::uint32_t bits;
+                           uint32_t bits;
                            std::memcpy(&bits, &val, 4);
                            bits = std::byteswap(bits);
                            std::memcpy(&val, &bits, 4);
@@ -477,7 +487,7 @@ namespace glz
                         double val;
                         std::memcpy(&val, it, 8);
                         if (need_swap) {
-                           std::uint64_t bits;
+                           uint64_t bits;
                            std::memcpy(&bits, &val, 8);
                            bits = std::byteswap(bits);
                            std::memcpy(&val, &bits, 8);
@@ -491,74 +501,74 @@ namespace glz
                   }
                   else if (ta_info.is_signed) {
                      if (ta_info.element_size == 1) {
-                        std::int8_t val;
+                        int8_t val;
                         std::memcpy(&val, it, 1);
-                        to<JSON, std::int8_t>::template op<Opts>(val, ctx, out, ix);
+                        to<JSON, int8_t>::template op<Opts>(val, ctx, out, ix);
                      }
                      else if (ta_info.element_size == 2) {
-                        std::int16_t val;
+                        int16_t val;
                         std::memcpy(&val, it, 2);
                         if (need_swap) {
-                           std::uint16_t bits;
+                           uint16_t bits;
                            std::memcpy(&bits, &val, 2);
                            bits = std::byteswap(bits);
                            std::memcpy(&val, &bits, 2);
                         }
-                        to<JSON, std::int16_t>::template op<Opts>(val, ctx, out, ix);
+                        to<JSON, int16_t>::template op<Opts>(val, ctx, out, ix);
                      }
                      else if (ta_info.element_size == 4) {
-                        std::int32_t val;
+                        int32_t val;
                         std::memcpy(&val, it, 4);
                         if (need_swap) {
-                           std::uint32_t bits;
+                           uint32_t bits;
                            std::memcpy(&bits, &val, 4);
                            bits = std::byteswap(bits);
                            std::memcpy(&val, &bits, 4);
                         }
-                        to<JSON, std::int32_t>::template op<Opts>(val, ctx, out, ix);
+                        to<JSON, int32_t>::template op<Opts>(val, ctx, out, ix);
                      }
                      else if (ta_info.element_size == 8) {
-                        std::int64_t val;
+                        int64_t val;
                         std::memcpy(&val, it, 8);
                         if (need_swap) {
-                           std::uint64_t bits;
+                           uint64_t bits;
                            std::memcpy(&bits, &val, 8);
                            bits = std::byteswap(bits);
                            std::memcpy(&val, &bits, 8);
                         }
-                        to<JSON, std::int64_t>::template op<Opts>(val, ctx, out, ix);
+                        to<JSON, int64_t>::template op<Opts>(val, ctx, out, ix);
                      }
                   }
                   else {
                      // Unsigned
                      if (ta_info.element_size == 1) {
-                        std::uint8_t val;
+                        uint8_t val;
                         std::memcpy(&val, it, 1);
-                        to<JSON, std::uint8_t>::template op<Opts>(val, ctx, out, ix);
+                        to<JSON, uint8_t>::template op<Opts>(val, ctx, out, ix);
                      }
                      else if (ta_info.element_size == 2) {
-                        std::uint16_t val;
+                        uint16_t val;
                         std::memcpy(&val, it, 2);
                         if (need_swap) {
                            val = std::byteswap(val);
                         }
-                        to<JSON, std::uint16_t>::template op<Opts>(val, ctx, out, ix);
+                        to<JSON, uint16_t>::template op<Opts>(val, ctx, out, ix);
                      }
                      else if (ta_info.element_size == 4) {
-                        std::uint32_t val;
+                        uint32_t val;
                         std::memcpy(&val, it, 4);
                         if (need_swap) {
                            val = std::byteswap(val);
                         }
-                        to<JSON, std::uint32_t>::template op<Opts>(val, ctx, out, ix);
+                        to<JSON, uint32_t>::template op<Opts>(val, ctx, out, ix);
                      }
                      else if (ta_info.element_size == 8) {
-                        std::uint64_t val;
+                        uint64_t val;
                         std::memcpy(&val, it, 8);
                         if (need_swap) {
                            val = std::byteswap(val);
                         }
-                        to<JSON, std::uint64_t>::template op<Opts>(val, ctx, out, ix);
+                        to<JSON, uint64_t>::template op<Opts>(val, ctx, out, ix);
                      }
                   }
 
@@ -591,7 +601,7 @@ namespace glz
                   ctx.error = error_code::unexpected_end;
                   return;
                }
-               std::uint16_t half;
+               uint16_t half;
                std::memcpy(&half, it, 2);
                if constexpr (std::endian::native == std::endian::little) {
                   half = std::byteswap(half);
@@ -606,7 +616,7 @@ namespace glz
                   ctx.error = error_code::unexpected_end;
                   return;
                }
-               std::uint32_t bits;
+               uint32_t bits;
                std::memcpy(&bits, it, 4);
                if constexpr (std::endian::native == std::endian::little) {
                   bits = std::byteswap(bits);
@@ -622,7 +632,7 @@ namespace glz
                   ctx.error = error_code::unexpected_end;
                   return;
                }
-               std::uint64_t bits;
+               uint64_t bits;
                std::memcpy(&bits, it, 8);
                if constexpr (std::endian::native == std::endian::little) {
                   bits = std::byteswap(bits);
@@ -639,7 +649,7 @@ namespace glz
             default:
                if (additional_info < 24) {
                   // Simple value 0-23 - output as number
-                  to<JSON, std::uint8_t>::template op<Opts>(additional_info, ctx, out, ix);
+                  to<JSON, uint8_t>::template op<Opts>(additional_info, ctx, out, ix);
                }
                else if (additional_info == 24) {
                   // Simple value in next byte
@@ -647,10 +657,10 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  std::uint8_t val;
+                  uint8_t val;
                   std::memcpy(&val, it, 1);
                   ++it;
-                  to<JSON, std::uint8_t>::template op<Opts>(val, ctx, out, ix);
+                  to<JSON, uint8_t>::template op<Opts>(val, ctx, out, ix);
                }
                else {
                   ctx.error = error_code::syntax_error;
@@ -671,7 +681,7 @@ namespace glz
    export template <auto Opts = glz::opts{}, class CBORBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx cbor_to_json(const CBORBuffer& cbor, JSONBuffer& out)
    {
-      std::size_t ix{}; // write index
+      size_t ix{}; // write index
 
       auto* it = cbor.data();
       auto* end = it + cbor.size();

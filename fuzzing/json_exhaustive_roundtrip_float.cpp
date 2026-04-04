@@ -9,6 +9,10 @@
 #include <vector>
 
 // must be outside test(), compilation fails on gcc 13 otherwise
+
+using std::uint32_t;
+using std::size_t;
+
 struct Value
 {
    // use a short name to reduce the number of characters written
@@ -17,7 +21,7 @@ struct Value
 
 void test()
 {
-   using UT = std::uint32_t;
+   using UT = uint32_t;
    static_assert(sizeof(float) == sizeof(UT));
 
    auto test_one_value = [](const UT loopvar, auto& outbuf) {
@@ -61,7 +65,7 @@ void test()
 
    std::vector<std::thread> threads;
    threads.reserve(nthreads);
-   for (std::size_t threadi = 0; threadi < nthreads; ++threadi) {
+   for (size_t threadi = 0; threadi < nthreads; ++threadi) {
       const UT start = threadi * step;
       const UT stop = (threadi == nthreads - 1) ? (std::numeric_limits<UT>::max)() : start + step;
       // std::cout << "thread i=" << threadi << " goes from " << start << " to " << stop << '\n';

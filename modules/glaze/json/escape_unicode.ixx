@@ -17,25 +17,30 @@ import glaze.util.string_literal;
 // These features require constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
 #if GLZ_HAS_CONSTEXPR_STRING
 
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::size_t;
+
 export namespace glz::detail
 {
    // Helper function to append a Unicode escape sequence to the output string.
-   inline constexpr void append_unicode_escape(std::string& output, std::uint16_t code_unit)
+   inline constexpr void append_unicode_escape(std::string& output, uint16_t code_unit)
    {
       output += '\\';
       output += 'u';
       for (int shift = 12; shift >= 0; shift -= 4) {
-         std::uint8_t digit = (code_unit >> shift) & 0xF;
+         uint8_t digit = (code_unit >> shift) & 0xF;
          output += (digit < 10) ? ('0' + digit) : ('A' + (digit - 10));
       }
    }
 
    // Function to calculate the length of the escaped JSON string.
-   inline constexpr std::size_t escaped_length(const std::string_view input)
+   inline constexpr size_t escaped_length(const std::string_view input)
    {
-      std::size_t length = 0;
-      std::size_t i = 0;
-      std::size_t len = input.size();
+      size_t length = 0;
+      size_t i = 0;
+      size_t len = input.size();
 
       while (i < len) {
          unsigned char c = static_cast<unsigned char>(input[i++]);
@@ -64,7 +69,7 @@ export namespace glz::detail
          }
          else {
             // Multibyte UTF-8 character
-            std::uint32_t codepoint = 0;
+            uint32_t codepoint = 0;
             int bytes = 0;
 
             if ((c & 0xE0) == 0xC0) {
@@ -122,13 +127,13 @@ export namespace glz::detail
    }
 
    // Main function to escape the JSON string.
-   inline constexpr std::string escape_json_string(const std::string_view input, const std::size_t output_length)
+   inline constexpr std::string escape_json_string(const std::string_view input, const size_t output_length)
    {
       std::string output;
       output.reserve(output_length);
 
-      std::size_t i = 0;
-      std::size_t len = input.size();
+      size_t i = 0;
+      size_t len = input.size();
 
       while (i < len) {
          unsigned char c = static_cast<unsigned char>(input[i++]);
@@ -161,8 +166,8 @@ export namespace glz::detail
                if (c <= 0x1F) {
                   // Control character, escape using \u00XX
                   output += "\\u00";
-                  std::uint8_t high_nibble = (c >> 4) & 0xF;
-                  std::uint8_t low_nibble = c & 0xF;
+                  uint8_t high_nibble = (c >> 4) & 0xF;
+                  uint8_t low_nibble = c & 0xF;
                   output += (high_nibble < 10) ? ('0' + high_nibble) : ('A' + high_nibble - 10);
                   output += (low_nibble < 10) ? ('0' + low_nibble) : ('A' + low_nibble - 10);
                }
@@ -174,7 +179,7 @@ export namespace glz::detail
          }
          else {
             // Multibyte UTF-8 character
-            std::uint32_t codepoint = 0;
+            uint32_t codepoint = 0;
             int bytes = 0;
 
             if ((c & 0xE0) == 0xC0) {
@@ -221,13 +226,13 @@ export namespace glz::detail
 
             if (codepoint <= 0xFFFF) {
                // BMP character
-               append_unicode_escape(output, static_cast<std::uint16_t>(codepoint));
+               append_unicode_escape(output, static_cast<uint16_t>(codepoint));
             }
             else {
                // Supplementary character (needs surrogate pair)
                codepoint -= 0x10000;
-               std::uint16_t high_surrogate = std::uint16_t(0xD800 + (codepoint >> 10));
-               std::uint16_t low_surrogate = std::uint16_t(0xDC00 + (codepoint & 0x3FF));
+               uint16_t high_surrogate = uint16_t(0xD800 + (codepoint >> 10));
+               uint16_t low_surrogate = uint16_t(0xDC00 + (codepoint & 0x3FF));
                append_unicode_escape(output, high_surrogate);
                append_unicode_escape(output, low_surrogate);
             }
@@ -246,7 +251,7 @@ export namespace glz
          constexpr auto len = detail::escaped_length(Str.sv());
          std::array<char, len + 1> result; // + 1 for null character
          const auto escaped = detail::escape_json_string(Str.sv(), len);
-         for (std::size_t i = 0; i < len; ++i) {
+         for (size_t i = 0; i < len; ++i) {
             result[i] = escaped[i];
          }
          result[len] = '\0';

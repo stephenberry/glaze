@@ -8,6 +8,9 @@ import glaze.util.expected;
 import std;
 import ut;
 
+using std::uint8_t;
+using std::int64_t;
+
 namespace rpc = glz::rpc;
 using ut::operator""_test;
 
@@ -71,8 +74,8 @@ ut::suite vector_test_cases = [] {
             called = true;
             ut::expect(value.has_value());
             ut::expect(value.value() == 6);
-            ut::expect(std::holds_alternative<std::int64_t>(id));
-            ut::expect(std::get<std::int64_t>(id) == std::int64_t{1});
+            ut::expect(std::holds_alternative<int64_t>(id));
+            ut::expect(std::get<int64_t>(id) == int64_t{1});
          });
       ut::expect(request_str.first == R"({"jsonrpc":"2.0","method":"summer","params":[1,2,3],"id":1})");
 
@@ -433,7 +436,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(notify_str == R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":0,"foo_b":""},"id":null})");
    };
    ut::test("client call erases id from queue") = [&client, &server] {
-      std::uint8_t call_cnt{};
+      uint8_t call_cnt{};
       auto [request, inserted] =
          client.request<"foo">("next gen id", foo_params{}, [&call_cnt](auto, auto) { call_cnt++; });
       auto response = server.call(request);

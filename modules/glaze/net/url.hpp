@@ -7,6 +7,8 @@
 #include <string_view>
 #include <unordered_map>
 
+using std::size_t;
+
 namespace glz
 {
    // URL encoding/decoding utilities
@@ -40,7 +42,7 @@ namespace glz
       output.clear();
       output.reserve(input.size());
 
-      for (std::size_t i = 0; i < input.size(); ++i) {
+      for (size_t i = 0; i < input.size(); ++i) {
          if (input[i] == '%' && i + 2 < input.size()) {
             const int high = hex_char_to_int(input[i + 1]);
             const int low = hex_char_to_int(input[i + 2]);
@@ -145,10 +147,10 @@ namespace glz
          return;
       }
 
-      std::size_t pos = 0;
+      size_t pos = 0;
       while (pos < query_string.size()) {
          // Find the end of this key=value pair
-         std::size_t amp_pos = query_string.find('&', pos);
+         size_t amp_pos = query_string.find('&', pos);
          if (amp_pos == std::string_view::npos) {
             amp_pos = query_string.size();
          }
@@ -156,7 +158,7 @@ namespace glz
          std::string_view pair = query_string.substr(pos, amp_pos - pos);
          if (!pair.empty()) {
             // Find the '=' separator
-            std::size_t eq_pos = pair.find('=');
+            size_t eq_pos = pair.find('=');
             if (eq_pos != std::string_view::npos) {
                std::string_view key = pair.substr(0, eq_pos);
                std::string_view value = pair.substr(eq_pos + 1);
@@ -236,7 +238,7 @@ namespace glz
     */
    constexpr target_components split_target(std::string_view target) noexcept
    {
-      const std::size_t query_pos = target.find('?');
+      const size_t query_pos = target.find('?');
       if (query_pos == std::string_view::npos) {
          return {target, {}};
       }

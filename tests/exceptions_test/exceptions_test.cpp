@@ -21,6 +21,8 @@ import ut;
 
 import std;
 
+using std::uint64_t;
+
 using namespace ut;
 
 struct my_struct
@@ -28,7 +30,7 @@ struct my_struct
    int i = 287;
    double d = 3.14;
    std::string hello = "Hello World";
-   std::array<std::uint64_t, 3> arr = {1, 2, 3};
+   std::array<uint64_t, 3> arr = {1, 2, 3};
 };
 
 template <>
@@ -710,12 +712,12 @@ suite async_tests = [] {
 
 struct times
 {
-   std::uint64_t time;
-   std::optional<std::uint64_t> time1;
+   uint64_t time;
+   std::optional<uint64_t> time1;
 
-   void read_time(std::uint64_t timeValue) { time = timeValue; }
+   void read_time(uint64_t timeValue) { time = timeValue; }
 
-   void read_time1(std::optional<std::uint64_t> time1Value) { time1 = time1Value; }
+   void read_time1(std::optional<uint64_t> time1Value) { time1 = time1Value; }
 };
 
 struct date

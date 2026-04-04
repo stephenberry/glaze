@@ -9,6 +9,16 @@ import glaze.util.itoa_40kb;
 
 import ut;
 
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 
 // ==================== Direct to_chars validation ====================
@@ -31,7 +41,7 @@ bool validate_to_chars_exhaustive()
       std::string_view std_result(std_buf, std_end - std_buf);
 
       if (glz_result != std_result) {
-         std::cerr << "Mismatch for value " << std::int64_t(val) << ": glz='" << glz_result << "' std='" << std_result
+         std::cerr << "Mismatch for value " << int64_t(val) << ": glz='" << glz_result << "' std='" << std_result
                    << "'\n";
          return false;
       }
@@ -39,12 +49,12 @@ bool validate_to_chars_exhaustive()
    };
 
    if constexpr (std::is_unsigned_v<T>) {
-      for (std::uint64_t i = 0; i <= std::uint64_t((std::numeric_limits<T>::max)()); ++i) {
+      for (uint64_t i = 0; i <= uint64_t((std::numeric_limits<T>::max)()); ++i) {
          if (!test_value(T(i))) return false;
       }
    }
    else {
-      for (std::int64_t i = std::int64_t(std::numeric_limits<T>::lowest()); i <= std::int64_t((std::numeric_limits<T>::max)()); ++i) {
+      for (int64_t i = int64_t(std::numeric_limits<T>::lowest()); i <= int64_t((std::numeric_limits<T>::max)()); ++i) {
          if (!test_value(T(i))) return false;
       }
    }
@@ -85,7 +95,7 @@ bool validate_to_chars_40kb_samples()
    if (!test_value(std::numeric_limits<T>::lowest())) return false;
 
    // Test random samples
-   for (std::size_t i = 0; i < 100000; ++i) {
+   for (size_t i = 0; i < 100000; ++i) {
       if (!test_value(dist(rng))) return false;
    }
    return true;
@@ -102,7 +112,7 @@ bool test_samples_with_opts()
    bool valid = true;
    T sample{};
 
-   for (std::size_t i = 0; i < 100000; ++i) {
+   for (size_t i = 0; i < 100000; ++i) {
       sample = dist(gen);
       if (glz::write<Opts{}>(sample, buffer)) {
          valid = false;
@@ -162,7 +172,7 @@ bool test_to_max_with_opts()
    std::string buffer{};
    bool valid = true;
    if constexpr (std::is_unsigned_v<T>) {
-      for (std::uint64_t i = 0; i < (std::numeric_limits<T>::max)(); ++i) {
+      for (uint64_t i = 0; i < (std::numeric_limits<T>::max)(); ++i) {
          if (glz::write<Opts{}>(i, buffer)) {
             valid = false;
             break;
@@ -179,7 +189,7 @@ bool test_to_max_with_opts()
       }
    }
    else {
-      for (std::int64_t i = std::numeric_limits<T>::lowest(); i < (std::numeric_limits<T>::max)(); ++i) {
+      for (int64_t i = std::numeric_limits<T>::lowest(); i < (std::numeric_limits<T>::max)(); ++i) {
          if (glz::write<Opts{}>(i, buffer)) {
             valid = false;
             break;
@@ -210,9 +220,9 @@ template <class T, class Opts = glz::opts>
 bool test_performance_with_opts()
 {
 #ifdef NDEBUG
-   constexpr std::size_t n = 10000000;
+   constexpr size_t n = 10000000;
 #else
-   constexpr std::size_t n = 100000;
+   constexpr size_t n = 100000;
 #endif
 
    std::mt19937 gen{};
@@ -221,7 +231,7 @@ bool test_performance_with_opts()
    std::string buffer;
    auto t0 = std::chrono::steady_clock::now();
    bool valid = true;
-   for (std::size_t i = 0; i < n; ++i) {
+   for (size_t i = 0; i < n; ++i) {
       const auto sample = dist(gen);
       std::ignore = glz::write<Opts{}>(sample, buffer);
       T v{};
@@ -263,7 +273,7 @@ void test_struct_with_array_minified()
 
    vector_object<T> obj;
 
-   for (std::size_t i = 0; i < 1000; ++i) {
+   for (size_t i = 0; i < 1000; ++i) {
       obj.vec.emplace_back(dist(gen));
    }
 
@@ -276,9 +286,9 @@ template <class T, class Opts = glz::opts>
 bool test_single_char_performance_with_opts()
 {
 #ifdef NDEBUG
-   constexpr std::size_t n = 10000000;
+   constexpr size_t n = 10000000;
 #else
-   constexpr std::size_t n = 100000;
+   constexpr size_t n = 100000;
 #endif
 
    std::mt19937 gen{};
@@ -287,7 +297,7 @@ bool test_single_char_performance_with_opts()
    std::string buffer;
    auto t0 = std::chrono::steady_clock::now();
    bool valid = true;
-   for (std::size_t i = 0; i < n; ++i) {
+   for (size_t i = 0; i < n; ++i) {
       const auto sample = dist(gen);
       std::ignore = glz::write<Opts{}>(sample, buffer);
       T v{};
@@ -320,7 +330,7 @@ bool test_single_char_performance()
 template <class T>
 bool test_lengths()
 {
-   using pair = std::pair<std::string_view, std::uint64_t>;
+   using pair = std::pair<std::string_view, uint64_t>;
    static constexpr std::array<pair, 21> samples = {
       pair{"", 0ull}, //
       pair{"1", 1ull}, //
@@ -347,7 +357,7 @@ bool test_lengths()
 
    std::string buffer{};
    bool valid = true;
-   std::size_t max_length{};
+   size_t max_length{};
    if constexpr (sizeof(T) == 1) {
       max_length = 3;
    }
@@ -357,21 +367,21 @@ bool test_lengths()
    else if constexpr (sizeof(T) == 4) {
       max_length = 10;
    }
-   else if constexpr (std::same_as<T, std::uint64_t>) {
+   else if constexpr (std::same_as<T, uint64_t>) {
       max_length = 20;
    }
-   else if constexpr (std::same_as<T, std::int64_t>) {
+   else if constexpr (std::same_as<T, int64_t>) {
       max_length = 19;
    }
 
-   for (std::size_t i = 1; i <= max_length; ++i) {
+   for (size_t i = 1; i <= max_length; ++i) {
       const auto& p = samples[i];
       T value{};
       if (glz::read_json(value, p.first)) {
          valid = false;
          break;
       }
-      if (std::uint64_t(value) != p.second) {
+      if (uint64_t(value) != p.second) {
          valid = false;
          break;
       }
@@ -384,18 +394,18 @@ bool test_lengths()
 
 suite to_chars_validation = [] {
    // Exhaustive tests for small integer types (every possible value)
-   "to_chars std::uint8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<std::uint8_t>()); };
-   "to_chars std::int8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<std::int8_t>()); };
-   "to_chars std::uint16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<std::uint16_t>()); };
-   "to_chars std::int16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<std::int16_t>()); };
+   "to_chars std::uint8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint8_t>()); };
+   "to_chars std::int8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int8_t>()); };
+   "to_chars std::uint16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint16_t>()); };
+   "to_chars std::int16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int16_t>()); };
 
    // Sample tests for larger types (exhaustive would take too long)
    "to_chars std::uint32_t samples"_test = [] {
       char glz_buf[32], std_buf[32];
       std::mt19937 rng(42);
-      std::uniform_int_distribution<std::uint32_t> dist(0, (std::numeric_limits<std::uint32_t>::max)());
+      std::uniform_int_distribution<uint32_t> dist(0, (std::numeric_limits<uint32_t>::max)());
 
-      auto test = [&](std::uint32_t val) {
+      auto test = [&](uint32_t val) {
          auto glz_end = glz::to_chars(glz_buf, val);
          auto [std_end, ec] = std::to_chars(std_buf, std_buf + 32, val);
          expect(ec == std::errc{});
@@ -404,17 +414,17 @@ suite to_chars_validation = [] {
 
       test(0);
       test(1);
-      test((std::numeric_limits<std::uint32_t>::max)());
+      test((std::numeric_limits<uint32_t>::max)());
       for (int i = 0; i < 100000; ++i) test(dist(rng));
    };
    "to_chars std::int32_t samples"_test = [] {
       // Test edge cases and random samples for to_chars (400B tables)
       char glz_buf[32], std_buf[32];
       std::mt19937 rng(42);
-      std::uniform_int_distribution<std::int32_t> dist(std::numeric_limits<std::int32_t>::lowest(),
-                                                  (std::numeric_limits<std::int32_t>::max)());
+      std::uniform_int_distribution<int32_t> dist(std::numeric_limits<int32_t>::lowest(),
+                                                  (std::numeric_limits<int32_t>::max)());
 
-      auto test = [&](std::int32_t val) {
+      auto test = [&](int32_t val) {
          auto glz_end = glz::to_chars(glz_buf, val);
          auto [std_end, ec] = std::to_chars(std_buf, std_buf + 32, val);
          expect(ec == std::errc{});
@@ -424,26 +434,26 @@ suite to_chars_validation = [] {
       test(0);
       test(1);
       test(-1);
-      test((std::numeric_limits<std::int32_t>::max)());
-      test(std::numeric_limits<std::int32_t>::lowest());
+      test((std::numeric_limits<int32_t>::max)());
+      test(std::numeric_limits<int32_t>::lowest());
       for (int i = 0; i < 100000; ++i) test(dist(rng));
    };
 
    // to_chars_40kb validation for 32/64-bit types
-   "to_chars_40kb std::int32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<std::int32_t>()); };
-   "to_chars_40kb std::uint32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<std::uint32_t>()); };
-   "to_chars_40kb std::int64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<std::int64_t>()); };
-   "to_chars_40kb std::uint64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<std::uint64_t>()); };
+   "to_chars_40kb std::int32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<int32_t>()); };
+   "to_chars_40kb std::uint32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<uint32_t>()); };
+   "to_chars_40kb std::int64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<int64_t>()); };
+   "to_chars_40kb std::uint64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<uint64_t>()); };
 };
 
 // We test parsing an array so that early termination triggers errors
 suite u8_test = [] {
-   "u8 full"_test = [] { expect(test_to_max<std::uint8_t>()); };
+   "u8 full"_test = [] { expect(test_to_max<uint8_t>()); };
 
-   "u8 lengths"_test = [] { expect(test_lengths<std::uint8_t>()); };
+   "u8 lengths"_test = [] { expect(test_lengths<uint8_t>()); };
 
    "u8"_test = [] {
-      using V = std::uint8_t;
+      using V = uint8_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -467,12 +477,12 @@ suite u8_test = [] {
 
    "u8 performance"_test = [] {
 #ifndef _MSC_VER
-      expect(test_performance<std::uint8_t>());
+      expect(test_performance<uint8_t>());
 #endif
    };
 
    "i8"_test = [] {
-      using V = std::int8_t;
+      using V = int8_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -505,12 +515,12 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[1e3]"));
    };
 
-   "i8 full"_test = [] { expect(test_to_max<std::int8_t>()); };
+   "i8 full"_test = [] { expect(test_to_max<int8_t>()); };
 
-   "i8 lengths"_test = [] { expect(test_lengths<std::int8_t>()); };
+   "i8 lengths"_test = [] { expect(test_lengths<int8_t>()); };
 
    "u16"_test = [] {
-      using V = std::uint16_t;
+      using V = uint16_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -538,12 +548,12 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[1e7]"));
    };
 
-   "u16 sample"_test = [] { expect(test_to_max<std::uint16_t>()); };
+   "u16 sample"_test = [] { expect(test_to_max<uint16_t>()); };
 
-   "u16 lengths"_test = [] { expect(test_lengths<std::uint16_t>()); };
+   "u16 lengths"_test = [] { expect(test_lengths<uint16_t>()); };
 
    "i16"_test = [] {
-      using V = std::int16_t;
+      using V = int16_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -575,12 +585,12 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[1e7]"));
    };
 
-   "i16 full"_test = [] { expect(test_to_max<std::int16_t>()); };
+   "i16 full"_test = [] { expect(test_to_max<int16_t>()); };
 
-   "i16 lengths"_test = [] { expect(test_lengths<std::int16_t>()); };
+   "i16 lengths"_test = [] { expect(test_lengths<int16_t>()); };
 
    "u32"_test = [] {
-      using V = std::uint32_t;
+      using V = uint32_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -610,12 +620,12 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[1e10]"));
    };
 
-   "u32 samples"_test = [] { expect(test_samples<std::uint32_t>()); };
+   "u32 samples"_test = [] { expect(test_samples<uint32_t>()); };
 
-   "u32 lengths"_test = [] { expect(test_lengths<std::uint32_t>()); };
+   "u32 lengths"_test = [] { expect(test_lengths<uint32_t>()); };
 
    "i32"_test = [] {
-      using V = std::int32_t;
+      using V = int32_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -645,12 +655,12 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[1e10]"));
    };
 
-   "i32 samples"_test = [] { expect(test_samples<std::int32_t>()); };
+   "i32 samples"_test = [] { expect(test_samples<int32_t>()); };
 
-   "i32 lengths"_test = [] { expect(test_lengths<std::int32_t>()); };
+   "i32 lengths"_test = [] { expect(test_lengths<int32_t>()); };
 
    "u64"_test = [] {
-      using V = std::uint64_t;
+      using V = uint64_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -685,18 +695,18 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[1e20]"));
    };
 
-   "u64 samples"_test = [] { expect(test_samples<std::uint64_t>()); };
+   "u64 samples"_test = [] { expect(test_samples<uint64_t>()); };
 
-   "u64 lengths"_test = [] { expect(test_lengths<std::uint64_t>()); };
+   "u64 lengths"_test = [] { expect(test_lengths<uint64_t>()); };
 
-   "u64 performance"_test = [] { expect(test_performance<std::uint64_t>()); };
+   "u64 performance"_test = [] { expect(test_performance<uint64_t>()); };
 
-   "u64 single char performance"_test = [] { expect(test_single_char_performance<std::uint64_t>()); };
+   "u64 single char performance"_test = [] { expect(test_single_char_performance<uint64_t>()); };
 
-   "u64 array minified"_test = [] { test_struct_with_array_minified<std::uint64_t>(); };
+   "u64 array minified"_test = [] { test_struct_with_array_minified<uint64_t>(); };
 
    "i64"_test = [] {
-      using V = std::int64_t;
+      using V = int64_t;
       std::array<V, 2> value{};
       expect(not glz::read_json(value, "[0, 0]"));
       expect(value == std::array<V, 2>{0, 0});
@@ -740,17 +750,17 @@ suite u8_test = [] {
 
    "i64 samples"_test = [] {
 #ifndef _MSC_VER
-      expect(test_samples<std::int64_t>());
+      expect(test_samples<int64_t>());
 #endif
    };
 
-   "i64 lengths"_test = [] { expect(test_lengths<std::int64_t>()); };
+   "i64 lengths"_test = [] { expect(test_lengths<int64_t>()); };
 
-   "i64 performance"_test = [] { expect(test_performance<std::int64_t>()); };
+   "i64 performance"_test = [] { expect(test_performance<int64_t>()); };
 
-   "i64 single char performance"_test = [] { expect(test_single_char_performance<std::int64_t>()); };
+   "i64 single char performance"_test = [] { expect(test_single_char_performance<int64_t>()); };
 
-   "i64 array minified"_test = [] { test_struct_with_array_minified<std::int64_t>(); };
+   "i64 array minified"_test = [] { test_struct_with_array_minified<int64_t>(); };
 };
 
 int main() { return 0; }

@@ -9,10 +9,12 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/rpc/repe/repe.hpp" // For protocol_storage template
 
+using std::uint32_t;
+
 namespace glz
 {
    // Forward declaration of the registry template
-   template <auto Opts, std::uint32_t Proto>
+   template <auto Opts, uint32_t Proto>
    struct registry;
 
    template <>

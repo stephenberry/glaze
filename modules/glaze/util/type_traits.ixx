@@ -4,6 +4,8 @@ export module glaze.util.type_traits;
 
 import std;
 
+using std::size_t;
+
 export namespace glz
 {
    template <class... Args>
@@ -44,7 +46,7 @@ export namespace glz
    template <class R, class... Args>
    struct function_traits<std::function<R(Args...)>>
    {
-      static constexpr std::size_t N = sizeof...(Args);
+      static constexpr size_t N = sizeof...(Args);
       using result_type = R;
       using arguments = std::tuple<Args...>;
    };

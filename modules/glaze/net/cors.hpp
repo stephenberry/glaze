@@ -9,6 +9,8 @@
 
 #include "glaze/net/http_router.hpp"
 
+using std::size_t;
+
 namespace glz
 {
    /**
@@ -119,7 +121,7 @@ namespace glz
       if (vec.empty()) return "";
 
       std::string result = vec[0];
-      for (std::size_t i = 1; i < vec.size(); ++i) {
+      for (size_t i = 1; i < vec.size(); ++i) {
          result += delimiter + vec[i];
       }
       return result;

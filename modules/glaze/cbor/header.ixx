@@ -8,46 +8,56 @@ import glaze.core.context;
 
 #include "glaze/util/inline.hpp"
 
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 export namespace glz::cbor
 {
    // Major types (high 3 bits of initial byte)
    // These define the structural encoding of CBOR data items per RFC 8949.
    namespace major
    {
-      inline constexpr std::uint8_t uint = 0; // 0b000 - Unsigned integer
-      inline constexpr std::uint8_t nint = 1; // 0b001 - Negative integer (-1 - n)
-      inline constexpr std::uint8_t bstr = 2; // 0b010 - Byte string
-      inline constexpr std::uint8_t tstr = 3; // 0b011 - Text string (UTF-8)
-      inline constexpr std::uint8_t array = 4; // 0b100 - Array of data items
-      inline constexpr std::uint8_t map = 5; // 0b101 - Map of key-value pairs
-      inline constexpr std::uint8_t tag = 6; // 0b110 - Semantic tag
-      inline constexpr std::uint8_t simple = 7; // 0b111 - Simple value or float
+      inline constexpr uint8_t uint = 0; // 0b000 - Unsigned integer
+      inline constexpr uint8_t nint = 1; // 0b001 - Negative integer (-1 - n)
+      inline constexpr uint8_t bstr = 2; // 0b010 - Byte string
+      inline constexpr uint8_t tstr = 3; // 0b011 - Text string (UTF-8)
+      inline constexpr uint8_t array = 4; // 0b100 - Array of data items
+      inline constexpr uint8_t map = 5; // 0b101 - Map of key-value pairs
+      inline constexpr uint8_t tag = 6; // 0b110 - Semantic tag
+      inline constexpr uint8_t simple = 7; // 0b111 - Simple value or float
    }
 
    // Additional information special values (low 5 bits of initial byte)
    namespace info
    {
-      inline constexpr std::uint8_t uint8_follows = 24; // 1-byte argument follows
-      inline constexpr std::uint8_t uint16_follows = 25; // 2-byte argument follows (big-endian)
-      inline constexpr std::uint8_t uint32_follows = 26; // 4-byte argument follows (big-endian)
-      inline constexpr std::uint8_t uint64_follows = 27; // 8-byte argument follows (big-endian)
+      inline constexpr uint8_t uint8_follows = 24; // 1-byte argument follows
+      inline constexpr uint8_t uint16_follows = 25; // 2-byte argument follows (big-endian)
+      inline constexpr uint8_t uint32_follows = 26; // 4-byte argument follows (big-endian)
+      inline constexpr uint8_t uint64_follows = 27; // 8-byte argument follows (big-endian)
       // 28-30 reserved
-      inline constexpr std::uint8_t indefinite = 31; // Indefinite length (arrays/maps/strings)
+      inline constexpr uint8_t indefinite = 31; // Indefinite length (arrays/maps/strings)
    }
 
    // Simple values (major type 7, additional info values)
    namespace simple
    {
-      inline constexpr std::uint8_t false_value = 20;
-      inline constexpr std::uint8_t true_value = 21;
-      inline constexpr std::uint8_t null_value = 22;
-      inline constexpr std::uint8_t undefined = 23;
+      inline constexpr uint8_t false_value = 20;
+      inline constexpr uint8_t true_value = 21;
+      inline constexpr uint8_t null_value = 22;
+      inline constexpr uint8_t undefined = 23;
       // 24 = simple value in next byte
-      inline constexpr std::uint8_t float16 = 25; // IEEE 754 half-precision (16-bit)
-      inline constexpr std::uint8_t float32 = 26; // IEEE 754 single-precision (32-bit)
-      inline constexpr std::uint8_t float64 = 27; // IEEE 754 double-precision (64-bit)
+      inline constexpr uint8_t float16 = 25; // IEEE 754 half-precision (16-bit)
+      inline constexpr uint8_t float32 = 26; // IEEE 754 single-precision (32-bit)
+      inline constexpr uint8_t float64 = 27; // IEEE 754 double-precision (64-bit)
       // 28-30 reserved
-      inline constexpr std::uint8_t break_code = 31; // "break" stop code for indefinite
+      inline constexpr uint8_t break_code = 31; // "break" stop code for indefinite
    }
 
    // Semantic tags (major type 6)
@@ -55,83 +65,83 @@ export namespace glz::cbor
    namespace semantic_tag
    {
       // Standard tags (RFC 8949)
-      inline constexpr std::uint64_t datetime_string = 0; // RFC 3339 date/time string
-      inline constexpr std::uint64_t datetime_epoch = 1; // Epoch-based date/time
-      inline constexpr std::uint64_t unsigned_bignum = 2; // Positive bignum
-      inline constexpr std::uint64_t negative_bignum = 3; // Negative bignum
-      inline constexpr std::uint64_t decimal_fraction = 4; // Decimal fraction [exponent, mantissa]
-      inline constexpr std::uint64_t bigfloat = 5; // Bigfloat [exponent, mantissa]
+      inline constexpr uint64_t datetime_string = 0; // RFC 3339 date/time string
+      inline constexpr uint64_t datetime_epoch = 1; // Epoch-based date/time
+      inline constexpr uint64_t unsigned_bignum = 2; // Positive bignum
+      inline constexpr uint64_t negative_bignum = 3; // Negative bignum
+      inline constexpr uint64_t decimal_fraction = 4; // Decimal fraction [exponent, mantissa]
+      inline constexpr uint64_t bigfloat = 5; // Bigfloat [exponent, mantissa]
 
       // Encoding hints
-      inline constexpr std::uint64_t base64url = 21; // Expected base64url encoding
-      inline constexpr std::uint64_t base64 = 22; // Expected base64 encoding
-      inline constexpr std::uint64_t base16 = 23; // Expected base16 encoding
-      inline constexpr std::uint64_t encoded_cbor = 24; // Embedded CBOR data item
+      inline constexpr uint64_t base64url = 21; // Expected base64url encoding
+      inline constexpr uint64_t base64 = 22; // Expected base64 encoding
+      inline constexpr uint64_t base16 = 23; // Expected base16 encoding
+      inline constexpr uint64_t encoded_cbor = 24; // Embedded CBOR data item
 
       // Other standard tags
-      inline constexpr std::uint64_t uri = 32; // URI (RFC 3986)
-      inline constexpr std::uint64_t base64url_str = 33; // base64url-encoded text
-      inline constexpr std::uint64_t base64_str = 34; // base64-encoded text
-      inline constexpr std::uint64_t regex = 35; // Regular expression
-      inline constexpr std::uint64_t mime = 36; // MIME message
+      inline constexpr uint64_t uri = 32; // URI (RFC 3986)
+      inline constexpr uint64_t base64url_str = 33; // base64url-encoded text
+      inline constexpr uint64_t base64_str = 34; // base64-encoded text
+      inline constexpr uint64_t regex = 35; // Regular expression
+      inline constexpr uint64_t mime = 36; // MIME message
 
       // Self-description
-      inline constexpr std::uint64_t self_described = 55799; // Self-described CBOR (magic)
+      inline constexpr uint64_t self_described = 55799; // Self-described CBOR (magic)
 
       // Multi-dimensional arrays (RFC 8746)
-      inline constexpr std::uint64_t multi_dim_array = 40; // Row-major multi-dimensional array
-      inline constexpr std::uint64_t multi_dim_array_col_major = 1040; // Column-major multi-dimensional array
+      inline constexpr uint64_t multi_dim_array = 40; // Row-major multi-dimensional array
+      inline constexpr uint64_t multi_dim_array_col_major = 1040; // Column-major multi-dimensional array
 
       // Complex numbers (IANA CBOR tags registry)
       // https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml
-      inline constexpr std::uint64_t complex_number = 43000; // Single complex: [real, imag]
-      inline constexpr std::uint64_t complex_array = 43001; // Interleaved: [r0, i0, r1, i1, ...]
+      inline constexpr uint64_t complex_number = 43000; // Single complex: [real, imag]
+      inline constexpr uint64_t complex_array = 43001; // Interleaved: [r0, i0, r1, i1, ...]
 
       // Typed arrays (RFC 8746)
-      inline constexpr std::uint64_t ta_uint8 = 64;
-      inline constexpr std::uint64_t ta_uint16_be = 65;
-      inline constexpr std::uint64_t ta_uint32_be = 66;
-      inline constexpr std::uint64_t ta_uint64_be = 67;
-      inline constexpr std::uint64_t ta_uint8_clamped = 68;
-      inline constexpr std::uint64_t ta_uint16_le = 69;
-      inline constexpr std::uint64_t ta_uint32_le = 70;
-      inline constexpr std::uint64_t ta_uint64_le = 71;
-      inline constexpr std::uint64_t ta_sint8 = 72;
-      inline constexpr std::uint64_t ta_sint16_be = 73;
-      inline constexpr std::uint64_t ta_sint32_be = 74;
-      inline constexpr std::uint64_t ta_sint64_be = 75;
+      inline constexpr uint64_t ta_uint8 = 64;
+      inline constexpr uint64_t ta_uint16_be = 65;
+      inline constexpr uint64_t ta_uint32_be = 66;
+      inline constexpr uint64_t ta_uint64_be = 67;
+      inline constexpr uint64_t ta_uint8_clamped = 68;
+      inline constexpr uint64_t ta_uint16_le = 69;
+      inline constexpr uint64_t ta_uint32_le = 70;
+      inline constexpr uint64_t ta_uint64_le = 71;
+      inline constexpr uint64_t ta_sint8 = 72;
+      inline constexpr uint64_t ta_sint16_be = 73;
+      inline constexpr uint64_t ta_sint32_be = 74;
+      inline constexpr uint64_t ta_sint64_be = 75;
       // 76 reserved
-      inline constexpr std::uint64_t ta_sint16_le = 77;
-      inline constexpr std::uint64_t ta_sint32_le = 78;
-      inline constexpr std::uint64_t ta_sint64_le = 79;
-      inline constexpr std::uint64_t ta_float16_be = 80;
-      inline constexpr std::uint64_t ta_float32_be = 81;
-      inline constexpr std::uint64_t ta_float64_be = 82;
-      inline constexpr std::uint64_t ta_float128_be = 83;
-      inline constexpr std::uint64_t ta_float16_le = 84;
-      inline constexpr std::uint64_t ta_float32_le = 85;
-      inline constexpr std::uint64_t ta_float64_le = 86;
-      inline constexpr std::uint64_t ta_float128_le = 87;
+      inline constexpr uint64_t ta_sint16_le = 77;
+      inline constexpr uint64_t ta_sint32_le = 78;
+      inline constexpr uint64_t ta_sint64_le = 79;
+      inline constexpr uint64_t ta_float16_be = 80;
+      inline constexpr uint64_t ta_float32_be = 81;
+      inline constexpr uint64_t ta_float64_be = 82;
+      inline constexpr uint64_t ta_float128_be = 83;
+      inline constexpr uint64_t ta_float16_le = 84;
+      inline constexpr uint64_t ta_float32_le = 85;
+      inline constexpr uint64_t ta_float64_le = 86;
+      inline constexpr uint64_t ta_float128_le = 87;
    }
 
    // Construct initial byte from major type and additional info
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::uint8_t initial_byte(std::uint8_t major_type, std::uint8_t additional_info) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint8_t initial_byte(uint8_t major_type, uint8_t additional_info) noexcept
    {
-      return static_cast<std::uint8_t>((major_type << 5) | (additional_info & 0x1f));
+      return static_cast<uint8_t>((major_type << 5) | (additional_info & 0x1f));
    }
 
    // Extract major type from initial byte
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::uint8_t get_major_type(std::uint8_t initial) noexcept { return initial >> 5; }
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint8_t get_major_type(uint8_t initial) noexcept { return initial >> 5; }
 
    // Extract additional info from initial byte
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::uint8_t get_additional_info(std::uint8_t initial) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint8_t get_additional_info(uint8_t initial) noexcept
    {
       return initial & 0x1f;
    }
 
    // Decode IEEE 754 half-precision float (binary16) to double
    // Per RFC 8949 Appendix D
-   [[nodiscard]] inline double decode_half(std::uint16_t half) noexcept
+   [[nodiscard]] inline double decode_half(uint16_t half) noexcept
    {
       const int sign = (half >> 15) & 1;
       const int exp = (half >> 10) & 0x1f;
@@ -156,56 +166,56 @@ export namespace glz::cbor
 
    // Encode double to IEEE 754 half-precision float (binary16)
    // Returns the encoded half value
-   [[nodiscard]] inline std::uint16_t encode_half(double value) noexcept
+   [[nodiscard]] inline uint16_t encode_half(double value) noexcept
    {
       // Handle special cases
       if (std::isnan(value)) {
          return 0x7e00; // NaN
       }
 
-      std::uint64_t bits;
+      uint64_t bits;
       std::memcpy(&bits, &value, sizeof(double));
 
-      const std::uint16_t sign = static_cast<std::uint16_t>((bits >> 63) & 1);
-      const std::int64_t exp = static_cast<std::int64_t>((bits >> 52) & 0x7ff) - 1023;
-      const std::uint64_t mant = bits & 0xfffffffffffffull;
+      const uint16_t sign = static_cast<uint16_t>((bits >> 63) & 1);
+      const int64_t exp = static_cast<int64_t>((bits >> 52) & 0x7ff) - 1023;
+      const uint64_t mant = bits & 0xfffffffffffffull;
 
       if (std::isinf(value)) {
-         return static_cast<std::uint16_t>((sign << 15) | 0x7c00); // Infinity
+         return static_cast<uint16_t>((sign << 15) | 0x7c00); // Infinity
       }
 
       if (value == 0.0) {
-         return static_cast<std::uint16_t>(sign << 15); // Zero (preserves sign)
+         return static_cast<uint16_t>(sign << 15); // Zero (preserves sign)
       }
 
       // Check if exponent is in range for half precision
       if (exp < -24) {
          // Too small, underflows to zero
-         return static_cast<std::uint16_t>(sign << 15);
+         return static_cast<uint16_t>(sign << 15);
       }
 
       if (exp > 15) {
          // Too large, overflows to infinity
-         return static_cast<std::uint16_t>((sign << 15) | 0x7c00);
+         return static_cast<uint16_t>((sign << 15) | 0x7c00);
       }
 
-      std::uint16_t half_mant;
-      std::uint16_t half_exp;
+      uint16_t half_mant;
+      uint16_t half_exp;
 
       if (exp < -14) {
          // Subnormal in half precision
          half_exp = 0;
          // Calculate the shift for subnormal
          const int shift = static_cast<int>(-14 - exp);
-         half_mant = static_cast<std::uint16_t>((mant | 0x10000000000000ull) >> (43 + shift));
+         half_mant = static_cast<uint16_t>((mant | 0x10000000000000ull) >> (43 + shift));
       }
       else {
          // Normal in half precision
-         half_exp = static_cast<std::uint16_t>(exp + 15);
-         half_mant = static_cast<std::uint16_t>(mant >> 42);
+         half_exp = static_cast<uint16_t>(exp + 15);
+         half_mant = static_cast<uint16_t>(mant >> 42);
       }
 
-      return static_cast<std::uint16_t>((sign << 15) | (half_exp << 10) | (half_mant & 0x3ff));
+      return static_cast<uint16_t>((sign << 15) | (half_exp << 10) | (half_mant & 0x3ff));
    }
 
    // Check if a double can be exactly represented as a half-precision float
@@ -215,7 +225,7 @@ export namespace glz::cbor
          return true;
       }
 
-      const std::uint16_t half = encode_half(value);
+      const uint16_t half = encode_half(value);
       return decode_half(half) == value;
    }
 
@@ -235,34 +245,34 @@ export namespace glz::cbor
    {
       // Select the appropriate tag for a type based on native endianness
       template <class T>
-      [[nodiscard]] consteval std::uint64_t native_tag() noexcept
+      [[nodiscard]] consteval uint64_t native_tag() noexcept
       {
          constexpr bool is_le = (std::endian::native == std::endian::little);
 
          // Unsigned integers
-         if constexpr (std::same_as<T, std::uint8_t>) {
+         if constexpr (std::same_as<T, uint8_t>) {
             return semantic_tag::ta_uint8; // 64 - single byte, endianness irrelevant
          }
-         else if constexpr (std::same_as<T, std::uint16_t>) {
+         else if constexpr (std::same_as<T, uint16_t>) {
             return is_le ? semantic_tag::ta_uint16_le : semantic_tag::ta_uint16_be; // 69 or 65
          }
-         else if constexpr (std::same_as<T, std::uint32_t>) {
+         else if constexpr (std::same_as<T, uint32_t>) {
             return is_le ? semantic_tag::ta_uint32_le : semantic_tag::ta_uint32_be; // 70 or 66
          }
-         else if constexpr (std::same_as<T, std::uint64_t>) {
+         else if constexpr (std::same_as<T, uint64_t>) {
             return is_le ? semantic_tag::ta_uint64_le : semantic_tag::ta_uint64_be; // 71 or 67
          }
          // Signed integers
-         else if constexpr (std::same_as<T, std::int8_t>) {
+         else if constexpr (std::same_as<T, int8_t>) {
             return semantic_tag::ta_sint8; // 72 - single byte, endianness irrelevant
          }
-         else if constexpr (std::same_as<T, std::int16_t>) {
+         else if constexpr (std::same_as<T, int16_t>) {
             return is_le ? semantic_tag::ta_sint16_le : semantic_tag::ta_sint16_be; // 77 or 73
          }
-         else if constexpr (std::same_as<T, std::int32_t>) {
+         else if constexpr (std::same_as<T, int32_t>) {
             return is_le ? semantic_tag::ta_sint32_le : semantic_tag::ta_sint32_be; // 78 or 74
          }
-         else if constexpr (std::same_as<T, std::int64_t>) {
+         else if constexpr (std::same_as<T, int64_t>) {
             return is_le ? semantic_tag::ta_sint64_le : semantic_tag::ta_sint64_be; // 79 or 75
          }
          // Floating point
@@ -284,13 +294,13 @@ export namespace glz::cbor
       struct typed_array_info
       {
          bool valid{false};
-         std::size_t element_size{0};
+         size_t element_size{0};
          bool is_little_endian{false};
          bool is_signed{false};
          bool is_float{false};
       };
 
-      [[nodiscard]] constexpr typed_array_info get_info(std::uint64_t tag) noexcept
+      [[nodiscard]] constexpr typed_array_info get_info(uint64_t tag) noexcept
       {
          typed_array_info info{};
 
@@ -368,7 +378,7 @@ export namespace glz::cbor
       }
 
       // Check if we need to byteswap when reading a typed array
-      [[nodiscard]] constexpr bool needs_byteswap(std::uint64_t tag) noexcept
+      [[nodiscard]] constexpr bool needs_byteswap(uint64_t tag) noexcept
       {
          const auto info = get_info(tag);
          if (!info.valid || info.element_size == 1) {

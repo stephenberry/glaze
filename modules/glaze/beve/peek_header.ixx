@@ -12,49 +12,55 @@ import glaze.util.expected;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    // Extension subtypes for beve_header
    namespace extension
    {
-      constexpr std::uint8_t delimiter = 0; // Data delimiter (tag = 0x06)
-      export constexpr std::uint8_t variant = 1; // Variant type (tag = 0x0E), count = variant index
-      export constexpr std::uint8_t complex = 3; // Complex number/array (tag = 0x1E)
-      constexpr std::uint8_t complex_number = 0; // Single complex (count = 2)
-      constexpr std::uint8_t complex_array = 1; // Array of complex (count = element count)
+      constexpr uint8_t delimiter = 0; // Data delimiter (tag = 0x06)
+      export constexpr uint8_t variant = 1; // Variant type (tag = 0x0E), count = variant index
+      export constexpr uint8_t complex = 3; // Complex number/array (tag = 0x1E)
+      constexpr uint8_t complex_number = 0; // Single complex (count = 2)
+      constexpr uint8_t complex_array = 1; // Array of complex (count = element count)
    }
 
    // Information extracted from a BEVE header without full deserialization
    export struct beve_header
    {
-      std::uint8_t tag{}; // The raw tag byte
-      std::uint8_t type{}; // Base type: null(0), number(1), string(2), object(3), typed_array(4), generic_array(5),
+      uint8_t tag{}; // The raw tag byte
+      uint8_t type{}; // Base type: null(0), number(1), string(2), object(3), typed_array(4), generic_array(5),
                       // extensions(6)
-      std::uint8_t ext_type{}; // For extensions: subtype (extension::variant, extension::complex, etc.)
-      std::size_t count{}; // Element/member count for containers, string length for strings, 1 for scalars
+      uint8_t ext_type{}; // For extensions: subtype (extension::variant, extension::complex, etc.)
+      size_t count{}; // Element/member count for containers, string length for strings, 1 for scalars
                       // For variants: the variant index; for complex_number: 2; for complex_array: element count
-      std::size_t header_size{}; // Total bytes consumed by tag + count encoding (for seeking past header)
+      size_t header_size{}; // Total bytes consumed by tag + count encoding (for seeking past header)
    };
 
    // Internal helper to peek at compressed integer without modifying iterator
    namespace detail
    {
-      [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::size_t peek_compressed_int_size(const std::uint8_t* data,
-                                                                                std::size_t available) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t peek_compressed_int_size(const uint8_t* data,
+                                                                                size_t available) noexcept
       {
          if (available == 0) return 0;
-         const std::uint8_t config = data[0] & 0b000000'11;
+         const uint8_t config = data[0] & 0b000000'11;
          return byte_count_lookup[config];
       }
 
-      [[nodiscard]] GLZ_ALWAYS_INLINE constexpr std::size_t peek_compressed_int_value(const std::uint8_t* data,
-                                                                                 std::size_t available) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t peek_compressed_int_value(const uint8_t* data,
+                                                                                 size_t available) noexcept
       {
          if (available == 0) return 0;
 
-         const std::uint8_t header = data[0];
-         const std::uint8_t config = header & 0b000000'11;
-         const std::size_t required = byte_count_lookup[config];
+         const uint8_t header = data[0];
+         const uint8_t config = header & 0b000000'11;
+         const size_t required = byte_count_lookup[config];
 
          if (available < required) return 0;
 
@@ -62,7 +68,7 @@ namespace glz
          case 0:
             return header >> 2;
          case 1: {
-            std::uint16_t h;
+            uint16_t h;
             std::memcpy(&h, data, 2);
             if constexpr (std::endian::native == std::endian::big) {
                h = std::byteswap(h);
@@ -70,7 +76,7 @@ namespace glz
             return h >> 2;
          }
          case 2: {
-            std::uint32_t h;
+            uint32_t h;
             std::memcpy(&h, data, 4);
             if constexpr (std::endian::native == std::endian::big) {
                h = std::byteswap(h);
@@ -78,13 +84,13 @@ namespace glz
             return h >> 2;
          }
          case 3: {
-            if constexpr (sizeof(std::size_t) > sizeof(std::uint32_t)) {
-               std::uint64_t h;
+            if constexpr (sizeof(size_t) > sizeof(uint32_t)) {
+               uint64_t h;
                std::memcpy(&h, data, 8);
                if constexpr (std::endian::native == std::endian::big) {
                   h = std::byteswap(h);
                }
-               return static_cast<std::size_t>(h >> 2);
+               return static_cast<size_t>(h >> 2);
             }
             else {
                return 0; // 8-byte length encoding not supported on 32-bit systems
@@ -108,8 +114,8 @@ namespace glz
    export template <class Buffer>
    [[nodiscard]] expected<beve_header, error_ctx> beve_peek_header(const Buffer& buffer) noexcept
    {
-      const auto* data = reinterpret_cast<const std::uint8_t*>(buffer.data());
-      const std::size_t size = buffer.size();
+      const auto* data = reinterpret_cast<const uint8_t*>(buffer.data());
+      const size_t size = buffer.size();
 
       if (size == 0) [[unlikely]] {
          return unexpected(error_ctx{0, error_code::unexpected_end});
@@ -143,7 +149,7 @@ namespace glz
          if (size < 2) [[unlikely]] {
             return unexpected(error_ctx{1, error_code::unexpected_end});
          }
-         const std::size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
+         const size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
          if (int_size == 0 || size < 1 + int_size) [[unlikely]] {
             return unexpected(error_ctx{1, error_code::unexpected_end});
          }
@@ -156,7 +162,7 @@ namespace glz
          if (size < 2) [[unlikely]] {
             return unexpected(error_ctx{1, error_code::unexpected_end});
          }
-         const std::size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
+         const size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
          if (int_size == 0 || size < 1 + int_size) [[unlikely]] {
             return unexpected(error_ctx{1, error_code::unexpected_end});
          }
@@ -169,7 +175,7 @@ namespace glz
          if (size < 2) [[unlikely]] {
             return unexpected(error_ctx{1, error_code::unexpected_end});
          }
-         const std::size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
+         const size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
          if (int_size == 0 || size < 1 + int_size) [[unlikely]] {
             return unexpected(error_ctx{1, error_code::unexpected_end});
          }
@@ -182,7 +188,7 @@ namespace glz
          if (size < 2) [[unlikely]] {
             return unexpected(error_ctx{1, error_code::unexpected_end});
          }
-         const std::size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
+         const size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
          if (int_size == 0 || size < 1 + int_size) [[unlikely]] {
             return unexpected(error_ctx{1, error_code::unexpected_end});
          }
@@ -193,7 +199,7 @@ namespace glz
       case tag::extensions: {
          // Extensions: delimiter, variant, or complex
          // Subtype is encoded in bits 3-4 of the tag
-         const std::uint8_t subtype = (info.tag >> 3) & 0b11;
+         const uint8_t subtype = (info.tag >> 3) & 0b11;
          info.ext_type = subtype;
 
          if (subtype == extension::delimiter) {
@@ -206,7 +212,7 @@ namespace glz
             if (size < 2) [[unlikely]] {
                return unexpected(error_ctx{1, error_code::unexpected_end});
             }
-            const std::size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
+            const size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
             if (int_size == 0 || size < 1 + int_size) [[unlikely]] {
                return unexpected(error_ctx{1, error_code::unexpected_end});
             }
@@ -218,7 +224,7 @@ namespace glz
             if (size < 2) [[unlikely]] {
                return unexpected(error_ctx{1, error_code::unexpected_end});
             }
-            const std::uint8_t complex_header = data[1];
+            const uint8_t complex_header = data[1];
             const bool is_array = (complex_header & 1) == extension::complex_array;
 
             if (is_array) {
@@ -226,7 +232,7 @@ namespace glz
                if (size < 3) [[unlikely]] {
                   return unexpected(error_ctx{2, error_code::unexpected_end});
                }
-               const std::size_t int_size = detail::peek_compressed_int_size(data + 2, size - 2);
+               const size_t int_size = detail::peek_compressed_int_size(data + 2, size - 2);
                if (int_size == 0 || size < 2 + int_size) [[unlikely]] {
                   return unexpected(error_ctx{2, error_code::unexpected_end});
                }
@@ -254,7 +260,7 @@ namespace glz
    }
 
    // Convenience overload for C-style arrays and raw pointers with size
-   export [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header(const void* data, std::size_t size) noexcept
+   export [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header(const void* data, size_t size) noexcept
    {
       return beve_peek_header(std::string_view{reinterpret_cast<const char*>(data), size});
    }
@@ -276,22 +282,22 @@ namespace glz
    // Returns the header information on success, or an error_ctx on failure.
    // The header_size in the result is relative to the offset position.
    export template <class Buffer>
-   [[nodiscard]] expected<beve_header, error_ctx> beve_peek_header_at(const Buffer& buffer, std::size_t offset) noexcept
+   [[nodiscard]] expected<beve_header, error_ctx> beve_peek_header_at(const Buffer& buffer, size_t offset) noexcept
    {
-      const std::size_t size = buffer.size();
+      const size_t size = buffer.size();
       if (offset >= size) [[unlikely]] {
          return unexpected(error_ctx{offset, error_code::unexpected_end});
       }
 
-      const auto* data = reinterpret_cast<const std::uint8_t*>(buffer.data()) + offset;
-      const std::size_t remaining = size - offset;
+      const auto* data = reinterpret_cast<const uint8_t*>(buffer.data()) + offset;
+      const size_t remaining = size - offset;
 
       return beve_peek_header(std::string_view{reinterpret_cast<const char*>(data), remaining});
    }
 
    // Convenience overload for raw pointers with size and offset
-   export [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header_at(const void* data, std::size_t size,
-                                                                                    std::size_t offset) noexcept
+   export [[nodiscard]] inline expected<beve_header, error_ctx> beve_peek_header_at(const void* data, size_t size,
+                                                                                    size_t offset) noexcept
    {
       if (offset >= size) [[unlikely]] {
          return unexpected(error_ctx{offset, error_code::unexpected_end});

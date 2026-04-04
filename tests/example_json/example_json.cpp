@@ -5,6 +5,8 @@ import std;
 import glaze;
 import ut;
 
+using std::uint32_t;
+
 using namespace ut;
 
 //------------------------------------
@@ -15,7 +17,7 @@ struct BasicStruct
    int i{};
    double d{};
    std::string str{};
-   std::array<std::uint32_t, 3> arr{};
+   std::array<uint32_t, 3> arr{};
 };
 static_assert(glz::reflectable<BasicStruct>);
 
@@ -32,7 +34,7 @@ suite basic_reflection = [] {
       expect(obj2.i == 42);
       expect(obj2.d == 3.14);
       expect(obj2.str == "Hello");
-      expect(obj2.arr == std::array<std::uint32_t, 3>{1, 2, 3});
+      expect(obj2.arr == std::array<uint32_t, 3>{1, 2, 3});
    };
 };
 

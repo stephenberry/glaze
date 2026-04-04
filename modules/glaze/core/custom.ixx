@@ -13,9 +13,12 @@ import glaze.tuplet;
 import glaze.util.type_traits;
 import glaze.core.common;
 
+using std::uint32_t;
+using std::size_t;
+
 namespace glz
 {
-   template <std::uint32_t Format, class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
    struct from<Format, T>
    {
@@ -47,7 +50,7 @@ namespace glz
                            return;
                      }
                      else {
-                        if (std::size_t(ctx.error) > std::size_t(error_code::end_reached)) [[unlikely]]
+                        if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]]
                            return;
                      }
                      (value.val.*(value.from))(std::move(input));
@@ -82,7 +85,7 @@ namespace glz
                               return;
                         }
                         else {
-                           if (std::size_t(ctx.error) > std::size_t(error_code::end_reached)) [[unlikely]]
+                           if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]]
                               return;
                         }
                         from(std::move(input));
@@ -126,7 +129,7 @@ namespace glz
                            return;
                      }
                      else {
-                        if (std::size_t(ctx.error) > std::size_t(error_code::end_reached)) [[unlikely]]
+                        if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]]
                            return;
                      }
                      if constexpr (N == 2) {
@@ -160,7 +163,7 @@ namespace glz
       }
    };
 
-   template <std::uint32_t Format, class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
    struct to<Format, T>
    {

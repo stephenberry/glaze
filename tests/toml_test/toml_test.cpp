@@ -8,6 +8,16 @@ import glaze;
 
 import ut;
 
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 
 struct my_struct
@@ -15,7 +25,7 @@ struct my_struct
    int i = 287;
    double d = 3.14;
    std::string hello = "Hello World";
-   std::array<std::uint64_t, 3> arr = {1, 2, 3};
+   std::array<uint64_t, 3> arr = {1, 2, 3};
 };
 
 struct nested
@@ -349,7 +359,7 @@ arr = [4, 5, 6])";
    "read_wrong_overflow_integer"_test = [] {
       // Max uint64 value plus one.
       std::string toml_input = "18446744073709551616";
-      std::uint64_t value{};
+      uint64_t value{};
       auto error = glz::read_toml(value, toml_input);
       expect(error);
       expect(error == glz::error_code::parse_number_failure);
@@ -358,7 +368,7 @@ arr = [4, 5, 6])";
    "read_nearly_overfow_integer"_test = [] {
       // Max uint64 value.
       std::string toml_input = "18446744073709551615";
-      std::uint64_t value{};
+      uint64_t value{};
       expect(not glz::read_toml(value, toml_input));
       expect(value == 18446744073709551615ull);
    };
@@ -366,7 +376,7 @@ arr = [4, 5, 6])";
    "read_wrong_underflow_integer"_test = [] {
       // Min int64 value minus one.
       std::string toml_input = "-9223372036854775809";
-      std::int64_t value{};
+      int64_t value{};
       auto error = glz::read_toml(value, toml_input);
       expect(error);
       expect(error == glz::error_code::parse_number_failure);
@@ -375,7 +385,7 @@ arr = [4, 5, 6])";
    "read_nearly_underflow_integer"_test = [] {
       // Min int64 value.
       std::string toml_input = "-9223372036854775808";
-      std::int64_t value{};
+      int64_t value{};
       expect(not glz::read_toml(value, toml_input));
       expect(value == -9223372036854775807ll - 1);
    };
@@ -657,26 +667,26 @@ arr = [4, 5, 6])";
    "read_decimal_int8_boundaries"_test = [] {
       {
          std::string toml_input = "-128";
-         std::int8_t value{};
+         int8_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int8_t>::min());
+         expect(value == std::numeric_limits<int8_t>::min());
       }
       {
          std::string toml_input = "127";
-         std::int8_t value{};
+         int8_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int8_t>::max());
+         expect(value == std::numeric_limits<int8_t>::max());
       }
       {
          std::string toml_input = "-129";
-         std::int8_t value{};
+         int8_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
       }
       {
          std::string toml_input = "128";
-         std::int8_t value{};
+         int8_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
@@ -686,26 +696,26 @@ arr = [4, 5, 6])";
    "read_decimal_uint8_boundaries"_test = [] {
       {
          std::string toml_input = "0";
-         std::uint8_t value{};
+         uint8_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint8_t>::min());
+         expect(value == std::numeric_limits<uint8_t>::min());
       }
       {
          std::string toml_input = "255";
-         std::uint8_t value{};
+         uint8_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint8_t>::max());
+         expect(value == std::numeric_limits<uint8_t>::max());
       }
       {
          std::string toml_input = "-1";
-         std::uint8_t value{};
+         uint8_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
       }
       {
          std::string toml_input = "256";
-         std::uint8_t value{};
+         uint8_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
@@ -715,26 +725,26 @@ arr = [4, 5, 6])";
    "read_decimal_int16_boundaries"_test = [] {
       {
          std::string toml_input = "-32768";
-         std::int16_t value{};
+         int16_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int16_t>::min());
+         expect(value == std::numeric_limits<int16_t>::min());
       }
       {
          std::string toml_input = "32767";
-         std::int16_t value{};
+         int16_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int16_t>::max());
+         expect(value == std::numeric_limits<int16_t>::max());
       }
       {
          std::string toml_input = "-32769";
-         std::int16_t value{};
+         int16_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
       }
       {
          std::string toml_input = "32768";
-         std::int16_t value{};
+         int16_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
@@ -744,26 +754,26 @@ arr = [4, 5, 6])";
    "read_decimal_uint16_boundaries"_test = [] {
       {
          std::string toml_input = "0";
-         std::uint16_t value{};
+         uint16_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint16_t>::min());
+         expect(value == std::numeric_limits<uint16_t>::min());
       }
       {
          std::string toml_input = "65535";
-         std::uint16_t value{};
+         uint16_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint16_t>::max());
+         expect(value == std::numeric_limits<uint16_t>::max());
       }
       {
          std::string toml_input = "-1";
-         std::uint16_t value{};
+         uint16_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
       }
       {
          std::string toml_input = "65536";
-         std::uint16_t value{};
+         uint16_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
@@ -773,26 +783,26 @@ arr = [4, 5, 6])";
    "read_decimal_int32_boundaries"_test = [] {
       {
          std::string toml_input = "-2147483648";
-         std::int32_t value{};
+         int32_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int32_t>::min());
+         expect(value == std::numeric_limits<int32_t>::min());
       }
       {
          std::string toml_input = "2147483647";
-         std::int32_t value{};
+         int32_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int32_t>::max());
+         expect(value == std::numeric_limits<int32_t>::max());
       }
       {
          std::string toml_input = "-2147483649";
-         std::int32_t value{};
+         int32_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
       }
       {
          std::string toml_input = "2147483648";
-         std::int32_t value{};
+         int32_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
@@ -802,26 +812,26 @@ arr = [4, 5, 6])";
    "read_decimal_uint32_boundaries"_test = [] {
       {
          std::string toml_input = "0";
-         std::uint32_t value{};
+         uint32_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint32_t>::min());
+         expect(value == std::numeric_limits<uint32_t>::min());
       }
       {
          std::string toml_input = "4294967295";
-         std::uint32_t value{};
+         uint32_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint32_t>::max());
+         expect(value == std::numeric_limits<uint32_t>::max());
       }
       {
          std::string toml_input = "-1";
-         std::uint32_t value{};
+         uint32_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
       }
       {
          std::string toml_input = "4294967296";
-         std::uint32_t value{};
+         uint32_t value{};
          auto error = glz::read_toml(value, toml_input);
          expect(error);
          expect(error == glz::error_code::parse_number_failure);
@@ -845,21 +855,21 @@ arr = [4, 5, 6])";
 
    "read_hex_with_underscores_integer"_test = [] {
       std::string toml_input = "0xDEAD_BEEF";
-      std::uint32_t value{};
+      uint32_t value{};
       expect(not glz::read_toml(value, toml_input));
       expect(value == 0xDEADBEEF);
    };
 
    "read_binary_with_underscores_integer"_test = [] {
       std::string toml_input = "0b1010_0101_1111";
-      std::uint32_t value{};
+      uint32_t value{};
       expect(not glz::read_toml(value, toml_input));
       expect(value == 0b101001011111);
    };
 
    "read_octal_with_underscores_integer"_test = [] {
       std::string toml_input = "0o12_34_70";
-      std::uint32_t value{};
+      uint32_t value{};
       expect(not glz::read_toml(value, toml_input));
       expect(value == 0123470);
    };
@@ -2880,7 +2890,7 @@ name = "NotArray"
       expect(not glz::read_toml(parsed, buffer));
 
       expect(parsed.products.size() == 5);
-      for (std::size_t i = 0; i < 5; ++i) {
+      for (size_t i = 0; i < 5; ++i) {
          expect(parsed.products[i] == original.products[i]);
       }
    };
@@ -3137,16 +3147,16 @@ suite variant_toml_tests = [] {
    };
 
    "variant_read_toml_int"_test = [] {
-      std::variant<std::int64_t, double, std::string, bool> v;
+      std::variant<int64_t, double, std::string, bool> v;
       std::string toml = "42";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::int64_t>(v));
-      expect(std::get<std::int64_t>(v) == 42);
+      expect(std::holds_alternative<int64_t>(v));
+      expect(std::get<int64_t>(v) == 42);
    };
 
    "variant_read_toml_double"_test = [] {
-      std::variant<std::int64_t, double, std::string, bool> v;
+      std::variant<int64_t, double, std::string, bool> v;
       std::string toml = "3.14";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3155,7 +3165,7 @@ suite variant_toml_tests = [] {
    };
 
    "variant_read_toml_string"_test = [] {
-      std::variant<std::int64_t, double, std::string, bool> v;
+      std::variant<int64_t, double, std::string, bool> v;
       std::string toml = "\"hello world\"";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3164,7 +3174,7 @@ suite variant_toml_tests = [] {
    };
 
    "variant_read_toml_bool_true"_test = [] {
-      std::variant<std::int64_t, double, std::string, bool> v;
+      std::variant<int64_t, double, std::string, bool> v;
       std::string toml = "true";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3173,7 +3183,7 @@ suite variant_toml_tests = [] {
    };
 
    "variant_read_toml_bool_false"_test = [] {
-      std::variant<std::int64_t, double, std::string, bool> v;
+      std::variant<int64_t, double, std::string, bool> v;
       std::string toml = "false";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3182,7 +3192,7 @@ suite variant_toml_tests = [] {
    };
 
    "variant_read_toml_array"_test = [] {
-      std::variant<std::int64_t, std::vector<int>, std::string> v;
+      std::variant<int64_t, std::vector<int>, std::string> v;
       std::string toml = "[1, 2, 3]";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3198,16 +3208,16 @@ suite variant_toml_tests = [] {
    // may not support inf/nan for all integer types in variants
 
    "variant_read_toml_negative_int"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = "-123";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::int64_t>(v));
-      expect(std::get<std::int64_t>(v) == -123);
+      expect(std::holds_alternative<int64_t>(v));
+      expect(std::get<int64_t>(v) == -123);
    };
 
    "variant_read_toml_scientific"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = "1e10";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3219,7 +3229,7 @@ suite variant_toml_tests = [] {
 // Tests for glz::generic_i64 with TOML
 suite generic_toml_tests = [] {
    "generic_i64_write_toml_int"_test = [] {
-      glz::generic_i64 g = std::int64_t{42};
+      glz::generic_i64 g = int64_t{42};
       std::string buffer{};
       auto ec = glz::write_toml(g, buffer);
       expect(not ec);
@@ -3268,8 +3278,8 @@ suite generic_toml_tests = [] {
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.is_number());
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == 42);
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == 42);
    };
 
    "generic_i64_read_toml_double"_test = [] {
@@ -3308,9 +3318,9 @@ suite generic_toml_tests = [] {
       expect(g.is_array());
       auto& arr = g.get<glz::generic_i64::array_t>();
       expect(arr.size() == 3);
-      expect(arr[0].get<std::int64_t>() == 1);
-      expect(arr[1].get<std::int64_t>() == 2);
-      expect(arr[2].get<std::int64_t>() == 3);
+      expect(arr[0].get<int64_t>() == 1);
+      expect(arr[1].get<int64_t>() == 2);
+      expect(arr[2].get<int64_t>() == 3);
    };
 
    "generic_i64_read_toml_negative_int"_test = [] {
@@ -3319,8 +3329,8 @@ suite generic_toml_tests = [] {
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.is_number());
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == -999);
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == -999);
    };
 
    "generic_i64_read_toml_scientific"_test = [] {
@@ -3350,7 +3360,7 @@ suite generic_toml_tests = [] {
       expect(parsed.is_array());
       auto& arr = parsed.get<glz::generic_i64::array_t>();
       expect(arr.size() == 4);
-      expect(arr[0].get<std::int64_t>() == 42);
+      expect(arr[0].get<int64_t>() == 42);
       expect(arr[2].get<std::string>() == "test");
       expect(arr[3].get<bool>() == true);
    };
@@ -3365,8 +3375,8 @@ suite generic_u64_toml_tests = [] {
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.is_number());
       // Positive integers should go to std::uint64_t (first int type)
-      expect(g.holds<std::uint64_t>());
-      expect(g.get<std::uint64_t>() == 42);
+      expect(g.holds<uint64_t>());
+      expect(g.get<uint64_t>() == 42);
    };
 
    "generic_u64_read_toml_negative_int"_test = [] {
@@ -3376,8 +3386,8 @@ suite generic_u64_toml_tests = [] {
       expect(not ec) << glz::format_error(ec, toml);
       expect(g.is_number());
       // Negative integers should go to std::int64_t
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == -42);
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == -42);
    };
 
    "generic_u64_read_toml_double"_test = [] {
@@ -3432,39 +3442,39 @@ suite generic_f64_toml_tests = [] {
 suite variant_toml_corner_cases = [] {
    // TOML-specific number formats
    "variant_read_hex_number"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = "0xDEAD";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::int64_t>(v));
-      expect(std::get<std::int64_t>(v) == 0xDEAD);
+      expect(std::holds_alternative<int64_t>(v));
+      expect(std::get<int64_t>(v) == 0xDEAD);
    };
 
    "variant_read_octal_number"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = "0o755";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::int64_t>(v));
-      expect(std::get<std::int64_t>(v) == 0755);
+      expect(std::holds_alternative<int64_t>(v));
+      expect(std::get<int64_t>(v) == 0755);
    };
 
    "variant_read_binary_number"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = "0b11010110";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::int64_t>(v));
-      expect(std::get<std::int64_t>(v) == 0b11010110);
+      expect(std::holds_alternative<int64_t>(v));
+      expect(std::get<int64_t>(v) == 0b11010110);
    };
 
    "variant_read_underscore_number"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = "1_000_000";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::int64_t>(v));
-      expect(std::get<std::int64_t>(v) == 1000000);
+      expect(std::holds_alternative<int64_t>(v));
+      expect(std::get<int64_t>(v) == 1000000);
    };
 
    // Note: inf/nan tests removed - TOML parser doesn't fully support inf/nan in typed arrays
@@ -3472,7 +3482,7 @@ suite variant_toml_corner_cases = [] {
 
    // String edge cases
    "variant_read_empty_string"_test = [] {
-      std::variant<std::int64_t, double, std::string, bool> v;
+      std::variant<int64_t, double, std::string, bool> v;
       std::string toml = "\"\"";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3481,7 +3491,7 @@ suite variant_toml_corner_cases = [] {
    };
 
    "variant_read_literal_string"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = R"('literal \n not escaped')";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3490,7 +3500,7 @@ suite variant_toml_corner_cases = [] {
    };
 
    "variant_read_escaped_string"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = R"("hello\nworld")";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3500,37 +3510,37 @@ suite variant_toml_corner_cases = [] {
 
    // Empty and single element arrays
    "variant_read_empty_array"_test = [] {
-      std::variant<std::int64_t, std::vector<std::int64_t>, std::string> v;
+      std::variant<int64_t, std::vector<int64_t>, std::string> v;
       std::string toml = "[]";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::vector<std::int64_t>>(v));
-      expect(std::get<std::vector<std::int64_t>>(v).empty());
+      expect(std::holds_alternative<std::vector<int64_t>>(v));
+      expect(std::get<std::vector<int64_t>>(v).empty());
    };
 
    "variant_read_single_element_array"_test = [] {
-      std::variant<std::int64_t, std::vector<std::int64_t>, std::string> v;
+      std::variant<int64_t, std::vector<int64_t>, std::string> v;
       std::string toml = "[42]";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::vector<std::int64_t>>(v));
-      auto& arr = std::get<std::vector<std::int64_t>>(v);
+      expect(std::holds_alternative<std::vector<int64_t>>(v));
+      auto& arr = std::get<std::vector<int64_t>>(v);
       expect(arr.size() == 1);
       expect(arr[0] == 42);
    };
 
    // Boundary values
    "variant_read_zero"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = "0";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::int64_t>(v));
-      expect(std::get<std::int64_t>(v) == 0);
+      expect(std::holds_alternative<int64_t>(v));
+      expect(std::get<int64_t>(v) == 0);
    };
 
    "variant_read_negative_zero_float"_test = [] {
-      std::variant<std::int64_t, double, std::string> v;
+      std::variant<int64_t, double, std::string> v;
       std::string toml = "-0.0";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -3540,12 +3550,12 @@ suite variant_toml_corner_cases = [] {
 
    // Whitespace handling in arrays
    "variant_read_array_with_whitespace"_test = [] {
-      std::variant<std::int64_t, std::vector<std::int64_t>, std::string> v;
+      std::variant<int64_t, std::vector<int64_t>, std::string> v;
       std::string toml = "[  1  ,  2  ,  3  ]";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::vector<std::int64_t>>(v));
-      auto& arr = std::get<std::vector<std::int64_t>>(v);
+      expect(std::holds_alternative<std::vector<int64_t>>(v));
+      auto& arr = std::get<std::vector<int64_t>>(v);
       expect(arr.size() == 3);
       expect(arr[0] == 1);
       expect(arr[1] == 2);
@@ -3554,12 +3564,12 @@ suite variant_toml_corner_cases = [] {
 
    // Nested arrays
    "variant_read_nested_array"_test = [] {
-      std::variant<std::int64_t, std::vector<std::vector<std::int64_t>>, std::string> v;
+      std::variant<int64_t, std::vector<std::vector<int64_t>>, std::string> v;
       std::string toml = "[[1, 2], [3, 4]]";
       auto ec = glz::read_toml(v, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(std::holds_alternative<std::vector<std::vector<std::int64_t>>>(v));
-      auto& arr = std::get<std::vector<std::vector<std::int64_t>>>(v);
+      expect(std::holds_alternative<std::vector<std::vector<int64_t>>>(v));
+      auto& arr = std::get<std::vector<std::vector<int64_t>>>(v);
       expect(arr.size() == 2);
       expect(arr[0].size() == 2);
       expect(arr[0][0] == 1);
@@ -3576,8 +3586,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "0xCAFE";
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == 0xCAFE);
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == 0xCAFE);
    };
 
    "generic_i64_read_octal"_test = [] {
@@ -3585,8 +3595,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "0o777";
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == 0777);
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == 0777);
    };
 
    "generic_i64_read_binary"_test = [] {
@@ -3594,8 +3604,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "0b10101010";
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == 0b10101010);
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == 0b10101010);
    };
 
    "generic_i64_read_underscore_number"_test = [] {
@@ -3603,8 +3613,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "1_234_567";
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == 1234567);
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == 1234567);
    };
 
    // Note: inf/nan tests removed - TOML parser doesn't fully support inf/nan in generic arrays
@@ -3653,8 +3663,8 @@ suite generic_toml_corner_cases = [] {
       expect(g.is_array());
       auto& arr = g.get<glz::generic_i64::array_t>();
       expect(arr.size() == 4);
-      expect(arr[0].holds<std::int64_t>());
-      expect(arr[0].get<std::int64_t>() == 1);
+      expect(arr[0].holds<int64_t>());
+      expect(arr[0].get<int64_t>() == 1);
       expect(arr[1].holds<std::string>());
       expect(arr[1].get<std::string>() == "two");
       expect(arr[2].holds<bool>());
@@ -3679,8 +3689,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "18446744073709551615"; // UINT64_MAX
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::uint64_t>());
-      expect(g.get<std::uint64_t>() == (std::numeric_limits<std::uint64_t>::max)());
+      expect(g.holds<uint64_t>());
+      expect(g.get<uint64_t>() == (std::numeric_limits<uint64_t>::max)());
    };
 
    "generic_i64_read_large_negative"_test = [] {
@@ -3688,8 +3698,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "-9223372036854775808"; // INT64_MIN
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == (std::numeric_limits<std::int64_t>::min)());
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == (std::numeric_limits<int64_t>::min)());
    };
 
    "generic_i64_read_large_positive"_test = [] {
@@ -3697,8 +3707,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "9223372036854775807"; // INT64_MAX
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == (std::numeric_limits<std::int64_t>::max)());
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == (std::numeric_limits<int64_t>::max)());
    };
 
    // Write generic object to TOML (works because write supports maps)
@@ -3720,8 +3730,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "0";
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::uint64_t>());
-      expect(g.get<std::uint64_t>() == 0);
+      expect(g.holds<uint64_t>());
+      expect(g.get<uint64_t>() == 0);
    };
 
    "generic_u64_read_one"_test = [] {
@@ -3729,8 +3739,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "1";
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::uint64_t>());
-      expect(g.get<std::uint64_t>() == 1);
+      expect(g.holds<uint64_t>());
+      expect(g.get<uint64_t>() == 1);
    };
 
    "generic_u64_read_negative_one"_test = [] {
@@ -3738,8 +3748,8 @@ suite generic_toml_corner_cases = [] {
       std::string toml = "-1";
       auto ec = glz::read_toml(g, toml);
       expect(not ec) << glz::format_error(ec, toml);
-      expect(g.holds<std::int64_t>());
-      expect(g.get<std::int64_t>() == -1);
+      expect(g.holds<int64_t>());
+      expect(g.get<int64_t>() == -1);
    };
 
    // Note: f64 mode inf/nan tests removed - same limitation as i64 mode
@@ -3788,8 +3798,8 @@ enabled = true)";
       expect(obj.size() == 3);
       expect(obj.at("name").holds<std::string>());
       expect(obj.at("name").get<std::string>() == "test");
-      expect(obj.at("count").holds<std::int64_t>());
-      expect(obj.at("count").get<std::int64_t>() == 42);
+      expect(obj.at("count").holds<int64_t>());
+      expect(obj.at("count").get<int64_t>() == 42);
       expect(obj.at("enabled").holds<bool>());
       expect(obj.at("enabled").get<bool>() == true);
    };
@@ -3806,7 +3816,7 @@ server.port = 8080)";
       expect(obj.contains("server"));
       auto& server = obj.at("server").get<glz::generic_i64::object_t>();
       expect(server.at("host").get<std::string>() == "localhost");
-      expect(server.at("port").get<std::int64_t>() == 8080);
+      expect(server.at("port").get<int64_t>() == 8080);
    };
 
    // TOML document with table sections
@@ -3828,7 +3838,7 @@ name = "Admin")";
       expect(obj.contains("database"));
       auto& db = obj.at("database").get<glz::generic_i64::object_t>();
       expect(db.at("server").get<std::string>() == "192.168.1.1");
-      expect(db.at("port").get<std::int64_t>() == 5432);
+      expect(db.at("port").get<int64_t>() == 5432);
       expect(obj.contains("owner"));
       auto& owner = obj.at("owner").get<glz::generic_i64::object_t>();
       expect(owner.at("name").get<std::string>() == "Admin");
@@ -3846,9 +3856,9 @@ names = ["Alice", "Bob"])";
       expect(obj.at("numbers").holds<glz::generic_i64::array_t>());
       auto& numbers = obj.at("numbers").get<glz::generic_i64::array_t>();
       expect(numbers.size() == 3);
-      expect(numbers[0].get<std::int64_t>() == 1);
-      expect(numbers[1].get<std::int64_t>() == 2);
-      expect(numbers[2].get<std::int64_t>() == 3);
+      expect(numbers[0].get<int64_t>() == 1);
+      expect(numbers[1].get<int64_t>() == 2);
+      expect(numbers[2].get<int64_t>() == 3);
       auto& names = obj.at("names").get<glz::generic_i64::array_t>();
       expect(names.size() == 2);
       expect(names[0].get<std::string>() == "Alice");
@@ -3865,8 +3875,8 @@ names = ["Alice", "Bob"])";
       auto& obj = g.get<glz::generic_i64::object_t>();
       expect(obj.contains("point"));
       auto& point = obj.at("point").get<glz::generic_i64::object_t>();
-      expect(point.at("x").get<std::int64_t>() == 10);
-      expect(point.at("y").get<std::int64_t>() == 20);
+      expect(point.at("x").get<int64_t>() == 10);
+      expect(point.at("y").get<int64_t>() == 20);
    };
 
    // Roundtrip test: JSON -> generic -> TOML -> generic (roundtrip)
@@ -3886,7 +3896,7 @@ names = ["Alice", "Bob"])";
       expect(parsed.holds<glz::generic_i64::object_t>());
       auto& obj = parsed.get<glz::generic_i64::object_t>();
       expect(obj.at("name").get<std::string>() == "test");
-      expect(obj.at("count").get<std::int64_t>() == 42);
+      expect(obj.at("count").get<int64_t>() == 42);
       expect(obj.at("active").get<bool>() == true);
    };
 
@@ -3902,7 +3912,7 @@ a.e = true)";
       auto& root = g.get<glz::generic_i64::object_t>();
       auto& a = root.at("a").get<glz::generic_i64::object_t>();
       auto& b = a.at("b").get<glz::generic_i64::object_t>();
-      expect(b.at("c").get<std::int64_t>() == 123);
+      expect(b.at("c").get<int64_t>() == 123);
       expect(b.at("d").get<std::string>() == "nested");
       expect(a.at("e").get<bool>() == true);
    };
@@ -3916,7 +3926,7 @@ a.e = true)";
       expect(g.holds<glz::generic_i64::object_t>());
       auto& obj = g.get<glz::generic_i64::object_t>();
       expect(obj.at("name").get<std::string>() == "inline");
-      expect(obj.at("value").get<std::int64_t>() == 42);
+      expect(obj.at("value").get<int64_t>() == 42);
    };
 
    // Note: Empty string input produces no_read_input error from core reader.
@@ -3933,11 +3943,11 @@ negative = -42)";
       expect(g.holds<glz::generic_u64::object_t>());
       auto& obj = g.get<glz::generic_u64::object_t>();
       // Large positive number should be std::uint64_t
-      expect(obj.at("positive").holds<std::uint64_t>());
-      expect(obj.at("positive").get<std::uint64_t>() == (std::numeric_limits<std::uint64_t>::max)());
+      expect(obj.at("positive").holds<uint64_t>());
+      expect(obj.at("positive").get<uint64_t>() == (std::numeric_limits<uint64_t>::max)());
       // Negative number should use std::int64_t
-      expect(obj.at("negative").holds<std::int64_t>());
-      expect(obj.at("negative").get<std::int64_t>() == -42);
+      expect(obj.at("negative").holds<int64_t>());
+      expect(obj.at("negative").get<int64_t>() == -42);
    };
 
    // f64 mode document test
@@ -3958,7 +3968,7 @@ float = 3.14)";
 
    // std::map direct read test
    "std_map_read_toml_document"_test = [] {
-      std::map<std::string, std::int64_t> m;
+      std::map<std::string, int64_t> m;
       std::string toml = R"(one = 1
 two = 2
 three = 3)";
@@ -3984,7 +3994,7 @@ city = "Boston")";
 
    // Inline table into std::map
    "std_map_read_inline_table"_test = [] {
-      std::map<std::string, std::int64_t> m;
+      std::map<std::string, int64_t> m;
       std::string toml = R"({ a = 1, b = 2, c = 3 })";
       auto ec = glz::read_toml(m, toml);
       expect(not ec) << glz::format_error(ec, toml);
@@ -4028,7 +4038,7 @@ enabled = false)";
       expect(not ec) << glz::format_error(ec, toml);
       expect(m.size() == 4);
       expect(std::get<std::string>(m["name"].data) == "Bob");
-      expect(std::get<std::int64_t>(m["count"].data) == 42); // i64 mode preserves integers
+      expect(std::get<int64_t>(m["count"].data) == 42); // i64 mode preserves integers
       expect(std::abs(std::get<double>(m["rate"].data) - 3.14) < 0.001);
       expect(std::get<bool>(m["enabled"].data) == false);
    };
@@ -4042,8 +4052,8 @@ name = "test")";
       auto ec = glz::read_toml(m, toml);
       expect(not ec) << glz::format_error(ec, toml);
       expect(m.size() == 3);
-      expect(std::get<std::uint64_t>(m["big_positive"].data) == (std::numeric_limits<std::uint64_t>::max)());
-      expect(std::get<std::int64_t>(m["negative"].data) == -100); // negative uses std::int64_t
+      expect(std::get<uint64_t>(m["big_positive"].data) == (std::numeric_limits<uint64_t>::max)());
+      expect(std::get<int64_t>(m["negative"].data) == -100); // negative uses std::int64_t
       expect(std::get<std::string>(m["name"].data) == "test");
    };
 
@@ -4061,7 +4071,7 @@ database.name = "mydb")";
       // Check server object
       auto& server = std::get<glz::generic_i64::object_t>(m["server"].data);
       expect(std::get<std::string>(server.at("host").data) == "localhost");
-      expect(std::get<std::int64_t>(server.at("port").data) == 8080);
+      expect(std::get<int64_t>(server.at("port").data) == 8080);
       expect(std::get<bool>(server.at("ssl").data) == true);
 
       // Check database object
@@ -4089,7 +4099,7 @@ verbose = true)";
 
       auto& server = std::get<glz::generic_i64::object_t>(m["server"].data);
       expect(std::get<std::string>(server.at("host").data) == "0.0.0.0");
-      expect(std::get<std::int64_t>(server.at("port").data) == 3000);
+      expect(std::get<int64_t>(server.at("port").data) == 3000);
 
       auto& logging = std::get<glz::generic_i64::object_t>(m["logging"].data);
       expect(std::get<std::string>(logging.at("level").data) == "debug");
@@ -4130,8 +4140,8 @@ name = "origin")";
       expect(m.size() == 2);
 
       auto& point = std::get<glz::generic_i64::object_t>(m["point"].data);
-      expect(std::get<std::int64_t>(point.at("x").data) == 10);
-      expect(std::get<std::int64_t>(point.at("y").data) == 20);
+      expect(std::get<int64_t>(point.at("x").data) == 10);
+      expect(std::get<int64_t>(point.at("y").data) == 20);
 
       expect(std::get<std::string>(m["name"].data) == "origin");
    };
@@ -4141,7 +4151,7 @@ name = "origin")";
       // Create initial map with various value types
       std::map<std::string, glz::generic_i64> original;
       original["name"].data = std::string{"roundtrip_test"};
-      original["count"].data = std::int64_t{999};
+      original["count"].data = int64_t{999};
       original["ratio"].data = double{1.5};
       original["active"].data = true;
 
@@ -4158,7 +4168,7 @@ name = "origin")";
       // Verify
       expect(parsed.size() == 4);
       expect(std::get<std::string>(parsed["name"].data) == "roundtrip_test");
-      expect(std::get<std::int64_t>(parsed["count"].data) == 999);
+      expect(std::get<int64_t>(parsed["count"].data) == 999);
       expect(std::abs(std::get<double>(parsed["ratio"].data) - 1.5) < 0.001);
       expect(std::get<bool>(parsed["active"].data) == true);
    };
@@ -4172,7 +4182,7 @@ weight = 2.5)";
       auto ec = glz::read_toml(m, toml);
       expect(not ec) << glz::format_error(ec, toml);
       expect(m.size() == 3);
-      expect(std::get<std::int64_t>(m["id"].data) == 12345);
+      expect(std::get<int64_t>(m["id"].data) == 12345);
       expect(std::get<std::string>(m["label"].data) == "item");
       expect(std::abs(std::get<double>(m["weight"].data) - 2.5) < 0.001);
    };
@@ -4190,7 +4200,7 @@ a.b.f = true)";
       auto& a = std::get<glz::generic_i64::object_t>(m["a"].data);
       auto& b = std::get<glz::generic_i64::object_t>(a.at("b").data);
       auto& c = std::get<glz::generic_i64::object_t>(b.at("c").data);
-      expect(std::get<std::int64_t>(c.at("d").data) == 42);
+      expect(std::get<int64_t>(c.at("d").data) == 42);
       expect(std::get<std::string>(c.at("e").data) == "deep");
       expect(std::get<bool>(b.at("f").data) == true);
    };

@@ -19,10 +19,16 @@ import glaze.util.string_literal;
 // https://datatracker.ietf.org/doc/html/rfc6902
 
 // todo: export only what is necessary. 
+
+using std::uint8_t;
+using std::uint32_t;
+using std::ptrdiff_t;
+using std::size_t;
+
 export namespace glz
 {
    // RFC 6902 operation types
-   enum struct patch_op_type : std::uint8_t { add, remove, replace, move, copy, test };
+   enum struct patch_op_type : uint8_t { add, remove, replace, move, copy, test };
 
    // Single patch operation
    // Uses std::optional for fields that are only present for certain operations:
@@ -104,7 +110,7 @@ export namespace glz
    {
       std::string result;
       result.reserve(token.size());
-      for (std::size_t i = 0; i < token.size(); ++i) {
+      for (size_t i = 0; i < token.size(); ++i) {
          if (token[i] == '~') {
             if (i + 1 >= token.size()) {
                return unexpected(error_ctx{0, error_code::invalid_json_pointer});
@@ -150,7 +156,7 @@ export namespace glz
          const auto& val_a = std::get<4>(a.data); // array
          const auto& val_b = std::get<4>(b.data);
          if (val_a.size() != val_b.size()) return false;
-         for (std::size_t i = 0; i < val_a.size(); ++i) {
+         for (size_t i = 0; i < val_a.size(); ++i) {
             if (!equal(val_a[i], val_b[i])) return false;
          }
          return true;
@@ -181,7 +187,7 @@ export namespace glz
             }
             else if constexpr (std::same_as<T, generic::array_t>) {
                if (val_a.size() != val_b.size()) return false;
-               for (std::size_t i = 0; i < val_a.size(); ++i) {
+               for (size_t i = 0; i < val_a.size(); ++i) {
                   if (!equal(val_a[i], val_b[i])) return false;
                }
                return true;
@@ -231,7 +237,7 @@ export namespace glz
       }
 
       // Parse array index from string, returns nullopt for "-" (append) or invalid
-      [[nodiscard]] inline std::optional<std::size_t> parse_array_index(std::string_view token)
+      [[nodiscard]] inline std::optional<size_t> parse_array_index(std::string_view token)
       {
          if (token.empty()) return std::nullopt;
 
@@ -241,7 +247,7 @@ export namespace glz
          // Leading zeros are not allowed (except "0" itself)
          if (token.size() > 1 && token[0] == '0') return std::nullopt;
 
-         std::size_t index = 0;
+         size_t index = 0;
          auto [ptr, ec] = std::from_chars(token.data(), token.data() + token.size(), index);
          if (ec != std::errc{} || ptr != token.data() + token.size()) {
             return std::nullopt;
@@ -317,7 +323,7 @@ export namespace glz
 
          while (!remaining.empty()) {
             // Find next '/' or end
-            std::size_t slash_pos = remaining.find('/');
+            size_t slash_pos = remaining.find('/');
             std::string_view segment_escaped =
                (slash_pos == std::string_view::npos) ? remaining : remaining.substr(0, slash_pos);
 
@@ -347,7 +353,7 @@ export namespace glz
                   if (!index_opt || *index_opt > arr.size()) {
                      return error_ctx{0, error_code::nonexistent_json_ptr};
                   }
-                  arr.insert(arr.begin() + static_cast<std::ptrdiff_t>(*index_opt), std::move(value));
+                  arr.insert(arr.begin() + static_cast<ptrdiff_t>(*index_opt), std::move(value));
                   return {};
                }
                else {
@@ -414,12 +420,12 @@ export namespace glz
             return error_ctx{0, error_code::nonexistent_json_ptr};
          }
 
-         std::size_t index = *index_opt;
+         size_t index = *index_opt;
          if (index > arr.size()) {
             return error_ctx{0, error_code::nonexistent_json_ptr};
          }
 
-         arr.insert(arr.begin() + static_cast<std::ptrdiff_t>(index), std::move(value));
+         arr.insert(arr.begin() + static_cast<ptrdiff_t>(index), std::move(value));
          return {};
       }
       else {
@@ -460,13 +466,13 @@ export namespace glz
             return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
          }
 
-         std::size_t index = *index_opt;
+         size_t index = *index_opt;
          if (index >= arr.size()) {
             return unexpected(error_ctx{0, error_code::nonexistent_json_ptr});
          }
 
          generic removed = std::move(arr[index]);
-         arr.erase(arr.begin() + static_cast<std::ptrdiff_t>(index));
+         arr.erase(arr.begin() + static_cast<ptrdiff_t>(index));
          return removed;
       }
       else {
@@ -681,17 +687,17 @@ export namespace glz
             const auto& src_arr = std::get<4>(source.data);
             const auto& tgt_arr = std::get<4>(target.data);
 
-            std::size_t min_len = std::min(src_arr.size(), tgt_arr.size());
+            size_t min_len = std::min(src_arr.size(), tgt_arr.size());
 
             // Compare common elements
-            for (std::size_t i = 0; i < min_len; ++i) {
+            for (size_t i = 0; i < min_len; ++i) {
                std::string child_path = path + "/" + std::to_string(i);
                diff_impl(src_arr[i], tgt_arr[i], child_path, ops, opts);
             }
 
             // Target has more elements -> add
             if (tgt_arr.size() > src_arr.size()) {
-               for (std::size_t i = min_len; i < tgt_arr.size(); ++i) {
+               for (size_t i = min_len; i < tgt_arr.size(); ++i) {
                   std::string child_path = path + "/" + std::to_string(i);
                   ops.push_back({patch_op_type::add, child_path, tgt_arr[i], std::nullopt});
                }
@@ -701,7 +707,7 @@ export namespace glz
             // the patch is applied, removing element N doesn't shift the indices
             // of elements we still need to remove (N-1, N-2, etc.)
             else if (src_arr.size() > tgt_arr.size()) {
-               for (std::size_t i = src_arr.size(); i > min_len; --i) {
+               for (size_t i = src_arr.size(); i > min_len; --i) {
                   std::string child_path = path + "/" + std::to_string(i - 1);
                   ops.push_back({patch_op_type::remove, child_path, std::nullopt, std::nullopt});
                }
@@ -754,17 +760,17 @@ export namespace glz
                   const auto& src_arr = src_val;
                   const auto& tgt_arr = std::get<generic::array_t>(target.data);
 
-                  std::size_t min_len = std::min(src_arr.size(), tgt_arr.size());
+                  size_t min_len = std::min(src_arr.size(), tgt_arr.size());
 
                   // Compare common elements
-                  for (std::size_t i = 0; i < min_len; ++i) {
+                  for (size_t i = 0; i < min_len; ++i) {
                      std::string child_path = path + "/" + std::to_string(i);
                      diff_impl(src_arr[i], tgt_arr[i], child_path, ops, opts);
                   }
 
                   // Target has more elements -> add
                   if (tgt_arr.size() > src_arr.size()) {
-                     for (std::size_t i = min_len; i < tgt_arr.size(); ++i) {
+                     for (size_t i = min_len; i < tgt_arr.size(); ++i) {
                         std::string child_path = path + "/" + std::to_string(i);
                         ops.push_back({patch_op_type::add, child_path, tgt_arr[i], std::nullopt});
                      }
@@ -774,7 +780,7 @@ export namespace glz
                   // the patch is applied, removing element N doesn't shift the indices
                   // of elements we still need to remove (N-1, N-2, etc.)
                   else if (src_arr.size() > tgt_arr.size()) {
-                     for (std::size_t i = src_arr.size(); i > min_len; --i) {
+                     for (size_t i = src_arr.size(); i > min_len; --i) {
                         std::string child_path = path + "/" + std::to_string(i - 1);
                         ops.push_back({patch_op_type::remove, child_path, std::nullopt, std::nullopt});
                      }
@@ -887,7 +893,7 @@ export namespace glz
    {
       // Recursive merge patch implementation
       // Modifies target in-place according to RFC 7386 algorithm
-      [[nodiscard]] inline error_ctx apply_merge_patch_impl(generic& target, const generic& patch, std::uint32_t depth = 0)
+      [[nodiscard]] inline error_ctx apply_merge_patch_impl(generic& target, const generic& patch, uint32_t depth = 0)
       {
          if (depth >= max_recursive_depth_limit) [[unlikely]] {
             return error_ctx{0, error_code::exceeded_max_recursive_depth};

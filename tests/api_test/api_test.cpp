@@ -11,6 +11,10 @@ import glaze.version;
 
 import ut;
 
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
+
 struct my_struct
 {
    int i = 42;
@@ -178,7 +182,7 @@ void tests()
 
    "unordered type name"_test = [] {
       {
-         std::string_view u = glz::name_v<std::unordered_map<std::uint64_t, std::string_view>>;
+         std::string_view u = glz::name_v<std::unordered_map<uint64_t, std::string_view>>;
          expect(u == "std::unordered_map<std::uint64_t,std::string_view>");
       }
    };
@@ -201,10 +205,10 @@ void tests()
 
    "span type name"_test = [] {
       std::string_view s = glz::name_v<std::span<double>>;
-      if constexpr (sizeof(std::size_t) == sizeof(std::uint64_t)) {
+      if constexpr (sizeof(size_t) == sizeof(uint64_t)) {
          expect(s == "std::span<double,18446744073709551615>");
       }
-      else if constexpr (sizeof(std::size_t) == sizeof(std::uint32_t)) {
+      else if constexpr (sizeof(size_t) == sizeof(uint32_t)) {
          expect(s == "std::span<double,4294967295>");
       }
    };

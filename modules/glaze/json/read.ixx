@@ -49,6 +49,12 @@ import glaze.file.file_ops;
 #pragma warning(disable : 4702)
 #endif
 
+using std::uint8_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    // Note: custom_num_t, custom_str_t, custom_bool_t concepts are defined in core/custom_meta.hpp
@@ -94,7 +100,7 @@ namespace glz
                   else if constexpr (std::is_constructible_v<Key, sv>) {
                      parse<JSON>::op<Opts>((value.*reader)[Key{key}], ctx, it, end);
                   }
-                  else if constexpr (std::is_constructible_v<Key, const char*, std::size_t>) {
+                  else if constexpr (std::is_constructible_v<Key, const char*, size_t>) {
                      parse<JSON>::op<Opts>((value.*reader)[Key{key.data(), key.size()}], ctx, it, end);
                   }
                   else if constexpr (std::is_constructible_v<Key, std::string_view>) {
@@ -125,7 +131,7 @@ namespace glz
                      else if constexpr (std::is_constructible_v<KeyParam, sv>) {
                         (value.*reader)(KeyParam{key}, input);
                      }
-                     else if constexpr (std::is_constructible_v<KeyParam, const char*, std::size_t>) {
+                     else if constexpr (std::is_constructible_v<KeyParam, const char*, size_t>) {
                         (value.*reader)(KeyParam{key.data(), key.size()}, input);
                      }
                      else if constexpr (std::is_constructible_v<KeyParam, std::string_view>) {
@@ -210,7 +216,7 @@ namespace glz
          skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         const sv key = {start, std::size_t(it - start)};
+         const sv key = {start, size_t(it - start)};
          ++it;
          if constexpr (not Opts.null_terminated) {
             if (it == end) [[unlikely]] {
@@ -231,7 +237,7 @@ namespace glz
    // Returns the index of the matching key, or N if not found
    // Advances it past the key and closing quote
    template <class T>
-   GLZ_ALWAYS_INLINE std::size_t decode_linear(is_context auto&& ctx, auto&& it, auto&& end)
+   GLZ_ALWAYS_INLINE size_t decode_linear(is_context auto&& ctx, auto&& it, auto&& end)
    {
       static constexpr auto N = reflect<T>::size;
       static constexpr auto& keys = reflect<T>::keys;
@@ -240,11 +246,11 @@ namespace glz
       skip_string_view(ctx, it, end);
       if (bool(ctx.error)) [[unlikely]]
          return N;
-      const sv key{key_start, std::size_t(it - key_start)};
+      const sv key{key_start, size_t(it - key_start)};
       ++it; // skip closing quote
 
       // Linear search through known keys
-      for (std::size_t i = 0; i < N; ++i) {
+      for (size_t i = 0; i < N; ++i) {
          if (keys[i] == key) {
             return i;
          }
@@ -253,7 +259,7 @@ namespace glz
       return N; // not found
    }
 
-   template <auto Opts, class T, std::size_t I, class Value, class... SelectedIndex>
+   template <auto Opts, class T, size_t I, class Value, class... SelectedIndex>
       requires(glaze_object_t<T> || reflectable<T>)
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, SelectedIndex&&... selected_index)
    {
@@ -345,7 +351,7 @@ namespace glz
       }
    }
 
-   template <auto Opts, class T, std::size_t I, class Value>
+   template <auto Opts, class T, size_t I, class Value>
       requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>))
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
    {
@@ -397,7 +403,7 @@ namespace glz
                return;
             }
             else {
-               const sv key{key_start, std::size_t(it - key_start - 1)};
+               const sv key{key_start, size_t(it - key_start - 1)};
                if constexpr (not Opts.null_terminated) {
                   if (it == end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -429,7 +435,7 @@ namespace glz
          }
 
          // Fold expression dispatch - avoids jump table overhead for smaller binary size
-         auto parse_field = [&]<std::size_t I>() {
+         auto parse_field = [&]<size_t I>() {
             if constexpr (check_skip_null_members_on_read(Opts)) {
                if (*it == 'n') {
                   ++it;
@@ -486,7 +492,7 @@ namespace glz
                ((selected_index = I), ...);
             }
          };
-         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+         [&]<size_t... Is>(std::index_sequence<Is...>) {
             (void)(((index == Is ? (parse_field.template operator()<Is>(), true) : false) || ...));
          }(std::make_index_sequence<N>{});
       }
@@ -508,7 +514,7 @@ namespace glz
                skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               const sv key = {start, std::size_t(it - start)};
+               const sv key = {start, size_t(it - start)};
                ++it; // skip the quote
                if constexpr (not Opts.null_terminated) {
                   if (it == end) [[unlikely]] {
@@ -533,7 +539,7 @@ namespace glz
             }
          }
          else {
-            visit<N>([&]<std::size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end, selected_index...); }, index);
+            visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end, selected_index...); }, index);
          }
       }
    }
@@ -575,7 +581,7 @@ namespace glz
          }
 
          const auto n = value.size();
-         for (std::size_t i = 1; it < end; ++i, ++it) {
+         for (size_t i = 1; it < end; ++i, ++it) {
             if (*it == '"') {
                ++it;
                if constexpr (not Opts.null_terminated) {
@@ -699,7 +705,7 @@ namespace glz
          }
          static constexpr sv null_string = "null";
          if constexpr (not check_is_padded(Opts)) {
-            const auto n = std::size_t(end - it);
+            const auto n = size_t(end - it);
             if ((n < 4) || not comparitor<null_string>(it)) [[unlikely]] {
                ctx.error = error_code::syntax_error;
             }
@@ -750,15 +756,15 @@ namespace glz
          }
          else {
             if constexpr (not check_is_padded(Opts)) {
-               if (std::size_t(end - it) < 4) [[unlikely]] {
+               if (size_t(end - it) < 4) [[unlikely]] {
                   ctx.error = error_code::expected_true_or_false;
                   return;
                }
             }
 
-            std::uint32_t c;
-            static constexpr std::uint32_t u_true = 0b01100101'01110101'01110010'01110100;
-            static constexpr std::uint32_t u_fals = 0b01110011'01101100'01100001'01100110;
+            uint32_t c;
+            static constexpr uint32_t u_true = 0b01100101'01110101'01110010'01110100;
+            static constexpr uint32_t u_fals = 0b01110011'01101100'01100001'01100110;
             std::memcpy(&c, it, 4);
             if constexpr (std::endian::native == std::endian::big) {
                c = std::byteswap(c);
@@ -948,7 +954,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            value.append(start, std::size_t(it - start));
+            value.append(start, size_t(it - start));
          }
          else {
             if constexpr (!check_opening_handled(Opts)) {
@@ -973,12 +979,12 @@ namespace glz
                      return;
                   }
 
-                  std::uint64_t chunk;
+                  uint64_t chunk;
                   std::memcpy(&chunk, it, 8);
                   if constexpr (std::endian::native == std::endian::big) {
                      chunk = std::byteswap(chunk);
                   }
-                  const std::uint64_t test_chars = has_quote(chunk);
+                  const uint64_t test_chars = has_quote(chunk);
                   if (test_chars) {
                      it += (std::countr_zero(test_chars) >> 3);
 
@@ -986,7 +992,7 @@ namespace glz
                      while (*prev == '\\') {
                         --prev;
                      }
-                     if (std::size_t(it - prev) % 2) {
+                     if (size_t(it - prev) % 2) {
                         break;
                      }
                      ++it; // skip the escaped quote
@@ -996,7 +1002,7 @@ namespace glz
                   }
                }
 
-               auto n = std::size_t(it - start);
+               auto n = size_t(it - start);
                value.resize(n + string_padding_bytes);
 
                auto* p = value.data();
@@ -1007,17 +1013,17 @@ namespace glz
                   }
 
                   std::memcpy(p, start, 8);
-                  std::uint64_t swar;
+                  uint64_t swar;
                   std::memcpy(&swar, p, 8);
                   if constexpr (std::endian::native == std::endian::big) {
                      swar = std::byteswap(swar);
                   }
 
-                  constexpr std::uint64_t lo7_mask = repeat_byte8(0b01111111);
-                  const std::uint64_t lo7 = swar & lo7_mask;
-                  const std::uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                  const std::uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                  std::uint64_t next = ~((backslash & less_32) | swar);
+                  constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                  const uint64_t lo7 = swar & lo7_mask;
+                  const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                  const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                  uint64_t next = ~((backslash & less_32) | swar);
 
                   next &= repeat_byte8(0b10000000);
                   if (next == 0) {
@@ -1048,11 +1054,11 @@ namespace glz
                      }
                      n += offset;
                      // escape + u + unicode code points
-                     n -= 2 + std::uint32_t(start - mark);
+                     n -= 2 + uint32_t(start - mark);
                   }
                   else {
                      p += next;
-                     *p = char_unescape_table[std::uint8_t(*start)];
+                     *p = char_unescape_table[uint8_t(*start)];
                      if (*p == 0) [[unlikely]] {
                         ctx.error = error_code::invalid_escape;
                         return;
@@ -1073,7 +1079,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               value.assign(start, std::size_t(it - start));
+               value.assign(start, size_t(it - start));
                ++it;
             }
          }
@@ -1093,7 +1099,7 @@ namespace glz
                ctx.error = error_code::parse_number_failure;
                return;
             }
-            value.append(start, std::size_t(it - start));
+            value.append(start, size_t(it - start));
          }
          else {
             if constexpr (!check_opening_handled(Opts)) {
@@ -1111,7 +1117,7 @@ namespace glz
             if constexpr (not check_raw_string(Opts)) {
                static constexpr auto string_padding_bytes = 8;
 
-               if (std::size_t(end - it) >= 8) {
+               if (size_t(end - it) >= 8) {
                   auto start = it;
                   const auto end8 = end - 8;
                   while (true) {
@@ -1119,12 +1125,12 @@ namespace glz
                         break;
                      }
 
-                     std::uint64_t chunk;
+                     uint64_t chunk;
                      std::memcpy(&chunk, it, 8);
                      if constexpr (std::endian::native == std::endian::big) {
                         chunk = std::byteswap(chunk);
                      }
-                     const std::uint64_t test_chars = has_quote(chunk);
+                     const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (std::countr_zero(test_chars) >> 3);
 
@@ -1132,7 +1138,7 @@ namespace glz
                         while (*prev == '\\') {
                            --prev;
                         }
-                        if (std::size_t(it - prev) % 2) {
+                        if (size_t(it - prev) % 2) {
                            goto continue_decode;
                         }
                         ++it; // skip the escaped quote
@@ -1154,7 +1160,7 @@ namespace glz
                         while (*prev == '\\') {
                            --prev;
                         }
-                        if (std::size_t(it - prev) % 2) {
+                        if (size_t(it - prev) % 2) {
                            goto continue_decode;
                         }
                      }
@@ -1165,8 +1171,8 @@ namespace glz
 
                continue_decode:
 
-                  const auto available_padding = std::size_t(end - it);
-                  auto n = std::size_t(it - start);
+                  const auto available_padding = size_t(end - it);
+                  auto n = size_t(it - start);
                   if (available_padding >= 8) [[likely]] {
                      value.resize(n + string_padding_bytes);
 
@@ -1178,17 +1184,17 @@ namespace glz
                         }
 
                         std::memcpy(p, start, 8);
-                        std::uint64_t swar;
+                        uint64_t swar;
                         std::memcpy(&swar, p, 8);
                         if constexpr (std::endian::native == std::endian::big) {
                            swar = std::byteswap(swar);
                         }
 
-                        constexpr std::uint64_t lo7_mask = repeat_byte8(0b01111111);
-                        const std::uint64_t lo7 = swar & lo7_mask;
-                        const std::uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                        const std::uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                        std::uint64_t next = ~((backslash & less_32) | swar);
+                        constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                        const uint64_t lo7 = swar & lo7_mask;
+                        const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                        const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                        uint64_t next = ~((backslash & less_32) | swar);
 
                         next &= repeat_byte8(0b10000000);
                         if (next == 0) {
@@ -1219,11 +1225,11 @@ namespace glz
                            }
                            n += offset;
                            // escape + u + unicode code points
-                           n -= 2 + std::uint32_t(start - mark);
+                           n -= 2 + uint32_t(start - mark);
                         }
                         else {
                            p += next;
-                           *p = char_unescape_table[std::uint8_t(*start)];
+                           *p = char_unescape_table[uint8_t(*start)];
                            if (*p == 0) [[unlikely]] {
                               ctx.error = error_code::invalid_escape;
                               return;
@@ -1245,7 +1251,7 @@ namespace glz
                      it = start;
                      while (it < end) [[likely]] {
                         if (*it == '"') {
-                           value.resize(std::size_t(p - value.data()));
+                           value.resize(size_t(p - value.data()));
                            ++it;
                            return;
                         }
@@ -1267,7 +1273,7 @@ namespace glz
                               }
                            }
                            else {
-                              *p = char_unescape_table[std::uint8_t(*it)];
+                              *p = char_unescape_table[uint8_t(*it)];
                               if (*p == 0) [[unlikely]] {
                                  ctx.error = error_code::invalid_escape;
                                  return;
@@ -1295,7 +1301,7 @@ namespace glz
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
-                        value.assign(buffer.data(), std::size_t(p - buffer.data()));
+                        value.assign(buffer.data(), size_t(p - buffer.data()));
                         ++it;
                         if constexpr (not Opts.null_terminated) {
                            if (it == end) {
@@ -1327,7 +1333,7 @@ namespace glz
                            }
                         }
                         else {
-                           *p = char_unescape_table[std::uint8_t(*it)];
+                           *p = char_unescape_table[uint8_t(*it)];
                            if (*p == 0) [[unlikely]] {
                               ctx.error = error_code::invalid_escape;
                               return;
@@ -1356,7 +1362,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               value.assign(start, std::size_t(it - start));
+               value.assign(start, size_t(it - start));
                ++it;
             }
          }
@@ -1378,7 +1384,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            value.append(reinterpret_cast<const char8_t*>(start), std::size_t(it - start));
+            value.append(reinterpret_cast<const char8_t*>(start), size_t(it - start));
          }
          else {
             if constexpr (!check_opening_handled(Opts)) {
@@ -1403,12 +1409,12 @@ namespace glz
                      return;
                   }
 
-                  std::uint64_t chunk;
+                  uint64_t chunk;
                   std::memcpy(&chunk, it, 8);
                   if constexpr (std::endian::native == std::endian::big) {
                      chunk = std::byteswap(chunk);
                   }
-                  const std::uint64_t test_chars = has_quote(chunk);
+                  const uint64_t test_chars = has_quote(chunk);
                   if (test_chars) {
                      it += (std::countr_zero(test_chars) >> 3);
 
@@ -1416,7 +1422,7 @@ namespace glz
                      while (*prev == '\\') {
                         --prev;
                      }
-                     if (std::size_t(it - prev) % 2) {
+                     if (size_t(it - prev) % 2) {
                         break;
                      }
                      ++it; // skip the escaped quote
@@ -1426,7 +1432,7 @@ namespace glz
                   }
                }
 
-               auto n = std::size_t(it - start);
+               auto n = size_t(it - start);
                value.resize(n + string_padding_bytes);
 
                auto* p = reinterpret_cast<char*>(value.data());
@@ -1437,17 +1443,17 @@ namespace glz
                   }
 
                   std::memcpy(p, start, 8);
-                  std::uint64_t swar;
+                  uint64_t swar;
                   std::memcpy(&swar, p, 8);
                   if constexpr (std::endian::native == std::endian::big) {
                      swar = std::byteswap(swar);
                   }
 
-                  constexpr std::uint64_t lo7_mask = repeat_byte8(0b01111111);
-                  const std::uint64_t lo7 = swar & lo7_mask;
-                  const std::uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                  const std::uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                  std::uint64_t next = ~((backslash & less_32) | swar);
+                  constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                  const uint64_t lo7 = swar & lo7_mask;
+                  const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                  const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                  uint64_t next = ~((backslash & less_32) | swar);
 
                   next &= repeat_byte8(0b10000000);
                   if (next == 0) {
@@ -1478,11 +1484,11 @@ namespace glz
                      }
                      n += offset;
                      // escape + u + unicode code points
-                     n -= 2 + std::uint32_t(start - mark);
+                     n -= 2 + uint32_t(start - mark);
                   }
                   else {
                      p += next;
-                     *p = char_unescape_table[std::uint8_t(*start)];
+                     *p = char_unescape_table[uint8_t(*start)];
                      if (*p == 0) [[unlikely]] {
                         ctx.error = error_code::invalid_escape;
                         return;
@@ -1503,7 +1509,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               value.assign(reinterpret_cast<const char8_t*>(start), std::size_t(it - start));
+               value.assign(reinterpret_cast<const char8_t*>(start), size_t(it - start));
                ++it;
             }
          }
@@ -1523,7 +1529,7 @@ namespace glz
                ctx.error = error_code::parse_number_failure;
                return;
             }
-            value.append(reinterpret_cast<const char8_t*>(start), std::size_t(it - start));
+            value.append(reinterpret_cast<const char8_t*>(start), size_t(it - start));
          }
          else {
             if constexpr (!check_opening_handled(Opts)) {
@@ -1541,7 +1547,7 @@ namespace glz
             if constexpr (not check_raw_string(Opts)) {
                static constexpr auto string_padding_bytes = 8;
 
-               if (std::size_t(end - it) >= 8) {
+               if (size_t(end - it) >= 8) {
                   auto start = it;
                   const auto end8 = end - 8;
                   while (true) {
@@ -1549,12 +1555,12 @@ namespace glz
                         break;
                      }
 
-                     std::uint64_t chunk;
+                     uint64_t chunk;
                      std::memcpy(&chunk, it, 8);
                      if constexpr (std::endian::native == std::endian::big) {
                         chunk = std::byteswap(chunk);
                      }
-                     const std::uint64_t test_chars = has_quote(chunk);
+                     const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (std::countr_zero(test_chars) >> 3);
 
@@ -1562,7 +1568,7 @@ namespace glz
                         while (*prev == '\\') {
                            --prev;
                         }
-                        if (std::size_t(it - prev) % 2) {
+                        if (size_t(it - prev) % 2) {
                            goto continue_decode_u8;
                         }
                         ++it; // skip the escaped quote
@@ -1584,7 +1590,7 @@ namespace glz
                         while (*prev == '\\') {
                            --prev;
                         }
-                        if (std::size_t(it - prev) % 2) {
+                        if (size_t(it - prev) % 2) {
                            goto continue_decode_u8;
                         }
                      }
@@ -1595,8 +1601,8 @@ namespace glz
 
                continue_decode_u8:
 
-                  const auto available_padding = std::size_t(end - it);
-                  auto n = std::size_t(it - start);
+                  const auto available_padding = size_t(end - it);
+                  auto n = size_t(it - start);
                   if (available_padding >= 8) [[likely]] {
                      value.resize(n + string_padding_bytes);
 
@@ -1608,17 +1614,17 @@ namespace glz
                         }
 
                         std::memcpy(p, start, 8);
-                        std::uint64_t swar;
+                        uint64_t swar;
                         std::memcpy(&swar, p, 8);
                         if constexpr (std::endian::native == std::endian::big) {
                            swar = std::byteswap(swar);
                         }
 
-                        constexpr std::uint64_t lo7_mask = repeat_byte8(0b01111111);
-                        const std::uint64_t lo7 = swar & lo7_mask;
-                        const std::uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                        const std::uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                        std::uint64_t next = ~((backslash & less_32) | swar);
+                        constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                        const uint64_t lo7 = swar & lo7_mask;
+                        const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                        const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                        uint64_t next = ~((backslash & less_32) | swar);
 
                         next &= repeat_byte8(0b10000000);
                         if (next == 0) {
@@ -1649,11 +1655,11 @@ namespace glz
                            }
                            n += offset;
                            // escape + u + unicode code points
-                           n -= 2 + std::uint32_t(start - mark);
+                           n -= 2 + uint32_t(start - mark);
                         }
                         else {
                            p += next;
-                           *p = char_unescape_table[std::uint8_t(*start)];
+                           *p = char_unescape_table[uint8_t(*start)];
                            if (*p == 0) [[unlikely]] {
                               ctx.error = error_code::invalid_escape;
                               return;
@@ -1675,7 +1681,7 @@ namespace glz
                      it = start;
                      while (it < end) [[likely]] {
                         if (*it == '"') {
-                           value.resize(std::size_t(p - reinterpret_cast<char*>(value.data())));
+                           value.resize(size_t(p - reinterpret_cast<char*>(value.data())));
                            ++it;
                            return;
                         }
@@ -1697,7 +1703,7 @@ namespace glz
                               }
                            }
                            else {
-                              *p = char_unescape_table[std::uint8_t(*it)];
+                              *p = char_unescape_table[uint8_t(*it)];
                               if (*p == 0) [[unlikely]] {
                                  ctx.error = error_code::invalid_escape;
                                  return;
@@ -1725,7 +1731,7 @@ namespace glz
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
-                        value.assign(reinterpret_cast<const char8_t*>(buffer.data()), std::size_t(p - buffer.data()));
+                        value.assign(reinterpret_cast<const char8_t*>(buffer.data()), size_t(p - buffer.data()));
                         ++it;
                         if constexpr (not Opts.null_terminated) {
                            if (it == end) {
@@ -1757,7 +1763,7 @@ namespace glz
                            }
                         }
                         else {
-                           *p = char_unescape_table[std::uint8_t(*it)];
+                           *p = char_unescape_table[uint8_t(*it)];
                            if (*p == 0) [[unlikely]] {
                               ctx.error = error_code::invalid_escape;
                               return;
@@ -1786,7 +1792,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               value.assign(reinterpret_cast<const char8_t*>(start), std::size_t(it - start));
+               value.assign(reinterpret_cast<const char8_t*>(start), size_t(it - start));
                ++it;
             }
          }
@@ -1820,14 +1826,14 @@ namespace glz
          if constexpr (string_view_t<T>) {
             using value_type = typename std::decay_t<T>::value_type;
             if constexpr (std::same_as<value_type, char8_t>) {
-               value = {reinterpret_cast<const char8_t*>(start), std::size_t(it - start)};
+               value = {reinterpret_cast<const char8_t*>(start), size_t(it - start)};
             }
             else {
-               value = {start, std::size_t(it - start)};
+               value = {start, size_t(it - start)};
             }
          }
          else if constexpr (char_array_t<T>) {
-            const std::size_t n = it - start;
+            const size_t n = it - start;
             if ((n + 1) > sizeof(value)) {
                ctx.error = error_code::unexpected_end;
                return;
@@ -1836,7 +1842,7 @@ namespace glz
             value[n] = '\0';
          }
          else if constexpr (array_char_t<T>) {
-            const std::size_t n = it - start;
+            const size_t n = it - start;
             if ((n + 1) > value.size()) {
                ctx.error = error_code::unexpected_end;
                return;
@@ -1845,7 +1851,7 @@ namespace glz
             value[n] = '\0';
          }
          else if constexpr (static_string_t<T>) {
-            const std::size_t n = it - start;
+            const size_t n = it - start;
             if (n > value.capacity()) {
                ctx.error = error_code::unexpected_end;
                return;
@@ -2002,7 +2008,7 @@ namespace glz
             }
 
             // Simply assign the enum value - fold expression dispatch
-            [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            [&]<size_t... Is>(std::index_sequence<Is...>) {
                (void)(((index == Is ? (value = get<Is>(reflect<T>::values), true) : false) || ...));
             }(std::make_index_sequence<N>{});
          }
@@ -2016,7 +2022,7 @@ namespace glz
                return;
             }
 
-            visit<N>([&]<std::size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end); }, index);
+            visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end); }, index);
          }
       }
    };
@@ -2074,7 +2080,7 @@ namespace glz
          if (*it == 'n') {
             match<"null", Opts>(ctx, it, end);
          }
-         else if (is_digit(std::uint8_t(*it))) {
+         else if (is_digit(uint8_t(*it))) {
             skip_number<Opts>(ctx, it, end);
          }
          else {
@@ -2082,7 +2088,7 @@ namespace glz
          }
          if (bool(ctx.error)) [[unlikely]]
             return;
-         value.str = {it_start, static_cast<std::size_t>(it - it_start)};
+         value.str = {it_start, static_cast<size_t>(it - it_start)};
       }
    };
 
@@ -2092,7 +2098,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto end)
       {
-         value.str = {it, static_cast<std::size_t>(end - it)}; // read entire contents as string
+         value.str = {it, static_cast<size_t>(end - it)}; // read entire contents as string
          it = end;
       }
    };
@@ -2200,7 +2206,7 @@ namespace glz
             return;
          }
 
-         const std::size_t ws_size = std::size_t(it - ws_start);
+         const size_t ws_size = size_t(it - ws_start);
 
          static constexpr bool should_append = (resizable<T> || is_inplace_vector<T>) && check_append_arrays(Opts);
          if constexpr (not should_append) {
@@ -2208,7 +2214,7 @@ namespace glz
 
             auto value_it = value.begin();
 
-            for (std::size_t i = 0; i < n; ++i) {
+            for (size_t i = 0; i < n; ++i) {
                parse<JSON>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -2219,7 +2225,7 @@ namespace glz
                   ++it;
 
                   if constexpr (!Opts.minified && !Opts.comments) {
-                     if (ws_size && ws_size < std::size_t(end - it)) {
+                     if (ws_size && ws_size < size_t(end - it)) {
                         skip_matching_ws(ws_start, it, ws_size);
                      }
                   }
@@ -2260,8 +2266,8 @@ namespace glz
                   // Streaming refill point: at start of each iteration, ensure buffer has data
                   if constexpr (has_streaming_state<decltype(ctx)>) {
                      if (ctx.stream.enabled()) {
-                        const std::size_t consumed = static_cast<std::size_t>(it - ctx.stream.data());
-                        const std::size_t remaining = ctx.stream.size() - consumed;
+                        const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
+                        const size_t remaining = ctx.stream.size() - consumed;
                         // Refill when less than half of buffer remains to ensure space for next element
                         if (remaining <= ctx.stream.size() / 2 || it >= end) {
                            const char* new_it;
@@ -2292,7 +2298,7 @@ namespace glz
                   // Streaming refill point: after parsing each element, refill if buffer is low
                   if constexpr (has_streaming_state<decltype(ctx)>) {
                      if (ctx.stream.enabled()) {
-                        const std::size_t consumed = static_cast<std::size_t>(it - ctx.stream.data());
+                        const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
                         // Refill when less than 25% of buffer remains to ensure enough space for next element
                         if (ctx.stream.size() - consumed <= ctx.stream.size() / 4 || it >= end) {
                            const char* new_it;
@@ -2315,7 +2321,7 @@ namespace glz
                      ++it;
 
                      if constexpr (!Opts.minified && !Opts.comments) {
-                        if (ws_size && ws_size < std::size_t(end - it)) {
+                        if (ws_size && ws_size < size_t(end - it)) {
                            skip_matching_ws(ws_start, it, ws_size);
                         }
                      }
@@ -2421,7 +2427,7 @@ namespace glz
                   parse<JSON>::op<Opts>(item.first, ctx, key.data(), key.data() + key.size());
                }
                else {
-                  if (std::size_t(end - it) == key.size()) [[unlikely]] {
+                  if (size_t(end - it) == key.size()) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
@@ -2465,7 +2471,7 @@ namespace glz
    // 'it' is copied so that it does not actually progress the iterator
    // expects the opening brace ([) to have already been consumed
    template <auto Opts>
-   [[nodiscard]] std::size_t number_of_array_elements(is_context auto&& ctx, auto it, auto end) noexcept
+   [[nodiscard]] size_t number_of_array_elements(is_context auto&& ctx, auto it, auto end) noexcept
    {
       skip_ws<Opts>(ctx, it, end);
       if (bool(ctx.error)) [[unlikely]]
@@ -2474,7 +2480,7 @@ namespace glz
       if (*it == ']') [[unlikely]] {
          return 0;
       }
-      std::size_t count = 1;
+      size_t count = 1;
       while (true) {
          switch (*it) {
          case ',': {
@@ -2545,7 +2551,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
          value.resize(n);
-         std::size_t i = 0;
+         size_t i = 0;
          for (auto& x : value) {
             parse<JSON>::op<Opts>(x, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -2600,7 +2606,7 @@ namespace glz
             return;
          }
 
-         for_each<N>([&]<std::size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -2692,7 +2698,7 @@ namespace glz
 
             constexpr auto N = reflect<T>::size;
             if (index < N) [[likely]] {
-               visit<N>([&]<std::size_t I>() { get_member(value, get<I>(reflect<T>::values)) = true; }, index);
+               visit<N>([&]<size_t I>() { get_member(value, get<I>(reflect<T>::values)) = true; }, index);
             }
             else [[unlikely]] {
                ctx.error = error_code::invalid_flag_input;
@@ -2816,7 +2822,7 @@ namespace glz
                parse<JSON>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
             }
             else {
-               if (std::size_t(end - it) == key.size()) [[unlikely]] {
+               if (size_t(end - it) == key.size()) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -2857,7 +2863,7 @@ namespace glz
    inline consteval bool contains_tag()
    {
       auto& keys = reflect<T>::keys;
-      for (std::size_t i = 0; i < keys.size(); ++i) {
+      for (size_t i = 0; i < keys.size(); ++i) {
          if (Tag.sv() == keys[i]) {
             return true;
          }
@@ -2898,7 +2904,7 @@ namespace glz
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
          }
-         const std::size_t ws_size = std::size_t(it - ws_start);
+         const size_t ws_size = size_t(it - ws_start);
 
          if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0 && Opts.error_on_unknown_keys) {
             if constexpr (not tag.sv().empty()) {
@@ -2915,7 +2921,7 @@ namespace glz
                   skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  const sv key{start, std::size_t(it - start)};
+                  const sv key{start, size_t(it - start)};
                   ++it;
                   if constexpr (not Opts.null_terminated) {
                      if (it == end) [[unlikely]] {
@@ -2983,14 +2989,14 @@ namespace glz
                }
             }();
 
-            std::size_t read_count{}; // for partial_read
+            size_t read_count{}; // for partial_read
 
             bool first = true;
             while (true) {
                if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.partial_read) {
                   static constexpr bit_array<num_members> all_fields = [] {
                      bit_array<num_members> arr{};
-                     for (std::size_t i = 0; i < num_members; ++i) {
+                     for (size_t i = 0; i < num_members; ++i) {
                         arr[i] = true;
                      }
                      return arr;
@@ -3005,8 +3011,8 @@ namespace glz
                // Streaming refill point: at start of each iteration, ensure buffer has data
                if constexpr (has_streaming_state<decltype(ctx)>) {
                   if (ctx.stream.enabled()) {
-                     const std::size_t consumed = static_cast<std::size_t>(it - ctx.stream.data());
-                     const std::size_t remaining = ctx.stream.size() - consumed;
+                     const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
+                     const size_t remaining = ctx.stream.size() - consumed;
                      // Refill when less than half of buffer remains to ensure space for next key-value pair
                      if (remaining <= ctx.stream.size() / 2 || it >= end) {
                         const char* new_it;
@@ -3029,7 +3035,7 @@ namespace glz
                   if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
                      constexpr auto req_fields = required_fields<T, Opts>();
                      if ((req_fields & fields) != req_fields) {
-                        for (std::size_t i = 0; i < num_members; ++i) {
+                        for (size_t i = 0; i < num_members; ++i) {
                            if (not fields[i] && req_fields[i]) {
                               ctx.custom_error_message = reflect<T>::keys[i];
                               // We just return the first missing key in order to avoid heap allocations
@@ -3075,7 +3081,7 @@ namespace glz
 
                   if constexpr ((not Opts.minified) && (num_members > 1 || not Opts.error_on_unknown_keys) &&
                                 (!Opts.comments)) {
-                     if (ws_size && ws_size < std::size_t(end - it)) {
+                     if (ws_size && ws_size < size_t(end - it)) {
                         skip_matching_ws(ws_start, it, ws_size);
                      }
                   }
@@ -3105,7 +3111,7 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv key{start, std::size_t(it - start)};
+                     const sv key{start, size_t(it - start)};
                      ++it;
                      if constexpr (not Opts.null_terminated) {
                         if (it == end) [[unlikely]] {
@@ -3169,7 +3175,7 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv key{start, std::size_t(it - start)};
+                     const sv key{start, size_t(it - start)};
                      ++it;
                      if constexpr (not Opts.null_terminated) {
                         if (it == end) [[unlikely]] {
@@ -3198,7 +3204,7 @@ namespace glz
                   }
 
                   if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
-                     std::size_t index = num_members;
+                     size_t index = num_members;
                      parse_and_invoke<Opts, T>(value, ctx, it, end, index);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -3303,7 +3309,7 @@ namespace glz
                // Streaming refill point: after parsing each key-value pair, refill if buffer is low
                if constexpr (has_streaming_state<decltype(ctx)>) {
                   if (ctx.stream.enabled()) {
-                     const std::size_t consumed = static_cast<std::size_t>(it - ctx.stream.data());
+                     const size_t consumed = static_cast<size_t>(it - ctx.stream.data());
                      // Refill when less than 25% of buffer remains to ensure enough space for next element
                      if (ctx.stream.size() - consumed <= ctx.stream.size() / 4 || it >= end) {
                         const char* new_it;
@@ -3419,11 +3425,11 @@ namespace glz
    template <template <class> class Trait, class... Ts>
    struct variant_count_impl<std::variant<Ts...>, Trait>
    {
-      static constexpr std::size_t value = (std::size_t(Trait<Ts>::value) + ... + 0);
+      static constexpr size_t value = (size_t(Trait<Ts>::value) + ... + 0);
    };
 
    template <class Variant, template <class> class Trait>
-   constexpr std::size_t variant_count_v = variant_count_impl<Variant, Trait>::value;
+   constexpr size_t variant_count_v = variant_count_impl<Variant, Trait>::value;
 
    // Get first index matching trait (or variant_npos if none)
    // Using helper struct instead of IIFE for MSVC compatibility
@@ -3433,19 +3439,19 @@ namespace glz
    template <template <class> class Trait, class... Ts>
    struct variant_first_index_impl<std::variant<Ts...>, Trait>
    {
-      static constexpr std::size_t find()
+      static constexpr size_t find()
       {
-         std::size_t result = std::variant_npos;
-         std::size_t idx = 0;
+         size_t result = std::variant_npos;
+         size_t idx = 0;
          // Short-circuit: find first match
          ((Trait<Ts>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx), ...);
          return result;
       }
-      static constexpr std::size_t value = find();
+      static constexpr size_t value = find();
    };
 
    template <class Variant, template <class> class Trait>
-   constexpr std::size_t variant_first_index_v = variant_first_index_impl<Variant, Trait>::value;
+   constexpr size_t variant_first_index_v = variant_first_index_impl<Variant, Trait>::value;
 
    // Count types matching both category trait AND const/non-const filter
    // Using helper struct instead of IIFE for MSVC compatibility
@@ -3455,11 +3461,11 @@ namespace glz
    template <template <class> class Trait, bool IsConst, class... Ts>
    struct variant_filtered_count_impl<std::variant<Ts...>, Trait, IsConst>
    {
-      static constexpr std::size_t value = (std::size_t(Trait<Ts>::value && (glaze_const_value_t<Ts> == IsConst)) + ... + 0);
+      static constexpr size_t value = (size_t(Trait<Ts>::value && (glaze_const_value_t<Ts> == IsConst)) + ... + 0);
    };
 
    template <class Variant, template <class> class Trait, bool IsConst>
-   constexpr std::size_t variant_filtered_count_v = variant_filtered_count_impl<Variant, Trait, IsConst>::value;
+   constexpr size_t variant_filtered_count_v = variant_filtered_count_impl<Variant, Trait, IsConst>::value;
 
    // Variant type counts using fold expressions (replaces tuple-based variant_type_count)
    export template <class T>
@@ -3496,7 +3502,7 @@ namespace glz
 
             // First pass: const glaze types in this category
             if constexpr (const_count > 0) {
-               for_each<N>([&]<std::size_t I>() {
+               for_each<N>([&]<size_t I>() {
                   if (found_match) {
                      return;
                   }
@@ -3535,9 +3541,9 @@ namespace glz
                // so we need runtime tracking (vs the old tuple-based approach where
                // the loop index directly corresponded to position in filtered set).
                // This has negligible cost: one increment per matching type.
-               std::size_t non_const_idx = 0;
+               size_t non_const_idx = 0;
 
-               for_each<N>([&]<std::size_t I>() {
+               for_each<N>([&]<size_t I>() {
                   if (found_match) {
                      return;
                   }
@@ -3655,11 +3661,11 @@ namespace glz
                else {
                   auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
                   static constexpr auto& deduction_bits = variant_deduction_bits<T>;
-                  static constexpr std::size_t deduction_key_count = variant_deduction_key_count<T>;
+                  static constexpr size_t deduction_key_count = variant_deduction_key_count<T>;
                   static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
 
                   // Track if we've encountered a tag and what value it had
-                  std::optional<std::size_t> tag_specified_index{};
+                  std::optional<size_t> tag_specified_index{};
 
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
@@ -3683,7 +3689,7 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv key = {key_start, std::size_t(it - key_start)};
+                     const sv key = {key_start, size_t(it - key_start)};
 
                      if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                         return;
@@ -3716,7 +3722,7 @@ namespace glz
                                  return;
                               }
 
-                              std::size_t type_index;
+                              size_t type_index;
                               if constexpr (std::integral<id_type>) {
                                  type_index = variant_id_to_index<T>::op(type_id);
                               }
@@ -3958,7 +3964,7 @@ namespace glz
                            it = start;
                            const auto type_index = possible_types.countr_zero();
 
-                           if (value.index() != static_cast<std::size_t>(type_index))
+                           if (value.index() != static_cast<size_t>(type_index))
                               emplace_runtime_variant(value, type_index);
                            std::visit(
                               [&](auto&& v) {
@@ -4037,13 +4043,13 @@ namespace glz
 
                         // Validate against tag if one was specified
                         if (tag_specified_index.has_value() &&
-                            tag_specified_index.value() != static_cast<std::size_t>(type_index)) {
+                            tag_specified_index.value() != static_cast<size_t>(type_index)) {
                            ctx.error = error_code::no_matching_variant_type;
                            return;
                         }
 
                         it = start;
-                        if (value.index() != static_cast<std::size_t>(type_index))
+                        if (value.index() != static_cast<size_t>(type_index))
                            emplace_runtime_variant(value, type_index);
                         std::visit(
                            [&](auto&& v) {
@@ -4094,9 +4100,9 @@ namespace glz
                         constexpr auto N = std::variant_size_v<T>;
 
                         // Compile-time array of field counts for each variant type
-                        constexpr auto field_counts = []<std::size_t... I>(std::index_sequence<I...>) {
-                           return std::array<std::size_t, N> {
-                              ([]<std::size_t J = I>() -> std::size_t {
+                        constexpr auto field_counts = []<size_t... I>(std::index_sequence<I...>) {
+                           return std::array<size_t, N> {
+                              ([]<size_t J = I>() -> size_t {
                                  using V = std::decay_t<std::variant_alternative_t<J, T>>;
                                  if constexpr (glaze_object_t<V> || reflectable<V>) {
                                     return reflect<V>::size;
@@ -4107,21 +4113,21 @@ namespace glz
                                        return reflect<X>::size;
                                     }
                                     else {
-                                       return std::numeric_limits<std::size_t>::max();
+                                       return std::numeric_limits<size_t>::max();
                                     }
                                  }
                                  else {
-                                    return std::numeric_limits<std::size_t>::max();
+                                    return std::numeric_limits<size_t>::max();
                                  }
                               }.template operator()<I>())...
                            };
                         }(std::make_index_sequence<N>{});
 
                         // Find the type with minimum field count among the possible types
-                        std::size_t min_fields = std::numeric_limits<std::size_t>::max();
-                        std::size_t chosen_index = N; // Invalid index initially
+                        size_t min_fields = std::numeric_limits<size_t>::max();
+                        size_t chosen_index = N; // Invalid index initially
 
-                        for (std::size_t i = 0; i < N; ++i) {
+                        for (size_t i = 0; i < N; ++i) {
                            if (possible_types[i] && field_counts[i] < min_fields) {
                               min_fields = field_counts[i];
                               chosen_index = i;
@@ -4239,7 +4245,7 @@ namespace glz
             constexpr auto N = std::variant_size_v<T>;
             bool parsed = false;
 
-            for_each<N>([&]<std::size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (parsed) return;
 
                auto copy_it = it;
@@ -4315,7 +4321,7 @@ namespace glz
          skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         sv type_id = {start, std::size_t(it - start)};
+         sv type_id = {start, size_t(it - start)};
          if (match<'"'>(ctx, it)) {
             return;
          }
@@ -4455,7 +4461,7 @@ namespace glz
       requires(std::is_array_v<T>)
    struct from<JSON, T>
    {
-      template <auto Opts, class V, std::size_t N>
+      template <auto Opts, class V, size_t N>
       GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          parse<JSON>::op<Opts>(std::span{value, N}, ctx, it, end);
@@ -4557,7 +4563,7 @@ namespace glz
                return;
          }
          else {
-            if (std::size_t(ctx.error) > std::size_t(error_code::end_reached)) [[unlikely]] {
+            if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]] {
                return;
             }
          }
@@ -4611,9 +4617,9 @@ namespace glz
          const auto n = str.size();
 
          // Helper to parse N digits
-         auto parse_digits = [&s](std::size_t start, std::size_t count) -> int {
+         auto parse_digits = [&s](size_t start, size_t count) -> int {
             int val = 0;
-            for (std::size_t i = 0; i < count; ++i) {
+            for (size_t i = 0; i < count; ++i) {
                const char c = s[start + i];
                if (c < '0' || c > '9') return -1;
                val = val * 10 + (c - '0');
@@ -4642,11 +4648,11 @@ namespace glz
          }
 
          // Parse optional fractional seconds
-         std::size_t pos = 19;
-         std::int64_t subsec_nanos = 0;
+         size_t pos = 19;
+         int64_t subsec_nanos = 0;
          if (pos < n && s[pos] == '.') {
             ++pos;
-            std::int64_t frac = 0;
+            int64_t frac = 0;
             int digits = 0;
             while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
                if (digits < 9) {
@@ -4656,7 +4662,7 @@ namespace glz
                ++pos;
             }
             // Scale to nanoseconds
-            static constexpr std::int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
+            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
                                                 10000,      1000,      100,      10,      1};
             if (digits > 0 && digits <= 9) {
                subsec_nanos = frac * scale[digits];

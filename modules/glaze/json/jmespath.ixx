@@ -22,6 +22,9 @@ import glaze.util.tuple;
 import glaze.concepts.container_concepts;
 import glaze.tuplet;
 
+using std::int32_t;
+using std::size_t;
+
 namespace glz
 {
    namespace jmespath
@@ -50,7 +53,7 @@ namespace glz
        */
       inline constexpr std::string_view trim_left(std::string_view s)
       {
-         std::size_t start = 0;
+         size_t start = 0;
          while (start < s.size() && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r')) {
             start++;
          }
@@ -72,8 +75,8 @@ namespace glz
             return {"", "", tokenization_error::none};
          }
 
-         std::size_t pos = 0;
-         std::size_t len = s.size();
+         size_t pos = 0;
+         size_t len = s.size();
          int bracket_level = 0;
          int parenthesis_level = 0;
          bool in_string = false;
@@ -85,8 +88,8 @@ namespace glz
             if (in_string) {
                if (current == string_delim) {
                   // Check for escaped delimiter
-                  std::size_t backslashes = 0;
-                  std::size_t temp = pos;
+                  size_t backslashes = 0;
+                  size_t temp = pos;
                   while (temp > 0 && s[--temp] == '\\') {
                      backslashes++;
                   }
@@ -180,7 +183,7 @@ namespace glz
          final_tokens.reserve(tokens.size()); // at least
 
          for (auto token : tokens) {
-            std::size_t start = 0;
+            size_t start = 0;
             while (start < token.size()) {
                // Find the next '['
                auto open = token.find('[', start);
@@ -286,7 +289,7 @@ namespace glz
          }
 
          std::array<std::string_view, N> arr{};
-         for (std::size_t i = 0; i < N; ++i) {
+         for (size_t i = 0; i < N; ++i) {
             arr[i] = tokens[i];
          }
          return arr; // Vector destroyed here, leaving only the array.
@@ -297,10 +300,10 @@ namespace glz
          bool is_array_access = false; // True if "key[...]"
          bool error = false; // True if parsing encountered an error
          std::string_view key; // The part before the first '['
-         std::optional<std::int32_t> start; // For a single index or slice start
-         std::optional<std::int32_t> end; // For slice end
-         std::optional<std::int32_t> step; // For slice step
-         std::size_t colon_count = 0; // Number of ':' characters found inside the brackets
+         std::optional<int32_t> start; // For a single index or slice start
+         std::optional<int32_t> end; // For slice end
+         std::optional<int32_t> step; // For slice step
+         size_t colon_count = 0; // Number of ':' characters found inside the brackets
       };
 
       inline constexpr std::optional<int> parse_int(std::string_view s)
@@ -348,7 +351,7 @@ namespace glz
          }
 
          // Count colons to determine if it's a slice
-         std::size_t colon_count = 0;
+         size_t colon_count = 0;
          for (char c : inside) {
             if (c == ':') {
                colon_count++;
@@ -360,9 +363,9 @@ namespace glz
          auto parse_slice = [&](std::string_view inside) {
             std::string_view parts[3];
             {
-               std::size_t start_idx = 0;
+               size_t start_idx = 0;
                int idx = 0;
-               for (std::size_t i = 0; i <= inside.size(); ++i) {
+               for (size_t i = 0; i <= inside.size(); ++i) {
                   if (i == inside.size() || inside[i] == ':') {
                      if (idx < 3) {
                         parts[idx] = inside.substr(start_idx, i - start_idx);
@@ -450,7 +453,7 @@ namespace glz
          }
 
          // Determine slice parameters
-         std::int32_t step_idx = decomposed_key.step.value_or(1);
+         int32_t step_idx = decomposed_key.step.value_or(1);
          bool has_negative_index = (decomposed_key.start.value_or(0) < 0) || (decomposed_key.end.value_or(0) < 0);
 
          // Only support step == 1 and positive indices for now for tuples
@@ -459,24 +462,24 @@ namespace glz
             return;
          }
 
-         const std::int32_t start_idx = decomposed_key.start.value_or(0);
-         const std::int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<std::int32_t>::max)());
+         const int32_t start_idx = decomposed_key.start.value_or(0);
+         const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
 
          if (*it == ']') {
             ++it;
             return;
          }
 
-         std::int32_t current_index = 0;
+         int32_t current_index = 0;
 
          // Iterate tuple elements
          using TupleType = std::decay_t<T>;
-         constexpr std::size_t N = glz::tuple_size_v<TupleType>;
+         constexpr size_t N = glz::tuple_size_v<TupleType>;
 
-         glz::for_each<N>([&]<std::size_t I>() {
+         glz::for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) return;
 
-            std::int32_t target_idx = start_idx + I;
+            int32_t target_idx = start_idx + I;
 
             // If target is beyond the slice request
             if (target_idx >= end_idx) {
@@ -547,7 +550,7 @@ namespace glz
          }
 
          // Determine slice parameters
-         std::int32_t step_idx = decomposed_key.step.value_or(1);
+         int32_t step_idx = decomposed_key.step.value_or(1);
          bool has_negative_index = (decomposed_key.start.value_or(0) < 0) || (decomposed_key.end.value_or(0) < 0);
 
          // If we have negative indices or step != 1, fall back to the original method (read all then slice)
@@ -584,21 +587,21 @@ namespace glz
             }
 
             // Now do the slicing
-            const std::int32_t size = static_cast<std::int32_t>(value.size());
-            auto wrap_index = [&](std::int32_t idx) {
+            const int32_t size = static_cast<int32_t>(value.size());
+            auto wrap_index = [&](int32_t idx) {
                if (idx < 0) idx += size;
-               return std::clamp(idx, std::int32_t{0}, size);
+               return std::clamp(idx, int32_t{0}, size);
             };
 
-            const std::int32_t start_idx = wrap_index(decomposed_key.start.value_or(0));
-            const std::int32_t end_idx = wrap_index(decomposed_key.end.value_or(size));
+            const int32_t start_idx = wrap_index(decomposed_key.start.value_or(0));
+            const int32_t end_idx = wrap_index(decomposed_key.end.value_or(size));
 
             if (step_idx == 1) {
                if (start_idx < end_idx) {
                   if (start_idx > 0) {
                      value.erase(value.begin(), value.begin() + start_idx);
                   }
-                  if (static_cast<std::size_t>(end_idx - start_idx) < value.size()) {
+                  if (static_cast<size_t>(end_idx - start_idx) < value.size()) {
                      value.erase(value.begin() + (end_idx - start_idx), value.end());
                   }
                }
@@ -609,14 +612,14 @@ namespace glz
             else {
                // For steps != 1 (or negative steps), the fallback path was already chosen.
                // Just apply the same logic as before.
-               std::size_t dest = 0;
+               size_t dest = 0;
                if (step_idx > 0) {
-                  for (std::int32_t i = start_idx; i < end_idx; i += step_idx) {
+                  for (int32_t i = start_idx; i < end_idx; i += step_idx) {
                      value[dest++] = std::move(value[i]);
                   }
                }
                else {
-                  for (std::int32_t i = start_idx; i > end_idx; i += step_idx) {
+                  for (int32_t i = start_idx; i > end_idx; i += step_idx) {
                      value[dest++] = std::move(value[i]);
                   }
                }
@@ -628,8 +631,8 @@ namespace glz
 
          // If we reach here, step == 1 and no negative indices, so we can do partial reading.
          value.clear();
-         const std::int32_t start_idx = decomposed_key.start.value_or(0);
-         const std::int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<std::int32_t>::max)());
+         const int32_t start_idx = decomposed_key.start.value_or(0);
+         const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
 
          // If empty array
          if (*it == ']') {
@@ -638,7 +641,7 @@ namespace glz
          }
 
          // We'll read elements and track their index
-         std::int32_t current_index = 0;
+         int32_t current_index = 0;
          while (true) {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
@@ -747,7 +750,7 @@ namespace glz
 
                         if constexpr (I == (N - 1)) {
                            // Skip until we reach the target element n
-                           for (std::int32_t i = 0; i < n; ++i) {
+                           for (int32_t i = 0; i < n; ++i) {
                               skip_value<JSON>::op<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
@@ -771,7 +774,7 @@ namespace glz
                         else {
                            // Not the last token. We must still parse the element at index n so the next indexing can
                            // proceed.
-                           for (std::int32_t i = 0; i < n; ++i) {
+                           for (int32_t i = 0; i < n; ++i) {
                               skip_value<JSON>::op<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
@@ -817,7 +820,7 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv k = {start, std::size_t(it - start)};
+                     const sv k = {start, size_t(it - start)};
                      ++it;
 
                      if (key.size() == k.size() && comparitor<key>(k.data())) {
@@ -843,7 +846,7 @@ namespace glz
                            if constexpr (decomposed_key.start.has_value()) {
                               // Skip until we reach the target element
                               constexpr auto n = decomposed_key.start.value();
-                              for (std::int32_t i = 0; i < n; ++i) {
+                              for (int32_t i = 0; i < n; ++i) {
                                  skip_value<JSON>::op<Opts>(ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
@@ -911,7 +914,7 @@ namespace glz
                   skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  const sv k = {start, std::size_t(it - start)};
+                  const sv k = {start, size_t(it - start)};
                   ++it;
 
                   if (key.size() == k.size() && comparitor<key>(k.data())) {
@@ -954,7 +957,7 @@ namespace glz
          buffer.resize(buffer.size() - padding_bytes);
       }
 
-      return {std::size_t(it - start), ctx.error, ctx.custom_error_message};
+      return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
    // A "compiled" jmespath expression, which can be pre-computed for efficient traversal
@@ -969,7 +972,7 @@ namespace glz
          error = jmespath::tokenize_full_jmespath(path, tokens);
       }
 
-      template <std::size_t N>
+      template <size_t N>
       jmespath_expression(const char (&input_path)[N]) noexcept : path(input_path)
       {
          error = jmespath::tokenize_full_jmespath(path, tokens);
@@ -1015,7 +1018,7 @@ namespace glz
 
          skip_ws<Opts>(ctx, it, end);
 
-         for (std::size_t I = 0; I < N; ++I) {
+         for (size_t I = 0; I < N; ++I) {
             if (bool(ctx.error)) [[unlikely]] {
                break;
             }
@@ -1042,11 +1045,11 @@ namespace glz
                      else {
                         // Single index scenario
                         if (decomposed_key.start.has_value()) {
-                           const std::int32_t n = decomposed_key.start.value();
+                           const int32_t n = decomposed_key.start.value();
 
                            if (I == (N - 1)) {
                               // Skip until we reach the target element n
-                              for (std::int32_t i = 0; i < n; ++i) {
+                              for (int32_t i = 0; i < n; ++i) {
                                  skip_value<JSON>::op<Opts>(ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
@@ -1070,7 +1073,7 @@ namespace glz
                            else {
                               // Not the last token. We must still parse the element at index n so the next indexing can
                               // proceed.
-                              for (std::int32_t i = 0; i < n; ++i) {
+                              for (int32_t i = 0; i < n; ++i) {
                                  skip_value<JSON>::op<Opts>(ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
@@ -1114,7 +1117,7 @@ namespace glz
                         skip_string_view(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        const sv k = {start_pos, std::size_t(it - start_pos)};
+                        const sv k = {start_pos, size_t(it - start_pos)};
                         ++it;
 
                         if (key.size() == k.size() && std::memcmp(key.data(), k.data(), key.size()) == 0) {
@@ -1139,8 +1142,8 @@ namespace glz
                            else {
                               // Single index scenario
                               if (decomposed_key.start.has_value()) {
-                                 std::int32_t n = decomposed_key.start.value();
-                                 for (std::int32_t i = 0; i < n; ++i) {
+                                 int32_t n = decomposed_key.start.value();
+                                 for (int32_t i = 0; i < n; ++i) {
                                     skip_value<JSON>::op<Opts>(ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
@@ -1208,7 +1211,7 @@ namespace glz
                      skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv k = {start_pos, std::size_t(it - start_pos)};
+                     const sv k = {start_pos, size_t(it - start_pos)};
                      ++it;
 
                      if (key.size() == k.size() && std::memcmp(key.data(), k.data(), key.size()) == 0) {
@@ -1261,7 +1264,7 @@ namespace glz
          buffer.resize(buffer.size() - padding_bytes);
       }
 
-      return {std::size_t(it - start), ctx.error, ctx.custom_error_message};
+      return {size_t(it - start), ctx.error, ctx.custom_error_message};
    }
 
 }

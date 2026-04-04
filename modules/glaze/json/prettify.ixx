@@ -15,6 +15,10 @@ import glaze.util.dump;
 
 // Minified JSONC only works with /**/ style comments, so we only supports this
 
+using std::uint8_t;
+using std::int64_t;
+using std::size_t;
+
 namespace glz
 {
    namespace detail
@@ -28,10 +32,10 @@ namespace glz
          using enum json_type;
 
          std::vector<json_type> state(64);
-         std::int64_t indent{};
+         int64_t indent{};
 
          while (it < end) {
-            switch (json_types[std::uint8_t(*it)]) {
+            switch (json_types[uint8_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
                dump_maybe_empty(value, b, ix);
@@ -77,7 +81,7 @@ namespace glz
                dump('[', b, ix);
                ++it;
                ++indent;
-               if (std::size_t(indent) >= state.size()) [[unlikely]] {
+               if (size_t(indent) >= state.size()) [[unlikely]] {
                   state.resize(state.size() * 2);
                   if (state.size() >= max_recursive_depth_limit) [[unlikely]] {
                      ctx.error = error_code::exceeded_max_recursive_depth;
@@ -135,7 +139,7 @@ namespace glz
                dump('{', b, ix);
                ++it;
                ++indent;
-               if (std::size_t(indent) >= state.size()) [[unlikely]] {
+               if (size_t(indent) >= state.size()) [[unlikely]] {
                   state.resize(state.size() * 2);
                   if (state.size() >= max_recursive_depth_limit) [[unlikely]] {
                      ctx.error = error_code::exceeded_max_recursive_depth;
@@ -201,7 +205,7 @@ namespace glz
             }
             out.resize(in.size() * 2);
          }
-         std::size_t ix = 0;
+         size_t ix = 0;
          auto [it, end] = read_iterators<Opts>(in);
          if (bool(ctx.error)) [[unlikely]] {
             return;

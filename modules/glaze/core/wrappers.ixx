@@ -6,6 +6,8 @@ import std;
 
 import glaze.core.opts;
 
+using std::size_t;
+
 namespace glz
 {
    // treat a value as quoted to avoid double parsing into a value
@@ -129,17 +131,17 @@ namespace glz
    // Limit string length or array size when reading
    // For strings: limits max_string_length
    // For arrays/vectors: limits max_array_size
-   export template <class T, std::size_t MaxLen>
+   export template <class T, size_t MaxLen>
    struct max_length_t
    {
       static constexpr bool glaze_wrapper = true;
       static constexpr auto glaze_reflect = false;
-      static constexpr std::size_t max_len = MaxLen;
+      static constexpr size_t max_len = MaxLen;
       using value_type = T;
       T& val;
    };
 
-   template <auto MemPtr, std::size_t MaxLen>
+   template <auto MemPtr, size_t MaxLen>
    inline constexpr decltype(auto) max_length_impl() noexcept
    {
       return [](auto&& val) {
@@ -150,6 +152,6 @@ namespace glz
 
    // Limit string length or array size when reading from binary formats
    // Usage: glz::max_length<&T::field, 100>
-   export template <auto MemPtr, std::size_t MaxLen>
+   export template <auto MemPtr, size_t MaxLen>
    constexpr auto max_length = max_length_impl<MemPtr, MaxLen>();
 }

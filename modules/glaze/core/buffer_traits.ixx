@@ -10,6 +10,8 @@ import glaze.concepts.container_concepts;
 
 #include "glaze/util/inline.hpp"
 
+using std::size_t;
+
 export namespace glz
 {
    // Primary template for buffer traits
@@ -22,22 +24,22 @@ export namespace glz
       static constexpr bool is_output_streaming = false; // True for output buffers that support incremental flushing
       static constexpr bool is_input_streaming = false; // True for input buffers that support incremental refilling
 
-      GLZ_ALWAYS_INLINE static constexpr std::size_t capacity(const Buffer& b) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t capacity(const Buffer& b) noexcept
       {
          if constexpr (is_resizable) {
-            return std::numeric_limits<std::size_t>::max(); // Effectively unlimited
+            return std::numeric_limits<size_t>::max(); // Effectively unlimited
          }
          else if constexpr (has_size<std::remove_cvref_t<Buffer>>) {
             return b.size();
          }
          else {
-            return std::numeric_limits<std::size_t>::max();
+            return std::numeric_limits<size_t>::max();
          }
       }
 
       // Attempt to ensure buffer can hold `needed` bytes
       // Returns true if successful, false if buffer cannot accommodate
-      GLZ_ALWAYS_INLINE static bool ensure_capacity(Buffer& b, std::size_t needed) noexcept(not is_resizable)
+      GLZ_ALWAYS_INLINE static bool ensure_capacity(Buffer& b, size_t needed) noexcept(not is_resizable)
       {
          if constexpr (is_resizable) {
             if (needed > b.size()) {
@@ -52,7 +54,7 @@ export namespace glz
       }
 
       // Finalize buffer to actual written size
-      GLZ_ALWAYS_INLINE static void finalize(Buffer& b, std::size_t written) noexcept(not is_resizable)
+      GLZ_ALWAYS_INLINE static void finalize(Buffer& b, size_t written) noexcept(not is_resizable)
       {
          if constexpr (is_resizable) {
             b.resize(written);
@@ -62,7 +64,7 @@ export namespace glz
 
       // Flush written data to underlying storage (for streaming buffers)
       // Default: no-op for regular buffers
-      GLZ_ALWAYS_INLINE static void flush([[maybe_unused]] Buffer& b, [[maybe_unused]] std::size_t written) noexcept {}
+      GLZ_ALWAYS_INLINE static void flush([[maybe_unused]] Buffer& b, [[maybe_unused]] size_t written) noexcept {}
    };
 
    // Concept to check if a buffer type supports output streaming (flushing)
@@ -71,7 +73,7 @@ export namespace glz
 
    // Flush helper for streaming output buffers
    template <class B>
-   GLZ_ALWAYS_INLINE void flush_buffer(B&& b, std::size_t written) noexcept
+   GLZ_ALWAYS_INLINE void flush_buffer(B&& b, size_t written) noexcept
    {
       buffer_traits<std::remove_cvref_t<B>>::flush(b, written);
    }
@@ -102,7 +104,7 @@ export namespace glz
    // Consume helper for streaming input buffers
    // Marks bytes as consumed after successful parsing
    template <class B>
-   GLZ_ALWAYS_INLINE void consume_buffer(B&& b, std::size_t bytes) noexcept
+   GLZ_ALWAYS_INLINE void consume_buffer(B&& b, size_t bytes) noexcept
    {
       if constexpr (is_input_streaming<B>) {
          buffer_traits<std::remove_cvref_t<B>>::consume(b, bytes);
@@ -119,18 +121,18 @@ export namespace glz
       static constexpr bool is_output_streaming = false;
       static constexpr bool is_input_streaming = false;
 
-      GLZ_ALWAYS_INLINE static constexpr std::size_t capacity(char*) noexcept { return std::numeric_limits<std::size_t>::max(); }
+      GLZ_ALWAYS_INLINE static constexpr size_t capacity(char*) noexcept { return std::numeric_limits<size_t>::max(); }
 
-      GLZ_ALWAYS_INLINE static constexpr bool ensure_capacity(char*, std::size_t) noexcept
+      GLZ_ALWAYS_INLINE static constexpr bool ensure_capacity(char*, size_t) noexcept
       {
          return true; // Trust caller
       }
 
-      GLZ_ALWAYS_INLINE static constexpr void finalize(char*, std::size_t) noexcept {}
+      GLZ_ALWAYS_INLINE static constexpr void finalize(char*, size_t) noexcept {}
    };
 
    // Specialization for std::span
-   template <class T, std::size_t Extent>
+   template <class T, size_t Extent>
    struct buffer_traits<std::span<T, Extent>>
    {
       static constexpr bool is_resizable = false;
@@ -138,41 +140,41 @@ export namespace glz
       static constexpr bool is_output_streaming = false;
       static constexpr bool is_input_streaming = false;
 
-      GLZ_ALWAYS_INLINE static constexpr std::size_t capacity(const std::span<T, Extent>& b) noexcept { return b.size(); }
+      GLZ_ALWAYS_INLINE static constexpr size_t capacity(const std::span<T, Extent>& b) noexcept { return b.size(); }
 
-      GLZ_ALWAYS_INLINE static constexpr bool ensure_capacity(const std::span<T, Extent>& b, std::size_t needed) noexcept
+      GLZ_ALWAYS_INLINE static constexpr bool ensure_capacity(const std::span<T, Extent>& b, size_t needed) noexcept
       {
          return needed <= b.size();
       }
 
-      GLZ_ALWAYS_INLINE static constexpr void finalize(std::span<T, Extent>&, std::size_t) noexcept {}
+      GLZ_ALWAYS_INLINE static constexpr void finalize(std::span<T, Extent>&, size_t) noexcept {}
    };
 
    // Specialization for std::array
-   template <class T, std::size_t N>
+   template <class T, size_t N>
    struct buffer_traits<std::array<T, N>>
    {
       static constexpr bool is_resizable = false;
       static constexpr bool has_bounded_capacity = true;
       static constexpr bool is_output_streaming = false;
       static constexpr bool is_input_streaming = false;
-      static constexpr std::size_t static_capacity = N;
+      static constexpr size_t static_capacity = N;
 
-      GLZ_ALWAYS_INLINE static constexpr std::size_t capacity(const std::array<T, N>&) noexcept { return N; }
+      GLZ_ALWAYS_INLINE static constexpr size_t capacity(const std::array<T, N>&) noexcept { return N; }
 
-      GLZ_ALWAYS_INLINE static constexpr bool ensure_capacity(std::array<T, N>&, std::size_t needed) noexcept
+      GLZ_ALWAYS_INLINE static constexpr bool ensure_capacity(std::array<T, N>&, size_t needed) noexcept
       {
          return needed <= N;
       }
 
-      GLZ_ALWAYS_INLINE static constexpr void finalize(std::array<T, N>&, std::size_t) noexcept {}
+      GLZ_ALWAYS_INLINE static constexpr void finalize(std::array<T, N>&, size_t) noexcept {}
    };
 
    // Unified buffer space checking for write operations
    // Handles resizable buffers (resize), bounded buffers (error on overflow), and raw pointers (trust caller)
    template <class B>
    GLZ_ALWAYS_INLINE bool ensure_space(is_context auto& ctx, B& b,
-                                       std::size_t required) noexcept(not vector_like<std::remove_cvref_t<B>>)
+                                       size_t required) noexcept(not vector_like<std::remove_cvref_t<B>>)
    {
       using Buffer = std::remove_cvref_t<B>;
 

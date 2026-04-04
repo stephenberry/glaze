@@ -11,15 +11,18 @@
 
 // Modified from: https://en.wikipedia.org/wiki/MurmurHash
 
+using std::uint32_t;
+using std::size_t;
+
 namespace glz
 {
-   constexpr std::uint32_t to_uint32(const auto* bytes) noexcept
+   constexpr uint32_t to_uint32(const auto* bytes) noexcept
    {
-      std::uint32_t res{};
+      uint32_t res{};
       if consteval {
          // Compile-time: build value byte-by-byte in little-endian order
-         for (std::size_t i = 0; i < 4; ++i) {
-            res |= static_cast<std::uint32_t>(bytes[i]) << (8 * i);
+         for (size_t i = 0; i < 4; ++i) {
+            res |= static_cast<uint32_t>(bytes[i]) << (8 * i);
          }
       }
       else {
@@ -33,7 +36,7 @@ namespace glz
       return res;
    }
 
-   inline constexpr std::uint32_t murmur_32_scramble(std::uint32_t k) noexcept
+   inline constexpr uint32_t murmur_32_scramble(uint32_t k) noexcept
    {
       k *= 0xcc9e2d51;
       k = (k << 15) | (k >> 17);
@@ -41,26 +44,26 @@ namespace glz
       return k;
    }
 
-   inline constexpr std::uint32_t murmur3_32(auto&& value) noexcept
+   inline constexpr uint32_t murmur3_32(auto&& value) noexcept
    {
-      std::uint32_t h = 31; // We always use a seed of 31 for Crusher
-      std::uint32_t k;
+      uint32_t h = 31; // We always use a seed of 31 for Crusher
+      uint32_t k;
       const auto n = value.size();
       auto* key = value.data();
       /* Read in groups of 4. */
-      for (std::size_t i = n >> 2; i; i--) {
+      for (size_t i = n >> 2; i; i--) {
          // Here is a source of differing results across endiannesses.
          // A swap here has no effects on hash properties though.
          k = to_uint32(key);
 
-         key += sizeof(std::uint32_t);
+         key += sizeof(uint32_t);
          h ^= murmur_32_scramble(k);
          h = (h << 13) | (h >> 19);
          h = h * 5 + 0xe6546b64;
       }
       /* Read the rest. */
       k = 0;
-      for (std::size_t i = n & 3; i; i--) {
+      for (size_t i = n & 3; i; i--) {
          k <<= 8;
          k |= key[i - 1];
       }
@@ -69,7 +72,7 @@ namespace glz
       // we use. Swaps only apply when the memory is copied in a chunk.
       h ^= murmur_32_scramble(k);
       /* Finalize. */
-      h ^= std::uint32_t(n);
+      h ^= uint32_t(n);
       h ^= h >> 16;
       h *= 0x85ebca6b;
       h ^= h >> 13;

@@ -26,6 +26,8 @@ import glaze.util.string_literal;
 import glaze.util.tuple;
 import glaze.tuplet;
 
+using std::size_t;
+
 namespace glz
 {
    template <>
@@ -91,7 +93,7 @@ namespace glz
             }
          };
 
-         for (std::size_t i = 0; i < n; ++i) {
+         for (size_t i = 0; i < n; ++i) {
             parse<JSON>::op<Opts>(*value_it++, ctx, it, end);
             if (it == end) {
                if constexpr (erasable<T>) {

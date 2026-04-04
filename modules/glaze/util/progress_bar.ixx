@@ -4,43 +4,45 @@ export module glaze.util.progress_bar;
 
 import std;
 
+using std::size_t;
+
 namespace glz
 {
    export struct progress_bar final
    {
-      std::size_t width{};
-      std::size_t completed{};
-      std::size_t total{};
+      size_t width{};
+      size_t completed{};
+      size_t total{};
       double time_taken{};
 
       std::string string() const
       {
          std::string s{};
 
-         const std::size_t one = 1;
+         const size_t one = 1;
          const auto one_or_total = (std::max)(total, one);
          const auto one_or_completed = (std::min)(completed, one_or_total);
          const auto progress = static_cast<double>(one_or_completed) / one_or_total;
-         const auto percentage = static_cast<std::size_t>(std::round(progress * 100));
+         const auto percentage = static_cast<size_t>(std::round(progress * 100));
 
          if (width > 2) {
             const auto len = width - 2;
-            const auto filled = static_cast<std::size_t>(std::round(progress * len));
+            const auto filled = static_cast<size_t>(std::round(progress * len));
 
             s += "[";
 
-            for (std::size_t i = 0; i < filled; ++i) {
+            for (size_t i = 0; i < filled; ++i) {
                s += '=';
             }
 
-            for (std::size_t i = 0; i < len - filled; ++i) {
+            for (size_t i = 0; i < len - filled; ++i) {
                s += '-';
             }
 
             s += "]";
          }
 
-         const auto eta_s = static_cast<std::size_t>(
+         const auto eta_s = static_cast<size_t>(
             std::round(((one_or_total - one_or_completed) * time_taken) / (std::max)(one_or_completed, one)));
          const auto minutes = eta_s / 60;
          const auto seconds = eta_s - minutes * 60;

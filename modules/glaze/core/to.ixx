@@ -12,9 +12,11 @@ import glaze.util.type_traits;
 
 // Common behavior for `to` specializations, typically applies for all formats
 
+using std::uint32_t;
+
 namespace glz
 {
-   template <std::uint32_t Format>
+   template <uint32_t Format>
    struct to<Format, hidden>
    {
       template <auto Opts>
@@ -24,7 +26,7 @@ namespace glz
       }
    };
 
-   template <std::uint32_t Format>
+   template <uint32_t Format>
    struct to<Format, skip>
    {
       template <auto Opts>
@@ -34,7 +36,7 @@ namespace glz
       }
    };
 
-   template <std::uint32_t Format, filesystem_path T>
+   template <uint32_t Format, filesystem_path T>
    struct to<Format, T>
    {
       template <auto Opts, class... Args>

@@ -14,19 +14,22 @@ import std;
 #endif
 #endif
 
+using std::ptrdiff_t;
+using std::size_t;
+
 namespace glz
 {
    namespace detail::inplace_vector
    {
-      template <class T, std::size_t N>
+      template <class T, size_t N>
       struct byte_storage
       {
          alignas(T) unsigned char storage[sizeof(T) * N];
-         std::size_t size_ = 0;
+         size_t size_ = 0;
          constexpr T* data_ptr() noexcept { return std::launder(reinterpret_cast<T*>(storage)); }
          constexpr const T* data_ptr() const noexcept { return std::launder(reinterpret_cast<const T*>(storage)); }
-         constexpr std::size_t storage_size() const noexcept { return size_; }
-         constexpr void set_storage_size(std::size_t new_size) noexcept { size_ = new_size; }
+         constexpr size_t storage_size() const noexcept { return size_; }
+         constexpr void set_storage_size(size_t new_size) noexcept { size_ = new_size; }
       };
 
       template <class T>
@@ -34,14 +37,14 @@ namespace glz
       {
          constexpr T* data_ptr() noexcept { return nullptr; }
          constexpr const T* data_ptr() const noexcept { return nullptr; }
-         constexpr std::size_t storage_size() const noexcept { return 0; }
-         constexpr void set_storage_size(std::size_t) noexcept {};
+         constexpr size_t storage_size() const noexcept { return 0; }
+         constexpr void set_storage_size(size_t) noexcept {};
       };
 
-      template <class T, std::size_t N>
+      template <class T, size_t N>
       using storage_type = std::conditional_t<N == 0, zero_storage<T>, byte_storage<T, N>>;
 
-      template <class T, std::size_t N>
+      template <class T, size_t N>
       class inplace_vector_base : protected storage_type<T, N>
       {
         protected:
@@ -57,8 +60,8 @@ namespace glz
          using const_pointer = const T*;
          using reference = value_type&;
          using const_reference = const value_type&;
-         using size_type = std::size_t;
-         using difference_type = std::ptrdiff_t;
+         using size_type = size_t;
+         using difference_type = ptrdiff_t;
          using iterator = T*;
          using const_iterator = const T*;
          using reverse_iterator = std::reverse_iterator<iterator>;
@@ -412,14 +415,14 @@ namespace glz
    }
 
    // Non-member functions
-   export template <class T, std::size_t N>
+   export template <class T, size_t N>
    constexpr void swap(detail::inplace_vector::inplace_vector_base<T, N>& x,
                        detail::inplace_vector::inplace_vector_base<T, N>& y) noexcept(noexcept(x.swap(y)))
    {
       x.swap(y);
    }
 
-   export template <class T, std::size_t N, class U>
+   export template <class T, size_t N, class U>
    constexpr typename detail::inplace_vector::inplace_vector_base<T, N>::size_type erase(
       detail::inplace_vector::inplace_vector_base<T, N>& c, const U& value)
    {
@@ -429,7 +432,7 @@ namespace glz
       return r;
    }
 
-   export template <class T, std::size_t N, class Predicate>
+   export template <class T, size_t N, class Predicate>
    constexpr typename detail::inplace_vector::inplace_vector_base<T, N>::size_type erase_if(
       detail::inplace_vector::inplace_vector_base<T, N>& c, Predicate pred)
    {
@@ -439,7 +442,7 @@ namespace glz
       return r;
    }
 
-   export template <class T, std::size_t N>
+   export template <class T, size_t N>
    class inplace_vector : public detail::inplace_vector::inplace_vector_base<T, N>
    {
      public:
@@ -449,8 +452,8 @@ namespace glz
       using const_pointer = const T*;
       using reference = value_type&;
       using const_reference = const value_type&;
-      using size_type = std::size_t;
-      using difference_type = std::ptrdiff_t;
+      using size_type = size_t;
+      using difference_type = ptrdiff_t;
       using iterator = T*;
       using const_iterator = const T*;
       using reverse_iterator = std::reverse_iterator<iterator>;
@@ -970,7 +973,7 @@ namespace glz
 
    namespace freestanding
    {
-      export template <class T, std::size_t N>
+      export template <class T, size_t N>
       class inplace_vector : public detail::inplace_vector::inplace_vector_base<T, N>
       {
         public:
@@ -980,8 +983,8 @@ namespace glz
          using const_pointer = const T*;
          using reference = value_type&;
          using const_reference = const value_type&;
-         using size_type = std::size_t;
-         using difference_type = std::ptrdiff_t;
+         using size_type = size_t;
+         using difference_type = ptrdiff_t;
          using iterator = T*;
          using const_iterator = const T*;
          using reverse_iterator = std::reverse_iterator<iterator>;

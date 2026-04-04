@@ -8,6 +8,13 @@
 #include <vector>
 
 // must be outside test(), compilation fails on gcc 13 otherwise
+
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::size_t;
+
 template <typename T>
 struct Value
 {
@@ -89,7 +96,7 @@ void test()
    // can't use jthread, does not exist in all stdlibs.
    std::vector<std::thread> threads;
    threads.reserve(nthreads);
-   for (std::size_t threadi = 0; threadi < nthreads; ++threadi) {
+   for (size_t threadi = 0; threadi < nthreads; ++threadi) {
       const UT start = threadi * step;
       const UT stop = (threadi == nthreads - 1) ? (std::numeric_limits<UT>::max)() : start + step;
       // std::cout << "thread i=" << threadi << " goes from " << start << " to " << stop << '\n';
@@ -114,12 +121,12 @@ void testonetype(int bits)
 {
    switch (bits) {
    case 16:
-      test<std::int16_t>();
-      test<std::uint16_t>();
+      test<int16_t>();
+      test<uint16_t>();
       break;
    case 32:
-      test<std::int32_t>();
-      test<std::uint32_t>();
+      test<int32_t>();
+      test<uint32_t>();
       break;
    }
 }

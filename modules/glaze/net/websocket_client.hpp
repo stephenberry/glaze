@@ -8,6 +8,9 @@
 #include "glaze/net/http_client.hpp"
 #include "glaze/net/websocket_connection.hpp"
 
+using std::uint16_t;
+using std::size_t;
+
 namespace glz
 {
    struct websocket_client
@@ -48,7 +51,7 @@ namespace glz
          std::shared_ptr<ssl_socket> ssl_socket_;
 #endif
 
-         std::size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
+         size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
 #ifdef GLZ_ENABLE_SSL
          asio::ssl::verify_mode ssl_verify_mode_{asio::ssl::verify_peer}; // Default to verify peer
 #endif
@@ -208,7 +211,7 @@ namespace glz
             // Generate random Sec-WebSocket-Key
             std::string key_bytes(16, '\0');
             std::mt19937 rng(std::random_device{}());
-            std::uniform_int_distribution<std::uint16_t> dist(0, 255);
+            std::uniform_int_distribution<uint16_t> dist(0, 255);
             for (auto& b : key_bytes) b = static_cast<char>(dist(rng));
             std::string key = glz::write_base64(key_bytes);
 
@@ -220,7 +223,7 @@ namespace glz
             std::weak_ptr<impl> weak_self = weak_from_this();
 
             asio::async_write(*socket, asio::buffer(*req_buf),
-                              [weak_self, socket, req_buf, key](std::error_code ec, std::size_t) {
+                              [weak_self, socket, req_buf, key](std::error_code ec, size_t) {
                                  auto self = weak_self.lock();
                                  if (!self) return; // Client was destroyed
 
@@ -235,12 +238,12 @@ namespace glz
          template <typename SocketType>
          void read_handshake_response(std::shared_ptr<SocketType> socket, const std::string& expected_key)
          {
-            static constexpr std::size_t max_handshake_size = 1024 * 16;
+            static constexpr size_t max_handshake_size = 1024 * 16;
             auto response_buf = std::make_shared<asio::streambuf>(max_handshake_size);
             std::weak_ptr<impl> weak_self = weak_from_this();
 
             asio::async_read_until(*socket, *response_buf, "\r\n\r\n",
-                                   [weak_self, socket, response_buf, expected_key](std::error_code ec, std::size_t) {
+                                   [weak_self, socket, response_buf, expected_key](std::error_code ec, size_t) {
                                       auto self = weak_self.lock();
                                       if (!self) return; // Client was destroyed
 
@@ -402,7 +405,7 @@ namespace glz
          impl_->on_error = std::make_shared<error_handler_t>(std::move(handler));
       }
 
-      void set_max_message_size(std::size_t size) { impl_->max_message_size = size; }
+      void set_max_message_size(size_t size) { impl_->max_message_size = size; }
 
 #ifdef GLZ_ENABLE_SSL
       // Set SSL verification mode before calling connect()

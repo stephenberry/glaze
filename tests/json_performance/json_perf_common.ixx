@@ -3,25 +3,27 @@ export module glaze.tests.json_perf_common;
 
 import std;
 
+using std::size_t;
+
 export namespace glz::perf
 {
    // We scale all speeds by the minified JSON byte length, so that libraries which do not efficiently write JSON do not
    // get an unfair advantage. We want to know how fast the libraries will serialize/deserialize with respect to one
    // another.
-   inline std::size_t minified_byte_length{};
+   inline size_t minified_byte_length{};
 
    struct results
    {
       std::string_view name{};
       std::string_view url{};
-      std::size_t iterations{};
+      size_t iterations{};
 
-      std::optional<std::size_t> json_byte_length{};
+      std::optional<size_t> json_byte_length{};
       std::optional<double> json_read{};
       std::optional<double> json_write{};
       std::optional<double> json_roundtrip{};
 
-      std::optional<std::size_t> binary_byte_length{};
+      std::optional<size_t> binary_byte_length{};
       std::optional<double> beve_write{};
       std::optional<double> beve_read{};
       std::optional<double> beve_roundtrip{};

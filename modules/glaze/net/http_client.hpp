@@ -21,11 +21,14 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/util/key_transformers.hpp"
 
+using std::uint16_t;
+using std::size_t;
+
 namespace glz
 {
-   inline int strncasecmp(const char* s1, const char* s2, std::size_t n)
+   inline int strncasecmp(const char* s1, const char* s2, size_t n)
    {
-      for (std::size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < n; ++i) {
          unsigned char c1 = static_cast<unsigned char>(s1[i]);
          unsigned char c2 = static_cast<unsigned char>(s2[i]);
          if (c1 == '\0' || c2 == '\0') {
@@ -49,7 +52,7 @@ namespace glz
    {
       std::string protocol;
       std::string host;
-      std::uint16_t port;
+      uint16_t port;
       std::string path;
    };
 
@@ -68,7 +71,7 @@ namespace glz
       }
 
       // Find protocol
-      std::size_t protocol_end = url.find("://");
+      size_t protocol_end = url.find("://");
       if (protocol_end == std::string_view::npos) {
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
@@ -79,12 +82,12 @@ namespace glz
       }
 
       // Process host, port and path
-      std::size_t host_start = protocol_end + 3;
+      size_t host_start = protocol_end + 3;
       if (host_start >= url.size()) {
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
 
-      std::size_t host_end = url.find_first_of("/:", host_start);
+      size_t host_end = url.find_first_of("/:", host_start);
       std::string host;
       std::string port_str;
       std::string path = "/";
@@ -94,8 +97,8 @@ namespace glz
       }
       else if (url[host_end] == ':') {
          host = std::string(url.substr(host_start, host_end - host_start));
-         std::size_t port_start = host_end + 1;
-         std::size_t port_end = url.find('/', port_start);
+         size_t port_start = host_end + 1;
+         size_t port_end = url.find('/', port_start);
 
          if (port_end == std::string_view::npos) {
             port_str = std::string(url.substr(port_start));
@@ -118,7 +121,7 @@ namespace glz
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
 
-      std::uint16_t port = 0;
+      uint16_t port = 0;
       if (port_str.empty()) {
          port = (protocol == "https" || protocol == "wss") ? 443 : 80;
       }
@@ -128,7 +131,7 @@ namespace glz
             if (port_long <= 0 || port_long > 65535) {
                return std::unexpected(std::make_error_code(std::errc::invalid_argument));
             }
-            port = static_cast<std::uint16_t>(port_long);
+            port = static_cast<uint16_t>(port_long);
          }
          catch (const std::exception&) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
@@ -144,16 +147,16 @@ namespace glz
       struct connection_key
       {
          std::string host;
-         std::uint16_t port;
+         uint16_t port;
 
          bool operator==(const connection_key& other) const { return host == other.host && port == other.port; }
       };
 
       struct connection_key_hash
       {
-         std::size_t operator()(const connection_key& key) const
+         size_t operator()(const connection_key& key) const
          {
-            return std::hash<std::string>{}(key.host) ^ (std::hash<std::uint16_t>{}(key.port) << 1);
+            return std::hash<std::string>{}(key.host) ^ (std::hash<uint16_t>{}(key.port) << 1);
          }
       };
 
@@ -164,7 +167,7 @@ namespace glz
 
       http_connection_pool(asio::any_io_executor executor) : io_executor(executor) {}
 
-      std::shared_ptr<asio::ip::tcp::socket> get_connection(const std::string& host, std::uint16_t port)
+      std::shared_ptr<asio::ip::tcp::socket> get_connection(const std::string& host, uint16_t port)
       {
          connection_key key{host, port};
 
@@ -189,7 +192,7 @@ namespace glz
          return std::make_shared<asio::ip::tcp::socket>(io_executor);
       }
 
-      void return_connection(const std::string& host, std::uint16_t port, std::shared_ptr<asio::ip::tcp::socket> socket)
+      void return_connection(const std::string& host, uint16_t port, std::shared_ptr<asio::ip::tcp::socket> socket)
       {
          if (!socket || !socket->is_open()) {
             return;
@@ -228,7 +231,7 @@ namespace glz
       std::function<bool(int)> status_is_error{}; // Evaluated before treating status as failure
 
       // Constructor with optional buffer size limit and strategy
-      http_stream_connection(std::size_t max_buffer_size = 1024 * 1024,
+      http_stream_connection(size_t max_buffer_size = 1024 * 1024,
                              stream_read_strategy read_strategy = stream_read_strategy::bulk_transfer)
          : buffer(std::make_shared<asio::streambuf>(max_buffer_size)), strategy(read_strategy)
       {}
@@ -526,10 +529,10 @@ namespace glz
          // don't start worker threads when an io_executor was provided
          if (!async_io_context) return;
 
-         std::size_t num_threads = std::max(2u, std::thread::hardware_concurrency());
+         size_t num_threads = std::max(2u, std::thread::hardware_concurrency());
          worker_threads.reserve(num_threads);
 
-         for (std::size_t i = 0; i < num_threads; ++i) {
+         for (size_t i = 0; i < num_threads; ++i) {
             worker_threads.emplace_back([this]() {
                while (running) {
                   try {
@@ -685,7 +688,7 @@ namespace glz
          asio::async_write(*connection->socket, asio::buffer(*request_buffer),
                            [this, connection, request_buffer, on_data = std::move(on_data),
                             on_error = std::move(on_error), on_connect = std::move(on_connect),
-                            on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+                            on_disconnect = std::move(on_disconnect)](std::error_code ec, size_t) mutable {
                               if (ec || connection->should_stop) {
                                  on_error(ec);
                                  if (on_disconnect) on_disconnect();
@@ -706,7 +709,7 @@ namespace glz
             *connection->socket, *connection->buffer, "\r\n\r\n",
             [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
              on_connect = std::move(on_connect),
-             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t bytes_transferred) mutable {
+             on_disconnect = std::move(on_disconnect)](std::error_code ec, size_t bytes_transferred) mutable {
                if (ec || connection->should_stop) {
                   on_error(ec);
                   if (on_disconnect) on_disconnect();
@@ -753,7 +756,7 @@ namespace glz
                   if (colon_pos != std::string::npos) {
                      std::string_view name = header_line.substr(0, colon_pos);
                      // Skip past ':' and any whitespace
-                     std::size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
+                     size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                      std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
                      // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
@@ -813,7 +816,7 @@ namespace glz
          asio::async_read_until(
             *connection->socket, *connection->buffer, "\r\n",
             [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
-             on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t bytes_transferred) mutable {
+             on_disconnect = std::move(on_disconnect)](asio::error_code ec, size_t bytes_transferred) mutable {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
                      on_error(ec);
@@ -830,7 +833,7 @@ namespace glz
                   line_view = line_view.substr(0, semi_pos);
                }
 
-               std::size_t chunk_size;
+               size_t chunk_size;
                auto [ptr, parse_ec] =
                   std::from_chars(line_view.data(), line_view.data() + line_view.size(), chunk_size, 16);
 
@@ -854,12 +857,12 @@ namespace glz
             });
       }
 
-      void read_chunk_body(std::shared_ptr<http_stream_connection> connection, std::size_t chunk_size,
+      void read_chunk_body(std::shared_ptr<http_stream_connection> connection, size_t chunk_size,
                            http_data_handler on_data, http_error_handler on_error,
                            http_disconnect_handler on_disconnect)
       {
          // We need to read 'chunk_size' bytes of data, plus 2 bytes for the trailing CRLF.
-         std::size_t total_to_read = chunk_size + 2;
+         size_t total_to_read = chunk_size + 2;
 
          // Check if we have enough data in the buffer already.
          if (connection->buffer->size() >= total_to_read) {
@@ -881,7 +884,7 @@ namespace glz
             *connection->socket, *connection->buffer,
             asio::transfer_exactly(total_to_read - connection->buffer->size()),
             [this, connection, chunk_size, on_data = std::move(on_data), on_error = std::move(on_error),
-             on_disconnect = std::move(on_disconnect)](asio::error_code ec, std::size_t) mutable {
+             on_disconnect = std::move(on_disconnect)](asio::error_code ec, size_t) mutable {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
                      on_error(ec);
@@ -932,7 +935,7 @@ namespace glz
          asio::async_read(
             *connection->socket, *connection->buffer, asio::transfer_at_least(1),
             [this, connection, on_data, on_error, on_disconnect](asio::error_code ec,
-                                                                 std::size_t /*bytes_transferred*/) {
+                                                                 size_t /*bytes_transferred*/) {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
                      on_error(ec);
@@ -963,10 +966,10 @@ namespace glz
          }
 
          // Use async_read_some for immediate delivery of available data
-         constexpr std::size_t read_size = 8192;
+         constexpr size_t read_size = 8192;
          connection->socket->async_read_some(
             connection->buffer->prepare(read_size),
-            [this, connection, on_data, on_error, on_disconnect](asio::error_code ec, std::size_t bytes_transferred) {
+            [this, connection, on_data, on_error, on_disconnect](asio::error_code ec, size_t bytes_transferred) {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
                      on_error(ec);
@@ -1034,7 +1037,7 @@ namespace glz
             // Read response headers synchronously
             asio::streambuf response_buffer;
             asio::error_code ec;
-            std::size_t header_bytes = asio::read_until(*socket, response_buffer, "\r\n\r\n", ec);
+            size_t header_bytes = asio::read_until(*socket, response_buffer, "\r\n\r\n", ec);
             if (ec) {
                socket->close();
                return std::unexpected<std::error_code>(ec);
@@ -1058,7 +1061,7 @@ namespace glz
 
             // Parse headers from the view
             std::unordered_map<std::string, std::string> response_headers;
-            std::size_t content_length = 0;
+            size_t content_length = 0;
             bool connection_close = false;
 
             while (!header_data.starts_with("\r\n")) {
@@ -1072,7 +1075,7 @@ namespace glz
                auto colon_pos = header_line.find(':');
                if (colon_pos != std::string::npos) {
                   std::string_view name = header_line.substr(0, colon_pos);
-                  std::size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
+                  size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                   std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
                   if (name.length() == 14 && strncasecmp(name.data(), "Content-Length", 14) == 0) {
@@ -1093,9 +1096,9 @@ namespace glz
             response_buffer.consume(header_bytes);
 
             // Read the rest of the body if necessary
-            std::size_t body_in_buffer = response_buffer.size();
+            size_t body_in_buffer = response_buffer.size();
             if (content_length > body_in_buffer) {
-               std::size_t remaining_to_read = content_length - body_in_buffer;
+               size_t remaining_to_read = content_length - body_in_buffer;
                asio::error_code read_ec;
                asio::read(*socket, response_buffer, asio::transfer_exactly(remaining_to_read), read_ec);
                if (read_ec) {
@@ -1211,7 +1214,7 @@ namespace glz
          auto request_str_ptr = std::make_shared<std::string>(std::move(request_str));
          asio::async_write(*socket, asio::buffer(*request_str_ptr),
                            [this, socket, request_str_ptr, url, handler = std::forward<CompletionHandler>(handler)](
-                              std::error_code ec, std::size_t) mutable {
+                              std::error_code ec, size_t) mutable {
                               if (ec) {
                                  handler(std::unexpected(ec));
                                  return;
@@ -1229,7 +1232,7 @@ namespace glz
 
          asio::async_read_until(*socket, *buffer, "\r\n\r\n",
                                 [this, socket, buffer, url, handler = std::forward<CompletionHandler>(handler)](
-                                   std::error_code ec, std::size_t bytes_transferred) mutable {
+                                   std::error_code ec, size_t bytes_transferred) mutable {
                                    if (ec) {
                                       handler(std::unexpected(ec));
                                       return;
@@ -1241,7 +1244,7 @@ namespace glz
 
       template <typename CompletionHandler>
       void parse_and_read_body(std::shared_ptr<asio::ip::tcp::socket> socket, std::shared_ptr<asio::streambuf> buffer,
-                               std::size_t header_size, // <-- NEW: The size of the header block from async_read_until
+                               size_t header_size, // <-- NEW: The size of the header block from async_read_until
                                const url_parts& url, CompletionHandler&& handler)
       {
          std::string_view header_section{static_cast<const char*>(buffer->data().data()), header_size};
@@ -1263,7 +1266,7 @@ namespace glz
 
          // Parse all header fields from the view.
          std::unordered_map<std::string, std::string> response_headers;
-         std::size_t content_length = 0;
+         size_t content_length = 0;
          // The header section ends with an empty line ("\r\n"), which means our view will start with it.
          while (!header_section.starts_with("\r\n")) {
             line_end = header_section.find("\r\n");
@@ -1278,7 +1281,7 @@ namespace glz
             if (colon_pos != std::string::npos) {
                std::string_view name = header_line.substr(0, colon_pos);
                // Skip past ':' and any leading whitespace on the value.
-               std::size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
+               size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
                // A case-insensitive comparison is more robust for header names.
@@ -1296,15 +1299,15 @@ namespace glz
          buffer->consume(header_size);
 
          // Read the rest of the body, if any is still needed.
-         std::size_t body_already_in_buffer = buffer->size();
-         std::size_t remaining_to_read =
+         size_t body_already_in_buffer = buffer->size();
+         size_t remaining_to_read =
             (content_length > body_already_in_buffer) ? (content_length - body_already_in_buffer) : 0;
 
          asio::async_read(
             *socket, *buffer, asio::transfer_exactly(remaining_to_read),
             [this, socket, buffer, url, status_code = parsed_status->status_code,
              response_headers = std::move(response_headers),
-             handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
+             handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, size_t) mutable {
                // EOF is expected if the server closes the connection.
                if (ec && ec != asio::error::eof) {
                   handler(std::unexpected(ec));

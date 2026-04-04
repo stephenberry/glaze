@@ -7,12 +7,14 @@
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
 
+using std::uint64_t;
+
 using namespace ut;
 
 namespace
 {
    // Helper to create a valid REPE request buffer
-   std::string make_request(std::string_view query, std::string_view body, std::uint64_t id = 1, bool notify = false)
+   std::string make_request(std::string_view query, std::string_view body, uint64_t id = 1, bool notify = false)
    {
       glz::repe::header hdr{};
       hdr.spec = glz::repe::repe_magic;

@@ -22,6 +22,10 @@ import glaze.concepts.container_concepts;
 
 import std;
 
+using std::uint8_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    export template <auto Opts = opts{}, class Template, class T, resizable Buffer>
@@ -41,14 +45,14 @@ namespace glz
       }
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
-            while (whitespace_table[std::uint8_t(*it)]) {
+            while (whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          };
 
-         std::unordered_map<std::uint64_t, std::uint64_t> numbering{};
-         std::uint64_t major_count{};
-         std::uint64_t prev_count{};
+         std::unordered_map<uint64_t, uint64_t> numbering{};
+         uint64_t major_count{};
+         uint64_t prev_count{};
 
          while (it < end) {
             switch (*it) {
@@ -58,7 +62,7 @@ namespace glz
                   ++it;
                   skip_whitespace();
 
-                  std::uint64_t count{};
+                  uint64_t count{};
                   while (*it == '+') {
                      ++it;
                      ++count;
@@ -76,7 +80,7 @@ namespace glz
                   else if (count > 1) {
                      format_to(buffer, major_count);
 
-                     for (std::size_t i = 1; i < count; ++i) {
+                     for (size_t i = 1; i < count; ++i) {
                         buffer.append(".");
                         auto& x = numbering[i];
                         if (i == (count - 1)) {
@@ -107,7 +111,7 @@ namespace glz
                      ++it;
                   }
 
-                  const sv key{start, std::size_t(it - start)};
+                  const sv key{start, size_t(it - start)};
 
                   skip_whitespace();
 
@@ -120,7 +124,7 @@ namespace glz
                   if (index < N) [[likely]] {
                      static thread_local std::string temp{};
                      visit<N>(
-                        [&]<std::size_t I>() {
+                        [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == key.size()) && comparitor<TargetKey>(start)) [[likely]] {
@@ -140,7 +144,7 @@ namespace glz
                         index);
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return {std::size_t(it - start), ctx.error, ctx.custom_error_message};
+                        return {size_t(it - start), ctx.error, ctx.custom_error_message};
                      }
 
                      buffer.append(temp);
@@ -178,7 +182,7 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return {std::size_t(it - outer_start), ctx.error, ctx.custom_error_message};
+         return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
       }
 
       return {};

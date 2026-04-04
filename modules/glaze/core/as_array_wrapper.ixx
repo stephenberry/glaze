@@ -13,9 +13,11 @@ import glaze.util.type_traits;
 
 import glaze.reflection.to_tuple;
 
+using std::uint32_t;
+
 export namespace glz
 {
-   template <std::uint32_t Format, class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, as_array_wrapper>)
    struct from<Format, T>
    {
@@ -27,7 +29,7 @@ export namespace glz
       }
    };
 
-   template <std::uint32_t Format, class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, as_array_wrapper>)
    struct to<Format, T>
    {

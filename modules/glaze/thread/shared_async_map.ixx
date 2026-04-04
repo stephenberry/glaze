@@ -25,6 +25,9 @@ import glaze.util.expected;
 
 // This shared_async_map is intended to hold thread safe value types (V)
 
+using std::ptrdiff_t;
+using std::size_t;
+
 namespace glz
 {
    export template <class K, class V>
@@ -79,7 +82,7 @@ namespace glz
         public:
          using iterator_category = std::forward_iterator_tag;
          using value_type = shared_async_map::value_type;
-         using difference_type = std::ptrdiff_t;
+         using difference_type = ptrdiff_t;
          using pointer = value_type*;
          using reference = value_type&;
 
@@ -176,7 +179,7 @@ namespace glz
         public:
          using iterator_category = std::forward_iterator_tag;
          using value_type = shared_async_map::const_value_type;
-         using difference_type = std::ptrdiff_t;
+         using difference_type = ptrdiff_t;
          using pointer = const value_type*;
          using reference = const value_type&;
 
@@ -579,14 +582,14 @@ namespace glz
       }
 
       // Count the number of elements with the given key (0 or 1)
-      std::size_t count(const K& key) const
+      size_t count(const K& key) const
       {
          std::shared_lock lock(state->mutex);
          auto [it, found] = binary_search_key(key);
          return found ? 1 : 0;
       }
 
-      std::size_t size() const
+      size_t size() const
       {
          std::shared_lock lock(state->mutex);
          return state->items.size();

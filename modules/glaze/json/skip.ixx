@@ -11,6 +11,8 @@ import glaze.util.parse;
 
 #include "glaze/util/inline.hpp"
 
+using std::size_t;
+
 export namespace glz
 {
    template <>
@@ -199,7 +201,7 @@ export namespace glz
          bool validate_skipped = true;
       };
       skip_value<JSON>::op<opts_validate_skipped{{Opts}}>(ctx, it, end);
-      return std::span{start, std::size_t(it - start)};
+      return std::span{start, size_t(it - start)};
    }
 
    template <auto Opts>

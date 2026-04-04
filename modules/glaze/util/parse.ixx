@@ -17,6 +17,12 @@ import glaze.util.string_literal;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
+
 export namespace glz
 {
    inline constexpr std::array<bool, 256> numeric_table = [] {
@@ -88,7 +94,7 @@ export namespace glz
    }();
 
    // Character classification for lazy JSON value skipping
-   enum class lazy_char_type : std::uint8_t {
+   enum class lazy_char_type : uint8_t {
       other = 0, // whitespace, separators, literals - just advance
       quote = 1, // " - skip string
       open = 2, // { or [ - increase depth
@@ -128,9 +134,9 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<std::uint8_t, 256> digit_hex_table = [] {
-      std::array<std::uint8_t, 256> t;
-      std::fill(t.begin(), t.end(), std::uint8_t(255));
+   inline constexpr std::array<uint8_t, 256> digit_hex_table = [] {
+      std::array<uint8_t, 256> t;
+      std::fill(t.begin(), t.end(), uint8_t(255));
       t['0'] = 0;
       t['1'] = 1;
       t['2'] = 2;
@@ -156,20 +162,20 @@ export namespace glz
       return t;
    }();
 
-   inline constexpr std::array<std::uint16_t, 256> char_escape_table = [] {
+   inline constexpr std::array<uint16_t, 256> char_escape_table = [] {
       // Build std::uint16_t so that memcpy produces chars in correct order.
       // On LE: chars[0] in low byte, chars[1] in high byte -> memcpy writes [chars[0]][chars[1]]
       // On BE: chars[0] in high byte, chars[1] in low byte -> memcpy writes [chars[0]][chars[1]]
-      auto combine = [](const char chars[2]) -> std::uint16_t {
+      auto combine = [](const char chars[2]) -> uint16_t {
          if constexpr (std::endian::native == std::endian::big) {
-            return (std::uint16_t(std::uint8_t(chars[0])) << 8) | std::uint16_t(std::uint8_t(chars[1]));
+            return (uint16_t(uint8_t(chars[0])) << 8) | uint16_t(uint8_t(chars[1]));
          }
          else {
-            return std::uint16_t(std::uint8_t(chars[0])) | (std::uint16_t(std::uint8_t(chars[1])) << 8);
+            return uint16_t(uint8_t(chars[0])) | (uint16_t(uint8_t(chars[1])) << 8);
          }
       };
 
-      std::array<std::uint16_t, 256> t{};
+      std::array<uint16_t, 256> t{};
       t['\b'] = combine(R"(\b)");
       t['\t'] = combine(R"(\t)");
       t['\n'] = combine(R"(\n)");
@@ -180,25 +186,25 @@ export namespace glz
       return t;
    }();
 
-   consteval std::uint32_t repeat_byte4(const auto repeat) { return std::uint32_t(0x01010101u) * std::uint8_t(repeat); }
+   consteval uint32_t repeat_byte4(const auto repeat) { return uint32_t(0x01010101u) * uint8_t(repeat); }
 
-   consteval std::uint64_t repeat_byte8(const std::uint8_t repeat) { return 0x0101010101010101ull * repeat; }
+   consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }
 
 #if defined(__SIZEOF_INT128__)
-   consteval __uint128_t repeat_byte16(const std::uint8_t repeat)
+   consteval __uint128_t repeat_byte16(const uint8_t repeat)
    {
       __uint128_t multiplier = (__uint128_t(0x0101010101010101ull) << 64) | 0x0101010101010101ull;
       return multiplier * repeat;
    }
 #endif
 
-   consteval std::uint64_t not_repeat_byte8(const std::uint8_t repeat) { return ~(0x0101010101010101ull * repeat); }
+   consteval uint64_t not_repeat_byte8(const uint8_t repeat) { return ~(0x0101010101010101ull * repeat); }
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE std::uint32_t hex_to_u32(const char* c) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept
    {
       constexpr auto& t = digit_hex_table;
-      const std::uint8_t arr[4]{t[std::uint8_t(c[3])], t[std::uint8_t(c[2])], t[std::uint8_t(c[1])], t[std::uint8_t(c[0])]};
-      auto chunk = std::bit_cast<std::uint32_t>(arr);
+      const uint8_t arr[4]{t[uint8_t(c[3])], t[uint8_t(c[2])], t[uint8_t(c[1])], t[uint8_t(c[0])]};
+      auto chunk = std::bit_cast<uint32_t>(arr);
       // On big-endian, bit_cast produces bytes in opposite order than expected
       // byteswap to get consistent little-endian representation
       if constexpr (std::endian::native == std::endian::big) {
@@ -210,7 +216,7 @@ export namespace glz
       }
 
       // now pack into first four bytes of std::uint32_t
-      std::uint32_t packed{};
+      uint32_t packed{};
       packed |= (chunk & 0x0000000F);
       packed |= (chunk & 0x00000F00) >> 4;
       packed |= (chunk & 0x000F0000) >> 8;
@@ -219,7 +225,7 @@ export namespace glz
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE std::uint32_t code_point_to_utf8(const std::uint32_t code_point, Char* c) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c) noexcept
    {
       if (code_point <= 0x7F) {
          c[0] = Char(code_point);
@@ -246,7 +252,7 @@ export namespace glz
       return 0;
    }
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE std::uint32_t skip_code_point(const std::uint32_t code_point) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t skip_code_point(const uint32_t code_point) noexcept
    {
       if (code_point <= 0x7F) {
          return 1;
@@ -265,20 +271,20 @@ export namespace glz
 
    namespace unicode
    {
-      constexpr std::uint32_t generic_surrogate_mask = 0xF800;
-      constexpr std::uint32_t generic_surrogate_value = 0xD800;
+      constexpr uint32_t generic_surrogate_mask = 0xF800;
+      constexpr uint32_t generic_surrogate_value = 0xD800;
 
-      constexpr std::uint32_t surrogate_mask = 0xFC00;
-      constexpr std::uint32_t high_surrogate_value = 0xD800;
-      constexpr std::uint32_t low_surrogate_value = 0xDC00;
+      constexpr uint32_t surrogate_mask = 0xFC00;
+      constexpr uint32_t high_surrogate_value = 0xD800;
+      constexpr uint32_t low_surrogate_value = 0xDC00;
 
-      constexpr std::uint32_t surrogate_codepoint_offset = 0x10000;
-      constexpr std::uint32_t surrogate_codepoint_mask = 0x03FF;
-      constexpr std::uint32_t surrogate_codepoint_bits = 10;
+      constexpr uint32_t surrogate_codepoint_offset = 0x10000;
+      constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
+      constexpr uint32_t surrogate_codepoint_bits = 10;
    }
 
    template <class SrcChar, class DstChar = SrcChar>
-   [[nodiscard]] GLZ_ALWAYS_INLINE std::uint32_t handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
                                                                       const SrcChar* end) noexcept
    {
       using namespace unicode;
@@ -286,13 +292,13 @@ export namespace glz
       if (it + 4 >= end) [[unlikely]] {
          return false;
       }
-      const std::uint32_t high = hex_to_u32(it);
+      const uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
       it += 4; // skip the code point characters
 
-      std::uint32_t code_point;
+      uint32_t code_point;
 
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
@@ -304,14 +310,14 @@ export namespace glz
             return false;
          }
          // The next two characters must be `\u`
-         std::uint16_t u;
+         uint16_t u;
          std::memcpy(&u, it, 2);
          if (u != to_uint16_t(R"(\u)")) [[unlikely]] {
             return false;
          }
          it += 2;
          // verify that second unicode escape sequence is present
-         const std::uint32_t low = hex_to_u32(it);
+         const uint32_t low = hex_to_u32(it);
          if (low == 0xFFFFFFFFu) [[unlikely]] {
             return false;
          }
@@ -328,7 +334,7 @@ export namespace glz
       else {
          code_point = high;
       }
-      const std::uint32_t offset = code_point_to_utf8(code_point, dst);
+      const uint32_t offset = code_point_to_utf8(code_point, dst);
       dst += offset;
       return offset;
    }
@@ -341,13 +347,13 @@ export namespace glz
          return false;
       }
 
-      const std::uint32_t high = hex_to_u32(it);
+      const uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
       it += 4; // skip the code point characters
 
-      std::uint32_t code_point;
+      uint32_t code_point;
 
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
@@ -359,14 +365,14 @@ export namespace glz
             return false;
          }
          // The next two characters must be `\u`
-         std::uint16_t u;
+         uint16_t u;
          std::memcpy(&u, it, 2);
          if (u != to_uint16_t(R"(\u)")) [[unlikely]] {
             return false;
          }
          it += 2;
          // verify that second unicode escape sequence is present
-         const std::uint32_t low = hex_to_u32(it);
+         const uint32_t low = hex_to_u32(it);
          if (low == 0xFFFFFFFFu) [[unlikely]] {
             return false;
          }
@@ -484,7 +490,7 @@ export namespace glz
       requires(!check_is_padded(Opts))
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      const auto n = std::size_t(end - it);
+      const auto n = size_t(end - it);
       static constexpr auto S = str.sv();
       if ((n < str.size()) || not comparitor<S>(it)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
@@ -520,38 +526,38 @@ export namespace glz
       }
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_zero(const std::uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
    {
       return (((chunk - 0x0101010101010101u) & ~chunk) & 0x8080808080808080u);
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_quote(const std::uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8('"'));
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_escape(const std::uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_escape(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8('\\'));
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_space(const std::uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_space(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8(' '));
    }
 
    template <char Char>
-   GLZ_ALWAYS_INLINE constexpr auto has_char(const std::uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_char(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8(Char));
    }
 
-   GLZ_ALWAYS_INLINE constexpr std::uint64_t is_less_32(const std::uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_32(const uint64_t chunk) noexcept
    {
       return has_zero(chunk & repeat_byte8(0b11100000u));
    }
 
-   GLZ_ALWAYS_INLINE constexpr std::uint64_t is_greater_15(const std::uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t chunk) noexcept
    {
       return (chunk & repeat_byte8(0b11110000u));
    }
@@ -587,7 +593,7 @@ export namespace glz
       if constexpr (not Opts.minified) {
          if constexpr (Opts.null_terminated) {
             if constexpr (Opts.comments) {
-               while (whitespace_comment_table[std::uint8_t(*it)]) {
+               while (whitespace_comment_table[uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
@@ -600,14 +606,14 @@ export namespace glz
                }
             }
             else {
-               while (whitespace_table[std::uint8_t(*it)]) {
+               while (whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
             }
          }
          else {
             if constexpr (Opts.comments) {
-               while (it < end && whitespace_comment_table[std::uint8_t(*it)]) {
+               while (it < end && whitespace_comment_table[uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
@@ -624,7 +630,7 @@ export namespace glz
                }
             }
             else {
-               while (it < end && whitespace_table[std::uint8_t(*it)]) {
+               while (it < end && whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
                if (it == end) [[unlikely]] {
@@ -638,10 +644,10 @@ export namespace glz
       return false;
    }
 
-   GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, std::uint64_t length) noexcept
+   GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
    {
       if (length > 7) {
-         std::uint64_t v[2];
+         uint64_t v[2];
          while (length > 8) {
             std::memcpy(v, ws, 8);
             std::memcpy(v + 1, it, 8);
@@ -666,9 +672,9 @@ export namespace glz
          return;
       }
       {
-         constexpr std::uint64_t n{sizeof(std::uint32_t)};
+         constexpr uint64_t n{sizeof(uint32_t)};
          if (length >= n) {
-            std::uint32_t v[2];
+            uint32_t v[2];
             std::memcpy(v, ws, n);
             std::memcpy(v + 1, it, n);
             if (v[0] != v[1]) {
@@ -680,9 +686,9 @@ export namespace glz
          }
       }
       {
-         constexpr std::uint64_t n{sizeof(std::uint16_t)};
+         constexpr uint64_t n{sizeof(uint16_t)};
          if (length >= n) {
-            std::uint16_t v[2];
+            uint16_t v[2];
             std::memcpy(v, ws, n);
             std::memcpy(v + 1, it, n);
             if (v[0] != v[1]) {
@@ -703,7 +709,7 @@ export namespace glz
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      const auto* pc = std::memchr(it, '"', std::size_t(end - it));
+      const auto* pc = std::memchr(it, '"', size_t(end - it));
       if (pc) [[likely]] {
          it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
          return;
@@ -715,14 +721,14 @@ export namespace glz
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       while (it < end) [[likely]] {
-         const auto* pc = std::memchr(it, '"', std::size_t(end - it));
+         const auto* pc = std::memchr(it, '"', size_t(end - it));
          if (pc) [[likely]] {
             it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
             auto* prev = it - 1;
             while (*prev == '\\') {
                --prev;
             }
-            if (std::size_t(it - prev) % 2) {
+            if (size_t(it - prev) % 2) {
                return;
             }
             ++it; // skip the escaped quote
@@ -766,18 +772,18 @@ export namespace glz
 
       if constexpr (Opts.validate_skipped) {
          while (true) {
-            std::uint64_t swar;
+            uint64_t swar;
             std::memcpy(&swar, it, 8);
             if constexpr (std::endian::native == std::endian::big) {
                swar = std::byteswap(swar);
             }
 
-            constexpr std::uint64_t lo7_mask = repeat_byte8(0b01111111);
-            const std::uint64_t lo7 = swar & lo7_mask;
-            const std::uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-            const std::uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
-            const std::uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-            std::uint64_t next = ~((backslash & quote & less_32) | swar);
+            constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+            const uint64_t lo7 = swar & lo7_mask;
+            const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+            const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
+            const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+            uint64_t next = ~((backslash & quote & less_32) | swar);
             next &= repeat_byte8(0b10000000);
 
             if (next == 0) {
@@ -787,7 +793,7 @@ export namespace glz
             }
 
             // Find the first occurrence
-            std::size_t offset = (countr_zero(next) >> 3);
+            size_t offset = (countr_zero(next) >> 3);
             it += offset;
 
             const auto c = *it;
@@ -828,7 +834,7 @@ export namespace glz
                   }
                }
                else {
-                  if (not char_unescape_table[std::uint8_t(*it)]) [[unlikely]] {
+                  if (not char_unescape_table[uint8_t(*it)]) [[unlikely]] {
                      ctx.error = error_code::invalid_escape;
                      return;
                   }
@@ -871,7 +877,7 @@ export namespace glz
             }
             case '\\': {
                ++it;
-               if (char_unescape_table[std::uint8_t(*it)]) {
+               if (char_unescape_table[uint8_t(*it)]) {
                   ++it;
                   continue;
                }
@@ -916,22 +922,22 @@ export namespace glz
       consteval skip_until_closed_opts(bool padded_, bool comments_) noexcept : padded{padded_}, comments{comments_} {}
    };
 
-   template <skip_until_closed_opts Opts, char open, char close, std::size_t Depth = 1>
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
       requires(Opts.padded && not Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
 
-      std::size_t depth = Depth;
+      size_t depth = Depth;
 
       while (it < end) [[likely]] {
-         std::uint64_t chunk;
+         uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const std::uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
@@ -970,22 +976,22 @@ export namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <skip_until_closed_opts Opts, char open, char close, std::size_t Depth = 1>
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
       requires(Opts.padded && Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
 
-      std::size_t depth = Depth;
+      size_t depth = Depth;
 
       while (it < end) [[likely]] {
-         std::uint64_t chunk;
+         uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const std::uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
@@ -1031,22 +1037,22 @@ export namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <skip_until_closed_opts Opts, char open, char close, std::size_t Depth = 1>
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
       requires(not Opts.padded && not Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
 
-      std::size_t depth = Depth;
+      size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
-         std::uint64_t chunk;
+         uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const std::uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
@@ -1121,22 +1127,22 @@ export namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <skip_until_closed_opts Opts, char open, char close, std::size_t Depth = 1>
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
       requires(not Opts.padded && Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr bool opening_not_handled = false;
       static constexpr bool skip_validation = false;
 
-      std::size_t depth = Depth;
+      size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
-         std::uint64_t chunk;
+         uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          if constexpr (std::endian::native == std::endian::big) {
             chunk = std::byteswap(chunk);
          }
-         const std::uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
 
@@ -1218,13 +1224,13 @@ export namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   inline constexpr std::optional<std::uint64_t> stoui(const std::string_view s) noexcept
+   inline constexpr std::optional<uint64_t> stoui(const std::string_view s) noexcept
    {
       if (s.empty()) {
          return {};
       }
 
-      std::uint64_t ret;
+      uint64_t ret;
       auto* c = s.data();
       bool valid = detail::stoui64(ret, c);
       if (valid) {
@@ -1294,7 +1300,7 @@ export namespace glz
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (not Opts.validate) {
-         while (numeric_table[std::uint8_t(*it)]) {
+         while (numeric_table[uint8_t(*it)]) {
             ++it;
          }
       }
@@ -1317,24 +1323,24 @@ export namespace glz
       skip_till_quote(ctx, it, end);
       if (bool(ctx.error)) [[unlikely]]
          return {};
-      return sv{start, static_cast<std::size_t>(it++ - start)};
+      return sv{start, static_cast<size_t>(it++ - start)};
    }
 
-   template <std::size_t multiple>
+   template <size_t multiple>
    GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const std::integral auto val) noexcept
    {
       return val + (multiple - (val % multiple)) % multiple;
    }
 
-   inline bool validate_utf8(const auto* str, const std::size_t size) noexcept
+   inline bool validate_utf8(const auto* str, const size_t size) noexcept
    {
-      const std::uint8_t* it = reinterpret_cast<const std::uint8_t*>(str);
-      const std::uint8_t* end = it + size;
+      const uint8_t* it = reinterpret_cast<const uint8_t*>(str);
+      const uint8_t* end = it + size;
 
       while (it < end) {
          // Optimistic SWAR check for ASCII
          if (it + 8 <= end) {
-            std::uint64_t chunk;
+            uint64_t chunk;
             std::memcpy(&chunk, it, 8);
             if ((chunk & glz::repeat_byte8(0x80)) == 0) {
                it += 8;
@@ -1343,7 +1349,7 @@ export namespace glz
          }
 
          // Byte-by-byte validation (standard conformant)
-         std::uint8_t byte = *it;
+         uint8_t byte = *it;
 
          if (byte < 0x80) {
             it++;

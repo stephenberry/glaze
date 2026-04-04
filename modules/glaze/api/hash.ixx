@@ -22,12 +22,15 @@ import glaze.util.string_literal;
 // bit: 1220 times 128 bit: 2.2494655e22 times (or 22 sextillion times) 256 bit: 7.6545351e60 times From these
 // calculations it is apparent that a 128 bit hash is more than sufficient
 
+using std::uint64_t;
+using std::size_t;
+
 export namespace glz
 {
    template <class T, T Value>
    consteval auto make_array()
    {
-      return []<std::size_t... I>(std::index_sequence<I...>) {
+      return []<size_t... I>(std::index_sequence<I...>) {
          return std::array<char, sizeof(T)>{static_cast<char>(((Value >> (std::numeric_limits<unsigned char>::digits * I)) & 0xff))...};
       }(std::make_index_sequence<sizeof(T)>{});
    }
@@ -36,7 +39,7 @@ export namespace glz
    {
       // convert an integer to a string_view at compile time
 
-      constexpr std::uint64_t num_digits(auto x) noexcept // number of digits needed, including minus sign
+      constexpr uint64_t num_digits(auto x) noexcept // number of digits needed, including minus sign
       {
          return x < 10 ? 1 : 1 + num_digits(x / 10);
       }
@@ -48,28 +51,28 @@ export namespace glz
       };
 
       // recursive number-printing template, general case (for three or more digits)
-      template <std::uint64_t size, std::uint64_t x, char... args>
+      template <uint64_t size, uint64_t x, char... args>
       struct numeric_builder
       {
          using type = typename numeric_builder<size - 1, x / 10, '0' + x % 10, args...>::type;
       };
 
       // special case for two digits; minus sign is handled here
-      template <std::uint64_t x, char... args>
+      template <uint64_t x, char... args>
       struct numeric_builder<2, x, args...>
       {
          using type = metastring<'0' + x / 10, '0' + x % 10, args...>;
       };
 
       // special case for one digit (positive numbers only)
-      template <std::uint64_t x, char... args>
+      template <uint64_t x, char... args>
       struct numeric_builder<1, x, args...>
       {
          using type = metastring<'0' + x, args...>;
       };
 
       // convenience wrapper for numeric_builder
-      template <std::uint64_t x>
+      template <uint64_t x>
       struct numeric_string
       {
          // generate a unique string type representing this number
@@ -91,29 +94,29 @@ export namespace glz
    template <class T, T Value>
    inline constexpr std::string_view int_to_sv_v = int_to_sv<T, Value>{}.get();
 
-   template <std::uint64_t I>
+   template <uint64_t I>
    inline consteval auto to_sv()
    {
       return detail::numeric_string<I>::get();
    }
 
-   template <std::size_t I>
+   template <size_t I>
    struct hash128_i
    {
       static constexpr sv str = to_sv<I>();
-      static constexpr sv h0 = int_to_sv_v<std::uint64_t, xxh64::hash(str.data(), str.size(), 0)>;
-      static constexpr sv h1 = int_to_sv_v<std::uint64_t, xxh64::hash(str.data(), str.size(), 1)>;
+      static constexpr sv h0 = int_to_sv_v<uint64_t, xxh64::hash(str.data(), str.size(), 0)>;
+      static constexpr sv h1 = int_to_sv_v<uint64_t, xxh64::hash(str.data(), str.size(), 1)>;
       static constexpr sv value = join_v<h0, h1>;
    };
 
-   template <std::size_t I>
+   template <size_t I>
    inline constexpr std::string_view hash128_i_v = hash128_i<I>::value;
 
    template <const std::string_view& Str>
    struct hash128
    {
-      static constexpr sv h0 = int_to_sv_v<std::uint64_t, xxh64::hash(Str.data(), Str.size(), 0)>;
-      static constexpr sv h1 = int_to_sv_v<std::uint64_t, xxh64::hash(Str.data(), Str.size(), 1)>;
+      static constexpr sv h0 = int_to_sv_v<uint64_t, xxh64::hash(Str.data(), Str.size(), 0)>;
+      static constexpr sv h1 = int_to_sv_v<uint64_t, xxh64::hash(Str.data(), Str.size(), 1)>;
       static constexpr sv value = join_v<h0, h1>;
    };
 

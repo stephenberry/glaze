@@ -22,13 +22,16 @@ import glaze.util.for_each;
 
 import std;
 
+using std::uint8_t;
+using std::size_t;
+
 namespace glz
 {
    // HTML escape function
    inline std::string html_escape(const std::string& input)
    {
       std::string result;
-      result.reserve(static_cast<std::size_t>(input.size() * 1.1)); // Reserve some extra space
+      result.reserve(static_cast<size_t>(input.size() * 1.1)); // Reserve some extra space
 
       for (char c : input) {
          switch (c) {
@@ -72,7 +75,7 @@ namespace glz
 
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
-            while (it < end && whitespace_table[std::uint8_t(*it)]) {
+            while (it < end && whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          };
@@ -118,10 +121,10 @@ namespace glz
 
                   if (it == end) {
                      ctx.error = error_code::unexpected_end;
-                     return {std::size_t(it - outer_start), ctx.error, ctx.custom_error_message};
+                     return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                   }
 
-                  const sv key{start, std::size_t(it - start)};
+                  const sv key{start, size_t(it - start)};
 
                   skip_whitespace();
 
@@ -142,7 +145,7 @@ namespace glz
 
                      if (closing_pos == end) {
                         ctx.error = error_code::unexpected_end;
-                        return {std::size_t(it - outer_start), ctx.error, "Closing tag not found for section"};
+                        return {size_t(it - outer_start), ctx.error, "Closing tag not found for section"};
                      }
 
                      if (it + 1 < end) {
@@ -166,11 +169,11 @@ namespace glz
 
                         if (index >= N) {
                            ctx.error = error_code::unknown_key;
-                           return {std::size_t(it - outer_start), ctx.error, ctx.custom_error_message};
+                           return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                         }
                         else {
                            visit<N>(
-                              [&]<std::size_t I>() {
+                              [&]<size_t I>() {
                                  static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                                  if (TargetKey == key) [[likely]] {
                                     using field_type = refl_t<T, I>;
@@ -255,7 +258,7 @@ namespace glz
                      }
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return {std::size_t(it - outer_start), ctx.error, ctx.custom_error_message};
+                        return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                      }
 
                      // Handle inverted sections and boolean sections
@@ -283,7 +286,7 @@ namespace glz
                      }
                      // Container iteration for regular sections was already handled above
 
-                     while (it < end && whitespace_table[std::uint8_t(*it)]) {
+                     while (it < end && whitespace_table[uint8_t(*it)]) {
                         buffer.push_back(*it);
                         ++it;
                      }
@@ -299,14 +302,14 @@ namespace glz
 
                   if (index >= N) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
-                     return {std::size_t(it - outer_start), ctx.error, ctx.custom_error_message};
+                     return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                   }
                   else [[likely]] {
                      // For triple braces, we need to expect three closing braces
-                     std::size_t expected_closing_braces = is_triple_brace ? 3 : 2;
+                     size_t expected_closing_braces = is_triple_brace ? 3 : 2;
 
                      // Check for correct closing braces
-                     std::size_t closing_brace_count = 0;
+                     size_t closing_brace_count = 0;
                      auto temp_it = it;
                      while (temp_it < end && *temp_it == '}' && closing_brace_count < 3) {
                         ++temp_it;
@@ -315,7 +318,7 @@ namespace glz
 
                      if (closing_brace_count < expected_closing_braces) {
                         ctx.error = error_code::syntax_error;
-                        return {std::size_t(it - outer_start), ctx.error, ctx.custom_error_message};
+                        return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                      }
 
                      // Serialize the value
@@ -324,10 +327,10 @@ namespace glz
                         set_json<opt_true<Opts, unquoted_opt_tag{}>>(); // write out string like values without quotes
 
                      visit<N>(
-                        [&]<std::size_t I>() {
+                        [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            if ((TargetKey.size() == key.size()) && comparitor<TargetKey>(start)) [[likely]] {
-                              std::size_t ix = 0;
+                              size_t ix = 0;
                               temp_buffer.resize(2 * write_padding_bytes);
 
                               if constexpr (reflectable<T>) {
@@ -348,7 +351,7 @@ namespace glz
                         index);
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return {std::size_t(it - outer_start), ctx.error, ctx.custom_error_message};
+                        return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
                      }
 
                      // Apply HTML escaping for double braces, leave unescaped for triple braces
@@ -382,7 +385,7 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return {std::size_t(it - outer_start), ctx.error, ctx.custom_error_message};
+         return {size_t(it - outer_start), ctx.error, ctx.custom_error_message};
       }
 
       return {};

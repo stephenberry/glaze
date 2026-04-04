@@ -23,6 +23,14 @@ import glaze.concepts.container_concepts;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint8_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::ptrdiff_t;
+using std::size_t;
+
 export namespace glz
 {
    // Forward declarations (needed for circular references)
@@ -50,13 +58,13 @@ export namespace glz
 
          // Find closing quote using memchr (SIMD-optimized in libc)
          while (p < end) {
-            const char* q = static_cast<const char*>(std::memchr(p, '"', static_cast<std::size_t>(end - p)));
+            const char* q = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
             if (!q) [[unlikely]] {
                return end; // unclosed string
             }
 
             // Count preceding backslashes to check if escaped
-            std::size_t backslashes = 0;
+            size_t backslashes = 0;
             const char* check = q - 1;
             while (check > start && *check == '\\') {
                ++backslashes;
@@ -85,7 +93,7 @@ export namespace glz
             else {
                if (p >= end) break;
             }
-            switch (lazy_char_class[std::uint8_t(*p)]) {
+            switch (lazy_char_class[uint8_t(*p)]) {
             case quote:
                p = skip_string_fast<Opts>(p, end);
                break;
@@ -100,10 +108,10 @@ export namespace glz
             case number:
                ++p;
                if constexpr (Opts.null_terminated) {
-                  while (numeric_table[std::uint8_t(*p)]) ++p;
+                  while (numeric_table[uint8_t(*p)]) ++p;
                }
                else {
-                  while (p < end && numeric_table[std::uint8_t(*p)]) ++p;
+                  while (p < end && numeric_table[uint8_t(*p)]) ++p;
                }
                break;
             default:
@@ -141,7 +149,7 @@ export namespace glz
                else {
                   if (p >= end) break;
                }
-               switch (lazy_char_class[std::uint8_t(*p)]) {
+               switch (lazy_char_class[uint8_t(*p)]) {
                case quote:
                   p = skip_string_fast<Opts>(p, end);
                   break;
@@ -156,10 +164,10 @@ export namespace glz
                case number:
                   ++p;
                   if constexpr (Opts.null_terminated) {
-                     while (numeric_table[std::uint8_t(*p)]) ++p;
+                     while (numeric_table[uint8_t(*p)]) ++p;
                   }
                   else {
-                     while (p < end && numeric_table[std::uint8_t(*p)]) ++p;
+                     while (p < end && numeric_table[uint8_t(*p)]) ++p;
                   }
                   break;
                default:
@@ -172,10 +180,10 @@ export namespace glz
          default:
             // Number
             if constexpr (Opts.null_terminated) {
-               while (numeric_table[std::uint8_t(*p)]) ++p;
+               while (numeric_table[uint8_t(*p)]) ++p;
             }
             else {
-               while (p < end && numeric_table[std::uint8_t(*p)]) ++p;
+               while (p < end && numeric_table[uint8_t(*p)]) ++p;
             }
             return p;
          }
@@ -231,7 +239,7 @@ export namespace glz
       }
       [[nodiscard]] bool is_number() const noexcept
       {
-         return !has_error() && data_ && (is_digit(std::uint8_t(*data_)) || *data_ == '-');
+         return !has_error() && data_ && (is_digit(uint8_t(*data_)) || *data_ == '-');
       }
       [[nodiscard]] bool is_string() const noexcept { return !has_error() && data_ && *data_ == '"'; }
       [[nodiscard]] bool is_array() const noexcept { return !has_error() && data_ && *data_ == '['; }
@@ -250,7 +258,7 @@ export namespace glz
       {
          if (has_error() || !data_) return {};
          const char* end = detail::skip_value_lazy<Opts>(data_, json_end());
-         return {data_, static_cast<std::size_t>(end - data_)};
+         return {data_, static_cast<size_t>(end - data_)};
       }
 
       /// @brief Parse this value directly into a C++ type (single-pass, no double scanning)
@@ -274,7 +282,7 @@ export namespace glz
          auto end = json_end();
          parse<JSON>::op<opts{}>(value, ctx, it, end);
          if (bool(ctx.error)) {
-            return error_ctx{static_cast<std::size_t>(it - data_), ctx.error};
+            return error_ctx{static_cast<size_t>(it - data_), ctx.error};
          }
          return {};
       }
@@ -282,10 +290,10 @@ export namespace glz
       template <class T>
       [[nodiscard]] expected<T, error_ctx> get() const;
 
-      [[nodiscard]] lazy_json_view operator[](std::size_t index) const;
+      [[nodiscard]] lazy_json_view operator[](size_t index) const;
       [[nodiscard]] lazy_json_view operator[](std::string_view key) const;
       [[nodiscard]] bool contains(std::string_view key) const;
-      [[nodiscard]] std::size_t size() const;
+      [[nodiscard]] size_t size() const;
       [[nodiscard]] bool empty() const noexcept;
 
       // Key access for object iteration
@@ -316,10 +324,10 @@ export namespace glz
       static void skip_ws(const char*& p, [[maybe_unused]] const char* end) noexcept
       {
          if constexpr (Opts.null_terminated) {
-            while (whitespace_table[std::uint8_t(*p)]) ++p;
+            while (whitespace_table[uint8_t(*p)]) ++p;
          }
          else {
-            while (p < end && whitespace_table[std::uint8_t(*p)]) ++p;
+            while (p < end && whitespace_table[uint8_t(*p)]) ++p;
          }
       }
 
@@ -336,7 +344,7 @@ export namespace glz
    {
      private:
       const char* json_{};
-      std::size_t len_{};
+      size_t len_{};
       const char* root_data_{};
       mutable lazy_json_view<Opts> root_view_{}; // Cached root view with parse_pos_
 
@@ -397,7 +405,7 @@ export namespace glz
       [[nodiscard]] const lazy_json_view<Opts>& root() const noexcept { return root_view_; }
 
       [[nodiscard]] lazy_json_view<Opts> operator[](std::string_view key) const { return root_view_[key]; }
-      [[nodiscard]] lazy_json_view<Opts> operator[](std::size_t index) const { return root_view_[index]; }
+      [[nodiscard]] lazy_json_view<Opts> operator[](size_t index) const { return root_view_[index]; }
 
       [[nodiscard]] bool is_null() const noexcept { return !root_data_ || *root_data_ == 'n'; }
       [[nodiscard]] bool is_array() const noexcept { return root_data_ && *root_data_ == '['; }
@@ -406,7 +414,7 @@ export namespace glz
       explicit operator bool() const noexcept { return !is_null(); }
 
       [[nodiscard]] const char* json_data() const noexcept { return json_; }
-      [[nodiscard]] std::size_t json_size() const noexcept { return len_; }
+      [[nodiscard]] size_t json_size() const noexcept { return len_; }
 
       /// @brief Reset parse position to beginning (for re-scanning from start)
       void reset_parse_pos() noexcept { root_view_.parse_pos_ = nullptr; }
@@ -430,7 +438,7 @@ export namespace glz
      public:
       using iterator_category = std::forward_iterator_tag;
       using value_type = lazy_json_view<Opts>;
-      using difference_type = std::ptrdiff_t;
+      using difference_type = ptrdiff_t;
       using pointer = void;
       using reference = lazy_json_view<Opts>&;
 
@@ -459,10 +467,10 @@ export namespace glz
       void skip_ws(const char*& p) noexcept
       {
          if constexpr (Opts.null_terminated) {
-            while (whitespace_table[std::uint8_t(*p)]) ++p;
+            while (whitespace_table[uint8_t(*p)]) ++p;
          }
          else {
-            while (p < json_end_ && whitespace_table[std::uint8_t(*p)]) ++p;
+            while (p < json_end_ && whitespace_table[uint8_t(*p)]) ++p;
          }
       }
    };
@@ -500,7 +508,7 @@ export namespace glz
       indexed_lazy_view() = default;
 
       /// @brief Number of elements - O(1)
-      [[nodiscard]] std::size_t size() const noexcept { return value_starts_.size(); }
+      [[nodiscard]] size_t size() const noexcept { return value_starts_.size(); }
 
       /// @brief Check if empty - O(1)
       [[nodiscard]] bool empty() const noexcept { return value_starts_.empty(); }
@@ -512,7 +520,7 @@ export namespace glz
       [[nodiscard]] bool is_array() const noexcept { return !is_object_; }
 
       /// @brief O(1) random access by index
-      [[nodiscard]] lazy_json_view<Opts> operator[](std::size_t index) const
+      [[nodiscard]] lazy_json_view<Opts> operator[](size_t index) const
       {
          if (index >= value_starts_.size()) {
             return lazy_json_view<Opts>::make_error(error_code::exceeded_static_array_size);
@@ -527,7 +535,7 @@ export namespace glz
          if (!is_object_) {
             return lazy_json_view<Opts>::make_error(error_code::get_wrong_type);
          }
-         for (std::size_t i = 0; i < keys_.size(); ++i) {
+         for (size_t i = 0; i < keys_.size(); ++i) {
             if (keys_[i] == key) {
                return lazy_json_view<Opts>{doc_, value_starts_[i], keys_[i]};
             }
@@ -556,7 +564,7 @@ export namespace glz
          : doc_(doc), json_end_(json_end), is_object_(is_object)
       {}
 
-      void reserve(std::size_t n)
+      void reserve(size_t n)
       {
          value_starts_.reserve(n);
          if (is_object_) {
@@ -582,18 +590,18 @@ export namespace glz
    {
      private:
       const indexed_lazy_view<Opts>* parent_{};
-      std::size_t index_{};
+      size_t index_{};
       mutable lazy_json_view<Opts> current_view_{}; // Cached for reference return
 
      public:
       using iterator_category = std::random_access_iterator_tag;
       using value_type = lazy_json_view<Opts>;
-      using difference_type = std::ptrdiff_t;
+      using difference_type = ptrdiff_t;
       using pointer = void;
       using reference = lazy_json_view<Opts>&;
 
       indexed_lazy_iterator() = default;
-      indexed_lazy_iterator(const indexed_lazy_view<Opts>* parent, std::size_t index) : parent_(parent), index_(index) {}
+      indexed_lazy_iterator(const indexed_lazy_view<Opts>* parent, size_t index) : parent_(parent), index_(index) {}
 
       reference operator*() const
       {
@@ -636,24 +644,24 @@ export namespace glz
 
       indexed_lazy_iterator& operator+=(difference_type n)
       {
-         index_ = static_cast<std::size_t>(static_cast<difference_type>(index_) + n);
+         index_ = static_cast<size_t>(static_cast<difference_type>(index_) + n);
          return *this;
       }
 
       indexed_lazy_iterator& operator-=(difference_type n)
       {
-         index_ = static_cast<std::size_t>(static_cast<difference_type>(index_) - n);
+         index_ = static_cast<size_t>(static_cast<difference_type>(index_) - n);
          return *this;
       }
 
       indexed_lazy_iterator operator+(difference_type n) const
       {
-         return {parent_, static_cast<std::size_t>(static_cast<difference_type>(index_) + n)};
+         return {parent_, static_cast<size_t>(static_cast<difference_type>(index_) + n)};
       }
 
       indexed_lazy_iterator operator-(difference_type n) const
       {
-         return {parent_, static_cast<std::size_t>(static_cast<difference_type>(index_) - n)};
+         return {parent_, static_cast<size_t>(static_cast<difference_type>(index_) - n)};
       }
 
       difference_type operator-(const indexed_lazy_iterator& other) const
@@ -664,9 +672,9 @@ export namespace glz
       reference operator[](difference_type n) const
       {
          std::string_view key =
-            parent_->is_object_ ? parent_->keys_[index_ + static_cast<std::size_t>(n)] : std::string_view{};
+            parent_->is_object_ ? parent_->keys_[index_ + static_cast<size_t>(n)] : std::string_view{};
          current_view_ =
-            lazy_json_view<Opts>{parent_->doc_, parent_->value_starts_[index_ + static_cast<std::size_t>(n)], key};
+            lazy_json_view<Opts>{parent_->doc_, parent_->value_starts_[index_ + static_cast<size_t>(n)], key};
          return current_view_;
       }
 
@@ -699,14 +707,14 @@ export namespace glz
       const char* key_start = p;
 
       while (p < end) {
-         const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<std::size_t>(end - p)));
+         const char* quote = static_cast<const char*>(std::memchr(p, '"', static_cast<size_t>(end - p)));
          if (!quote) [[unlikely]] {
             p = end;
-            return std::string_view{key_start, static_cast<std::size_t>(end - key_start)};
+            return std::string_view{key_start, static_cast<size_t>(end - key_start)};
          }
 
          // Count preceding backslashes to check if escaped
-         std::size_t backslashes = 0;
+         size_t backslashes = 0;
          const char* check = quote - 1;
          while (check > start && *check == '\\') {
             ++backslashes;
@@ -715,18 +723,18 @@ export namespace glz
 
          if ((backslashes & 1) == 0) {
             // Even backslashes = real quote
-            std::string_view key{key_start, static_cast<std::size_t>(quote - key_start)};
+            std::string_view key{key_start, static_cast<size_t>(quote - key_start)};
             p = quote + 1; // skip closing quote
             return key;
          }
          // Odd backslashes = escaped quote, continue searching
          p = quote + 1;
       }
-      return std::string_view{key_start, static_cast<std::size_t>(p - key_start)};
+      return std::string_view{key_start, static_cast<size_t>(p - key_start)};
    }
 
    template <opts Opts>
-   inline lazy_json_view<Opts> lazy_json_view<Opts>::operator[](std::size_t index) const
+   inline lazy_json_view<Opts> lazy_json_view<Opts>::operator[](size_t index) const
    {
       if (has_error()) return *this;
       if (!is_array()) return make_error(error_code::get_wrong_type);
@@ -744,7 +752,7 @@ export namespace glz
       }
 
       // Skip 'index' elements using lazy scanning
-      for (std::size_t i = 0; i < index; ++i) {
+      for (size_t i = 0; i < index; ++i) {
          p = detail::skip_value_lazy<Opts>(p, end);
          skip_ws(p, end);
 
@@ -882,7 +890,7 @@ export namespace glz
    }
 
    template <opts Opts>
-   inline std::size_t lazy_json_view<Opts>::size() const
+   inline size_t lazy_json_view<Opts>::size() const
    {
       if (has_error() || !data_) return 0;
       if (!is_array() && !is_object()) return 0;
@@ -900,7 +908,7 @@ export namespace glz
          if (p >= end || *p == close_char) return 0;
       }
 
-      std::size_t count = 0;
+      size_t count = 0;
       const bool is_obj = is_object();
 
       while (true) {
@@ -1188,7 +1196,7 @@ export namespace glz
          if (bool(ctx.error)) {
             return unexpected(error_ctx{0, ctx.error});
          }
-         std::string_view raw{data_, static_cast<std::size_t>(it - data_)};
+         std::string_view raw{data_, static_cast<size_t>(it - data_)};
          return glz::read_json<std::string>(raw);
       }
       else if constexpr (std::is_same_v<T, std::string_view>) {
@@ -1201,7 +1209,7 @@ export namespace glz
          if (bool(ctx.error)) {
             return unexpected(error_ctx{0, ctx.error});
          }
-         return std::string_view{data_ + 1, static_cast<std::size_t>(it - data_ - 1)};
+         return std::string_view{data_ + 1, static_cast<size_t>(it - data_ - 1)};
       }
       else if constexpr (std::is_same_v<T, double>) {
          if (!is_number()) {
@@ -1225,37 +1233,37 @@ export namespace glz
          }
          return value;
       }
-      else if constexpr (std::is_same_v<T, std::int64_t>) {
+      else if constexpr (std::is_same_v<T, int64_t>) {
          if (!is_number()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         std::int64_t value{};
+         int64_t value{};
          auto it = data_;
          if (!glz::atoi(value, it, end)) {
             return unexpected(error_ctx{0, error_code::parse_number_failure});
          }
          return value;
       }
-      else if constexpr (std::is_same_v<T, std::uint64_t>) {
+      else if constexpr (std::is_same_v<T, uint64_t>) {
          if (!is_number()) {
             return unexpected(error_ctx{0, error_code::get_wrong_type});
          }
-         std::uint64_t value{};
+         uint64_t value{};
          auto it = data_;
          if (!glz::atoi(value, it, end)) {
             return unexpected(error_ctx{0, error_code::parse_number_failure});
          }
          return value;
       }
-      else if constexpr (std::is_same_v<T, std::int32_t>) {
-         auto result = get<std::int64_t>();
+      else if constexpr (std::is_same_v<T, int32_t>) {
+         auto result = get<int64_t>();
          if (!result) return unexpected(result.error());
-         return static_cast<std::int32_t>(*result);
+         return static_cast<int32_t>(*result);
       }
-      else if constexpr (std::is_same_v<T, std::uint32_t>) {
-         auto result = get<std::uint64_t>();
+      else if constexpr (std::is_same_v<T, uint32_t>) {
+         auto result = get<uint64_t>();
          if (!result) return unexpected(result.error());
-         return static_cast<std::uint32_t>(*result);
+         return static_cast<uint32_t>(*result);
       }
       else {
          static_assert(false_v<T>, "Unsupported type for lazy_json_view::get<T>()");
@@ -1289,7 +1297,7 @@ export namespace glz
             return;
          }
 
-         const std::size_t n = static_cast<std::size_t>(it - view.data());
+         const size_t n = static_cast<size_t>(it - view.data());
          if constexpr (resizable<B>) {
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));
@@ -1332,10 +1340,10 @@ export namespace glz
       const char* end = buffer.data() + buffer.size();
 
       if constexpr (Opts.null_terminated) {
-         while (whitespace_table[std::uint8_t(*p)]) ++p;
+         while (whitespace_table[uint8_t(*p)]) ++p;
       }
       else {
-         while (p < end && whitespace_table[std::uint8_t(*p)]) ++p;
+         while (p < end && whitespace_table[uint8_t(*p)]) ++p;
       }
 
       if (p >= end) {
@@ -1344,7 +1352,7 @@ export namespace glz
 
       // Validate first character is valid JSON start
       const char c = *p;
-      if (c != '{' && c != '[' && c != '"' && c != 't' && c != 'f' && c != 'n' && !is_digit(std::uint8_t(c)) && c != '-') {
+      if (c != '{' && c != '[' && c != '"' && c != 't' && c != 'f' && c != 'n' && !is_digit(uint8_t(c)) && c != '-') {
          return unexpected(error_ctx{0, error_code::syntax_error});
       }
 

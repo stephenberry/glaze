@@ -10,13 +10,16 @@ import ut;
 
 import glaze.tests.json_perf_common;
 
+using std::int64_t;
+using std::size_t;
+
 using namespace ut;
 using namespace glz::perf;
 
 #ifdef NDEBUG
-[[maybe_unused]] constexpr std::size_t iterations = 1'000'000;
+[[maybe_unused]] constexpr size_t iterations = 1'000'000;
 #else
-[[maybe_unused]] constexpr std::size_t iterations = 100'000;
+[[maybe_unused]] constexpr size_t iterations = 100'000;
 #endif
 
 struct icon_emoji_data
@@ -30,40 +33,40 @@ struct permission_overwrite
    std::string allow{};
    std::string deny{};
    std::string id{};
-   std::int64_t type{};
+   int64_t type{};
 };
 
 struct channel_data
 {
    std::vector<permission_overwrite> permission_overwrites{};
    std::optional<std::string> last_message_id{};
-   std::int64_t default_thread_rate_limit_per_user{};
+   int64_t default_thread_rate_limit_per_user{};
    std::vector<std::nullptr_t> applied_tags{};
    std::vector<std::nullptr_t> recipients{};
-   std::int64_t default_auto_archive_duration{};
+   int64_t default_auto_archive_duration{};
    std::nullptr_t status{nullptr};
    std::string last_pin_timestamp{};
    std::nullptr_t topic{nullptr};
-   std::int64_t rate_limit_per_user{};
+   int64_t rate_limit_per_user{};
    icon_emoji_data icon_emoji{};
-   std::int64_t total_message_sent{};
-   std::int64_t video_quality_mode{};
+   int64_t total_message_sent{};
+   int64_t video_quality_mode{};
    std::string application_id{};
    std::string permissions{};
-   std::int64_t message_count{};
+   int64_t message_count{};
    std::string parent_id{};
-   std::int64_t member_count{};
+   int64_t member_count{};
    std::string owner_id{};
    std::string guild_id{};
-   std::int64_t user_limit{};
-   std::int64_t position{};
+   int64_t user_limit{};
+   int64_t position{};
    std::string name{};
    std::string icon{};
-   std::int64_t version{};
-   std::int64_t bitrate{};
+   int64_t version{};
+   int64_t bitrate{};
    std::string id{};
-   std::int64_t flags{};
-   std::int64_t type{};
+   int64_t flags{};
+   int64_t type{};
    bool managed{};
    bool nsfw{};
 };
@@ -78,13 +81,13 @@ struct user_data
    std::nullptr_t locale{nullptr};
    std::string discriminator{};
    std::string user_name{};
-   std::int64_t accent_color{};
-   std::int64_t premium_type{};
-   std::int64_t public_flags{};
+   int64_t accent_color{};
+   int64_t premium_type{};
+   int64_t public_flags{};
    std::string email{};
    bool mfa_enabled{};
    std::string id{};
-   std::int64_t flags{};
+   int64_t flags{};
    bool verified{};
    bool system{};
    bool bot{};
@@ -101,7 +104,7 @@ struct member_data
    std::string joined_at{};
    std::string guild_id{};
    user_data user{};
-   std::int64_t flags{};
+   int64_t flags{};
    bool pending{};
    bool deaf{};
    bool mute{};
@@ -118,14 +121,14 @@ struct role_data
    std::nullptr_t unicode_emoji{nullptr};
    std::nullptr_t icon{nullptr};
    std::string permissions{};
-   std::int64_t position{};
+   int64_t position{};
    std::string name{};
    bool mentionable{};
-   std::int64_t version{};
+   int64_t version{};
    std::string id{};
    tags_data tags{};
-   std::int64_t color{};
-   std::int64_t flags{};
+   int64_t color{};
+   int64_t flags{};
    bool managed{};
    bool hoist{};
 };
@@ -141,49 +144,49 @@ struct guild_data
    std::nullptr_t vanity_url_code{nullptr};
    std::nullptr_t application_id{nullptr};
    std::nullptr_t afk_channel_id{nullptr};
-   std::int64_t default_message_notifications{};
-   std::int64_t max_stage_video_channel_users{};
+   int64_t default_message_notifications{};
+   int64_t max_stage_video_channel_users{};
    std::string public_updates_channel_id{};
    std::nullptr_t description{nullptr};
    std::vector<std::nullptr_t> threads{};
    std::vector<channel_data> channels{};
-   std::int64_t premium_subscription_count{};
-   std::int64_t approximate_presence_count{};
+   int64_t premium_subscription_count{};
+   int64_t approximate_presence_count{};
    std::vector<std::string> features{};
    std::vector<std::string> stickers{};
    bool premium_progress_bar_enabled{};
    std::vector<member_data> members{};
    std::nullptr_t hub_type{nullptr};
-   std::int64_t approximate_member_count{};
-   std::int64_t explicit_content_filter{};
-   std::int64_t max_video_channel_users{};
+   int64_t approximate_member_count{};
+   int64_t explicit_content_filter{};
+   int64_t max_video_channel_users{};
    std::nullptr_t splash{nullptr};
    std::nullptr_t banner{nullptr};
    std::string system_channel_id{};
    std::string widget_channel_id{};
    std::string preferred_locale{};
-   std::int64_t system_channel_flags{};
+   int64_t system_channel_flags{};
    std::string rules_channel_id{};
    std::vector<role_data> roles{};
-   std::int64_t verification_level{};
+   int64_t verification_level{};
    std::string permissions{};
-   std::int64_t max_presences{};
+   int64_t max_presences{};
    std::string discovery{};
    std::string joined_at{};
-   std::int64_t member_count{};
-   std::int64_t premium_tier{};
+   int64_t member_count{};
+   int64_t premium_tier{};
    std::string owner_id{};
-   std::int64_t max_members{};
-   std::int64_t afk_timeout{};
+   int64_t max_members{};
+   int64_t afk_timeout{};
    bool widget_enabled{};
    std::string region{};
-   std::int64_t nsfw_level{};
-   std::int64_t mfa_level{};
+   int64_t nsfw_level{};
+   int64_t mfa_level{};
    std::string name{};
    std::string icon{};
    bool unavailable{};
    std::string id{};
-   std::int64_t flags{};
+   int64_t flags{};
    bool large{};
    bool owner{};
    bool nsfw{};
@@ -194,8 +197,8 @@ struct discord_message
 {
    std::string t{};
    guild_data d{};
-   std::int64_t op{};
-   std::int64_t s{};
+   int64_t op{};
+   int64_t s{};
 };
 
 template <>
@@ -315,7 +318,7 @@ auto generic_tester()
 
    auto t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -334,7 +337,7 @@ auto generic_tester()
    // write performance
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::write<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -351,7 +354,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_json(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -366,7 +369,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::validate_json(buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -382,7 +385,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -398,7 +401,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -413,7 +416,7 @@ auto generic_tester()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;

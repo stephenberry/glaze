@@ -6,6 +6,8 @@ import std;
 
 import glaze.core.context;
 
+using std::size_t;
+
 export namespace glz
 {
    // Type-erased interface for streaming buffer operations.
@@ -29,8 +31,8 @@ export namespace glz
 
       // Function pointers for type-erased operations
       const char* (*get_data)(void*) = nullptr;
-      std::size_t (*get_size)(void*) = nullptr;
-      void (*consume)(void*, std::size_t) = nullptr;
+      size_t (*get_size)(void*) = nullptr;
+      void (*consume)(void*, size_t) = nullptr;
       bool (*refill)(void*) = nullptr;
       bool (*eof)(void*) = nullptr;
 
@@ -41,10 +43,10 @@ export namespace glz
       const char* data() const noexcept { return get_data(buffer_ptr); }
 
       // Get current available size
-      std::size_t size() const noexcept { return get_size(buffer_ptr); }
+      size_t size() const noexcept { return get_size(buffer_ptr); }
 
       // Consume n bytes from buffer
-      void consume_bytes(std::size_t n) const noexcept { consume(buffer_ptr, n); }
+      void consume_bytes(size_t n) const noexcept { consume(buffer_ptr, n); }
 
       // Refill buffer, returns true if data available
       bool refill_buffer() const noexcept { return refill(buffer_ptr); }
@@ -55,7 +57,7 @@ export namespace glz
       // Consume up to current position and refill
       // Returns new iterators via out parameters
       // it_offset is how far into current buffer we've parsed
-      bool consume_and_refill(std::size_t consumed_bytes, const char*& new_it, const char*& new_end) const noexcept
+      bool consume_and_refill(size_t consumed_bytes, const char*& new_it, const char*& new_end) const noexcept
       {
          consume_bytes(consumed_bytes);
          bool has_data = refill_buffer();
@@ -72,8 +74,8 @@ export namespace glz
       streaming_state state;
       state.buffer_ptr = &buffer;
       state.get_data = [](void* p) -> const char* { return static_cast<Buffer*>(p)->data(); };
-      state.get_size = [](void* p) -> std::size_t { return static_cast<Buffer*>(p)->size(); };
-      state.consume = [](void* p, std::size_t n) { static_cast<Buffer*>(p)->consume(n); };
+      state.get_size = [](void* p) -> size_t { return static_cast<Buffer*>(p)->size(); };
+      state.consume = [](void* p, size_t n) { static_cast<Buffer*>(p)->consume(n); };
       state.refill = [](void* p) -> bool { return static_cast<Buffer*>(p)->refill(); };
       state.eof = [](void* p) -> bool { return static_cast<Buffer*>(p)->eof(); };
       return state;

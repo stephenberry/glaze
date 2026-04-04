@@ -21,6 +21,9 @@ import glaze.json.write;
 
 import glaze.concepts.container_concepts;
 
+using std::uint8_t;
+using std::uint64_t;
+
 namespace glz
 {
    template <matrix_t T>
@@ -35,8 +38,8 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
-         constexpr std::uint8_t layout = std::uint8_t(!T::IsRowMajor);
-         if (std::uint8_t(*it) != layout) {
+         constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
+         if (uint8_t(*it) != layout) {
             ctx.error = error_code::syntax_error;
          }
          ++it;
@@ -61,8 +64,8 @@ namespace glz
             ctx.error = error_code::unexpected_end;
             return;
          }
-         constexpr std::uint8_t layout = std::uint8_t(!T::IsRowMajor);
-         if (std::uint8_t(*it) != layout) {
+         constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
+         if (uint8_t(*it) != layout) {
             ctx.error = error_code::syntax_error;
             return;
          }
@@ -83,11 +86,11 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         constexpr std::uint8_t matrix = 0b00010'000;
-         constexpr std::uint8_t tag = tag::extensions | matrix;
+         constexpr uint8_t matrix = 0b00010'000;
+         constexpr uint8_t tag = tag::extensions | matrix;
          dump_type(tag, args...);
 
-         constexpr std::uint8_t layout = std::uint8_t(!T::IsRowMajor);
+         constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
          dump_type(layout, args...);
 
          std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
@@ -107,11 +110,11 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         constexpr std::uint8_t matrix = 0b00010'000;
-         constexpr std::uint8_t tag = tag::extensions | matrix;
+         constexpr uint8_t matrix = 0b00010'000;
+         constexpr uint8_t tag = tag::extensions | matrix;
          dump_type(tag, args...);
 
-         constexpr std::uint8_t layout = std::uint8_t(!T::IsRowMajor);
+         constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
          dump_type(layout, args...);
 
          std::array<Eigen::Index, 2> extents{value.rows(), value.cols()};
@@ -137,7 +140,7 @@ namespace glz
          using EigenType = std::remove_cvref_t<T>;
 
          // Write tag: 40 for row-major, 1040 for column-major
-         constexpr std::uint64_t tag =
+         constexpr uint64_t tag =
             EigenType::IsRowMajor ? cbor::semantic_tag::multi_dim_array : cbor::semantic_tag::multi_dim_array_col_major;
          cbor_detail::encode_arg(cbor::major::tag, tag, b, ix);
 
@@ -146,8 +149,8 @@ namespace glz
 
          // Write dimensions as array [rows, cols]
          cbor_detail::encode_arg(cbor::major::array, 2, b, ix);
-         cbor_detail::encode_arg(cbor::major::uint, static_cast<std::uint64_t>(value.rows()), b, ix);
-         cbor_detail::encode_arg(cbor::major::uint, static_cast<std::uint64_t>(value.cols()), b, ix);
+         cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(value.rows()), b, ix);
+         cbor_detail::encode_arg(cbor::major::uint, static_cast<uint64_t>(value.cols()), b, ix);
 
          // Write data as typed array
          std::span<const Scalar> view(value.data(), value.size());
@@ -173,19 +176,19 @@ namespace glz
          }
 
          // Read and verify tag (40 = row-major, 1040 = column-major)
-         std::uint8_t initial;
+         uint8_t initial;
          std::memcpy(&initial, it, 1);
          if (cbor::get_major_type(initial) != cbor::major::tag) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
          ++it;
-         const std::uint64_t tag = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
+         const uint64_t tag = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
          if (bool(ctx.error)) [[unlikely]]
             return;
 
          // Verify tag matches expected layout
-         constexpr std::uint64_t expected_tag =
+         constexpr uint64_t expected_tag =
             EigenType::IsRowMajor ? cbor::semantic_tag::multi_dim_array : cbor::semantic_tag::multi_dim_array_col_major;
          if (tag != expected_tag) [[unlikely]] {
             ctx.error = error_code::syntax_error;

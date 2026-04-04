@@ -13,6 +13,8 @@ import glaze.util.type_traits;
 // glz::manage is useful for transforming state from a user facing format
 // into a more complex or esoteric internal format.
 
+using std::uint32_t;
+
 namespace glz
 {
    // manage_t invokes a function call before reading and after writing from a value
@@ -31,7 +33,7 @@ namespace glz
    export template <class T, class Member, class From, class To>
    manage_t(T&, Member, From, To) -> manage_t<T, Member, From, To>;
 
-   template <std::uint32_t Format, class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, manage_t>)
    struct from<Format, T>
    {
@@ -76,7 +78,7 @@ namespace glz
       }
    };
 
-   template <std::uint32_t Format, class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, manage_t>)
    struct to<Format, T>
    {

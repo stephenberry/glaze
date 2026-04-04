@@ -31,6 +31,8 @@ import glaze.reflection.to_tuple;
 // Use JSON Pointer syntax to seek to a specific element
 // https://github.com/stephenberry/JSON-Pointer
 
+using std::size_t;
+
 namespace glz
 {
    namespace detail
@@ -46,7 +48,7 @@ namespace glz
          }
 
          out.clear();
-         std::size_t i = 1; // Skip leading '/'
+         size_t i = 1; // Skip leading '/'
          for (; i < json_ptr.size(); ++i) {
             auto c = json_ptr[i];
             if (c == '/') {
@@ -139,7 +141,7 @@ namespace glz
          }
          if (json_ptr[0] != '/' || json_ptr.size() < 2) return false;
 
-         std::size_t index{};
+         size_t index{};
          auto [p, ec] = std::from_chars(&json_ptr[1], json_ptr.data() + json_ptr.size(), index);
          if (ec != std::errc{}) return false;
          json_ptr = json_ptr.substr(p - json_ptr.data());
@@ -217,7 +219,7 @@ namespace glz
             if (ec != std::errc()) [[unlikely]] {
                return false;
             }
-            json_ptr = json_ptr.substr(std::size_t(ptr - json_ptr.data()));
+            json_ptr = json_ptr.substr(size_t(ptr - json_ptr.data()));
          }
          else {
             auto [p, ec] = std::from_chars(&json_ptr[1], json_ptr.data() + json_ptr.size(), key);
@@ -236,7 +238,7 @@ namespace glz
             if (index < N) [[likely]] {
                bool ret{};
                visit<N>(
-                  [&]<std::size_t I>() {
+                  [&]<size_t I>() {
                      static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                      if (key == TargetKey) {
                         if constexpr (reflectable<T>) {
@@ -443,10 +445,10 @@ namespace glz
 
 namespace glz
 {
-   constexpr std::size_t json_ptr_depth(const auto s)
+   constexpr size_t json_ptr_depth(const auto s)
    {
-      std::size_t count = 0;
-      for (std::size_t i = 0; (i = s.find('/', i)) != std::string::npos; ++i) {
+      size_t count = 0;
+      for (size_t i = 0; (i = s.find('/', i)) != std::string::npos; ++i) {
          ++count;
       }
       return count;
@@ -527,7 +529,7 @@ namespace glz
          }
 
          for (auto i = 1; i < n; ++i) {
-            v[i] = sv{start, std::size_t((v[i].data() + v[i].size()) - start)};
+            v[i] = sv{start, size_t((v[i].data() + v[i].size()) - start)};
          }
          return v;
       }
@@ -546,7 +548,7 @@ namespace glz
          }
 
          for (auto i = 1; i < N; ++i) {
-            v[i] = sv{start, std::size_t((v[i].data() + v[i].size()) - start)};
+            v[i] = sv{start, size_t((v[i].data() + v[i].size()) - start)};
          }
          return v;
       }
@@ -572,24 +574,24 @@ namespace glz
       std::array<sv, N> unique_keys{};
       const auto it = std::unique_copy(first_keys.begin(), first_keys.end(), unique_keys.begin());
 
-      const auto n_unique = static_cast<std::size_t>(std::distance(unique_keys.begin(), it));
+      const auto n_unique = static_cast<size_t>(std::distance(unique_keys.begin(), it));
 
-      std::array<std::size_t, N> n_items_per_group{};
+      std::array<size_t, N> n_items_per_group{};
 
-      for (std::size_t i = 0; i < n_unique; ++i) {
+      for (size_t i = 0; i < n_unique; ++i) {
          n_items_per_group[i] = std::count(first_keys.begin(), first_keys.end(), unique_keys[i]);
       }
 
       return glz::tuple{n_items_per_group, n_unique, unique_keys};
    }
 
-   template <auto Arr, std::size_t... Is>
+   template <auto Arr, size_t... Is>
    constexpr auto make_arrays(std::index_sequence<Is...>)
    {
       return glz::tuplet::make_tuple(pair{sv{}, std::array<sv, Arr[Is]>{}}...);
    }
 
-   template <std::size_t N, auto& Arr>
+   template <size_t N, auto& Arr>
    constexpr auto sub_group(const auto start)
    {
       std::array<sv, N> ret;
@@ -606,10 +608,10 @@ namespace glz
       constexpr auto unique_keys = glz::get<2>(group_info);
 
       auto arrs = make_arrays<n_items_per_group>(std::make_index_sequence<n_unique>{});
-      std::size_t start{};
+      size_t start{};
 
       for_each<n_unique>([&]<auto I>() {
-         constexpr std::size_t n_items = n_items_per_group[I];
+         constexpr size_t n_items = n_items_per_group[I];
 
          glz::get<I>(arrs).first = unique_keys[I];
          glz::get<I>(arrs).second = glz::sub_group<n_items, Arr>(start);

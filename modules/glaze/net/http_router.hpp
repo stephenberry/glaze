@@ -20,6 +20,9 @@
 #include "glaze/net/url.hpp"
 #include "glaze/util/key_transformers.hpp"
 
+using std::uint16_t;
+using std::size_t;
+
 namespace glz
 {
    // Request context object
@@ -33,7 +36,7 @@ namespace glz
       std::unordered_map<std::string, std::string> headers{};
       std::string body{};
       std::string remote_ip{};
-      std::uint16_t remote_port{};
+      uint16_t remote_port{};
    };
 
    // Response builder
@@ -319,12 +322,12 @@ namespace glz
 
          if (pattern.empty()) return true; // Empty pattern matches anything
 
-         std::size_t v_pos = 0;
-         std::size_t p_pos = 0;
+         size_t v_pos = 0;
+         size_t p_pos = 0;
 
          // For backtracking when we encounter *
-         std::optional<std::size_t> backtrack_pattern;
-         std::optional<std::size_t> backtrack_value;
+         std::optional<size_t> backtrack_pattern;
+         std::optional<size_t> backtrack_value;
 
          // For character classes
          State state = State::Literal;
@@ -493,14 +496,14 @@ namespace glz
          std::vector<std::string> segments;
          segments.reserve(std::count(path.begin(), path.end(), '/') + 1);
 
-         std::size_t start = 0;
+         size_t start = 0;
          while (start < path.size()) {
             if (path[start] == '/') {
                start++;
                continue;
             }
 
-            std::size_t end = path.find('/', start);
+            size_t end = path.find('/', start);
             if (end == std::string::npos) end = path.size();
 
             segments.push_back(std::string(path.substr(start, end - start)));
@@ -759,7 +762,7 @@ namespace glz
          RadixNode* current = &root;
 
          // Build the path through the tree
-         for (std::size_t i = 0; i < segments.size(); ++i) {
+         for (size_t i = 0; i < segments.size(); ++i) {
             const std::string& segment = segments[i];
 
             if (segment.empty()) continue;
@@ -855,7 +858,7 @@ namespace glz
        * @param result Handler if a match is found
        * @return true if a match was found, false otherwise
        */
-      bool match_node(RadixNode* node, const std::vector<std::string>& segments, std::size_t index, http_method method,
+      bool match_node(RadixNode* node, const std::vector<std::string>& segments, size_t index, http_method method,
                       std::unordered_map<std::string, std::string>& params, handler& result) const
       {
          // End of path
@@ -920,7 +923,7 @@ namespace glz
          if (node->wildcard_child) {
             // For wildcards, capture all remaining segments (URL-decoded)
             std::string full_capture;
-            for (std::size_t i = index; i < segments.size(); i++) {
+            for (size_t i = index; i < segments.size(); i++) {
                if (i > index) full_capture += "/";
                full_capture += url_decode(segments[i]);
             }

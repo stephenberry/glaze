@@ -4,11 +4,14 @@ export module glaze.core.context;
 
 import std;
 
+using std::uint32_t;
+using std::size_t;
+
 namespace glz
 {
-   export inline constexpr std::size_t max_recursive_depth_limit = 256;
+   export inline constexpr size_t max_recursive_depth_limit = 256;
 
-   export enum struct error_code : std::uint32_t {
+   export enum struct error_code : uint32_t {
       // REPE compliant error codes
       none, //
       version_mismatch,
@@ -95,7 +98,7 @@ namespace glz
    // Provides error information and byte count processed
    export struct error_ctx final
    {
-      std::size_t count{}; // Bytes processed (read or written)
+      size_t count{}; // Bytes processed (read or written)
       error_code ec{}; // Error code (none on success)
       std::string_view custom_error_message{}; // Human-readable error context
 
@@ -113,7 +116,7 @@ namespace glz
       error_code error{};
       std::string_view custom_error_message;
       // INTERNAL USE:
-      std::uint32_t depth{}; // Nesting depth of structures (objects/arrays)
+      uint32_t depth{}; // Nesting depth of structures (objects/arrays)
       // Used for indentation when writing and for stack overflow protection when reading
       std::string current_file; // top level file path
       // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
@@ -124,7 +127,7 @@ namespace glz
    export template <class T>
    concept is_context = requires(T& ctx) {
       { ctx.error } -> std::same_as<error_code&>;
-      { ctx.depth } -> std::same_as<std::uint32_t&>;
+      { ctx.depth } -> std::same_as<uint32_t&>;
    };
 
    // Runtime constraint concepts
@@ -140,17 +143,17 @@ namespace glz
 
    export template <class Ctx>
    concept has_runtime_max_string_length = requires(Ctx& ctx) {
-      { ctx.max_string_length } -> std::convertible_to<std::size_t>;
+      { ctx.max_string_length } -> std::convertible_to<size_t>;
    };
 
    export template <class Ctx>
    concept has_runtime_max_array_size = requires(Ctx& ctx) {
-      { ctx.max_array_size } -> std::convertible_to<std::size_t>;
+      { ctx.max_array_size } -> std::convertible_to<size_t>;
    };
 
    export template <class Ctx>
    concept has_runtime_max_map_size = requires(Ctx& ctx) {
-      { ctx.max_map_size } -> std::convertible_to<std::size_t>;
+      { ctx.max_map_size } -> std::convertible_to<size_t>;
    };
 
    export template <class Ctx>

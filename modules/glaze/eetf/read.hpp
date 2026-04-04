@@ -7,6 +7,9 @@
 #include "ei.hpp"
 #include "opts.hpp"
 
+using std::uint8_t;
+using std::size_t;
+
 namespace glz
 {
 
@@ -190,10 +193,10 @@ namespace glz
          }
 
          if constexpr (is_std_tuple<T>) {
-            for_each<N>([&]<std::size_t I>() { parse<EETF>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            for_each<N>([&]<size_t I>() { parse<EETF>::op<Opts>(std::get<I>(value), ctx, it, end); });
          }
          else {
-            for_each<N>([&]<std::size_t I>() { parse<EETF>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+            for_each<N>([&]<size_t I>() { parse<EETF>::op<Opts>(glz::get<I>(value), ctx, it, end); });
          }
       }
    };
@@ -314,7 +317,7 @@ namespace glz
                   const sv key{mkey.data(), n};
 
                   visit<N>(
-                     [&]<std::size_t I>() {
+                     [&]<size_t I>() {
                         static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                         static constexpr auto Length = TargetKey.size();
                         if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
@@ -369,13 +372,13 @@ namespace glz
       }
    };
 
-   template <std::uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, class Buffer>
+   template <uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, class Buffer>
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept
    {
       return read<eetf::eetf_opts{.format = EETF, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <std::uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, is_buffer Buffer>
+   template <uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, is_buffer Buffer>
    [[nodiscard]] expected<T, error_ctx> read_term(Buffer&& buffer) noexcept
    {
       T value{};

@@ -10,6 +10,9 @@ import glaze.core.buffer_traits;
 
 #include "glaze/util/inline.hpp"
  
+
+using std::size_t;
+
 export namespace glz
 {
    // Concept for byte-oriented output streams
@@ -36,9 +39,9 @@ export namespace glz
    // Must be large enough to hold any single JSON value (floats can be ~24 bytes,
    // plus overhead for keys, syntax, etc.). Set to 2 * write_padding_bytes since
    // the write code resizes buffers to this value on first write anyway.
-   inline constexpr std::size_t min_ostream_buffer_size = 512;
+   inline constexpr size_t min_ostream_buffer_size = 512;
 
-   template <byte_output_stream Stream, std::size_t DefaultCapacity = 65536>
+   template <byte_output_stream Stream, size_t DefaultCapacity = 65536>
       requires(DefaultCapacity >= min_ostream_buffer_size)
    class basic_ostream_buffer
    {
@@ -47,20 +50,20 @@ export namespace glz
 
       Stream* stream_;
       std::vector<char> buffer_;
-      std::size_t flush_offset_ = 0; // Logical position that maps to buffer_[0]
-      std::size_t logical_size_ = 0; // Reported size (set by resize)
+      size_t flush_offset_ = 0; // Logical position that maps to buffer_[0]
+      size_t logical_size_ = 0; // Reported size (set by resize)
 
      public:
       using value_type = char;
       using reference = char&;
       using const_reference = const char&;
-      using size_type = std::size_t;
+      using size_type = size_t;
       using iterator = char*;
       using const_iterator = const char*;
       using stream_type = Stream;
 
       // Construct with output stream and optional initial capacity
-      explicit basic_ostream_buffer(Stream& stream, std::size_t initial_capacity = DefaultCapacity) : stream_(&stream)
+      explicit basic_ostream_buffer(Stream& stream, size_t initial_capacity = DefaultCapacity) : stream_(&stream)
       {
          buffer_.resize(initial_capacity);
          logical_size_ = initial_capacity;
@@ -75,22 +78,22 @@ export namespace glz
       ~basic_ostream_buffer() = default;
 
       // Element access - maps logical position to physical buffer
-      reference operator[](std::size_t ix) noexcept
+      reference operator[](size_t ix) noexcept
       {
          assert(ix >= flush_offset_ && "Index before flush offset");
          return buffer_[ix - flush_offset_];
       }
-      const_reference operator[](std::size_t ix) const noexcept
+      const_reference operator[](size_t ix) const noexcept
       {
          assert(ix >= flush_offset_ && "Index before flush offset");
          return buffer_[ix - flush_offset_];
       }
 
       // Current logical size
-      std::size_t size() const noexcept { return logical_size_; }
+      size_t size() const noexcept { return logical_size_; }
 
       // Resize - called by serialization when more space is needed
-      void resize(std::size_t new_size)
+      void resize(size_t new_size)
       {
          // Ensure buffer can hold data from flush_offset_ to new_size
          if (new_size > buffer_.size() + flush_offset_) {
@@ -100,10 +103,10 @@ export namespace glz
       }
 
       // Final flush - called by buffer_traits::finalize()
-      void finalize(std::size_t total_written)
+      void finalize(size_t total_written)
       {
          if (total_written > flush_offset_ && stream_) {
-            const std::size_t to_flush = total_written - flush_offset_;
+            const size_t to_flush = total_written - flush_offset_;
             stream_->write(buffer_.data(), static_cast<std::streamsize>(to_flush));
             flush_offset_ = total_written;
          }
@@ -115,10 +118,10 @@ export namespace glz
       // Flushes when buffer usage exceeds 50% of DefaultCapacity. This threshold balances
       // memory usage against syscall overhead. To control flush frequency, adjust
       // DefaultCapacity: smaller capacity = more frequent flushes, larger = fewer flushes.
-      void flush(std::size_t written_so_far)
+      void flush(size_t written_so_far)
       {
          if (written_so_far > flush_offset_ && stream_) {
-            const std::size_t unflushed = written_so_far - flush_offset_;
+            const size_t unflushed = written_so_far - flush_offset_;
             if (unflushed >= DefaultCapacity / 2) {
                stream_->write(buffer_.data(), static_cast<std::streamsize>(unflushed));
                flush_offset_ = written_so_far;
@@ -143,10 +146,10 @@ export namespace glz
       Stream* stream() const noexcept { return stream_; }
 
       // Bytes flushed so far
-      std::size_t bytes_flushed() const noexcept { return flush_offset_; }
+      size_t bytes_flushed() const noexcept { return flush_offset_; }
 
       // Current buffer capacity
-      std::size_t buffer_capacity() const noexcept { return buffer_.size(); }
+      size_t buffer_capacity() const noexcept { return buffer_.size(); }
 
       // Iterator support (satisfies range concept)
       iterator begin() noexcept { return buffer_.data(); }
@@ -160,34 +163,34 @@ export namespace glz
    };
 
    // buffer_traits specialization for basic_ostream_buffer
-   template <class Stream, std::size_t N>
+   template <class Stream, size_t N>
    struct buffer_traits<basic_ostream_buffer<Stream, N>>
    {
       static constexpr bool is_resizable = true;
       static constexpr bool has_bounded_capacity = false;
       static constexpr bool is_output_streaming = true;
 
-      GLZ_ALWAYS_INLINE static constexpr std::size_t capacity(const basic_ostream_buffer<Stream, N>&) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t capacity(const basic_ostream_buffer<Stream, N>&) noexcept
       {
-         return std::numeric_limits<std::size_t>::max();
+         return std::numeric_limits<size_t>::max();
       }
 
-      GLZ_ALWAYS_INLINE static bool ensure_capacity(basic_ostream_buffer<Stream, N>& b, std::size_t needed)
+      GLZ_ALWAYS_INLINE static bool ensure_capacity(basic_ostream_buffer<Stream, N>& b, size_t needed)
       {
          b.resize(needed);
          return true;
       }
 
-      GLZ_ALWAYS_INLINE static void finalize(basic_ostream_buffer<Stream, N>& b, std::size_t written)
+      GLZ_ALWAYS_INLINE static void finalize(basic_ostream_buffer<Stream, N>& b, size_t written)
       {
          b.finalize(written);
       }
 
-      GLZ_ALWAYS_INLINE static void flush(basic_ostream_buffer<Stream, N>& b, std::size_t written) { b.flush(written); }
+      GLZ_ALWAYS_INLINE static void flush(basic_ostream_buffer<Stream, N>& b, size_t written) { b.flush(written); }
    };
 
    // Convenience alias for std::ostream (polymorphic, works with any standard stream)
-   template <std::size_t DefaultCapacity = 65536>
+   template <size_t DefaultCapacity = 65536>
    using ostream_buffer = basic_ostream_buffer<std::ostream, DefaultCapacity>;
 
 } // namespace glz

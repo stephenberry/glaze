@@ -21,6 +21,9 @@ import glaze.tuplet;
 #endif
 
 // For struct fields
+
+using std::size_t;
+
 export namespace glz::detail
 {
    // Do not const qualify this value to avoid duplicate `to_tie` template instantiations with rest of Glaze
@@ -112,7 +115,7 @@ export namespace glz
 #endif
    }();
 
-   template <class T, std::size_t... I>
+   template <class T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
       if constexpr (sizeof...(I) == 0) {
@@ -140,20 +143,20 @@ export namespace glz
    // Helper to compute renamed key size at compile time
    // Using consteval forces evaluation before template instantiation
    // This unified approach works for both GCC and Clang (including Clang 19+)
-   template <class T, std::size_t I>
-   consteval std::size_t renamed_key_size()
+   template <class T, size_t I>
+   consteval size_t renamed_key_size()
    {
       return meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>).size();
    }
 
    // Storage for renamed key with exact size determined at compile time
-   template <class T, std::size_t I, std::size_t N = renamed_key_size<T, I>()>
+   template <class T, size_t I, size_t N = renamed_key_size<T, I>()>
    struct renamed_key_storage
    {
       static constexpr auto value = [] {
          std::array<char, N + 1> arr{};
          auto str = meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
-         for (std::size_t i = 0; i < N; ++i) {
+         for (size_t i = 0; i < N; ++i) {
             arr[i] = str[i];
          }
          arr[N] = '\0';
@@ -161,7 +164,7 @@ export namespace glz
       }();
    };
 
-   template <meta_has_rename_key_string T, std::size_t... I>
+   template <meta_has_rename_key_string T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
       if constexpr (sizeof...(I) == 0) {
@@ -184,7 +187,7 @@ export namespace glz
       { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::convertible_to<std::string_view>;
    } && !meta_has_rename_key_string<T>;
 
-   template <meta_has_rename_key_convertible T, std::size_t... I>
+   template <meta_has_rename_key_convertible T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
       if constexpr (sizeof...(I) == 0) {
@@ -201,7 +204,7 @@ export namespace glz
       { glz::meta<std::remove_cvref_t<T>>::template rename_key<0>() } -> std::convertible_to<std::string_view>;
    } && !meta_has_rename_key_string<T> && !meta_has_rename_key_convertible<T>;
 
-   template <meta_has_rename_key_indexed T, std::size_t... I>
+   template <meta_has_rename_key_indexed T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
       if constexpr (sizeof...(I) == 0) {
@@ -221,7 +224,7 @@ export namespace glz
    // This allows users to get the type of a member at a given index in rename_key
    namespace detail
    {
-      template <class T, std::size_t I>
+      template <class T, size_t I>
       struct member_type_at_index
       {
          using tie_type = decltype(to_tie(std::declval<std::remove_cvref_t<T>&>()));
@@ -231,7 +234,7 @@ export namespace glz
 
    // Helper to get the type of a member at a given index
    // Usage in rename_key: using member_type = glz::member_type_t<T, Index>;
-   template <class T, std::size_t Index>
+   template <class T, size_t Index>
    using member_type_t = typename detail::member_type_at_index<T, Index>::type;
 }
 

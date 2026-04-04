@@ -11,6 +11,8 @@ import glaze;
 
 import ut;
 
+using std::uint32_t;
+
 using namespace ut;
 
 // Test structs using pure reflection (no glz::meta needed)
@@ -66,19 +68,19 @@ struct alloc_opts : glz::opts
 
 struct alloc_opts_beve : glz::opts
 {
-   static constexpr std::uint32_t format = glz::BEVE;
+   static constexpr uint32_t format = glz::BEVE;
    bool allocate_raw_pointers = true;
 };
 
 struct alloc_opts_cbor : glz::opts
 {
-   static constexpr std::uint32_t format = glz::CBOR;
+   static constexpr uint32_t format = glz::CBOR;
    bool allocate_raw_pointers = true;
 };
 
 struct alloc_opts_msgpack : glz::opts
 {
-   static constexpr std::uint32_t format = glz::MSGPACK;
+   static constexpr uint32_t format = glz::MSGPACK;
    bool allocate_raw_pointers = true;
 };
 

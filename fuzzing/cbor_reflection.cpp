@@ -5,15 +5,18 @@
 #include <glaze/glaze.hpp>
 #include <vector>
 
+using std::uint64_t;
+using std::size_t;
+
 struct my_struct
 {
    int i = 287;
    double d = 3.14;
    std::string hello = "Hello World";
-   std::array<std::uint64_t, 3> arr = {1, 2, 3};
+   std::array<uint64_t, 3> arr = {1, 2, 3};
 };
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, std::size_t Size)
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
 {
    // use a vector with null termination instead of a std::string to avoid
    // small string optimization to hide bounds problems

@@ -9,6 +9,8 @@ import ut;
 
 import glaze.tests.json_perf_common;
 
+using std::size_t;
+
 using namespace ut;
 using namespace glz::perf;
 
@@ -96,9 +98,9 @@ struct glz::meta<obj_t>
 };
 
 #ifdef NDEBUG
-[[maybe_unused]] constexpr std::size_t iterations = 1'000'000;
+[[maybe_unused]] constexpr size_t iterations = 1'000'000;
 #else
-[[maybe_unused]] constexpr std::size_t iterations = 100'000;
+[[maybe_unused]] constexpr size_t iterations = 100'000;
 #endif
 
 template <auto Opts>
@@ -110,7 +112,7 @@ auto glaze_test()
 
    auto t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -129,7 +131,7 @@ auto glaze_test()
    // write performance
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::write<Opts>(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -146,7 +148,7 @@ auto glaze_test()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_json(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -161,7 +163,7 @@ auto glaze_test()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -177,7 +179,7 @@ auto glaze_test()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
@@ -192,7 +194,7 @@ auto glaze_test()
 
    t0 = std::chrono::steady_clock::now();
 
-   for (std::size_t i = 0; i < iterations; ++i) {
+   for (size_t i = 0; i < iterations; ++i) {
       if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;

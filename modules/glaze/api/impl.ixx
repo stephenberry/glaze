@@ -46,6 +46,9 @@ export import glaze;
 
 import glaze.util.string_literal;
 
+using std::uint32_t;
+using std::size_t;
+
 namespace glz
 {
    template <class UserType>
@@ -60,7 +63,7 @@ namespace glz
          return seek([&](auto&&) {}, user, path);
       }
 
-      bool read(const std::uint32_t format, const sv path, const sv data) noexcept override
+      bool read(const uint32_t format, const sv path, const sv data) noexcept override
       {
          error_ctx pe{};
          bool success;
@@ -81,7 +84,7 @@ namespace glz
          return false;
       }
 
-      bool write(const std::uint32_t format, const sv path, std::string& data) noexcept override
+      bool write(const uint32_t format, const sv path, std::string& data) noexcept override
       {
          // TODO: Support write errors when seeking
          if (format == JSON) {
@@ -110,7 +113,7 @@ namespace glz
          return static_cast<V>(*reinterpret_cast<std::add_pointer_t<std::decay_t<T>>>(t));
       }
 
-      template <class Arg_tuple, class F, class Parent, std::size_t... Is>
+      template <class Arg_tuple, class F, class Parent, size_t... Is>
          requires std::invocable<F, Parent, ref_t<glz::tuple_element_t<Is, Arg_tuple>>...>
       decltype(auto) call_args(F&& f, Parent&& parent, [[maybe_unused]] std::span<void*> args,
                                std::index_sequence<Is...>)

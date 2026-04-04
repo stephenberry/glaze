@@ -16,6 +16,16 @@ import glaze.json.write;
 import glaze.util.dump;
 import glaze.util.string_literal;
 
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 namespace glz
 {
    namespace detail
@@ -24,7 +34,7 @@ namespace glz
       inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&& end, auto& out, auto& ix) noexcept
       {
          const auto number_type = (tag & 0b000'11'000) >> 3;
-         const std::uint8_t byte_count = byte_count_lookup[tag >> 5];
+         const uint8_t byte_count = byte_count_lookup[tag >> 5];
 
          auto write_number = [&]<class T>(T&& value) {
             if ((it + sizeof(T)) > end) [[unlikely]] {
@@ -63,19 +73,19 @@ namespace glz
             // signed integer
             switch (byte_count) {
             case 1: {
-               write_number(std::int8_t{});
+               write_number(int8_t{});
                break;
             }
             case 2: {
-               write_number(std::int16_t{});
+               write_number(int16_t{});
                break;
             }
             case 4: {
-               write_number(std::int32_t{});
+               write_number(int32_t{});
                break;
             }
             case 8: {
-               write_number(std::int64_t{});
+               write_number(int64_t{});
                break;
             }
             default: {
@@ -89,19 +99,19 @@ namespace glz
             // unsigned integer
             switch (byte_count) {
             case 1: {
-               write_number(std::uint8_t{});
+               write_number(uint8_t{});
                break;
             }
             case 2: {
-               write_number(std::uint16_t{});
+               write_number(uint16_t{});
                break;
             }
             case 4: {
-               write_number(std::uint32_t{});
+               write_number(uint32_t{});
                break;
             }
             case 8: {
-               write_number(std::uint64_t{});
+               write_number(uint64_t{});
                break;
             }
             default: {
@@ -120,7 +130,7 @@ namespace glz
 
       template <auto Opts, class Buffer>
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix,
-                                     std::uint32_t recursive_depth)
+                                     uint32_t recursive_depth)
       {
          // Check recursion depth limit
          if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
@@ -132,7 +142,7 @@ namespace glz
             ctx.error = error_code::syntax_error;
             return;
          }
-         const auto tag = std::uint8_t(*it);
+         const auto tag = uint8_t(*it);
          const auto type = tag & 0b00000'111;
          switch (type) {
          case tag::null: {
@@ -162,7 +172,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (std::uint64_t(end - it) < n) [[unlikely]] {
+            if (uint64_t(end - it) < n) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -192,13 +202,13 @@ namespace glz
                if (bool(ctx.error)) {
                   return;
                }
-               for (std::size_t i = 0; i < n_fields; ++i) {
+               for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
                   const auto n = int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  if (std::uint64_t(end - it) < n) [[unlikely]] {
+                  if (uint64_t(end - it) < n) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
@@ -233,7 +243,7 @@ namespace glz
                if (bool(ctx.error)) {
                   return;
                }
-               for (std::size_t i = 0; i < n_fields; ++i) {
+               for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
                   dump('"', out, ix);
                   beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
@@ -281,14 +291,14 @@ namespace glz
          case tag::typed_array: {
             ++it;
             const auto value_type = (tag & 0b000'11'000) >> 3;
-            const std::uint8_t byte_count = byte_count_lookup[tag >> 5];
+            const uint8_t byte_count = byte_count_lookup[tag >> 5];
 
             auto write_array = [&]<class T>(T&& value) {
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               for (std::size_t i = 0; i < n; ++i) {
+               for (size_t i = 0; i < n; ++i) {
                   if ((it + sizeof(T)) > end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
@@ -331,19 +341,19 @@ namespace glz
                // signed integer
                switch (byte_count) {
                case 1: {
-                  write_array(std::int8_t{});
+                  write_array(int8_t{});
                   break;
                }
                case 2: {
-                  write_array(std::int16_t{});
+                  write_array(int16_t{});
                   break;
                }
                case 4: {
-                  write_array(std::int32_t{});
+                  write_array(int32_t{});
                   break;
                }
                case 8: {
-                  write_array(std::int64_t{});
+                  write_array(int64_t{});
                   break;
                }
                default: {
@@ -357,19 +367,19 @@ namespace glz
                // unsigned integer
                switch (byte_count) {
                case 1: {
-                  write_array(std::uint8_t{});
+                  write_array(uint8_t{});
                   break;
                }
                case 2: {
-                  write_array(std::uint16_t{});
+                  write_array(uint16_t{});
                   break;
                }
                case 4: {
-                  write_array(std::uint32_t{});
+                  write_array(uint32_t{});
                   break;
                }
                case 8: {
-                  write_array(std::uint64_t{});
+                  write_array(uint64_t{});
                   break;
                }
                default: {
@@ -395,12 +405,12 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  for (std::size_t i = 0; i < n_strings; ++i) {
+                  for (size_t i = 0; i < n_strings; ++i) {
                      const auto n = int_from_compressed(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
-                     if (std::uint64_t(end - it) < n) [[unlikely]] {
+                     if (uint64_t(end - it) < n) [[unlikely]] {
                         ctx.error = error_code::unexpected_end;
                         return;
                      }
@@ -437,7 +447,7 @@ namespace glz
                return;
             }
             dump('[', out, ix);
-            for (std::size_t i = 0; i < n; ++i) {
+            for (size_t i = 0; i < n; ++i) {
                beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -450,7 +460,7 @@ namespace glz
             break;
          }
          case tag::extensions: {
-            const std::uint8_t extension = tag >> 3;
+            const uint8_t extension = tag >> 3;
             switch (extension) {
             case 0: {
                // delimiter
@@ -477,7 +487,7 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               const auto matrix_header = std::uint8_t(*it);
+               const auto matrix_header = uint8_t(*it);
                ++it;
 
                dump('{', out, ix);
@@ -554,7 +564,7 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               const auto complex_header = std::uint8_t(*it);
+               const auto complex_header = uint8_t(*it);
                ++it;
 
                const auto complex_type = complex_header & 0b0000000'1;
@@ -566,7 +576,7 @@ namespace glz
                      return;
                   }
                   dump('[', out, ix);
-                  for (std::size_t i = 0; i < n; ++i) {
+                  for (size_t i = 0; i < n; ++i) {
                      dump('[', out, ix);
                      beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
                      if (bool(ctx.error)) [[unlikely]] {
@@ -620,7 +630,7 @@ namespace glz
    export template <auto Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx beve_to_json(const BEVEBuffer& beve, JSONBuffer& out)
    {
-      std::size_t ix{}; // write index
+      size_t ix{}; // write index
 
       auto* it = beve.data();
       auto* end = it + beve.size();

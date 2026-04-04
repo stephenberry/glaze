@@ -13,6 +13,8 @@ import glaze.toml;
 
 import ut;
 
+using std::size_t;
+
 using namespace ut;
 
 // Test struct for object serialization
@@ -101,7 +103,7 @@ suite json_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::JSON>::op<glz::opts{}>(obj, ctx, buf, ix);
       buf.finalize(ix);
@@ -116,7 +118,7 @@ suite json_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::JSON>::op<glz::opts{}>(arr, ctx, buf, ix);
       buf.finalize(ix);
@@ -131,7 +133,7 @@ suite json_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::JSON>::op<glz::opts{}>(map_data, ctx, buf, ix);
       buf.finalize(ix);
@@ -147,7 +149,7 @@ suite json_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::JSON>::op<glz::opts{}>(obj, ctx, buf, ix);
       buf.finalize(ix);
@@ -172,7 +174,7 @@ suite json_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss}; // Small buffer to trigger multiple flushes
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::JSON>::op<glz::opts{}>(large_arr, ctx, buf, ix);
       buf.finalize(ix);
@@ -195,7 +197,7 @@ suite beve_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::BEVE>::op<glz::opts{.format = glz::BEVE}>(arr, ctx, buf, ix);
       buf.finalize(ix);
@@ -214,7 +216,7 @@ suite beve_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::BEVE>::op<glz::opts{.format = glz::BEVE}>(obj, ctx, buf, ix);
       buf.finalize(ix);
@@ -234,7 +236,7 @@ suite beve_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::BEVE>::op<glz::opts{.format = glz::BEVE}>(map_data, ctx, buf, ix);
       buf.finalize(ix);
@@ -256,7 +258,7 @@ suite cbor_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::CBOR>::op<glz::opts{.format = glz::CBOR}>(arr, ctx, buf, ix);
       buf.finalize(ix);
@@ -275,7 +277,7 @@ suite cbor_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::CBOR>::op<glz::opts{.format = glz::CBOR}>(obj, ctx, buf, ix);
       buf.finalize(ix);
@@ -295,7 +297,7 @@ suite cbor_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::CBOR>::op<glz::opts{.format = glz::CBOR}>(map_data, ctx, buf, ix);
       buf.finalize(ix);
@@ -317,7 +319,7 @@ suite msgpack_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::MSGPACK>::op<glz::opts{.format = glz::MSGPACK}>(arr, ctx, buf, ix);
       buf.finalize(ix);
@@ -336,7 +338,7 @@ suite msgpack_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::MSGPACK>::op<glz::opts{.format = glz::MSGPACK}>(obj, ctx, buf, ix);
       buf.finalize(ix);
@@ -356,7 +358,7 @@ suite msgpack_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::MSGPACK>::op<glz::opts{.format = glz::MSGPACK}>(map_data, ctx, buf, ix);
       buf.finalize(ix);
@@ -378,7 +380,7 @@ suite toml_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::TOML>::op<glz::opts{.format = glz::TOML}>(obj, ctx, buf, ix);
       buf.finalize(ix);
@@ -399,7 +401,7 @@ suite csv_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::CSV>::op<glz::opts{.format = glz::CSV}>(csv_data, ctx, buf, ix);
       buf.finalize(ix);
@@ -417,7 +419,7 @@ suite csv_ostream_buffer_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::CSV>::op<glz::opts{.format = glz::CSV}>(arr, ctx, buf, ix);
       buf.finalize(ix);
@@ -435,7 +437,7 @@ suite ostream_buffer_edge_cases = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::JSON>::op<glz::opts{}>(empty_arr, ctx, buf, ix);
       buf.finalize(ix);
@@ -449,7 +451,7 @@ suite ostream_buffer_edge_cases = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::JSON>::op<glz::opts{}>(obj, ctx, buf, ix);
       buf.finalize(ix);
@@ -464,7 +466,7 @@ suite ostream_buffer_edge_cases = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss}; // Minimum size buffer (512 bytes)
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       glz::serialize<glz::JSON>::op<glz::opts{}>(long_string, ctx, buf, ix);
       buf.finalize(ix);
@@ -482,7 +484,7 @@ suite ostream_buffer_edge_cases = [] {
       glz::context ctx{};
 
       // Write first object
-      std::size_t ix1 = 0;
+      size_t ix1 = 0;
       glz::serialize<glz::JSON>::op<glz::opts{}>(42, ctx, buf, ix1);
       buf.finalize(ix1);
 
@@ -501,7 +503,7 @@ suite flush_behavior_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<1024> buf{oss}; // 1KB buffer
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       // Small array that won't trigger flush
       std::vector<int> small_arr{1, 2, 3};
@@ -519,7 +521,7 @@ suite flush_behavior_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss}; // Small buffer to trigger flushes
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       // Larger array that will trigger flushes
       std::vector<int> arr(50);
@@ -540,7 +542,7 @@ suite flush_behavior_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss}; // Small buffer
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       std::map<std::string, int> map_data{{"alpha", 1}, {"beta", 2}, {"gamma", 3}, {"delta", 4}, {"epsilon", 5}};
       glz::serialize<glz::JSON>::op<glz::opts{}>(map_data, ctx, buf, ix);
@@ -557,7 +559,7 @@ suite flush_behavior_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss}; // Small buffer to ensure flushing
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       expect(buf.bytes_flushed() == 0u);
 
@@ -585,7 +587,7 @@ suite flush_behavior_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<1024> buf{oss}; // Large buffer
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       // Write small content that won't trigger intermediate flush
       TestObject obj{42, "test", 3.14};
@@ -606,7 +608,7 @@ suite flush_behavior_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       // Nested structure
       std::map<std::string, std::vector<int>> nested{
@@ -633,7 +635,7 @@ suite buffer_traits_comprehensive_tests = [] {
       static_assert(!traits::is_output_streaming);
 
       std::string s = "hello";
-      expect(traits::capacity(s) == std::numeric_limits<std::size_t>::max());
+      expect(traits::capacity(s) == std::numeric_limits<size_t>::max());
       expect(traits::ensure_capacity(s, 100) == true);
       expect(s.size() >= 100u); // ensure_capacity may resize
    };
@@ -683,7 +685,7 @@ suite buffer_traits_comprehensive_tests = [] {
 
       char buf[100];
       char* ptr = buf;
-      expect(traits::capacity(ptr) == std::numeric_limits<std::size_t>::max());
+      expect(traits::capacity(ptr) == std::numeric_limits<size_t>::max());
       expect(traits::ensure_capacity(ptr, 1000) == true); // Always trusts caller
    };
 
@@ -732,7 +734,7 @@ suite ostream_buffer_reset_tests = [] {
       std::ostringstream oss;
       glz::ostream_buffer<512> buf{oss};
       glz::context ctx{};
-      std::size_t ix = 0;
+      size_t ix = 0;
 
       // First write
       glz::serialize<glz::JSON>::op<glz::opts{}>(42, ctx, buf, ix);

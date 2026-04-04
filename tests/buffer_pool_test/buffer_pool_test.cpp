@@ -5,6 +5,8 @@ import glaze.util.buffer_pool;
 import std;
 import ut;
 
+using std::size_t;
+
 using namespace ut;
 
 suite buffer_pool_tests = [] {
@@ -110,7 +112,7 @@ suite buffer_pool_tests = [] {
 
    "oversized_buffer_shrink"_test = [] {
       glz::buffer_pool pool{10, 1000}; // Max buffer size 1000
-      std::size_t original_capacity{};
+      size_t original_capacity{};
       {
          auto buf = pool.borrow();
          buf.value().resize(5000);

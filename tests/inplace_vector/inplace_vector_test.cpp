@@ -8,11 +8,13 @@ import glaze.containers.inplace_vector;
 
 import ut;
 
+using std::size_t;
+
 using namespace ut;
 
 using glz::inplace_vector;
 
-template <typename T, std::size_t N>
+template <typename T, size_t N>
 using freestanding_iv = glz::freestanding::inplace_vector<T, N>;
 
 // used for initializing freestading inplace_vector without il constructor
@@ -1141,7 +1143,7 @@ suite storage_access_tests = [] {
       expect(v1 == v2) << "assign() and assign_range() should produce identical results";
       expect(v1.size() == 5) << "Size should match source";
 
-      for (std::size_t i = 0; i < v1.size(); ++i) {
+      for (size_t i = 0; i < v1.size(); ++i) {
          expect(v1[i] == source[i]) << "Elements should match source at index " << i;
       }
    };
@@ -1160,11 +1162,11 @@ suite swap_bug_tests = [] {
       expect(v1.size() == orig_v2.size()) << "v1 should have v2's original size";
       expect(v2.size() == orig_v1.size()) << "v2 should have v1's original size";
 
-      for (std::size_t i = 0; i < v1.size(); ++i) {
+      for (size_t i = 0; i < v1.size(); ++i) {
          expect(v1[i] == orig_v2[i]) << "v1 element " << i << " should match v2's original";
       }
 
-      for (std::size_t i = 0; i < v2.size(); ++i) {
+      for (size_t i = 0; i < v2.size(); ++i) {
          expect(v2[i] == orig_v1[i]) << "v2 element " << i << " should match v1's original";
       }
    };
@@ -1173,8 +1175,8 @@ suite swap_bug_tests = [] {
       inplace_vector<int, 10> v1{1, 2};
       inplace_vector<int, 10> v2{3, 4, 5, 6, 7};
 
-      std::size_t orig_v1_size = v1.size();
-      std::size_t orig_v2_size = v2.size();
+      size_t orig_v1_size = v1.size();
+      size_t orig_v2_size = v2.size();
 
       v1.swap(v2);
 
