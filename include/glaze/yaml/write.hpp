@@ -593,8 +593,7 @@ namespace glz
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }
-            else if constexpr (writable_map_t<element_t> || writable_array_t<element_t> ||
-                              glaze_value_t<element_t>) {
+            else if constexpr (writable_map_t<element_t> || writable_array_t<element_t> || glaze_value_t<element_t>) {
                // Containers and glaze_value_t (which may wrap containers) -
                // write on next line with increased indent
                dump('\n', b, ix);

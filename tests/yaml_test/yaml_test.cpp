@@ -251,9 +251,7 @@ struct glz::meta<yaml_custom_scalar_struct>
       }
    };
 
-   static constexpr auto write_fn = [](const T& t) -> std::string {
-      return t.key + ":" + std::to_string(t.val);
-   };
+   static constexpr auto write_fn = [](const T& t) -> std::string { return t.key + ":" + std::to_string(t.val); };
 
    static constexpr auto value = glz::custom<read_fn, write_fn>;
 };
