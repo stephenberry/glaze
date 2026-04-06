@@ -845,6 +845,17 @@ namespace glz
                }
             }();
 
+            // Skip fields based on meta::skip (compile-time) and meta::skip_if (runtime)
+            if constexpr (meta_has_skip<V>) {
+               static constexpr meta_context mctx{.op = operation::serialize};
+               if constexpr (meta<V>::skip(reflect<V>::keys[I], mctx)) return;
+            }
+            if constexpr (meta_has_skip_if<V>) {
+               static constexpr auto k = glz::get<I>(reflect<V>::keys);
+               static constexpr meta_context mctx{.op = operation::serialize};
+               if (meta<V>::skip_if(member, k, mctx)) return;
+            }
+
             // Skip null members if configured
             if constexpr (nullable_like<val_t>) {
                if constexpr (Opts.skip_null_members) {
@@ -947,8 +958,8 @@ namespace glz
                   }
                }
             }
-            else {
-               // Empty containers go on same line as flow-style {} or []
+            else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> || reflectable<val_t>) {
+               // Complex types (containers, objects): empty on same line, non-empty on next line
                bool wrote_empty = false;
                if constexpr (writable_map_t<val_t>) {
                   if (member.empty()) {
@@ -970,10 +981,15 @@ namespace glz
                   serialize<YAML>::op<Opts>(member, nested_ctx, b, ix);
                }
                else {
-                  // Pass indent through opts internal state - simplified approach
-                  // For now, just write at next indent level
                   write_block_mapping_nested<Opts>(member, ctx, b, ix, indent_level + 1);
                }
+            }
+            else {
+               // All other types (custom_t, types with custom to/from<YAML>, etc.)
+               // are assumed to produce scalar values — write on same line
+               dump(' ', b, ix);
+               serialize<YAML>::op<Opts>(member, ctx, b, ix);
+               dump('\n', b, ix);
             }
          });
       }

@@ -185,6 +185,88 @@ struct glz::meta<yaml_custom_read_struct>
    static constexpr auto value = object("value", custom<&T::read_value, &T::value>);
 };
 
+// Struct with custom lambda-based read/write for YAML custom_t testing
+struct yaml_custom_lambda_struct
+{
+   std::string label{};
+   int score{};
+
+   bool operator==(const yaml_custom_lambda_struct&) const = default;
+};
+
+template <>
+struct glz::meta<yaml_custom_lambda_struct>
+{
+   using T = yaml_custom_lambda_struct;
+
+   static constexpr auto read_fn = [](T& t, const std::string& str) {
+      auto pos = str.find('|');
+      if (pos != std::string::npos) {
+         t.label = str.substr(0, pos);
+         t.score = std::stoi(str.substr(pos + 1));
+      }
+   };
+
+   static constexpr auto write_fn = [](const T& t) -> std::string { return t.label + "|" + std::to_string(t.score); };
+
+   static constexpr auto value = object("data", glz::custom<read_fn, write_fn>);
+};
+
+// Struct with custom field alongside regular fields
+struct yaml_custom_mixed_struct
+{
+   std::string name{};
+   yaml_custom_lambda_struct item{};
+   int count{};
+
+   bool operator==(const yaml_custom_mixed_struct&) const = default;
+};
+
+template <>
+struct glz::meta<yaml_custom_mixed_struct>
+{
+   using T = yaml_custom_mixed_struct;
+   static constexpr auto value = object("name", &T::name, "item", &T::item, "count", &T::count);
+};
+
+// Struct with compile-time skip for YAML
+struct yaml_skip_struct
+{
+   std::string id{};
+   std::string secret{};
+   int count{};
+};
+
+template <>
+struct glz::meta<yaml_skip_struct>
+{
+   static constexpr bool skip(const std::string_view key, const glz::meta_context&) { return key == "secret"; }
+};
+
+// Struct with runtime skip_if for YAML
+struct yaml_skip_if_struct
+{
+   std::string name{};
+   int age{};
+   std::string city{};
+};
+
+template <>
+struct glz::meta<yaml_skip_if_struct>
+{
+   template <class V>
+   static constexpr bool skip_if(V&& value, std::string_view key, const glz::meta_context&)
+   {
+      using D = std::decay_t<V>;
+      if constexpr (std::same_as<D, int>) {
+         return key == "age" && value == 0;
+      }
+      else {
+         return false;
+      }
+   }
+};
+
 suite yaml_write_tests = [] {
    "write_simple_struct"_test = [] {
       simple_struct obj{42, 3.14, "test"};
@@ -7846,6 +7928,91 @@ age: 30)";
       expect(!ec) << glz::format_error(ec, yaml);
       expect(obj.size() == 3u);
       expect(obj == std::vector<int>{1, 2, 3});
+   };
+};
+
+suite yaml_skip_tests = [] {
+   "yaml_write_skip_excludes_field"_test = [] {
+      yaml_skip_struct obj{"abc", "top_secret", 42};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml.find("id: abc") != std::string::npos);
+      expect(yaml.find("count: 42") != std::string::npos);
+      expect(yaml.find("secret") == std::string::npos) << "secret field should be skipped";
+   };
+
+   "yaml_write_skip_if_excludes_default_value"_test = [] {
+      yaml_skip_if_struct obj{"Alice", 0, "NYC"};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml.find("name: Alice") != std::string::npos);
+      expect(yaml.find("city: NYC") != std::string::npos);
+      expect(yaml.find("age") == std::string::npos) << "age should be skipped when 0";
+   };
+
+   "yaml_write_skip_if_includes_nondefault_value"_test = [] {
+      yaml_skip_if_struct obj{"Bob", 30, "LA"};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml.find("name: Bob") != std::string::npos);
+      expect(yaml.find("age: 30") != std::string::npos);
+      expect(yaml.find("city: LA") != std::string::npos);
+   };
+};
+
+suite yaml_custom_write_tests = [] {
+   "yaml_custom_lambda_write_inline"_test = [] {
+      yaml_custom_lambda_struct obj{"hello", 99};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      // Custom type should be written inline (key: value), not on next line
+      expect(yaml.find("data: hello|99") != std::string::npos) << yaml;
+   };
+
+   "yaml_custom_lambda_roundtrip"_test = [] {
+      yaml_custom_lambda_struct original{"test", 42};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      yaml_custom_lambda_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "yaml_custom_mixed_struct_roundtrip"_test = [] {
+      yaml_custom_mixed_struct original{"widget", {"fast", 10}, 3};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+      // The custom field inside nested struct should be inline
+      expect(yaml.find("data: fast|10") != std::string::npos) << yaml;
+
+      yaml_custom_mixed_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.name == original.name);
+      expect(parsed.item == original.item);
+      expect(parsed.count == original.count);
+   };
+
+   "yaml_custom_read_struct_roundtrip"_test = [] {
+      // Existing custom read struct: write outputs int, read parses string to int
+      yaml_custom_read_struct original{};
+      original.value = 77;
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      yaml_custom_read_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.value == 77);
    };
 };
 
