@@ -229,6 +229,35 @@ struct glz::meta<yaml_custom_mixed_struct>
    static constexpr auto value = object("name", &T::name, "item", &T::item, "count", &T::count);
 };
 
+// Struct with top-level custom serialization (serializes as a single scalar string)
+struct yaml_custom_scalar_struct
+{
+   std::string key{};
+   int val{};
+
+   bool operator==(const yaml_custom_scalar_struct&) const = default;
+};
+
+template <>
+struct glz::meta<yaml_custom_scalar_struct>
+{
+   using T = yaml_custom_scalar_struct;
+
+   static constexpr auto read_fn = [](T& t, const std::string& str) {
+      auto pos = str.find(':');
+      if (pos != std::string::npos) {
+         t.key = str.substr(0, pos);
+         t.val = std::stoi(str.substr(pos + 1));
+      }
+   };
+
+   static constexpr auto write_fn = [](const T& t) -> std::string {
+      return t.key + ":" + std::to_string(t.val);
+   };
+
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
+};
+
 // Struct with compile-time skip for YAML
 struct yaml_skip_struct
 {
@@ -8083,6 +8112,44 @@ suite yaml_custom_write_tests = [] {
       ec = glz::read_yaml(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(parsed.value == 77);
+   };
+
+   "yaml_custom_scalar_sequence_inline"_test = [] {
+      std::vector<yaml_custom_scalar_struct> vec{{"a", 1}, {"b", 2}, {"c", 3}};
+      std::string yaml;
+      auto ec = glz::write_yaml(vec, yaml);
+      expect(!ec);
+      // Values should be inline after dash, not at column 0
+      expect(yaml.find("- 'a:1'") != std::string::npos) << yaml;
+      expect(yaml.find("- 'b:2'") != std::string::npos) << yaml;
+      // Should NOT have value at column 0 after newline
+      expect(yaml.find("\n'") == std::string::npos) << "value should not be at column 0";
+   };
+
+   "yaml_custom_scalar_sequence_roundtrip"_test = [] {
+      std::vector<yaml_custom_scalar_struct> original{{"x", 10}, {"y", 20}};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      std::vector<yaml_custom_scalar_struct> parsed;
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.size() == 2u);
+      expect(parsed[0] == original[0]);
+      expect(parsed[1] == original[1]);
+   };
+
+   "yaml_custom_scalar_sequence_in_struct_roundtrip"_test = [] {
+      yaml_custom_mixed_struct outer{"container", {"fast", 10}, 5};
+      std::string yaml;
+      auto ec = glz::write_yaml(outer, yaml);
+      expect(!ec);
+
+      yaml_custom_mixed_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == outer);
    };
 };
 

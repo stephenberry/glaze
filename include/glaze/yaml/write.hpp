@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/custom_meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
@@ -586,10 +587,23 @@ namespace glz
                // Compact form: first key inline after dash
                write_block_mapping<Opts>(element, ctx, b, ix, indent_level + 1, true);
             }
-            else {
-               // Other complex types - write on next line with increased indent
+            else if constexpr (has_custom_meta_v<element_t>) {
+               // Types with top-level custom serialization produce scalar output -
+               // write inline after dash
+               serialize<YAML>::op<Opts>(element, ctx, b, ix);
+               dump('\n', b, ix);
+            }
+            else if constexpr (writable_map_t<element_t> || writable_array_t<element_t> ||
+                              glaze_value_t<element_t>) {
+               // Containers and glaze_value_t (which may wrap containers) -
+               // write on next line with increased indent
                dump('\n', b, ix);
                write_block_mapping_nested<Opts>(element, ctx, b, ix, indent_level + 1);
+            }
+            else {
+               // Other types (pairs, tuples, etc.) - write inline after dash
+               serialize<YAML>::op<Opts>(element, ctx, b, ix);
+               dump('\n', b, ix);
             }
          }
       }
