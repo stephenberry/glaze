@@ -265,7 +265,14 @@ namespace glz
 
       static constexpr auto values = [] {
          return [&]<size_t... I>(std::index_sequence<I...>) { //
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
             return tuple{get<value_indices[I]>(meta_v<T>)...}; //
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
 
@@ -1390,8 +1397,6 @@ namespace glz
 
    inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings)
    {
-      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
-#if !defined(_MSC_VER)
       const auto N = input_strings.size();
       if (N == 0) {
          return {};
@@ -1456,9 +1461,6 @@ namespace glz
       }
 
       return info;
-#else
-      return {};
-#endif
    }
 
    template <class T>

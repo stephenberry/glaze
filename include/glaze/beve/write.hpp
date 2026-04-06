@@ -749,14 +749,45 @@ namespace glz
          }
          else if constexpr (num_t<V>) {
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t tag = tag::typed_array | type | (byte_count<V> << 5);
-            dump_type(ctx, tag, b, ix);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
+            constexpr uint8_t numeric_header = tag::typed_array | type | (byte_count<V> << 5);
+
+            if constexpr (check_aligned_arrays(Opts) && sizeof(V) > 1) {
+               // Aligned typed array: ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
+               dump_type(ctx, tag::aligned_typed_array, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               dump_type(ctx, numeric_header, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               dump_compressed_int(ctx, value.size(), b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+
+               // Write padding length byte and padding
+               constexpr size_t alignment = sizeof(V);
+               const uint8_t padding = uint8_t((alignment - ((ix + 1) % alignment)) % alignment);
+               const auto n = value.size() * sizeof(V);
+               if (!ensure_space(ctx, b, ix + 1 + padding + n + write_padding_bytes)) [[unlikely]] {
+                  return;
+               }
+               dump_type(ctx, padding, b, ix);
+               if (padding) {
+                  std::memset(&b[ix], 0, padding);
+                  ix += padding;
+               }
             }
-            dump_compressed_int(ctx, value.size(), b, ix);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
+            else {
+               dump_type(ctx, numeric_header, b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               dump_compressed_int(ctx, value.size(), b, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
 
             if constexpr (contiguous<T>) {
@@ -764,8 +795,10 @@ namespace glz
                   std::is_volatile_v<std::remove_reference_t<std::remove_pointer_t<decltype(value.data())>>>;
 
                const auto n = value.size() * sizeof(V);
-               if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
-                  return;
+               if constexpr (!(check_aligned_arrays(Opts) && sizeof(V) > 1)) {
+                  if (!ensure_space(ctx, b, ix + n + write_padding_bytes)) [[unlikely]] {
+                     return;
+                  }
                }
 
                if constexpr (is_volatile) {

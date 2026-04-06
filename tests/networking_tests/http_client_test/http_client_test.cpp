@@ -1080,6 +1080,217 @@ suite glz_http_client_tests = [] {
    };
 };
 
+// Raw TCP server that sends HTTP responses without Content-Length or chunked encoding
+// (EOF-delimited body, per RFC 7230 §3.3.3)
+class eof_delimited_server
+{
+  public:
+   eof_delimited_server() = default;
+   ~eof_delimited_server() { stop(); }
+
+   bool start(const std::string& response_body)
+   {
+      try {
+         acceptor_ = std::make_unique<asio::ip::tcp::acceptor>(
+            io_, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+         port_ = acceptor_->local_endpoint().port();
+
+         server_thread_ = std::thread([this, response_body]() {
+            try {
+               asio::ip::tcp::socket socket(io_);
+               acceptor_->accept(socket);
+
+               // Read the request (drain it)
+               asio::streambuf request_buf;
+               asio::read_until(socket, request_buf, "\r\n\r\n");
+
+               // Send response with Connection: close but no Content-Length or Transfer-Encoding
+               std::string http_response =
+                  "HTTP/1.1 200 OK\r\n"
+                  "Content-Type: application/json\r\n"
+                  "Connection: close\r\n"
+                  "\r\n" +
+                  response_body;
+
+               asio::write(socket, asio::buffer(http_response));
+               socket.shutdown(asio::ip::tcp::socket::shutdown_both);
+               socket.close();
+            }
+            catch (...) {
+            }
+         });
+
+         return true;
+      }
+      catch (...) {
+         return false;
+      }
+   }
+
+   bool start_with_reset()
+   {
+      try {
+         acceptor_ = std::make_unique<asio::ip::tcp::acceptor>(
+            io_, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+         port_ = acceptor_->local_endpoint().port();
+
+         server_thread_ = std::thread([this]() {
+            try {
+               asio::ip::tcp::socket socket(io_);
+               acceptor_->accept(socket);
+
+               asio::streambuf request_buf;
+               asio::read_until(socket, request_buf, "\r\n\r\n");
+
+               // Send headers and partial body, then reset the connection
+               std::string http_response =
+                  "HTTP/1.1 200 OK\r\n"
+                  "Content-Type: application/json\r\n"
+                  "Connection: close\r\n"
+                  "\r\n"
+                  "partial";
+
+               asio::write(socket, asio::buffer(http_response));
+
+               // Force a RST by setting linger to 0 and closing
+               asio::socket_base::linger option(true, 0);
+               socket.set_option(option);
+               socket.close();
+            }
+            catch (...) {
+            }
+         });
+
+         return true;
+      }
+      catch (...) {
+         return false;
+      }
+   }
+
+   void stop()
+   {
+      if (acceptor_) acceptor_->close();
+      if (server_thread_.joinable()) server_thread_.join();
+   }
+
+   uint16_t port() const { return port_; }
+   std::string base_url() const { return "http://127.0.0.1:" + std::to_string(port_); }
+
+  private:
+   asio::io_context io_;
+   std::unique_ptr<asio::ip::tcp::acceptor> acceptor_;
+   std::thread server_thread_;
+   uint16_t port_{0};
+};
+
+suite eof_delimited_tests = [] {
+   "sync_eof_delimited_body"_test = [] {
+      const std::string expected_body = R"({"name":"Hue Bridge","modelid":"BSB002"})";
+      eof_delimited_server server;
+      expect(server.start(expected_body)) << "EOF-delimited server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/api/0/config");
+
+      expect(result.has_value()) << "GET should succeed for EOF-delimited response";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == expected_body) << "Body should match: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   "async_eof_delimited_body"_test = [] {
+      const std::string expected_body = R"({"name":"Hue Bridge","modelid":"BSB002"})";
+      eof_delimited_server server;
+      expect(server.start(expected_body)) << "EOF-delimited server should start";
+
+      glz::http_client client;
+
+      std::promise<glz::expected<glz::response, std::error_code>> promise;
+      auto future = promise.get_future();
+
+      client.get_async(
+         server.base_url() + "/api/0/config", {},
+         [&](glz::expected<glz::response, std::error_code> result) { promise.set_value(std::move(result)); });
+
+      auto status = future.wait_for(std::chrono::seconds(5));
+      expect(status == std::future_status::ready) << "Async GET should complete";
+
+      if (status == std::future_status::ready) {
+         auto result = future.get();
+         expect(result.has_value()) << "Async GET should succeed for EOF-delimited response";
+         if (result.has_value()) {
+            expect(result->status_code == 200) << "Status should be 200";
+            expect(result->response_body == expected_body) << "Body should match: " << result->response_body;
+         }
+      }
+
+      server.stop();
+   };
+
+   "sync_eof_delimited_max_body_size"_test = [] {
+      // Body larger than the limit
+      const std::string large_body(1024, 'X');
+      eof_delimited_server server;
+      expect(server.start(large_body)) << "EOF-delimited server should start";
+
+      glz::http_client client;
+      client.max_response_body_size(100); // limit well below body size
+      auto result = client.get(server.base_url() + "/api/0/config");
+
+      expect(!result.has_value()) << "GET should fail when body exceeds max size";
+
+      server.stop();
+   };
+
+   "async_eof_delimited_max_body_size"_test = [] {
+      const std::string large_body(1024, 'X');
+      eof_delimited_server server;
+      expect(server.start(large_body)) << "EOF-delimited server should start";
+
+      glz::http_client client;
+      client.max_response_body_size(100);
+
+      std::promise<glz::expected<glz::response, std::error_code>> promise;
+      auto future = promise.get_future();
+
+      client.get_async(
+         server.base_url() + "/api/0/config", {},
+         [&](glz::expected<glz::response, std::error_code> result) { promise.set_value(std::move(result)); });
+
+      auto status = future.wait_for(std::chrono::seconds(5));
+      expect(status == std::future_status::ready) << "Async GET should complete";
+
+      if (status == std::future_status::ready) {
+         auto result = future.get();
+         expect(!result.has_value()) << "Async GET should fail when body exceeds max size";
+      }
+
+      server.stop();
+   };
+
+   "sync_eof_delimited_connection_reset"_test = [] {
+      // Server that resets the connection after sending partial data
+      eof_delimited_server server;
+      expect(server.start_with_reset()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/api/0/config");
+
+      // RST behavior is platform-dependent:
+      // - On most platforms, the RST is received as a connection error (result is an error)
+      // - On some platforms, data may arrive before the RST, resulting in a partial body with EOF
+      if (result.has_value()) {
+         expect(result->response_body == "partial") << "If RST is seen as EOF, partial body should be returned";
+      }
+
+      server.stop();
+   };
+};
+
 int main()
 {
    std::cout << "Running HTTP Client Tests...\n";

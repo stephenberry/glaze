@@ -291,6 +291,13 @@ namespace glz
    // Can be combined with 'raw' to write completely unprocessed string content.
 
    // ---
+   // bool aligned_arrays = false;
+   // When true, BEVE typed arrays for numeric types use alignment padding so that the data payload
+   // begins at a memory offset that is a multiple of the element size. This enables zero-copy
+   // access via std::span<T> directly into the message buffer, eliminating copy and allocation overhead.
+   // Only applies to BEVE format. The alignment padding is deterministic and does not need to be stored.
+
+   // ---
    // bool structs_as_arrays = false;
    // Serialize/deserialize structs as arrays without field keys.
    // Useful for binary formats or when field names add unnecessary overhead.
@@ -769,6 +776,16 @@ namespace glz
    {
       if constexpr (requires { Opts.qualified_type_names; }) {
          return Opts.qualified_type_names;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_aligned_arrays(auto&& Opts)
+   {
+      if constexpr (requires { Opts.aligned_arrays; }) {
+         return Opts.aligned_arrays;
       }
       else {
          return false;
