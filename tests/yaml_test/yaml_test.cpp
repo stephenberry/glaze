@@ -7931,6 +7931,76 @@ age: 30)";
    };
 };
 
+suite yaml_compact_sequence_tests = [] {
+   "write_compact_sequence_of_objects"_test = [] {
+      std::vector<simple_struct> vec{{1, 2.0, "a"}, {3, 4.0, "b"}};
+      std::string yaml;
+      auto ec = glz::write_yaml(vec, yaml);
+      expect(!ec);
+      // First key should be inline after dash: "- x:" not "-\n  x:"
+      expect(yaml.find("- x:") != std::string::npos) << yaml;
+      expect(yaml.find("-\n") == std::string::npos) << "should not have expanded dash";
+   };
+
+   "write_compact_sequence_roundtrip"_test = [] {
+      std::vector<simple_struct> original{{1, 2.0, "a"}, {3, 4.0, "b"}};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      std::vector<simple_struct> parsed;
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.size() == 2u);
+      expect(parsed[0].x == 1);
+      expect(parsed[0].name == "a");
+      expect(parsed[1].x == 3);
+      expect(parsed[1].name == "b");
+   };
+
+   "write_compact_nested_sequence_of_objects"_test = [] {
+      nested_struct obj{"hello", {1, 2.0, "inner"}, {10, 20}};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      // numbers sequence should have simple scalars (no compaction needed)
+      expect(yaml.find("- 10") != std::string::npos);
+   };
+
+   "write_compact_sequence_in_struct_roundtrip"_test = [] {
+      // nested_struct has a vector<int> (simple sequence) and nested object
+      nested_struct original{"eng", {1, 2.0, "Alice"}, {10, 20, 30}};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      nested_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.title == "eng");
+      expect(parsed.data.x == 1);
+      expect(parsed.data.name == "Alice");
+      expect(parsed.numbers == std::vector<int>{10, 20, 30});
+   };
+
+   "write_compact_optional_objects_in_sequence"_test = [] {
+      std::vector<std::optional<simple_struct>> vec{simple_struct{1, 2.0, "a"}, std::nullopt};
+      std::string yaml;
+      auto ec = glz::write_yaml(vec, yaml);
+      expect(!ec);
+      expect(yaml.find("- x:") != std::string::npos) << yaml;
+      expect(yaml.find("- null") != std::string::npos) << yaml;
+
+      std::vector<std::optional<simple_struct>> parsed;
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.size() == 2u);
+      expect(parsed[0].has_value());
+      expect(parsed[0]->x == 1);
+      expect(!parsed[1].has_value());
+   };
+};
+
 suite yaml_skip_tests = [] {
    "yaml_write_skip_excludes_field"_test = [] {
       yaml_skip_struct obj{"abc", "top_secret", 42};
