@@ -206,6 +206,7 @@ namespace glz
                   return;
                }
                term_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+               if (bool(ctx.error)) return;
                if constexpr (Opts.prettify) {
                   dump(": ", out, ix);
                }
