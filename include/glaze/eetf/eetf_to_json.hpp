@@ -242,7 +242,7 @@ namespace glz
       }
    } // namespace detail
 
-   template <auto Opts = eetf::eetf_opts{}, class EETFBuffer, class JSONBuffer>
+   template <auto Opts = opts{}, class EETFBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx eetf_to_json(const EETFBuffer& term, JSONBuffer& out)
    {
       size_t ix{}; // write index
