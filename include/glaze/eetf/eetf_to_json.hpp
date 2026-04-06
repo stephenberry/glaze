@@ -194,9 +194,6 @@ namespace glz
                dump('\n', out, ix);
                dumpn(check_indentation_char(Opts), ctx.depth, out, ix);
             }
-            else {
-               ++ctx.depth;
-            }
 
             while (arity--) {
                // write key
@@ -229,9 +226,6 @@ namespace glz
                ctx.depth -= check_indentation_width(Opts);
                dump('\n', out, ix);
                dumpn(check_indentation_char(Opts), ctx.depth, out, ix);
-            }
-            else {
-               --ctx.depth;
             }
             dump('}', out, ix);
             break;
