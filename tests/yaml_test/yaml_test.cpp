@@ -772,6 +772,53 @@ suite yaml_writer_edge_case_tests = [] {
       expect(yaml == "'a:b': 1\n'x#y': 2\n");
    };
 
+   "write_scalar_quotes_string_with_comma"_test = [] {
+      const std::string original = "hello, world";
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+      expect(yaml == "'hello, world'");
+
+      std::string parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_scalar_quotes_string_with_only_comma"_test = [] {
+      const std::string original = "a,b,c";
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+      expect(yaml == "'a,b,c'");
+
+      std::string parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_map_keys_with_comma_are_quoted"_test = [] {
+      std::map<std::string, int> value{{"a,b", 1}};
+      std::string yaml{};
+      auto ec = glz::write_yaml(value, yaml);
+      expect(!ec);
+      expect(yaml == "'a,b': 1\n");
+   };
+
+   "write_struct_with_comma_in_string_roundtrip"_test = [] {
+      simple_struct original{7, 2.5, "one, two, three"};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      simple_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.x == original.x);
+      expect(parsed.name == original.name);
+   };
+
    "write_flow_map_with_multiline_scalar_roundtrip"_test = [] {
       const std::map<std::string, std::string> original{
          {"name", "svc"},
