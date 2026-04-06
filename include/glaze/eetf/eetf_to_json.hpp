@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 
 #include "glaze/eetf/ei.hpp"
 #include "glaze/eetf/opts.hpp"
@@ -132,10 +133,10 @@ namespace glz
             const size_t len = get8s(ctx, it, end);
             CHECK_OFFSET(len);
             const sv value{reinterpret_cast<const char*>(it), len};
-            if (len == 4 && std::strncmp(it, "true", len) == 0) {
+            if (len == 4 && std::memcmp(it, "true", 4) == 0) {
                dump("true", out, ix);
             }
-            else if (len == 5 && std::strncmp(it, "false", len) == 0) {
+            else if (len == 5 && std::memcmp(it, "false", 5) == 0) {
                dump("false", out, ix);
             }
             else {
