@@ -72,8 +72,8 @@ namespace glz
             return;
          }
 
-         static auto write_sequence = [&](size_t arity, size_t index, auto&& ctx, auto&& it, auto&& end, Buffer& out,
-                                          auto&& ix, auto recursive_depth) {
+         auto write_sequence = [](size_t arity, size_t index, auto&& ctx, auto&& it, auto&& end, Buffer& out,
+                                   auto&& ix, auto recursive_depth) {
             std::advance(it, index);
             if (invalid_end(ctx, it, end)) [[unlikely]] {
                return;
