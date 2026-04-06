@@ -1002,6 +1002,14 @@ namespace glz
                      wrote_empty = true;
                   }
                }
+               else if constexpr (writable_array_t<val_t>) {
+                  if constexpr (requires { member.empty(); }) {
+                     if (member.empty()) {
+                        dump(" []\n", b, ix);
+                        wrote_empty = true;
+                     }
+                  }
+               }
                if (wrote_empty) {
                   return;
                }
