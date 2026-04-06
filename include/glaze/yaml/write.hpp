@@ -958,7 +958,8 @@ namespace glz
                   }
                }
             }
-            else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> || reflectable<val_t>) {
+            else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> ||
+                               reflectable<val_t>) {
                // Complex types (containers, objects): empty on same line, non-empty on next line
                bool wrote_empty = false;
                if constexpr (writable_map_t<val_t>) {
