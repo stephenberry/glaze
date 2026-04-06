@@ -17,14 +17,14 @@ namespace glz
       template <class It0, class It1>
       GLZ_ALWAYS_INLINE size_t get8s(auto&& ctx, It0&& it, It1&& end)
       {
-         CHECK_OFFSET_RET(1, 0);
+         if (check_offset(ctx, it, end, 1)) return 0;
          return std::size_t(*it++);
       }
 
       template <class It0, class It1>
       GLZ_ALWAYS_INLINE size_t get16be(auto&& ctx, It0&& it, It1&& end)
       {
-         CHECK_OFFSET_RET(2, 0);
+         if (check_offset(ctx, it, end, 2)) return 0;
          const std::size_t b1 = (*it++) << 8;
          return b1 | *it++;
       }
@@ -121,7 +121,7 @@ namespace glz
             ++it; // skip type
             const size_t len = get16be(ctx, it, end);
             if (bool(ctx.error)) return;
-            CHECK_OFFSET(len);
+            if (check_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
             to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
             std::advance(it, len);
@@ -133,7 +133,7 @@ namespace glz
             ++it; // skip type
             const size_t len = get8s(ctx, it, end);
             if (bool(ctx.error)) return;
-            CHECK_OFFSET(len);
+            if (check_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
             if (len == 4 && std::memcmp(it, "true", 4) == 0) {
                dump("true", out, ix);

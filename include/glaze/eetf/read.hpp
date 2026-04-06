@@ -23,7 +23,7 @@ namespace glz
                return;
             }
 
-            CHECK_OFFSET(term_header.second);
+            if (check_offset(ctx, it, end, term_header.second)) return;
             std::advance(it, term_header.second);
          }
 
