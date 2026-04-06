@@ -407,10 +407,14 @@ namespace glz
 
    namespace yaml
    {
-      // Forward declaration for nested object helper used in block sequences
+      // Forward declarations for helpers used in block sequences
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
                                                         int32_t indent_level);
+
+      template <auto Opts, class T, class B>
+      GLZ_ALWAYS_INLINE void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
+                                                 int32_t indent_level, bool skip_first_indent = false);
 
       // Helper to check if a type is "simple" (writes on same line)
       template <class T>
@@ -553,8 +557,13 @@ namespace glz
                      }
                   }
                   if (!wrote_empty) {
-                     dump('\n', b, ix);
-                     write_block_mapping_nested<Opts>(*element, ctx, b, ix, indent_level + 1);
+                     if constexpr (glaze_object_t<inner_t> || reflectable<inner_t>) {
+                        write_block_mapping<Opts>(*element, ctx, b, ix, indent_level + 1, true);
+                     }
+                     else {
+                        dump('\n', b, ix);
+                        write_block_mapping_nested<Opts>(*element, ctx, b, ix, indent_level + 1);
+                     }
                   }
                }
             }
@@ -573,8 +582,12 @@ namespace glz
                   dump('\n', b, ix);
                }
             }
+            else if constexpr (glaze_object_t<element_t> || reflectable<element_t>) {
+               // Compact form: first key inline after dash
+               write_block_mapping<Opts>(element, ctx, b, ix, indent_level + 1, true);
+            }
             else {
-               // Complex type - write on next line with increased indent
+               // Other complex types - write on next line with increased indent
                dump('\n', b, ix);
                write_block_mapping_nested<Opts>(element, ctx, b, ix, indent_level + 1);
             }
@@ -822,7 +835,7 @@ namespace glz
       // Write block-style mapping
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level)
+                                                 int32_t indent_level, bool skip_first_indent)
       {
          using V = std::remove_cvref_t<T>;
          constexpr auto N = reflect<V>::size;
@@ -865,13 +878,21 @@ namespace glz
                }
             }
 
-            // Write indentation
-            const int32_t spaces = indent_level * indent_width;
-            if (!ensure_space(ctx, b, ix + spaces + key.size() + 8)) [[unlikely]] {
-               return;
+            // Write indentation (skip for first field when in compact sequence context)
+            if (skip_first_indent) {
+               skip_first_indent = false;
+               if (!ensure_space(ctx, b, ix + key.size() + 8)) [[unlikely]] {
+                  return;
+               }
             }
-            for (int32_t i = 0; i < spaces; ++i) {
-               b[ix++] = ' ';
+            else {
+               const int32_t spaces = indent_level * indent_width;
+               if (!ensure_space(ctx, b, ix + spaces + key.size() + 8)) [[unlikely]] {
+                  return;
+               }
+               for (int32_t i = 0; i < spaces; ++i) {
+                  b[ix++] = ' ';
+               }
             }
 
             // Write key
