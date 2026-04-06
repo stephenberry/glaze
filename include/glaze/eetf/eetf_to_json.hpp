@@ -120,6 +120,7 @@ namespace glz
          case ERL_ATOM_UTF8_EXT: {
             ++it; // skip type
             const size_t len = get16be(ctx, it, end);
+            if (bool(ctx.error)) return;
             CHECK_OFFSET(len);
             const sv value{reinterpret_cast<const char*>(it), len};
             to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
@@ -131,6 +132,7 @@ namespace glz
          case ERL_SMALL_ATOM_UTF8_EXT: {
             ++it; // skip type
             const size_t len = get8s(ctx, it, end);
+            if (bool(ctx.error)) return;
             CHECK_OFFSET(len);
             const sv value{reinterpret_cast<const char*>(it), len};
             if (len == 4 && std::memcmp(it, "true", 4) == 0) {
