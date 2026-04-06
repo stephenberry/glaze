@@ -12,6 +12,12 @@
 namespace glz
 {
 
+#define CHECK_OFFSET_RET(off, r)              \
+   if ((it + (off)) > end) [[unlikely]] {     \
+      ctx.error = error_code::unexpected_end; \
+      return (r);                             \
+   }
+
 #define CHECK_OFFSET(off)                     \
    if ((it + (off)) > end) [[unlikely]] {     \
       ctx.error = error_code::unexpected_end; \
