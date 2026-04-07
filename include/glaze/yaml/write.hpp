@@ -912,6 +912,19 @@ namespace glz
             dump(key, b, ix);
             dump(':', b, ix);
 
+            // Handle empty containers inline (before type dispatch)
+            if constexpr (range<val_t> && !str_t<val_t> && !is_simple_type<val_t>() && has_empty<val_t>) {
+               if (member.empty()) {
+                  if constexpr (writable_map_t<val_t>) {
+                     dump(" {}\n", b, ix);
+                  }
+                  else {
+                     dump(" []\n", b, ix);
+                  }
+                  return;
+               }
+            }
+
             if constexpr (is_simple_type<val_t>()) {
                // Simple types go on same line
                dump(' ', b, ix);
@@ -992,34 +1005,8 @@ namespace glz
                   }
                }
             }
-            else if constexpr (writable_array_t<val_t>) {
-               // Arrays: empty on same line, non-empty on next line
-               if constexpr (requires { member.empty(); }) {
-                  if (member.empty()) {
-                     dump(" []\n", b, ix);
-                     return;
-                  }
-               }
-               dump('\n', b, ix);
-               if constexpr (requires { ctx.indent_level; }) {
-                  auto nested_ctx = ctx;
-                  nested_ctx.indent_level = indent_level + 1;
-                  serialize<YAML>::op<Opts>(member, nested_ctx, b, ix);
-               }
-               else {
-                  write_block_mapping_nested<Opts>(member, ctx, b, ix, indent_level + 1);
-               }
-            }
-            else if constexpr (writable_map_t<val_t> || glaze_object_t<val_t> ||
+            else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> ||
                                reflectable<val_t>) {
-               // Complex types (maps, objects): empty map on same line, non-empty on next line
-               if constexpr (writable_map_t<val_t>) {
-                  if (member.empty()) {
-                     dump(" {}\n", b, ix);
-                     return;
-                  }
-               }
-
                // Complex types go on next line with increased indent
                dump('\n', b, ix);
 
