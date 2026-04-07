@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/custom_meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
@@ -407,10 +408,14 @@ namespace glz
 
    namespace yaml
    {
-      // Forward declaration for nested object helper used in block sequences
+      // Forward declarations for helpers used in block sequences
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
                                                         int32_t indent_level);
+
+      template <auto Opts, class T, class B>
+      GLZ_ALWAYS_INLINE void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
+                                                 int32_t indent_level, bool skip_first_indent = false);
 
       // Helper to check if a type is "simple" (writes on same line)
       template <class T>
@@ -553,8 +558,13 @@ namespace glz
                      }
                   }
                   if (!wrote_empty) {
-                     dump('\n', b, ix);
-                     write_block_mapping_nested<Opts>(*element, ctx, b, ix, indent_level + 1);
+                     if constexpr (glaze_object_t<inner_t> || reflectable<inner_t>) {
+                        write_block_mapping<Opts>(*element, ctx, b, ix, indent_level + 1, true);
+                     }
+                     else {
+                        dump('\n', b, ix);
+                        write_block_mapping_nested<Opts>(*element, ctx, b, ix, indent_level + 1);
+                     }
                   }
                }
             }
@@ -573,10 +583,26 @@ namespace glz
                   dump('\n', b, ix);
                }
             }
-            else {
-               // Complex type - write on next line with increased indent
+            else if constexpr (glaze_object_t<element_t> || reflectable<element_t>) {
+               // Compact form: first key inline after dash
+               write_block_mapping<Opts>(element, ctx, b, ix, indent_level + 1, true);
+            }
+            else if constexpr (has_custom_meta_v<element_t>) {
+               // Types with top-level custom serialization produce scalar output -
+               // write inline after dash
+               serialize<YAML>::op<Opts>(element, ctx, b, ix);
+               dump('\n', b, ix);
+            }
+            else if constexpr (writable_map_t<element_t> || writable_array_t<element_t> || glaze_value_t<element_t>) {
+               // Containers and glaze_value_t (which may wrap containers) -
+               // write on next line with increased indent
                dump('\n', b, ix);
                write_block_mapping_nested<Opts>(element, ctx, b, ix, indent_level + 1);
+            }
+            else {
+               // Other types (pairs, tuples, etc.) - write inline after dash
+               serialize<YAML>::op<Opts>(element, ctx, b, ix);
+               dump('\n', b, ix);
             }
          }
       }
@@ -822,7 +848,7 @@ namespace glz
       // Write block-style mapping
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level)
+                                                 int32_t indent_level, bool skip_first_indent)
       {
          using V = std::remove_cvref_t<T>;
          constexpr auto N = reflect<V>::size;
@@ -845,6 +871,17 @@ namespace glz
                }
             }();
 
+            // Skip fields based on meta::skip (compile-time) and meta::skip_if (runtime)
+            if constexpr (meta_has_skip<V>) {
+               static constexpr meta_context mctx{.op = operation::serialize};
+               if constexpr (meta<V>::skip(reflect<V>::keys[I], mctx)) return;
+            }
+            if constexpr (meta_has_skip_if<V>) {
+               static constexpr auto k = glz::get<I>(reflect<V>::keys);
+               static constexpr meta_context mctx{.op = operation::serialize};
+               if (meta<V>::skip_if(member, k, mctx)) return;
+            }
+
             // Skip null members if configured
             if constexpr (nullable_like<val_t>) {
                if constexpr (Opts.skip_null_members) {
@@ -854,18 +891,39 @@ namespace glz
                }
             }
 
-            // Write indentation
-            const int32_t spaces = indent_level * indent_width;
-            if (!ensure_space(ctx, b, ix + spaces + key.size() + 8)) [[unlikely]] {
-               return;
+            // Write indentation (skip for first field when in compact sequence context)
+            if (skip_first_indent) {
+               skip_first_indent = false;
+               if (!ensure_space(ctx, b, ix + key.size() + 8)) [[unlikely]] {
+                  return;
+               }
             }
-            for (int32_t i = 0; i < spaces; ++i) {
-               b[ix++] = ' ';
+            else {
+               const int32_t spaces = indent_level * indent_width;
+               if (!ensure_space(ctx, b, ix + spaces + key.size() + 8)) [[unlikely]] {
+                  return;
+               }
+               for (int32_t i = 0; i < spaces; ++i) {
+                  b[ix++] = ' ';
+               }
             }
 
             // Write key
             dump(key, b, ix);
             dump(':', b, ix);
+
+            // Handle empty containers inline (before type dispatch)
+            if constexpr (range<val_t> && !str_t<val_t> && !is_simple_type<val_t>() && has_empty<val_t>) {
+               if (member.empty()) {
+                  if constexpr (writable_map_t<val_t>) {
+                     dump(" {}\n", b, ix);
+                  }
+                  else {
+                     dump(" []\n", b, ix);
+                  }
+                  return;
+               }
+            }
 
             if constexpr (is_simple_type<val_t>()) {
                // Simple types go on same line
@@ -947,19 +1005,8 @@ namespace glz
                   }
                }
             }
-            else {
-               // Empty containers go on same line as flow-style {} or []
-               bool wrote_empty = false;
-               if constexpr (writable_map_t<val_t>) {
-                  if (member.empty()) {
-                     dump(" {}\n", b, ix);
-                     wrote_empty = true;
-                  }
-               }
-               if (wrote_empty) {
-                  return;
-               }
-
+            else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> ||
+                               reflectable<val_t>) {
                // Complex types go on next line with increased indent
                dump('\n', b, ix);
 
@@ -970,10 +1017,15 @@ namespace glz
                   serialize<YAML>::op<Opts>(member, nested_ctx, b, ix);
                }
                else {
-                  // Pass indent through opts internal state - simplified approach
-                  // For now, just write at next indent level
                   write_block_mapping_nested<Opts>(member, ctx, b, ix, indent_level + 1);
                }
+            }
+            else {
+               // All other types (custom_t, types with custom to/from<YAML>, etc.)
+               // are assumed to produce scalar values — write on same line
+               dump(' ', b, ix);
+               serialize<YAML>::op<Opts>(member, ctx, b, ix);
+               dump('\n', b, ix);
             }
          });
       }

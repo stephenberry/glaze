@@ -78,7 +78,7 @@ done <<<"${macros_ff}"
 %cmake_install
 
 %check
-%ctest
+%ctest --timeout 120
 
 %files devel
 %license LICENSE

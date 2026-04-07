@@ -1580,6 +1580,129 @@ void container_types()
       expect(!glz::read_beve(vec2, buffer));
       expect(vec == vec2);
    };
+   "vector bool LSB-first spec compliance"_test = [] {
+      // BEVE spec: bits are packed per byte in LSB-first order.
+      // bit 0 (least-significant) corresponds to the lowest array index for that byte.
+      // [true, false, true] -> 0b00000101 = 0x05
+      {
+         std::vector<bool> vec{true, false, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         // buffer[0] = header, buffer[1] = compressed size (3 << 2 = 12)
+         expect(buffer.size() == 3u);
+         expect(uint8_t(buffer[2]) == 0x05u);
+      }
+      // [true] -> 0b00000001 = 0x01
+      {
+         std::vector<bool> vec{true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 3u);
+         expect(uint8_t(buffer[2]) == 0x01u);
+      }
+      // [false, true] -> 0b00000010 = 0x02
+      {
+         std::vector<bool> vec{false, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 3u);
+         expect(uint8_t(buffer[2]) == 0x02u);
+      }
+      // 8 bools: [true, false, true, true, false, true, false, true] -> 0b10101101 = 0xAD
+      {
+         std::vector<bool> vec{true, false, true, true, false, true, false, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 3u);
+         expect(uint8_t(buffer[2]) == 0xADu);
+      }
+      // 9 bools span two bytes: [true, true, true, true, true, true, true, true, true]
+      // byte 0: 0b11111111 = 0xFF, byte 1: 0b00000001 = 0x01
+      {
+         std::vector<bool> vec{true, true, true, true, true, true, true, true, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 4u);
+         expect(uint8_t(buffer[2]) == 0xFFu);
+         expect(uint8_t(buffer[3]) == 0x01u);
+      }
+      // Verify read also decodes LSB-first correctly
+      {
+         std::vector<bool> vec{true, false, true, true, false};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::vector<bool> vec2{};
+         expect(not glz::read_beve(vec2, buffer));
+         expect(vec2.size() == 5u);
+         expect(vec2[0] == true);
+         expect(vec2[1] == false);
+         expect(vec2[2] == true);
+         expect(vec2[3] == true);
+         expect(vec2[4] == false);
+      }
+      // Empty vector
+      {
+         std::vector<bool> vec{};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 2u); // header + compressed size (0)
+         std::vector<bool> vec2{};
+         expect(not glz::read_beve(vec2, buffer));
+         expect(vec2.empty());
+      }
+   };
+   "set<bool> read via set-type reader path"_test = [] {
+      // std::set<bool> uses the emplaceable (non-resizable) reader path.
+      // Write with vector, read into set to exercise that code path.
+      {
+         std::vector<bool> vec{true, false};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.size() == 2u);
+         expect(s.contains(true));
+         expect(s.contains(false));
+      }
+      {
+         std::vector<bool> vec{true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.size() == 1u);
+         expect(s.contains(true));
+      }
+      {
+         std::vector<bool> vec{false};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.size() == 1u);
+         expect(s.contains(false));
+      }
+      // Empty
+      {
+         std::vector<bool> vec{};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.empty());
+      }
+      // Multiple values: set deduplicates, but reader must still parse all bytes
+      {
+         std::vector<bool> vec{true, false, true, true, false, true, false, true, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.size() == 2u);
+         expect(s.contains(true));
+         expect(s.contains(false));
+      }
+   };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
       for (auto& item : deq) item = rand();
@@ -6393,6 +6516,166 @@ suite expected_tests = [] {
       expect(!glz::read_beve(obj2, s));
       expect(!obj2);
       expect(obj2.error() == 42);
+   };
+};
+
+// Test for https://github.com/stephenberry/glaze/issues/2422
+// BEVE skip of variant-encoded values when error_on_unknown_keys is false
+struct OldDiag
+{
+   std::string rule_id{};
+   std::variant<std::monostate, std::string, int> args{};
+   std::string severity{};
+};
+
+struct NewDiag
+{
+   std::string rule_id{};
+   std::string message{};
+   std::string severity{};
+};
+
+suite beve_skip_variant_suite = [] {
+   "skip variant string when key removed"_test = [] {
+      OldDiag old_diag{.rule_id = "RULE_001", .args = std::string{"field overlap"}, .severity = "error"};
+      std::string buffer{};
+      expect(not glz::write_beve(old_diag, buffer));
+
+      NewDiag new_diag{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(new_diag, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(new_diag.rule_id == "RULE_001");
+      expect(new_diag.severity == "error");
+      expect(new_diag.message.empty());
+   };
+
+   "skip variant monostate when key removed"_test = [] {
+      OldDiag old_diag{.rule_id = "R2", .args = std::monostate{}, .severity = "warn"};
+      std::string buffer{};
+      expect(not glz::write_beve(old_diag, buffer));
+
+      NewDiag new_diag{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(new_diag, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(new_diag.rule_id == "R2");
+      expect(new_diag.severity == "warn");
+   };
+
+   "skip variant int when key removed"_test = [] {
+      OldDiag old_diag{.rule_id = "R3", .args = 42, .severity = "info"};
+      std::string buffer{};
+      expect(not glz::write_beve(old_diag, buffer));
+
+      NewDiag new_diag{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(new_diag, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(new_diag.rule_id == "R3");
+      expect(new_diag.severity == "info");
+   };
+};
+
+// Test BEVE skip of complex extension types when error_on_unknown_keys is false
+struct WithComplex
+{
+   int id{};
+   std::complex<double> value{};
+   std::string name{};
+};
+
+struct WithComplexFloat
+{
+   int id{};
+   std::complex<float> value{};
+   std::string name{};
+};
+
+struct WithComplexArray
+{
+   int id{};
+   std::vector<std::complex<double>> values{};
+   std::string name{};
+};
+
+struct WithComplexFloatArray
+{
+   int id{};
+   std::vector<std::complex<float>> values{};
+   std::string name{};
+};
+
+struct SkipSimple
+{
+   int id{};
+   std::string name{};
+};
+
+suite beve_skip_complex_suite = [] {
+   "skip complex<double> when key removed"_test = [] {
+      WithComplex src{.id = 1, .value = {3.14, 2.71}, .name = "test"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 1);
+      expect(dst.name == "test");
+   };
+
+   "skip complex<float> when key removed"_test = [] {
+      WithComplexFloat src{.id = 2, .value = {1.0f, 0.5f}, .name = "float"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 2);
+      expect(dst.name == "float");
+   };
+
+   "skip vector<complex<double>> when key removed"_test = [] {
+      WithComplexArray src{.id = 3, .values = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}}, .name = "array"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 3);
+      expect(dst.name == "array");
+   };
+
+   "skip vector<complex<float>> when key removed"_test = [] {
+      WithComplexFloatArray src{.id = 4, .values = {{1.0f, 2.0f}}, .name = "farray"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 4);
+      expect(dst.name == "farray");
+   };
+
+   "skip empty vector<complex<double>> when key removed"_test = [] {
+      WithComplexArray src{.id = 5, .values = {}, .name = "empty"};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      SkipSimple dst{};
+      constexpr glz::opts opts = {.format = glz::BEVE, .error_on_unknown_keys = false};
+      auto ec = glz::read<opts>(dst, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      expect(dst.id == 5);
+      expect(dst.name == "empty");
    };
 };
 

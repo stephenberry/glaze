@@ -123,6 +123,7 @@ nav:
    - networking/tls-support.md
    - networking/http-client.md
    - networking/websocket-client.md
+   - networking/body-size-limits.md
    - networking/advanced-networking.md
    - networking/http-examples.md
  - RPC:

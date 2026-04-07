@@ -33,6 +33,7 @@ int main() {
 ## Features
 
 - **Connection Pooling**: Automatically reuses connections for better performance
+- **Chunked Transfer-Encoding**: Transparent decoding of chunked responses across synchronous, asynchronous, and streaming paths
 - **Asynchronous Operations**: Non-blocking requests with futures or completion handlers
 - **JSON Support**: Built-in JSON serialization for POST requests
 - **Thread-Safe**: Multiple threads can safely use the same client instance
@@ -444,6 +445,16 @@ if (url_parts) {
     std::cout << "Path: " << url_parts->path << std::endl;         // "/v1/users"
 }
 ```
+
+## Chunked Transfer-Encoding
+
+Responses using `Transfer-Encoding: chunked` are automatically decoded. This is transparent to the caller -- `response_body` contains the fully assembled body regardless of whether the server used `Content-Length` or chunked encoding.
+
+- Chunk extensions (`;key=value`) are ignored per RFC 7230
+- Trailer headers after the terminal chunk are consumed and discarded
+- Malformed chunk sizes return a `protocol_error`
+
+For streaming requests (`stream_request_v2`), chunked data is delivered incrementally via the `on_data` callback as each chunk arrives.
 
 ## Performance Notes
 

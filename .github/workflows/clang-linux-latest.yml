@@ -36,7 +36,7 @@ jobs:
       LLVM_VERSION: ${{matrix.clang}}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install latest clang
       run: |

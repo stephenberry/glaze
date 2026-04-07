@@ -675,14 +675,14 @@ namespace glz
 
             value.clear();
 
-            const auto num_bytes = (value.size() + 7) / 8;
+            const auto num_bytes = (n + 7) / 8;
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                if (invalid_end(ctx, it, end)) {
                   return;
                }
                uint8_t byte;
                std::memcpy(&byte, it, 1);
-               for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
+               for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
                   bool x = byte >> bit_i & uint8_t(1);
                   value.emplace(x);
                }
@@ -954,7 +954,7 @@ namespace glz
                }
                uint8_t byte;
                std::memcpy(&byte, it, 1);
-               for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
+               for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
                   value[i] = byte >> bit_i & uint8_t(1);
                }
             }

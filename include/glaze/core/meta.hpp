@@ -767,8 +767,8 @@ namespace glz
       }
       else if constexpr (std::is_same_v<std::decay_t<decltype(ids[0])>, std::string_view>) {
          constexpr auto Len = detail::variant_ids_string_len<T>;
-         auto& static_arr = detail::make_static<detail::variant_ids_joined<T, Len>>::value;
-         return std::string_view{static_arr.data(), Len};
+         constexpr auto& arr = detail::variant_ids_joined<T, Len>;
+         return std::string_view{arr.data(), Len};
       }
       else {
          return std::string_view{};

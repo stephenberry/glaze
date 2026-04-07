@@ -505,6 +505,18 @@ namespace glz
        * Default: 0 (unlimited)
        */
       uint32_t max_requests_per_connection = 0;
+
+      /**
+       * @brief Maximum allowed request body size in bytes
+       *
+       * Requests whose Content-Length exceeds this limit are rejected with
+       * HTTP 413 (Payload Too Large) before the body is allocated or read.
+       * Only applies to Content-Length-based requests (the server does not
+       * currently support chunked request Transfer-Encoding).
+       * Set to 0 for no limit.
+       * Default: 100 MB
+       */
+      size_t max_request_body_size = http_default_max_body_size;
    };
 
    // Server implementation using non-blocking asio with WebSocket support
@@ -1358,6 +1370,17 @@ namespace glz
          return *this;
       }
 
+      // Set maximum request body size in bytes (0 = unlimited).
+      // Requests exceeding this are rejected with HTTP 413.
+      // Must be configured before starting the server; not safe to change while serving.
+      inline http_server& max_request_body_size(size_t max_size)
+      {
+         conn_config_.max_request_body_size = max_size;
+         return *this;
+      }
+
+      size_t max_request_body_size() const { return conn_config_.max_request_body_size; }
+
       /**
        * @brief Wait for a shutdown signal
        *
@@ -1728,6 +1751,12 @@ namespace glz
                send_error_response_with_close(conn, 400, "Bad Request");
                return;
             }
+         }
+
+         // Reject oversized request bodies before allocating memory
+         if (conn_config_.max_request_body_size > 0 && content_length > conn_config_.max_request_body_size) {
+            send_error_response_with_close(conn, 413, "Payload Too Large");
+            return;
          }
 
          // Body bytes in the buffer start at headers_end
