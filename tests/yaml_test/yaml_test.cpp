@@ -294,6 +294,22 @@ struct glz::meta<yaml_skip_if_struct>
    }
 };
 
+// Struct for empty array tests
+struct yaml_empty_array_struct
+{
+   std::string name{"hello"};
+   std::vector<int> items{};
+   bool operator==(const yaml_empty_array_struct&) const = default;
+};
+
+struct yaml_multi_empty_arrays_struct
+{
+   std::vector<int> a{};
+   std::vector<std::string> b{};
+   int x{42};
+   bool operator==(const yaml_multi_empty_arrays_struct&) const = default;
+};
+
 suite yaml_write_tests = [] {
    "write_simple_struct"_test = [] {
       simple_struct obj{42, 3.14, "test"};
@@ -8148,6 +8164,44 @@ suite yaml_custom_write_tests = [] {
       ec = glz::read_yaml(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       expect(parsed == outer);
+   };
+};
+
+suite yaml_empty_array_tests = [] {
+   "empty_array_field_inline"_test = [] {
+      yaml_empty_array_struct obj{};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml == "name: hello\nitems: []\n") << yaml;
+   };
+
+   "empty_array_field_roundtrip"_test = [] {
+      yaml_empty_array_struct original{};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      yaml_empty_array_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "non_empty_array_field_unchanged"_test = [] {
+      yaml_empty_array_struct obj{"hello", {1, 2, 3}};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml == "name: hello\nitems:\n  - 1\n  - 2\n  - 3\n") << yaml;
+   };
+
+   "multiple_empty_arrays"_test = [] {
+      yaml_multi_empty_arrays_struct obj{};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml == "a: []\nb: []\nx: 42\n") << yaml;
    };
 };
 

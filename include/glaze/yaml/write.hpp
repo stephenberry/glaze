@@ -912,6 +912,19 @@ namespace glz
             dump(key, b, ix);
             dump(':', b, ix);
 
+            // Handle empty containers inline (before type dispatch)
+            if constexpr (range<val_t> && !str_t<val_t> && !is_simple_type<val_t>() && has_empty<val_t>) {
+               if (member.empty()) {
+                  if constexpr (writable_map_t<val_t>) {
+                     dump(" {}\n", b, ix);
+                  }
+                  else {
+                     dump(" []\n", b, ix);
+                  }
+                  return;
+               }
+            }
+
             if constexpr (is_simple_type<val_t>()) {
                // Simple types go on same line
                dump(' ', b, ix);
@@ -994,18 +1007,6 @@ namespace glz
             }
             else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> ||
                                reflectable<val_t>) {
-               // Complex types (containers, objects): empty on same line, non-empty on next line
-               bool wrote_empty = false;
-               if constexpr (writable_map_t<val_t>) {
-                  if (member.empty()) {
-                     dump(" {}\n", b, ix);
-                     wrote_empty = true;
-                  }
-               }
-               if (wrote_empty) {
-                  return;
-               }
-
                // Complex types go on next line with increased indent
                dump('\n', b, ix);
 
