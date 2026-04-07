@@ -721,7 +721,7 @@ namespace glz
                constexpr auto num_bytes = (N + 7) / 8;
                std::array<uint8_t, num_bytes> bytes{};
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
-                  for (size_t bit_i = 7; bit_i < 8 && i < N; --bit_i, ++i) {
+                  for (size_t bit_i = 0; bit_i < 8 && i < N; ++bit_i, ++i) {
                      bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
                }
@@ -737,7 +737,7 @@ namespace glz
                }
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                   uint8_t byte{};
-                  for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
+                  for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
                      byte |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
                   dump_type(ctx, byte, b, ix);

@@ -1580,6 +1580,129 @@ void container_types()
       expect(!glz::read_beve(vec2, buffer));
       expect(vec == vec2);
    };
+   "vector bool LSB-first spec compliance"_test = [] {
+      // BEVE spec: bits are packed per byte in LSB-first order.
+      // bit 0 (least-significant) corresponds to the lowest array index for that byte.
+      // [true, false, true] -> 0b00000101 = 0x05
+      {
+         std::vector<bool> vec{true, false, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         // buffer[0] = header, buffer[1] = compressed size (3 << 2 = 12)
+         expect(buffer.size() == 3u);
+         expect(uint8_t(buffer[2]) == 0x05u);
+      }
+      // [true] -> 0b00000001 = 0x01
+      {
+         std::vector<bool> vec{true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 3u);
+         expect(uint8_t(buffer[2]) == 0x01u);
+      }
+      // [false, true] -> 0b00000010 = 0x02
+      {
+         std::vector<bool> vec{false, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 3u);
+         expect(uint8_t(buffer[2]) == 0x02u);
+      }
+      // 8 bools: [true, false, true, true, false, true, false, true] -> 0b10101101 = 0xAD
+      {
+         std::vector<bool> vec{true, false, true, true, false, true, false, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 3u);
+         expect(uint8_t(buffer[2]) == 0xADu);
+      }
+      // 9 bools span two bytes: [true, true, true, true, true, true, true, true, true]
+      // byte 0: 0b11111111 = 0xFF, byte 1: 0b00000001 = 0x01
+      {
+         std::vector<bool> vec{true, true, true, true, true, true, true, true, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 4u);
+         expect(uint8_t(buffer[2]) == 0xFFu);
+         expect(uint8_t(buffer[3]) == 0x01u);
+      }
+      // Verify read also decodes LSB-first correctly
+      {
+         std::vector<bool> vec{true, false, true, true, false};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::vector<bool> vec2{};
+         expect(not glz::read_beve(vec2, buffer));
+         expect(vec2.size() == 5u);
+         expect(vec2[0] == true);
+         expect(vec2[1] == false);
+         expect(vec2[2] == true);
+         expect(vec2[3] == true);
+         expect(vec2[4] == false);
+      }
+      // Empty vector
+      {
+         std::vector<bool> vec{};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         expect(buffer.size() == 2u); // header + compressed size (0)
+         std::vector<bool> vec2{};
+         expect(not glz::read_beve(vec2, buffer));
+         expect(vec2.empty());
+      }
+   };
+   "set<bool> read via set-type reader path"_test = [] {
+      // std::set<bool> uses the emplaceable (non-resizable) reader path.
+      // Write with vector, read into set to exercise that code path.
+      {
+         std::vector<bool> vec{true, false};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.size() == 2u);
+         expect(s.contains(true));
+         expect(s.contains(false));
+      }
+      {
+         std::vector<bool> vec{true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.size() == 1u);
+         expect(s.contains(true));
+      }
+      {
+         std::vector<bool> vec{false};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.size() == 1u);
+         expect(s.contains(false));
+      }
+      // Empty
+      {
+         std::vector<bool> vec{};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.empty());
+      }
+      // Multiple values: set deduplicates, but reader must still parse all bytes
+      {
+         std::vector<bool> vec{true, false, true, true, false, true, false, true, true};
+         std::string buffer{};
+         expect(not glz::write_beve(vec, buffer));
+         std::set<bool> s{};
+         expect(not glz::read_beve(s, buffer));
+         expect(s.size() == 2u);
+         expect(s.contains(true));
+         expect(s.contains(false));
+      }
+   };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
       for (auto& item : deq) item = rand();
