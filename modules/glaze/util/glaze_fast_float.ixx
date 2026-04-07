@@ -1,19 +1,20 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+module;
+#include <cstdint>
 export module glaze.util.glaze_fast_float;
-
-// This is an adapter to speed up the parsing portion of the fast_float conversion
 
 import std;
 
 import glaze.util.fast_float;
 
-#include <cstdint>
 #include "glaze/util/inline.hpp"
 
 using std::int64_t;
 using std::uint64_t;
 using std::size_t;
+
+// This is an adapter to speed up the parsing portion of the fast_float conversion
 
 export namespace glz
 {
