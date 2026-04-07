@@ -1413,7 +1413,7 @@ namespace glz
       std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
       std::vector<std::thread> threads;
       http_router root_router;
-      bool running = false;
+      std::atomic<bool> running{false};
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
