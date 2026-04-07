@@ -346,7 +346,7 @@ suite eetf_to_json_tests = [] {
 
       expect(!glz::eetf_to_json<glz::opts{.prettify = true}>(buffer, json));
       expect(json ==
-R"({
+             R"({
    "first": 1,
    "second": 2,
    "third": 3
