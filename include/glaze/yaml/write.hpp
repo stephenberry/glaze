@@ -992,26 +992,32 @@ namespace glz
                   }
                }
             }
-            else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> ||
+            else if constexpr (writable_array_t<val_t>) {
+               // Arrays: empty on same line, non-empty on next line
+               if constexpr (requires { member.empty(); }) {
+                  if (member.empty()) {
+                     dump(" []\n", b, ix);
+                     return;
+                  }
+               }
+               dump('\n', b, ix);
+               if constexpr (requires { ctx.indent_level; }) {
+                  auto nested_ctx = ctx;
+                  nested_ctx.indent_level = indent_level + 1;
+                  serialize<YAML>::op<Opts>(member, nested_ctx, b, ix);
+               }
+               else {
+                  write_block_mapping_nested<Opts>(member, ctx, b, ix, indent_level + 1);
+               }
+            }
+            else if constexpr (writable_map_t<val_t> || glaze_object_t<val_t> ||
                                reflectable<val_t>) {
-               // Complex types (containers, objects): empty on same line, non-empty on next line
-               bool wrote_empty = false;
+               // Complex types (maps, objects): empty map on same line, non-empty on next line
                if constexpr (writable_map_t<val_t>) {
                   if (member.empty()) {
                      dump(" {}\n", b, ix);
-                     wrote_empty = true;
+                     return;
                   }
-               }
-               else if constexpr (writable_array_t<val_t>) {
-                  if constexpr (requires { member.empty(); }) {
-                     if (member.empty()) {
-                        dump(" []\n", b, ix);
-                        wrote_empty = true;
-                     }
-                  }
-               }
-               if (wrote_empty) {
-                  return;
                }
 
                // Complex types go on next line with increased indent
