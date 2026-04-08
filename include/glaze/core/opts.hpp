@@ -478,6 +478,16 @@ namespace glz
       }
    }
 
+   consteval bool check_skip_default_members(auto&& Opts)
+   {
+      if constexpr (requires { Opts.skip_default_members; }) {
+         return Opts.skip_default_members;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_shrink_to_fit(auto&& Opts)
    {
       if constexpr (requires { Opts.shrink_to_fit; }) {

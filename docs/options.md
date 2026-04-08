@@ -62,6 +62,7 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `size_t max_string_length` | `0` | Maximum string length when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `size_t max_array_size` | `0` | Maximum array size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
+| `bool skip_default_members` | `false` | Skip writing members with default values (empty strings, empty containers, zero numbers, false bools) |
 | `bool allocate_raw_pointers` | `false` | Allocate memory for null raw pointers during deserialization. See also [Runtime Control](security.md#runtime-raw-pointer-allocation-control). |
 
 ### CSV Options (`glz::opts_csv`)
@@ -211,6 +212,36 @@ auto result = glz::write<fast_opts{}>(obj, large_buffer);
 
 #### `skip_null_members`
 When `true` (default), null values are omitted from JSON output. This applies to nullable types like `std::optional`, `std::shared_ptr`, `std::unique_ptr`, and raw pointers (`T*`).
+
+#### `skip_default_members` (Inheritable)
+When `true`, members with default values are omitted from serialized output. This provides a high-level alternative to writing per-type `skip_if` logic for common cases. A value is considered "default" when:
+
+- **Strings**: empty (`""`)
+- **Numbers** (int, float): zero (`0`)
+- **Booleans**: `false`
+- **Containers** (vector, map, set, etc.): empty
+
+This option works across all formats (JSON, BEVE, CBOR, YAML). It is independent from `skip_null_members` (which handles nullable types like `std::optional` and pointers) and can be combined with `skip` / `skip_if` for maximum control.
+
+```cpp
+struct my_opts : glz::opts {
+   bool skip_default_members = true;
+};
+
+struct player {
+   std::string name{};
+   int score{};
+   std::vector<std::string> achievements{};
+   bool premium{};
+};
+
+player p{.name = "Alice", .score = 0, .achievements = {}, .premium = false};
+auto json = glz::write<my_opts{}>(p).value_or("error");
+// Output: {"name":"Alice"}
+// score (0), achievements (empty), and premium (false) are skipped
+```
+
+See also [Skip Keys](skip-keys.md) for per-field skip control.
 
 #### `prettify`
 When `true`, outputs formatted JSON with indentation and newlines.

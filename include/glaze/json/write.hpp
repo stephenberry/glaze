@@ -2200,6 +2200,18 @@ namespace glz
                         if (is_glaze_value_field_null<T, I>(value, t)) return;
                      }
 
+                     if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
+                        decltype(auto) member = [&]() -> decltype(auto) {
+                           if constexpr (reflectable<T>) {
+                              return get_member(value, get<I>(t));
+                           }
+                           else {
+                              return get_member(value, get<I>(reflect<T>::values));
+                           }
+                        }();
+                        if (is_default_value(member)) return;
+                     }
+
                      if constexpr (Opts.prettify) {
                         if (!ensure_space(ctx, b, ix + padding + ctx.depth)) [[unlikely]] {
                            return;
