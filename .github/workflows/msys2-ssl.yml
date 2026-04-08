@@ -60,9 +60,7 @@ jobs:
           utf8_test \
           https_test
 
-    # Configure Windows Error Reporting to create full crash dumps.
-    # This is completely non-intrusive — WER only activates AFTER the crash,
-    # so it doesn't affect timing or memory layout like GDB/Page Heap do.
+    # Configure WER crash dumps before running tests
     - name: Configure crash dumps (WER)
       shell: pwsh
       run: |
@@ -70,56 +68,73 @@ jobs:
         New-Item -Path $dumpPath -ItemType Directory -Force | Out-Null
         $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
         New-Item -Path $regPath -Force | Out-Null
-        Set-ItemProperty -Path $regPath -Name "DumpType" -Value 2 -Type DWord          # 2 = Full dump
+        Set-ItemProperty -Path $regPath -Name "DumpType" -Value 2 -Type DWord
         Set-ItemProperty -Path $regPath -Name "DumpFolder" -Value $dumpPath -Type ExpandString
         Set-ItemProperty -Path $regPath -Name "DumpCount" -Value 10 -Type DWord
         Write-Host "WER crash dumps configured at $dumpPath"
 
-    # Run the crashing test natively (no GDB, no Page Heap)
-    - name: Run http_client_test (native)
+    # Run http_client_test up to 50 times — stop on first crash
+    - name: "Repeat: http_client_test (up to 50x)"
       working-directory: build
       run: |
-        echo "Running http_client_test natively to reproduce crash..."
-        ctest --output-on-failure -R "^http_client_test$" || true
+        echo "Running http_client_test repeatedly until crash or 50 passes..."
+        for i in $(seq 1 50); do
+          echo -n "Run $i/50: "
+          if ! ctest --output-on-failure -R "^http_client_test$" 2>&1 | tail -1; then
+            echo "CRASHED on run $i"
+            break
+          fi
+          if [ $i -eq 50 ]; then
+            echo "All 50 runs passed (crash did not reproduce)"
+          fi
+        done
 
-    - name: Run mingw_ssl_diag (native)
+    # Run mingw_ssl_diag up to 50 times
+    - name: "Repeat: mingw_ssl_diag (up to 50x)"
       working-directory: build
       run: |
-        ctest --output-on-failure -R "^mingw_ssl_diag$" || true
+        echo "Running mingw_ssl_diag repeatedly until crash or 50 passes..."
+        for i in $(seq 1 50); do
+          echo -n "Run $i/50: "
+          if ! ctest --output-on-failure -R "^mingw_ssl_diag$" 2>&1 | tail -1; then
+            echo "CRASHED on run $i"
+            break
+          fi
+          if [ $i -eq 50 ]; then
+            echo "All 50 runs passed (crash did not reproduce)"
+          fi
+        done
 
-    # Analyze any crash dumps that were created
+    # Check for and analyze any crash dumps
     - name: Analyze crash dumps
+      if: always()
       shell: pwsh
       run: |
         $dumps = Get-ChildItem -Path "D:\CrashDumps" -Filter "*.dmp" -ErrorAction SilentlyContinue
         if ($dumps) {
           Write-Host "=== Found $($dumps.Count) crash dump(s) ==="
           foreach ($dump in $dumps) {
-            Write-Host ""
-            Write-Host "=== Dump: $($dump.Name) ($('{0:N0}' -f ($dump.Length / 1MB)) MB) ==="
-            Write-Host ""
+            Write-Host "  $($dump.Name) — $('{0:N1}' -f ($dump.Length / 1MB)) MB"
           }
         } else {
-          Write-Host "No crash dumps found — WER may not have triggered."
-          Write-Host "Listing D:\CrashDumps contents:"
-          Get-ChildItem -Path "D:\CrashDumps" -ErrorAction SilentlyContinue | Format-Table
+          Write-Host "No crash dumps captured."
         }
 
-    - name: GDB post-mortem analysis
+    - name: GDB post-mortem
       if: always()
       run: |
-        echo "=== Checking for crash dumps ==="
-        ls -la /d/CrashDumps/ 2>/dev/null || echo "No dumps directory"
-
+        found=0
         for dump in /d/CrashDumps/*.dmp; do
           [ -f "$dump" ] || continue
+          found=1
           echo ""
-          echo "=== Analyzing: $dump ==="
+          echo "========================================="
+          echo "=== Analyzing: $dump"
+          echo "========================================="
           echo ""
-          # Load the dump in gdb for post-mortem analysis
           gdb -batch \
             -ex "target mini $dump" \
-            -ex "echo === CRASHING THREAD BACKTRACE ===\n" \
+            -ex "echo === CRASHING THREAD ===\n" \
             -ex "bt" \
             -ex "echo \n=== ALL THREADS ===\n" \
             -ex "thread apply all bt" \
@@ -127,8 +142,12 @@ jobs:
             -ex "info registers" \
             -ex "quit" \
             tests/networking_tests/http_client_test/http_client_test.exe \
-            2>&1 || echo "gdb analysis failed for $dump"
+            2>&1 || echo "(gdb analysis failed)"
         done
+
+        if [ $found -eq 0 ]; then
+          echo "No crash dumps to analyze."
+        fi
 
     - name: Run remaining tests
       if: always()
