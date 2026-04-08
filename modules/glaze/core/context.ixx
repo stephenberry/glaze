@@ -122,6 +122,7 @@ namespace glz
       std::string current_file; // top level file path
       // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
       // because debuggers like jumping to std::string_view initialization calls
+      std::string scratch{};
    };
 
    // Concept for any context type (base or streaming)
