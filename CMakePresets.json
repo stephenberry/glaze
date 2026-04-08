@@ -123,10 +123,7 @@
    },
    {
       "name": "x64-build",
-      "configurePreset": "x64",
-      "targets": [
-         "beve_test"
-      ]
+      "configurePreset": "x64"
    }
   ],
   "testPresets": [
