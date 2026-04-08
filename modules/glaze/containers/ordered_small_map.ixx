@@ -1,22 +1,13 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.containers.ordered_small_map;
 
-#pragma once
+import std;
 
-#include <algorithm>
-#include <concepts>
-#include <cstdlib>
-#include <cstring>
-#include <limits>
-#include <memory>
-#include <new>
-#include <stdexcept>
-#include <string>
-#include <string_view>
-#include <tuple>
-#include <utility>
+import glaze.hash.sweethash;
 
-#include "glaze/hash/sweethash.hpp"
+using std::uint8_t;
+using std::uint32_t;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -41,7 +32,7 @@
 
 namespace glz
 {
-   template <class T>
+   export template <class T>
    struct ordered_small_map
    {
       using key_type = std::string;

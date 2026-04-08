@@ -414,7 +414,7 @@ namespace glz
       }
    }
 
-   template <class T>
+   export template <class T>
    inline constexpr auto member_names =
       [] { return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>>{}); }();
 

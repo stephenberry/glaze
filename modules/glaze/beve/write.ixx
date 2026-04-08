@@ -9,6 +9,7 @@ import glaze.beve.key_traits;
 
 import glaze.core.buffer_traits;
 import glaze.core.common;
+import glaze.core.custom;
 import glaze.core.context;
 import glaze.core.opts;
 import glaze.core.reflect;

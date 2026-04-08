@@ -5,6 +5,7 @@ module;
 export module glaze.thread.shared_async_map;
 
 import std;
+import glaze.core.traits;
 
 import glaze.thread.value_proxy;
 import glaze.util.expected;

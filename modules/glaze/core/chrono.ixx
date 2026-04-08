@@ -4,6 +4,8 @@ export module glaze.core.chrono;
 
 import std;
 
+import glaze.core.traits;
+
 export namespace glz
 {
    // Concept for std::chrono::duration types

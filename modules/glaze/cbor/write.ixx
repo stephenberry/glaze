@@ -11,6 +11,7 @@ import glaze.core.to;
 import glaze.core.write;
 import glaze.core.context;
 import glaze.core.common;
+import glaze.core.custom;
 import glaze.core.meta;
 import glaze.reflection.to_tuple;
 import glaze.concepts.container_concepts;

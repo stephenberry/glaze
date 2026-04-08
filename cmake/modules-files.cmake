@@ -1,4 +1,4 @@
-## TODO: sort in the alphabetic order
+## TODO: sort
 
 
 # Top-level
@@ -48,7 +48,8 @@ target_sources(glaze_glaze
       modules/glaze/core/std_error_code.ixx
       modules/glaze/core/streaming_state.ixx
       modules/glaze/core/to.ixx
-      
+      modules/glaze/core/traits.ixx
+
       modules/glaze/core/wrapper_traits.ixx
       modules/glaze/core/write.ixx
       modules/glaze/core/write_chars.ixx
@@ -97,7 +98,6 @@ target_sources(glaze_glaze
     modules/glaze/util/parse.ixx
     modules/glaze/util/atoi.ixx
     modules/glaze/util/for_each.ixx
-    modules/glaze/util/utility.ixx
     modules/glaze/util/type_traits.ixx
     modules/glaze/util/bit.ixx
     modules/glaze/util/compare.ixx
@@ -267,6 +267,7 @@ target_sources(glaze_glaze
     FILES
     modules/glaze/containers/flat_map.ixx
     modules/glaze/containers/inplace_vector.ixx
+    modules/glaze/containers/ordered_small_map.ixx
 )
 
 # hardware
@@ -374,4 +375,12 @@ target_sources(glaze_glaze
     modules/glaze/toml/read.ixx
     modules/glaze/toml/skip.ixx
     modules/glaze/toml/write.ixx
+)
+
+# hash
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/hash/sweethash.ixx
 )

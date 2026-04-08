@@ -46,6 +46,7 @@ export module glaze.thread.guard;
 
 import std;
 import glaze.thread.atomic;
+import glaze.core.traits;
 
 namespace glz
 {

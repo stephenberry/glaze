@@ -3,6 +3,7 @@
 export module glaze.thread.async_vector;
 
 import std;
+import glaze.core.traits;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions

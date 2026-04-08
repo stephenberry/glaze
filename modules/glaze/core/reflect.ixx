@@ -499,7 +499,7 @@ namespace glz
       }
    }
 
-   template <auto Opts, class T>
+   export template <auto Opts, class T>
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
          constexpr auto N = reflect<T>::size;
@@ -659,7 +659,7 @@ namespace glz
       return custom_getter_is_null(custom_val, ctx);
    }
 
-   template <class T, auto Opts>
+   export template <class T, auto Opts>
    constexpr auto required_fields()
    {
       constexpr auto N = reflect<T>::size;

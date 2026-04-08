@@ -21,6 +21,7 @@ import glaze.concepts.container_concepts;
 
 import glaze.api.std.string;
 import glaze.api.std.variant;
+import glaze.containers.ordered_small_map;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions

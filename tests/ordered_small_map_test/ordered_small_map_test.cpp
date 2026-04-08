@@ -1,14 +1,10 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/containers/ordered_small_map.hpp"
+import std;
+import ut;
 
-#include <iostream>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-#include "ut/ut.hpp"
+import glaze.containers.ordered_small_map;
 
 using namespace ut;
 

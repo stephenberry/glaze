@@ -1,18 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 // sweethash - High performance string hashing
 // sweet32 and sweet64 hash algorithms using SWAR (8 bytes at a time)
 // Developed by Stephen Berry
+export module glaze.hash.sweethash;
 
-#pragma once
+import std;
 
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
 
-namespace glz::sweethash
+export namespace glz::sweethash
 {
 
    template <class T>

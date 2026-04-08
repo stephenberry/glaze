@@ -6,6 +6,7 @@ import std;
 import glaze.core.common;
 import glaze.core.context;
 import glaze.core.opts;
+import glaze.core.traits;
 
 // Provides a thread safe wrapper around a std::string, which Glaze knows how to serialize/deserialize safely
 
@@ -785,7 +786,6 @@ export namespace glz
 
 // Allow formatting via std::format
 #ifdef __cpp_lib_format
-#include <format>
 export namespace std
 {
    template <>

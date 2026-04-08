@@ -4,6 +4,7 @@ export module glaze.thread.async;
 
 import std;
 import glaze.util.type_traits;
+import glaze.core.traits;
 
 // The purpose of glz::async is to create a thread-safe wrapper around a type
 // The only way to access the data is by supplying lambdas to `read` or `write`

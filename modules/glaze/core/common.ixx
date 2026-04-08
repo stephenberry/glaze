@@ -8,6 +8,7 @@ import glaze.core.context;
 import glaze.core.array_apply;
 import glaze.core.cast;
 import glaze.core.meta;
+import glaze.core.traits;
 import glaze.reflection.requires_key;
 
 import glaze.concepts.container_concepts;
@@ -21,7 +22,6 @@ import glaze.util.help;
 import glaze.util.string_literal;
 import glaze.util.tuple;
 import glaze.util.type_traits;
-import glaze.util.utility;
 import glaze.util.variant;
 
 #include "glaze/core/feature_test.hpp"
@@ -243,7 +243,7 @@ namespace glz
       { t.has_value() } -> std::convertible_to<bool>;
    };
 
-   template <class T>
+   export template <class T>
    concept str_t = (!std::same_as<std::nullptr_t, T> && !has_value_method<T> &&
                     std::constructible_from<std::string_view, std::decay_t<T>>) ||
                    array_char_t<T> || u8str_t<T>;
@@ -444,23 +444,23 @@ namespace glz
    // Marker type for P2996 automatic enum reflection
    // Usage: template<> struct glz::meta<MyEnum> : glz::reflect_enum {};
    // Can combine with name transformers: struct glz::meta<MyEnum> : glz::reflect_enum, glz::snake_case {};
-   struct reflect_enum
+   export struct reflect_enum
    {
       static constexpr bool glaze_reflect_enum = true;
    };
 
    // Concept to detect enums using P2996 reflection (only available with GLZ_REFLECTION26)
 #if GLZ_REFLECTION26
-   template <class T>
+   export template <class T>
    concept is_reflect_enum =
       std::is_enum_v<std::remove_cvref_t<T>> && requires { requires meta<std::remove_cvref_t<T>>::glaze_reflect_enum; };
 #else
-   template <class T>
+   export template <class T>
    concept is_reflect_enum = false;
 #endif
 
    // Note: is_reflect_enum is handled separately because P2996 requires inline consteval context
-   template <class T>
+   export template <class T>
    concept is_named_enum = ((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_read<T>);
 
    export template <class T>
@@ -500,7 +500,7 @@ namespace glz
 
    // P2996 can reflect any class, but we must exclude types with their own Glaze specializations.
    // Types with custom serialization should specialize glz::specified<T> to std::true_type.
-   template <class T>
+   export template <class T>
    concept reflectable = std::is_class_v<std::remove_cvref_t<T>> &&
                          !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> || range<T> || pair_t<T> || null_t<T> ||
                            str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);
@@ -509,7 +509,7 @@ namespace glz
    // These exclusions handle aggregate types that shouldn't be reflected as objects:
    // str_t: aggregate string-like types, tuple_t: std::array and custom tuple-like aggregates,
    // func_t: aggregate callables, is_specified: types with explicit serialization.
-   template <class T>
+   export template <class T>
    concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
                          !(is_no_reflect<T> || glaze_t<T> || meta_keys<T> || range<T> || pair_t<T> || null_t<T> ||
                            str_t<T> || bool_t<T> || tuple_t<T> || func_t<T> || is_specified<T>);

@@ -4,8 +4,6 @@ export module glaze.util.for_each;
 
 import std;
 
-import glaze.util.utility;
-
 #include "glaze/util/inline.hpp"
 
 // We do not mark these functions noexcept so that it can be used in exception contexts

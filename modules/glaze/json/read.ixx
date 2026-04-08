@@ -29,7 +29,6 @@ import glaze.util.parse;
 import glaze.util.atoi;
 import glaze.util.expected;
 import glaze.util.tuple;
-import glaze.util.utility;
 import glaze.util.bit_array;
 
 import glaze.core.streaming_state;
