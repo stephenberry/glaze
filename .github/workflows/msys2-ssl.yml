@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/*
+      - debug/*
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
@@ -38,7 +39,6 @@ jobs:
           mingw-w64-x86_64-openssl
           mingw-w64-x86_64-gdb
 
-    # Build Release with debug symbols so GDB backtraces show line numbers
     - name: Configure CMake
       run: |
         cmake -S . -B build \
@@ -60,39 +60,78 @@ jobs:
           utf8_test \
           https_test
 
-    # Run under GDB to get a backtrace on crash
-    - name: "GDB: http_client_test"
-      working-directory: build
+    # Configure Windows Error Reporting to create full crash dumps.
+    # This is completely non-intrusive — WER only activates AFTER the crash,
+    # so it doesn't affect timing or memory layout like GDB/Page Heap do.
+    - name: Configure crash dumps (WER)
+      shell: pwsh
       run: |
-        echo "Running http_client_test under GDB to capture crash backtrace..."
-        gdb -batch \
-          -ex "set print thread-events off" \
-          -ex "run" \
-          -ex "echo \n=== CRASH BACKTRACE ===\n" \
-          -ex "bt full" \
-          -ex "echo \n=== ALL THREADS ===\n" \
-          -ex "thread apply all bt" \
-          -ex "quit" \
-          --args tests/networking_tests/http_client_test/http_client_test.exe \
-          2>&1 || true
+        $dumpPath = "D:\CrashDumps"
+        New-Item -Path $dumpPath -ItemType Directory -Force | Out-Null
+        $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
+        New-Item -Path $regPath -Force | Out-Null
+        Set-ItemProperty -Path $regPath -Name "DumpType" -Value 2 -Type DWord          # 2 = Full dump
+        Set-ItemProperty -Path $regPath -Name "DumpFolder" -Value $dumpPath -Type ExpandString
+        Set-ItemProperty -Path $regPath -Name "DumpCount" -Value 10 -Type DWord
+        Write-Host "WER crash dumps configured at $dumpPath"
 
-    - name: "GDB: mingw_ssl_diag"
+    # Run the crashing test natively (no GDB, no Page Heap)
+    - name: Run http_client_test (native)
       working-directory: build
       run: |
-        echo "Running mingw_ssl_diag under GDB..."
-        gdb -batch \
-          -ex "set print thread-events off" \
-          -ex "run" \
-          -ex "echo \n=== CRASH BACKTRACE ===\n" \
-          -ex "bt full" \
-          -ex "echo \n=== ALL THREADS ===\n" \
-          -ex "thread apply all bt" \
-          -ex "quit" \
-          --args tests/networking_tests/mingw_ssl_diag/mingw_ssl_diag.exe \
-          2>&1 || true
+        echo "Running http_client_test natively to reproduce crash..."
+        ctest --output-on-failure -R "^http_client_test$" || true
+
+    - name: Run mingw_ssl_diag (native)
+      working-directory: build
+      run: |
+        ctest --output-on-failure -R "^mingw_ssl_diag$" || true
+
+    # Analyze any crash dumps that were created
+    - name: Analyze crash dumps
+      shell: pwsh
+      run: |
+        $dumps = Get-ChildItem -Path "D:\CrashDumps" -Filter "*.dmp" -ErrorAction SilentlyContinue
+        if ($dumps) {
+          Write-Host "=== Found $($dumps.Count) crash dump(s) ==="
+          foreach ($dump in $dumps) {
+            Write-Host ""
+            Write-Host "=== Dump: $($dump.Name) ($('{0:N0}' -f ($dump.Length / 1MB)) MB) ==="
+            Write-Host ""
+          }
+        } else {
+          Write-Host "No crash dumps found — WER may not have triggered."
+          Write-Host "Listing D:\CrashDumps contents:"
+          Get-ChildItem -Path "D:\CrashDumps" -ErrorAction SilentlyContinue | Format-Table
+        }
+
+    - name: GDB post-mortem analysis
+      if: always()
+      run: |
+        echo "=== Checking for crash dumps ==="
+        ls -la /d/CrashDumps/ 2>/dev/null || echo "No dumps directory"
+
+        for dump in /d/CrashDumps/*.dmp; do
+          [ -f "$dump" ] || continue
+          echo ""
+          echo "=== Analyzing: $dump ==="
+          echo ""
+          # Load the dump in gdb for post-mortem analysis
+          gdb -batch \
+            -ex "target mini $dump" \
+            -ex "echo === CRASHING THREAD BACKTRACE ===\n" \
+            -ex "bt" \
+            -ex "echo \n=== ALL THREADS ===\n" \
+            -ex "thread apply all bt" \
+            -ex "echo \n=== REGISTERS ===\n" \
+            -ex "info registers" \
+            -ex "quit" \
+            tests/networking_tests/http_client_test/http_client_test.exe \
+            2>&1 || echo "gdb analysis failed for $dump"
+        done
 
     - name: Run remaining tests
-      working-directory: build
+      if: always()
       run: |
         ctest --output-on-failure -R \
           "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test)$"
