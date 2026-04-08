@@ -491,8 +491,7 @@ ut::suite stale_optional_jsonrpc_regression = [] {
          << "optional fields must not persist: " << response;
 
       // Call 3: only one optional present
-      response = server.call(
-         R"({"jsonrpc":"2.0","method":"cmd","params":{"action":"third","priority":10},"id":3})");
+      response = server.call(R"({"jsonrpc":"2.0","method":"cmd","params":{"action":"third","priority":10},"id":3})");
       ut::expect(response == R"({"jsonrpc":"2.0","result":{"had_priority":true,"had_label":false},"id":3})")
          << "only priority should be set: " << response;
    };
