@@ -1,7 +1,5 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
-module;
-#include <cstdint>
 export module glaze.util.glaze_fast_float;
 
 import std;
