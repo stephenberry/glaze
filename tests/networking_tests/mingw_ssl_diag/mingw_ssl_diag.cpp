@@ -1,11 +1,10 @@
 // Minimal diagnostic test for MinGW + SSL heap corruption (issue #2411)
 //
 // Isolates each layer to find where heap corruption originates:
-//   1. Raw OpenSSL context create/destroy
-//   2. ASIO SSL context create/destroy
-//   3. http_client create/destroy (no requests)
-//   4. http_client with a single HTTP GET (non-SSL, but SSL compiled in)
-//   5. Multiple http_client lifecycles
+//   Phase 1-3: Basic lifecycle (OpenSSL, ASIO SSL, http_client)
+//   Phase 4-7: HTTP operations (single, repeated, connection reuse, concurrent)
+//   Phase 8-11: Stress tests targeting race conditions in create/destroy
+//               with active requests, rapid cycling, and concurrent clients
 
 #ifndef GLZ_ENABLE_SSL
 #define GLZ_ENABLE_SSL
@@ -15,6 +14,7 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <vector>
 
 #include <openssl/err.h>
 #include <openssl/ssl.h>
@@ -36,6 +36,12 @@ class diag_server
    bool start()
    {
       server_.get("/ping", [](const glz::request&, glz::response& res) { res.status(200).body("pong"); });
+
+      // Slow endpoint to keep requests in-flight during destruction
+      server_.get("/slow", [](const glz::request&, glz::response& res) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(200));
+         res.status(200).body("slow");
+      });
 
       for (uint16_t p = 19200; p < 19300; ++p) {
          try {
@@ -113,7 +119,6 @@ suite mingw_ssl_diag = [] {
          asio::ssl::context ctx(asio::ssl::context::tls_client);
          asio::error_code ec;
          ctx.set_default_verify_paths(ec);
-         // Don't fail on verify path errors - some CI environments lack system CA certs
          ctx.set_verify_mode(asio::ssl::verify_peer);
       }
 
@@ -126,7 +131,6 @@ suite mingw_ssl_diag = [] {
 
       for (int i = 0; i < 5; ++i) {
          glz::http_client client;
-         // Just create and destroy - no requests
       }
 
       std::cout << "[phase3] OK - http_client lifecycle without requests" << std::endl;
@@ -188,7 +192,7 @@ suite mingw_ssl_diag = [] {
       std::cout << "[phase6] OK - multiple requests on single client" << std::endl;
    };
 
-   // Phase 7: Concurrent requests
+   // Phase 7: Concurrent async requests
    "phase7_http_client_concurrent"_test = [] {
       std::cout << "[phase7] Concurrent async requests..." << std::endl;
 
@@ -213,7 +217,6 @@ suite mingw_ssl_diag = [] {
                              });
          }
 
-         // Wait for all to complete
          for (int i = 0; i < 100 && completed + errors < N; ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
          }
@@ -225,6 +228,126 @@ suite mingw_ssl_diag = [] {
 
       server.stop();
       std::cout << "[phase7] OK - concurrent requests" << std::endl;
+   };
+
+   // Phase 8: Destroy client while async requests are in-flight
+   // This is the most likely race condition: worker threads processing
+   // completions while the destructor tears down the io_context.
+   "phase8_destroy_with_inflight_requests"_test = [] {
+      std::cout << "[phase8] Destroying client with in-flight requests..." << std::endl;
+
+      diag_server server;
+      expect(server.start()) << "Server failed to start";
+
+      for (int round = 0; round < 20; ++round) {
+         glz::http_client client;
+
+         // Fire async requests against the slow endpoint
+         for (int i = 0; i < 5; ++i) {
+            client.get_async(server.url() + "/slow", {}, [](auto) {});
+         }
+
+         // Don't wait — destroy immediately while requests are pending.
+         // The destructor calls stop_workers() which stops io_context and
+         // joins threads. If there's a race, this is where it crashes.
+      }
+
+      server.stop();
+      std::cout << "[phase8] OK - destroy with in-flight requests" << std::endl;
+   };
+
+   // Phase 9: Rapid create/destroy cycling with immediate requests
+   // Stresses the worker thread start/stop path.
+   "phase9_rapid_lifecycle_with_requests"_test = [] {
+      std::cout << "[phase9] Rapid client lifecycle cycling..." << std::endl;
+
+      diag_server server;
+      expect(server.start()) << "Server failed to start";
+
+      for (int round = 0; round < 50; ++round) {
+         glz::http_client client;
+         // Fire one async request then immediately destroy
+         client.get_async(server.url() + "/ping", {}, [](auto) {});
+      }
+
+      server.stop();
+      std::cout << "[phase9] OK - rapid lifecycle cycling" << std::endl;
+   };
+
+   // Phase 10: Multiple clients sharing work concurrently
+   // Each client has its own io_context and worker threads.
+   "phase10_concurrent_clients"_test = [] {
+      std::cout << "[phase10] Multiple concurrent clients..." << std::endl;
+
+      diag_server server;
+      expect(server.start()) << "Server failed to start";
+
+      {
+         constexpr int NUM_CLIENTS = 5;
+         constexpr int REQUESTS_PER_CLIENT = 10;
+         std::vector<std::thread> threads;
+         std::atomic<int> total_success{0};
+         std::atomic<int> total_errors{0};
+
+         for (int c = 0; c < NUM_CLIENTS; ++c) {
+            threads.emplace_back([&]() {
+               glz::http_client client;
+               for (int i = 0; i < REQUESTS_PER_CLIENT; ++i) {
+                  auto result = client.get(server.url() + "/ping");
+                  if (result.has_value() && result->status_code == 200) {
+                     total_success++;
+                  }
+                  else {
+                     total_errors++;
+                  }
+               }
+            });
+         }
+
+         for (auto& t : threads) {
+            t.join();
+         }
+
+         expect(total_errors == 0) << "Concurrent client errors: " << total_errors.load();
+         expect(total_success == NUM_CLIENTS * REQUESTS_PER_CLIENT)
+            << "Expected " << NUM_CLIENTS * REQUESTS_PER_CLIENT << " successes, got " << total_success.load();
+      }
+
+      server.stop();
+      std::cout << "[phase10] OK - concurrent clients" << std::endl;
+   };
+
+   // Phase 11: Mixed sync + async with destruction under load
+   // Combines the most aggressive patterns.
+   "phase11_stress_mixed"_test = [] {
+      std::cout << "[phase11] Mixed stress test..." << std::endl;
+
+      diag_server server;
+      expect(server.start()) << "Server failed to start";
+
+      for (int round = 0; round < 10; ++round) {
+         // Create client, fire a mix of sync and async, destroy
+         glz::http_client client;
+
+         // Sync request
+         auto result = client.get(server.url() + "/ping");
+         (void)result;
+
+         // Fire several async requests against both fast and slow endpoints
+         for (int i = 0; i < 3; ++i) {
+            client.get_async(server.url() + "/ping", {}, [](auto) {});
+            client.get_async(server.url() + "/slow", {}, [](auto) {});
+         }
+
+         // Small random-ish delay to vary the destruction timing
+         if (round % 3 == 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         }
+         // Destroy with mixed pending work
+      }
+
+      server.stop();
+      std::cout << "[phase11] OK - mixed stress test" << std::endl;
    };
 };
 

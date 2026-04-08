@@ -17,8 +17,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: MinGW64 + SSL
+  # Run WITHOUT Page Heap first — this is where the heap corruption reproduces
+  no-pageheap:
+    name: MinGW64 + SSL (no Page Heap)
     runs-on: windows-latest
     defaults:
       run:
@@ -48,42 +49,23 @@ jobs:
     - name: Build
       run: |
         cmake --build build -j $(nproc) --target \
+          mingw_ssl_diag \
+          http_client_test \
           websocket_client_test \
           websocket_close_test \
           wss_test \
           shared_context_bug_test \
           utf8_test \
-          https_test \
-          http_client_test \
-          mingw_ssl_diag
+          https_test
 
-    # Enable Full Page Heap for test executables.
-    # Places each heap allocation on its own page with a guard page so that
-    # buffer overflows / use-after-free crash immediately at the offending
-    # instruction instead of silently corrupting the heap.
-    - name: Enable Page Heap
-      shell: pwsh
-      run: |
-        $exes = @(
-          "http_client_test.exe",
-          "mingw_ssl_diag.exe",
-          "websocket_client_test.exe",
-          "wss_test.exe",
-          "https_test.exe"
-        )
-        foreach ($exe in $exes) {
-          Write-Host "Enabling full page heap for $exe"
-          & reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$exe" /v GlobalFlag /t REG_DWORD /d 0x02000000 /f
-          & reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$exe" /v PageHeapFlags /t REG_DWORD /d 0x3 /f
-        }
-
-    - name: Run diagnostic test
+    - name: Run diagnostic (no Page Heap)
       working-directory: build
       run: |
-        echo "=== MinGW SSL Diagnostic Test ==="
+        echo "=== MinGW SSL Diagnostic — NO Page Heap ==="
+        echo "Heap corruption should reproduce here."
         ctest --output-on-failure -R "^mingw_ssl_diag$" || true
 
-    - name: Run http_client_test
+    - name: Run http_client_test (no Page Heap)
       working-directory: build
       run: |
         ctest --output-on-failure -R "^http_client_test$" || true
@@ -93,3 +75,60 @@ jobs:
       run: |
         ctest --output-on-failure -R \
           "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test)$"
+
+  # Run WITH Page Heap — catches buffer overflows / use-after-free at the
+  # exact instruction, turning deferred 0xc0000374 into immediate 0xc0000005
+  pageheap:
+    name: MinGW64 + SSL (Page Heap)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-openssl
+
+    - name: Configure CMake
+      run: |
+        cmake -S . -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23 \
+          -Dglaze_ENABLE_SSL=ON
+
+    - name: Build
+      run: |
+        cmake --build build -j $(nproc) --target \
+          mingw_ssl_diag \
+          http_client_test
+
+    - name: Enable Page Heap
+      shell: pwsh
+      run: |
+        $exes = @("http_client_test.exe", "mingw_ssl_diag.exe")
+        foreach ($exe in $exes) {
+          Write-Host "Enabling full page heap for $exe"
+          & reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$exe" /v GlobalFlag /t REG_DWORD /d 0x02000000 /f
+          & reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$exe" /v PageHeapFlags /t REG_DWORD /d 0x3 /f
+        }
+
+    - name: Run diagnostic (with Page Heap)
+      working-directory: build
+      run: |
+        echo "=== MinGW SSL Diagnostic — WITH Page Heap ==="
+        ctest --output-on-failure -R "^mingw_ssl_diag$" || true
+
+    - name: Run http_client_test (with Page Heap)
+      working-directory: build
+      run: |
+        ctest --output-on-failure -R "^http_client_test$" || true
