@@ -43,6 +43,15 @@ class diag_server
          res.status(200).body("slow");
       });
 
+      // Streaming endpoint
+      server_.stream_get("/stream", [](glz::request&, glz::streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         res.send("chunk1;");
+         res.send("chunk2;");
+         res.send("chunk3;");
+         res.close();
+      });
+
       for (uint16_t p = 19200; p < 19300; ++p) {
          try {
             server_.bind("127.0.0.1", p);
@@ -317,37 +326,98 @@ suite mingw_ssl_diag = [] {
       std::cout << "[phase10] OK - concurrent clients" << std::endl;
    };
 
-   // Phase 11: Mixed sync + async with destruction under load
-   // Combines the most aggressive patterns.
-   "phase11_stress_mixed"_test = [] {
-      std::cout << "[phase11] Mixed stress test..." << std::endl;
+   // Phase 11: Streaming request — the code path in http_client_test
+   // that we suspect triggers the heap corruption.
+   "phase11_streaming_request"_test = [] {
+      std::cout << "[phase11] Streaming request..." << std::endl;
+
+      diag_server server;
+      expect(server.start()) << "Server failed to start";
+
+      {
+         glz::http_client client;
+
+         std::string received;
+         std::mutex mtx;
+         std::promise<void> done;
+         auto future = done.get_future();
+
+         auto conn = client.stream_request_v2({
+            .method = "GET",
+            .url = server.url() + "/stream",
+            .on_connect = [](const glz::response&) {},
+            .on_disconnect = [&]() { done.set_value(); },
+            .on_data = [&](std::string_view data) {
+               std::lock_guard lock(mtx);
+               received.append(data);
+            },
+            .on_error = [](std::error_code) {},
+         });
+
+         auto status = future.wait_for(std::chrono::seconds(5));
+         expect(status == std::future_status::ready) << "Stream did not complete";
+      }
+
+      server.stop();
+      std::cout << "[phase11] OK - streaming request" << std::endl;
+   };
+
+   // Phase 12: Repeated streaming with client destruction
+   "phase12_streaming_destroy_cycle"_test = [] {
+      std::cout << "[phase12] Streaming with client destruction cycling..." << std::endl;
+
+      diag_server server;
+      expect(server.start()) << "Server failed to start";
+
+      for (int round = 0; round < 20; ++round) {
+         glz::http_client client;
+
+         std::promise<void> done;
+         auto future = done.get_future();
+
+         auto conn = client.stream_request_v2({
+            .method = "GET",
+            .url = server.url() + "/stream",
+            .on_connect = [](const glz::response&) {},
+            .on_disconnect = [&]() { done.set_value(); },
+            .on_data = [](std::string_view) {},
+            .on_error = [](std::error_code) {},
+         });
+
+         auto status = future.wait_for(std::chrono::seconds(5));
+         (void)status;
+         // Destroy client — may have pending handlers
+      }
+
+      server.stop();
+      std::cout << "[phase12] OK - streaming destroy cycle" << std::endl;
+   };
+
+   // Phase 13: Mixed sync + async with destruction under load
+   "phase13_stress_mixed"_test = [] {
+      std::cout << "[phase13] Mixed stress test..." << std::endl;
 
       diag_server server;
       expect(server.start()) << "Server failed to start";
 
       for (int round = 0; round < 10; ++round) {
-         // Create client, fire a mix of sync and async, destroy
          glz::http_client client;
 
-         // Sync request
          auto result = client.get(server.url() + "/ping");
          (void)result;
 
-         // Fire several async requests against both fast and slow endpoints
          for (int i = 0; i < 3; ++i) {
             client.get_async(server.url() + "/ping", {}, [](auto) {});
             client.get_async(server.url() + "/slow", {}, [](auto) {});
          }
 
-         // Small random-ish delay to vary the destruction timing
          if (round % 3 == 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
          }
-         // Destroy with mixed pending work
       }
 
       server.stop();
-      std::cout << "[phase11] OK - mixed stress test" << std::endl;
+      std::cout << "[phase13] OK - mixed stress test" << std::endl;
    };
 };
 
