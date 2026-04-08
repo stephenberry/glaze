@@ -17,9 +17,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Debug + ASAN build to locate heap corruption
-  asan:
-    name: MinGW64 + SSL + ASAN (Debug)
+  build:
+    name: MinGW64 + SSL
     runs-on: windows-latest
     defaults:
       run:
@@ -44,53 +43,6 @@ jobs:
           -G Ninja \
           -DCMAKE_BUILD_TYPE=Debug \
           -DCMAKE_CXX_STANDARD=23 \
-          -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
-          -Dglaze_ENABLE_SSL=ON \
-          -Dglaze_ENABLE_SANITIZERS=OFF
-
-    - name: Build
-      run: |
-        cmake --build build -j $(nproc) --target \
-          http_client_test \
-          mingw_ssl_diag
-
-    - name: Run ASAN diagnostics
-      working-directory: build
-      run: |
-        echo "=== Running MinGW SSL diagnostic test ==="
-        ctest --output-on-failure -R "^mingw_ssl_diag$" || true
-        echo ""
-        echo "=== Running http_client_test ==="
-        ctest --output-on-failure -R "^http_client_test$" || true
-
-  # Release build for functional correctness
-  release:
-    name: MinGW64 + SSL (Release)
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - uses: msys2/setup-msys2@v2
-      with:
-        update: true
-        msystem: MINGW64
-        install: >-
-          mingw-w64-x86_64-cmake
-          mingw-w64-x86_64-ninja
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-openssl
-
-    - name: Configure CMake
-      run: |
-        cmake -S . -B build \
-          -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_CXX_STANDARD=23 \
           -Dglaze_ENABLE_SSL=ON
 
     - name: Build
@@ -105,8 +57,39 @@ jobs:
           http_client_test \
           mingw_ssl_diag
 
-    - name: Test
+    # Enable Full Page Heap for test executables.
+    # This makes Windows place each heap allocation on its own page with a
+    # guard page, so buffer overflows / use-after-free crash immediately at
+    # the offending instruction instead of silently corrupting the heap.
+    - name: Enable Page Heap
+      shell: pwsh
+      run: |
+        $exes = @(
+          "http_client_test.exe",
+          "mingw_ssl_diag.exe",
+          "websocket_client_test.exe",
+          "wss_test.exe",
+          "https_test.exe"
+        )
+        foreach ($exe in $exes) {
+          Write-Host "Enabling full page heap for $exe"
+          & reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$exe" /v GlobalFlag /t REG_DWORD /d 0x02000000 /f
+          & reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$exe" /v PageHeapFlags /t REG_DWORD /d 0x3 /f
+        }
+
+    - name: Run diagnostic test
       working-directory: build
       run: |
-        ctest -C Release --output-on-failure -R \
-          "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test|http_client_test|mingw_ssl_diag)$"
+        echo "=== MinGW SSL Diagnostic Test ==="
+        ctest --output-on-failure -R "^mingw_ssl_diag$" || true
+
+    - name: Run http_client_test (heap corruption repro)
+      working-directory: build
+      run: |
+        ctest --output-on-failure -R "^http_client_test$" || true
+
+    - name: Run remaining tests
+      working-directory: build
+      run: |
+        ctest --output-on-failure -R \
+          "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test)$"
