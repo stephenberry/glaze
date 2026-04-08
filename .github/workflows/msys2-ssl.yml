@@ -36,12 +36,15 @@ jobs:
           mingw-w64-x86_64-ninja
           mingw-w64-x86_64-gcc
           mingw-w64-x86_64-openssl
+          mingw-w64-x86_64-gdb
 
+    # Build Release with debug symbols so GDB backtraces show line numbers
     - name: Configure CMake
       run: |
         cmake -S . -B build \
           -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_FLAGS="-g" \
           -DCMAKE_CXX_STANDARD=23 \
           -Dglaze_ENABLE_SSL=ON
 
@@ -57,28 +60,36 @@ jobs:
           utf8_test \
           https_test
 
-    # Run http_client_test in a loop — the heap corruption is intermittent.
-    # The original crash took ~0.7s, so 20 iterations ≈ 14s.
-    - name: "Repeat: http_client_test (20x)"
+    # Run under GDB to get a backtrace on crash
+    - name: "GDB: http_client_test"
       working-directory: build
       run: |
-        echo "Running http_client_test 20 times to reproduce intermittent heap corruption..."
-        for i in $(seq 1 20); do
-          echo "--- Run $i/20 ---"
-          ctest --output-on-failure -R "^http_client_test$" || { echo "FAILED on run $i"; exit 1; }
-        done
-        echo "All 20 runs passed."
+        echo "Running http_client_test under GDB to capture crash backtrace..."
+        gdb -batch \
+          -ex "set print thread-events off" \
+          -ex "run" \
+          -ex "echo \n=== CRASH BACKTRACE ===\n" \
+          -ex "bt full" \
+          -ex "echo \n=== ALL THREADS ===\n" \
+          -ex "thread apply all bt" \
+          -ex "quit" \
+          --args tests/networking_tests/http_client_test/http_client_test.exe \
+          2>&1 || true
 
-    # Same for the diagnostic stress tests
-    - name: "Repeat: mingw_ssl_diag (20x)"
+    - name: "GDB: mingw_ssl_diag"
       working-directory: build
       run: |
-        echo "Running mingw_ssl_diag 20 times..."
-        for i in $(seq 1 20); do
-          echo "--- Run $i/20 ---"
-          ctest --output-on-failure -R "^mingw_ssl_diag$" || { echo "FAILED on run $i"; exit 1; }
-        done
-        echo "All 20 runs passed."
+        echo "Running mingw_ssl_diag under GDB..."
+        gdb -batch \
+          -ex "set print thread-events off" \
+          -ex "run" \
+          -ex "echo \n=== CRASH BACKTRACE ===\n" \
+          -ex "bt full" \
+          -ex "echo \n=== ALL THREADS ===\n" \
+          -ex "thread apply all bt" \
+          -ex "quit" \
+          --args tests/networking_tests/mingw_ssl_diag/mingw_ssl_diag.exe \
+          2>&1 || true
 
     - name: Run remaining tests
       working-directory: build
