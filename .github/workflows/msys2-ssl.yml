@@ -41,7 +41,7 @@ jobs:
       run: |
         cmake -S . -B build \
           -G Ninja \
-          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_STANDARD=23 \
           -Dglaze_ENABLE_SSL=ON
 
@@ -58,9 +58,9 @@ jobs:
           mingw_ssl_diag
 
     # Enable Full Page Heap for test executables.
-    # This makes Windows place each heap allocation on its own page with a
-    # guard page, so buffer overflows / use-after-free crash immediately at
-    # the offending instruction instead of silently corrupting the heap.
+    # Places each heap allocation on its own page with a guard page so that
+    # buffer overflows / use-after-free crash immediately at the offending
+    # instruction instead of silently corrupting the heap.
     - name: Enable Page Heap
       shell: pwsh
       run: |
@@ -83,7 +83,7 @@ jobs:
         echo "=== MinGW SSL Diagnostic Test ==="
         ctest --output-on-failure -R "^mingw_ssl_diag$" || true
 
-    - name: Run http_client_test (heap corruption repro)
+    - name: Run http_client_test
       working-directory: build
       run: |
         ctest --output-on-failure -R "^http_client_test$" || true
