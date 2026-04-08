@@ -8050,6 +8050,35 @@ suite const_mem_func_tests = [] {
    };
 };
 
+struct class_with_noexcept_mem_func
+{
+  public:
+   std::array<uint32_t, 3> get_values() noexcept { return values; }
+   void set_values(const std::array<uint32_t, 3>& v) noexcept { values = v; }
+
+  private:
+   std::array<uint32_t, 3> values{};
+};
+
+template <>
+struct glz::meta<class_with_noexcept_mem_func>
+{
+   using T = class_with_noexcept_mem_func;
+   static constexpr auto value = object("values", custom<&T::set_values, &T::get_values>);
+};
+
+suite noexcept_mem_func_tests = [] {
+   "noexcept_mem_func"_test = [] {
+      class_with_noexcept_mem_func obj{};
+      std::string s = R"({"values":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.get_values() == std::array<uint32_t, 3>{1, 2, 3});
+      s.clear();
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"values":[1,2,3]})");
+   };
+};
+
 struct constrained_object
 {
    int age{};

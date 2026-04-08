@@ -1089,4 +1089,100 @@ suite merge_tests = [] {
    };
 };
 
+// Regression test: optional fields must not persist across RPC calls
+// See: https://github.com/stephenberry/glaze/issues/XXXX
+struct command_with_optional
+{
+   std::string action{};
+   std::optional<uint64_t> time{};
+   std::optional<std::string> tag{};
+};
+
+struct free_func_api_t
+{
+   std::function<void(const command_with_optional&)> handler;
+};
+
+struct command_service
+{
+   std::optional<uint64_t> last_time{};
+   std::optional<std::string> last_tag{};
+   std::string last_action{};
+
+   void execute(const command_with_optional& cmd)
+   {
+      last_action = cmd.action;
+      last_time = cmd.time;
+      last_tag = cmd.tag;
+   }
+
+   struct glaze
+   {
+      using T = command_service;
+      static constexpr auto value = glz::object(&T::execute);
+   };
+};
+
+suite stale_optional_regression = [] {
+   using namespace test_helpers;
+
+   "optional_fields_not_stale_json_member_function"_test = [] {
+      glz::registry server{};
+      command_service svc{};
+      server.on(svc);
+
+      // Call 1: both optionals populated
+      call_json(server, {"/execute"}, command_with_optional{.action = "timed", .time = 12345, .tag = "urgent"});
+      expect(svc.last_action == "timed");
+      expect(svc.last_time.has_value());
+      expect(svc.last_time.value() == 12345u);
+      expect(svc.last_tag.has_value());
+      expect(svc.last_tag.value() == "urgent");
+
+      // Call 2: optionals omitted — they must be nullopt, not stale
+      call_json(server, {"/execute"}, command_with_optional{.action = "immediate"});
+      expect(svc.last_action == "immediate");
+      expect(!svc.last_time.has_value()) << "time should be nullopt, not stale from previous call";
+      expect(!svc.last_tag.has_value()) << "tag should be nullopt, not stale from previous call";
+
+      // Call 3: only one optional set
+      call_json(server, {"/execute"}, command_with_optional{.action = "tagged", .tag = "low"});
+      expect(svc.last_action == "tagged");
+      expect(!svc.last_time.has_value()) << "time should be nullopt";
+      expect(svc.last_tag.value() == "low");
+   };
+
+   "optional_fields_not_stale_beve_member_function"_test = [] {
+      glz::registry<glz::opts{.format = glz::BEVE}> server{};
+      command_service svc{};
+      server.on(svc);
+
+      call_beve(server, {"/execute"}, command_with_optional{.action = "timed", .time = 99});
+      expect(svc.last_time.value() == 99u);
+
+      call_beve(server, {"/execute"}, command_with_optional{.action = "immediate"});
+      expect(!svc.last_time.has_value()) << "time should be nullopt after BEVE call without it";
+   };
+
+   "optional_fields_not_stale_json_free_function"_test = [] {
+      static std::optional<uint64_t> captured_time{};
+      static std::string captured_action{};
+
+      glz::registry server{};
+
+      free_func_api_t api{};
+      api.handler = [](const command_with_optional& cmd) {
+         captured_action = cmd.action;
+         captured_time = cmd.time;
+      };
+      server.on(api);
+
+      call_json(server, {"/handler"}, command_with_optional{.action = "first", .time = 42});
+      expect(captured_time.value() == 42u);
+
+      call_json(server, {"/handler"}, command_with_optional{.action = "second"});
+      expect(!captured_time.has_value()) << "time should be nullopt in free function path";
+   };
+};
+
 int main() { return 0; }
