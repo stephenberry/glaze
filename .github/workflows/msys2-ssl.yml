@@ -1,0 +1,66 @@
+name: msys2-mingw-ssl
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    name: MinGW64 + SSL (ws:// and wss://)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-openssl
+
+    - name: Configure CMake
+      run: |
+        cmake -S . -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DCMAKE_CXX_STANDARD=23 \
+          -Dglaze_ENABLE_SSL=ON
+
+    - name: Build
+      run: |
+        cmake --build build -j $(nproc) --target \
+          websocket_client_test \
+          websocket_close_test \
+          wss_test \
+          shared_context_bug_test \
+          utf8_test \
+          https_test \
+          http_client_test
+
+    - name: Test
+      working-directory: build
+      run: |
+        ctest -C ${{env.BUILD_TYPE}} --output-on-failure -R \
+          "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test|http_client_test)$"
