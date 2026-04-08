@@ -16,12 +16,10 @@ on:
       - 'docs/**'
   workflow_dispatch:
 
-env:
-  BUILD_TYPE: Release
-
 jobs:
-  build:
-    name: MinGW64 + SSL (ws:// and wss://)
+  # Debug + ASAN build to locate heap corruption
+  asan:
+    name: MinGW64 + SSL + ASAN (Debug)
     runs-on: windows-latest
     defaults:
       run:
@@ -44,7 +42,54 @@ jobs:
       run: |
         cmake -S . -B build \
           -G Ninja \
-          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_CXX_STANDARD=23 \
+          -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" \
+          -Dglaze_ENABLE_SSL=ON \
+          -Dglaze_ENABLE_SANITIZERS=OFF
+
+    - name: Build
+      run: |
+        cmake --build build -j $(nproc) --target \
+          http_client_test \
+          mingw_ssl_diag
+
+    - name: Run ASAN diagnostics
+      working-directory: build
+      run: |
+        echo "=== Running MinGW SSL diagnostic test ==="
+        ctest --output-on-failure -R "^mingw_ssl_diag$" || true
+        echo ""
+        echo "=== Running http_client_test ==="
+        ctest --output-on-failure -R "^http_client_test$" || true
+
+  # Release build for functional correctness
+  release:
+    name: MinGW64 + SSL (Release)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-openssl
+
+    - name: Configure CMake
+      run: |
+        cmake -S . -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_STANDARD=23 \
           -Dglaze_ENABLE_SSL=ON
 
@@ -57,10 +102,11 @@ jobs:
           shared_context_bug_test \
           utf8_test \
           https_test \
-          http_client_test
+          http_client_test \
+          mingw_ssl_diag
 
     - name: Test
       working-directory: build
       run: |
-        ctest -C ${{env.BUILD_TYPE}} --output-on-failure -R \
-          "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test|http_client_test)$"
+        ctest -C Release --output-on-failure -R \
+          "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test|http_client_test|mingw_ssl_diag)$"
