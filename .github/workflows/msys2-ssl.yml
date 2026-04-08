@@ -73,37 +73,38 @@ jobs:
         Set-ItemProperty -Path $regPath -Name "DumpCount" -Value 10 -Type DWord
         Write-Host "WER crash dumps configured at $dumpPath"
 
-    # Run http_client_test up to 50 times — stop on first crash
+    # Run http_client_test up to 50 times — stop on first crash.
+    # Previously this crashed on the very first attempt, so 50 clean
+    # runs is strong evidence the fix works.
     - name: "Repeat: http_client_test (up to 50x)"
       working-directory: build
       run: |
-        echo "Running http_client_test repeatedly until crash or 50 passes..."
+        echo "Running http_client_test up to 50 times..."
         for i in $(seq 1 50); do
-          echo -n "Run $i/50: "
-          if ! ctest --output-on-failure -R "^http_client_test$" 2>&1 | tail -1; then
-            echo "CRASHED on run $i"
-            break
-          fi
-          if [ $i -eq 50 ]; then
-            echo "All 50 runs passed (crash did not reproduce)"
+          echo "--- Run $i/50 ---"
+          ctest --output-on-failure -R "^http_client_test$"
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "FAILED on run $i (exit code $rc)"
+            exit $rc
           fi
         done
+        echo "All 50 runs passed."
 
-    # Run mingw_ssl_diag up to 50 times
     - name: "Repeat: mingw_ssl_diag (up to 50x)"
       working-directory: build
       run: |
-        echo "Running mingw_ssl_diag repeatedly until crash or 50 passes..."
+        echo "Running mingw_ssl_diag up to 50 times..."
         for i in $(seq 1 50); do
-          echo -n "Run $i/50: "
-          if ! ctest --output-on-failure -R "^mingw_ssl_diag$" 2>&1 | tail -1; then
-            echo "CRASHED on run $i"
-            break
-          fi
-          if [ $i -eq 50 ]; then
-            echo "All 50 runs passed (crash did not reproduce)"
+          echo "--- Run $i/50 ---"
+          ctest --output-on-failure -R "^mingw_ssl_diag$"
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "FAILED on run $i (exit code $rc)"
+            exit $rc
           fi
         done
+        echo "All 50 runs passed."
 
     # Check for and analyze any crash dumps
     - name: Analyze crash dumps
