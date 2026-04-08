@@ -130,7 +130,7 @@ glz::param_constraint numeric{
     }
 };
 
-router.get("/users/:id", user_handler, {{"id", numeric}});
+router.get("/users/:id", user_handler, {.constraints = {{"id", numeric}}});
 
 // UUID constraint using regex
 glz::param_constraint uuid{
@@ -141,7 +141,7 @@ glz::param_constraint uuid{
     }
 };
 
-router.get("/sessions/:session_id", session_handler, {{"session_id", uuid}});
+router.get("/sessions/:session_id", session_handler, {.constraints = {{"session_id", uuid}}});
 
 // Alphanumeric constraint
 glz::param_constraint username{
@@ -155,8 +155,16 @@ glz::param_constraint username{
     }
 };
 
-router.get("/profile/:username", profile_handler, {{"username", username}});
+router.get("/profile/:username", profile_handler, {.constraints = {{"username", username}}});
 ```
+
+Constraints are passed through the `route_spec` argument (`.constraints = ...`).
+
+Constraint behavior:
+- If validation returns `false`, the route is treated as a non-match.
+- `router.match(...)` returns no handler in this case.
+- With `glz::http_server`, the default result is `404 Not Found`.
+- `param_constraint.description` is used for generated OpenAPI path parameter descriptions and debug output, not automatic runtime error bodies.
 
 ### Advanced Validation Functions
 
@@ -238,7 +246,7 @@ glz::param_constraint safe_path{
     }
 };
 
-router.get("/files/*path", file_handler, {{"path", safe_path}});
+router.get("/files/*path", file_handler, {.constraints = {{"path", safe_path}}});
 ```
 
 ## Route Priority

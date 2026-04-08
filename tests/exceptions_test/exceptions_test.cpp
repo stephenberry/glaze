@@ -193,7 +193,7 @@ suite read_file_test = [] {
 
    "read_file invalid"_test = [] {
       file_struct s;
-      expect(throws([&] { glz::ex::read_file_json(s, "../nonexsistant_file.json", std::string{}); }));
+      expect(throws([&] { glz::ex::read_file_json(s, "../nonexistent_file.json", std::string{}); }));
    };
 };
 
@@ -751,6 +751,21 @@ suite custom_tests = [] {
       }
       catch (const std::exception& error) {
          expect(false) << error.what() << '\n';
+      }
+   };
+};
+
+suite ordered_small_map_overflow_tests = [] {
+   "ordered_small_map reserve overflow throws"_test = [] {
+      constexpr auto max_u32_as_size = static_cast<size_t>((std::numeric_limits<uint32_t>::max)());
+      if constexpr ((std::numeric_limits<size_t>::max)() > max_u32_as_size) {
+         glz::ordered_small_map<int> map;
+         const auto too_large = max_u32_as_size + size_t{1};
+         expect(throws([&] { map.reserve(too_large); }));
+      }
+      else {
+         // 32-bit size_t cannot represent > uint32_t, so this overflow path is unreachable.
+         expect(true);
       }
    };
 };

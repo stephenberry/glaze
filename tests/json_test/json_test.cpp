@@ -1197,6 +1197,26 @@ suite container_types = [] {
       expect(glz::read_json(tuple2, buffer) == glz::error_code::none);
       expect(tuple == tuple2);
    };
+   "tuple error_on_missing_array_elements"_test = [] {
+      struct opts_strict_elements : glz::opts
+      {
+         bool error_on_missing_array_elements = true;
+      };
+
+      std::tuple<int, double, std::string> t{};
+
+      // Exact match should succeed
+      expect(glz::read<opts_strict_elements{}>(t, R"([1, 2.5, "hello"])") == glz::error_code::none);
+      expect(std::get<0>(t) == 1);
+      expect(std::get<1>(t) == 2.5);
+      expect(std::get<2>(t) == "hello");
+
+      // Fewer elements should error
+      expect(glz::read<opts_strict_elements{}>(t, R"([1, 2.5])") == glz::error_code::array_element_not_found);
+
+      // Fewer elements without the option should succeed (default behavior)
+      expect(glz::read_json(t, R"([1, 2.5])") == glz::error_code::none);
+   };
    "pair roundtrip"_test = [] {
       auto pair = std::make_pair(std::string("water"), 5.2);
       decltype(pair) pair2{};
@@ -3517,6 +3537,20 @@ suite thread_pool = [] {
 
       expect(numbers.size() == 1000);
    };
+
+   "thread pool zero threads fallback"_test = [] {
+      glz::pool pool(0);
+
+      std::atomic<int> x = 0;
+
+      for (auto i = 0; i < 1000; ++i) {
+         pool.emplace_back([&] { ++x; });
+      }
+
+      pool.wait();
+
+      expect(x == 1000);
+   };
 };
 
 struct local_meta
@@ -3903,7 +3937,7 @@ suite read_file_test = [] {
 
    "read_file invalid"_test = [] {
       file_struct s;
-      expect(glz::read_file_json(s, "../nonexsistant_file.json", std::string{}) != glz::error_code::none);
+      expect(glz::read_file_json(s, "../nonexistent_file.json", std::string{}) != glz::error_code::none);
    };
 };
 
@@ -6931,6 +6965,89 @@ suite numbers_as_strings_suite = [] {
    };
 };
 
+using short_string_t = std::array<char, 64>;
+
+void copy_to_short_string(short_string_t& out, const std::string_view value)
+{
+   const auto n = (std::min)(value.size(), out.size() - 1);
+   std::fill(out.begin(), out.end(), '\0');
+   std::memcpy(out.data(), value.data(), n);
+}
+
+struct short_string_glaze_proxy_t
+{
+   short_string_t* proxy{};
+
+   explicit short_string_glaze_proxy_t(short_string_t& value) : proxy{&value} {}
+};
+
+template <>
+struct glz::meta<short_string_glaze_proxy_t>
+{
+   static constexpr auto read = [](short_string_glaze_proxy_t& obj, const std::string_view& value) {
+      copy_to_short_string(*obj.proxy, value);
+   };
+
+   static constexpr auto write = [](short_string_glaze_proxy_t& obj) -> std::string_view {
+      return {obj.proxy->data()};
+   };
+
+   static constexpr auto value = glz::custom<read, write>;
+};
+
+struct object_with_short_string
+{
+   short_string_t value{};
+};
+
+template <>
+struct glz::meta<object_with_short_string>
+{
+   using T = object_with_short_string;
+   static constexpr auto value = glz::object("value", glz::string_as_number<&T::value>);
+};
+
+struct object_with_short_string_proxy
+{
+   short_string_glaze_proxy_t value;
+};
+
+template <>
+struct glz::meta<object_with_short_string_proxy>
+{
+   using T = object_with_short_string_proxy;
+   static constexpr auto value = glz::object("value", glz::string_as_number<&T::value>);
+};
+
+suite string_as_number_custom_proxy_suite = [] {
+   "string_as_number_with_custom_string_view_proxy"_test = [] {
+      object_with_short_string target{};
+      object_with_short_string_proxy proxy{short_string_glaze_proxy_t{target.value}};
+
+      const std::string input = R"({"value":13})";
+      const auto err = glz::read_json(proxy, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(std::string_view{target.value.data()} == "13");
+
+      std::string output{};
+      expect(not glz::write_json(proxy, output));
+      expect(output == input) << output;
+   };
+
+   "string_as_number_with_char_array_storage"_test = [] {
+      object_with_short_string target{};
+
+      const std::string input = R"({"value":42})";
+      const auto err = glz::read_json(target, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(std::string_view{target.value.data()} == "42");
+
+      std::string output{};
+      expect(not glz::write_json(target, output));
+      expect(output == input) << output;
+   };
+};
+
 enum struct MyEnum { VALUE_1 = 200, VALUE_2 = 300, VALUE_3 = 400, UNUSED_VALUE = 500 };
 
 suite numeric_enums_suite = [] {
@@ -7046,6 +7163,20 @@ struct glz::meta<cx_values>
    static constexpr auto value{glz::object("info", &T::info, "index", &T::index, "value", &T::value)};
 };
 
+struct cx_values_implicit_static_key
+{
+   static constexpr std::string_view other_type{"http://www.github.io"};
+   std::string type{"http://www.github.io"};
+   int status{};
+};
+
+template <>
+struct glz::meta<cx_values_implicit_static_key>
+{
+   using T = cx_values_implicit_static_key;
+   static constexpr auto value{glz::object(&T::other_type, &T::type, &T::status)};
+};
+
 struct direct_cx_value_conversion
 {
    static constexpr uint64_t const_v{42};
@@ -7141,6 +7272,7 @@ struct variant_to_tuple<std::variant<Ts...>>
 {
    using type = std::tuple<Ts...>;
 };
+
 suite constexpr_values_test = [] {
    "constexpr_values_write"_test = [] {
       cx_values obj{};
@@ -7156,6 +7288,20 @@ suite constexpr_values_test = [] {
       expect(obj.info == "information");
       expect(obj.index == 42);
       expect(obj.value == "special");
+   };
+
+   "constexpr_values_implicit_static_key"_test = [] {
+      cx_values_implicit_static_key obj{};
+      obj.status = 100;
+      std::string s{};
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"other_type":"http://www.github.io","type":"http://www.github.io","status":100})") << s;
+
+      s = R"({"other_type":"something_else","type":"updated","status":200})";
+      expect(!glz::read_json(obj, s));
+      expect(cx_values_implicit_static_key::other_type == "http://www.github.io");
+      expect(obj.type == "updated");
+      expect(obj.status == 200);
    };
 
    using const_only_variant =
@@ -7406,7 +7552,7 @@ suite obj_nested_merge = [] {
          !glz::read_json(json, "{\"key1\":42,\"key2\":\"hello world\",\"v\":[1,2,3],\"m\":{\"a\":1,\"b\":2,\"c\":3}}"));
       glz::obj obj{"not", "important"};
       auto s = glz::write_json(glz::merge{obj, json}).value_or("error");
-      expect(s == R"({"not":"important","key1":42,"key2":"hello world","m":{"a":1,"b":2,"c":3},"v":[1,2,3]})") << s;
+      expect(s == R"({"not":"important","key1":42,"key2":"hello world","v":[1,2,3],"m":{"a":1,"b":2,"c":3}})") << s;
    };
 };
 
@@ -8170,6 +8316,31 @@ suite self_constraint_real_world = [] {
          expect(minimal == glz::error_code::none);
          expect(!request.discount_code);
       }
+   };
+};
+
+struct skip_read_constraint_opts : glz::opts
+{
+   bool skip_read_constraint = true;
+};
+
+suite skip_read_constraint_tests = [] {
+   "skip_read_constraint allows invalid data through"_test = [] {
+      constexpr skip_read_constraint_opts opts{};
+
+      constrained_object obj{};
+      std::string buffer = R"({"age": 120,"name":"Constantine"})";
+
+      // With default options, constraint is violated
+      auto ec = glz::read_json(obj, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+
+      // With skip_read_constraint = true, constraint is skipped
+      obj = {};
+      ec = glz::read<opts>(obj, buffer);
+      expect(ec == glz::error_code::none);
+      expect(obj.age == 120);
+      expect(obj.name == "Constantine");
    };
 };
 
@@ -12723,14 +12894,14 @@ suite factor8_strings = [] {
       const auto payload = R"("abcdefg")"; // 8 chars after open quote
       const auto parsed = glz::read_json<std::string>(payload);
       expect(parsed.has_value());
-      expect(*parsed->end() == '\0');
+      expect(parsed->data()[parsed->size()] == '\0');
    };
 
    "factor of 8"_test = [] {
       const auto payload = R"("abcdefghijklmno")"; // 16 chars after open quote
       const auto parsed = glz::read_json<std::string>(payload);
       expect(parsed.has_value());
-      expect(*parsed->end() == '\0');
+      expect(parsed->data()[parsed->size()] == '\0');
    };
 };
 
@@ -12745,6 +12916,38 @@ struct glz::meta<cast_obj>
    using T = cast_obj;
    static constexpr auto value = object("integer", cast<&T::integer, double>, //
                                         "indirect", cast<[](T& s) -> auto& { return s.integer; }, double>);
+};
+
+struct glaze_value_nullable_field
+{
+   std::optional<int> my_val;
+   struct glaze
+   {
+      static constexpr auto value{&glaze_value_nullable_field::my_val};
+   };
+};
+
+struct glaze_value_nullable_obj
+{
+   glaze_value_nullable_field field_name{};
+   std::string required_field{};
+};
+
+struct glaze_value_ptr_field
+{
+   std::unique_ptr<int> ptr;
+   struct glaze
+   {
+      static constexpr auto value{&glaze_value_ptr_field::ptr};
+   };
+};
+
+struct glaze_value_nullable_multi_obj
+{
+   glaze_value_nullable_field a{};
+   glaze_value_ptr_field b{};
+   std::string c{};
+   glaze_value_nullable_field d{};
 };
 
 struct cast_nullable_obj
@@ -12807,6 +13010,110 @@ suite cast_tests = [] {
 
       // Test missing required field
       data = R"({"a":null})";
+      ec = glz::read<opts>(obj, data);
+      expect(ec == glz::error_code::missing_key);
+   };
+
+   "glaze_value_t nullable skip_null_members write"_test = [] {
+      // When skip_null_members is enabled (default), writing a glaze_value_t
+      // wrapping a nullable type should skip the field when the inner value is null
+      glaze_value_nullable_obj obj{};
+      obj.required_field = "hello";
+      // field_name.my_val is std::nullopt by default
+
+      auto result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"required_field":"hello"})") << result.value();
+
+      // With value present, the field should be written
+      obj.field_name.my_val = 42;
+      result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"field_name":42,"required_field":"hello"})") << result.value();
+   };
+
+   "glaze_value_t nullable unique_ptr inner type"_test = [] {
+      glaze_value_nullable_multi_obj obj{};
+      obj.c = "hello";
+      // a (optional) and b (unique_ptr) and d (optional) are all null
+
+      auto result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"c":"hello"})") << result.value();
+
+      // Set only the unique_ptr field
+      obj.b.ptr = std::make_unique<int>(99);
+      result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"b":99,"c":"hello"})") << result.value();
+
+      // Set all fields
+      obj.a.my_val = 1;
+      obj.d.my_val = 4;
+      result = glz::write_json(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"a":1,"b":99,"c":"hello","d":4})") << result.value();
+   };
+
+   "glaze_value_t nullable skip_null_members false"_test = [] {
+      constexpr auto opts = glz::opts{.format = glz::JSON, .skip_null_members = false};
+
+      glaze_value_nullable_obj obj{};
+      obj.required_field = "hello";
+
+      auto result = glz::write<opts>(obj);
+      expect(result.has_value());
+      expect(result.value() == R"({"field_name":null,"required_field":"hello"})") << result.value();
+   };
+
+   "glaze_value_t nullable write then read round-trip"_test = [] {
+      // Round-trip with null field: field is skipped, reading into default object preserves nullopt
+      glaze_value_nullable_obj obj{};
+      obj.required_field = "hello";
+
+      auto json = glz::write_json(obj);
+      expect(json.has_value());
+
+      glaze_value_nullable_obj obj2{};
+      auto ec = glz::read_json(obj2, json.value());
+      expect(!ec) << glz::format_error(ec, json.value());
+      expect(!obj2.field_name.my_val.has_value());
+      expect(obj2.required_field == "hello");
+
+      // Round-trip with value present
+      obj.field_name.my_val = 42;
+      json = glz::write_json(obj);
+      expect(json.has_value());
+
+      ec = glz::read_json(obj2, json.value());
+      expect(!ec) << glz::format_error(ec, json.value());
+      expect(obj2.field_name.my_val.has_value());
+      expect(obj2.field_name.my_val.value() == 42);
+   };
+
+   "glaze_value_t nullable with error_on_missing_keys"_test = [] {
+      constexpr auto opts = glz::opts{
+         .format = glz::JSON,
+         .error_on_missing_keys = true,
+      };
+
+      // Missing nullable value-type field should not error
+      std::string_view data = R"({"required_field":"hello"})";
+      glaze_value_nullable_obj obj{};
+      auto ec = glz::read<opts>(obj, data);
+      expect(!ec) << glz::format_error(ec, data);
+      expect(!obj.field_name.my_val.has_value());
+      expect(obj.required_field == "hello");
+
+      // With value present
+      data = R"({"field_name":42,"required_field":"world"})";
+      ec = glz::read<opts>(obj, data);
+      expect(!ec) << glz::format_error(ec, data);
+      expect(obj.field_name.my_val.has_value());
+      expect(obj.field_name.my_val.value() == 42);
+
+      // Missing required (non-nullable) field should still error
+      data = R"({"field_name":42})";
       ec = glz::read<opts>(obj, data);
       expect(ec == glz::error_code::missing_key);
    };
@@ -13078,7 +13385,17 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer{};
       expect(not glz::write<opts_with_function_pointers{}>(thing, buffer));
-#if defined(__GNUC__) && !defined(__clang__)
+#if GLZ_REFLECTION26
+      // P2996 display_string_of behavior varies by compiler:
+      // - Bloomberg Clang: "(member-function-pointer-type)"
+      // - GCC: full signature like traditional GCC
+      bool pass =
+         (buffer == R"json({"name":"test_item","description":"(member-function-pointer-type)"})json") ||
+         (buffer ==
+          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})") ||
+         (buffer == R"({"name":"test_item","description":"std::basic_string<char> (MemberFunctionThing::*)() const"})");
+      expect(pass) << buffer;
+#elif defined(__GNUC__) && !defined(__clang__)
 #if defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
       // Old ABI uses std::basic_string<char> without __cxx11 namespace
       expect(buffer ==
@@ -13090,6 +13407,10 @@ suite member_function_pointer_serialization = [] {
          R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})")
          << buffer;
 #endif
+#elif defined(_MSC_VER)
+      // MSVC produces fully qualified type names with calling convention
+      expect(buffer.find("MemberFunctionThing") != std::string::npos && buffer.find("test_item") != std::string::npos)
+         << buffer;
 #else
       expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
          << buffer;
@@ -13111,7 +13432,19 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer2{};
       expect(not glz::write<opts_with_function_pointers{}>(s, buffer2));
+#if GLZ_REFLECTION26
+      // P2996 display_string_of behavior varies by compiler:
+      // - Bloomberg Clang: "(member-function-pointer-type)"
+      // - GCC: full signature like traditional output
+      bool pass = (buffer2 == R"json({"f1":"(member-function-pointer-type)"})json") ||
+                  (buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})");
+      expect(pass) << buffer2;
+#elif defined(_MSC_VER)
+      // MSVC produces different type names and calling conventions
+      expect(buffer2.find("struct_t") != std::string::npos && buffer2.find("f1") != std::string::npos) << buffer2;
+#else
       expect(buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})") << buffer2;
+#endif
    };
 };
 
@@ -13624,6 +13957,27 @@ suite bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "long string should overflow";
+   };
+
+   // Test: always_null_t (glz::generic null) to bounded buffer (issue #2362)
+   "always_null_t to bounded buffer"_test = [] {
+      glz::generic obj{}; // default constructed generic is null
+      std::array<char, 512> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_json(obj, buffer);
+      expect(not result) << "always_null_t write to span should succeed";
+      std::string_view json(buffer.data(), result.count);
+      expect(json == "null") << "should serialize as null";
+   };
+
+   "always_null_t to small bounded buffer"_test = [] {
+      glz::generic obj{}; // default constructed generic is null
+      std::array<char, 2> storage{};
+      std::span<char> buffer(storage);
+
+      auto result = glz::write_json(obj, buffer);
+      expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow for too-small buffer";
    };
 };
 

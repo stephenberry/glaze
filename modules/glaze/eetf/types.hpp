@@ -22,6 +22,8 @@ namespace glz::eetf
    struct tagged_string : std::string
    {
       using tag = Tag;
+
+      auto operator<=>(const tagged_string& rhs) const = default;
    };
 
    using atom = tagged_string<tag_atom>;

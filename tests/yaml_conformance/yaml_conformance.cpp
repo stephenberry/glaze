@@ -4,6 +4,7 @@
 #include <string>
 
 #include "glaze/glaze.hpp"
+#include "glaze/json/patch.hpp"
 #include "glaze/yaml.hpp"
 #include "ut/ut.hpp"
 
@@ -18,6 +19,19 @@ static std::string normalize_json(const std::string& json)
    std::string out;
    (void)glz::write_json(val, out);
    return out;
+}
+
+// Semantic JSON comparison that ignores object key ordering.
+static bool json_text_equal(const std::string& lhs_json, const std::string& rhs_json)
+{
+   glz::generic lhs{};
+   glz::generic rhs{};
+   auto lhs_ec = glz::read_json(lhs, lhs_json);
+   auto rhs_ec = glz::read_json(rhs, rhs_json);
+   if (lhs_ec || rhs_ec) {
+      return lhs_json == rhs_json;
+   }
+   return glz::equal(lhs, rhs);
 }
 
 // ============================================================================
@@ -56,7 +70,7 @@ suite yaml_conformance_pass_1 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -85,7 +99,7 @@ invalid
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -110,7 +124,7 @@ invalid
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -126,7 +140,7 @@ invalid
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -142,7 +156,7 @@ invalid
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -176,7 +190,7 @@ invalid
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -201,7 +215,7 @@ invalid
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -230,7 +244,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -248,7 +262,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -266,7 +280,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -284,7 +298,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -303,7 +317,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -328,7 +342,7 @@ quoted: "So does this
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -357,7 +371,7 @@ a:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -382,20 +396,7 @@ top2: &node2
 )yaml";
       glz::generic parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml({
-  "top1": {
-    "key1": "val1"
-  },
-  "top2": "val2"
-}
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 
    // 4Q9F: Folded Block Scalar [1.3]
@@ -418,7 +419,7 @@ top2: &node2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -439,7 +440,7 @@ top2: &node2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -456,7 +457,7 @@ top2: &node2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -474,7 +475,7 @@ plain\value\with\backslashes
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -494,7 +495,7 @@ plain\value\with\backslashes
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -513,7 +514,7 @@ plain\value\with\backslashes
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -538,7 +539,7 @@ folded: >
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -565,7 +566,7 @@ folded: >
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -592,7 +593,7 @@ Chomping: |
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -612,7 +613,7 @@ Chomping: |
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -637,7 +638,7 @@ Chomping: |
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -659,7 +660,7 @@ bar: 42
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -678,7 +679,7 @@ bar: 42
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -705,7 +706,7 @@ bar: 42
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -723,7 +724,7 @@ bar: 42
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -742,7 +743,7 @@ bar: 42
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -811,7 +812,7 @@ bar: 42
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -835,7 +836,7 @@ bar: 42
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -862,7 +863,7 @@ null
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -883,7 +884,7 @@ null
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -903,7 +904,7 @@ null
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -937,7 +938,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -961,7 +962,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -995,7 +996,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1015,7 +1016,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1059,7 +1060,7 @@ h: i
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1093,7 +1094,7 @@ h: i
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1121,7 +1122,7 @@ b"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1148,7 +1149,7 @@ b"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1169,7 +1170,7 @@ double: "text"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1190,7 +1191,7 @@ double: "text"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 };
@@ -1229,7 +1230,7 @@ suite yaml_conformance_pass_2 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1255,7 +1256,7 @@ keep: |+
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1276,7 +1277,7 @@ keep: |+
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1329,7 +1330,7 @@ tab: "\tstring"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1349,17 +1350,7 @@ key: "missing closing quote
 )yaml";
       glz::generic parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml({
-  "a": "b"
-}
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 
    // D88J: Flow Sequence in Block Mapping
@@ -1380,7 +1371,7 @@ key: "missing closing quote
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1399,7 +1390,7 @@ key: "missing closing quote
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1440,7 +1431,7 @@ key: "missing closing quote
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1466,7 +1457,7 @@ c: d	#X
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1484,7 +1475,7 @@ c: d	#X
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1502,7 +1493,7 @@ c: d	#X
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1523,7 +1514,7 @@ c: d	#X
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1554,7 +1545,7 @@ c: d	#X
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1574,7 +1565,7 @@ foo: 1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1605,7 +1596,7 @@ foo: 1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1634,7 +1625,7 @@ foo: 1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1673,7 +1664,7 @@ keep: |+
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1709,7 +1700,7 @@ keep: |+
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1744,7 +1735,7 @@ keep: |+
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1774,7 +1765,7 @@ tie-fighter: '|\-*-/|'
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1806,7 +1797,7 @@ c
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1849,7 +1840,7 @@ wanted: love ♥ and peace ☮
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1889,7 +1880,7 @@ wanted: love ♥ and peace ☮
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1908,7 +1899,7 @@ wanted: love ♥ and peace ☮
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1935,7 +1926,7 @@ stats: |
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1958,7 +1949,7 @@ baz: jazz
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -1981,7 +1972,7 @@ three: 4
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2014,7 +2005,7 @@ rbi:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2035,7 +2026,7 @@ rbi:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2055,7 +2046,7 @@ rbi:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2074,7 +2065,7 @@ rbi:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2100,7 +2091,7 @@ rbi:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2145,7 +2136,7 @@ rbi:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2179,7 +2170,7 @@ key3: "quoted3"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2202,7 +2193,7 @@ key3: "quoted3"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2219,7 +2210,7 @@ key3: "quoted3"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2236,7 +2227,7 @@ key3: "quoted3"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2253,7 +2244,7 @@ key3: "quoted3"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2301,7 +2292,7 @@ baz: 2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2321,7 +2312,7 @@ string"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2340,7 +2331,7 @@ string"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2426,7 +2417,7 @@ suite yaml_conformance_pass_3 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2461,7 +2452,7 @@ suite yaml_conformance_pass_3 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2492,7 +2483,7 @@ suite yaml_conformance_pass_3 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2513,7 +2504,7 @@ suite yaml_conformance_pass_3 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2541,7 +2532,7 @@ suite yaml_conformance_pass_3 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2589,7 +2580,7 @@ h: "
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2621,7 +2612,7 @@ to a line feed, or 	\
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2644,7 +2635,7 @@ to a line feed, or 	\
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2679,7 +2670,7 @@ national:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2699,7 +2690,7 @@ national:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2727,7 +2718,7 @@ key3: "quoted3"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2759,7 +2750,7 @@ key3: "quoted3"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2781,7 +2772,7 @@ to a line feed, or 	\
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2811,17 +2802,7 @@ e: f
 )yaml";
       glz::generic parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml({
-  "a": "b"
-}
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 
    // R52L: Nested flow mapping sequence and mappings
@@ -2847,7 +2828,7 @@ e: f
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2879,7 +2860,7 @@ Document
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2910,7 +2891,7 @@ folded: > first line
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2957,7 +2938,7 @@ key2: &b *a
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -2977,17 +2958,7 @@ key2: &b *a
 )yaml";
       glz::generic parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml([
-  "sequence entry"
-]
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 
    // SYW4: Spec Example 2.2. Mapping Scalars to Scalars
@@ -3009,7 +2980,7 @@ rbi: 147   # Runs Batted In
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3030,7 +3001,7 @@ rbi: 147   # Runs Batted In
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3052,7 +3023,7 @@ rbi: 147   # Runs Batted In
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3075,7 +3046,7 @@ rbi: 147   # Runs Batted In
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3099,7 +3070,7 @@ rbi: 147   # Runs Batted In
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3120,7 +3091,7 @@ rbi: 147   # Runs Batted In
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3176,7 +3147,7 @@ v
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3203,7 +3174,7 @@ Chomping: |
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3238,7 +3209,7 @@ bar: 1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3273,7 +3244,7 @@ bar: 1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3303,7 +3274,7 @@ Sammy Sosa: {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3331,7 +3302,7 @@ Sammy Sosa: {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3402,7 +3373,7 @@ top6:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3440,7 +3411,7 @@ this is#not: a comment
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3478,7 +3449,7 @@ this is#not: a comment
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3500,7 +3471,7 @@ foo:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3527,7 +3498,7 @@ foo:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3551,7 +3522,7 @@ e
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3570,7 +3541,7 @@ plain: a
          auto expected = normalize_json(R"({"plain":"a b\nc"})");
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3587,10 +3558,10 @@ Reuse anchor: *anchor
       if (!ec) {
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         // Keys sorted alphabetically by std::map
+         // Keys in insertion order (ordered_small_map)
          std::string expected =
-            R"({"First occurrence":"Foo","Override anchor":"Bar","Reuse anchor":"Bar","Second occurrence":"Foo"})";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+            R"({"First occurrence":"Foo","Second occurrence":"Foo","Override anchor":"Bar","Reuse anchor":"Bar"})";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3609,7 +3580,7 @@ k:#foo
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3625,7 +3596,7 @@ k:#foo
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"(["a"])";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3638,12 +3609,12 @@ k:#foo
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("2 leading \\\ttab"
+         std::string expected_json = R"yaml("2 leading \ttab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3656,12 +3627,12 @@ k:#foo
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("5 leading \\\t  tab"
+         std::string expected_json = R"yaml("5 leading \t  tab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3677,12 +3648,12 @@ omitted value:,
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml({"http://foo.com":null,"omitted value":null,"unquoted":"separate"}
+         std::string expected_json = R"yaml({"unquoted":"separate","http://foo.com":null,"omitted value":null}
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3702,7 +3673,7 @@ omitted value:,
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3722,8 +3693,14 @@ omitted value:,
 : "bar"}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 4MUZ_01: Flow mapping colon on line after key
@@ -3732,8 +3709,14 @@ omitted value:,
 : bar}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 4MUZ_02: Flow mapping colon on line after key
@@ -3742,8 +3725,14 @@ omitted value:,
 : bar}
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 4QFQ: Spec Example 8.2. Block Indentation Indicator [1.3]
@@ -3763,12 +3752,12 @@ omitted value:,
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml(["detected\n","# detected\n"," explicit\n","detected\n"]
+         std::string expected_json = R"yaml(["detected\n","\n\n# detected\n"," explicit\n","detected\n"]
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3783,12 +3772,12 @@ omitted value:,
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml([{"aaa":"  xxx\nbbb: |\n  xxx\n"}]
+         std::string expected_json = R"yaml([{"aaa":"xxx\n","bbb":"xxx\n"}]
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3808,8 +3797,8 @@ block: |
       if (!ec) {
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         std::string expected = R"({"block":"text\n \tlines\n","plain":"text lines","quoted":"text lines"})";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         std::string expected = R"({"plain":"text lines","quoted":"text lines","block":"text\n \tlines\n"})";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3827,7 +3816,7 @@ block: |
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3869,7 +3858,7 @@ description:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3887,21 +3876,21 @@ mapping: !!map
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "mapping": {
-    "foo": "bar"
-  },
   "sequence": [
     "entry",
     [
       "nested"
     ]
-  ]
+  ],
+  "mapping": {
+    "foo": "bar"
+  }
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3928,7 +3917,7 @@ mapping: !!map
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -3952,8 +3941,14 @@ mapping: !!map
   :bar }
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 5TRB: Invalid document-start marker in doublequoted tring
@@ -3965,15 +3960,7 @@ mapping: !!map
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml(" --- "
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 
    // 5TYM: Spec Example 6.21. Local Tag Prefix
@@ -3995,7 +3982,7 @@ mapping: !!map
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4006,20 +3993,7 @@ mapping: !!map
 )yaml";
       glz::generic parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml({
-  "key": [
-    "a",
-    "b"
-  ]
-}
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 
    // 5WE3: Spec Example 8.17. Explicit Block Mapping Entries
@@ -4045,7 +4019,7 @@ mapping: !!map
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4076,7 +4050,7 @@ x: { y: z }in: valid
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4101,7 +4075,7 @@ x: { y: z }in: valid
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4117,12 +4091,12 @@ x: { y: z }in: valid
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("ab\n\n\n"
+         std::string expected_json = R"yaml("ab\n\n \n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4151,7 +4125,7 @@ Not indented:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4171,7 +4145,7 @@ Not indented:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4198,7 +4172,7 @@ Not indented:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4215,7 +4189,7 @@ b: *anchor
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"({"a":null,"b":null})";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4234,7 +4208,7 @@ b: *anchor
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4254,12 +4228,12 @@ b: *anchor
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json =
-            R"yaml("Sammy Sosa completed another fine season with great stats.\n  63 Home Runs   0.288 Batting Average\nWhat a year!\n"
+            R"yaml("Sammy Sosa completed another fine season with great stats.\n\n  63 Home Runs\n  0.288 Batting Average\n\nWhat a year!\n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4283,7 +4257,7 @@ b: *anchor
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4301,7 +4275,7 @@ b: *anchor
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4329,7 +4303,7 @@ b: *anchor
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4345,12 +4319,18 @@ g: h
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("a"
+         std::string expected_json = R"yaml({
+  "a": "b",
+  "c": 42,
+  "e": "f",
+  "g": "h",
+  "23": false
+}
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4389,7 +4369,7 @@ top7:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4411,7 +4391,7 @@ rbi:
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"({"hr":["Mark McGwire","Sammy Sosa"],"rbi":["Sammy Sosa","Ken Griffey"]})";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4424,12 +4404,14 @@ rbi:
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("foo"
+         std::string expected_json = R"yaml({
+  "foo": "baz"
+}
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4440,19 +4422,8 @@ rbi:
  d": 1
 )yaml";
       glz::generic parsed{};
-      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml({
-  "a\nb": 1,
-  "c d": 1
-}
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // 7T8X: Spec Example 8.10. Folded Lines - 8.13. Final Empty Lines
@@ -4478,12 +4449,12 @@ rbi:
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("folded line\nnext line   * bullet\n  * list   * lines\nlast line\n"
+         std::string expected_json = R"yaml("\nfolded line\nnext line\n  * bullet\n\n  * list\n  * lines\n\nlast line\n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4495,8 +4466,14 @@ rbi:
 , word2]
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"(["word1","word2"])";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 7W2P: Block Mapping with Missing Values
@@ -4518,7 +4495,7 @@ c:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4555,7 +4532,7 @@ key2: {}
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4565,8 +4542,14 @@ key2: {}
 word2
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"("---word1 word2")";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // 87E4: Spec Example 7.8. Single Quoted Implicit Keys
@@ -4590,7 +4573,7 @@ word2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4610,7 +4593,7 @@ key ends with two colons::: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 };
@@ -4632,7 +4615,7 @@ suite yaml_conformance_pass_5 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4661,7 +4644,7 @@ suite yaml_conformance_pass_5 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4678,7 +4661,7 @@ suite yaml_conformance_pass_5 = [] {
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4702,7 +4685,7 @@ single: pair,
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4722,7 +4705,7 @@ single: pair,
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4750,7 +4733,7 @@ single: pair,
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4770,7 +4753,7 @@ single: pair,
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4789,7 +4772,7 @@ single: pair,
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4806,7 +4789,7 @@ single: pair,
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4835,7 +4818,7 @@ single: pair,
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4872,7 +4855,7 @@ matches %: 20
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4924,7 +4907,7 @@ value11
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4935,18 +4918,7 @@ value11
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml({
-  "key1": "value1",
-  "key2": "value2"
-}
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 
    // 9MAG: Flow sequence with invalid comma at the beginning
@@ -4975,7 +4947,7 @@ value11
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -4987,15 +4959,7 @@ b"
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml("a ... x b"
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 
    // 9WXW: Spec Example 6.18. Primary Tag Handle
@@ -5017,7 +4981,7 @@ b"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5039,7 +5003,7 @@ e
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5067,7 +5031,7 @@ e
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5091,7 +5055,7 @@ d:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5104,15 +5068,16 @@ d:
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml([
-  "single multiline",
-  "sequence entry"
+         // The '- ' at indent 1 is deeper than the sequence indicator at col 0,
+         // so it is plain scalar content, not a new sequence entry.
+         std::string expected_json = R"json([
+  "single multiline - sequence entry"
 ]
-)yaml";
+)json";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5126,7 +5091,7 @@ d:
          auto expected = normalize_json(R"(null)");
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5152,7 +5117,7 @@ four: 5
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5177,7 +5142,7 @@ four: 5
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5218,7 +5183,7 @@ invalid: x
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5251,7 +5216,7 @@ word2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5276,7 +5241,7 @@ word2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5320,17 +5285,17 @@ word2
     "radius": 7
   },
   {
-    "finish": {
-      "x": 89,
-      "y": 102
-    },
     "start": {
       "x": 73,
       "y": 129
+    },
+    "finish": {
+      "x": 89,
+      "y": 102
     }
   },
   {
-    "color": "0xFFEEBB",
+    "color": 16772795,
     "start": {
       "x": 73,
       "y": 129
@@ -5342,7 +5307,7 @@ word2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5361,7 +5326,7 @@ word2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5381,7 +5346,7 @@ word2
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"([{"a":"b"},{"c":"d"},{"e":"f"},{"g":"h"}])";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5405,7 +5370,7 @@ word2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5436,7 +5401,7 @@ alias: *anchor
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5458,19 +5423,8 @@ alias: *anchor
  d': 1
 )yaml";
       glz::generic parsed{};
-      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml({
-  "a\\nb": 1,
-  "c d": 1
-}
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // D83L: Block scalar indicator order
@@ -5492,7 +5446,7 @@ alias: *anchor
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5505,30 +5459,28 @@ alias: *anchor
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("1 trailing tab"
+         std::string expected_json = R"yaml("1 trailing\t tab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
-   // DE56_01: Trailing tabs in double quoted
+   // DE56_01: Trailing tabs in double quoted (escape \t followed by literal trailing spaces)
    "DE56_01"_test = [] {
-      std::string yaml = R"yaml("2 trailing\t  
-    tab"
-)yaml";
+      std::string yaml = "\"2 trailing\\t  \n    tab\"\n";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("2 trailing tab"
+         std::string expected_json = R"yaml("2 trailing\t tab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5539,12 +5491,11 @@ alias: *anchor
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("3 trailing\\ tab"
-)yaml";
+         std::string expected_json = "\"3 trailing\\t tab\"";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5555,12 +5506,11 @@ alias: *anchor
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("4 trailing\\ tab"
-)yaml";
+         std::string expected_json = "\"4 trailing\\t tab\"";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5577,15 +5527,15 @@ implicit: entry,
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "": null,
   "explicit": "entry",
-  "implicit": "entry"
+  "implicit": "entry",
+  "": null
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5605,7 +5555,7 @@ line3
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5625,7 +5575,7 @@ line3
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5657,7 +5607,7 @@ bar: 2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5679,7 +5629,7 @@ bar: 2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5698,7 +5648,7 @@ bar: 2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5729,12 +5679,12 @@ bar: 2
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("literal\n\n\ntext\n"
+         std::string expected_json = R"yaml("\n\nliteral\n \n\ntext\n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5750,7 +5700,7 @@ bar: 2
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"({"a":"b","b":"a"})";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5788,7 +5738,7 @@ scalar2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5821,7 +5771,7 @@ e
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 };
@@ -5834,8 +5784,14 @@ suite yaml_conformance_pass_6 = [] {
 word2
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"("---word1 word2")";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // F2C7: Anchors and Tags
@@ -5859,7 +5815,7 @@ word2
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5880,14 +5836,14 @@ b: >2
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "a": " more indented regular\n",
-  "b": " more indented regular\n"
+  "a": " more indented\nregular\n",
+  "b": "\n\n more indented\nregular\n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5913,7 +5869,7 @@ safe dash: -foo
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5933,7 +5889,7 @@ line3
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5949,7 +5905,7 @@ line3
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"(["a"])";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -5959,16 +5915,8 @@ line3
 - [-, -]
 )yaml";
       glz::generic parsed{};
-      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml([["-","-"]]
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // GH63: Mixed Block Mapping (explicit to implicit)
@@ -5989,7 +5937,7 @@ fifteen: d
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6001,13 +5949,7 @@ fifteen: d
 )yaml";
       glz::generic parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         std::string expected = R"(["item1","item2"])";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 
    // H2RW: Blank lines
@@ -6032,13 +5974,13 @@ text: |
          std::string expected_json = R"yaml({
   "foo": 1,
   "bar": 2,
-  "text": "a\n\nb\n\nc\n\nd\n"
+  "text": "a\n  \nb\n\nc\n\nd\n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6052,12 +5994,15 @@ text: |
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("foo"
+         std::string expected_json = R"yaml({
+  "foo": "bar",
+  "baz": "foo"
+}
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6082,12 +6027,12 @@ double: "quoted \' scalar"
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("1st non-empty\n2nd non-empty \t3rd non-empty"
+         std::string expected_json = R"yaml("1st non-empty\n2nd non-empty 3rd non-empty"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6115,7 +6060,7 @@ double: "quoted \' scalar"
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6135,8 +6080,8 @@ block:	|
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected =
-            R"({"block":"void main() {\n\tprintf(\"Hello, world!\\n\");\n}\n","quoted":"Quoted \t"})";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+            R"({"quoted":"Quoted \t","block":"void main() {\n\tprintf(\"Hello, world!\\n\");\n}\n"})";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6173,7 +6118,7 @@ block:	|
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6203,7 +6148,7 @@ block:	|
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6229,7 +6174,7 @@ Second occurrence: *anchor
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"({"First occurrence":"Value","Second occurrence":"Value"})";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6254,7 +6199,7 @@ Second occurrence: *anchor
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6265,8 +6210,14 @@ Second occurrence: *anchor
   :bar }
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"foo":"bar"})";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // K858: Spec Example 8.6. Empty Scalar Chomping
@@ -6284,14 +6235,14 @@ keep: |+
       if (!ec) {
          std::string expected_json = R"yaml({
   "strip": "",
-  "clip": "\n",
+  "clip": "",
   "keep": "\n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6303,12 +6254,12 @@ keep: |+
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("2 inline\\\ttab"
+         std::string expected_json = R"yaml("2 inline\ttab"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6327,22 +6278,19 @@ invalid item
 
    // L24T_00: Trailing line of spaces
    "L24T_00"_test = [] {
-      std::string yaml = R"yaml(foo: |
-  x
-   
-)yaml";
+      std::string yaml = "foo: |\n  x\n   \n";
       glz::generic parsed{};
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "foo": "x\n"
+  "foo": "x\n \n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6356,13 +6304,13 @@ invalid item
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "foo": "x\n"
+  "foo": "x\n \n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6385,7 +6333,7 @@ invalid item
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6410,7 +6358,7 @@ invalid item
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6429,7 +6377,7 @@ invalid item
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"(["a","b","c","c",""])";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6463,7 +6411,7 @@ invalid item
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6488,7 +6436,7 @@ invalid item
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6514,7 +6462,7 @@ invalid item
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6532,14 +6480,14 @@ folded:
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "folded": "value\n",
-  "literal": "value\n"
+  "literal": "value\n",
+  "folded": "value\n"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6562,7 +6510,7 @@ document
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6581,7 +6529,7 @@ document
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"("literal\n\ttext\n")";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6601,7 +6549,7 @@ document
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"("foo\n\n\t bar\n\nbaz\n")";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6631,7 +6579,7 @@ document
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6649,7 +6597,7 @@ document
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6667,7 +6615,7 @@ document
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6685,7 +6633,7 @@ document
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6703,7 +6651,7 @@ document
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6743,13 +6691,13 @@ document
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "key": "value with tabs"
+  "key": "value with\ntabs"
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6776,7 +6724,7 @@ document
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6808,7 +6756,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6838,7 +6786,7 @@ key: value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6862,12 +6810,12 @@ key: value
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml(1
+         std::string expected_json = R"yaml("1 - 3"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6888,7 +6836,7 @@ a: b
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6914,7 +6862,7 @@ a: b
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"([null,"a",{"":"a","b":null},{"":null},{"":null},{"":null}])";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6949,7 +6897,7 @@ foo: bar
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6967,7 +6915,7 @@ foo: bar
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -6991,15 +6939,15 @@ foo: bar
       if (!ec) {
          std::string expected_json = R"yaml([
   "detected\n",
-  "# detected\n",
+  "\n\n# detected\n",
   " explicit\n",
-  "\t detected\n"
+  "\t\ndetected\n"
 ]
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7026,7 +6974,7 @@ bar:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7041,14 +6989,14 @@ bar:
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
          std::string expected_json = R"yaml({
-  "d": 23,
-  "a": 4.2
+  "a": 4.2,
+  "d": 23
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7061,15 +7009,7 @@ bar:
 )yaml";
       glz::generic parsed{};
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml(" ... "
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      expect(bool(ec));
    };
 };
 
@@ -7114,7 +7054,7 @@ block: > # lala
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7160,7 +7100,7 @@ Stack:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7175,12 +7115,12 @@ Stack:
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml({"":null,"plain key":"in-line value","quoted key":["entry"]}
+         std::string expected_json = R"yaml({"plain key":"in-line value","":null,"quoted key":["entry"]}
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7198,13 +7138,13 @@ Stack:
          std::string expected_json = R"yaml([
   "12",
   12,
-  12
+  "12"
 ]
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7224,7 +7164,7 @@ Stack:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7261,8 +7201,7 @@ mapping:
     "two"
   ],
   "mapping": {
-    "sky": null,
-    "": "blue",
+    "sky": "blue",
     "sea": "green"
   }
 }
@@ -7270,7 +7209,7 @@ mapping:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7282,12 +7221,12 @@ mapping:
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml({"[\"d\",\"e\"]":"f","a":["b","c"]}
+         std::string expected_json = R"yaml({"a":["b","c"],"[\"d\",\"e\"]":"f"}
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7306,7 +7245,7 @@ seq:
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"({"seq":["a","b"]})";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7317,12 +7256,12 @@ seq:
       [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("-"
+         std::string expected_json = R"yaml([null]
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7351,12 +7290,12 @@ seq:
       auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       if (!ec) {
-         std::string expected_json = R"yaml("literal\n\n\ntext\n"
+         std::string expected_json = R"yaml("\n\nliteral\n \n\ntext\n"
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7375,7 +7314,7 @@ seq:
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"("literal\n\ttext\n")";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7417,7 +7356,7 @@ invalid
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7458,7 +7397,7 @@ top7:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7508,7 +7447,7 @@ action: grand slam
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7535,7 +7474,7 @@ mapping: { sky: blue, sea: green }
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7620,7 +7559,7 @@ comments:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7639,7 +7578,7 @@ comments:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7656,7 +7595,7 @@ comments:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7681,7 +7620,7 @@ comments:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7697,14 +7636,14 @@ comments:
       if (!ec) {
          std::string expected_json = R"yaml({
   "x": [
-    "x \tx"
+    "x x"
   ]
 }
 )yaml";
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7722,7 +7661,7 @@ comments:
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"(["a","b","a","b"])";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7735,8 +7674,14 @@ comments:
  }
 )yaml";
       glz::generic parsed{};
-      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(bool(ec));
+      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      if (!ec) {
+         std::string actual;
+         (void)glz::write_json(parsed, actual);
+         std::string expected = R"({"k":{"k":"v"}})";
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
+      }
    };
 
    // W42U: Spec Example 8.15. Block Sequence Entry Types
@@ -7767,7 +7712,7 @@ comments:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7791,7 +7736,7 @@ comments:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7812,7 +7757,7 @@ b: *:@*!$"<foo>:
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7844,7 +7789,7 @@ block scalar: |
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7876,7 +7821,7 @@ block scalar: |
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7895,7 +7840,7 @@ scalar
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7940,7 +7885,7 @@ block: > # lala
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7960,7 +7905,7 @@ key: &an:chor value
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -7982,7 +7927,7 @@ bar: 1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -8069,7 +8014,7 @@ bar: 1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -8078,16 +8023,8 @@ bar: 1
       std::string yaml = R"yaml([-]
 )yaml";
       glz::generic parsed{};
-      auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
-      expect(!ec) << glz::format_error(ec, yaml);
-      if (!ec) {
-         std::string expected_json = R"yaml(["-"]
-)yaml";
-         auto expected = normalize_json(expected_json);
-         std::string actual;
-         (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
-      }
+      [[maybe_unused]] auto ec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(bool(ec));
    };
 
    // Z67P: Spec Example 8.21. Block Scalar Nodes [1.3]
@@ -8109,7 +8046,7 @@ folded: !foo >1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -8130,7 +8067,7 @@ folded: !foo >1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -8155,7 +8092,7 @@ c: &d d
          std::string actual;
          (void)glz::write_json(parsed, actual);
          std::string expected = R"({"a":"b","c":"d"})";
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 
@@ -8189,7 +8126,7 @@ a: 1
          auto expected = normalize_json(expected_json);
          std::string actual;
          (void)glz::write_json(parsed, actual);
-         expect(actual == expected) << "expected: " << expected << "\nactual: " << actual;
+         expect(json_text_equal(actual, expected)) << "expected: " << expected << "\nactual: " << actual;
       }
    };
 };

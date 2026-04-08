@@ -75,11 +75,13 @@ namespace glz
                      parse<Format>::template op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     auto success = (value.val.*(value.constraint))(input);
-                     if (not success) {
-                        ctx.error = error_code::constraint_violated;
-                        ctx.custom_error_message = V::message;
-                        return;
+                     if constexpr (!check_skip_read_constraint(Opts)) {
+                        auto success = (value.val.*(value.constraint))(input);
+                        if (not success) {
+                           ctx.error = error_code::constraint_violated;
+                           ctx.custom_error_message = V::message;
+                           return;
+                        }
                      }
                      assign_to_target(std::move(input));
                   }
@@ -104,11 +106,13 @@ namespace glz
                         parse<Format>::template op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        auto success = constraint(input);
-                        if (not success) {
-                           ctx.error = error_code::constraint_violated;
-                           ctx.custom_error_message = V::message;
-                           return;
+                        if constexpr (!check_skip_read_constraint(Opts)) {
+                           auto success = constraint(input);
+                           if (not success) {
+                              ctx.error = error_code::constraint_violated;
+                              ctx.custom_error_message = V::message;
+                              return;
+                           }
                         }
                         assign_to_target(std::move(input));
                      }
@@ -144,11 +148,13 @@ namespace glz
                      parse<Format>::template op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     auto success = value.constraint(value.val, input);
-                     if (not success) {
-                        ctx.error = error_code::constraint_violated;
-                        ctx.custom_error_message = V::message;
-                        return;
+                     if constexpr (!check_skip_read_constraint(Opts)) {
+                        auto success = value.constraint(value.val, input);
+                        if (not success) {
+                           ctx.error = error_code::constraint_violated;
+                           ctx.custom_error_message = V::message;
+                           return;
+                        }
                      }
                      assign_to_target(std::move(input));
                   }

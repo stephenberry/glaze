@@ -169,6 +169,10 @@ export namespace glz
    // Shrinks dynamic containers to new size to save memory
 
    // ---
+   // bool error_on_missing_array_elements = false;
+   // Require arrays to have all elements expected by the target type (tuples, glaze_array_t, tuple_t)
+
+   // ---
    // bool error_on_const_read = false;
    // Error if attempt is made to read into a const value, by default the value is skipped without error
 
@@ -196,6 +200,10 @@ export namespace glz
    // When specified, uses std::format_to instead of Dragonbox for float/double serialization
 
    // ---
+   // bool skip_read_constraint = false;
+   // Skip read_constraint validation during reading. Useful for performance when constraints are known to be valid
+
+   // ---
    // bool skip_self_constraint = false;
    // Skip self_constraint validation during reading. Useful for performance when constraints are known to be valid
    // or when validation should be deferred.
@@ -214,7 +222,21 @@ export namespace glz
    // Use preset struct: glz::opts_size
 
    // ---
-   // std::size_t max_string_length = 0;
+   // bool reflect_enums = false;
+   // When true and GLZ_REFLECTION26 is enabled, automatically reflects all enum types
+   // using C++26 P2996 reflection, serializing them as strings instead of integers.
+   // This allows enum string serialization without explicit glz::meta specializations.
+
+   // ---
+   // bool qualified_type_names = false;
+   // When true and GLZ_REFLECTION26 is enabled, type_name_for_opts and name_for_opts return
+   // fully-qualified type names with namespace prefixes (e.g., "mylib::MyType" instead of "MyType").
+   // This uses P2996's std::meta::qualified_name_of instead of display_string_of.
+   // Useful for avoiding name collisions when types in different namespaces share the same name.
+   // Note: Only affects P2996 reflection. Traditional reflection always returns qualified names.
+
+   // ---
+   // size_t max_string_length = 0;
    // Maximum length for string allocations when reading. 0 means no limit (default).
    // When set, strings exceeding this length will fail with error_code::invalid_length.
    // Useful for preventing memory exhaustion attacks from malicious input.
@@ -270,6 +292,13 @@ export namespace glz
    // Skip escape sequence encoding/decoding for strings.
    // Improves read/write performance when strings are known to not contain escape characters.
    // Can be combined with 'raw' to write completely unprocessed string content.
+
+   // ---
+   // bool aligned_arrays = false;
+   // When true, BEVE typed arrays for numeric types use alignment padding so that the data payload
+   // begins at a memory offset that is a multiple of the element size. This enables zero-copy
+   // access via std::span<T> directly into the message buffer, eliminating copy and allocation overhead.
+   // Only applies to BEVE format. The alignment padding is deterministic and does not need to be stored.
 
    // ---
    // bool structs_as_arrays = false;
@@ -352,6 +381,16 @@ export namespace glz
       }
    }
 
+   consteval bool check_error_on_missing_array_elements(auto&& Opts)
+   {
+      if constexpr (requires { Opts.error_on_missing_array_elements; }) {
+         return Opts.error_on_missing_array_elements;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_error_on_const_read(auto&& Opts)
    {
       if constexpr (requires { Opts.error_on_const_read; }) {
@@ -386,6 +425,16 @@ export namespace glz
    {
       if constexpr (requires { Opts.validate_trailing_whitespace; }) {
          return Opts.validate_trailing_whitespace;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_null_terminated(auto&& Opts)
+   {
+      if constexpr (requires { Opts.null_terminated; }) {
+         return Opts.null_terminated;
       }
       else {
          return false;
@@ -620,6 +669,16 @@ export namespace glz
       }
    }
 
+   consteval bool check_skip_read_constraint(auto&& Opts)
+   {
+      if constexpr (requires { Opts.skip_read_constraint; }) {
+         return Opts.skip_read_constraint;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_skip_self_constraint(auto&& Opts)
    {
       if constexpr (requires { Opts.skip_self_constraint; }) {
@@ -705,6 +764,36 @@ export namespace glz
    }
 
    consteval bool is_size_optimized(auto&& Opts) { return check_optimization_level(Opts) == optimization_level::size; }
+
+   consteval bool check_reflect_enums(auto&& Opts)
+   {
+      if constexpr (requires { Opts.reflect_enums; }) {
+         return Opts.reflect_enums;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_qualified_type_names(auto&& Opts)
+   {
+      if constexpr (requires { Opts.qualified_type_names; }) {
+         return Opts.qualified_type_names;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_aligned_arrays(auto&& Opts)
+   {
+      if constexpr (requires { Opts.aligned_arrays; }) {
+         return Opts.aligned_arrays;
+      }
+      else {
+         return false;
+      }
+   }
 
    // Check if raw pointer allocation is possible (either compile-time or runtime option available)
    template <auto Opts, class Ctx>
@@ -1348,6 +1437,8 @@ export namespace glz
    template <uint32_t Format = INVALID, class T = void>
    struct from;
 
+   // Note: specified and is_specified are defined in glaze/core/traits.hpp
+
    template <uint32_t Format = INVALID, class T = void>
    struct to_partial;
 
@@ -1370,6 +1461,17 @@ export namespace glz
    template <uint32_t Format>
    struct serialize
    {};
+
+   // Default context type for a format.
+   // Formats that need a richer context (e.g. YAML) specialize this.
+   template <uint32_t Format>
+   struct format_context
+   {
+      using type = context;
+   };
+
+   template <uint32_t Format>
+   using format_context_t = typename format_context<Format>::type;
 
    template <uint32_t Format>
    struct serialize_partial

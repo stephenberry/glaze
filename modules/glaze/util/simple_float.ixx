@@ -33,8 +33,8 @@ namespace glz::simple_float
          int32_t exp10{};
       };
 
-      constexpr int32_t max_exp10 = 400;
-      constexpr int32_t min_exp10 = -400;
+      inline constexpr int32_t max_exp10 = 400;
+      inline constexpr int32_t min_exp10 = -400;
 
       // Strict JSON-compliant number parser
       // JSON number format (RFC 8259):

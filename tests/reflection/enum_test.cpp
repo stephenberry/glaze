@@ -77,7 +77,7 @@ suite sparse_enum_tests = [] {
    };
 
    "sparse_enum_deserialization"_test = [] {
-      SparseEnum e;
+      SparseEnum e{};
       expect(not glz::read_json(e, R"("Zero")"));
       expect(e == SparseEnum::Zero);
 
@@ -90,7 +90,7 @@ suite sparse_enum_tests = [] {
          std::string json;
          expect(not glz::write_json(val, json));
 
-         SparseEnum parsed;
+         SparseEnum parsed{};
          expect(not glz::read_json(parsed, json));
          expect(parsed == val);
       }
@@ -101,7 +101,7 @@ suite sparse_enum_tests = [] {
          std::string json;
          expect(not glz::write_json(val, json));
 
-         SparseEnumMillions parsed;
+         SparseEnumMillions parsed{};
          expect(not glz::read_json(parsed, json));
          expect(parsed == val);
       }
@@ -112,7 +112,7 @@ suite sparse_enum_tests = [] {
          std::string json;
          expect(not glz::write_json(val, json));
 
-         SparseEnumPow2 parsed;
+         SparseEnumPow2 parsed{};
          expect(not glz::read_json(parsed, json));
          expect(parsed == val);
       }
@@ -154,14 +154,14 @@ suite sparse_enum_tests = [] {
          std::string json;
          expect(not glz::write_json(val, json));
 
-         SparseEnumXor parsed;
+         SparseEnumXor parsed{};
          expect(not glz::read_json(parsed, json));
          expect(parsed == val);
       }
    };
 
    "sparse_enum_xor_deserialization"_test = [] {
-      SparseEnumXor e;
+      SparseEnumXor e{};
       expect(not glz::read_json(e, R"("NO_ERROR")"));
       expect(e == SparseEnumXor::no_error);
 
@@ -184,7 +184,7 @@ suite sparse_enum_tests = [] {
       expect(not glz::write_json(obj, json));
       expect(json == R"({"e1":"Zero","e2":"FourHundredMillion"})") << json;
 
-      SparseEnumTestStruct parsed;
+      SparseEnumTestStruct parsed{};
       expect(not glz::read_json(parsed, json));
       expect(parsed.e1 == SparseEnum::Zero);
       expect(parsed.e2 == SparseEnum::FourHundredMillion);
@@ -260,7 +260,7 @@ suite two_element_enum_tests = [] {
    };
 
    "two_element_small_deserialization"_test = [] {
-      TwoElementSmall e;
+      TwoElementSmall e{};
       expect(not glz::read_json(e, R"("First")"));
       expect(e == TwoElementSmall::First);
 
@@ -273,7 +273,7 @@ suite two_element_enum_tests = [] {
          std::string json;
          expect(not glz::write_json(val, json));
 
-         TwoElementSmall parsed;
+         TwoElementSmall parsed{};
          expect(not glz::read_json(parsed, json));
          expect(parsed == val);
       }
@@ -285,7 +285,7 @@ suite two_element_enum_tests = [] {
          std::string json;
          expect(not glz::write_json(val, json));
 
-         TwoElementLargeU64 parsed;
+         TwoElementLargeU64 parsed{};
          expect(not glz::read_json(parsed, json));
          expect(parsed == val);
       }
@@ -297,7 +297,7 @@ suite two_element_enum_tests = [] {
          std::string json;
          expect(not glz::write_json(val, json));
 
-         TwoElementNegative parsed;
+         TwoElementNegative parsed{};
          expect(not glz::read_json(parsed, json));
          expect(parsed == val);
       }
@@ -308,7 +308,7 @@ suite two_element_enum_tests = [] {
          std::string json;
          expect(not glz::write_json(val, json));
 
-         TwoElementSequential parsed;
+         TwoElementSequential parsed{};
          expect(not glz::read_json(parsed, json));
          expect(parsed == val);
       }
@@ -327,7 +327,7 @@ suite two_element_enum_tests = [] {
    };
 
    "two_element_named_deserialization"_test = [] {
-      TwoElementNamed e;
+      TwoElementNamed e{};
       expect(not glz::read_json(e, R"("OFF")"));
       expect(e == TwoElementNamed::Off);
 
@@ -1143,7 +1143,7 @@ void test_enum_roundtrip()
       E val = static_cast<E>(glz::get<I>(glz::reflect<E>::values));
       std::string json;
       expect(not glz::write_json(val, json));
-      E parsed;
+      E parsed{};
       expect(not glz::read_json(parsed, json));
       expect(parsed == val) << "Failed for value at index " << I;
    });

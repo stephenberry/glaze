@@ -974,4 +974,225 @@ suite json_patch_tests = [] {
    };
 };
 
+// ============================================================================
+// generic_i64 Patch Tests
+// ============================================================================
+
+suite generic_i64_patch_tests = [] {
+   "i64 basic add operation"_test = [] {
+      auto doc = glz::read_json<glz::generic_i64>(R"({"foo":"bar"})");
+      expect(doc.has_value());
+
+      glz::patch_document_t<glz::generic_i64> ops;
+      glz::patch_op_t<glz::generic_i64> op;
+      op.op = glz::patch_op_type::add;
+      op.path = "/baz";
+      op.value = glz::generic_i64{};
+      op.value->data = int64_t{9223372036854775807}; // INT64_MAX
+      ops.push_back(op);
+
+      auto ec = glz::patch(*doc, ops);
+      expect(!ec);
+
+      auto result = glz::write_json(*doc);
+      expect(result.has_value());
+      expect(*result == R"({"foo":"bar","baz":9223372036854775807})");
+   };
+
+   "i64 replace preserves integer precision"_test = [] {
+      auto doc = glz::read_json<glz::generic_i64>(R"({"value":42})");
+      expect(doc.has_value());
+
+      glz::patch_document_t<glz::generic_i64> ops;
+      glz::patch_op_t<glz::generic_i64> op;
+      op.op = glz::patch_op_type::replace;
+      op.path = "/value";
+      op.value = glz::generic_i64{};
+      op.value->data = int64_t{9007199254740993}; // 2^53 + 1, not representable as double
+      ops.push_back(op);
+
+      auto ec = glz::patch(*doc, ops);
+      expect(!ec);
+
+      auto result = glz::write_json(*doc);
+      expect(result.has_value());
+      expect(*result == R"({"value":9007199254740993})");
+   };
+
+   "i64 diff and patch round-trip"_test = [] {
+      auto source = glz::read_json<glz::generic_i64>(R"({"a":1,"b":2})");
+      auto target = glz::read_json<glz::generic_i64>(R"({"a":1,"b":9223372036854775807,"c":3})");
+      expect(source.has_value() && target.has_value());
+
+      auto ops = glz::diff(*source, *target);
+      expect(ops.has_value());
+
+      auto result = *source;
+      auto ec = glz::patch(result, *ops);
+      expect(!ec);
+      expect(glz::equal(result, *target));
+   };
+
+   "i64 test operation"_test = [] {
+      auto doc = glz::read_json<glz::generic_i64>(R"({"value":9223372036854775807})");
+      expect(doc.has_value());
+
+      glz::patch_document_t<glz::generic_i64> ops;
+      glz::patch_op_t<glz::generic_i64> op;
+      op.op = glz::patch_op_type::test;
+      op.path = "/value";
+      op.value = glz::generic_i64{};
+      op.value->data = int64_t{9223372036854775807};
+      ops.push_back(op);
+
+      auto ec = glz::patch(*doc, ops);
+      expect(!ec);
+   };
+
+   "i64 move operation"_test = [] {
+      auto doc = glz::read_json<glz::generic_i64>(R"({"a":{"x":100},"b":{}})");
+      expect(doc.has_value());
+
+      glz::patch_document_t<glz::generic_i64> ops;
+      glz::patch_op_t<glz::generic_i64> op;
+      op.op = glz::patch_op_type::move;
+      op.path = "/b/x";
+      op.from = "/a/x";
+      ops.push_back(op);
+
+      auto ec = glz::patch(*doc, ops);
+      expect(!ec);
+
+      auto result = glz::write_json(*doc);
+      expect(result.has_value());
+      expect(*result == R"({"a":{},"b":{"x":100}})");
+   };
+
+   "i64 merge patch"_test = [] {
+      auto target = glz::read_json<glz::generic_i64>(R"({"a":1,"b":"hello"})");
+      expect(target.has_value());
+
+      auto ec = glz::merge_patch(*target, std::string_view{R"({"b":"world","c":9223372036854775807})"});
+      expect(!ec);
+
+      auto result = glz::write_json(*target);
+      expect(result.has_value());
+      expect(*result == R"({"a":1,"b":"world","c":9223372036854775807})");
+   };
+
+   "i64 merge diff"_test = [] {
+      auto source = glz::read_json<glz::generic_i64>(R"({"a":1,"b":2})");
+      auto target = glz::read_json<glz::generic_i64>(R"({"a":1,"b":9223372036854775807})");
+      expect(source.has_value() && target.has_value());
+
+      auto patch = glz::merge_diff(*source, *target);
+      expect(patch.has_value());
+
+      auto patch_json = glz::write_json(*patch);
+      expect(patch_json.has_value());
+      expect(*patch_json == R"({"b":9223372036854775807})");
+   };
+
+   "i64 patched (non-mutating)"_test = [] {
+      auto doc = glz::read_json<glz::generic_i64>(R"({"x":1})");
+      expect(doc.has_value());
+
+      auto ops = glz::diff(*doc, *glz::read_json<glz::generic_i64>(R"({"x":9007199254740993})"));
+      expect(ops.has_value());
+
+      auto result = glz::patched(*doc, *ops);
+      expect(result.has_value());
+
+      auto json = glz::write_json(*result);
+      expect(json.has_value());
+      expect(*json == R"({"x":9007199254740993})");
+
+      // Original should be unchanged
+      auto original_json = glz::write_json(*doc);
+      expect(*original_json == R"({"x":1})");
+   };
+
+   "i64 patch_json string convenience"_test = [] {
+      auto result = glz::patch_json<glz::generic_i64>(R"({"a":1})",
+                                                      R"([{"op":"replace","path":"/a","value":9223372036854775807}])");
+      expect(result.has_value());
+      expect(*result == R"({"a":9223372036854775807})");
+   };
+};
+
+// ============================================================================
+// generic_u64 Patch Tests
+// ============================================================================
+
+suite generic_u64_patch_tests = [] {
+   "u64 basic add operation"_test = [] {
+      auto doc = glz::read_json<glz::generic_u64>(R"({"foo":"bar"})");
+      expect(doc.has_value());
+
+      glz::patch_document_t<glz::generic_u64> ops;
+      glz::patch_op_t<glz::generic_u64> op;
+      op.op = glz::patch_op_type::add;
+      op.path = "/baz";
+      op.value = glz::generic_u64{};
+      op.value->data = uint64_t{18446744073709551615ULL}; // UINT64_MAX
+      ops.push_back(op);
+
+      auto ec = glz::patch(*doc, ops);
+      expect(!ec);
+
+      auto result = glz::write_json(*doc);
+      expect(result.has_value());
+      expect(*result == R"({"foo":"bar","baz":18446744073709551615})");
+   };
+
+   "u64 diff and patch round-trip"_test = [] {
+      auto source = glz::read_json<glz::generic_u64>(R"({"a":1,"b":2})");
+      auto target = glz::read_json<glz::generic_u64>(R"({"a":1,"b":18446744073709551615,"c":3})");
+      expect(source.has_value() && target.has_value());
+
+      auto ops = glz::diff(*source, *target);
+      expect(ops.has_value());
+
+      auto result = *source;
+      auto ec = glz::patch(result, *ops);
+      expect(!ec);
+      expect(glz::equal(result, *target));
+   };
+
+   "u64 test operation"_test = [] {
+      auto doc = glz::read_json<glz::generic_u64>(R"({"value":18446744073709551615})");
+      expect(doc.has_value());
+
+      glz::patch_document_t<glz::generic_u64> ops;
+      glz::patch_op_t<glz::generic_u64> op;
+      op.op = glz::patch_op_type::test;
+      op.path = "/value";
+      op.value = glz::generic_u64{};
+      op.value->data = uint64_t{18446744073709551615ULL};
+      ops.push_back(op);
+
+      auto ec = glz::patch(*doc, ops);
+      expect(!ec);
+   };
+
+   "u64 merge patch"_test = [] {
+      auto target = glz::read_json<glz::generic_u64>(R"({"a":1})");
+      expect(target.has_value());
+
+      auto ec = glz::merge_patch(*target, std::string_view{R"({"b":18446744073709551615})"});
+      expect(!ec);
+
+      auto result = glz::write_json(*target);
+      expect(result.has_value());
+      expect(*result == R"({"a":1,"b":18446744073709551615})");
+   };
+
+   "u64 patch_json string convenience"_test = [] {
+      auto result = glz::patch_json<glz::generic_u64>(R"({"a":1})",
+                                                      R"([{"op":"replace","path":"/a","value":18446744073709551615}])");
+      expect(result.has_value());
+      expect(*result == R"({"a":18446744073709551615})");
+   };
+};
+
 int main() { return 0; }

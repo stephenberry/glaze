@@ -9,7 +9,7 @@ Formats Supported:
 - [CSV](https://stephenberry.github.io/glaze/csv/) (Comma Separated Value) | `glaze/csv.hpp`
 - [MessagePack](https://stephenberry.github.io/glaze/msgpack/) | `glaze/msgpack.hpp`
 - [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation) | `glaze/stencil/stencil.hpp`
-- [TOML](https://stephenberry.github.io/glaze/toml/) (Tom's Obvious, Minimal Language) | `glaze/toml.hpp`
+- [TOML 1.1](https://stephenberry.github.io/glaze/toml/) (Tom's Obvious, Minimal Language) | `glaze/toml.hpp`
 - [YAML](https://stephenberry.github.io/glaze/yaml/) | `glaze/yaml.hpp`
 - [EETF](https://stephenberry.github.io/glaze/EETF/erlang-external-term-format/) (Erlang External Term Format) | `glaze/eetf.hpp`
 - [And Many More Features](https://stephenberry.github.io/glaze/)
@@ -18,23 +18,47 @@ Formats Supported:
 >
 > Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
 
-> [!TIP]
->
-> **New: Streaming I/O Support** - Glaze now supports streaming serialization and deserialization for processing large files with bounded memory usage. Write JSON/BEVE directly to output streams with automatic flushing, or read from input streams with automatic refilling. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for details.
-
-> [!IMPORTANT]
->
-> **Breaking Changes in v7.0.0:**
-> - Options `quoted_num`, `raw_string`, and `structs_as_arrays` moved out of `glz::opts` to [inheritable options](https://stephenberry.github.io/glaze/options/)
-> - `glz::raw` renamed to `glz::unquoted` (wrapper and option)
-> - `glz::number` renamed to `glz::string_as_number` (wrapper and option)
->
-> Deprecated names remain available with compiler warnings. Custom opts structs using old names will produce static_assert errors with migration instructions.
-
-## With compile time reflection for MSVC, Clang, and GCC!
+## With C++23 & C++26 compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
 - See [example on Compiler Explorer](https://gcc.godbolt.org/z/T4To5fKfz)
+
+## C++26 P2996 Reflection Support
+
+Glaze now supports [P2996 "Reflection for C++26"](https://wg21.link/P2996). When enabled, P2996 unlocks capabilities that aren't possible with traditional compile-time reflection:
+
+- **Non-aggregate types** — classes with constructors, virtual functions, and inheritance just work
+- **Automatic enum serialization** — no `glz::meta` needed, enums serialize to strings automatically
+- **Unlimited struct members** — no 128-member cap
+- **Private member access** — reflect on all members regardless of access specifiers
+- **Standardized** — no compiler-specific hacks, built on `std::meta`
+
+```cpp
+// Classes with constructors — just works with P2996
+class User {
+public:
+   std::string name;
+   int age;
+   User() = default;
+   User(std::string n, int a) : name(std::move(n)), age(a) {}
+};
+
+User u{"Alice", 30};
+auto json = glz::write_json(u).value_or("error");
+// {"name":"Alice","age":30}
+
+// Enums serialize as strings — no glz::meta required
+enum class Color { Red, Green, Blue };
+Color c = Color::Green;
+
+struct reflect_enums_opts : glz::opts {
+   bool reflect_enums = true;
+};
+auto color_json = glz::write<reflect_enums_opts{}>(c).value_or("error");
+// "Green"
+```
+
+Supported compilers: [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) (`-std=c++26 -freflection`) and [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996). See the [P2996 documentation](https://stephenberry.github.io/glaze/p2996-reflection/) for setup and details.
 
 ## [📖 Documentation](https://stephenberry.github.io/glaze/)
 
@@ -44,6 +68,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 
 - Pure, compile time reflection for structs
   - Powerful meta specialization system for custom names and behavior
+  - [C++26 P2996 reflection](https://stephenberry.github.io/glaze/p2996-reflection/) support — non-aggregates, automatic enums, unlimited members
 - JSON [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) compliance with UTF-8 validation
 - Standard C++ library support
 - Header only
@@ -267,6 +292,28 @@ set(glaze_DISABLE_ALWAYS_INLINE ON)
 ```
 
 > **Note:** This reduces compilation time and binary size, which can be useful for embedded systems where size is critical. For additional binary size reduction, see Optimization Levels below.
+
+### C++26 P2996 Reflection
+
+Glaze supports [C++26 P2996 reflection](https://wg21.link/P2996) as an alternative backend for struct reflection. This replaces traditional `__PRETTY_FUNCTION__` parsing with standardized reflection primitives.
+
+```cmake
+set(glaze_ENABLE_REFLECTION26 ON)
+```
+
+Requires [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) or [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996) with flags:
+
+**GCC 16+:**
+```bash
+-std=c++26 -freflection
+```
+
+**Bloomberg clang-p2996:**
+```bash
+-std=c++26 -freflection -fexpansion-statements -stdlib=libc++
+```
+
+Benefits include unlimited struct members (vs 128 with traditional reflection), cleaner type names, and future C++ standards compliance. See [P2996 Reflection](https://stephenberry.github.io/glaze/p2996-reflection/) for details.
 
 ### Optimization Levels (Embedded/Size Optimization)
 

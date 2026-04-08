@@ -70,16 +70,10 @@ namespace glz
 
    namespace detail
    {
-      export template <std::array V>
-      struct make_static
-      {
-         static constexpr auto value = V;
-      };
-
       template <const std::string_view&... Strs>
       inline constexpr std::string_view join()
       {
-         constexpr auto joined_arr = []() {
+         static constexpr auto joined_arr = []() {
             constexpr size_t len = (Strs.size() + ... + 0);
             std::array<char, len + 1> arr;
             auto append = [i = 0, &arr](const auto& s) mutable {
@@ -89,8 +83,7 @@ namespace glz
             arr[len] = '\0';
             return arr;
          }();
-         auto& static_arr = make_static<joined_arr>::value;
-         return {static_arr.data(), static_arr.size() - 1};
+         return {joined_arr.data(), joined_arr.size() - 1};
       }
    }
 
@@ -100,7 +93,7 @@ namespace glz
 
    export template <const std::string_view& Key, bool Prettify = false>
    inline constexpr auto quoted_key_v = []() -> std::string_view {
-      constexpr auto quoted = [] {
+      static constexpr auto quoted = [] {
          constexpr auto N = Key.size();
          std::array<char, N + 4 + Prettify> result; // [quote, key, quote, colon, (prettify? space), null]
          result[0] = '"';
@@ -118,8 +111,6 @@ namespace glz
          }
          return result;
       }();
-      // TODO: make_static required by GCC 12
-      auto& static_arr = detail::make_static<quoted>::value;
-      return {static_arr.data(), static_arr.size() - 1};
+      return {quoted.data(), quoted.size() - 1};
    }();
 }

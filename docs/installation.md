@@ -7,7 +7,7 @@ This guide covers some of the ways to install and integrate the Glaze JSON libra
 ### Compiler Support
 - **C++23** standard required
 - **Clang 17+**
-- **GCC 12+** 
+- **GCC 13+** 
 - **MSVC 2022+**
 - **Apple Clang (latest Xcode)**
 
@@ -176,6 +176,19 @@ Or define the macro directly before including Glaze headers:
 #define GLZ_DISABLE_SIMD
 #include "glaze/glaze.hpp"
 ```
+
+### C++26 P2996 Reflection
+
+Enable C++26 P2996 reflection support for use with Bloomberg clang-p2996 or future C++26 compilers:
+
+```cmake
+set(glaze_ENABLE_REFLECTION26 ON)
+FetchContent_MakeAvailable(glaze)
+```
+
+This replaces traditional `__PRETTY_FUNCTION__` reflection with standardized P2996 reflection primitives. Requires compiler flags: `-std=c++26 -freflection -fexpansion-statements -stdlib=libc++`
+
+See [P2996 Reflection](p2996-reflection.md) for details.
 
 ### Disable Forced Inlining
 

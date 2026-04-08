@@ -42,9 +42,17 @@ namespace glz
    // Response builder
    struct response
    {
+      enum header_flag : uint8_t {
+         has_content_length = 1,
+         has_date = 2,
+         has_server = 4,
+         has_connection = 8,
+      };
+
       int status_code = 200;
       std::unordered_map<std::string, std::string> response_headers{};
       std::string response_body{};
+      uint8_t user_headers_set{};
 
       inline response& status(int code)
       {
@@ -55,13 +63,26 @@ namespace glz
       inline response& header(std::string_view name, std::string_view value)
       {
          // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-         response_headers[to_lower_case(name)] = std::string(value);
+         std::string key(name);
+         for (auto& c : key) c = ascii_tolower(c);
+
+         // Track which default headers the user has set
+         if (key == "content-length")
+            user_headers_set |= has_content_length;
+         else if (key == "date")
+            user_headers_set |= has_date;
+         else if (key == "server")
+            user_headers_set |= has_server;
+         else if (key == "connection")
+            user_headers_set |= has_connection;
+
+         response_headers[std::move(key)] = std::string(value);
          return *this;
       }
 
       inline response& body(std::string_view content)
       {
-         response_body = std::string(content);
+         response_body.assign(content.data(), content.size());
          return *this;
       }
 
@@ -82,6 +103,15 @@ namespace glz
             response_body = R"({"error":"glz::write_json error"})"; // rare that this would ever happen
          }
          return *this;
+      }
+
+      // Reset response for reuse, preserving allocated capacity
+      void clear()
+      {
+         status_code = 200;
+         response_headers.clear();
+         response_body.clear(); // preserves capacity
+         user_headers_set = 0;
       }
 
       inline response& content_type(std::string_view type) { return header("content-type", type); }
@@ -113,7 +143,7 @@ namespace glz
       /**
        * @brief Human-readable description of the constraint
        *
-       * Used for error reporting and debugging.
+       * Used for OpenAPI parameter descriptions and debugging output.
        */
       std::string description{};
 
@@ -743,15 +773,7 @@ namespace glz
 
          // Optimization: for non-parameterized routes, store them directly
          if (path_str.find(':') == std::string::npos && path_str.find('*') == std::string::npos) {
-            // Check for conflicts first
-            auto& method_handlers = direct_routes[path_str];
-            if (method_handlers.find(method) != method_handlers.end()) {
-               throw std::runtime_error("Route conflict: handler already exists for " + std::string(to_string(method)) +
-                                        " " + path_str);
-            }
-
-            // Store the route directly
-            method_handlers[method] = handle;
+            direct_routes[path_str][method] = handle;
             return;
          }
 
@@ -827,12 +849,6 @@ namespace glz
 
                current = current->static_children[segment].get();
             }
-         }
-
-         // Check for route conflict
-         if (current->is_endpoint && current->handlers.find(method) != current->handlers.end()) {
-            throw std::runtime_error("Route conflict: handler already exists for " + std::string(to_string(method)) +
-                                     " " + path_str);
          }
 
          // Mark as endpoint and set handler

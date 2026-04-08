@@ -121,6 +121,46 @@ auto ec = glz::read_json(value, buffer); // Prefer this API if calls happen more
 auto result = glz::read_json<Value>(buffer); // Allocates the Value type within the call
 ```
 
+### Reusing Context Across Calls
+
+Glaze uses a `glz::context` object internally during parsing and serialization. This context contains a scratch buffer that is used as temporary storage in specific cases — such as parsing object keys that require unescaping, reading `quoted` wrapped values, `escape_bytes` decoding, and filesystem path deserialization. Most parsing and serialization does **not** use the scratch buffer, so for simple structs with plain string or numeric fields, reusing a context provides little benefit. By default, a fresh context is created for each call:
+
+```c++
+// Each call creates and destroys its own context (and scratch buffer)
+for (auto& item : items) {
+   auto ec = glz::read_json(item, buffers[i]);
+}
+```
+
+For hot loops, you can create a context once and pass it to every call. The scratch buffer grows as needed and is reused across calls, avoiding repeated allocations:
+
+```c++
+glz::context ctx{};
+for (auto& item : items) {
+   auto ec = glz::read<glz::opts{}>(item, buffers[i], ctx);
+}
+```
+
+This is most beneficial when parsing data that exercises the scratch buffer (e.g., objects with escaped keys, `quoted` fields, or filesystem paths) in a tight loop.
+
+> [!NOTE]
+>
+> The context stores error state, so if you reuse a context you should check for errors after each call. The error state is overwritten by each subsequent call.
+
+Custom contexts that inherit from `glz::context` also benefit from scratch buffer reuse:
+
+```c++
+struct my_context : glz::context {
+   size_t max_string_length = 1024;
+};
+
+my_context ctx{};
+for (auto& msg : messages) {
+   auto ec = glz::read<glz::opts{}>(msg.value, msg.buffer, ctx);
+   if (ec) { /* handle error */ }
+}
+```
+
 ## Buffers
 
 It is recommended to use a non-const `std::string` as your input and output buffer. When reading, Glaze will automatically pad the `std::string` for more efficient SIMD/SWAR and resize back to the original once parsing is finished.

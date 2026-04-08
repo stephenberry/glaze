@@ -271,16 +271,16 @@ export namespace glz
 
    namespace unicode
    {
-      constexpr uint32_t generic_surrogate_mask = 0xF800;
-      constexpr uint32_t generic_surrogate_value = 0xD800;
+      inline constexpr uint32_t generic_surrogate_mask = 0xF800;
+      inline constexpr uint32_t generic_surrogate_value = 0xD800;
 
-      constexpr uint32_t surrogate_mask = 0xFC00;
-      constexpr uint32_t high_surrogate_value = 0xD800;
-      constexpr uint32_t low_surrogate_value = 0xDC00;
+      inline constexpr uint32_t surrogate_mask = 0xFC00;
+      inline constexpr uint32_t high_surrogate_value = 0xD800;
+      inline constexpr uint32_t low_surrogate_value = 0xDC00;
 
-      constexpr uint32_t surrogate_codepoint_offset = 0x10000;
-      constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
-      constexpr uint32_t surrogate_codepoint_bits = 10;
+      inline constexpr uint32_t surrogate_codepoint_offset = 0x10000;
+      inline constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
+      inline constexpr uint32_t surrogate_codepoint_bits = 10;
    }
 
    template <class SrcChar, class DstChar = SrcChar>
@@ -1384,136 +1384,3 @@ export namespace glz
       return true;
    }
 }
-
-export namespace glz
-{
-   // TODO: GCC 12 lacks constexpr std::from_chars
-   // Remove this code when dropping GCC 12 support
-   namespace detail
-   {
-      struct from_chars_result
-      {
-         const char* ptr;
-         std::errc ec;
-      };
-
-      inline constexpr int char_to_digit(char c) noexcept
-      {
-         if (c >= '0' && c <= '9') return c - '0';
-         if (c >= 'a' && c <= 'z') return c - 'a' + 10;
-         if (c >= 'A' && c <= 'Z') return c - 'A' + 10;
-         return -1;
-      }
-
-      template <class I>
-      constexpr from_chars_result from_chars(const char* first, const char* last, I& value, int base = 10)
-      {
-         from_chars_result result{first, std::errc{}};
-
-         // Basic validation of base
-         if (base < 2 || base > 36) {
-            // Not standard behavior to check base validity here, but let's return invalid_argument
-            result.ec = std::errc::invalid_argument;
-            return result;
-         }
-
-         using U = std::make_unsigned_t<I>;
-         constexpr bool is_signed = std::is_signed<I>::value;
-         constexpr U umax = (std::numeric_limits<U>::max)();
-
-         if (first == last) {
-            // Empty range
-            result.ec = std::errc::invalid_argument;
-            return result;
-         }
-
-         bool negative = false;
-         // Check for sign only if signed type
-         if constexpr (is_signed) {
-            if (*first == '-') {
-               negative = true;
-               ++first;
-            }
-            else if (*first == '+') {
-               ++first;
-            }
-         }
-
-         if (first == last) {
-            // After sign there's nothing
-            result.ec = std::errc::invalid_argument;
-            return result;
-         }
-
-         U acc = 0;
-         bool any = false;
-
-         // We'll do overflow checking as we parse
-         // For accumulation: acc * base + digit
-         // Overflow if acc > (umax - digit)/base
-
-         while (first != last) {
-            int d = char_to_digit(*first);
-            if (d < 0 || d >= base) break;
-
-            // Check overflow before multiplying/adding
-            if (acc > (umax - static_cast<U>(d)) / static_cast<U>(base)) {
-               // Overflow
-               result.ec = std::errc::result_out_of_range;
-               // We still move ptr to the last valid digit parsed
-               result.ptr = first;
-               // No need to parse further; we know it's out of range.
-               return result;
-            }
-
-            acc = acc * base + static_cast<U>(d);
-            any = true;
-            ++first;
-         }
-
-         if (!any) {
-            // No digits parsed
-            result.ec = std::errc::invalid_argument;
-            return result;
-         }
-
-         // If signed and negative, check if result fits
-         if constexpr (is_signed) {
-            // The largest magnitude we can represent in a negative value is (max + 1)
-            // since -(min()) = max() + 1.
-            constexpr U limit = static_cast<U>((std::numeric_limits<I>::max)()) + 1U;
-            if (negative) {
-               if (acc > limit) {
-                  result.ec = std::errc::result_out_of_range;
-                  result.ptr = first;
-                  return result;
-               }
-               // Negate in unsigned arithmetic to avoid signed overflow when acc == limit
-               // (e.g., when parsing -2147483648, acc = 2147483648u for int32)
-#if defined(_MSC_VER) && !defined(__clang__)
-               // Use subtraction from zero instead of unary minus to avoid MSVC C4146 error
-               value = static_cast<I>(U{0} - acc);
-#else
-               value = static_cast<I>(-acc);
-#endif
-            }
-            else {
-               if (acc > static_cast<U>((std::numeric_limits<I>::max)())) {
-                  result.ec = std::errc::result_out_of_range;
-                  result.ptr = first;
-                  return result;
-               }
-               value = static_cast<I>(acc);
-            }
-         }
-         else {
-            // Unsigned type
-            value = acc;
-         }
-
-         result.ptr = first;
-         return result;
-      }
-   }
-}
-

@@ -31,6 +31,10 @@ import glaze.reflection.to_tuple;
 
 #include "glaze/util/inline.hpp"
 
+#if GLZ_REFLECTION26
+#include <meta>
+#endif
+
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
 #pragma warning(push)
@@ -289,7 +293,14 @@ namespace glz
 
       static constexpr auto values = [] {
          return [&]<size_t... I>(std::index_sequence<I...>) { //
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
             return tuple{get<value_indices[I]>(meta_v<T>)...}; //
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
 
@@ -337,6 +348,14 @@ namespace glz
       template <size_t I>
       using type = member_t<V, decltype(get<I>(values))>;
    };
+
+   // Note: is_reflect_enum<T> types do NOT get a reflect<T> specialization here.
+   // P2996 reflection must be done inline in the handlers (to<JSON, T>, from<JSON, T>)
+   // because P2996 operations like std::meta::enumerators_of require a consteval context
+   // that is not available during template class instantiation.
+
+   // Note: is_reflect_enum handlers use the existing enum_nameof and enum_count
+   // from get_name.hpp. The enum values are obtained using P2996 splicing inline.
 
    template <class T>
       requires(is_memory_object<T>)
@@ -396,7 +415,91 @@ namespace glz
    export template <class T, size_t I>
    using field_t = std::remove_cvref_t<refl_t<T, I>>;
 
-   export template <auto Opts, class T>
+   // Check if a custom_t getter (To) returns a nullable type (write side).
+   // Complement of custom_type_is_nullable which checks the From/setter (read side).
+   template <class V>
+   consteval bool custom_getter_returns_nullable()
+   {
+      if constexpr (!is_specialization_v<V, custom_t>) {
+         return false;
+      }
+      else {
+         using To = typename V::to_t;
+         using ParentT = std::remove_reference_t<decltype(std::declval<V&>().val)>;
+
+         if constexpr (std::is_member_pointer_v<To>) {
+            if constexpr (std::is_member_function_pointer_v<To>) {
+               using Ret = std::decay_t<typename return_type<To>::type>;
+               return null_t<Ret>;
+            }
+            else if constexpr (std::is_member_object_pointer_v<To>) {
+               using Value = std::decay_t<decltype(std::declval<ParentT&>().*(std::declval<To>()))>;
+               if constexpr (is_specialization_v<Value, std::function>) {
+                  using Ret = std::decay_t<typename function_traits<Value>::result_type>;
+                  return null_t<Ret>;
+               }
+               else {
+                  return null_t<Value>;
+               }
+            }
+            else {
+               return false;
+            }
+         }
+         else if constexpr (std::invocable<To, ParentT&>) {
+            using Ret = std::decay_t<std::invoke_result_t<To, ParentT&>>;
+            return null_t<Ret>;
+         }
+         else if constexpr (std::invocable<To, const ParentT&>) {
+            using Ret = std::decay_t<std::invoke_result_t<To, const ParentT&>>;
+            return null_t<Ret>;
+         }
+         else if constexpr (std::invocable<To, ParentT&, context&>) {
+            using Ret = std::decay_t<std::invoke_result_t<To, ParentT&, context&>>;
+            return null_t<Ret>;
+         }
+         else {
+            return false;
+         }
+      }
+   }
+
+   // Check if a glaze_value_t wraps a nullable inner type (write side).
+   template <class V>
+   consteval bool glaze_value_is_nullable()
+   {
+      if constexpr (glaze_value_t<V>) {
+         return null_t<remove_meta_wrapper_t<V>>;
+      }
+      else {
+         return false;
+      }
+   }
+
+   // Runtime check: is a glaze_value_t field currently null?
+   template <class T, size_t I, class Value, class Tie>
+   bool is_glaze_value_field_null(Value&& value, Tie&& t)
+   {
+      using val_t = field_t<T, I>;
+      using Inner = remove_meta_wrapper_t<val_t>;
+      decltype(auto) element = [&]() -> decltype(auto) {
+         if constexpr (reflectable<T>) {
+            return get<I>(t);
+         }
+         else {
+            return get<I>(reflect<T>::values);
+         }
+      };
+      auto&& inner_val = get_member(get_member(value, element()), meta_wrapper_v<val_t>);
+      if constexpr (nullable_value_t<Inner>) {
+         return !inner_val.has_value();
+      }
+      else {
+         return !bool(inner_val);
+      }
+   }
+
+   template <auto Opts, class T>
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
          constexpr auto N = reflect<T>::size;
@@ -407,10 +510,12 @@ namespace glz
             // if any type could be null then we might skip
             constexpr bool write_function_pointers = check_write_function_pointers(Opts);
             return [&]<size_t... I>(std::index_sequence<I...>) {
-                return ((always_skipped<field_t<T, I>> ||
-                         (!write_function_pointers && glz::is_member_function_pointer<field_t<T, I>>) ||
-                        null_t<field_t<T, I>>) ||
-                       ...);
+               return (
+                  (always_skipped<field_t<T, I>> ||
+                   (!write_function_pointers && is_member_function_pointer<field_t<T, I>>) || null_t<field_t<T, I>> ||
+                   (is_specialization_v<field_t<T, I>, custom_t> && custom_getter_returns_nullable<field_t<T, I>>()) ||
+                   glaze_value_is_nullable<field_t<T, I>>()) ||
+                  ...);
             }(std::make_index_sequence<N>{});
          }
          else {
@@ -441,6 +546,8 @@ namespace glz
       }
    }();
 
+   // Check if a custom_t setter (From) accepts a nullable type (read side).
+   // Complement of custom_getter_returns_nullable which checks the To/getter (write side).
    template <class V, class From>
    consteval bool custom_type_is_nullable()
    {
@@ -490,7 +597,69 @@ namespace glz
       return false;
    }
 
-   export template <class T, auto Opts>
+   // Runtime check: invoke a custom_t getter and return whether the result is null
+   template <class V>
+   bool custom_getter_is_null(V&& custom_val, auto&& ctx)
+   {
+      using CV = std::remove_cvref_t<V>;
+      using To = typename CV::to_t;
+
+      auto check_null = [](auto&& result) {
+         using Ret = std::decay_t<decltype(result)>;
+         if constexpr (nullable_value_t<Ret>) {
+            return !result.has_value();
+         }
+         else {
+            return !bool(result);
+         }
+      };
+
+      if constexpr (std::is_member_pointer_v<To>) {
+         if constexpr (std::is_member_function_pointer_v<To>) {
+            return check_null((custom_val.val.*(custom_val.to))());
+         }
+         else if constexpr (std::is_member_object_pointer_v<To>) {
+            auto& to_val = custom_val.val.*(custom_val.to);
+            using Func = std::decay_t<decltype(to_val)>;
+            if constexpr (is_specialization_v<Func, std::function>) {
+               return check_null(to_val());
+            }
+            else {
+               return check_null(to_val);
+            }
+         }
+         else {
+            return false;
+         }
+      }
+      else if constexpr (std::invocable<To, decltype(custom_val.val)>) {
+         return check_null(std::invoke(custom_val.to, custom_val.val));
+      }
+      else if constexpr (std::invocable<To, decltype(custom_val.val), std::remove_reference_t<decltype(ctx)>&>) {
+         return check_null(std::invoke(custom_val.to, custom_val.val, ctx));
+      }
+      else {
+         return false;
+      }
+   }
+
+   // Check if a custom_t field at index I is null, given the parent value and tie.
+   // Used by JSON/CBOR/BEVE write paths to skip null custom getter results.
+   template <class T, size_t I, class Value, class Tie, class Ctx>
+   bool is_custom_field_null(Value&& value, Tie&& t, Ctx&& ctx)
+   {
+      decltype(auto) custom_val = [&]() -> decltype(auto) {
+         if constexpr (reflectable<T>) {
+            return get_member(value, get<I>(t));
+         }
+         else {
+            return get_member(value, get<I>(reflect<T>::values));
+         }
+      }();
+      return custom_getter_is_null(custom_val, ctx);
+   }
+
+   template <class T, auto Opts>
    constexpr auto required_fields()
    {
       constexpr auto N = reflect<T>::size;
@@ -521,6 +690,10 @@ namespace glz
                      using CastType = typename V::cast_type;
                      return null_t<CastType>;
                   }
+                  else if constexpr (glaze_value_t<V>) {
+                     using Inner = remove_meta_wrapper_t<V>;
+                     return null_t<Inner>;
+                  }
                   else {
                      return null_t<V>;
                   }
@@ -540,6 +713,11 @@ namespace glz
                // Handle cast_t by checking if the cast type is nullable
                using CastType = typename V::cast_type;
                fields[I] = !Opts.skip_null_members || !null_t<CastType>;
+            }
+            else if constexpr (glaze_value_t<V>) {
+               // Handle value types (structs with glaze::value) by checking the underlying type
+               using Inner = remove_meta_wrapper_t<V>;
+               fields[I] = !Opts.skip_null_members || !null_t<Inner>;
             }
             else {
                fields[I] = !Opts.skip_null_members || !null_t<V>;
@@ -1066,6 +1244,7 @@ namespace glz
    // ============================================================================
 
    // get a std::string_view from an enum value
+   // Note: is_reflect_enum types are handled separately because P2996 requires inline consteval context
    export template <class T>
       requires(glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
    constexpr auto get_enum_name(T&& enum_value)
@@ -1238,8 +1417,6 @@ namespace glz
 
    export inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings)
    {
-      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
-#if !defined(_MSC_VER)
       const auto N = input_strings.size();
       if (N == 0) {
          return {};
@@ -1304,9 +1481,6 @@ namespace glz
       }
 
       return info;
-#else
-      return {};
-#endif
    }
 
    template <class T>
@@ -2168,7 +2342,7 @@ namespace glz
             const auto* c = quote_memchr<HashInfo.min_length>(it, end);
             if (c) [[likely]] {
                const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-               if (n == 0 || n > HashInfo.max_length) [[unlikely]] {
+               if (n == 0 || n > HashInfo.max_length || HashInfo.unique_index >= size_t(end - it)) [[unlikely]] {
                   return N; // error
                }
 

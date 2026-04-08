@@ -182,6 +182,7 @@ namespace glz
       {
          reg.endpoints[path] = [&func](jsonrpc::state&& state) mutable {
             static thread_local std::decay_t<Params> params{};
+            params = {}; // reset to avoid stale optional/variant fields across calls
             if (!jsonrpc::read_params<Opts>(params, state)) {
                return;
             }
@@ -272,6 +273,7 @@ namespace glz
       {
          reg.endpoints[path] = [&value, func](jsonrpc::state&& state) mutable {
             static thread_local Input input{};
+            input = {}; // reset to avoid stale optional/variant fields across calls
             if (state.has_body()) {
                if (!jsonrpc::read_params<Opts>(input, state)) {
                   return;

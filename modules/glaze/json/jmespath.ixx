@@ -312,7 +312,7 @@ namespace glz
             return std::nullopt;
          }
          int value;
-         auto result = detail::from_chars(s.data(), s.data() + s.size(), value);
+         auto result = std::from_chars(s.data(), s.data() + s.size(), value);
          if (result.ec == std::errc()) {
             return value;
          }

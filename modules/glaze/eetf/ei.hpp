@@ -15,10 +15,14 @@ using std::size_t;
 namespace glz
 {
 
-#define CHECK_OFFSET(off)                     \
-   if ((it + (off)) > end) [[unlikely]] {     \
-      ctx.error = error_code::unexpected_end; \
-      return;                                 \
+   template <class Ctx, class It0, class It1>
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool check_offset(Ctx&& ctx, It0&& it, It1&& end, size_t off)
+   {
+      if ((it + off) > end) [[unlikely]] {
+         ctx.error = error_code::unexpected_end;
+         return true;
+      }
+      return false;
    }
 
    using header_pair = std::pair<size_t, size_t>;
@@ -34,7 +38,7 @@ namespace glz
             return;
          }
 
-         CHECK_OFFSET(index);
+         if (check_offset(ctx, it, end, index)) return;
          std::advance(it, index);
       }
 
@@ -105,7 +109,7 @@ namespace glz
          index = 0;
       }
 
-      CHECK_OFFSET(index);
+      if (check_offset(ctx, it, end, index)) return;
       std::advance(it, index);
    }
 
@@ -160,7 +164,7 @@ namespace glz
          return;
       }
 
-      CHECK_OFFSET(sz);
+      if (check_offset(ctx, it, end, sz)) return;
 
       value.resize(sz);
       if (eetf::is_atom(type)) {
@@ -186,7 +190,7 @@ namespace glz
    {
       using namespace std::placeholders;
 
-      CHECK_OFFSET(sz * sizeof(uint8_t));
+      if (check_offset(ctx, it, end, sz * sizeof(std::uint8_t))) return;
 
       using V = range_value_t<std::decay_t<T>>;
 
@@ -250,7 +254,7 @@ namespace glz
          }
       }
 
-      CHECK_OFFSET(index);
+      if (check_offset(ctx, it, end, index)) return;
       std::advance(it, index);
 
       for (size_t idx = 0; idx < arity; idx++) {

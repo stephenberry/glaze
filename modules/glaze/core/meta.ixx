@@ -498,6 +498,23 @@ export namespace glz
    template <class T>
    using meta_keys_t = decay_keep_volatile_t<decltype(meta_keys_v<T>)>;
 
+   // Unwrap pointer indirection: T* -> T, M C::* -> M, otherwise identity
+   template <class T>
+   struct unwrap_pointer
+   {
+      using type = T;
+   };
+   template <class T>
+   struct unwrap_pointer<T*>
+   {
+      using type = T;
+   };
+   template <class M, class C>
+   struct unwrap_pointer<M C::*>
+   {
+      using type = M;
+   };
+
    template <class T>
    struct remove_meta_wrapper
    {
@@ -506,7 +523,7 @@ export namespace glz
    template <glaze_t T>
    struct remove_meta_wrapper<T>
    {
-      using type = std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<T>>>;
+      using type = typename unwrap_pointer<std::decay_t<meta_wrapper_t<T>>>::type;
    };
    template <class T>
    using remove_meta_wrapper_t = typename remove_meta_wrapper<T>::type;
@@ -581,6 +598,47 @@ export namespace glz
          return type_name<T>;
       }
    }();
+
+   // Opts-aware type name: returns qualified or unqualified based on qualified_type_names option.
+   // For traditional: always returns qualified names (existing behavior).
+   // For P2996: currently always returns unqualified names (display_string_of).
+   //            qualified_name_of is not yet available in Bloomberg clang-p2996.
+   template <class T, auto Opts>
+   consteval auto type_name_for_opts()
+   {
+#if GLZ_REFLECTION26
+      // TODO: When Bloomberg clang-p2996 adds qualified_name_of, enable this:
+      // if constexpr (check_qualified_type_names(Opts)) {
+      //    return qualified_type_name<T>;
+      // }
+      return type_name<T>;
+#else
+      // Traditional reflection always returns qualified names
+      // (qualified_type_names option has no effect)
+      return type_name<T>;
+#endif
+   }
+
+   // Opts-aware name: like name_v but respects qualified_type_names option for the fallback.
+   // Priority: meta<T>::name > T::glaze::name > type_name_for_opts
+   template <class T, auto Opts>
+   consteval auto name_for_opts()
+   {
+      if constexpr (named<T>) {
+         if constexpr (requires { T::glaze::name; }) {
+            return std::string_view{T::glaze::name};
+         }
+         else {
+            return std::string_view{meta<T>::name};
+         }
+      }
+      else if constexpr (std::is_void_v<T>) {
+         return std::string_view{"void"};
+      }
+      else {
+         return type_name_for_opts<T, Opts>();
+      }
+   }
 
    template <class T>
    concept tagged = requires { meta<std::decay_t<T>>::tag; } || requires { std::decay_t<T>::glaze::tag; };
@@ -658,6 +716,60 @@ export namespace glz
          std::array<std::string_view, N> ids{};
          for_each<N>([&]<auto I>() { ids[I] = glz::name_v<std::decay_t<std::variant_alternative_t<I, T>>>; });
          return ids;
+      }
+   }();
+
+   // Compile-time string listing the variant type IDs (e.g. "TYPE_A, TYPE_B, TYPE_C")
+   // Used for error messages when no matching variant type is found
+   namespace detail
+   {
+      template <is_variant T>
+      inline constexpr size_t variant_ids_string_len = [] {
+         constexpr auto& ids = ids_v<T>;
+         constexpr auto N = ids.size();
+         size_t len = 17; // "supported types: "
+         for (size_t i = 0; i < N; ++i) {
+            if (i > 0) len += 2; // ", "
+            len += ids[i].size();
+         }
+         return len;
+      }();
+
+      template <is_variant T, size_t Len>
+      inline constexpr auto variant_ids_joined = [] {
+         constexpr auto& ids = ids_v<T>;
+         constexpr auto N = ids.size();
+         std::array<char, Len + 1> arr{};
+         const char* prefix = "supported types: ";
+         size_t pos = 0;
+         for (size_t i = 0; i < 17; ++i) arr[pos++] = prefix[i];
+         for (size_t i = 0; i < N; ++i) {
+            if (i > 0) {
+               arr[pos++] = ',';
+               arr[pos++] = ' ';
+            }
+            for (auto c : ids[i]) arr[pos++] = c;
+         }
+         arr[Len] = '\0';
+         return arr;
+      }();
+   }
+
+   template <is_variant T>
+   inline constexpr std::string_view variant_ids_string_v = [] {
+      constexpr auto& ids = ids_v<T>;
+      constexpr auto N = ids.size();
+
+      if constexpr (N == 0) {
+         return std::string_view{};
+      }
+      else if constexpr (std::is_same_v<std::decay_t<decltype(ids[0])>, std::string_view>) {
+         constexpr auto Len = detail::variant_ids_string_len<T>;
+         constexpr auto& arr = detail::variant_ids_joined<T, Len>;
+         return std::string_view{arr.data(), Len};
+      }
+      else {
+         return std::string_view{};
       }
    }();
 

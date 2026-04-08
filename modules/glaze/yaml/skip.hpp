@@ -321,10 +321,18 @@ namespace glz::yaml
                break;
             }
 
-            // If dedented or not a sequence item, we're done
-            if (line_indent <= current_indent) {
+            // If dedented past current indent, we're done
+            if (line_indent < current_indent) {
                it = line_start;
                break;
+            }
+
+            // At current indent: continue only if it's another sequence item (indentless sequence)
+            if (line_indent == current_indent) {
+               if (!(*it == '-' && ((it + 1) == end || *(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\n'))) {
+                  it = line_start;
+                  break;
+               }
             }
 
             // Continue with next line
@@ -338,12 +346,79 @@ namespace glz::yaml
       // Check if this is followed by a colon (nested mapping)
       skip_inline_ws(it, end);
       if (it != end && *it == ':') {
-         // This was a key - skip the value too
-         ++it;
-         skip_inline_ws(it, end);
+         if (!in_flow) {
+            // Block context: skip rest of current line and all deeply-indented
+            // continuation lines. This handles the value after the colon as well
+            // as any remaining sibling entries in the nested block mapping.
+            while (it != end && *it != '\n' && *it != '\r') ++it;
+            while (it != end) {
+               if (!skip_newline(it, end)) break;
 
-         if (it != end && !at_newline_or_end(it, end)) {
-            skip_yaml_value<Opts>(ctx, it, end, current_indent, in_flow);
+               auto line_start = it;
+               int32_t line_indent = measure_indent(it, end, ctx);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it == end) break;
+               if (*it == '\n' || *it == '\r') continue; // blank line
+               if (*it == '#') {
+                  // Skip comment content to reach end of line
+                  while (it != end && *it != '\n' && *it != '\r') ++it;
+                  continue;
+               }
+
+               if (at_document_end(it, end) || at_document_start(it, end)) {
+                  it = line_start;
+                  break;
+               }
+
+               if (line_indent <= current_indent) {
+                  it = line_start;
+                  break;
+               }
+
+               // Content at deeper indent - skip this line
+               while (it != end && *it != '\n' && *it != '\r') ++it;
+            }
+         }
+         else {
+            // Flow context: use recursive parsing for proper handling
+            ++it;
+            skip_inline_ws(it, end);
+
+            if (it != end && !at_newline_or_end(it, end)) {
+               skip_yaml_value<Opts>(ctx, it, end, current_indent, in_flow);
+            }
+         }
+      }
+      else if (!in_flow) {
+         // No colon found: plain scalar value.
+         // Skip any continuation lines at deeper indentation.
+         while (it != end) {
+            while (it != end && *it != '\n' && *it != '\r') ++it;
+            if (!skip_newline(it, end)) break;
+
+            auto line_start = it;
+            int32_t line_indent = measure_indent(it, end, ctx);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            if (it == end) break;
+            if (*it == '\n' || *it == '\r') continue; // blank line
+            if (*it == '#') continue; // comment line, will be skipped next iteration
+
+            if (at_document_end(it, end) || at_document_start(it, end)) {
+               it = line_start;
+               break;
+            }
+
+            if (line_indent <= current_indent) {
+               it = line_start;
+               break;
+            }
+
+            // Continuation line at deeper indent - skip
+            while (it != end && *it != '\n' && *it != '\r') ++it;
          }
       }
    }

@@ -166,9 +166,14 @@ struct glz::meta<HttpStatus> {
 
 For projects with many enums or where compile time matters, consider enchantum or simple_enum. For smaller projects or maximum compatibility, magic_enum is a safe choice.
 
+## C++26 P2996 Alternative
+
+If you are using a C++26 compiler with P2996 reflection support (GCC 16+ or Bloomberg clang-p2996), Glaze can automatically reflect enums without any external library. See [P2996 Reflection](p2996-reflection.md#automatic-enum-string-serialization) for details.
+
 ## See Also
 
 - [Glaze enum documentation](json.md#enums)
+- [P2996 Reflection — Automatic Enum Serialization](p2996-reflection.md#automatic-enum-string-serialization)
 - [magic_enum](https://github.com/Neargye/magic_enum)
 - [enchantum](https://github.com/ZXShady/enchantum)
 - [simple_enum](https://github.com/arturbac/simple_enum)

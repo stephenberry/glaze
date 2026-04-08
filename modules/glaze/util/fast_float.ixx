@@ -584,7 +584,7 @@ struct adjusted_mantissa {
 inline constexpr int32_t invalid_am_bias = -0x8000;
 
 // used for binary_format_lookup_tables<T>::max_mantissa
-constexpr uint64_t constant_55555 = 5 * 5 * 5 * 5 * 5;
+inline constexpr uint64_t constant_55555 = 5 * 5 * 5 * 5 * 5;
 
 template <typename T, typename U = void> struct binary_format_lookup_tables;
 
@@ -1171,7 +1171,7 @@ template <typename UC> constexpr bool is_space(UC c) {
   return c < 256 && space_lut<>::value[uint8_t(c)];
 }
 
-template <typename UC> inline constexpr uint64_t int_cmp_zeros() {
+template <typename UC> constexpr uint64_t int_cmp_zeros() {
   static_assert((sizeof(UC) == 1) || (sizeof(UC) == 2) || (sizeof(UC) == 4),
                 "Unsupported character size");
   return (sizeof(UC) == 1) ? 0x3030303030303030
@@ -1181,7 +1181,7 @@ template <typename UC> inline constexpr uint64_t int_cmp_zeros() {
              : (uint64_t(UC('0')) << 32 | UC('0'));
 }
 
-template <typename UC> static constexpr int int_cmp_len() {
+template <typename UC> constexpr int int_cmp_len() {
   return sizeof(uint64_t) / sizeof(UC);
 }
 
@@ -3022,8 +3022,8 @@ typedef span<limb> limb_span;
 // of bits required to store the largest bigint, which is
 // `log2(10**(digits + max_exp))`, or `log2(10**(767 + 342))`, or
 // ~3600 bits, so we round to 4000.
-constexpr size_t bigint_bits = 4000;
-constexpr size_t bigint_limbs = bigint_bits / limb_bits;
+inline constexpr size_t bigint_bits = 4000;
+inline constexpr size_t bigint_limbs = bigint_bits / limb_bits;
 
 // vector-like type that is allocated on the stack. the entire
 // buffer is pre-allocated, and only the length changes.

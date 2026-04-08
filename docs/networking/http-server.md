@@ -244,7 +244,7 @@ glz::param_constraint id_constraint{
     }
 };
 
-server.get("/users/:id", handler, {{"id", id_constraint}});
+server.get("/users/:id", handler, {.constraints = {{"id", id_constraint}}});
 
 // Email constraint
 glz::param_constraint email_constraint{
@@ -255,6 +255,10 @@ glz::param_constraint email_constraint{
     }
 };
 ```
+
+Constraints are passed through the route `spec` (`.constraints = ...`).
+
+If a constraint returns `false`, the route is treated as a non-match. In `glz::http_server`, this means the default response is `404 Not Found`. If you want a custom error body/status (for example `400` with validation details), perform the validation in your handler and set the response explicitly.
 
 ## Response Handling
 

@@ -60,19 +60,21 @@ namespace glz
    struct calculate_size;
 
    // Primary template for BEVE size calculation dispatch
+   // The offset parameter tracks the absolute byte offset from the message start,
+   // used for computing exact alignment padding for aligned typed arrays.
    template <>
    struct calculate_size<BEVE, void>
    {
       template <auto Opts, class T>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(T&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(T&& value, size_t offset = 0)
       {
-         return calculate_size<BEVE, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value));
+         return calculate_size<BEVE, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), offset);
       }
 
       template <auto Opts, class T>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(T&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(T&& value, size_t offset = 0)
       {
-         return calculate_size<BEVE, std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value));
+         return calculate_size<BEVE, std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), offset);
       }
    };
 
@@ -81,17 +83,17 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t offset = 0)
       {
          using V = std::remove_cvref_t<decltype(get_member(std::declval<decltype(value)>(), meta_wrapper_v<T>))>;
-         return calculate_size<BEVE, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>));
+         return calculate_size<BEVE, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), offset);
       }
 
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&& value, size_t offset = 0)
       {
          using V = std::remove_cvref_t<decltype(get_member(std::declval<decltype(value)>(), meta_wrapper_v<T>))>;
-         return calculate_size<BEVE, V>::template no_header<Opts>(get_member(value, meta_wrapper_v<T>));
+         return calculate_size<BEVE, V>::template no_header<Opts>(get_member(value, meta_wrapper_v<T>), offset);
       }
    };
 
@@ -99,7 +101,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&, size_t = 0) noexcept
       {
          return 1; // null tag
       }
@@ -109,7 +111,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] static size_t op(auto&& value) noexcept
+      [[nodiscard]] static size_t op(auto&& value, size_t = 0) noexcept
       {
          const auto num_bytes = (value.size() + 7) / 8;
          return 1 + compressed_int_size(value.size()) + num_bytes; // tag + size + data
@@ -120,7 +122,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] static size_t op(auto&&) noexcept
+      [[nodiscard]] static size_t op(auto&&, size_t = 0) noexcept
       {
          static constexpr auto data_size = byte_length<T>();
          return data_size; // flags are written directly without header
@@ -131,7 +133,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&, size_t = 0) noexcept
       {
          return 0; // member function pointers are not serialized
       }
@@ -141,7 +143,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&, size_t = 0) noexcept
       {
          return 1 + 1; // tag + compressed_int(0) for empty string
       }
@@ -151,7 +153,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&, size_t = 0) noexcept
       {
          return 1; // bool tag contains the value
       }
@@ -161,9 +163,9 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t offset = 0)
       {
-         return calculate_size<BEVE, void>::template op<Opts>(name_v<std::decay_t<decltype(value)>>);
+         return calculate_size<BEVE, void>::template op<Opts>(name_v<std::decay_t<decltype(value)>>, offset);
       }
    };
 
@@ -171,9 +173,9 @@ namespace glz
    struct calculate_size<BEVE, basic_raw_json<T>>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t offset = 0)
       {
-         return calculate_size<BEVE, void>::template op<Opts>(value.str);
+         return calculate_size<BEVE, void>::template op<Opts>(value.str, offset);
       }
    };
 
@@ -181,9 +183,9 @@ namespace glz
    struct calculate_size<BEVE, basic_text<T>>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t offset = 0)
       {
-         return calculate_size<BEVE, void>::template op<Opts>(value.str);
+         return calculate_size<BEVE, void>::template op<Opts>(value.str, offset);
       }
    };
 
@@ -191,7 +193,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          return std::visit(
             [&](auto&& v) -> size_t {
@@ -200,7 +202,8 @@ namespace glz
                static constexpr uint64_t index = variant_index_v<V, Variant>;
 
                // 1 byte tag + compressed index + value size
-               return 1 + compressed_int_size<index>() + calculate_size<BEVE, void>::template op<Opts>(v);
+               const size_t header = 1 + compressed_int_size<index>();
+               return header + calculate_size<BEVE, void>::template op<Opts>(v, offset + header);
             },
             value);
       }
@@ -211,13 +214,13 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&, size_t = 0) noexcept
       {
          return 1 + sizeof(T); // tag + value
       }
 
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&&, size_t = 0) noexcept
       {
          return sizeof(T); // value only
       }
@@ -228,14 +231,14 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&, size_t = 0) noexcept
       {
          using V = std::underlying_type_t<std::decay_t<T>>;
          return 1 + sizeof(V); // tag + value
       }
 
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&&, size_t = 0) noexcept
       {
          using V = std::underlying_type_t<std::decay_t<T>>;
          return sizeof(V); // value only
@@ -246,14 +249,14 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&&, size_t = 0) noexcept
       {
          using V = typename T::value_type;
          return 2 + 2 * sizeof(V); // extension tag + complex header + real + imag
       }
 
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&&) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&&, size_t = 0) noexcept
       {
          using V = typename T::value_type;
          return 2 * sizeof(V); // real + imag
@@ -264,7 +267,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t = 0)
       {
          const sv str = [&]() -> const sv {
             if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
@@ -280,7 +283,7 @@ namespace glz
       }
 
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t no_header(auto&& value, size_t = 0)
       {
          const auto n = value.size();
          return compressed_int_size(n) + n; // length + data
@@ -300,7 +303,7 @@ namespace glz
 
       template <auto Opts>
          requires(map_like_array ? check_concatenate(Opts) == false : true)
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          using V = range_value_t<std::decay_t<T>>;
 
@@ -312,6 +315,15 @@ namespace glz
             result += num_bytes;
          }
          else if constexpr (num_t<V>) {
+            if constexpr (check_aligned_arrays(Opts) && sizeof(V) > 1) {
+               result += 1; // extra numeric header byte
+               result += 1; // padding length byte
+               // Compute exact padding from absolute offset
+               constexpr size_t alignment = sizeof(V);
+               const size_t abs_offset = offset + result;
+               const size_t padding = (alignment - (abs_offset % alignment)) % alignment;
+               result += padding;
+            }
             result += value.size() * sizeof(V);
          }
          else if constexpr (str_t<V>) {
@@ -328,7 +340,7 @@ namespace glz
          else {
             // generic array - need to sum element sizes
             for (auto&& x : value) {
-               result += calculate_size<BEVE, void>::template op<Opts>(x);
+               result += calculate_size<BEVE, void>::template op<Opts>(x, offset + result);
             }
          }
 
@@ -337,14 +349,14 @@ namespace glz
 
       template <auto Opts>
          requires(map_like_array && check_concatenate(Opts) == true)
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          size_t result = 1; // tag byte
          result += compressed_int_size(value.size()); // element count
 
          for (auto&& [k, v] : value) {
-            result += calculate_size<BEVE, void>::template no_header<Opts>(k);
-            result += calculate_size<BEVE, void>::template op<Opts>(v);
+            result += calculate_size<BEVE, void>::template no_header<Opts>(k, offset + result);
+            result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
          }
 
          return result;
@@ -355,14 +367,14 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t offset = 0)
       {
          size_t result = 1; // tag byte
          result += compressed_int_size<1>(); // count = 1
 
          const auto& [k, v] = value;
-         result += calculate_size<BEVE, void>::template no_header<Opts>(k);
-         result += calculate_size<BEVE, void>::template op<Opts>(v);
+         result += calculate_size<BEVE, void>::template no_header<Opts>(k, offset + result);
+         result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
 
          return result;
       }
@@ -372,14 +384,14 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          size_t result = 1; // tag byte
          result += compressed_int_size(value.size()); // element count
 
          for (auto&& [k, v] : value) {
-            result += calculate_size<BEVE, void>::template no_header<Opts>(k);
-            result += calculate_size<BEVE, void>::template op<Opts>(v);
+            result += calculate_size<BEVE, void>::template no_header<Opts>(k, offset + result);
+            result += calculate_size<BEVE, void>::template op<Opts>(v, offset + result);
          }
 
          return result;
@@ -391,9 +403,9 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts, class V, size_t N>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(const V (&value)[N])
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(const V (&value)[N], size_t offset = 0)
       {
-         return calculate_size<BEVE, void>::template op<Opts>(std::span{value, N});
+         return calculate_size<BEVE, void>::template op<Opts>(std::span{value, N}, offset);
       }
    };
 
@@ -402,10 +414,10 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t offset = 0)
       {
          if (value) {
-            return calculate_size<BEVE, void>::template op<Opts>(*value);
+            return calculate_size<BEVE, void>::template op<Opts>(*value, offset);
          }
          else {
             return 1; // null tag
@@ -418,10 +430,10 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value)
+      [[nodiscard]] GLZ_ALWAYS_INLINE static size_t op(auto&& value, size_t offset = 0)
       {
          if (value.has_value()) {
-            return calculate_size<BEVE, void>::template op<Opts>(value.value());
+            return calculate_size<BEVE, void>::template op<Opts>(value.value(), offset);
          }
          else {
             return 1; // null tag
@@ -434,7 +446,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Options>
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V> / 2;
@@ -448,8 +460,8 @@ namespace glz
 
          for_each<N>([&]<size_t I>() {
             constexpr auto Opts = opening_handled_off<Options>();
-            result += calculate_size<BEVE, void>::template no_header<Opts>(get<2 * I>(value.value)); // key
-            result += calculate_size<BEVE, void>::template op<Opts>(get<2 * I + 1>(value.value)); // value
+            result += calculate_size<BEVE, void>::template no_header<Opts>(get<2 * I>(value.value), offset + result);
+            result += calculate_size<BEVE, void>::template op<Opts>(get<2 * I + 1>(value.value), offset + result);
          });
 
          return result;
@@ -503,7 +515,7 @@ namespace glz
       }
 
       template <auto Opts>
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
@@ -512,7 +524,8 @@ namespace glz
          result += compressed_int_size<merge_element_count<Opts>()>(); // member count
 
          [&]<size_t... I>(std::index_sequence<I...>) {
-            ((result += calculate_size<BEVE, void>::template op<opening_handled<Opts>()>(glz::get<I>(value.value))),
+            ((result += calculate_size<BEVE, void>::template op<opening_handled<Opts>()>(glz::get<I>(value.value),
+                                                                                         offset + result)),
              ...);
          }(std::make_index_sequence<N>{});
 
@@ -552,7 +565,7 @@ namespace glz
 
       template <auto Opts>
          requires(check_structs_as_arrays(Opts) == true)
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          size_t result = 1; // generic_array tag
          result += compressed_int_size<count_to_write<Opts>()>(); // element count
@@ -572,11 +585,12 @@ namespace glz
             }
             else {
                if constexpr (reflectable<T>) {
-                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(t)));
+                  result +=
+                     calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(t)), offset + result);
                }
                else {
-                  result +=
-                     calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)));
+                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)),
+                                                                          offset + result);
                }
             }
          });
@@ -586,7 +600,7 @@ namespace glz
 
       template <auto Options>
          requires(check_structs_as_arrays(Options) == false)
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          constexpr auto Opts = opening_handled_off<Options>();
 
@@ -707,7 +721,7 @@ namespace glz
                      }
                   }();
 
-                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, member));
+                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, member), offset + result);
                }
             });
          }
@@ -736,7 +750,7 @@ namespace glz
                      }
                   }();
 
-                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, member));
+                  result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, member), offset + result);
                }
             });
          }
@@ -750,7 +764,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          static constexpr auto N = reflect<T>::size;
 
@@ -758,7 +772,8 @@ namespace glz
          result += compressed_int_size<N>(); // element count
 
          for_each<N>([&]<size_t I>() {
-            result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)));
+            result += calculate_size<BEVE, void>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)),
+                                                                    offset + result);
          });
 
          return result;
@@ -770,7 +785,7 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
          static constexpr auto N = glz::tuple_size_v<T>;
 
@@ -779,12 +794,12 @@ namespace glz
 
          if constexpr (is_std_tuple<T>) {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               ((result += calculate_size<BEVE, void>::template op<Opts>(std::get<I>(value))), ...);
+               ((result += calculate_size<BEVE, void>::template op<Opts>(std::get<I>(value), offset + result)), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               ((result += calculate_size<BEVE, void>::template op<Opts>(glz::get<I>(value))), ...);
+               ((result += calculate_size<BEVE, void>::template op<Opts>(glz::get<I>(value), offset + result)), ...);
             }(std::make_index_sequence<N>{});
          }
 
@@ -797,9 +812,9 @@ namespace glz
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
-      [[nodiscard]] static size_t op(auto&& value)
+      [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
-         return calculate_size<BEVE, decltype(value.string())>::template op<Opts>(value.string());
+         return calculate_size<BEVE, decltype(value.string())>::template op<Opts>(value.string(), offset);
       }
    };
 

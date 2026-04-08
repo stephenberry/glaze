@@ -320,6 +320,7 @@ namespace glz
          }
 
          static constexpr bool glaze_value_proxy = true;
+         static constexpr bool glaze_reflect = false;
 
          // Disable Copy and Move
          value_proxy(const value_proxy&) = delete;
@@ -371,6 +372,8 @@ namespace glz
             // Ensure that a lock is provided
             assert(shared_lock_ptr);
          }
+
+         static constexpr bool glaze_reflect = false;
 
          // Disable Copy and Move
          const_value_proxy(const const_value_proxy&) = delete;
@@ -633,4 +636,10 @@ namespace glz
          return const_iterator(state->items.cend(), state, shared_lock_ptr);
       }
    };
+
+   // Register shared_async_vector as having specified Glaze serialization
+   // This prevents P2996 automatic reflection from trying to reflect the mutex member
+   template <class T>
+   struct specified<shared_async_vector<T>> : std::true_type
+   {};
 }

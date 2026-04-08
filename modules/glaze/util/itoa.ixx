@@ -67,6 +67,12 @@ namespace glz
 #endif
 
       // ==================== std::uint32_t implementations ====================
+      // Note: We use `buf + N - lz` offsets instead of `buf -= lz` followed by `buf + N`.
+      // Forming a pointer before the start of an array is undefined behavior in C++,
+      // even if the pointer is never dereferenced. `buf -= lz` when buf points to the
+      // start of an allocation and lz=1 violates this. GCC _FORTIFY_SOURCE with LTO
+      // correctly detects and aborts on this.
+      // The compiler optimizes `buf + N - lz` identically (single sub, then offsets).
 
       GLZ_ALWAYS_INLINE char* u32_2(char* buf, uint32_t val) noexcept
       {
@@ -80,9 +86,8 @@ namespace glz
          const uint32_t aa = (val * 5243) >> 19; // val / 100
          const uint32_t lz = aa < 10;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
-         buf -= lz;
-         std::memcpy(buf + 2, &digit_pairs[val - aa * 100], 2);
-         return buf + 4;
+         std::memcpy(buf + 2 - lz, &digit_pairs[val - aa * 100], 2);
+         return buf + 4 - lz;
       }
 
       GLZ_ALWAYS_INLINE char* u32_6(char* buf, uint32_t val) noexcept
@@ -92,10 +97,9 @@ namespace glz
          const uint32_t bb = (bbcc * 5243) >> 19; // bbcc / 100
          const uint32_t lz = aa < 10;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
-         buf -= lz;
-         std::memcpy(buf + 2, &digit_pairs[bb], 2);
-         std::memcpy(buf + 4, &digit_pairs[bbcc - bb * 100], 2);
-         return buf + 6;
+         std::memcpy(buf + 2 - lz, &digit_pairs[bb], 2);
+         std::memcpy(buf + 4 - lz, &digit_pairs[bbcc - bb * 100], 2);
+         return buf + 6 - lz;
       }
 
       GLZ_ALWAYS_INLINE char* u32_8(char* buf, uint32_t val) noexcept
@@ -106,11 +110,10 @@ namespace glz
          const uint32_t cc = (ccdd * 5243) >> 19; // ccdd / 100
          const uint32_t lz = aa < 10;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
-         buf -= lz;
-         std::memcpy(buf + 2, &digit_pairs[aabb - aa * 100], 2);
-         std::memcpy(buf + 4, &digit_pairs[cc], 2);
-         std::memcpy(buf + 6, &digit_pairs[ccdd - cc * 100], 2);
-         return buf + 8;
+         std::memcpy(buf + 2 - lz, &digit_pairs[aabb - aa * 100], 2);
+         std::memcpy(buf + 4 - lz, &digit_pairs[cc], 2);
+         std::memcpy(buf + 6 - lz, &digit_pairs[ccdd - cc * 100], 2);
+         return buf + 8 - lz;
       }
 
       GLZ_ALWAYS_INLINE char* u32_10(char* buf, uint32_t val) noexcept
@@ -123,12 +126,11 @@ namespace glz
          const uint32_t dd = (ddee * 5243) >> 19;
          const uint32_t lz = aa < 10;
          std::memcpy(buf, char_table + ((aa * 2) | lz), 2);
-         buf -= lz;
-         std::memcpy(buf + 2, &digit_pairs[bb], 2);
-         std::memcpy(buf + 4, &digit_pairs[bbcc - bb * 100], 2);
-         std::memcpy(buf + 6, &digit_pairs[dd], 2);
-         std::memcpy(buf + 8, &digit_pairs[ddee - dd * 100], 2);
-         return buf + 10;
+         std::memcpy(buf + 2 - lz, &digit_pairs[bb], 2);
+         std::memcpy(buf + 4 - lz, &digit_pairs[bbcc - bb * 100], 2);
+         std::memcpy(buf + 6 - lz, &digit_pairs[dd], 2);
+         std::memcpy(buf + 8 - lz, &digit_pairs[ddee - dd * 100], 2);
+         return buf + 10 - lz;
       }
 
       // Fixed 8-digit output (no leading zero handling)

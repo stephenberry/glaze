@@ -6,6 +6,7 @@
 #include <cassert>
 #include <regex>
 
+#include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -429,6 +430,153 @@ suite path_param_decoding_tests = [] {
       auto [handler, params] = router.match(glz::http_method::GET, "/files/my%20docs/file%20name.txt");
       expect(handler != nullptr);
       expect(params["path"] == "my docs/file name.txt");
+   };
+};
+
+// Service composition test types (GitHub issue #2401)
+
+struct Task
+{
+   int id{};
+   std::string title{};
+};
+
+class TaskService
+{
+   std::vector<Task> tasks_;
+
+  public:
+   std::vector<Task> getAllTasks() { return tasks_; }
+};
+
+template <>
+struct glz::meta<TaskService>
+{
+   using T = TaskService;
+   static constexpr auto value = object(&T::getAllTasks);
+};
+
+struct Post
+{
+   int id{};
+   std::string title{};
+};
+
+class PostService
+{
+   std::vector<Post> posts_;
+
+  public:
+   std::vector<Post> getAllPosts() { return posts_; }
+};
+
+template <>
+struct glz::meta<PostService>
+{
+   using T = PostService;
+   static constexpr auto value = object(&T::getAllPosts);
+};
+
+struct Config
+{
+   int id{};
+   std::string title{};
+};
+
+class ConfigService
+{
+   std::vector<Config> configs_;
+
+  public:
+   std::vector<Config> getAllConfigs() { return configs_; }
+};
+
+template <>
+struct glz::meta<ConfigService>
+{
+   using T = ConfigService;
+   static constexpr auto value = object(&T::getAllConfigs);
+};
+
+suite route_replacement_tests = [] {
+   "duplicate_direct_route_replaces_handler"_test = [] {
+      glz::http_router router;
+
+      router.get("", [](const glz::request&, glz::response& res) { res.body("first"); });
+      router.get("", [](const glz::request&, glz::response& res) { res.body("second"); });
+
+      auto [handler, params] = router.match(glz::http_method::GET, "");
+      expect(handler != nullptr);
+
+      glz::request req{.method = glz::http_method::GET, .target = ""};
+      glz::response res;
+      handler(req, res);
+      expect(res.response_body == "second") << "Last registered handler should win";
+   };
+
+   "duplicate_route_different_methods_coexist"_test = [] {
+      glz::http_router router;
+
+      router.get("/path", [](const glz::request&, glz::response& res) { res.body("get"); });
+      router.put("/path", [](const glz::request&, glz::response& res) { res.body("put"); });
+      router.get("/path", [](const glz::request&, glz::response& res) { res.body("get2"); });
+
+      auto [get_handler, get_params] = router.match(glz::http_method::GET, "/path");
+      auto [put_handler, put_params] = router.match(glz::http_method::PUT, "/path");
+      expect(get_handler != nullptr);
+      expect(put_handler != nullptr);
+
+      glz::request req{.method = glz::http_method::GET, .target = "/path"};
+      glz::response get_res, put_res;
+      get_handler(req, get_res);
+      put_handler(req, put_res);
+      expect(get_res.response_body == "get2") << "Replaced GET should use new handler";
+      expect(put_res.response_body == "put") << "PUT should be unchanged";
+   };
+};
+
+suite service_composition_tests = [] {
+   "multiple_services_on_single_registry"_test = [] {
+      TaskService taskService;
+      PostService postService;
+      ConfigService configService;
+
+      glz::registry<glz::opts{}, glz::REST> registry;
+
+      // Registering multiple services should not produce errors
+      registry.on(taskService);
+      registry.on(postService);
+      registry.on(configService);
+
+      auto check = [&](const std::string& path, bool should_exist) {
+         auto [handler, params] = registry.endpoints.match(glz::http_method::GET, path);
+         expect((handler != nullptr) == should_exist) << path;
+      };
+
+      // Each service's endpoints should be accessible
+      check("/getAllTasks", true);
+      check("/getAllPosts", true);
+      check("/getAllConfigs", true);
+
+      // Root endpoint should exist (last registered service wins)
+      check("", true);
+   };
+
+   "single_service_root_endpoint_works"_test = [] {
+      TaskService taskService;
+
+      glz::registry<glz::opts{}, glz::REST> registry;
+      registry.on(taskService);
+
+      // Root should have both GET and PUT
+      auto [get_handler, get_params] = registry.endpoints.match(glz::http_method::GET, "");
+      auto [put_handler, put_params] = registry.endpoints.match(glz::http_method::PUT, "");
+      expect(get_handler != nullptr);
+      expect(put_handler != nullptr);
+
+      // Sub-endpoint should work
+      auto [tasks_handler, tasks_params] = registry.endpoints.match(glz::http_method::GET, "/getAllTasks");
+      expect(tasks_handler != nullptr);
    };
 };
 
