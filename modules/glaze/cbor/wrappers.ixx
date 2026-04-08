@@ -7,7 +7,7 @@ import glaze.cbor.write;
 
 import glaze.core.custom;
 import glaze.core.opts;
-import glaze.core.wrappers;
+import glaze.core.custom;
 import glaze.core.context;
 import glaze.core.common;
 

@@ -10,7 +10,7 @@ import glaze.json.write;
 
 import glaze.core.custom_meta;
 import glaze.core.common;
-import glaze.core.wrappers;
+import glaze.core.custom;
 import glaze.core.context;
 import glaze.core.meta;
 import glaze.core.opts;

@@ -24,7 +24,6 @@ import glaze.core.opts;
 import glaze.core.read;
 import glaze.core.seek;
 import glaze.core.to;
-import glaze.core.wrappers;
 import glaze.core.write;
 import glaze.core.as_array_wrapper;
 import glaze.file.hostname_include;

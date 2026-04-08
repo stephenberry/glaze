@@ -26,7 +26,6 @@ import glaze.core.read;
 import glaze.core.reflect;
 import glaze.core.seek;
 import glaze.core.to;
-import glaze.core.wrappers;
 import glaze.core.write;
 
 import glaze.hardware.volatile_array;

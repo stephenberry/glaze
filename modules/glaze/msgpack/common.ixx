@@ -5,7 +5,6 @@ export module glaze.msgpack.common;
 import std;
 
 import glaze.core.context;
-import glaze.core.error_category;
 import glaze.util.dump;
 import glaze.concepts.container_concepts;
 

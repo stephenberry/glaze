@@ -34,7 +34,6 @@ target_sources(glaze_glaze
       modules/glaze/core/convert_struct.ixx
       modules/glaze/core/custom.ixx
       modules/glaze/core/custom_meta.ixx
-      modules/glaze/core/error_category.ixx
       modules/glaze/core/istream_buffer.ixx
       modules/glaze/core/manage.ixx
       modules/glaze/core/meta.ixx
@@ -49,7 +48,7 @@ target_sources(glaze_glaze
       modules/glaze/core/std_error_code.ixx
       modules/glaze/core/streaming_state.ixx
       modules/glaze/core/to.ixx
-      modules/glaze/core/wrappers.ixx
+      
       modules/glaze/core/wrapper_traits.ixx
       modules/glaze/core/write.ixx
       modules/glaze/core/write_chars.ixx

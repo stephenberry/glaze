@@ -12,7 +12,6 @@ import glaze.core.context;
 import glaze.core.meta;
 import glaze.core.opts;
 import glaze.core.read;
-import glaze.core.wrappers;
 
 import ut;
 

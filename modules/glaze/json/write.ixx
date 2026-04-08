@@ -14,7 +14,7 @@ import glaze.core.chrono;
 import glaze.core.buffer_traits;
 import glaze.core.common;
 import glaze.core.context;
-export import glaze.core.custom;
+import glaze.core.custom;
 import glaze.core.custom_meta;
 import glaze.core.meta;
 import glaze.core.opts;
@@ -23,7 +23,6 @@ import glaze.core.seek;
 import glaze.core.to;
 import glaze.core.write;
 import glaze.core.write_chars;
-import glaze.core.wrappers;
 import glaze.thread.atomic;
 
 import glaze.file.file_ops;

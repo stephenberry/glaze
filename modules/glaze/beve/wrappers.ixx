@@ -11,7 +11,6 @@ import glaze.core.common;
 import glaze.core.context;
 import glaze.core.custom;
 import glaze.core.opts;
-import glaze.core.wrappers;
 
 #include "glaze/util/inline.hpp"
 

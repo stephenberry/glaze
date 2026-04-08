@@ -5,11 +5,10 @@ export module glaze.core.reflect;
 import std;
 
 import glaze.core.common;
+import glaze.core.custom;
 import glaze.core.context;
-export import glaze.core.error_category;
 import glaze.core.meta;
 import glaze.core.opts;
-import glaze.core.wrappers;
 import glaze.core.cast;
 
 import glaze.util.primes_64;

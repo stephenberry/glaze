@@ -7,7 +7,6 @@ import std;
 import glaze.core.context;
 import glaze.core.array_apply;
 import glaze.core.cast;
-import glaze.core.error_category;
 import glaze.core.meta;
 import glaze.reflection.requires_key;
 

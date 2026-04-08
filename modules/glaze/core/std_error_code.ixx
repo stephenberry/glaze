@@ -13,7 +13,6 @@ export module glaze.core.std_error_code;
 import std;
 
 import glaze.core.context;
-import glaze.core.error_category;
 import glaze.core.meta;
 
 using std::uint32_t;
