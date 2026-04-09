@@ -832,8 +832,12 @@ namespace glz
             }
          }
 
+         std::fprintf(stderr, "[HTTP_SERVER] before io_context->stop()\n");
+
          // Stop the io_context
          if (io_context) io_context->stop();
+
+         std::fprintf(stderr, "[HTTP_SERVER] after io_context->stop()\n");
 
          // Only join threads if we're not in one of the worker threads
          auto current_thread_id = std::this_thread::get_id();
@@ -848,14 +852,17 @@ namespace glz
          if (!is_worker_thread) {
             for (auto& thread : threads) {
                if (thread.joinable()) {
+                  std::fprintf(stderr, "[HTTP_SERVER] joining thread\n");
                   thread.join();
                }
             }
+            std::fprintf(stderr, "[HTTP_SERVER] threads cleared\n");
             threads.clear();
          }
 
          // Notify any threads waiting for shutdown
          shutdown_cv.notify_all();
+         std::fprintf(stderr, "[HTTP_SERVER] stop() complete\n");
       }
 
       inline http_server& mount(std::string_view base_path, const http_router& router)
