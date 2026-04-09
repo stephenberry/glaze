@@ -78,41 +78,28 @@ jobs:
     - name: "Repeat: http_client_test (up to 10x, direct)"
       working-directory: build
       run: |
-        exe="tests/networking_tests/http_client_test/http_client_test.exe"
-        echo "Verifying executable exists: $exe"
-        ls -la "$exe"
         for i in $(seq 1 10); do
-          echo ""
           echo "=== http_client_test run $i/10 ==="
-          if [ ! -f "$exe" ]; then
-            echo "ERROR: executable disappeared before run $i"
-            exit 1
-          fi
-          "$exe"
+          ctest -C Release --output-on-failure -R "^http_client_test$"
           rc=$?
           if [ $rc -ne 0 ]; then
-            echo "CRASHED on run $i with exit code $rc (hex: $(printf '0x%x' $rc))"
-            ls -la "$exe" 2>/dev/null || echo "Executable no longer exists!"
+            echo "FAILED on run $i (exit code $rc)"
             exit 1
           fi
-          echo "Run $i passed."
-          sleep 1
         done
         echo "All 10 runs passed."
 
-    - name: "Repeat: mingw_ssl_diag (up to 3x, direct)"
+    - name: "Repeat: mingw_ssl_diag (up to 3x)"
       working-directory: build
       run: |
-        exe="tests/networking_tests/mingw_ssl_diag/mingw_ssl_diag.exe"
         for i in $(seq 1 3); do
           echo "=== mingw_ssl_diag run $i/3 ==="
-          "$exe"
+          ctest -C Release --output-on-failure -R "^mingw_ssl_diag$"
           rc=$?
           if [ $rc -ne 0 ]; then
-            echo "CRASHED on run $i with exit code $rc"
+            echo "FAILED on run $i (exit code $rc)"
             exit 1
           fi
-          sleep 1
         done
         echo "All 3 runs passed."
 
