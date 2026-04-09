@@ -457,38 +457,54 @@ class simple_test_client
 // stderr survives process crash, so we can see the last test that started.
 #define TRACE_TEST std::fprintf(stderr, "[TEST] %s:%d\n", __func__, __LINE__)
 
+#ifdef _WIN32
+#include <windows.h>
+inline void check_heap(const char* label)
+{
+   BOOL ok = HeapValidate(GetProcessHeap(), 0, NULL);
+   std::fprintf(stderr, "[HEAP] %s: %s\n", label, ok ? "OK" : "CORRUPTED");
+}
+#else
+inline void check_heap(const char*) {}
+#endif
+
 suite working_http_tests = [] {
    "url_parsing_basic"_test = [] { TRACE_TEST;
+      check_heap("start of url_parsing_basic");
       auto result = parse_url("http://example.com/test");
       expect(result.has_value()) << "Basic URL should parse correctly\n";
       expect(result->protocol == "http") << "Protocol should be http\n";
       expect(result->host == "example.com") << "Host should be example.com\n";
       expect(result->port == 80) << "Port should default to 80\n";
       expect(result->path == "/test") << "Path should be /test\n";
+      check_heap("end of url_parsing_basic");
    };
 
    "simple_server_test"_test = [] { TRACE_TEST;
+      check_heap("before simple_server create");
       working_test_server server;
-
+      check_heap("after simple_server create");
       expect(server.start()) << "Test server should start successfully\n";
+      check_heap("after simple_server start");
       expect(server.port() > 0) << "Server should have valid port\n";
 
       // Give server a moment to fully initialize
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
       server.stop();
+      check_heap("after simple_server stop");
    };
 
    "basic_get_request"_test = [] { TRACE_TEST;
-      std::fprintf(stderr, "[TRACE] creating server\n");
+      check_heap("before server create");
       working_test_server server;
-      std::fprintf(stderr, "[TRACE] starting server\n");
+      check_heap("after server create");
       expect(server.start()) << "Server should start\n";
-      std::fprintf(stderr, "[TRACE] creating client\n");
+      check_heap("after server start");
       simple_test_client client;
-      std::fprintf(stderr, "[TRACE] sending GET\n");
+      check_heap("after client create");
       auto result = client.get(server.base_url() + "/hello");
-      std::fprintf(stderr, "[TRACE] GET returned\n");
+      check_heap("after GET");
 
       expect(result.has_value()) << "GET request should succeed\n";
       if (result.has_value()) {
@@ -496,9 +512,10 @@ suite working_http_tests = [] {
          expect(result->response_body == "Hello, World!") << "Body should match\n";
       }
 
-      std::fprintf(stderr, "[TRACE] stopping server\n");
+      check_heap("before server stop");
       server.stop();
-      std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
+      check_heap("after server stop");
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
       std::fprintf(stderr, "[TRACE] test done\n");
    };
 
