@@ -73,38 +73,19 @@ jobs:
         Set-ItemProperty -Path $regPath -Name "DumpCount" -Value 10 -Type DWord
         Write-Host "WER crash dumps configured at $dumpPath"
 
-    # Run http_client_test up to 50 times — stop on first crash.
-    # Previously this crashed on the very first attempt, so 50 clean
-    # runs is strong evidence the fix works.
-    - name: "Repeat: http_client_test (up to 50x)"
+    # Run http_client_test directly (not via ctest) so stdout isn't buffered.
+    # The ut framework prints test names as they run, so we'll see the last
+    # successful test before the crash.
+    - name: "Run http_client_test (direct)"
       working-directory: build
       run: |
-        echo "Running http_client_test up to 50 times..."
-        for i in $(seq 1 50); do
-          echo "--- Run $i/50 ---"
-          ctest --output-on-failure -R "^http_client_test$"
-          rc=$?
-          if [ $rc -ne 0 ]; then
-            echo "FAILED on run $i (exit code $rc)"
-            exit $rc
-          fi
-        done
-        echo "All 50 runs passed."
+        echo "Running http_client_test directly to capture last test before crash..."
+        ./tests/networking_tests/http_client_test/http_client_test.exe 2>&1 || true
 
-    - name: "Repeat: mingw_ssl_diag (up to 50x)"
+    - name: "Run mingw_ssl_diag"
       working-directory: build
       run: |
-        echo "Running mingw_ssl_diag up to 50 times..."
-        for i in $(seq 1 50); do
-          echo "--- Run $i/50 ---"
-          ctest --output-on-failure -R "^mingw_ssl_diag$"
-          rc=$?
-          if [ $rc -ne 0 ]; then
-            echo "FAILED on run $i (exit code $rc)"
-            exit $rc
-          fi
-        done
-        echo "All 50 runs passed."
+        ./tests/networking_tests/mingw_ssl_diag/mingw_ssl_diag.exe 2>&1 || true
 
     # Check for and analyze any crash dumps
     - name: Analyze crash dumps

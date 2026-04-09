@@ -1293,6 +1293,8 @@ suite eof_delimited_tests = [] {
 
 int main()
 {
+   // Force line-buffered stdout so crash output shows the last completed test
+   std::setvbuf(stdout, nullptr, _IOLBF, 0);
    std::cout << "Running HTTP Client Tests...\n";
    std::cout << "============================\n";
    return 0;

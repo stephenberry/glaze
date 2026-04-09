@@ -426,7 +426,11 @@ int main()
    std::cout << "MinGW + SSL Diagnostic Test" << std::endl;
    std::cout << "===========================" << std::endl;
    std::cout << "OpenSSL version: " << OpenSSL_version(OPENSSL_VERSION) << std::endl;
+#ifdef __VERSION__
    std::cout << "Compiler: " << __VERSION__ << std::endl;
+#elif defined(_MSC_VER)
+   std::cout << "Compiler: MSVC " << _MSC_VER << std::endl;
+#endif
    std::cout << std::endl;
    return 0;
 }
