@@ -20,6 +20,20 @@
 using namespace ut;
 using namespace glz;
 
+// Crash diagnostic: print test name to stderr (unbuffered) before each test.
+#define TRACE_TEST std::fprintf(stderr, "[TEST] %s:%d\n", __func__, __LINE__)
+
+#ifdef _WIN32
+#include <windows.h>
+inline void check_heap(const char* label)
+{
+   BOOL ok = HeapValidate(GetProcessHeap(), 0, NULL);
+   std::fprintf(stderr, "[HEAP] %s: %s\n", label, ok ? "OK" : "CORRUPTED");
+}
+#else
+inline void check_heap(const char*) {}
+#endif
+
 namespace test_http_client
 {
    struct put_payload
@@ -455,21 +469,6 @@ class simple_test_client
       return future.get();
    }
 };
-
-// Crash diagnostic: print test name to stderr (unbuffered) before each test.
-// stderr survives process crash, so we can see the last test that started.
-#define TRACE_TEST std::fprintf(stderr, "[TEST] %s:%d\n", __func__, __LINE__)
-
-#ifdef _WIN32
-#include <windows.h>
-inline void check_heap(const char* label)
-{
-   BOOL ok = HeapValidate(GetProcessHeap(), 0, NULL);
-   std::fprintf(stderr, "[HEAP] %s: %s\n", label, ok ? "OK" : "CORRUPTED");
-}
-#else
-inline void check_heap(const char*) {}
-#endif
 
 suite working_http_tests = [] {
    "url_parsing_basic"_test = [] { TRACE_TEST;
