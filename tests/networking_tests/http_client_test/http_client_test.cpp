@@ -45,7 +45,11 @@ class working_test_server
   public:
    working_test_server() : port_(0), running_(false) {}
 
-   ~working_test_server() { stop(); }
+   ~working_test_server()
+   {
+      std::fprintf(stderr, "[TRACE] working_test_server dtor\n");
+      stop();
+   }
 
    void set_cors_config(glz::cors_config config) { cors_config_ = std::move(config); }
 
@@ -298,6 +302,7 @@ class simple_test_client
   public:
    simple_test_client() : io_context_(1)
    {
+      std::fprintf(stderr, "[TRACE] simple_test_client ctor\n");
       // Start a single worker thread
       worker_thread_ = std::thread([this]() {
          asio::executor_work_guard<asio::io_context::executor_type> work_guard(io_context_.get_executor());
@@ -307,10 +312,12 @@ class simple_test_client
 
    ~simple_test_client()
    {
+      std::fprintf(stderr, "[TRACE] simple_test_client dtor begin\n");
       io_context_.stop();
       if (worker_thread_.joinable()) {
          worker_thread_.join();
       }
+      std::fprintf(stderr, "[TRACE] simple_test_client dtor end\n");
    }
 
    std::expected<response, std::error_code> get(const std::string& url)
@@ -473,11 +480,15 @@ suite working_http_tests = [] {
    };
 
    "basic_get_request"_test = [] { TRACE_TEST;
+      std::fprintf(stderr, "[TRACE] creating server\n");
       working_test_server server;
+      std::fprintf(stderr, "[TRACE] starting server\n");
       expect(server.start()) << "Server should start\n";
-
+      std::fprintf(stderr, "[TRACE] creating client\n");
       simple_test_client client;
+      std::fprintf(stderr, "[TRACE] sending GET\n");
       auto result = client.get(server.base_url() + "/hello");
+      std::fprintf(stderr, "[TRACE] GET returned\n");
 
       expect(result.has_value()) << "GET request should succeed\n";
       if (result.has_value()) {
@@ -485,8 +496,10 @@ suite working_http_tests = [] {
          expect(result->response_body == "Hello, World!") << "Body should match\n";
       }
 
+      std::fprintf(stderr, "[TRACE] stopping server\n");
       server.stop();
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
+      std::fprintf(stderr, "[TRACE] test done\n");
    };
 
    "cors_preflight_generates_options_response"_test = [] { TRACE_TEST;
