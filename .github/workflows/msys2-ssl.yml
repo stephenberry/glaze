@@ -84,13 +84,19 @@ jobs:
         for i in $(seq 1 10); do
           echo ""
           echo "=== http_client_test run $i/10 ==="
+          if [ ! -f "$exe" ]; then
+            echo "ERROR: executable disappeared before run $i"
+            exit 1
+          fi
           "$exe"
           rc=$?
           if [ $rc -ne 0 ]; then
             echo "CRASHED on run $i with exit code $rc (hex: $(printf '0x%x' $rc))"
+            ls -la "$exe" 2>/dev/null || echo "Executable no longer exists!"
             exit 1
           fi
           echo "Run $i passed."
+          sleep 1
         done
         echo "All 10 runs passed."
 
@@ -106,6 +112,7 @@ jobs:
             echo "CRASHED on run $i with exit code $rc"
             exit 1
           fi
+          sleep 1
         done
         echo "All 3 runs passed."
 
@@ -156,5 +163,5 @@ jobs:
     - name: Run remaining tests
       if: always()
       run: |
-        ctest --output-on-failure -R \
+        ctest -C Release --output-on-failure -R \
           "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test)$"
