@@ -73,19 +73,41 @@ jobs:
         Set-ItemProperty -Path $regPath -Name "DumpCount" -Value 10 -Type DWord
         Write-Host "WER crash dumps configured at $dumpPath"
 
-    # Run http_client_test directly (not via ctest) so stdout isn't buffered.
-    # The ut framework prints test names as they run, so we'll see the last
-    # successful test before the crash.
-    - name: "Run http_client_test (direct)"
+    # Run http_client_test directly up to 10 times to catch the intermittent crash.
+    # Output goes to a temp file so we can see the last test before crash.
+    - name: "Repeat: http_client_test (up to 10x, direct)"
       working-directory: build
       run: |
-        echo "Running http_client_test directly to capture last test before crash..."
-        ./tests/networking_tests/http_client_test/http_client_test.exe 2>&1 || true
+        exe="tests/networking_tests/http_client_test/http_client_test.exe"
+        echo "Verifying executable exists: $exe"
+        ls -la "$exe"
+        for i in $(seq 1 10); do
+          echo ""
+          echo "=== http_client_test run $i/10 ==="
+          "$exe"
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "CRASHED on run $i with exit code $rc (hex: $(printf '0x%x' $rc))"
+            exit 1
+          fi
+          echo "Run $i passed."
+        done
+        echo "All 10 runs passed."
 
-    - name: "Run mingw_ssl_diag"
+    - name: "Repeat: mingw_ssl_diag (up to 3x, direct)"
       working-directory: build
       run: |
-        ./tests/networking_tests/mingw_ssl_diag/mingw_ssl_diag.exe 2>&1 || true
+        exe="tests/networking_tests/mingw_ssl_diag/mingw_ssl_diag.exe"
+        for i in $(seq 1 3); do
+          echo "=== mingw_ssl_diag run $i/3 ==="
+          "$exe"
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "CRASHED on run $i with exit code $rc"
+            exit 1
+          fi
+        done
+        echo "All 3 runs passed."
 
     # Check for and analyze any crash dumps
     - name: Analyze crash dumps
