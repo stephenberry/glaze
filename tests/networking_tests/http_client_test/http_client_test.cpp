@@ -116,12 +116,15 @@ class working_test_server
 
       // Give any ongoing operations a moment to complete
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      check_heap("stop: after sleep");
 
       server_.stop();
+      check_heap("stop: after server_.stop()");
 
       if (server_thread_.joinable()) {
          server_thread_.join();
       }
+      check_heap("stop: after thread join");
    }
 
    uint16_t port() const { return port_; }
@@ -312,12 +315,12 @@ class simple_test_client
 
    ~simple_test_client()
    {
-      std::fprintf(stderr, "[TRACE] simple_test_client dtor begin\n");
+      check_heap("~simple_test_client: begin");
       io_context_.stop();
       if (worker_thread_.joinable()) {
          worker_thread_.join();
       }
-      std::fprintf(stderr, "[TRACE] simple_test_client dtor end\n");
+      check_heap("~simple_test_client: end");
    }
 
    std::expected<response, std::error_code> get(const std::string& url)
