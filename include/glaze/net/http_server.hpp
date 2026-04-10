@@ -833,6 +833,7 @@ namespace glz
          }
 
          // Stop the io_context
+         std::fprintf(stderr, "[HTTP_SERVER] stop: io_context->stop()\n");
          if (io_context) io_context->stop();
 
          // Only join threads if we're not in one of the worker threads
@@ -846,25 +847,25 @@ namespace glz
          }
 
          if (!is_worker_thread) {
+            std::fprintf(stderr, "[HTTP_SERVER] stop: joining %zu threads\n", threads.size());
             for (auto& thread : threads) {
                if (thread.joinable()) {
                   thread.join();
                }
             }
+            std::fprintf(stderr, "[HTTP_SERVER] stop: threads joined\n");
             threads.clear();
 
-            // Drain any pending completion handlers so they are destroyed now,
-            // while the server and its resources are still alive.
-            // Without this, pending handlers (holding shared_ptrs to
-            // connection_state and sockets) are destroyed inside the
-            // io_context destructor, which can cause heap corruption on
-            // MinGW/GCC with Windows.
+            // Drain any pending completion handlers
             if (io_context) {
+               std::fprintf(stderr, "[HTTP_SERVER] stop: draining io_context\n");
                io_context->restart();
                io_context->poll();
+               std::fprintf(stderr, "[HTTP_SERVER] stop: drain complete\n");
             }
          }
 
+         std::fprintf(stderr, "[HTTP_SERVER] stop: complete\n");
          // Notify any threads waiting for shutdown
          shutdown_cv.notify_all();
       }
