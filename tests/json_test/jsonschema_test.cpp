@@ -414,9 +414,8 @@ suite schema_tests = [] {
       expect[(obj.type.has_value())];
       expect(obj.type->size() == 1);
       expect(obj.type->at(0) == "array");
-      // check minItems and maxItems
-      expect[(obj.attributes.minItems.has_value())];
-      expect(obj.attributes.minItems.value() == 42);
+      // check maxItems (minItems not set because Glaze allows partial reading)
+      expect[(!obj.attributes.minItems.has_value())];
       expect[(obj.attributes.maxItems.has_value())];
       expect(obj.attributes.maxItems.value() == 42);
    };
@@ -628,6 +627,32 @@ suite value_type_variant_schema = [] {
       auto& types = *it->second.type;
       expect(std::find(types.begin(), types.end(), "string") != types.end()) << "missing string type";
       expect(std::find(types.begin(), types.end(), "null") != types.end()) << "missing null type";
+   };
+};
+
+suite vector_pair_schema_test = [] {
+   "vector_pair_string_int_schema"_test = [] {
+      // std::vector<std::pair<std::string, int>> serializes as a JSON object by default (concatenate=true)
+      // The schema should reflect this by generating an object type, not an array type
+      auto schema = glz::write_json_schema<std::vector<std::pair<std::string, int>>>().value_or("error");
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "failed to parse schema";
+      if (!obj) return;
+      expect(obj->type.has_value());
+      auto& types = *obj->type;
+      expect(std::find(types.begin(), types.end(), "object") != types.end()) << "expected object type";
+      expect(obj->additionalProperties.has_value()) << "expected additionalProperties";
+   };
+
+   "vector_pair_string_uint64_schema"_test = [] {
+      auto schema =
+         glz::write_json_schema<std::vector<std::pair<std::string, uint64_t>>>().value_or("error");
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "failed to parse schema";
+      if (!obj) return;
+      expect(obj->type.has_value());
+      auto& types = *obj->type;
+      expect(std::find(types.begin(), types.end(), "object") != types.end()) << "expected object type";
    };
 };
 

@@ -488,16 +488,27 @@ namespace glz
          static void op(auto& s, auto& defs)
          {
             using V = std::decay_t<range_value_t<std::decay_t<T>>>;
-            s.type = {"array"};
-            if constexpr (has_fixed_size_container<std::decay_t<T>>) {
-               s.attributes.minItems = get_size<std::decay_t<T>>();
-               s.attributes.maxItems = get_size<std::decay_t<T>>();
+            // When concatenate is true (default), arrays of pairs serialize as objects
+            if constexpr (pair_t<V> && check_concatenate(Opts)) {
+               using ValueType = std::decay_t<glz::tuple_element_t<1, V>>;
+               s.type = {"object"};
+               auto& def = defs[name_v<ValueType>];
+               if (!def.type) {
+                  to_json_schema<ValueType>::template op<Opts>(def, defs);
+               }
+               s.additionalProperties = schema{true, join_v<chars<"#/$defs/">, name_v<ValueType>>};
             }
-            auto& def = defs[name_v<V>];
-            if (!def.type) {
-               to_json_schema<V>::template op<Opts>(def, defs);
+            else {
+               s.type = {"array"};
+               if constexpr (has_fixed_size_container<std::decay_t<T>>) {
+                  s.attributes.maxItems = get_size<std::decay_t<T>>();
+               }
+               auto& def = defs[name_v<V>];
+               if (!def.type) {
+                  to_json_schema<V>::template op<Opts>(def, defs);
+               }
+               s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
             }
-            s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
          }
       };
 
