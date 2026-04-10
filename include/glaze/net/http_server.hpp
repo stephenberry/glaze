@@ -832,10 +832,6 @@ namespace glz
             }
          }
 
-         // Stop the io_context
-         std::fprintf(stderr, "[HTTP_SERVER] stop: io_context->stop()\n");
-         if (io_context) io_context->stop();
-
          // Only join threads if we're not in one of the worker threads
          auto current_thread_id = std::this_thread::get_id();
          bool is_worker_thread = false;
@@ -847,25 +843,30 @@ namespace glz
          }
 
          if (!is_worker_thread) {
-            std::fprintf(stderr, "[HTTP_SERVER] stop: joining %zu threads\n", threads.size());
+            // Close all tracked sockets to cancel pending I/O and allow
+            // the io_context to drain naturally before we force-stop.
+            {
+               std::lock_guard<std::mutex> lock(active_connections_mutex_);
+               for (auto& weak_conn : active_connections_) {
+                  if (auto conn = weak_conn.lock()) {
+                     asio::error_code ec;
+                     conn->socket.lowest_layer().close(ec);
+                  }
+               }
+               active_connections_.clear();
+            }
+
+            // Stop the io_context
+            if (io_context) io_context->stop();
+
             for (auto& thread : threads) {
                if (thread.joinable()) {
                   thread.join();
                }
             }
-            std::fprintf(stderr, "[HTTP_SERVER] stop: threads joined\n");
             threads.clear();
-
-            // Drain any pending completion handlers
-            if (io_context) {
-               std::fprintf(stderr, "[HTTP_SERVER] stop: draining io_context\n");
-               io_context->restart();
-               io_context->poll();
-               std::fprintf(stderr, "[HTTP_SERVER] stop: drain complete\n");
-            }
          }
 
-         std::fprintf(stderr, "[HTTP_SERVER] stop: complete\n");
          // Notify any threads waiting for shutdown
          shutdown_cv.notify_all();
       }
@@ -1483,6 +1484,10 @@ namespace glz
       std::condition_variable shutdown_cv;
       std::mutex shutdown_mutex;
 
+      // Active connection tracking for clean shutdown
+      std::mutex active_connections_mutex_;
+      std::vector<std::weak_ptr<connection_state>> active_connections_;
+
 #ifdef GLZ_ENABLE_SSL
       std::conditional_t<EnableTLS, std::unique_ptr<asio::ssl::context>, std::monostate> ssl_context;
 #endif
@@ -1536,7 +1541,14 @@ namespace glz
       }
 
       // Start handling a new connection
-      inline void start_connection(std::shared_ptr<connection_state> conn) { read_request(conn); }
+      inline void start_connection(std::shared_ptr<connection_state> conn)
+      {
+         {
+            std::lock_guard<std::mutex> lock(active_connections_mutex_);
+            active_connections_.push_back(conn);
+         }
+         read_request(conn);
+      }
 
       // Start or reset the idle timer for keep-alive connections
       inline void start_idle_timer(std::shared_ptr<connection_state> conn)
