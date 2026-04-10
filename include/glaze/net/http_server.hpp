@@ -1495,8 +1495,12 @@ namespace glz
       std::mutex active_connections_mutex_;
       std::vector<std::weak_ptr<connection_state>> active_connections_;
 
-#ifdef GLZ_ENABLE_SSL
-      std::conditional_t<EnableTLS, std::unique_ptr<asio::ssl::context>, std::monostate> ssl_context;
+#if defined(GLZ_ENABLE_SSL)
+      // SSL context only exists for TLS-enabled servers.
+      // Note: using conditional_t<EnableTLS, ..., monostate> previously caused
+      // the struct layout to change for non-TLS servers when GLZ_ENABLE_SSL was
+      // defined, which correlated with heap corruption on MinGW/GCC (#2411).
+      std::unique_ptr<asio::ssl::context> ssl_context;
 #endif
 
       inline void do_accept()
