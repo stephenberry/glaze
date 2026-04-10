@@ -84,7 +84,17 @@ When a pending handler holds `shared_ptr<connection_state>` and that handler is 
 
 The key issue: ASIO closes sockets in step 1 at the service level, then destroys handler captures in step 2. If a handler's capture holds the **last** shared_ptr to a connection_state, the socket destructor in step 2 may try to perform cleanup on an already-closed socket, leading to corruption of IOCP internal structures on MinGW.
 
-### Why the drain fix works
+### Detailed crash site (from CI tracing)
+
+The crash occurs during `thread.join()` inside `http_server::stop()`. The `io_context->stop()` succeeds, but the worker thread crashes while exiting `io_context::run()`. The heap is verified clean (via `HeapValidate`) immediately before `server_.stop()` is called, and through `io_context->stop()` on the main thread.
+
+The crash only occurs when the server has handled at least one connection. A server that starts and stops without handling any connections does not crash. The connection cleanup (socket close after `Connection: close` response) is the likely trigger.
+
+A `restart()` + `poll()` drain after `thread.join()` does NOT fix the issue because the crash occurs during the join itself, before the drain runs.
+
+**Current hypothesis**: This may be a GCC 15.2.0 miscompilation on MinGW. The `std::monostate ssl_context` member changes the http_server struct layout just enough to trigger an optimizer bug in connection cleanup codegen. Testing with `-O0` to confirm.
+
+### Why the drain fix works (when it applies)
 
 By calling `io_context->restart()` + `io_context->poll()` after joining worker threads, all pending handlers execute (and their captures are destroyed) while the io_context is still fully operational. When `~io_context()` later runs, there are no pending handlers left to destroy.
 
