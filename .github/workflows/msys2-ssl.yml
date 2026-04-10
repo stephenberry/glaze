@@ -18,16 +18,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: MinGW64 + SSL
+  # Test 1: GLZ_ENABLE_SSL defined + OpenSSL linked (the crashing configuration)
+  ssl-enabled:
+    name: "SSL enabled (GLZ_ENABLE_SSL + OpenSSL)"
     runs-on: windows-latest
     defaults:
       run:
         shell: msys2 {0}
-
     steps:
     - uses: actions/checkout@v6
-
     - uses: msys2/setup-msys2@v2
       with:
         update: true
@@ -37,111 +36,82 @@ jobs:
           mingw-w64-x86_64-ninja
           mingw-w64-x86_64-gcc
           mingw-w64-x86_64-openssl
-          mingw-w64-x86_64-gdb
 
-    - name: Configure CMake
+    - name: Configure & Build
       run: |
-        cmake -S . -B build \
-          -G Ninja \
+        cmake -S . -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_CXX_FLAGS="-g" \
           -DCMAKE_CXX_STANDARD=23 \
           -Dglaze_ENABLE_SSL=ON
+        cmake --build build -j $(nproc) --target mingw_ssl_diag
 
-    - name: Build
-      run: |
-        cmake --build build -j $(nproc) --target \
-          mingw_ssl_diag \
-          http_client_test \
-          websocket_client_test \
-          websocket_close_test \
-          wss_test \
-          shared_context_bug_test \
-          utf8_test \
-          https_test
-
-    # Configure WER crash dumps before running tests
-    - name: Configure crash dumps (WER)
-      shell: pwsh
-      run: |
-        $dumpPath = "D:\CrashDumps"
-        New-Item -Path $dumpPath -ItemType Directory -Force | Out-Null
-        $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"
-        New-Item -Path $regPath -Force | Out-Null
-        Set-ItemProperty -Path $regPath -Name "DumpType" -Value 2 -Type DWord
-        Set-ItemProperty -Path $regPath -Name "DumpFolder" -Value $dumpPath -Type ExpandString
-        Set-ItemProperty -Path $regPath -Name "DumpCount" -Value 10 -Type DWord
-        Write-Host "WER crash dumps configured at $dumpPath"
-
-    # Run the minimal reproducer FIRST — 20 rounds of server+GET+stop
-    - name: "mingw_ssl_diag (minimal reproducer)"
+    - name: "Run: mingw_ssl_diag (GLZ_ENABLE_SSL=ON)"
       working-directory: build
-      run: |
-        echo "=== Running minimal reproducer ==="
-        ctest -C Release --output-on-failure -R "^mingw_ssl_diag$" || true
+      run: ctest -C Release --output-on-failure -R "^mingw_ssl_diag$" || true
 
-    # Then run http_client_test
-    - name: "http_client_test (up to 3x)"
-      if: always()
+  # Test 2: OpenSSL DLLs linked but GLZ_ENABLE_SSL NOT defined
+  # If this crashes → DLL loading is the cause
+  # If this passes → the GLZ_ENABLE_SSL macro / template changes are the cause
+  link-only:
+    name: "Link-only (OpenSSL linked, NO GLZ_ENABLE_SSL)"
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - uses: actions/checkout@v6
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-openssl
+
+    - name: Configure & Build
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23 \
+          -Dglaze_ENABLE_SSL=ON
+        cmake --build build -j $(nproc) --target mingw_link_only_test
+
+    - name: "Run: mingw_link_only_test (no GLZ_ENABLE_SSL macro)"
       working-directory: build
-      run: |
-        for i in $(seq 1 3); do
-          echo "=== http_client_test run $i/3 ==="
-          ctest -C Release --output-on-failure -R "^http_client_test$"
-          rc=$?
-          if [ $rc -ne 0 ]; then
-            echo "FAILED on run $i (exit code $rc)"
-            exit 1
-          fi
-        done
-        echo "All 3 runs passed."
+      run: ctest -C Release --output-on-failure -R "^mingw_link_only_test$" || true
 
-    # Check for and analyze any crash dumps
-    - name: Analyze crash dumps
-      if: always()
-      shell: pwsh
-      run: |
-        $dumps = Get-ChildItem -Path "D:\CrashDumps" -Filter "*.dmp" -ErrorAction SilentlyContinue
-        if ($dumps) {
-          Write-Host "=== Found $($dumps.Count) crash dump(s) ==="
-          foreach ($dump in $dumps) {
-            Write-Host "  $($dump.Name) — $('{0:N1}' -f ($dump.Length / 1MB)) MB"
-          }
-        } else {
-          Write-Host "No crash dumps captured."
-        }
+  # Test 3: Static OpenSSL linking
+  # If this passes → DLL boundary / CRT mismatch is the cause
+  # If this crashes → the issue is deeper (OpenSSL code itself)
+  static-ssl:
+    name: "Static OpenSSL"
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - uses: actions/checkout@v6
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-openssl
 
-    - name: GDB post-mortem
-      if: always()
+    - name: Configure & Build
       run: |
-        found=0
-        for dump in /d/CrashDumps/*.dmp; do
-          [ -f "$dump" ] || continue
-          found=1
-          echo ""
-          echo "========================================="
-          echo "=== Analyzing: $dump"
-          echo "========================================="
-          echo ""
-          gdb -batch \
-            -ex "target mini $dump" \
-            -ex "echo === CRASHING THREAD ===\n" \
-            -ex "bt" \
-            -ex "echo \n=== ALL THREADS ===\n" \
-            -ex "thread apply all bt" \
-            -ex "echo \n=== REGISTERS ===\n" \
-            -ex "info registers" \
-            -ex "quit" \
-            tests/networking_tests/http_client_test/http_client_test.exe \
-            2>&1 || echo "(gdb analysis failed)"
-        done
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23 \
+          -Dglaze_ENABLE_SSL=ON \
+          -DOPENSSL_USE_STATIC_LIBS=ON
+        cmake --build build -j $(nproc) --target mingw_ssl_diag
 
-        if [ $found -eq 0 ]; then
-          echo "No crash dumps to analyze."
-        fi
-
-    - name: Run remaining tests
-      if: always()
-      run: |
-        ctest -C Release --output-on-failure -R \
-          "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test)$"
+    - name: "Run: mingw_ssl_diag (static OpenSSL)"
+      working-directory: build
+      run: ctest -C Release --output-on-failure -R "^mingw_ssl_diag$" || true

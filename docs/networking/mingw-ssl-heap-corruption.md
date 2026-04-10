@@ -92,7 +92,30 @@ The crash only occurs when the server has handled at least one connection. A ser
 
 A `restart()` + `poll()` drain after `thread.join()` does NOT fix the issue because the crash occurs during the join itself, before the drain runs.
 
-**Current hypothesis**: This may be a GCC 15.2.0 miscompilation on MinGW. The `std::monostate ssl_context` member changes the http_server struct layout just enough to trigger an optimizer bug in connection cleanup codegen. Testing with `-O0` to confirm.
+### Ruled out hypotheses
+
+| Hypothesis | Test | Result |
+|---|---|---|
+| GCC optimizer miscompilation | Build with `-O0` | Still crashes |
+| Struct layout change from `monostate` member | Changed to `unique_ptr` | Still crashes |
+| Pending handlers during io_context destruction | Added `restart()` + `poll()` drain | Still crashes |
+| OpenSSL TLS cleanup on thread exit | Added `OPENSSL_thread_stop()` | Still crashes |
+| Complex test infrastructure | Minimal reproducer (bare server + raw TCP) | Still crashes |
+
+### Confirmed minimal reproducer
+
+The crash reproduces with just:
+1. `glz::http_server<>` with one GET route
+2. A raw TCP client sends `GET /ping HTTP/1.1\r\nConnection: close\r\n\r\n`
+3. `server.stop()` → crash during `thread.join()`
+
+No `working_test_server`, no `simple_test_client`, no CORS, no streaming. The bug is in the core `http_server` + ASIO IOCP + MinGW + OpenSSL interaction.
+
+### Current understanding
+
+The crash occurs during `thread.join()` after `io_context->stop()`. `HeapValidate` passes on both the main thread (right before stop) and the worker thread (right after `run()` returns). The corruption happens during thread teardown — after the worker's function body completes but during the thread exit machinery.
+
+The crash only occurs when OpenSSL libraries are linked (even if no SSL code executes). This points to OpenSSL's DLL initialization or its interaction with MinGW's threading/heap infrastructure as the root cause.
 
 ### Why the drain fix works (when it applies)
 
