@@ -796,7 +796,13 @@ namespace glz
             for (size_t i = 0; i < actual_threads; ++i) {
                threads.emplace_back([this] {
                   io_context->run();
-                  // Don't report errors during shutdown
+#ifdef _WIN32
+                  // Diagnostic: check heap on the worker thread right after run() returns
+                  {
+                     BOOL ok = HeapValidate(GetProcessHeap(), 0, NULL);
+                     std::fprintf(stderr, "[HTTP_SERVER] worker thread exiting, heap: %s\n", ok ? "OK" : "CORRUPTED");
+                  }
+#endif
                });
             }
          }
