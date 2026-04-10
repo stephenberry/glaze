@@ -1,10 +1,16 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <array>
+import std;
+import glaze;
+import ut;
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+using std::int8_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -200,7 +206,7 @@ struct glz::meta<TwoElementSmall>
    static constexpr auto value = enumerate(First, Second);
 };
 
-// Two-element enum with large uint64_t values (tests uint64_t casting)
+// Two-element enum with large std::uint64_t values (tests std::uint64_t casting)
 enum class TwoElementLargeU64 : uint64_t { Low = 0, High = 0xFFFFFFFFFFFFFFFFull };
 
 template <>
@@ -210,7 +216,7 @@ struct glz::meta<TwoElementLargeU64>
    static constexpr auto value = enumerate(Low, High);
 };
 
-// Two-element enum with negative int64_t values
+// Two-element enum with negative std::int64_t values
 enum class TwoElementNegative : int64_t { Negative = -9223372036854775807ll, Positive = 9223372036854775807ll };
 
 template <>
@@ -274,7 +280,7 @@ suite two_element_enum_tests = [] {
    };
 
    "two_element_large_u64_roundtrip"_test = [] {
-      // Test with max uint64_t value to verify casting works correctly
+      // Test with max std::uint64_t value to verify casting works correctly
       for (auto val : {TwoElementLargeU64::Low, TwoElementLargeU64::High}) {
          std::string json;
          expect(not glz::write_json(val, json));
@@ -286,7 +292,7 @@ suite two_element_enum_tests = [] {
    };
 
    "two_element_negative_roundtrip"_test = [] {
-      // Test with extreme int64_t values (near min/max)
+      // Test with extreme std::int64_t values (near min/max)
       for (auto val : {TwoElementNegative::Negative, TwoElementNegative::Positive}) {
          std::string json;
          expect(not glz::write_json(val, json));
@@ -355,7 +361,7 @@ suite two_element_enum_tests = [] {
 // Tests that the hash algorithm finds seeds for various enum configurations
 // ============================================================================
 
-// uint8_t enums (should use small_range strategy since range <= 256)
+// std::uint8_t enums (should use small_range strategy since range <= 256)
 enum class RandomU8Enum1 : uint8_t {
    v0 = 1,
    v1 = 6,
@@ -742,7 +748,7 @@ struct glz::meta<RandomI8Enum2>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-// uint32_t enums (sparse, needs hash)
+// std::uint32_t enums (sparse, needs hash)
 enum class RandomU32Enum1 : uint32_t {
    v0 = 15228622,
    v1 = 41531046,
@@ -974,7 +980,7 @@ struct glz::meta<RandomU32Enum3>
                 v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63);
 };
 
-// int64_t enums (large sparse values including negatives)
+// std::int64_t enums (large sparse values including negatives)
 enum class RandomI64Enum1 : int64_t {
    v0 = -4564365332251179056ll,
    v1 = -4462304907209975628ll,

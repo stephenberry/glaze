@@ -1,6 +1,11 @@
-#include <iostream>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
+import std;
+
+import glaze.json;
+
+using std::size_t;
 
 namespace mylib
 {

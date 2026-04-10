@@ -7,6 +7,8 @@
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
 
+using std::uint64_t;
+
 using namespace ut;
 
 namespace

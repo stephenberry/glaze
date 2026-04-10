@@ -1,16 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
 // Comprehensive tests for the allocate_raw_pointers option
 // Tests raw pointer allocation during deserialization across JSON, BEVE, CBOR, and MSGPACK formats
 
-#include <map>
-#include <unordered_map>
-#include <vector>
+import std;
 
-#include "glaze/cbor.hpp" // CBOR not included in glaze.hpp by default
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import glaze.cbor;
+import glaze;
+
+import ut;
+
+using std::uint32_t;
 
 using namespace ut;
 

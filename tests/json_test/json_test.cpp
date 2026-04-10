@@ -1,46 +1,67 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <algorithm>
-#include <any>
-#include <array>
-#include <atomic>
-#include <bitset>
-#include <chrono>
-#include <complex>
-#include <deque>
-#include <forward_list>
-#include <initializer_list>
-#include <iostream>
-#include <list>
-#include <map>
-#include <numbers>
-#include <random>
-#include <ranges>
-#include <set>
-#include <span>
-#if defined(__STDCPP_FLOAT128_T__)
-#include <stdfloat>
-#endif
-#include <tuple>
-#include <unordered_map>
-#include <variant>
+import std;
 
-#include "glaze/api/impl.hpp"
-#include "glaze/containers/flat_map.hpp"
+import glaze.api.impl;
+import glaze.beve.read;
+import glaze.beve.write;
+import glaze.json;
+import glaze.json.write;
+import glaze.json.study;
+import glaze.json.prettify;
+import glaze.containers.flat_map;
+import glaze.core.array_apply;
+import glaze.core.cast;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.constraint;
+import glaze.core.custom;
+import glaze.core.manage;
+import glaze.core.meta;
+import glaze.core.std_error_code;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.seek;
+import glaze.core.to;
+import glaze.core.write;
+import glaze.core.as_array_wrapper;
+import glaze.file.hostname_include;
+import glaze.file.read_directory;
+import glaze.file.raw_or_file;
+import glaze.file.write_directory;
+import glaze.hardware.volatile_array;
+import glaze.concepts.container_concepts;
+import glaze.json.invoke;
+import glaze.record.recorder;
+import glaze.thread.atomic;
+import glaze.thread.threadpool;
+import glaze.trace;
+import glaze.tuplet;
+import glaze.reflection.to_tuple;
+import glaze.util.expected;
+import glaze.util.for_each;
+import glaze.util.string_literal;
+import glaze.util.type_traits;
+
+import glaze.tests.json.json_test_shared_types;
+
+import ut;
+
 #include "glaze/core/feature_test.hpp"
-#include "glaze/core/std_error_code.hpp"
-#include "glaze/file/hostname_include.hpp"
-#include "glaze/file/raw_or_file.hpp"
-#include "glaze/hardware/volatile_array.hpp"
-#include "glaze/json.hpp"
-#include "glaze/json/study.hpp"
-#include "glaze/record/recorder.hpp"
-#include "glaze/trace/trace.hpp"
-#include "json_test_shared_types.hpp"
-#include "ut/ut.hpp"
+
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
+using std::uint_fast32_t;
 
 // Custom opts for prettify without newlines in arrays
 struct opts_no_array_newlines : glz::opts
@@ -408,7 +429,7 @@ struct glz::meta<Shapes>
    static constexpr std::array value{circ, sq, triangle};
 };
 
-// static_assert(glz::reflect<Vehicle>::keys[uint32_t(Vehicle::Truck)] == "Truck");
+// static_assert(glz::reflect<Vehicle>::keys[std::uint32_t(Vehicle::Truck)] == "Truck");
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
@@ -1011,14 +1032,14 @@ suite container_types = [] {
    using namespace ut;
    "vector int roundtrip"_test = [] {
       std::vector<int> vec(100);
-      for (auto& item : vec) item = rand();
+      for (auto& item : vec) item = std::rand();
       std::string buffer{};
       std::vector<int> vec2{};
       expect(not glz::write_json(vec, buffer));
       expect(glz::read_json(vec2, buffer) == glz::error_code::none);
       expect(vec == vec2);
    };
-   "vector uint64_t roundtrip"_test = [] {
+   "vector std::uint64_t roundtrip"_test = [] {
       std::uniform_int_distribution<uint64_t> dist((std::numeric_limits<uint64_t>::min)(),
                                                    (std::numeric_limits<uint64_t>::max)());
       std::mt19937 gen{};
@@ -1032,7 +1053,7 @@ suite container_types = [] {
    };
    "vector double roundtrip"_test = [] {
       std::vector<double> vec(100);
-      for (auto& item : vec) item = rand() / (1.0 + rand());
+      for (auto& item : vec) item = std::rand() / (1.0 + std::rand());
       std::string buffer{};
       std::vector<double> vec2{};
       expect(not glz::write_json(vec, buffer));
@@ -1041,7 +1062,7 @@ suite container_types = [] {
    };
    "vector float roundtrip"_test = [] {
       std::vector<float> vec(100);
-      for (auto& item : vec) item = float(rand() / (1.0 + rand()));
+      for (auto& item : vec) item = float(std::rand() / (1.0 + std::rand()));
       std::string buffer{};
       std::vector<float> vec2{};
       expect(not glz::write_json(vec, buffer));
@@ -1050,7 +1071,7 @@ suite container_types = [] {
    };
    "vector bool roundtrip"_test = [] {
       std::vector<bool> vec(100);
-      for (auto&& item : vec) item = rand() / (1.0 + rand());
+      for (auto&& item : vec) item = std::rand() / (1.0 + std::rand());
       std::string buffer{};
       std::vector<bool> vec2{};
       expect(not glz::write_json(vec, buffer));
@@ -1094,7 +1115,7 @@ suite container_types = [] {
    };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
-      for (auto& item : deq) item = rand();
+      for (auto& item : deq) item = std::rand();
       std::string buffer{};
       std::vector<int> deq2{};
       expect(not glz::write_json(deq, buffer));
@@ -1103,7 +1124,7 @@ suite container_types = [] {
    };
    "list roundtrip"_test = [] {
       std::list<int> lis(100);
-      for (auto& item : lis) item = rand();
+      for (auto& item : lis) item = std::rand();
       std::string buffer{};
       std::list<int> lis2{};
       expect(not glz::write_json(lis, buffer));
@@ -1112,7 +1133,7 @@ suite container_types = [] {
    };
    "forward_list roundtrip"_test = [] {
       std::forward_list<int> lis(100);
-      for (auto& item : lis) item = rand();
+      for (auto& item : lis) item = std::rand();
       std::string buffer{};
       std::forward_list<int> lis2{};
       expect(not glz::write_json(lis, buffer));
@@ -1125,7 +1146,7 @@ suite container_types = [] {
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
          std::shuffle(str.begin(), str.end(), g);
-         map[str] = rand();
+         map[str] = std::rand();
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
@@ -1140,7 +1161,7 @@ suite container_types = [] {
    "map int keys roundtrip"_test = [] {
       std::map<int, int> map;
       for (auto i = 0; i < 20; ++i) {
-         map[rand()] = rand();
+         map[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::map<int, int> map2{};
@@ -1154,7 +1175,7 @@ suite container_types = [] {
    "unordered_map int keys roundtrip"_test = [] {
       std::unordered_map<int, int> map;
       for (auto i = 0; i < 20; ++i) {
-         map[rand()] = rand();
+         map[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::unordered_map<int, int> map2{};
@@ -1168,7 +1189,7 @@ suite container_types = [] {
    "unordered_map<int, std::string> roundtrip"_test = [] {
       std::unordered_map<int, std::string> map;
       for (auto i = 0; i < 5; ++i) {
-         map[rand()] = std::to_string(rand());
+         map[std::rand()] = std::to_string(std::rand());
       }
       std::string buffer{};
       std::unordered_map<int, std::string> map2{};
@@ -1854,9 +1875,9 @@ suite user_types = [] {
 
    "complex user obect member names"_test = [] {
       expect(glz::name_v<glz::detail::member_tuple_t<Thing>> ==
-             "glz::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<int32_t>,std::deque<double>,std::"
-             "vector<V3>,int32_t,double,bool,char,std::variant<var1_t,var2_t>,Color,std::vector<bool>,std::shared_ptr<"
-             "sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,int32_t>,std::map<int32_t,"
+             "glz::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<std::int32_t>,std::deque<double>,std::"
+             "vector<V3>,std::int32_t,double,bool,char,std::variant<var1_t,var2_t>,Color,std::vector<bool>,std::shared_ptr<"
+             "sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,std::int32_t>,std::map<std::int32_t,"
              "double>,sub_thing*>");
    };
 };
@@ -3818,7 +3839,7 @@ suite allocated_write = [] {
 
 suite nan_tests = [] {
    "nan_write_tests"_test = [] {
-      double d = NAN;
+      double d = std::numeric_limits<double>::quiet_NaN();
       std::string s{};
       expect(not glz::write_json(d, s));
       expect(s == "null");
@@ -5113,9 +5134,6 @@ suite custom_unique_tests = [] {
    };
 };
 
-#include <set>
-#include <unordered_set>
-
 static_assert(glz::emplaceable<std::set<std::string>>);
 
 suite sets = [] {
@@ -6044,7 +6062,7 @@ suite validation_tests = [] {
       // Tests are taken from the https://www.json.org/JSON_checker/ test suite
 
       std::string fail10 = R"({"Extra value after close": true} "misplaced quoted value")";
-      auto ec_fail10 = glz::read<opts_validate_trailing_whitespace{true}>(json, fail10);
+      auto ec_fail10 = glz::read<opts_validate_trailing_whitespace{{}, true}>(json, fail10);
       expect(ec_fail10 != glz::error_code::none);
       expect(glz::validate_json(fail10) != glz::error_code::none);
 
@@ -6186,12 +6204,12 @@ break"])";
       expect(glz::validate_json(fail6) != glz::error_code::none);
 
       std::string fail7 = R"(["Comma after the close"],)";
-      auto ec_fail7 = glz::read<opts_validate_trailing_whitespace{true}>(json, fail7);
+      auto ec_fail7 = glz::read<opts_validate_trailing_whitespace{{}, true}>(json, fail7);
       expect(ec_fail7 != glz::error_code::none);
       expect(glz::validate_json(fail7) != glz::error_code::none);
 
       std::string fail8 = R"(["Extra close"]])";
-      auto ec_fail8 = glz::read<opts_validate_trailing_whitespace{true}>(json, fail8);
+      auto ec_fail8 = glz::read<opts_validate_trailing_whitespace{{}, true}>(json, fail8);
       expect(ec_fail8 != glz::error_code::none);
       expect(glz::validate_json(fail8) != glz::error_code::none);
 
@@ -7171,7 +7189,7 @@ struct glz::meta<cx_values_implicit_static_key>
 
 struct direct_cx_value_conversion
 {
-   static constexpr std::uint64_t const_v{42};
+   static constexpr uint64_t const_v{42};
    struct glaze
    {
       static constexpr auto value{&direct_cx_value_conversion::const_v};
@@ -7181,7 +7199,7 @@ static_assert(glz::glaze_const_value_t<direct_cx_value_conversion>);
 
 struct direct_cx_value_conversion_different_value
 {
-   static constexpr std::uint64_t const_v{1337};
+   static constexpr uint64_t const_v{1337};
    struct glaze
    {
       static constexpr auto value{&direct_cx_value_conversion_different_value::const_v};
@@ -7329,14 +7347,14 @@ suite constexpr_values_test = [] {
 
    "constexpr blend with non constexpr variant"_test = [] {
       std::variant<std::monostate, direct_cx_value_conversion_different_value, direct_cx_value_conversion,
-                   std::uint64_t>
-         var{std::uint64_t{111}};
+                   uint64_t>
+         var{uint64_t{111}};
       std::string s{};
       expect(not glz::write_json(var, s));
       expect(s == R"(111)");
       auto parse_err{glz::read_json(var, s)};
       expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
-      expect(std::holds_alternative<std::uint64_t>(var));
+      expect(std::holds_alternative<uint64_t>(var));
    };
 };
 
@@ -7644,7 +7662,7 @@ suite number_reading = [] {
       expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
    };
 
-   "long float uint64_t"_test = [] {
+   "long float std::uint64_t"_test = [] {
       std::string_view buffer{"0.00666666666666666600"};
       uint64_t i{5};
       expect(glz::read_json(i, buffer));
@@ -7672,7 +7690,7 @@ suite number_reading = [] {
       expect(d == 0.0);
    };
 
-   "minimum int32_t"_test = [] {
+   "minimum std::int32_t"_test = [] {
       std::string buffer{"-2147483648"};
       int32_t i{};
       expect(!glz::read_json(i, buffer));
@@ -7682,7 +7700,7 @@ suite number_reading = [] {
       expect(buffer == "-2147483648");
    };
 
-   "minimum int64_t"_test = [] {
+   "minimum std::int64_t"_test = [] {
       std::string buffer{"-9223372036854775808"};
       int64_t i{};
       expect(!glz::read_json(i, buffer));
@@ -9358,7 +9376,7 @@ struct unicode_keys
 {
    float field1;
    float field2;
-   std::uint8_t field3;
+   uint8_t field3;
    std::string field4;
    std::string field5;
    std::string field6;
@@ -9377,7 +9395,7 @@ struct unicode_keys2
 {
    float field1;
    float field2;
-   std::uint8_t field3;
+   uint8_t field3;
 };
 
 template <>
@@ -9392,7 +9410,7 @@ struct unicode_keys3
    float field0;
    float field1;
    float field2;
-   std::uint8_t field3;
+   uint8_t field3;
    std::string field4;
    std::string field5;
    std::string field6;
@@ -9880,7 +9898,7 @@ suite meta_schema_tests = [] {
          "description": "for validation"
       },
       "x": {
-         "$ref": "#/$defs/int32_t",
+         "$ref": "#/$defs/std::int32_t",
          "description": "x is a special integer"
       }
    },
@@ -10922,7 +10940,7 @@ struct glz::meta<struct_c_arrays_meta>
 };
 
 suite c_style_arrays = [] {
-   "uint32_t c array"_test = [] {
+   "std::uint32_t c array"_test = [] {
       uint32_t arr[4] = {1, 2, 3, 4};
       std::string s{};
       expect(not glz::write_json(arr, s));
@@ -12377,7 +12395,7 @@ struct naive_static_string_t
    {
       const auto bytes_to_copy = (std::min)(N, sz);
       length = bytes_to_copy;
-      memcpy(buffer, v, bytes_to_copy);
+      std::memcpy(buffer, v, bytes_to_copy);
       return *this;
    }
 

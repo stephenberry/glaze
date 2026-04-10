@@ -1,28 +1,17 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/msgpack.hpp"
+import glaze.msgpack;
 
-#include <array>
-#include <bitset>
-#include <chrono>
-#include <compare>
-#include <cstddef>
-#include <deque>
-#include <filesystem>
-#include <list>
-#include <map>
-#include <optional>
-#include <set>
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <utility>
-#include <variant>
-#include <vector>
+import glaze.json;
 
-#include "glaze/json/ptr.hpp"
-#include "ut/ut.hpp"
+import std;
+import ut;
+
+using std::int8_t;
+using std::int32_t;
+using std::uint8_t;
+using std::uint64_t;
 
 using namespace ut;
 

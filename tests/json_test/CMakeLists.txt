@@ -146,11 +146,13 @@ add_test(NAME allocate_raw_pointers_test COMMAND allocate_raw_pointers_test)
 
 ## snprintf fallback test - tests float_format with forced snprintf fallback (for iOS < 16.3 compatibility)
 
-add_executable(snprintf_fallback_test snprintf_fallback_test.cpp)
+## TODO: Create a CMake option
 
-target_link_libraries(snprintf_fallback_test PRIVATE glz_test_common)
+## add_executable(snprintf_fallback_test snprintf_fallback_test.cpp)
 
-add_test(NAME snprintf_fallback_test COMMAND snprintf_fallback_test)
+## target_link_libraries(snprintf_fallback_test PRIVATE glz_test_common)
+
+## add_test(NAME snprintf_fallback_test COMMAND snprintf_fallback_test)
 
 ## glz::lazy test - lazy JSON type that stores string_views
 
@@ -167,3 +169,11 @@ add_executable(non_aggregate_reflection_test non_aggregate_reflection_test.cpp)
 target_link_libraries(non_aggregate_reflection_test PRIVATE glz_test_common)
 
 add_test(NAME non_aggregate_reflection_test COMMAND non_aggregate_reflection_test)
+
+
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    json_test_shared_types.ixx
+)

@@ -12,6 +12,8 @@
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
 
+using std::size_t;
+
 using namespace ut;
 
 // Test structures from Basic REST API Server example

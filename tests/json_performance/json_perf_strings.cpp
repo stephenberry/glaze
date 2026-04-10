@@ -1,9 +1,16 @@
-// String performance tests - split from json_performance.cpp for faster compilation
-#include <iostream>
-#include <random>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+// String performance tests - split from json_performance.cpp for faster compilation
+
+import std;
+import glaze;
+import ut;
+
+import glaze.tests.json_perf_common;
+
+using std::uint32_t;
+using std::size_t;
 
 using namespace ut;
 

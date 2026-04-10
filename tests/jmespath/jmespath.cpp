@@ -1,8 +1,13 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import glaze.tuplet;
+import glaze.util.tuple;
+import ut;
+
+using std::uint16_t;
 
 using namespace ut;
 

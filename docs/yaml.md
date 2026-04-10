@@ -284,7 +284,7 @@ Glaze supports YAML Core Schema tags and validates them against the C++ types be
 | Tag | Verbatim Form | Valid C++ Types |
 |-----|---------------|-----------------|
 | `!!str` | `!<tag:yaml.org,2002:str>` | `std::string`, `std::string_view` |
-| `!!int` | `!<tag:yaml.org,2002:int>` | `int`, `int64_t`, `uint32_t`, etc. |
+| `!!int` | `!<tag:yaml.org,2002:int>` | `int`, `int64_t`, `std::uint32_t`, etc. |
 | `!!float` | `!<tag:yaml.org,2002:float>` | `float`, `double` |
 | `!!bool` | `!<tag:yaml.org,2002:bool>` | `bool` |
 | `!!null` | `!<tag:yaml.org,2002:null>` | `std::optional`, `std::unique_ptr`, pointers |

@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 4.3) 
+
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "451f2fe2-a8a2-47c3-bc32-94786d8fc91b") 
 
 include(cmake/prelude.cmake)
 
@@ -8,6 +10,12 @@ project(
     LANGUAGES CXX
 )
 
+option(GLAZE_ENABLE_MODULES "Enable modules with import std" ON) # or GLAZE_GENERATE_HEADERS ??
+
+if (GLAZE_ENABLE_MODULES)
+   set(CMAKE_CXX_MODULE_STD 1)
+endif()
+
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
 
@@ -15,9 +23,14 @@ if (PROJECT_IS_TOP_LEVEL)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
 
-add_library(glaze_glaze INTERFACE)
+if(GLAZE_ENABLE_MODULES)
+  add_library(glaze_glaze STATIC)
+  set(GLAZE_LIB_TYPE PUBLIC)
+else()
+  add_library(glaze_glaze INTERFACE)
+  set(GLAZE_LIB_TYPE INTERFACE)
+endif()
 add_library(glaze::glaze ALIAS glaze_glaze)
-
 
 if (MSVC)
   string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
@@ -42,11 +55,14 @@ endif()
 
 set_property(TARGET ${PROJECT_NAME}_${PROJECT_NAME} PROPERTY EXPORT_NAME glaze)
 
-target_compile_features(${PROJECT_NAME}_${PROJECT_NAME} INTERFACE cxx_std_23)
+target_compile_features(glaze_glaze ${GLAZE_LIB_TYPE} cxx_std_23)
 target_include_directories(
-    ${PROJECT_NAME}_${PROJECT_NAME} ${warning_guard}
-    INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+    glaze_glaze ${warning_guard}
+    PUBLIC
+      "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/modules>"
 )
+
+include(cmake/modules-files.cmake)
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
@@ -74,7 +90,7 @@ if(glaze_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-option(glaze_EETF_FORMAT "Enable Erlang external term format parsing" OFF)
+option(glaze_EETF_FORMAT "Enable Erlang external term format parsing" OFF) # TODO: Convert
 
 if(glaze_EETF_FORMAT)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

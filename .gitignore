@@ -2,7 +2,7 @@
 out/
 **/bin/
 **/build*/
-**/lib*/
+**/lib/
 **/_build*/
 
 # CMake specific settings
@@ -61,4 +61,7 @@ pr_description.md
 /size_tests
 /tmp_benchmark
 /exterior
+
 pr.md
+
+/vc140.pdb

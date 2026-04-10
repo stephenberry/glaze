@@ -546,7 +546,7 @@ The generic JSON types provide a convenient way to parse arbitrary TOML data:
 |------|-----------------|----------|
 | `glz::generic` | `double` | General purpose, preserves floating-point precision |
 | `glz::generic_i64` | `int64_t` | When integers must be preserved exactly |
-| `glz::generic_u64` | `uint64_t` for positive, `int64_t` for negative | When large positive integers are needed |
+| `glz::generic_u64` | `std::uint64_t` for positive, `int64_t` for negative | When large positive integers are needed |
 
 #### Using glz::generic
 
@@ -591,10 +591,10 @@ Use `glz::generic_u64` when working with large unsigned integers:
 
 ```cpp
 glz::generic_u64 data;
-glz::read_toml(data, "big = 18446744073709551615");  // Max uint64_t
+glz::read_toml(data, "big = 18446744073709551615");  // Max std::uint64_t
 
 auto& obj = std::get<glz::obj_u64>(data);
-auto& big = std::get<uint64_t>(obj["big"]);  // 18446744073709551615
+auto& big = std::get<std::uint64_t>(obj["big"]);  // 18446744073709551615
 ```
 
 Negative integers are stored as `int64_t` even in u64 mode:
@@ -621,7 +621,7 @@ When reading into a variant or generic type, Glaze uses these rules to determine
 
 For integers in `glz::generic_u64` mode:
 - Numbers starting with `-` are stored as `int64_t`
-- Positive numbers are stored as `uint64_t`
+- Positive numbers are stored as `std::uint64_t`
 
 ### Writing Generic Types
 

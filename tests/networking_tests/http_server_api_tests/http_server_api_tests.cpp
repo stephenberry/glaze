@@ -19,6 +19,10 @@
 #include "ut/ut.hpp"
 
 #if defined(GLZ_USING_BOOST_ASIO)
+
+using std::uint64_t;
+using std::size_t;
+
 namespace asio
 {
    using namespace boost::asio;

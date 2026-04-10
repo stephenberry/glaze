@@ -26,3 +26,10 @@ foreach(test ${PERF_TESTS})
     endif ()
     add_test(NAME ${test} COMMAND ${test})
 endforeach()
+
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    json_perf_common.ixx
+)

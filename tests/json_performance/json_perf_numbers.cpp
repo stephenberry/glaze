@@ -1,9 +1,19 @@
-// Number performance tests - split from json_performance.cpp for faster compilation
-#include <cstring>
-#include <iostream>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+// Number performance tests - split from json_performance.cpp for faster compilation
+
+import std;
+import glaze;
+import ut;
+
+import glaze.tests.json_perf_common;
+
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -43,7 +53,7 @@ suite integers_test = [] {
 };
 
 suite uint64_t_test = [] {
-   "uint64_t"_test = [] {
+   "std::uint64_t"_test = [] {
 #ifdef NDEBUG
       constexpr size_t n = 100000000;
 #else
@@ -64,7 +74,7 @@ suite uint64_t_test = [] {
       expect(not e);
       auto t1 = std::chrono::steady_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
-      std::cout << "uint64_t read/write: " << duration << '\n';
+      std::cout << "std::uint64_t read/write: " << duration << '\n';
    };
 };
 

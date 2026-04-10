@@ -1,8 +1,12 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+
 // Separated from json_reflection_test.cpp to work around GCC compiler bug
 // with large translation units and DISABLE_ALWAYS_INLINE
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
 
 using namespace ut;
 
@@ -43,9 +47,6 @@ suite front_hash_tests = [] {
    };
 
    "front_64"_test = [] {
-      glz::keys_info_t info{.min_length = 8, .max_length = 8};
-      [[maybe_unused]] const auto valid = glz::front_bytes_hash_info<uint64_t>(glz::reflect<front_64_t>::keys, info);
-
       front_64_t obj{};
       std::string_view buffer = R"({"aaaaaaaa":1,"aaaaaaaz":2,"aaaaaaza":3})";
       auto ec = glz::read_json(obj, buffer);

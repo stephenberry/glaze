@@ -1,3 +1,6 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+
 // GCC 15's static analysis generates false positive -Warray-bounds warnings for tests that
 // deliberately use undersized buffers to verify buffer_overflow error handling.
 // The actual code calls ensure_space() before dump(), but GCC doesn't track this control flow.
@@ -5,21 +8,30 @@
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
 
-#include <array>
-#include <cstdint>
-#include <deque>
-#include <limits>
-#include <map>
-#include <span>
-#include <unordered_map>
+import std;
 
-#include "glaze/base64/base64.hpp"
-#include "glaze/csv/read.hpp"
-#include "glaze/csv/write.hpp"
-#include "glaze/record/recorder.hpp"
-#include "ut/ut.hpp"
+import glaze.base64;
+
+import glaze.core.meta_fwd;
+import glaze.core.opts;
+import glaze.core.context;
+
+import glaze.csv.read;
+import glaze.csv.write;
+
+import glaze.json;
+
+import glaze.record.recorder;
+
+import ut;
 
 // Specification: https://datatracker.ietf.org/doc/html/rfc4180
+
+using std::int8_t;
+using std::uint8_t;
+using std::int32_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -34,7 +46,7 @@ struct issue_768_test_struct
 {
    std::vector<int> num1{};
    std::vector<std::string> str1{};
-   void reserve(std::size_t cap)
+   void reserve(size_t cap)
    {
       num1.reserve(cap);
       str1.reserve(cap);
@@ -62,8 +74,8 @@ struct glz::meta<string_elements>
 
 struct signed_min_columns
 {
-   std::vector<std::int8_t> i8{};
-   std::vector<std::int32_t> i32{};
+   std::vector<int8_t> i8{};
+   std::vector<int32_t> i32{};
 };
 
 template <>
@@ -100,7 +112,7 @@ constexpr glz::opts_csv rowwise_char_opts_with_escaping{
    .raw_string = false,
 };
 
-enum struct csv_color : std::uint8_t {
+enum struct csv_color : uint8_t {
    red = 0,
    green = 1,
    blue = 2,
@@ -235,8 +247,8 @@ suite csv_tests = [] {
 
       expect(obj.i8.size() == 1);
       expect(obj.i32.size() == 1);
-      expect(obj.i8[0] == std::numeric_limits<std::int8_t>::min());
-      expect(obj.i32[0] == std::numeric_limits<std::int32_t>::min());
+      expect(obj.i8[0] == std::numeric_limits<int8_t>::min());
+      expect(obj.i32[0] == std::numeric_limits<int32_t>::min());
    };
 
    "rowwise char round trip"_test = [] {
@@ -710,7 +722,7 @@ struct FishRecord
 {
    std::vector<float> Duration;
    std::vector<float> FishSize;
-   std::vector<std::uint8_t> Amount;
+   std::vector<uint8_t> Amount;
 
    std::vector<std::string> FishBaitName;
    std::vector<std::string> SurfaceSlapFishName;

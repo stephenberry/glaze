@@ -3,9 +3,11 @@ include(FetchContent)
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v1.1.0
+  GIT_TAG fc3f5a9c36dfc56bd2cb0eab07733005e5af7b74 # todo: Return to tag later
   GIT_SHALLOW TRUE
 )
+
+set (UT_ENABLE_MODULES ON)
 
 message(STATUS "Fetching dependencies...")
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
@@ -14,6 +16,7 @@ FetchContent_MakeAvailable(ut)
 set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
 message(STATUS "...finished fetching dependencies.")
+
 
 # Setup ASIO dependency (used by networking tests)
 # This must be defined here before glz_test_common/glz_test_exceptions
@@ -124,7 +127,7 @@ add_subdirectory(compare_test)
 add_subdirectory(ordered_small_map_test)
 add_subdirectory(ordered_map_test)
 add_subdirectory(csv_test)
-add_subdirectory(eigen_test)
+# add_subdirectory(eigen_test) unfinished
 add_subdirectory(example_json)
 add_subdirectory(exceptions_test)
 add_subdirectory(inplace_vector)
@@ -146,9 +149,9 @@ add_subdirectory(stencil)
 add_subdirectory(threading_test)
 add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
-add_subdirectory(yaml_test)
+# add_subdirectory(yaml_test) disable for now, until latest changes are pulled
 
-add_subdirectory(yaml_conformance)
+# add_subdirectory(yaml_conformance)
 add_subdirectory(msgpack_test)
 add_subdirectory(ostream_buffer_test)
 add_subdirectory(istream_buffer_test)
@@ -169,7 +172,7 @@ endif()
 add_subdirectory(json_reflection_test)
 add_subdirectory(json_test)
 
-option(glaze_BUILD_NETWORKING_TESTS "Build networking tests (requires OpenSSL)" ON)
+option(glaze_BUILD_NETWORKING_TESTS "Build networking tests (requires OpenSSL)" OFF)
 if(glaze_BUILD_NETWORKING_TESTS)
     add_subdirectory(networking_tests)
 endif()

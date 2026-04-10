@@ -1,0 +1,696 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+export module glaze.reflection.get_name;
+
+import std;
+
+export import glaze.core.meta_fwd;
+
+import glaze.reflection.to_tuple;
+
+import glaze.util.string_literal;
+
+import glaze.tuplet;
+
+#include "glaze/core/feature_test.hpp"
+
+#if GLZ_REFLECTION26
+#include <meta>
+#endif
+
+#if defined(__clang__) || defined(__GNUC__)
+#define GLZ_PRETTY_FUNCTION __PRETTY_FUNCTION__
+#elif defined(_MSC_VER)
+#define GLZ_PRETTY_FUNCTION __FUNCSIG__
+#endif
+
+#if GLZ_REFLECTION26
+// ============================================================================
+// C++26 P2996 Reflection Implementation for member names
+// ============================================================================
+namespace glz::detail
+{
+   // Get member name using P2996 reflection
+   template <class T, size_t I>
+   consteval std::string_view get_member_name_p2996()
+   {
+      auto members = std::meta::nonstatic_data_members_of(^^T, reflection_access_ctx());
+      return std::meta::identifier_of(members[I]);
+   }
+}
+
+namespace glz
+{
+   // P2996 implementation of member_nameof
+   template <auto N, class T>
+   inline constexpr std::string_view member_nameof = detail::get_member_name_p2996<std::remove_cvref_t<T>, N>();
+
+   // P2996 type_name using display_string_of
+   // Note: Bloomberg Clang returns unqualified names, GCC returns qualified names
+   template <class T>
+   constexpr auto type_name = std::meta::display_string_of(^^T);
+
+   // Note: P2996 qualified_name_of is not yet available in Bloomberg clang-p2996.
+   // When it becomes available, add:
+   // template <class T>
+   // constexpr auto qualified_type_name = std::meta::qualified_name_of(^^T);
+   //
+   // For now, qualified_type_names option has no effect with P2996.
+
+   // P2996 implementation of member_names_impl (base version)
+   template <class T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array<sv, sizeof...(I)>{member_nameof<I, T>...};
+      }
+   }
+}
+
+// P2996 enum reflection helpers
+// Standard C++26 uses std::define_static_array (P3491) which returns a span
+// Bloomberg Clang uses reflect_constant_array which returns a std::meta::info to be spliced
+namespace glz::detail
+{
+   using namespace std::meta;
+
+   // Get enum name at index using P2996 reflection
+   template <class T, size_t I>
+   consteval std::string_view get_enum_name_p2996()
+   {
+#if defined(__clang__)
+      // Bloomberg Clang: reflect_constant_array returns info, splice to get array
+      constexpr info Enums = reflect_constant_array(enumerators_of(^^T));
+      return identifier_of([:Enums:][I]);
+#else
+      // Standard C++26: define_static_array returns span directly
+      constexpr auto Enums = std::define_static_array(enumerators_of(^^T));
+      return identifier_of(Enums[I]);
+#endif
+   }
+
+   // Get number of enumerators
+   template <class T>
+   consteval size_t enum_count_p2996()
+   {
+#if defined(__clang__)
+      constexpr info Enums = reflect_constant_array(enumerators_of(^^T));
+      return [:Enums:].size();
+#else
+      constexpr auto Enums = std::define_static_array(enumerators_of(^^T));
+      return Enums.size();
+#endif
+   }
+
+#if !defined(__clang__)
+   // GCC: Build a lookup table at compile time for runtime use
+   template <class E>
+   consteval auto make_enum_to_string_table()
+   {
+      static constexpr auto Enums = std::define_static_array(enumerators_of(^^E));
+      constexpr size_t N = Enums.size();
+      std::array<std::pair<E, std::string_view>, N> table{};
+      size_t i = 0;
+      template for (constexpr info I : Enums)
+      {
+         table[i] = {[:I:], identifier_of(I)};
+         ++i;
+      }
+      return table;
+   }
+#endif
+}
+
+namespace glz
+{
+   // P2996 enum name at index
+   template <class T, size_t I>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   inline constexpr std::string_view enum_nameof = detail::get_enum_name_p2996<std::remove_cvref_t<T>, I>();
+
+   // P2996 enum count
+   template <class T>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   inline constexpr size_t enum_count = detail::enum_count_p2996<std::remove_cvref_t<T>>();
+
+   // P2996 enum to string using expansion statements
+   template <class E, bool B = std::meta::is_enumerable_type(^^E)>
+      requires std::is_enum_v<std::remove_cvref_t<E>>
+   constexpr std::string_view enum_to_string(E e)
+   {
+      if constexpr (B) {
+#if defined(__clang__)
+         // Bloomberg Clang: reflect_constant_array returns info, splice to get array
+         constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
+         template for (constexpr std::meta::info I : [:Enums:]) if (e == [:I:]) return std::meta::identifier_of(I);
+#else
+         // GCC: Use lookup table to avoid consteval promotion
+         static constexpr auto table = detail::make_enum_to_string_table<E>();
+         for (const auto& [value, name] : table) {
+            if (e == value) {
+               return name;
+            }
+         }
+#endif
+      }
+      return {};
+   }
+
+   // P2996 string to enum using expansion statements
+   template <class E, bool B = std::meta::is_enumerable_type(^^E)>
+      requires std::is_enum_v<std::remove_cvref_t<E>>
+   constexpr std::optional<E> string_to_enum(std::string_view s)
+   {
+      if constexpr (B) {
+#if defined(__clang__)
+         // Bloomberg Clang: reflect_constant_array returns info, splice to get array
+         constexpr std::meta::info Enums = std::meta::reflect_constant_array(std::meta::enumerators_of(^^E));
+         template for (constexpr std::meta::info I : [:Enums:]) if (s == std::meta::identifier_of(I)) return [:I:];
+#else
+         // GCC: Use lookup table to avoid consteval promotion
+         static constexpr auto table = detail::make_enum_to_string_table<E>();
+         for (const auto& [value, name] : table) {
+            if (s == name) {
+               return value;
+            }
+         }
+#endif
+      }
+      return std::nullopt;
+   }
+}
+
+#else
+// ============================================================================
+// Traditional __PRETTY_FUNCTION__ implementation (pre-C++26)
+// ============================================================================
+
+// For struct fields
+
+using std::size_t;
+
+export namespace glz::detail
+{
+   // Do not const qualify this value to avoid duplicate `to_tie` template instantiations with rest of Glaze
+   // Temporary fix: const qualify it despite. Caused issues with reflect begin/end indices
+   // See https://github.com/stephenberry/glaze/issues/1568
+   template <class T>
+   extern const T external;
+
+   // using const char* simplifies the complier's output and should improve compile times
+   template <auto Ptr>
+   [[nodiscard]] consteval auto mangled_name()
+   {
+      // return std::source_location::current().function_name();
+      return GLZ_PRETTY_FUNCTION;
+   }
+
+   template <class T>
+   [[nodiscard]] consteval auto mangled_name()
+   {
+      // return std::source_location::current().function_name();
+      return GLZ_PRETTY_FUNCTION;
+   }
+
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+   template <auto N, class T>
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
+#pragma clang diagnostic pop
+#elif __GNUC__
+   template <auto N, class T>
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
+#else
+   template <auto N, class T>
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
+#endif
+
+   struct GLAZE_REFLECTOR
+   {
+      int GLAZE_FIELD;
+   };
+
+   struct reflect_field
+   {
+      static constexpr auto name = get_name_impl<0, GLAZE_REFLECTOR>;
+      static constexpr auto end = name.substr(name.find("GLAZE_FIELD") + sizeof("GLAZE_FIELD") - 1);
+      static constexpr auto begin = name[name.find("GLAZE_FIELD") - 1];
+   };
+
+   struct reflect_type
+   {
+      static constexpr std::string_view name = mangled_name<GLAZE_REFLECTOR>();
+      static constexpr auto end = name.substr(name.find("GLAZE_REFLECTOR") + sizeof("GLAZE_REFLECTOR") - 1);
+#if defined(__GNUC__) || defined(__clang__)
+      static constexpr auto begin = std::string_view{"T = "};
+#else
+      static constexpr auto begin = std::string_view{"glz::detail::mangled_name<"};
+#endif
+   };
+}
+
+export namespace glz
+{
+   template <auto N, class T>
+   struct member_nameof_impl
+   {
+      static constexpr auto name = detail::get_name_impl<N, T>;
+      static constexpr auto begin = name.find(detail::reflect_field::end);
+      static constexpr auto tmp = name.substr(0, begin);
+      static constexpr auto stripped = tmp.substr(tmp.find_last_of(detail::reflect_field::begin) + 1);
+      // making static memory to stripped to help the compiler optimize away prettified function signature
+      static constexpr std::string_view stripped_literal = join_v<stripped>;
+   };
+
+   template <auto N, class T>
+   inline constexpr auto member_nameof = []() constexpr { return member_nameof_impl<N, T>::stripped_literal; }();
+
+   template <class T>
+   constexpr auto type_name = [] {
+      constexpr std::string_view name = detail::mangled_name<T>();
+      constexpr auto begin = name.find(detail::reflect_type::end);
+      constexpr auto tmp = name.substr(0, begin);
+#if defined(__GNUC__) || defined(__clang__)
+      return tmp.substr(tmp.rfind(detail::reflect_type::begin) + detail::reflect_type::begin.size());
+#else
+      constexpr auto name_with_keyword =
+         tmp.substr(tmp.rfind(detail::reflect_type::begin) + detail::reflect_type::begin.size());
+      return name_with_keyword.substr(name_with_keyword.find(' ') + 1);
+#endif
+   }();
+
+   template <class T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array{member_nameof<I, T>...};
+      }
+   }
+}
+#endif // GLZ_REFLECTION26
+
+// ============================================================================
+// Common code (works with both P2996 and traditional reflection)
+// ============================================================================
+namespace glz
+{
+#if GLZ_HAS_CONSTEXPR_STRING
+   // Concept for when rename_key returns exactly std::string (allocates)
+   // Requires constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
+   template <class T>
+   concept meta_has_rename_key_string = requires(T t, const std::string_view s) {
+      { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::same_as<std::string>;
+   };
+
+   // Helper to compute renamed key size at compile time
+   // Using consteval forces evaluation before template instantiation
+   // This unified approach works for both GCC and Clang (including Clang 19+)
+   template <class T, size_t I>
+   consteval size_t renamed_key_size()
+   {
+      return meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>).size();
+   }
+
+   // Storage for renamed key with exact size determined at compile time
+   template <class T, size_t I, size_t N = renamed_key_size<T, I>()>
+   struct renamed_key_storage
+   {
+      static constexpr auto value = [] {
+         std::array<char, N + 1> arr{};
+         auto str = meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
+         for (size_t i = 0; i < N; ++i) {
+            arr[i] = str[i];
+         }
+         arr[N] = '\0';
+         return arr;
+      }();
+   };
+
+#if GLZ_REFLECTION26
+   // Helper to compute renamed enum key size at compile time
+   template <class T, size_t I>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   consteval size_t renamed_enum_key_size()
+   {
+      return meta<std::remove_cvref_t<T>>::rename_key(enum_nameof<T, I>).size();
+   }
+
+   // Storage for renamed enum key with exact size determined at compile time
+   template <class T, size_t I, size_t N = renamed_enum_key_size<T, I>()>
+      requires std::is_enum_v<std::remove_cvref_t<T>>
+   struct renamed_enum_key_storage
+   {
+      static constexpr auto value = [] {
+         std::array<char, N + 1> arr{};
+         auto str = meta<std::remove_cvref_t<T>>::rename_key(enum_nameof<T, I>);
+         for (size_t i = 0; i < N; ++i) {
+            arr[i] = str[i];
+         }
+         arr[N] = '\0';
+         return arr;
+      }();
+   };
+
+#endif
+
+   template <meta_has_rename_key_string T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array<sv, sizeof...(I)>{
+            sv{renamed_key_storage<T, I>::value.data(), renamed_key_storage<T, I>::value.size() - 1}...};
+      }
+   }
+#else
+   // When constexpr std::string is not available, this concept is always false
+   template <class T>
+   concept meta_has_rename_key_string = false;
+#endif
+
+   // Concept for when rename_key returns anything convertible to std::string_view EXCEPT std::string (non-allocating)
+   template <class T>
+   concept meta_has_rename_key_convertible = requires(T t, const std::string_view s) {
+      { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::convertible_to<std::string_view>;
+   } && !meta_has_rename_key_string<T>;
+
+   template <meta_has_rename_key_convertible T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array{glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>)...};
+      }
+   }
+
+   // Concept for indexed rename_key that provides type information
+   template <class T>
+   concept meta_has_rename_key_indexed = requires {
+      { glz::meta<std::remove_cvref_t<T>>::template rename_key<0>() } -> std::convertible_to<std::string_view>;
+   } && !meta_has_rename_key_string<T> && !meta_has_rename_key_convertible<T>;
+
+   template <meta_has_rename_key_indexed T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array<sv, sizeof...(I)>{sv{glz::meta<std::remove_cvref_t<T>>::template rename_key<I>()}...};
+      }
+   }
+
+   export template <class T>
+   inline constexpr auto member_names =
+      [] { return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>>{}); }();
+
+   // Forward declaration of refl_t for member type extraction
+   // The actual definition is in glaze/core/reflect.hpp
+   // This allows users to get the type of a member at a given index in rename_key
+   namespace detail
+   {
+      template <class T, size_t I>
+      struct member_type_at_index
+      {
+         using tie_type = decltype(to_tie(std::declval<std::remove_cvref_t<T>&>()));
+         using type = std::remove_cvref_t<tuple_element_t<I, tie_type>>;
+      };
+   }
+
+   // Helper to get the type of a member at a given index
+   // Usage in rename_key: using member_type = glz::member_type_t<T, Index>;
+   export template <class T, size_t Index>
+   using member_type_t = typename detail::member_type_at_index<T, Index>::type;
+}
+
+// For member object pointers
+export namespace glz
+{
+   template <class T>
+   struct remove_member_pointer
+   {
+      using type = T;
+   };
+
+   template <class C, class T>
+   struct remove_member_pointer<T C::*>
+   {
+      using type = C;
+   };
+
+   template <class C, class R, class... Args>
+   struct remove_member_pointer<R (C::*)(Args...)>
+   {
+      using type = C;
+   };
+
+   template <class T, auto P>
+   consteval std::string_view get_name_msvc()
+   {
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      str = str.substr(str.find("->") + 2);
+      return str.substr(0, str.find(">"));
+   }
+
+   template <class T, auto P>
+   consteval std::string_view func_name_msvc()
+   {
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      str = str.substr(str.rfind(type_name<T>) + type_name<T>.size());
+      str = str.substr(str.find("::") + 2);
+      return str.substr(0, str.find("("));
+   }
+
+#if defined(__clang__)
+   inline constexpr auto pretty_function_tail = "]";
+#elif defined(__GNUC__) || defined(__GNUG__)
+   inline constexpr auto pretty_function_tail = ";";
+#elif defined(_MSC_VER)
+#endif
+
+   consteval std::string_view trim_ascii_space(std::string_view str)
+   {
+      const auto first = str.find_first_not_of(" \t");
+      if (first == std::string_view::npos) {
+         return {};
+      }
+      const auto last = str.find_last_not_of(" \t");
+      return str.substr(first, last - first + 1);
+   }
+
+   consteval bool has_wrapping_parens(std::string_view str)
+   {
+      if (str.size() < 2 || str.front() != '(' || str.back() != ')') {
+         return false;
+      }
+
+      size_t depth{};
+      for (size_t i = 0; i < str.size(); ++i) {
+         const auto c = str[i];
+         if (c == '(') {
+            ++depth;
+         }
+         else if (c == ')') {
+            if (depth == 0) {
+               return false;
+            }
+            --depth;
+            if (depth == 0) {
+               return i + 1 == str.size();
+            }
+         }
+      }
+
+      return false;
+   }
+
+   consteval std::string_view strip_unmatched_trailing_parens(std::string_view str)
+   {
+      size_t open_count{};
+      size_t close_count{};
+      for (const auto c : str) {
+         if (c == '(') {
+            ++open_count;
+         }
+         else if (c == ')') {
+            ++close_count;
+         }
+      }
+
+      while (close_count > open_count && !str.empty() && str.back() == ')') {
+         str.remove_suffix(1);
+         --close_count;
+      }
+
+      return str;
+   }
+
+   consteval std::string_view normalize_extracted_name(std::string_view str)
+   {
+      str = trim_ascii_space(str);
+
+      while (has_wrapping_parens(str)) {
+         str.remove_prefix(1);
+         str.remove_suffix(1);
+         str = trim_ascii_space(str);
+      }
+
+      str = strip_unmatched_trailing_parens(str);
+
+      if (const auto scope_pos = str.rfind("::"); scope_pos != std::string_view::npos) {
+         return str.substr(scope_pos + 2);
+      }
+      return str;
+   }
+
+#if defined(_MSC_VER) && !defined(__clang__)
+   consteval std::string_view extract_template_argument(std::string_view str)
+   {
+      const auto arg_start = str.rfind('<');
+      if (arg_start != std::string_view::npos) {
+         str.remove_prefix(arg_start + 1);
+      }
+      const auto arg_end = str.rfind('>');
+      if (arg_end != std::string_view::npos) {
+         str = str.substr(0, arg_end);
+      }
+      return trim_ascii_space(str);
+   }
+
+   consteval std::string_view strip_leading_decl_keywords(std::string_view str)
+   {
+      str = trim_ascii_space(str);
+      while (true) {
+         if (str.starts_with("enum ")) {
+            str.remove_prefix(5);
+         }
+         else if (str.starts_with("struct ")) {
+            str.remove_prefix(7);
+         }
+         else if (str.starts_with("class ")) {
+            str.remove_prefix(6);
+         }
+         else {
+            break;
+         }
+         str = trim_ascii_space(str);
+      }
+      return str;
+   }
+#endif
+
+#if !defined(_MSC_VER) || defined(__clang__)
+   consteval std::string_view parse_name_from_pretty_function(std::string_view str)
+   {
+      const auto amp_pos = str.find("&");
+      if (amp_pos != std::string_view::npos) {
+         size_t prefix = amp_pos;
+         while (prefix > 0 && str[prefix - 1] == ' ') {
+            --prefix;
+         }
+         if (prefix > 0 && str[prefix - 1] == '(') {
+            str.remove_prefix(prefix - 1);
+         }
+         else {
+            str.remove_prefix(amp_pos + 1);
+         }
+      }
+      const auto tail_pos = str.find(pretty_function_tail);
+      if (tail_pos != std::string_view::npos) {
+         str = str.substr(0, tail_pos);
+      }
+      return normalize_extracted_name(str);
+   }
+#endif
+
+   template <auto P>
+      requires(std::is_member_pointer_v<decltype(P)>)
+   consteval std::string_view get_name()
+   {
+#if defined(_MSC_VER) && !defined(__clang__)
+      if constexpr (std::is_member_object_pointer_v<decltype(P)>) {
+         using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
+         constexpr auto p = P;
+         return get_name_msvc<T, &(detail::external<T>.*p)>();
+      }
+      else {
+         using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
+         return func_name_msvc<T, P>();
+      }
+#else
+      // TODO: Use std::source_location when deprecating clang 14
+      // std::string_view str = std::source_location::current().function_name();
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      str = str.substr(str.find("&") + 1);
+      str = str.substr(0, str.find(pretty_function_tail));
+      return str.substr(str.rfind("::") + 2);
+#endif
+   }
+
+   template <auto P>
+      requires(std::is_pointer_v<decltype(P)> && std::is_object_v<std::remove_pointer_t<decltype(P)>>)
+   consteval std::string_view get_name()
+   {
+#if defined(_MSC_VER) && !defined(__clang__)
+      // Example: `... glz::get_name<&T::static_value>(void)`
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      const auto arg_start = str.rfind('<');
+      if (arg_start != std::string_view::npos) {
+         str.remove_prefix(arg_start + 1);
+      }
+      const auto arg_end = str.rfind('>');
+      if (arg_end != std::string_view::npos) {
+         str = str.substr(0, arg_end);
+      }
+      const auto amp_pos = str.find('&');
+      if (amp_pos != std::string_view::npos) {
+         str.remove_prefix(amp_pos + 1);
+      }
+      return normalize_extracted_name(str);
+#else
+      return parse_name_from_pretty_function(GLZ_PRETTY_FUNCTION);
+#endif
+   }
+
+   template <auto E>
+      requires(std::is_enum_v<decltype(E)> && std::is_scoped_enum_v<decltype(E)>)
+   consteval auto get_name()
+   {
+#if defined(_MSC_VER) && !defined(__clang__)
+      std::string_view str = extract_template_argument(GLZ_PRETTY_FUNCTION);
+      return normalize_extracted_name(strip_leading_decl_keywords(str));
+#else
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      str = str.substr(str.rfind("::") + 2);
+      return str.substr(0, str.find(']'));
+#endif
+   }
+
+   template <auto E>
+      requires(std::is_enum_v<decltype(E)> && not std::is_scoped_enum_v<decltype(E)>)
+   consteval auto get_name()
+   {
+#if defined(_MSC_VER) && !defined(__clang__)
+      std::string_view str = extract_template_argument(GLZ_PRETTY_FUNCTION);
+      if (const auto eq_pos = str.rfind("= "); eq_pos != std::string_view::npos) {
+         str.remove_prefix(eq_pos + 2);
+      }
+      return normalize_extracted_name(strip_leading_decl_keywords(str));
+#else
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      str = str.substr(str.rfind("= ") + 2);
+      return str.substr(0, str.find(']'));
+#endif
+   }
+}

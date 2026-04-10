@@ -1,8 +1,9 @@
-// Unit tests for std::u8string support (both as buffer and value types)
-#include <string>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
 
 using namespace ut;
 

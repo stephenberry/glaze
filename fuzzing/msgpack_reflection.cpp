@@ -5,6 +5,9 @@
 #include <glaze/msgpack.hpp>
 #include <vector>
 
+using std::uint64_t;
+using std::size_t;
+
 struct my_struct
 {
    int i = 287;

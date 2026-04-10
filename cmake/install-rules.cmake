@@ -1,6 +1,8 @@
 # Project is configured with no languages, so tell GNUInstallDirs the lib dir
 set(CMAKE_INSTALL_LIBDIR lib CACHE PATH "")
 
+set(CMAKE_INSTALL_INCLUDEDIR "modules" CACHE PATH "")
+
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
 
@@ -16,7 +18,9 @@ install(
 install(
     TARGETS glaze_glaze
     EXPORT glazeTargets
+    FILE_SET CXX_MODULES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    COMPONENT glaze_Development
 )
 
 write_basic_package_version_file(

@@ -5,6 +5,8 @@
 #include <string>
 #include <string_view>
 
+using std::size_t;
+
 struct Person
 {
    std::string first_name{};
@@ -15,7 +17,7 @@ struct Person
 namespace
 {
    template <bool null_terminated>
-   void impl(const std::size_t pathsize, std::string_view all_buffer)
+   void impl(const size_t pathsize, std::string_view all_buffer)
    {
       // make separate allocations to make it easier for address sanitizer to catch
       // out of bounds access. also, make the size known up front so the allocation is

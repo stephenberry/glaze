@@ -1,17 +1,20 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <algorithm>
-#include <cstdint>
-#include <limits>
-#include <random>
-#include <thread>
+import std;
 
-#include "glaze/glaze_exceptions.hpp"
-#include "glaze/thread/async_string.hpp"
-#include "glaze/thread/async_vector.hpp"
-#include "glaze/thread/guard.hpp"
-#include "ut/ut.hpp"
+import glaze.json;
+import glaze.beve;
+import glaze.exceptions;
+import glaze.thread.async_string;
+import glaze.thread.async_vector;
+import glaze.thread.guard;
+
+import ut;
+
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 

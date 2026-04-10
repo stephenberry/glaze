@@ -14,7 +14,7 @@ The tables below list **all** compile time options, organized by category:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `uint32_t format` | `JSON` | Format selector (`JSON`, `BEVE`, `CSV`, `TOML`, etc.) |
+| `std::uint32_t format` | `JSON` | Format selector (`JSON`, `BEVE`, `CSV`, `TOML`, etc.) |
 | `bool null_terminated` | `true` | Whether the input buffer is null terminated |
 | `bool comments` | `false` | Support reading JSONC style comments |
 | `bool error_on_unknown_keys` | `true` | Error when an unknown key is encountered |
@@ -59,9 +59,9 @@ These options are **not** in `glz::opts` by default. Add them to a custom option
 | `bool assume_sufficient_buffer` | `false` | Skip bounds checking for fixed-size buffers (caller guarantees space) |
 | `bool linear_search` | `false` | Use linear key search instead of hash tables for smaller binary size |
 | `optimization_level optimization_level` | `normal` | Controls speed vs binary size tradeoff. See [Optimization Levels](optimization-levels.md) |
-| `size_t max_string_length` | `0` | Maximum string length when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
-| `size_t max_array_size` | `0` | Maximum array size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
-| `size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
+| `std::size_t max_string_length` | `0` | Maximum string length when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
+| `std::size_t max_array_size` | `0` | Maximum array size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
+| `std::size_t max_map_size` | `0` | Maximum map size when reading (0 = no limit). See also [Runtime Constraints](security.md#runtime-limits-via-custom-context). |
 | `bool allocate_raw_pointers` | `false` | Allocate memory for null raw pointers during deserialization. See also [Runtime Control](security.md#runtime-raw-pointer-allocation-control). |
 
 ### CSV Options (`glz::opts_csv`)
@@ -70,7 +70,7 @@ For CSV format, use `glz::opts_csv` which provides CSV-specific defaults.
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `uint32_t format` | `CSV` | Format selector (fixed to CSV) |
+| `std::uint32_t format` | `CSV` | Format selector (fixed to CSV) |
 | `bool null_terminated` | `true` | Whether the input buffer is null terminated |
 | `uint8_t layout` | `rowwise` | Data layout: `rowwise` or `colwise` |
 | `bool use_headers` | `true` | Read/write with column headers |

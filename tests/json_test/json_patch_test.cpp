@@ -1,12 +1,19 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+import glaze.json.patch;
+import glaze.core.context;
+import glaze.json.generic;
+import glaze.json.write;
+import glaze.util.fast_float;
 
-#include <cstdlib>
+import std;
 
-#include "glaze/json/patch.hpp"
-#include "ut/ut.hpp"
+import ut;
 
 using namespace ut;
+
+using std::int64_t;
+using std::uint64_t;
 
 suite json_patch_tests = [] {
    // ============================================================================

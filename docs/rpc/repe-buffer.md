@@ -145,7 +145,7 @@ The function validates:
 Overloads:
 ```cpp
 // From raw pointer + size
-glz::error_code from_buffer(const char* data, size_t size, message& msg);
+glz::error_code from_buffer(const char* data, std::size_t size, message& msg);
 
 // From string_view
 glz::error_code from_buffer(std::string_view data, message& msg);
@@ -165,7 +165,7 @@ struct request_view {
     std::string_view query;        // View into original buffer
     std::string_view body;         // View into original buffer
 
-    [[nodiscard]] uint64_t id() const noexcept;
+    [[nodiscard]] std::uint64_t id() const noexcept;
     [[nodiscard]] bool is_notify() const noexcept;
     [[nodiscard]] error_code error() const noexcept;
 };
@@ -322,7 +322,7 @@ Returns an empty `string_view` on error (invalid header, truncated data).
 ```cpp
 #include "glaze/rpc/repe/buffer.hpp"
 
-void route_message(const char* data, size_t size) {
+void route_message(const char* data, std::size_t size) {
     // Extract query without full deserialization
     auto query = glz::repe::extract_query(data, size);
 

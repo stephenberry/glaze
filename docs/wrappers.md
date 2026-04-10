@@ -202,7 +202,7 @@ When reading, first reads a value as a string, which unescapes, and then reads t
 ```c++
 struct client_state
 {
-   uint64_t id{};
+   std::uint64_t id{};
    std::map<std::string, std::vector<std::string>> layouts{};
 };
 
@@ -710,9 +710,9 @@ For global limits (applying to all strings/arrays), use custom options instead:
 ```c++
 struct secure_opts : glz::opts
 {
-   uint32_t format = glz::BEVE;
-   size_t max_string_length = 1024;    // Max 1KB per string
-   size_t max_array_size = 10000;      // Max 10,000 elements per array
+   std::uint32_t format = glz::BEVE;
+   std::size_t max_string_length = 1024;    // Max 1KB per string
+   std::size_t max_array_size = 10000;      // Max 10,000 elements per array
 };
 
 auto ec = glz::read<secure_opts{}>(obj, buffer);
@@ -939,13 +939,13 @@ Calls custom read and write std::functions, lambdas, or member functions.
 ```c++
 struct custom_encoding
 {
-   uint64_t x{};
+   std::uint64_t x{};
    std::string y{};
-   std::array<uint32_t, 3> z{};
+   std::array<std::uint32_t, 3> z{};
 
    void read_x(const std::string& s) { x = std::stoi(s); }
 
-   uint64_t write_x() { return x; }
+   std::uint64_t write_x() { return x; }
 
    void read_y(const std::string& s) { y = "hello" + s; }
 
@@ -975,7 +975,7 @@ In use:
   expect(!glz::read_json(obj, s));
   expect(obj.x == 3);
   expect(obj.y == "helloworld");
-  expect(obj.z == std::array<uint32_t, 3>{1, 2, 3});
+  expect(obj.z == std::array<std::uint32_t, 3>{1, 2, 3});
 };
 
 "custom_writing"_test = [] {
@@ -1179,7 +1179,7 @@ struct opts_skip_null_json : glz::opts {
 **BEVE:**
 ```c++
 struct opts_skip_null_beve : glz::opts {
-   uint32_t format = glz::BEVE;
+   std::uint32_t format = glz::BEVE;
    bool skip_null_members_on_read = true;
 };
 ```

@@ -1,22 +1,27 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/cbor.hpp"
+import std;
 
-#include <bit>
-#include <bitset>
-#include <complex>
-#include <deque>
-#include <expected>
-#include <map>
-#include <random>
-#include <span>
-#include <unordered_map>
-#include <vector>
+import glaze.cbor;
+import glaze.base64;
+import glaze.exceptions;
 
-#include "glaze/base64/base64.hpp"
-#include "glaze/glaze_exceptions.hpp"
-#include "ut/ut.hpp"
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.read;
+
+import ut;
+
+using std::uint8_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -1415,7 +1420,7 @@ void container_roundtrip_tests()
 {
    "vector_int_random"_test = [] {
       std::vector<int> vec(100);
-      for (auto& item : vec) item = rand();
+      for (auto& item : vec) item = std::rand();
       std::string buffer{};
       std::vector<int> vec2{};
       expect(not glz::write_cbor(vec, buffer));
@@ -1438,7 +1443,7 @@ void container_roundtrip_tests()
 
    "vector_double_random"_test = [] {
       std::vector<double> vec(100);
-      for (auto& item : vec) item = rand() / (1.0 + rand());
+      for (auto& item : vec) item = std::rand() / (1.0 + std::rand());
       std::string buffer{};
       std::vector<double> vec2{};
       expect(not glz::write_cbor(vec, buffer));
@@ -1452,7 +1457,7 @@ void container_roundtrip_tests()
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
          std::shuffle(str.begin(), str.end(), g);
-         map1[str] = rand();
+         map1[str] = std::rand();
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
@@ -1466,7 +1471,7 @@ void container_roundtrip_tests()
    "map_int_keys_random"_test = [] {
       std::map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map1[rand()] = rand();
+         map1[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::map<int, int> map2{};
@@ -1480,7 +1485,7 @@ void container_roundtrip_tests()
    "unordered_map_int_keys_random"_test = [] {
       std::unordered_map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map1[rand()] = rand();
+         map1[std::rand()] = std::rand();
       }
       std::string buffer{};
       std::unordered_map<int, int> map2{};

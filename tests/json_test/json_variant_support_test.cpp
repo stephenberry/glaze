@@ -1,22 +1,20 @@
 
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <array>
-#include <cstdint>
-#include <map>
-#include <memory>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <tuple>
-#include <variant>
-#include <vector>
+import std;
 
-#include "glaze/containers/flat_map.hpp"
-#include "glaze/json.hpp"
-#include "json_test_shared_types.hpp"
-#include "ut/ut.hpp"
+import glaze.containers.flat_map;
+import glaze.json;
+import glaze.tests.json.json_test_shared_types;
+import ut;
+
+using std::uint8_t;
+using std::int8_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -175,6 +173,10 @@ suite tagged_variant_tests = [] {
 #else
       expect(s == expected_qualified) << s;
 #endif
+      expect(
+         s ==
+         R"({"type":["object"],"$defs":{"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::map<std::string,std::int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"action":{"const":"PUT"},"data":{"$ref":"#/$defs/std::map<std::string,std::int32_t>"}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":["object"],"properties":{"action":{"const":"DELETE"},"data":{"$ref":"#/$defs/std::string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"std::variant<put_action, delete_action>"})")
+         << s;
    };
 #endif
 
@@ -186,11 +188,11 @@ suite tagged_variant_tests = [] {
       std::string b = R"({"num":["float", 3.14]})";
       expect(ec == glz::error_code::none) << glz::format_error(ec, b);
       expect(std::get<float>(obj.num) == 3.14f);
-      expect(not glz::read_json(obj, R"({"num":["uint64_t", 5]})"));
+      expect(not glz::read_json(obj, R"({"num":["std::uint64_t", 5]})"));
       expect(std::get<uint64_t>(obj.num) == 5);
-      expect(not glz::read_json(obj, R"({"num":["int8_t", -3]})"));
+      expect(not glz::read_json(obj, R"({"num":["std::int8_t", -3]})"));
       expect(std::get<int8_t>(obj.num) == -3);
-      expect(not glz::read_json(obj, R"({"num":["int32_t", -2]})"));
+      expect(not glz::read_json(obj, R"({"num":["std::int32_t", -2]})"));
       expect(std::get<int32_t>(obj.num) == -2);
 
       obj.num = 5.0;
@@ -199,15 +201,19 @@ suite tagged_variant_tests = [] {
       expect(s == R"({"num":["double",5]})");
       obj.num = uint64_t{3};
       expect(not glz::write_json(obj, s));
-      expect(s == R"({"num":["uint64_t",3]})");
+      expect(s == R"({"num":["std::uint64_t",3]})");
       obj.num = int8_t{-5};
       expect(not glz::write_json(obj, s));
-      expect(s == R"({"num":["int8_t",-5]})");
+      expect(s == R"({"num":["std::int8_t",-5]})");
    };
 
 #if !defined(_MSC_VER)
    "shared_ptr variant schema"_test = [] {
       const auto schema = glz::write_json_schema<std::shared_ptr<tagged_variant2>>().value_or("error");
+      expect(
+         schema ==
+         R"({"type":["object","null"],"$defs":{"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::map<std::string,std::int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::map<std::string,std::int32_t>"},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":["null"],"title":"std::monostate","const":null}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})")
+         << schema;
       // P2996 reflection: Bloomberg Clang returns unqualified names, GCC returns qualified names
       // Accept both forms for the title
       auto expected_qualified =
@@ -328,10 +334,10 @@ suite variant_tests = [] {
    };
 
    "variant write/read enum"_test = [] {
-      std::variant<Color, std::uint16_t> var{Color::Red};
+      std::variant<Color, uint16_t> var{Color::Red};
       auto res{glz::write_json(var).value_or("error")};
       expect(res == "\"Red\"") << res;
-      auto read{glz::read_json<std::variant<Color, std::uint16_t>>(res)};
+      auto read{glz::read_json<std::variant<Color, uint16_t>>(res)};
       expect(read.has_value());
       expect(std::holds_alternative<Color>(read.value()));
       expect(std::get<Color>(read.value()) == Color::Red);

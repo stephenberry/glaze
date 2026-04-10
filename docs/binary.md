@@ -37,7 +37,7 @@ The `glz::beve_size` function calculates the exact number of bytes needed to ser
 
 ```c++
 my_struct s{};
-size_t size = glz::beve_size(s);
+std::size_t size = glz::beve_size(s);
 // size contains the exact number of bytes needed to serialize s
 ```
 
@@ -47,14 +47,14 @@ size_t size = glz::beve_size(s);
 #include "glaze/beve.hpp"
 
 struct SensorData {
-   uint64_t timestamp;
+   std::uint64_t timestamp;
    double temperature;
    std::vector<double> readings;
 };
 
 // Calculate size before allocation
 SensorData data{12345, 98.6, {1.0, 2.0, 3.0}};
-size_t size = glz::beve_size(data);
+std::size_t size = glz::beve_size(data);
 
 // Allocate shared memory with exact size
 void* shm = mmap(nullptr, size, PROT_READ | PROT_WRITE,
@@ -71,8 +71,8 @@ For untagged serialization (structs written as arrays without keys), use `glz::b
 
 ```c++
 my_struct s{};
-size_t tagged_size = glz::beve_size(s);           // with keys
-size_t untagged_size = glz::beve_size_untagged(s); // without keys (smaller)
+std::size_t tagged_size = glz::beve_size(s);           // with keys
+std::size_t untagged_size = glz::beve_size_untagged(s); // without keys (smaller)
 ```
 
 **Compressed Integer Size Helper**
@@ -138,8 +138,8 @@ struct beve_header {
    uint8_t tag{};        // Raw tag byte
    uint8_t type{};       // Base type (see below)
    uint8_t ext_type{};   // For extensions: subtype (variant, complex, etc.)
-   size_t count{};       // Element count, string length, variant index, etc.
-   size_t header_size{}; // Bytes consumed by tag + count encoding
+   std::size_t count{};       // Element count, string length, variant index, etc.
+   std::size_t header_size{}; // Bytes consumed by tag + count encoding
 };
 ```
 
@@ -196,7 +196,7 @@ if (!header) {
 }
 
 // Reject oversized arrays
-constexpr size_t max_elements = 10000;
+constexpr std::size_t max_elements = 10000;
 if (header->type == glz::tag::typed_array && header->count > max_elements) {
    return unexpected(error_code::invalid_length);
 }
@@ -233,7 +233,7 @@ For C-style buffers:
 
 ```c++
 const void* data = /* ... */;
-size_t size = /* ... */;
+std::size_t size = /* ... */;
 
 auto result = glz::beve_peek_header(data, size);
 ```
@@ -244,7 +244,7 @@ Use `glz::beve_peek_header_at` to peek at headers at arbitrary byte offsets with
 
 ```c++
 std::string buffer = /* BEVE data */;
-size_t offset = /* position to inspect */;
+std::size_t offset = /* position to inspect */;
 
 auto header = glz::beve_peek_header_at(buffer, offset);
 if (header) {
@@ -275,7 +275,7 @@ if (header) {
 
 ```c++
 // Example: Multiple values in one buffer
-int32_t val1 = 42;
+std::int32_t val1 = 42;
 std::string val2 = "hello";
 
 auto buffer1 = glz::write_beve(val1).value();
@@ -412,7 +412,7 @@ BEVE can serialize map-like containers whose key types expose a value through Gl
 
 ```c++
 struct ModuleID {
-   uint64_t value{};
+   std::uint64_t value{};
    auto operator<=>(const ModuleID&) const = default;
 };
 
@@ -427,14 +427,14 @@ std::string beve{};
 glz::write_beve(modules, beve);
 ```
 
-Glaze inspects the metadata, reuses the underlying `uint64_t`, and emits the numeric BEVE map header so the payload decodes as a regular number key. The same behaviour works for `std::unordered_map` and concatenated ranges such as `std::vector<std::pair<ModuleID, T>>`.
+Glaze inspects the metadata, reuses the underlying `std::uint64_t`, and emits the numeric BEVE map header so the payload decodes as a regular number key. The same behaviour works for `std::unordered_map` and concatenated ranges such as `std::vector<std::pair<ModuleID, T>>`.
 
 If you prefer to keep a custom conversion in your metadata, `glz::cast` works as well:
 
 ```c++
 template <>
 struct glz::meta<ModuleID> {
-   static constexpr auto value = glz::cast<&ModuleID::value, uint64_t>;
+   static constexpr auto value = glz::cast<&ModuleID::value, std::uint64_t>;
 };
 ```
 
@@ -561,7 +561,7 @@ For manual control over reading, use `read_beve_at` which returns the number of 
 
 ```c++
 std::string buffer = /* delimited BEVE data */;
-size_t offset = 0;
+std::size_t offset = 0;
 
 while (offset < buffer.size()) {
    my_struct obj{};
@@ -586,7 +586,7 @@ The standard `read_beve` function tracks bytes consumed via `ec.count`:
 my_struct obj{};
 auto ec = glz::read_beve(obj, buffer);
 if (!ec) {
-   size_t bytes_consumed = ec.count;  // Number of bytes read on success
+   std::size_t bytes_consumed = ec.count;  // Number of bytes read on success
 }
 ```
 
@@ -636,7 +636,7 @@ if (result) {
     auto age = (*result)["user"]["age"].get<int64_t>();
 
     // Check container size without parsing elements
-    size_t count = (*result)["items"].size();
+    std::size_t count = (*result)["items"].size();
 }
 ```
 
