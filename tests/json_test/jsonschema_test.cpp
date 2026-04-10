@@ -230,7 +230,7 @@ struct glz::meta<const_one_enum>
 struct schematic_substitute
 {
    using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
-   std::optional<std::vector<std::string_view>> type{};
+   std::optional<std::variant<std::string_view, std::vector<std::string_view>>> type{};
    std::optional<std::vector<schematic_substitute>> oneOf{};
    struct schema
    {
@@ -335,8 +335,7 @@ suite schema_tests = [] {
          schematic_substitute obj{};
          auto err = read_json_ignore_unknown(obj, schema_str);
          expect(!err) << format_error(err, schema_str);
-         expect(obj.type->size() == 1);
-         expect(obj.type->at(0) == "integer");
+         expect(std::get<std::string_view>(*obj.type) == "integer");
       };
       test(one_number{});
       test(const_one_number{});
@@ -381,7 +380,7 @@ suite schema_tests = [] {
       std::string schema_str = glz::write_json_schema<std::monostate>().value_or("error");
       // reading null will of course leave the std::optional as empty, therefore check if
       // null is actually written in the schema
-      expect(schema_str == R"({"type":["null"],"$defs":{},"title":"std::monostate","const":null})");
+      expect(schema_str == R"({"type":"null","$defs":{},"title":"std::monostate","const":null})");
    };
 
    "enum oneOf has title and constant"_test = [] {
@@ -412,8 +411,7 @@ suite schema_tests = [] {
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
       expect[(obj.type.has_value())];
-      expect(obj.type->size() == 1);
-      expect(obj.type->at(0) == "array");
+      expect(std::get<std::string_view>(*obj.type) == "array");
       // check maxItems (minItems not set because Glaze allows partial reading)
       expect[(!obj.attributes.minItems.has_value())];
       expect[(obj.attributes.maxItems.has_value())];
@@ -424,7 +422,7 @@ suite schema_tests = [] {
       std::string schema_str = glz::write_json_schema<required_meta>().value_or("error");
       expect(
          schema_str ==
-         R"({"type":["object"],"properties":{"a":{"$ref":"#/$defs/int32_t"},"b":{"$ref":"#/$defs/int32_t"},"reserved_1":{"$ref":"#/$defs/int32_t"},"reserved_2":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})");
+         R"({"type":"object","properties":{"a":{"$ref":"#/$defs/int32_t"},"b":{"$ref":"#/$defs/int32_t"},"reserved_1":{"$ref":"#/$defs/int32_t"},"reserved_2":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})");
    };
 
    "Opts.error_on_missing_keys as fallback"_test = [] {
@@ -436,11 +434,11 @@ suite schema_tests = [] {
 
       expect(
          schema_str_req ==
-         R"({"type":["object"],"properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})");
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})");
 
       expect(
          schema_str_nreq ==
-         R"({"type":["object"],"properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})");
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})");
    };
 
    // Demonstrates using error_on_missing_keys to mark all non-nullable fields as required in JSON schema
@@ -535,7 +533,7 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<tuple_t>().value();
       expect(
          schema ==
-         R"({"type":["array"],"prefixItems":[{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},{"type":["string"]},{"type":["boolean"]}],"items":false,"$defs":{},"title":"std::tuple<int32_t,std::string,bool>","maxItems":3})")
+         R"({"type":"array","prefixItems":[{"type":"integer","minimum":-2147483648,"maximum":2147483647},{"type":"string"},{"type":"boolean"}],"items":false,"$defs":{},"title":"std::tuple<int32_t,std::string,bool>","maxItems":3})")
          << schema;
    };
 
@@ -554,7 +552,7 @@ suite value_type_variant_schema = [] {
       auto obj = glz::read_json<glz::detail::schematic>(schema);
       expect(obj.has_value()) << "Failed to parse schema";
       expect(obj->type.has_value());
-      expect(obj->type->at(0) == "array");
+      expect(std::get<std::string_view>(*obj->type) == "array");
       expect(obj->prefixItems.has_value());
       expect(obj->prefixItems->size() == 2);
       expect(obj->items.has_value());
@@ -571,7 +569,7 @@ suite value_type_variant_schema = [] {
       // second element should itself be an array with prefixItems
       auto& inner = (*obj->prefixItems)[1];
       expect(inner.type.has_value());
-      expect(inner.type->at(0) == "array");
+      expect(std::get<std::string_view>(*inner.type) == "array");
       expect(inner.prefixItems.has_value());
       expect(inner.prefixItems->size() == 2);
    };
@@ -590,7 +588,7 @@ suite value_type_variant_schema = [] {
       auto obj = glz::read_json<glz::detail::schematic>(schema);
       expect(obj.has_value()) << "Failed to parse schema";
       expect(obj->type.has_value());
-      expect(obj->type->at(0) == "array");
+      expect(std::get<std::string_view>(*obj->type) == "array");
       // items should be a $ref schema, not a boolean
       expect(obj->items.has_value());
       expect(std::holds_alternative<glz::schema>(*obj->items));
@@ -604,7 +602,7 @@ suite value_type_variant_schema = [] {
       auto obj = glz::read_json<glz::detail::schematic>(schema);
       expect(obj.has_value()) << "Failed to parse schema";
       expect(obj->type.has_value());
-      expect(obj->type->at(0) == "array");
+      expect(std::get<std::string_view>(*obj->type) == "array");
       // point3d has 3 members: double, double, int
       expect(obj->prefixItems.has_value());
       expect(obj->prefixItems->size() == 3);
@@ -624,7 +622,7 @@ suite value_type_variant_schema = [] {
       expect(it != obj->defs->end()) << "missing def for: " << std::string(glz::name_v<variant_t>);
       if (it == obj->defs->end()) return; // avoid segfault on missing key
       expect(it->second.type.has_value());
-      auto& types = *it->second.type;
+      auto& types = std::get<std::vector<std::string_view>>(*it->second.type);
       expect(std::find(types.begin(), types.end(), "string") != types.end()) << "missing string type";
       expect(std::find(types.begin(), types.end(), "null") != types.end()) << "missing null type";
    };
@@ -639,8 +637,7 @@ suite vector_pair_schema_test = [] {
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
       expect(obj->type.has_value());
-      auto& types = *obj->type;
-      expect(std::find(types.begin(), types.end(), "object") != types.end()) << "expected object type";
+      expect(std::get<std::string_view>(*obj->type) == "object") << "expected object type";
       expect(obj->additionalProperties.has_value()) << "expected additionalProperties";
    };
 
@@ -650,8 +647,7 @@ suite vector_pair_schema_test = [] {
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
       expect(obj->type.has_value());
-      auto& types = *obj->type;
-      expect(std::find(types.begin(), types.end(), "object") != types.end()) << "expected object type";
+      expect(std::get<std::string_view>(*obj->type) == "object") << "expected object type";
    };
 };
 
