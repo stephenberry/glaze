@@ -434,10 +434,12 @@ suite glz_enum_test = [] {
 enum class TestData : uint8_t { None, A, B, C, D, ERROR_E = 0xFF };
 
 // Issue #2455: structs with many fields to test fixed_padding + prettify
-struct issue2455_data {
+struct issue2455_data
+{
    int a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v;
 };
-struct issue2455_wrapper {
+struct issue2455_wrapper
+{
    issue2455_data d;
 };
 
