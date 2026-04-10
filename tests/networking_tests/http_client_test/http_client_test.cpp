@@ -503,21 +503,26 @@ suite working_http_tests = [] {
       check_heap("after server create");
       expect(server.start()) << "Server should start\n";
       check_heap("after server start");
-      simple_test_client client;
-      check_heap("after client create");
-      auto result = client.get(server.base_url() + "/hello");
-      check_heap("after GET");
 
-      expect(result.has_value()) << "GET request should succeed\n";
-      if (result.has_value()) {
-         expect(result->status_code == 200) << "Status should be 200\n";
-         expect(result->response_body == "Hello, World!") << "Body should match\n";
-      }
+      // Use a block to control destruction order and add heap checks
+      {
+         simple_test_client client;
+         check_heap("after client create");
+         auto result = client.get(server.base_url() + "/hello");
+         check_heap("after GET");
+
+         expect(result.has_value()) << "GET request should succeed\n";
+         if (result.has_value()) {
+            expect(result->status_code == 200) << "Status should be 200\n";
+            expect(result->response_body == "Hello, World!") << "Body should match\n";
+         }
+         check_heap("before client destroy");
+      } // client and result destroyed here
+      check_heap("after client destroy");
 
       check_heap("before server stop");
       server.stop();
       check_heap("after server stop");
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
       std::fprintf(stderr, "[TRACE] test done\n");
    };
 
