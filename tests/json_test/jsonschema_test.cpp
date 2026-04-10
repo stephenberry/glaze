@@ -516,7 +516,103 @@ struct cpp_class_variant
    std::variant<identifier, std::nullopt_t> name;
 };
 
+struct point3d
+{
+   double x{};
+   double y{};
+   int z{};
+};
+
+template <>
+struct glz::meta<point3d>
+{
+   static constexpr std::string_view name = "point3d";
+   static constexpr auto value = array(&point3d::x, &point3d::y, &point3d::z);
+};
+
 suite value_type_variant_schema = [] {
+   "tuple schema uses prefixItems"_test = [] {
+      using tuple_t = std::tuple<int, std::string, bool>;
+      auto schema = glz::write_json_schema<tuple_t>().value();
+      expect(
+         schema ==
+         R"({"type":["array"],"prefixItems":[{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},{"type":["string"]},{"type":["boolean"]}],"items":false,"$defs":{},"title":"std::tuple<int32_t,std::string,bool>","maxItems":3})")
+         << schema;
+   };
+
+   "single element tuple"_test = [] {
+      auto schema = glz::write_json_schema<std::tuple<int>>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema";
+      expect(obj->prefixItems.has_value());
+      expect(obj->prefixItems->size() == 1);
+      expect(obj->items.has_value());
+      expect(std::get<bool>(*obj->items) == false);
+   };
+
+   "glz::tuple schema"_test = [] {
+      auto schema = glz::write_json_schema<glz::tuple<int, std::string>>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema";
+      expect(obj->type.has_value());
+      expect(obj->type->at(0) == "array");
+      expect(obj->prefixItems.has_value());
+      expect(obj->prefixItems->size() == 2);
+      expect(obj->items.has_value());
+      expect(std::get<bool>(*obj->items) == false);
+   };
+
+   "nested tuple schema"_test = [] {
+      using nested_t = std::tuple<int, std::tuple<double, bool>>;
+      auto schema = glz::write_json_schema<nested_t>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema";
+      expect(obj->prefixItems.has_value());
+      expect(obj->prefixItems->size() == 2);
+      // second element should itself be an array with prefixItems
+      auto& inner = (*obj->prefixItems)[1];
+      expect(inner.type.has_value());
+      expect(inner.type->at(0) == "array");
+      expect(inner.prefixItems.has_value());
+      expect(inner.prefixItems->size() == 2);
+   };
+
+   "tuple with object type populates defs"_test = [] {
+      using tuple_t = std::tuple<int, schema_obj>;
+      auto schema = glz::write_json_schema<tuple_t>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema";
+      expect(obj->prefixItems.has_value());
+      expect(obj->prefixItems->size() == 2);
+   };
+
+   "homogeneous array items is schema ref"_test = [] {
+      auto schema = glz::write_json_schema<std::vector<int>>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema";
+      expect(obj->type.has_value());
+      expect(obj->type->at(0) == "array");
+      // items should be a $ref schema, not a boolean
+      expect(obj->items.has_value());
+      expect(std::holds_alternative<glz::schema>(*obj->items));
+      auto& ref = std::get<glz::schema>(*obj->items);
+      expect(ref.ref.has_value());
+      expect(*ref.ref == "#/$defs/int32_t");
+   };
+
+   "glaze_array_t schema"_test = [] {
+      auto schema = glz::write_json_schema<point3d>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema";
+      expect(obj->type.has_value());
+      expect(obj->type->at(0) == "array");
+      // point3d has 3 members: double, double, int
+      expect(obj->prefixItems.has_value());
+      expect(obj->prefixItems->size() == 3);
+      expect(obj->items.has_value());
+      expect(std::get<bool>(*obj->items) == false);
+   };
+
    "value_type_variant_json_schema"_test = [] {
       auto s = glz::write_json_schema<cpp_class_variant>().value();
       auto obj = glz::read_json<glz::detail::schematic>(s);
