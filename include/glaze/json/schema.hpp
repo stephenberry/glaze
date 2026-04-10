@@ -617,6 +617,7 @@ namespace glz
                }
             });
             s.items = false;
+            s.attributes.maxItems = N;
          }
       };
 

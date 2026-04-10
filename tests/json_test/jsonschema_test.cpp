@@ -536,7 +536,7 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<tuple_t>().value();
       expect(
          schema ==
-         R"({"type":["array"],"prefixItems":[{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},{"type":["string"]},{"type":["boolean"]}],"items":false,"$defs":{},"title":"std::tuple<int32_t,std::string,bool>"})")
+         R"({"type":["array"],"prefixItems":[{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},{"type":["string"]},{"type":["boolean"]}],"items":false,"$defs":{},"title":"std::tuple<int32_t,std::string,bool>","maxItems":3})")
          << schema;
    };
 
