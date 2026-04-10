@@ -253,7 +253,7 @@ The buffer refills automatically during parsing, enabling reading of arbitrarily
 - Tested for both 64bit and 32bit
 - Supports both little-endian and big-endian systems
 
-[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux. Big-endian is tested via QEMU emulation on s390x.
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (Visual Studio 2026 MSVC Build Tools 14.50), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux. Big-endian is tested via QEMU emulation on s390x.
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 

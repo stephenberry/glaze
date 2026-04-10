@@ -454,6 +454,16 @@ suite glz_enum_test = [] {
 
 enum class TestData : uint8_t { None, A, B, C, D, ERROR_E = 0xFF };
 
+// Issue #2455: structs with many fields to test fixed_padding + prettify
+struct issue2455_data
+{
+   int a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v;
+};
+struct issue2455_wrapper
+{
+   issue2455_data d;
+};
+
 struct DummyData
 {
    uint32_t id{0};
@@ -4529,7 +4539,7 @@ suite json_schema = [] {
       // when you update this string
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"array":{"$ref":"#/$defs/std::array<std::string,4>"},"b":{"$ref":"#/$defs/bool"},"c":{"$ref":"#/$defs/char"},"color":{"$ref":"#/$defs/Color"},"d":{"$ref":"#/$defs/double"},"deque":{"$ref":"#/$defs/std::deque<double>"},"i":{"$ref":"#/$defs/std::int32_t"},"list":{"$ref":"#/$defs/std::list<std::int32_t>"},"map":{"$ref":"#/$defs/std::map<std::string,std::int32_t>"},"mapi":{"$ref":"#/$defs/std::map<std::int32_t,double>"},"optional":{"$ref":"#/$defs/std::optional<V3>"},"sptr":{"$ref":"#/$defs/std::shared_ptr<sub_thing>"},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"$ref":"#/$defs/std::array<sub_thing2,1>"},"thing_ptr":{"$ref":"#/$defs/sub_thing*"},"v":{"$ref":"#/$defs/std::variant<var1_t,var2_t>"},"vb":{"$ref":"#/$defs/std::vector<bool>"},"vec3":{"$ref":"#/$defs/V3"},"vector":{"$ref":"#/$defs/std::vector<V3>"}},"additionalProperties":false,"$defs":{"Color":{"type":["string"],"oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"V3":{"type":["array"]},"bool":{"type":["boolean"]},"char":{"type":["string"]},"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":["number"],"minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<std::string,4>":{"type":["array"],"items":{"$ref":"#/$defs/std::string"},"minItems":4,"maxItems":4},"std::array<sub_thing2,1>":{"type":["array"],"items":{"$ref":"#/$defs/sub_thing2"},"minItems":1,"maxItems":1},"std::deque<double>":{"type":["array"],"items":{"$ref":"#/$defs/double"}},"std::list<std::int32_t>":{"type":["array"],"items":{"$ref":"#/$defs/std::int32_t"}},"std::map<std::int32_t,double>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/double"}},"std::map<std::string,std::int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/std::int32_t"}},"std::optional<V3>":{"type":["array","null"]},"std::shared_ptr<sub_thing>":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"std::string":{"type":["string"]},"std::variant<var1_t,var2_t>":{"type":["object"],"oneOf":[{"type":["object"],"properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":["object"],"properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"std::vector<V3>":{"type":["array"],"items":{"$ref":"#/$defs/V3"}},"std::vector<bool>":{"type":["array"],"items":{"$ref":"#/$defs/bool"}},"sub_thing":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing*":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing2":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
+         R"({"type":"object","properties":{"array":{"$ref":"#/$defs/std::array<std::string,4>"},"b":{"$ref":"#/$defs/bool"},"c":{"$ref":"#/$defs/char"},"color":{"$ref":"#/$defs/Color"},"d":{"$ref":"#/$defs/double"},"deque":{"$ref":"#/$defs/std::deque<double>"},"i":{"$ref":"#/$defs/int32_t"},"list":{"$ref":"#/$defs/std::list<int32_t>"},"map":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"mapi":{"$ref":"#/$defs/std::map<int32_t,double>"},"optional":{"$ref":"#/$defs/std::optional<V3>"},"sptr":{"$ref":"#/$defs/std::shared_ptr<sub_thing>"},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"$ref":"#/$defs/std::array<sub_thing2,1>"},"thing_ptr":{"$ref":"#/$defs/sub_thing*"},"v":{"$ref":"#/$defs/std::variant<var1_t,var2_t>"},"vb":{"$ref":"#/$defs/std::vector<bool>"},"vec3":{"$ref":"#/$defs/V3"},"vector":{"$ref":"#/$defs/std::vector<V3>"}},"additionalProperties":false,"$defs":{"Color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"V3":{"type":"array","prefixItems":[{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}],"items":false,"maxItems":3},"bool":{"type":"boolean"},"char":{"type":"string"},"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::array<std::string,4>":{"type":"array","items":{"$ref":"#/$defs/std::string"},"maxItems":4},"std::array<sub_thing2,1>":{"type":"array","items":{"$ref":"#/$defs/sub_thing2"},"maxItems":1},"std::deque<double>":{"type":"array","items":{"$ref":"#/$defs/double"}},"std::list<int32_t>":{"type":"array","items":{"$ref":"#/$defs/int32_t"}},"std::map<int32_t,double>":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"std::map<std::string,int32_t>":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::optional<V3>":{"type":["array","null"],"prefixItems":[{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}],"items":false,"maxItems":3},"std::shared_ptr<sub_thing>":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"std::string":{"type":"string"},"std::variant<var1_t,var2_t>":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"std::vector<V3>":{"type":"array","items":{"$ref":"#/$defs/V3"}},"std::vector<bool>":{"type":"array","items":{"$ref":"#/$defs/bool"}},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing*":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing2":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
          << schema;
    };
 };
@@ -9864,7 +9874,7 @@ suite meta_schema_tests = [] {
       const auto json_schema = glz::write_json_schema<meta_schema_t>().value_or("error");
       expect(
          json_schema ==
-         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/std::int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"std::int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"meta_schema_t"})")
+         R"({"type":"object","properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"bool":{"type":"boolean"},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::string":{"type":"string"}},"title":"meta_schema_t"})")
          << json_schema;
    };
 
@@ -9877,9 +9887,7 @@ suite meta_schema_tests = [] {
       const auto json_schema = glz::write_json_schema<meta_schema_t, glz::opts{.prettify = true}>().value_or("error");
       expect(json_schema ==
              R"({
-   "type": [
-      "object"
-   ],
+   "type": "object",
    "properties": {
       "file_name": {
          "$ref": "#/$defs/std::string",
@@ -9897,21 +9905,15 @@ suite meta_schema_tests = [] {
    "additionalProperties": false,
    "$defs": {
       "bool": {
-         "type": [
-            "boolean"
-         ]
+         "type": "boolean"
       },
-      "std::int32_t": {
-         "type": [
-            "integer"
-         ],
+      "int32_t": {
+         "type": "integer",
          "minimum": -2147483648,
          "maximum": 2147483647
       },
       "std::string": {
-         "type": [
-            "string"
-         ]
+         "type": "string"
       }
    },
    "title": "meta_schema_t"
@@ -14007,6 +14009,17 @@ suite bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow for too-small buffer";
+   };
+
+   // Regression test for issue #2455: out-of-bounds write with prettify + quoted_num
+   "prettify with fixed_padding struct"_test = [] {
+      issue2455_wrapper w{};
+      std::memset(&w, 128, sizeof(w));
+      std::string buffer;
+      constexpr auto opts = glz::opt_on<glz::opts{.prettify = true}, glz::quoted_num_opt_tag{}>();
+      auto ec = glz::write<opts>(w, buffer);
+      expect(not ec) << "prettify with many fields should not crash";
+      expect(buffer.size() > 0) << "output should not be empty";
    };
 };
 
