@@ -29,6 +29,10 @@ namespace glz
       constexpr explicit toml_opts(bool inline_arr) : opts{.format = TOML}, inline_arrays(inline_arr) {}
    };
 
+   // Skip member function pointers unless explicitly enabled
+   template <class T, auto Options>
+   constexpr bool skip_toml_field = always_skipped<T> || (!check_write_function_pointers(Options) && is_member_function_pointer<T>);
+
    template <>
    struct serialize<TOML>
    {
@@ -750,9 +754,7 @@ namespace glz
 
          using val_t = field_t<Type, I>;
 
-         // Skip member function pointers unless explicitly enabled
-         constexpr bool write_function_pointers = check_write_function_pointers(Options);
-         if constexpr (always_skipped<val_t> || (!write_function_pointers && is_member_function_pointer<val_t>)) {
+         if constexpr (skip_toml_field<val_t, Options>) {
             return;
          }
 
@@ -870,13 +872,6 @@ namespace glz
 
       static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
       bool first = true;
-
-      // Helper lambda to check if a field should be skipped
-      auto should_skip_field = [&]<size_t I>() constexpr {
-         using val_t = field_t<T, I>;
-         constexpr bool write_function_pointers = check_write_function_pointers(Options);
-         return always_skipped<val_t> || (!write_function_pointers && is_member_function_pointer<val_t>);
-      };
 
       // Helper lambda to check if nullable field is null
       auto is_null_field = [&]<size_t I>() -> bool {
@@ -1101,7 +1096,7 @@ namespace glz
          }
          using val_t = field_t<T, I>;
 
-         if constexpr (should_skip_field.template operator()<I>()) {
+         if constexpr (skip_toml_field<val_t, Options>) {
             return;
          }
 
@@ -1127,7 +1122,7 @@ namespace glz
          }
          using val_t = field_t<T, I>;
 
-         if constexpr (should_skip_field.template operator()<I>()) {
+         if constexpr (skip_toml_field<val_t, Options>) {
             return;
          }
 
