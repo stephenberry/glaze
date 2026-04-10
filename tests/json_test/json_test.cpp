@@ -433,6 +433,14 @@ suite glz_enum_test = [] {
 
 enum class TestData : uint8_t { None, A, B, C, D, ERROR_E = 0xFF };
 
+// Issue #2455: structs with many fields to test fixed_padding + prettify
+struct issue2455_data {
+   int a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v;
+};
+struct issue2455_wrapper {
+   issue2455_data d;
+};
+
 struct DummyData
 {
    uint32_t id{0};
@@ -13989,6 +13997,17 @@ suite bounded_buffer_overflow_tests = [] {
 
       auto result = glz::write_json(obj, buffer);
       expect(result.ec == glz::error_code::buffer_overflow) << "should return buffer_overflow for too-small buffer";
+   };
+
+   // Regression test for issue #2455: out-of-bounds write with prettify + quoted_num
+   "prettify with fixed_padding struct"_test = [] {
+      issue2455_wrapper w{};
+      std::memset(&w, 128, sizeof(w));
+      std::string buffer;
+      constexpr auto opts = glz::opt_on<glz::opts{.prettify = true}, glz::quoted_num_opt_tag{}>();
+      auto ec = glz::write<opts>(w, buffer);
+      expect(not ec) << "prettify with many fields should not crash";
+      expect(buffer.size() > 0) << "output should not be empty";
    };
 };
 
