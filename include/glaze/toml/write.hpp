@@ -31,7 +31,8 @@ namespace glz
 
    // Skip member function pointers unless explicitly enabled
    template <class T, auto Options>
-   constexpr bool skip_toml_field = always_skipped<T> || (!check_write_function_pointers(Options) && is_member_function_pointer<T>);
+   constexpr bool skip_toml_field =
+      always_skipped<T> || (!check_write_function_pointers(Options) && is_member_function_pointer<T>);
 
    template <>
    struct serialize<TOML>
