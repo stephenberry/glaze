@@ -165,7 +165,8 @@ namespace glz
       {
          std::optional<std::vector<std::string_view>> type{};
          std::optional<std::map<std::string_view, schema, std::less<>>> properties{}; // glaze_object
-         std::optional<schema> items{}; // array
+         std::optional<std::vector<schematic>> prefixItems{}; // tuple
+         std::optional<std::variant<bool, schema>> items{}; // array or tuple (false for tuple)
          std::optional<std::variant<bool, schema>> additionalProperties{}; // map
          std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
          std::optional<std::vector<schematic>> oneOf{};
@@ -243,6 +244,7 @@ struct glz::meta<glz::detail::schematic>
    using T = detail::schematic;
    static constexpr std::array keys{"type", //
                                     "properties", //
+                                    "prefixItems", //
                                     "items", //
                                     "additionalProperties", //
                                     "$defs", //
@@ -284,6 +286,7 @@ struct glz::meta<glz::detail::schematic>
    [[maybe_unused]] static constexpr glz::tuple value{
       &T::type, //
       &T::properties, //
+      &T::prefixItems, //
       &T::items, //
       &T::additionalProperties, //
       &T::defs, //
@@ -584,15 +587,36 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
+         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto&)
+         static void op(auto& s, auto& defs)
          {
-            // TODO: Actually handle this. We can specify a schema per item in items
-            //      We can also do size restrictions on static arrays
+            using V = std::decay_t<T>;
             s.type = {"array"};
+            static constexpr auto N = []() constexpr {
+               if constexpr (glaze_array_t<V>) {
+                  return glz::tuple_size_v<meta_t<V>>;
+               }
+               else {
+                  return glz::tuple_size_v<V>;
+               }
+            }();
+            s.prefixItems = std::vector<schematic>(N);
+            for_each<N>([&]<auto I>() {
+               if constexpr (glaze_array_t<V>) {
+                  using element_t = std::decay_t<member_t<V, decltype(glz::get<I>(meta_v<V>))>>;
+                  auto& item_schema = (*s.prefixItems)[I];
+                  to_json_schema<element_t>::template op<Opts>(item_schema, defs);
+               }
+               else {
+                  using element_t = std::decay_t<glz::tuple_element_t<I, V>>;
+                  auto& item_schema = (*s.prefixItems)[I];
+                  to_json_schema<element_t>::template op<Opts>(item_schema, defs);
+               }
+            });
+            s.items = false;
          }
       };
 
