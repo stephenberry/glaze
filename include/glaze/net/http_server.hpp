@@ -843,30 +843,37 @@ namespace glz
          }
 
          if (!is_worker_thread) {
-            // Close all tracked sockets to cancel pending I/O and allow
-            // the io_context to drain naturally before we force-stop.
+            std::fprintf(stderr, "[HTTP_SERVER] closing active connections\n");
+            // Close all tracked sockets to cancel pending I/O
             {
                std::lock_guard<std::mutex> lock(active_connections_mutex_);
+               std::fprintf(stderr, "[HTTP_SERVER] %zu tracked connections\n", active_connections_.size());
                for (auto& weak_conn : active_connections_) {
                   if (auto conn = weak_conn.lock()) {
+                     std::fprintf(stderr, "[HTTP_SERVER] closing socket\n");
                      asio::error_code ec;
                      conn->socket.lowest_layer().close(ec);
+                     std::fprintf(stderr, "[HTTP_SERVER] socket closed: %s\n", ec.message().c_str());
                   }
                }
                active_connections_.clear();
             }
 
-            // Stop the io_context
+            std::fprintf(stderr, "[HTTP_SERVER] calling io_context->stop()\n");
             if (io_context) io_context->stop();
+            std::fprintf(stderr, "[HTTP_SERVER] io_context stopped\n");
 
             for (auto& thread : threads) {
                if (thread.joinable()) {
+                  std::fprintf(stderr, "[HTTP_SERVER] joining thread\n");
                   thread.join();
+                  std::fprintf(stderr, "[HTTP_SERVER] thread joined\n");
                }
             }
             threads.clear();
          }
 
+         std::fprintf(stderr, "[HTTP_SERVER] stop complete\n");
          // Notify any threads waiting for shutdown
          shutdown_cv.notify_all();
       }
