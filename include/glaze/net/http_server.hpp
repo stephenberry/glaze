@@ -35,6 +35,10 @@
 #undef DELETE
 #endif
 
+#ifdef GLZ_ENABLE_SSL
+#include <openssl/crypto.h>
+#endif
+
 namespace glz
 {
    namespace detail
@@ -796,12 +800,13 @@ namespace glz
             for (size_t i = 0; i < actual_threads; ++i) {
                threads.emplace_back([this] {
                   io_context->run();
-#ifdef _WIN32
-                  // Diagnostic: check heap on the worker thread right after run() returns
-                  {
-                     BOOL ok = HeapValidate(GetProcessHeap(), 0, NULL);
-                     std::fprintf(stderr, "[HTTP_SERVER] worker thread exiting, heap: %s\n", ok ? "OK" : "CORRUPTED");
-                  }
+#ifdef GLZ_ENABLE_SSL
+                  // Explicitly clean up OpenSSL's per-thread state before the thread exits.
+                  // On MinGW/GCC + Windows, OpenSSL's TLS (thread-local storage) destructors
+                  // can corrupt the heap during implicit thread teardown because MinGW's
+                  // __emutls implementation doesn't handle OpenSSL's cleanup correctly.
+                  // Calling OPENSSL_thread_cleanup() explicitly avoids this.
+                  OPENSSL_thread_stop();
 #endif
                });
             }
