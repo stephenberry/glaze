@@ -7,7 +7,12 @@ export module glaze.exceptions.cbor_exceptions;
 import std;
 
 import glaze.cbor;
+
+import glaze.core.context;
+import glaze.core.opts;
+
 import glaze.exceptions.core_exceptions;
+
 import glaze.util.string_literal;
 
 namespace glz::ex

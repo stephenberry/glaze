@@ -6,6 +6,8 @@ import ut;
 
 import glaze.containers.ordered_small_map;
 
+using std::size_t;
+
 using namespace ut;
 
 #if __cpp_exceptions

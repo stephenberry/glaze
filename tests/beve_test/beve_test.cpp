@@ -1239,7 +1239,7 @@ void aligned_typed_array_tests()
          expect(reinterpret_cast<const char*>(span.data()) < beve.data() + beve.size());
 
          // Verify alignment
-         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(double) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(span.data()) % alignof(double) == std::uintptr_t(0));
       };
 
       "zero-copy span<const float>"_test = [] {
@@ -1254,7 +1254,7 @@ void aligned_typed_array_tests()
          expect(span[1] == 2.5f);
          expect(span[2] == 3.5f);
 
-         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(float) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(span.data()) % alignof(float) == std::uintptr_t(0));
       };
 
       "zero-copy span<const int32_t>"_test = [] {
@@ -1268,7 +1268,7 @@ void aligned_typed_array_tests()
          expect(span[0] == -10);
          expect(span[4] == 30);
 
-         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(int32_t) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(span.data()) % alignof(int32_t) == std::uintptr_t(0));
       };
 
       "zero-copy span<const uint64_t>"_test = [] {
@@ -1283,7 +1283,7 @@ void aligned_typed_array_tests()
          expect(span[1] == uint64_t(200));
          expect(span[2] == uint64_t(300));
 
-         expect(reinterpret_cast<uintptr_t>(span.data()) % alignof(uint64_t) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(span.data()) % alignof(uint64_t) == std::uintptr_t(0));
       };
 
       "zero-copy rejects non-aligned buffer"_test = [] {
@@ -1344,7 +1344,7 @@ void aligned_typed_array_tests()
          expect(span_bytes < buf_end);
 
          // Verify alignment
-         expect(reinterpret_cast<uintptr_t>(dst.values.data()) % alignof(double) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(dst.values.data()) % alignof(double) == std::uintptr_t(0));
       };
 
       "zero-copy struct with multiple span members"_test = [] {
@@ -1374,8 +1374,8 @@ void aligned_typed_array_tests()
          expect(reinterpret_cast<const char*>(dst.indices.data()) < buf_end);
 
          // Both are aligned
-         expect(reinterpret_cast<uintptr_t>(dst.positions.data()) % alignof(float) == uintptr_t(0));
-         expect(reinterpret_cast<uintptr_t>(dst.indices.data()) % alignof(int32_t) == uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(dst.positions.data()) % alignof(float) == std::uintptr_t(0));
+         expect(reinterpret_cast<std::uintptr_t>(dst.indices.data()) % alignof(int32_t) == std::uintptr_t(0));
       };
 
    } // if constexpr little-endian

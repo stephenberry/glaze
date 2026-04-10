@@ -34,6 +34,7 @@ import glaze.util.string_literal;
 
 #include "glaze/util/inline.hpp"
 
+using std::uint32_t;
 using std::int64_t;
 using std::size_t;
 

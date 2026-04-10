@@ -39,7 +39,6 @@ export import glaze.beve;
 export import glaze.core.buffer_traits;
 export import glaze.core.ostream_buffer;
 export import glaze.core.reflect;
-export import glaze.core.opts;
 
 export import glaze.csv;
 
@@ -54,8 +53,6 @@ export import glaze.json;
 export import glaze.msgpack;
 
 export import glaze.util.for_each;
-
-export import glaze.util.expected;
 
 //#include "glaze/record/recorder.hpp"
 //#include "glaze/stencil/stencil.hpp"

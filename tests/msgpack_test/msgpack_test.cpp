@@ -5,14 +5,12 @@ import glaze.msgpack;
 
 import glaze.json;
 
-import glaze.core.meta;
-import glaze.core.cast;
-import glaze.core.common;
-
 import std;
 import ut;
 
+using std::int8_t;
 using std::int32_t;
+using std::uint8_t;
 using std::uint64_t;
 
 using namespace ut;

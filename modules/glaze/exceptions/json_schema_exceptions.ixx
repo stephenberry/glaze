@@ -7,7 +7,10 @@ export module glaze.exceptions.json_schema_exceptions;
 import std;
 
 import glaze.core.opts;
+import glaze.core.reflect;
+
 import glaze.exceptions.core_exceptions;
+
 import glaze.json.schema;
 
 namespace glz::ex

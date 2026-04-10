@@ -268,6 +268,7 @@ target_sources(glaze_glaze
     modules/glaze/containers/flat_map.ixx
     modules/glaze/containers/inplace_vector.ixx
     modules/glaze/containers/ordered_small_map.ixx
+    modules/glaze/containers/ordered_map.ixx
 )
 
 # hardware

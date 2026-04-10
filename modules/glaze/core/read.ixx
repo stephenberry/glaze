@@ -58,7 +58,7 @@ namespace glz
       }
    }
 
-   template <auto Opts, class T>
+   export template <auto Opts, class T>
       requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx)
    {

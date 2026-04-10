@@ -4,7 +4,6 @@
 import std;
 
 import glaze.json;
-import glaze.util.expected;
 
 import ut;
 

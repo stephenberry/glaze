@@ -4,6 +4,8 @@ export module glaze.exceptions.binary_exceptions;
 
 #if __cpp_exceptions
 
+import std;
+
 import glaze.exceptions.core_exceptions;
 import glaze.util.string_literal;
 import glaze;

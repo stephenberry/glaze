@@ -8,8 +8,13 @@ import std;
 
 import glaze.exceptions.core_exceptions;
 import glaze.exceptions.json_schema_exceptions;
+
 import glaze.core.reflect;
+import glaze.core.context;
+import glaze.core.opts;
+
 import glaze.util.string_literal;
+
 import glaze;
 
 namespace glz::ex

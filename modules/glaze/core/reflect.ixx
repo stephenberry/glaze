@@ -417,7 +417,7 @@ namespace glz
 
    // Check if a custom_t getter (To) returns a nullable type (write side).
    // Complement of custom_type_is_nullable which checks the From/setter (read side).
-   template <class V>
+   export template <class V>
    consteval bool custom_getter_returns_nullable()
    {
       if constexpr (!is_specialization_v<V, custom_t>) {
@@ -465,7 +465,7 @@ namespace glz
    }
 
    // Check if a glaze_value_t wraps a nullable inner type (write side).
-   template <class V>
+   export template <class V>
    consteval bool glaze_value_is_nullable()
    {
       if constexpr (glaze_value_t<V>) {
@@ -477,7 +477,7 @@ namespace glz
    }
 
    // Runtime check: is a glaze_value_t field currently null?
-   template <class T, size_t I, class Value, class Tie>
+   export template <class T, size_t I, class Value, class Tie>
    bool is_glaze_value_field_null(Value&& value, Tie&& t)
    {
       using val_t = field_t<T, I>;
@@ -645,7 +645,7 @@ namespace glz
 
    // Check if a custom_t field at index I is null, given the parent value and tie.
    // Used by JSON/CBOR/BEVE write paths to skip null custom getter results.
-   template <class T, size_t I, class Value, class Tie, class Ctx>
+   export template <class T, size_t I, class Value, class Tie, class Ctx>
    bool is_custom_field_null(Value&& value, Tie&& t, Ctx&& ctx)
    {
       decltype(auto) custom_val = [&]() -> decltype(auto) {

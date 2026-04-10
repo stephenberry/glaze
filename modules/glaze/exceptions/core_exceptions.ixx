@@ -4,8 +4,13 @@ export module glaze.exceptions.core_exceptions;
 
 #if __cpp_exceptions
 
+import glaze.core.context;
+import glaze.core.opts;
 import glaze.core.read;
+import glaze.core.reflect;
 import glaze.core.write;
+
+import glaze.concepts.container_concepts;
 
 import glaze.util.string_literal;
 

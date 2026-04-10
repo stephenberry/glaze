@@ -8,6 +8,7 @@ import glaze.core.context;
 import glaze.core.opts;
 
 import glaze.util.parse;
+import glaze.util.atoi;
 
 #include "glaze/util/inline.hpp"
 

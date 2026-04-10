@@ -301,9 +301,6 @@ export namespace glz
 // ============================================================================
 namespace glz
 {
-   template <class T>
-   struct meta;
-
 #if GLZ_HAS_CONSTEXPR_STRING
    // Concept for when rename_key returns exactly std::string (allocates)
    // Requires constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)
@@ -433,7 +430,7 @@ namespace glz
 
    // Helper to get the type of a member at a given index
    // Usage in rename_key: using member_type = glz::member_type_t<T, Index>;
-   template <class T, size_t Index>
+   export template <class T, size_t Index>
    using member_type_t = typename detail::member_type_at_index<T, Index>::type;
 }
 

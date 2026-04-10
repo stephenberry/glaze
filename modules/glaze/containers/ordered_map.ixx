@@ -1,21 +1,11 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.containers.ordered_map;
 
-#pragma once
+import std;
 
-#include <algorithm>
-#include <concepts>
-#include <cstdint>
-#include <cstdlib>
-#include <cstring>
-#include <functional>
-#include <initializer_list>
-#include <iterator>
-#include <limits>
-#include <stdexcept>
-#include <type_traits>
-#include <utility>
-#include <vector>
+using std::uint32_t;
+using std::size_t;
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -45,7 +35,7 @@ namespace glz
       };
    }
 
-   template <class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>,
+   export template <class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>,
              class Allocator = std::allocator<std::pair<Key, T>>>
    struct ordered_map
    {

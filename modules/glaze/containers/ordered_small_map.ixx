@@ -6,6 +6,7 @@ import std;
 
 import glaze.hash.sweethash;
 
+using std::size_t;
 using std::uint8_t;
 using std::uint32_t;
 

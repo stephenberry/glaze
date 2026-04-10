@@ -17,6 +17,9 @@ using std::size_t;
 
 namespace glz
 {
+   export template <class T, class From, class To>
+   struct custom_t;
+
    template <uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
    struct from<Format, T>

@@ -12,6 +12,9 @@ import ut;
 
 using namespace ut;
 
+using std::int64_t;
+using std::uint64_t;
+
 suite json_patch_tests = [] {
    // ============================================================================
    // Helper Function Tests

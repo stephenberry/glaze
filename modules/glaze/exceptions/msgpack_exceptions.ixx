@@ -4,6 +4,10 @@ export module glaze.exceptions.msgpack_exceptions;
 
 #if __cpp_exceptions
 
+import std;
+
+import glaze.core.context;
+import glaze.core.opts;
 import glaze.exceptions.core_exceptions;
 import glaze.msgpack;
 import glaze.util.string_literal;
