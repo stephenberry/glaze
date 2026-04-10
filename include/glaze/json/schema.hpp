@@ -339,7 +339,7 @@ namespace glz
          {
             // &T::member
             if constexpr (glaze_t<T> && std::is_member_object_pointer_v<meta_wrapper_t<T>>) {
-               using val_t = member_t<T, meta_wrapper_t<T>>;
+               using val_t = std::remove_cvref_t<member_t<T, meta_wrapper_t<T>>>;
                to_json_schema<val_t>::template op<Opts>(s, defs);
                if constexpr (json_schema_t<T>) {
                   static constexpr auto schema_size = reflect<json_schema_type<T>>::size;
@@ -362,7 +362,7 @@ namespace glz
                }
             }
             else if constexpr (glaze_const_value_t<T>) { // &T::constexpr_member
-               using constexpr_val_t = member_t<T, meta_wrapper_t<T>>;
+               using constexpr_val_t = std::remove_cvref_t<member_t<T, meta_wrapper_t<T>>>;
                static constexpr auto val_v{*glz::meta_wrapper_v<T>};
                if constexpr (glz::glaze_enum_t<constexpr_val_t>) {
                   s.attributes.constant = glz::enum_name_v<val_v>;

@@ -651,4 +651,109 @@ suite vector_pair_schema_test = [] {
    };
 };
 
+// Issue #2459: meta value types should produce correct schema
+struct holds_bool
+{
+   bool value;
+};
+
+template <>
+struct glz::meta<holds_bool>
+{
+   static constexpr auto value = &holds_bool::value;
+};
+
+struct holds_int
+{
+   int value;
+};
+
+template <>
+struct glz::meta<holds_int>
+{
+   static constexpr auto value = &holds_int::value;
+};
+
+struct holds_string
+{
+   std::string value;
+};
+
+template <>
+struct glz::meta<holds_string>
+{
+   static constexpr auto value = &holds_string::value;
+};
+
+struct holds_optional
+{
+   std::optional<bool> value;
+};
+
+template <>
+struct glz::meta<holds_optional>
+{
+   static constexpr auto value = &holds_optional::value;
+};
+
+// glaze_const_value_t: constexpr pointer to static const member
+struct const_value_wrapper
+{
+   static constexpr std::uint64_t const_v{42};
+   struct glaze
+   {
+      static constexpr auto value{&const_value_wrapper::const_v};
+   };
+};
+static_assert(glz::glaze_const_value_t<const_value_wrapper>);
+
+suite meta_value_schema_test = [] {
+   "holds_bool schema"_test = [] {
+      auto schema = glz::write_json_schema<holds_bool>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "failed to parse schema";
+      if (!obj) return;
+      expect(obj->type.has_value());
+      expect(std::get<std::string_view>(*obj->type) == "boolean") << schema;
+   };
+
+   "holds_int schema"_test = [] {
+      auto schema = glz::write_json_schema<holds_int>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "failed to parse schema";
+      if (!obj) return;
+      expect(obj->type.has_value());
+      expect(std::get<std::string_view>(*obj->type) == "integer") << schema;
+   };
+
+   "holds_string schema"_test = [] {
+      auto schema = glz::write_json_schema<holds_string>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "failed to parse schema";
+      if (!obj) return;
+      expect(obj->type.has_value());
+      expect(std::get<std::string_view>(*obj->type) == "string") << schema;
+   };
+
+   "holds_optional schema"_test = [] {
+      auto schema = glz::write_json_schema<holds_optional>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "failed to parse schema";
+      if (!obj) return;
+      expect(obj->type.has_value());
+      auto& types = std::get<std::vector<std::string_view>>(*obj->type);
+      expect(std::find(types.begin(), types.end(), "boolean") != types.end()) << "missing boolean";
+      expect(std::find(types.begin(), types.end(), "null") != types.end()) << "missing null";
+   };
+
+   "const_value_wrapper schema"_test = [] {
+      auto schema = glz::write_json_schema<const_value_wrapper>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "failed to parse schema";
+      if (!obj) return;
+      expect(obj->type.has_value());
+      expect(std::get<std::string_view>(*obj->type) == "integer") << schema;
+   };
+};
+
 int main() { return 0; }
