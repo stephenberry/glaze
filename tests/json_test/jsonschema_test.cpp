@@ -645,8 +645,7 @@ suite vector_pair_schema_test = [] {
    };
 
    "vector_pair_string_uint64_schema"_test = [] {
-      auto schema =
-         glz::write_json_schema<std::vector<std::pair<std::string, uint64_t>>>().value_or("error");
+      auto schema = glz::write_json_schema<std::vector<std::pair<std::string, uint64_t>>>().value_or("error");
       auto obj = glz::read_json<glz::detail::schematic>(schema);
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
