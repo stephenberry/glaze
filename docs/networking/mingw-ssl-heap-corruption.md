@@ -1,138 +1,105 @@
-# MinGW + SSL Heap Corruption Investigation
+# MinGW + OpenSSL Heap Corruption
 
-**Issue**: [#2411](https://github.com/stephenberry/glaze/pull/2411)
-**Date**: 2026-04-07 through 2026-04-09
-**Status**: Root cause identified, fix applied
+**Issue**: [#2411](https://github.com/stephenberry/glaze/pull/2411), [#2448](https://github.com/stephenberry/glaze/pull/2448)
+**Date**: 2026-04-07 through 2026-04-11
+**Status**: Root cause identified — OpenSSL + MinGW runtime interaction bug (not a Glaze bug)
 
 ## Summary
 
-Heap corruption (`0xc0000374` STATUS_HEAP_CORRUPTION) occurs intermittently on MinGW/GCC 15.2.0 + Windows when `GLZ_ENABLE_SSL` is defined, even for plain HTTP/WS connections that don't use SSL.
+Heap corruption (`0xc0000374` STATUS_HEAP_CORRUPTION) occurs intermittently on MinGW/GCC 15.2.0 + Windows when OpenSSL is linked, during `http_server::stop()` → `thread.join()`. The crash happens after an ASIO worker thread has cleanly exited `io_context::run()`, during thread teardown.
 
-MSVC builds are unaffected. GDB and Page Heap both mask the issue by changing timing/memory layout.
+**This is not a Glaze bug.** The crash occurs purely from linking OpenSSL libraries — even when `GLZ_ENABLE_SSL` is not defined, no SSL headers are included, and no SSL code is compiled. MSVC builds are unaffected.
+
+## Root Cause
+
+OpenSSL's DLL initialization or its interaction with MinGW's threading/heap infrastructure corrupts the heap when ASIO worker threads exit after handling connections.
+
+### Evidence (A/B/C test)
+
+| Test | GLZ_ENABLE_SSL | OpenSSL linked | Crashes? |
+|------|---------------|----------------|----------|
+| ssl-enabled | YES | dynamic | YES |
+| link-only | **NO** | dynamic | **YES** |
+| static-ssl | YES | static | YES |
+| msys2 (no OpenSSL) | NO | **not linked** | **NO** |
+
+The `link-only` test compiles with `glaze_ENABLE_SSL=OFF` at the CMake level — no SSL headers, no SSL types, no `GLZ_ENABLE_SSL` macro. The only difference from the passing `msys2` workflow is that OpenSSL libraries are linked. This is sufficient to cause the crash.
+
+### Crash characteristics
+
+- Occurs during `std::thread::join()` in `http_server::stop()` 
+- `HeapValidate(GetProcessHeap(), 0, NULL)` passes on the main thread immediately before `stop()`
+- `HeapValidate` passes on the worker thread right after `io_context::run()` returns
+- The corruption happens between the worker's function body returning and `join()` completing — during thread teardown (TLS destructors, CRT cleanup)
+- Only occurs when the server has handled at least one HTTP connection
+- Intermittent: ~50-70% reproduction rate per CI run
+- GDB and Page Heap both mask the issue by changing timing/memory layout
+- Build optimization level irrelevant (`-O0` still crashes)
 
 ## Reproduction
 
 - **Platform**: Windows (GitHub Actions `windows-latest`), MSYS2 MINGW64
 - **Compiler**: GCC 15.2.0 (mingw-w64)
-- **OpenSSL**: 3.6.2
+- **OpenSSL**: 3.6.2 (both dynamic and static)
 - **ASIO**: 1.36.0 (standalone)
-- **Build**: Release with `-g` (debug symbols)
-- **Test**: `http_client_test` — crashes on ~50% of CI runs, always on run 1 when it does crash
 
-## Root Cause
-
-### The problem
-
-When `io_context::stop()` is called followed by `thread.join()`, the worker thread exits `io_context::run()`. However, there may be **queued-but-unexecuted completion handlers** remaining in the io_context's internal queue. These handlers are not executed — they sit in the queue until the `io_context` is destroyed.
-
-When `~io_context()` runs (during `~http_server()` member destruction), it destroys these pending handlers. The handlers' lambda captures hold `shared_ptr<connection_state>` which in turn hold ASIO sockets. Destroying sockets inside the io_context destructor is problematic because the io_context's internal data structures are being torn down simultaneously.
-
-On MinGW/GCC + Windows, this manifests as heap corruption. On MSVC, the different memory allocator and destruction ordering masks the issue.
-
-### Why SSL triggers it
-
-Defining `GLZ_ENABLE_SSL` changes the `http_server` struct layout (adds a `std::monostate ssl_context` member) and links OpenSSL libraries. This is sufficient to change heap allocation sizes and alignment, shifting the memory layout enough to expose the latent bug. The SSL code paths themselves are never executed for plain HTTP connections.
-
-### Narrowing timeline
-
-| Step | Finding |
-|------|---------|
-| HeapValidate before every operation | Heap is clean through server create, start, client create, GET request, and GET response |
-| HeapValidate before `server.stop()` | **OK** — heap is clean |
-| Trace inside `http_server::stop()` | `io_context->stop()` succeeds, crash occurs during `thread.join()` |
-| `thread.join()` | Worker thread is finishing; pending handlers are being processed/destroyed during shutdown |
-
-### The fix
-
-After stopping the io_context and joining all worker threads, **drain** the io_context to execute any remaining pending handlers while the server and its resources are still alive:
+### Minimal reproducer
 
 ```cpp
-// In http_server::stop(), after joining threads:
-if (io_context) {
-    io_context->restart();
-    io_context->poll();
+// Link against OpenSSL (even without GLZ_ENABLE_SSL defined)
+#include "glaze/net/http_server.hpp"
+
+int main() {
+    for (int round = 0; round < 20; ++round) {
+        glz::http_server<> server;
+        server.get("/ping", [](const glz::request&, glz::response& res) {
+            res.status(200).body("pong");
+        });
+        server.bind("127.0.0.1", 19300);
+        std::thread t([&]() { server.start(1); });
+
+        // Wait for server, then send one GET request with Connection: close
+        // ...
+
+        server.stop();   // crash during thread.join() inside stop()
+        t.join();
+    }
 }
 ```
 
-This ensures completion handlers (and their captured shared_ptrs to sockets/connections) are destroyed in a controlled manner, rather than inside `~io_context()`.
-
-The same fix pattern was applied to:
-- `http_server::stop()` — the confirmed crash site
-- `http_client::stop_workers()` — same pattern, preventive fix
-- `websocket_client` (on the `websocket` branch) — already had this fix via `cancel_all()`
-
-## ASIO analysis: this is a Glaze usage issue, not an ASIO bug
-
-Analysis of the ASIO 1.36.0 source code (standalone, Windows IOCP backend) confirms this is a Glaze-side issue.
-
-### ASIO's documented destruction semantics
-
-From `asio/io_context.hpp`:
-
-> On destruction, the io_context performs the following sequence of operations:
-> 1. For each service object svc, performs `svc->shutdown()`.
-> 2. **Uninvoked handler objects that were scheduled for deferred invocation on the io_context are destroyed.**
-> 3. For each service object svc, performs `delete static_cast<io_context::service*>(svc)`.
-
-Step 1 (`shutdown_services`) closes all sockets via `close_for_destruction()` in `win_iocp_socket_service_base::base_shutdown()`. This happens **before** pending handlers are destroyed.
-
-Step 2 destroys pending handlers. In the IOCP backend (`win_iocp_io_context::shutdown()`), this is done by dequeuing operations and calling `op->destroy()`, which invokes the handler's `do_complete` function with `owner = NULL`. The `do_complete` function **deallocates the handler's memory and calls its destructor** but does NOT invoke the user callback (guarded by `if (owner)`).
-
-### The problem in Glaze
-
-When a pending handler holds `shared_ptr<connection_state>` and that handler is destroyed during step 2, the `connection_state` destructor runs. This destroys the socket member. But the socket was already closed in step 1. On MinGW/GCC, the double-close or the interaction between socket destruction and io_context teardown causes heap corruption.
-
-The key issue: ASIO closes sockets in step 1 at the service level, then destroys handler captures in step 2. If a handler's capture holds the **last** shared_ptr to a connection_state, the socket destructor in step 2 may try to perform cleanup on an already-closed socket, leading to corruption of IOCP internal structures on MinGW.
-
-### Detailed crash site (from CI tracing)
-
-The crash occurs during `thread.join()` inside `http_server::stop()`. The `io_context->stop()` succeeds, but the worker thread crashes while exiting `io_context::run()`. The heap is verified clean (via `HeapValidate`) immediately before `server_.stop()` is called, and through `io_context->stop()` on the main thread.
-
-The crash only occurs when the server has handled at least one connection. A server that starts and stops without handling any connections does not crash. The connection cleanup (socket close after `Connection: close` response) is the likely trigger.
-
-A `restart()` + `poll()` drain after `thread.join()` does NOT fix the issue because the crash occurs during the join itself, before the drain runs.
-
-### Ruled out hypotheses
+## Ruled out hypotheses
 
 | Hypothesis | Test | Result |
 |---|---|---|
+| `GLZ_ENABLE_SSL` macro / template changes | Built with `glaze_ENABLE_SSL=OFF` + OpenSSL linked | Still crashes |
+| DLL boundary / CRT heap mismatch | Static OpenSSL linking | Still crashes |
 | GCC optimizer miscompilation | Build with `-O0` | Still crashes |
-| Struct layout change from `monostate` member | Changed to `unique_ptr` | Still crashes |
+| `http_server` struct layout change | Removed `ssl_context` member via base class | Still crashes |
 | Pending handlers during io_context destruction | Added `restart()` + `poll()` drain | Still crashes |
 | OpenSSL TLS cleanup on thread exit | Added `OPENSSL_thread_stop()` | Still crashes |
 | Complex test infrastructure | Minimal reproducer (bare server + raw TCP) | Still crashes |
+| ASIO misuse | Analyzed ASIO source — destruction semantics are correct | N/A |
 
-### Confirmed minimal reproducer
+## Recommendations
 
-The crash reproduces with just:
-1. `glz::http_server<>` with one GET route
-2. A raw TCP client sends `GET /ping HTTP/1.1\r\nConnection: close\r\n\r\n`
-3. `server.stop()` → crash during `thread.join()`
+1. **Do not use OpenSSL with MinGW/GCC on Windows for production** until this is resolved upstream
+2. **MSVC builds are unaffected** and should be used for Windows + SSL deployments  
+3. The MinGW SSL CI workflow (`msys2-ssl.yml`) documents and tracks this issue
+4. Consider reporting to [MSYS2](https://github.com/msys2/MSYS2-packages/issues) and/or [OpenSSL](https://github.com/openssl/openssl/issues)
 
-No `working_test_server`, no `simple_test_client`, no CORS, no streaming. The bug is in the core `http_server` + ASIO IOCP + MinGW + OpenSSL interaction.
+## ASIO analysis (for reference)
 
-### Current understanding
+Analysis of ASIO 1.36.0 source confirmed that ASIO's io_context destruction semantics are correct:
 
-The crash occurs during `thread.join()` after `io_context->stop()`. `HeapValidate` passes on both the main thread (right before stop) and the worker thread (right after `run()` returns). The corruption happens during thread teardown — after the worker's function body completes but during the thread exit machinery.
+1. `shutdown_services()` closes all sockets via `close_for_destruction()`
+2. Pending handlers are destroyed (not invoked) via `op->destroy()`
+3. Services are deleted
 
-The crash only occurs when OpenSSL libraries are linked (even if no SSL code executes). This points to OpenSSL's DLL initialization or its interaction with MinGW's threading/heap infrastructure as the root cause.
-
-### Why the drain fix works (when it applies)
-
-By calling `io_context->restart()` + `io_context->poll()` after joining worker threads, all pending handlers execute (and their captures are destroyed) while the io_context is still fully operational. When `~io_context()` later runs, there are no pending handlers left to destroy.
-
-### Why MSVC is unaffected
-
-MSVC's CRT heap allocator handles the double-close/reentrancy differently (likely with more slack in heap metadata), so the corruption doesn't manifest. MinGW's heap implementation (using Windows' native HeapAlloc) is stricter about metadata integrity.
-
-### Correct usage pattern
-
-ASIO expects callers to ensure all pending work is either completed or safely cancellable before destroying the io_context:
+The drain pattern (`restart()` + `poll()` after joining threads) is still good practice to ensure clean shutdown, even though it doesn't fix this particular issue:
 
 ```cpp
-io_context->stop();       // Prevent new handler dispatch
-join_worker_threads();    // Wait for in-progress handlers to finish
-io_context->restart();    // Clear the stopped flag
-io_context->poll();       // Execute remaining queued handlers
-// Now safe to destroy io_context
+io_context->stop();
+join_worker_threads();
+io_context->restart();
+io_context->poll();
 ```

@@ -1,5 +1,10 @@
 name: msys2-mingw-ssl
 
+# Tracks MinGW + OpenSSL heap corruption (see docs/networking/mingw-ssl-heap-corruption.md).
+# Known issue: OpenSSL linked with MinGW/GCC causes intermittent heap corruption
+# during ASIO worker thread shutdown. This is NOT a Glaze bug.
+# This workflow exists to detect if the issue is resolved upstream.
+
 on:
   push:
     branches:
@@ -18,15 +23,18 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Test 1: GLZ_ENABLE_SSL defined + OpenSSL linked (the crashing configuration)
-  ssl-enabled:
-    name: "SSL enabled (GLZ_ENABLE_SSL + OpenSSL)"
+  mingw-ssl:
+    name: MinGW64 + SSL
     runs-on: windows-latest
+    # Known intermittent failure — don't block PRs
+    continue-on-error: true
     defaults:
       run:
         shell: msys2 {0}
+
     steps:
     - uses: actions/checkout@v6
+
     - uses: msys2/setup-msys2@v2
       with:
         update: true
@@ -37,83 +45,26 @@ jobs:
           mingw-w64-x86_64-gcc
           mingw-w64-x86_64-openssl
 
-    - name: Configure & Build
+    - name: Configure CMake
       run: |
-        cmake -S . -B build -G Ninja \
+        cmake -S . -B build \
+          -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_STANDARD=23 \
           -Dglaze_ENABLE_SSL=ON
-        cmake --build build -j $(nproc) --target mingw_ssl_diag
 
-    - name: "Run: mingw_ssl_diag (GLZ_ENABLE_SSL=ON)"
-      working-directory: build
-      run: ctest -C Release --output-on-failure -R "^mingw_ssl_diag$" || true
-
-  # Test 2: OpenSSL DLLs linked but GLZ_ENABLE_SSL NOT defined
-  # Built with glaze_ENABLE_SSL=OFF so the glaze headers compile without
-  # any SSL code. OpenSSL is linked only at the test target level.
-  # If this crashes → DLL loading is the cause
-  # If this passes → the GLZ_ENABLE_SSL macro / template changes are the cause
-  link-only:
-    name: "Link-only (OpenSSL linked, NO GLZ_ENABLE_SSL)"
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-    - uses: actions/checkout@v6
-    - uses: msys2/setup-msys2@v2
-      with:
-        update: true
-        msystem: MINGW64
-        install: >-
-          mingw-w64-x86_64-cmake
-          mingw-w64-x86_64-ninja
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-openssl
-
-    - name: Configure & Build
+    - name: Build
       run: |
-        cmake -S . -B build -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_CXX_STANDARD=23 \
-          -Dglaze_ENABLE_SSL=OFF
-        cmake --build build -j $(nproc) --target mingw_link_only_test
+        cmake --build build -j $(nproc) --target \
+          websocket_client_test \
+          websocket_close_test \
+          wss_test \
+          shared_context_bug_test \
+          utf8_test \
+          https_test
 
-    - name: "Run: mingw_link_only_test (no GLZ_ENABLE_SSL macro)"
+    - name: Test
       working-directory: build
-      run: ctest -C Release --output-on-failure -R "^mingw_link_only_test$" || true
-
-  # Test 3: Static OpenSSL linking
-  # If this passes → DLL boundary / CRT mismatch is the cause
-  # If this crashes → the issue is deeper (OpenSSL code itself)
-  static-ssl:
-    name: "Static OpenSSL"
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-    - uses: actions/checkout@v6
-    - uses: msys2/setup-msys2@v2
-      with:
-        update: true
-        msystem: MINGW64
-        install: >-
-          mingw-w64-x86_64-cmake
-          mingw-w64-x86_64-ninja
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-openssl
-
-    - name: Configure & Build
       run: |
-        cmake -S . -B build -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_CXX_STANDARD=23 \
-          -Dglaze_ENABLE_SSL=ON \
-          -DOPENSSL_USE_STATIC_LIBS=ON
-        cmake --build build -j $(nproc) --target mingw_ssl_diag
-
-    - name: "Run: mingw_ssl_diag (static OpenSSL)"
-      working-directory: build
-      run: ctest -C Release --output-on-failure -R "^mingw_ssl_diag$" || true
+        ctest -C Release --output-on-failure -R \
+          "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test)$"

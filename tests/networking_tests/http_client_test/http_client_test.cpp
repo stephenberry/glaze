@@ -20,20 +20,6 @@
 using namespace ut;
 using namespace glz;
 
-// Crash diagnostic: print test name to stderr (unbuffered) before each test.
-#define TRACE_TEST std::fprintf(stderr, "[TEST] %s:%d\n", __func__, __LINE__)
-
-#ifdef _WIN32
-#include <windows.h>
-inline void check_heap(const char* label)
-{
-   BOOL ok = HeapValidate(GetProcessHeap(), 0, NULL);
-   std::fprintf(stderr, "[HEAP] %s: %s\n", label, ok ? "OK" : "CORRUPTED");
-}
-#else
-inline void check_heap(const char*) {}
-#endif
-
 namespace test_http_client
 {
    struct put_payload
@@ -59,11 +45,7 @@ class working_test_server
   public:
    working_test_server() : port_(0), running_(false) {}
 
-   ~working_test_server()
-   {
-      std::fprintf(stderr, "[TRACE] working_test_server dtor\n");
-      stop();
-   }
+   ~working_test_server() { stop(); }
 
    void set_cors_config(glz::cors_config config) { cors_config_ = std::move(config); }
 
@@ -130,15 +112,12 @@ class working_test_server
 
       // Give any ongoing operations a moment to complete
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      check_heap("stop: after sleep");
 
       server_.stop();
-      check_heap("stop: after server_.stop()");
 
       if (server_thread_.joinable()) {
          server_thread_.join();
       }
-      check_heap("stop: after thread join");
    }
 
    uint16_t port() const { return port_; }
@@ -319,7 +298,6 @@ class simple_test_client
   public:
    simple_test_client() : io_context_(1)
    {
-      std::fprintf(stderr, "[TRACE] simple_test_client ctor\n");
       // Start a single worker thread
       worker_thread_ = std::thread([this]() {
          asio::executor_work_guard<asio::io_context::executor_type> work_guard(io_context_.get_executor());
@@ -329,12 +307,10 @@ class simple_test_client
 
    ~simple_test_client()
    {
-      check_heap("~simple_test_client: begin");
       io_context_.stop();
       if (worker_thread_.joinable()) {
          worker_thread_.join();
       }
-      check_heap("~simple_test_client: end");
    }
 
    std::expected<response, std::error_code> get(const std::string& url)
@@ -471,62 +447,45 @@ class simple_test_client
 };
 
 suite working_http_tests = [] {
-   "url_parsing_basic"_test = [] { TRACE_TEST;
-      check_heap("start of url_parsing_basic");
+   "url_parsing_basic"_test = [] {
       auto result = parse_url("http://example.com/test");
       expect(result.has_value()) << "Basic URL should parse correctly\n";
       expect(result->protocol == "http") << "Protocol should be http\n";
       expect(result->host == "example.com") << "Host should be example.com\n";
       expect(result->port == 80) << "Port should default to 80\n";
       expect(result->path == "/test") << "Path should be /test\n";
-      check_heap("end of url_parsing_basic");
    };
 
-   "simple_server_test"_test = [] { TRACE_TEST;
-      check_heap("before simple_server create");
+   "simple_server_test"_test = [] {
       working_test_server server;
-      check_heap("after simple_server create");
+
       expect(server.start()) << "Test server should start successfully\n";
-      check_heap("after simple_server start");
       expect(server.port() > 0) << "Server should have valid port\n";
 
       // Give server a moment to fully initialize
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
       server.stop();
-      check_heap("after simple_server stop");
    };
 
-   "basic_get_request"_test = [] { TRACE_TEST;
-      check_heap("before server create");
+   "basic_get_request"_test = [] {
       working_test_server server;
-      check_heap("after server create");
       expect(server.start()) << "Server should start\n";
-      check_heap("after server start");
 
-      // Use a block to control destruction order and add heap checks
-      {
-         simple_test_client client;
-         check_heap("after client create");
-         auto result = client.get(server.base_url() + "/hello");
-         check_heap("after GET");
+      simple_test_client client;
+      auto result = client.get(server.base_url() + "/hello");
 
-         expect(result.has_value()) << "GET request should succeed\n";
-         if (result.has_value()) {
-            expect(result->status_code == 200) << "Status should be 200\n";
-            expect(result->response_body == "Hello, World!") << "Body should match\n";
-         }
-         check_heap("before client destroy");
-      } // client and result destroyed here
-      check_heap("after client destroy");
+      expect(result.has_value()) << "GET request should succeed\n";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "Status should be 200\n";
+         expect(result->response_body == "Hello, World!") << "Body should match\n";
+      }
 
-      check_heap("before server stop");
       server.stop();
-      check_heap("after server stop");
-      std::fprintf(stderr, "[TRACE] test done\n");
+      std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
    };
 
-   "cors_preflight_generates_options_response"_test = [] { TRACE_TEST;
+   "cors_preflight_generates_options_response"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -548,7 +507,7 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
    };
 
-   "cors_dynamic_origin_validation"_test = [] { TRACE_TEST;
+   "cors_dynamic_origin_validation"_test = [] {
       glz::cors_config config;
       config.allowed_origins.clear();
       config.allowed_origins_validator = [](std::string_view origin) {
@@ -595,7 +554,7 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "cors_reflects_headers"_test = [] { TRACE_TEST;
+   "cors_reflects_headers"_test = [] {
       glz::cors_config config;
       config.allowed_origins = {"http://client.local"};
       config.allowed_methods = {"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"};
@@ -640,7 +599,7 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "cors_allow_all_headers_flag"_test = [] { TRACE_TEST;
+   "cors_allow_all_headers_flag"_test = [] {
       glz::cors_config config;
       config.allowed_origins = {"http://client.local"};
       config.allowed_methods = {"*"};
@@ -668,7 +627,7 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "cors_preflight_rejects_missing_method"_test = [] { TRACE_TEST;
+   "cors_preflight_rejects_missing_method"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -694,7 +653,7 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "cors_wildcard_with_credentials_echoes_origin"_test = [] { TRACE_TEST;
+   "cors_wildcard_with_credentials_echoes_origin"_test = [] {
       glz::cors_config config;
       config.allowed_origins = {"*"};
       config.allow_credentials = true;
@@ -724,7 +683,7 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "basic_post_request"_test = [] { TRACE_TEST;
+   "basic_post_request"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -742,7 +701,7 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
    };
 
-   "multiple_requests"_test = [] { TRACE_TEST;
+   "multiple_requests"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -761,7 +720,7 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
    };
 
-   "json_response"_test = [] { TRACE_TEST;
+   "json_response"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -778,7 +737,7 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
    };
 
-   "error_handling"_test = [] { TRACE_TEST;
+   "error_handling"_test = [] {
       simple_test_client client;
 
       // Test connection to non-existent server
@@ -786,7 +745,7 @@ suite working_http_tests = [] {
       expect(!result.has_value()) << "Connection to closed port should fail\n";
    };
 
-   "http_status_error_category"_test = [] { TRACE_TEST;
+   "http_status_error_category"_test = [] {
       auto ec = make_http_status_error(502);
 
       expect(ec.category() == http_status_category());
@@ -795,7 +754,7 @@ suite working_http_tests = [] {
       expect(ec.message().find("502") != std::string::npos);
    };
 
-   "concurrent_server_requests"_test = [] { TRACE_TEST;
+   "concurrent_server_requests"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -826,7 +785,7 @@ suite working_http_tests = [] {
 
 // Test suite for the main glz::http_client, including streaming
 suite glz_http_client_tests = [] {
-   "synchronous_put_request"_test = [] { TRACE_TEST;
+   "synchronous_put_request"_test = [] {
       working_test_server server;
       expect(server.start());
 
@@ -844,7 +803,7 @@ suite glz_http_client_tests = [] {
       server.stop();
    };
 
-   "put_json_sets_content_type"_test = [] { TRACE_TEST;
+   "put_json_sets_content_type"_test = [] {
       working_test_server server;
       expect(server.start());
 
@@ -871,7 +830,7 @@ suite glz_http_client_tests = [] {
       server.stop();
    };
 
-   "basic_streaming_get"_test = [] { TRACE_TEST;
+   "basic_streaming_get"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -925,7 +884,7 @@ suite glz_http_client_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "client_disconnects_stream"_test = [] { TRACE_TEST;
+   "client_disconnects_stream"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -989,7 +948,7 @@ suite glz_http_client_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "streaming_request_with_http_error"_test = [] { TRACE_TEST;
+   "streaming_request_with_http_error"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -1040,7 +999,7 @@ suite glz_http_client_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "streaming_request_with_custom_status_predicate"_test = [] { TRACE_TEST;
+   "streaming_request_with_custom_status_predicate"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -1081,7 +1040,7 @@ suite glz_http_client_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "streaming_request_custom_predicate_flags_success"_test = [] { TRACE_TEST;
+   "streaming_request_custom_predicate_flags_success"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
 
@@ -1226,7 +1185,7 @@ class eof_delimited_server
 };
 
 suite eof_delimited_tests = [] {
-   "sync_eof_delimited_body"_test = [] { TRACE_TEST;
+   "sync_eof_delimited_body"_test = [] {
       const std::string expected_body = R"({"name":"Hue Bridge","modelid":"BSB002"})";
       eof_delimited_server server;
       expect(server.start(expected_body)) << "EOF-delimited server should start";
@@ -1243,7 +1202,7 @@ suite eof_delimited_tests = [] {
       server.stop();
    };
 
-   "async_eof_delimited_body"_test = [] { TRACE_TEST;
+   "async_eof_delimited_body"_test = [] {
       const std::string expected_body = R"({"name":"Hue Bridge","modelid":"BSB002"})";
       eof_delimited_server server;
       expect(server.start(expected_body)) << "EOF-delimited server should start";
@@ -1272,7 +1231,7 @@ suite eof_delimited_tests = [] {
       server.stop();
    };
 
-   "sync_eof_delimited_max_body_size"_test = [] { TRACE_TEST;
+   "sync_eof_delimited_max_body_size"_test = [] {
       // Body larger than the limit
       const std::string large_body(1024, 'X');
       eof_delimited_server server;
@@ -1287,7 +1246,7 @@ suite eof_delimited_tests = [] {
       server.stop();
    };
 
-   "async_eof_delimited_max_body_size"_test = [] { TRACE_TEST;
+   "async_eof_delimited_max_body_size"_test = [] {
       const std::string large_body(1024, 'X');
       eof_delimited_server server;
       expect(server.start(large_body)) << "EOF-delimited server should start";
@@ -1313,7 +1272,7 @@ suite eof_delimited_tests = [] {
       server.stop();
    };
 
-   "sync_eof_delimited_connection_reset"_test = [] { TRACE_TEST;
+   "sync_eof_delimited_connection_reset"_test = [] {
       // Server that resets the connection after sending partial data
       eof_delimited_server server;
       expect(server.start_with_reset()) << "Server should start";
@@ -1334,8 +1293,6 @@ suite eof_delimited_tests = [] {
 
 int main()
 {
-   // Force line-buffered stdout so crash output shows the last completed test
-   std::setvbuf(stdout, nullptr, _IOLBF, 0);
    std::cout << "Running HTTP Client Tests...\n";
    std::cout << "============================\n";
    return 0;

@@ -35,10 +35,6 @@
 #undef DELETE
 #endif
 
-#ifdef GLZ_ENABLE_SSL
-#include <openssl/crypto.h>
-#endif
-
 namespace glz
 {
    namespace detail
@@ -820,14 +816,6 @@ namespace glz
             for (size_t i = 0; i < actual_threads; ++i) {
                threads.emplace_back([this] {
                   io_context->run();
-#ifdef GLZ_ENABLE_SSL
-                  // Explicitly clean up OpenSSL's per-thread state before the thread exits.
-                  // On MinGW/GCC + Windows, OpenSSL's TLS (thread-local storage) destructors
-                  // can corrupt the heap during implicit thread teardown because MinGW's
-                  // __emutls implementation doesn't handle OpenSSL's cleanup correctly.
-                  // Calling OPENSSL_thread_cleanup() explicitly avoids this.
-                  OPENSSL_thread_stop();
-#endif
                });
             }
          }
@@ -863,6 +851,9 @@ namespace glz
             }
          }
 
+         // Stop the io_context
+         if (io_context) io_context->stop();
+
          // Only join threads if we're not in one of the worker threads
          auto current_thread_id = std::this_thread::get_id();
          bool is_worker_thread = false;
@@ -874,37 +865,14 @@ namespace glz
          }
 
          if (!is_worker_thread) {
-            std::fprintf(stderr, "[HTTP_SERVER] closing active connections\n");
-            // Close all tracked sockets to cancel pending I/O
-            {
-               std::lock_guard<std::mutex> lock(active_connections_mutex_);
-               std::fprintf(stderr, "[HTTP_SERVER] %zu tracked connections\n", active_connections_.size());
-               for (auto& weak_conn : active_connections_) {
-                  if (auto conn = weak_conn.lock()) {
-                     std::fprintf(stderr, "[HTTP_SERVER] closing socket\n");
-                     asio::error_code ec;
-                     conn->socket.lowest_layer().close(ec);
-                     std::fprintf(stderr, "[HTTP_SERVER] socket closed: %s\n", ec.message().c_str());
-                  }
-               }
-               active_connections_.clear();
-            }
-
-            std::fprintf(stderr, "[HTTP_SERVER] calling io_context->stop()\n");
-            if (io_context) io_context->stop();
-            std::fprintf(stderr, "[HTTP_SERVER] io_context stopped\n");
-
             for (auto& thread : threads) {
                if (thread.joinable()) {
-                  std::fprintf(stderr, "[HTTP_SERVER] joining thread\n");
                   thread.join();
-                  std::fprintf(stderr, "[HTTP_SERVER] thread joined\n");
                }
             }
             threads.clear();
          }
 
-         std::fprintf(stderr, "[HTTP_SERVER] stop complete\n");
          // Notify any threads waiting for shutdown
          shutdown_cv.notify_all();
       }
@@ -1522,9 +1490,6 @@ namespace glz
       std::condition_variable shutdown_cv;
       std::mutex shutdown_mutex;
 
-      // Active connection tracking for clean shutdown
-      std::mutex active_connections_mutex_;
-      std::vector<std::weak_ptr<connection_state>> active_connections_;
 
       // ssl_context is inherited from ssl_context_holder<EnableTLS>
       // and only exists when EnableTLS=true && GLZ_ENABLE_SSL is defined.
@@ -1578,14 +1543,7 @@ namespace glz
       }
 
       // Start handling a new connection
-      inline void start_connection(std::shared_ptr<connection_state> conn)
-      {
-         {
-            std::lock_guard<std::mutex> lock(active_connections_mutex_);
-            active_connections_.push_back(conn);
-         }
-         read_request(conn);
-      }
+      inline void start_connection(std::shared_ptr<connection_state> conn) { read_request(conn); }
 
       // Start or reset the idle timer for keep-alive connections
       inline void start_idle_timer(std::shared_ptr<connection_state> conn)
