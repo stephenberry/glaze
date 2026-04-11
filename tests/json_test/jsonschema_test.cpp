@@ -756,4 +756,12 @@ suite meta_value_schema_test = [] {
    };
 };
 
+// Issue #2467: void should produce null type, not all types
+suite void_schema_test = [] {
+   "void schema is null"_test = [] {
+      auto schema = glz::write_json_schema<void>().value();
+      expect(schema == R"({"type":"null","$defs":{},"title":"void"})") << schema;
+   };
+};
+
 int main() { return 0; }

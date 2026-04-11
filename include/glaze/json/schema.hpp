@@ -388,6 +388,16 @@ namespace glz
          }
       };
 
+      template <>
+      struct to_json_schema<void>
+      {
+         template <auto Opts>
+         static void op(auto& s, auto&)
+         {
+            s.type = sv{"null"};
+         }
+      };
+
       template <class T>
          requires(std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
                   std::same_as<T, std::vector<bool>::const_reference>)
