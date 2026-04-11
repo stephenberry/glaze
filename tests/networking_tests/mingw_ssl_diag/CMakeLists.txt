@@ -24,9 +24,8 @@ if(OpenSSL_FOUND)
         add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
         # Test 2: OpenSSL DLLs linked but GLZ_ENABLE_SSL NOT defined.
-        # Isolates whether the crash is caused by DLL loading or by the macro.
-        # We un-define GLZ_ENABLE_SSL that comes from the glaze::glaze interface
-        # to ensure SSL code paths are not compiled.
+        # Must be built with glaze_ENABLE_SSL=OFF at CMake level so the
+        # glaze::glaze interface doesn't propagate GLZ_ENABLE_SSL.
         add_executable(mingw_link_only_test mingw_link_only_test.cpp)
 
         target_link_libraries(mingw_link_only_test PRIVATE
@@ -34,10 +33,6 @@ if(OpenSSL_FOUND)
             OpenSSL::SSL
             OpenSSL::Crypto
         )
-        # Un-define GLZ_ENABLE_SSL that comes from glaze::glaze interface.
-        # GCC processes flags left-to-right, and target_compile_options
-        # appends after interface definitions, so -U wins.
-        target_compile_options(mingw_link_only_test PRIVATE -UGLZ_ENABLE_SSL)
 
         add_test(NAME mingw_link_only_test COMMAND mingw_link_only_test)
     else()

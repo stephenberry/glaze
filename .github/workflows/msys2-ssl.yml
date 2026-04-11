@@ -50,6 +50,8 @@ jobs:
       run: ctest -C Release --output-on-failure -R "^mingw_ssl_diag$" || true
 
   # Test 2: OpenSSL DLLs linked but GLZ_ENABLE_SSL NOT defined
+  # Built with glaze_ENABLE_SSL=OFF so the glaze headers compile without
+  # any SSL code. OpenSSL is linked only at the test target level.
   # If this crashes → DLL loading is the cause
   # If this passes → the GLZ_ENABLE_SSL macro / template changes are the cause
   link-only:
@@ -75,7 +77,7 @@ jobs:
         cmake -S . -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_STANDARD=23 \
-          -Dglaze_ENABLE_SSL=ON
+          -Dglaze_ENABLE_SSL=OFF
         cmake --build build -j $(nproc) --target mingw_link_only_test
 
     - name: "Run: mingw_link_only_test (no GLZ_ENABLE_SSL macro)"
