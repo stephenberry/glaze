@@ -523,9 +523,29 @@ namespace glz
       size_t max_request_body_size = http_default_max_body_size;
    };
 
+   // Conditionally holds the SSL context only for TLS-enabled servers.
+   // Using a base class ensures http_server<false> has no SSL members at all,
+   // which avoids instantiating unique_ptr<asio::ssl::context> destructor
+   // and prevents heap corruption on MinGW/GCC (#2411).
+#ifdef GLZ_ENABLE_SSL
+   template <bool EnableTLS>
+   struct ssl_context_holder
+   {};
+
+   template <>
+   struct ssl_context_holder<true>
+   {
+      std::unique_ptr<asio::ssl::context> ssl_context;
+   };
+#else
+   template <bool>
+   struct ssl_context_holder
+   {};
+#endif
+
    // Server implementation using non-blocking asio with WebSocket support
    template <bool EnableTLS = false>
-   struct http_server
+   struct http_server : ssl_context_holder<EnableTLS>
    {
       // Socket type abstraction
       using socket_type = std::conditional_t<EnableTLS,
@@ -609,8 +629,8 @@ namespace glz
          // Initialize SSL context for TLS-enabled servers
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
-            ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tlsv12);
-            ssl_context->set_default_verify_paths();
+            this->ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tlsv12);
+            this->ssl_context->set_default_verify_paths();
 #else
             static_assert(!EnableTLS, "TLS support requires GLZ_ENABLE_SSL to be defined and OpenSSL to be available");
 #endif
@@ -1287,8 +1307,8 @@ namespace glz
       {
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
-            ssl_context->use_certificate_chain_file(cert_file);
-            ssl_context->use_private_key_file(key_file, asio::ssl::context::pem);
+            this->ssl_context->use_certificate_chain_file(cert_file);
+            this->ssl_context->use_private_key_file(key_file, asio::ssl::context::pem);
 #endif
          }
          else {
@@ -1308,7 +1328,7 @@ namespace glz
       {
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
-            ssl_context->set_verify_mode(mode);
+            this->ssl_context->set_verify_mode(mode);
 #endif
          }
          return *this;
@@ -1506,12 +1526,8 @@ namespace glz
       std::mutex active_connections_mutex_;
       std::vector<std::weak_ptr<connection_state>> active_connections_;
 
-      // Diagnostic: ssl_context member removed to test if its presence
-      // causes heap corruption on MinGW (#2411).
-      // TODO: restore for http_server<true> if this fixes the crash
-      // #if defined(GLZ_ENABLE_SSL)
-      //       std::unique_ptr<asio::ssl::context> ssl_context;
-      // #endif
+      // ssl_context is inherited from ssl_context_holder<EnableTLS>
+      // and only exists when EnableTLS=true && GLZ_ENABLE_SSL is defined.
 
       inline void do_accept()
       {
@@ -1526,7 +1542,7 @@ namespace glz
                   if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
                      // For HTTPS: create connection eagerly, then perform SSL handshake
-                     auto conn = std::make_shared<connection_state>(socket_type(std::move(socket), *ssl_context),
+                     auto conn = std::make_shared<connection_state>(socket_type(std::move(socket), *this->ssl_context),
                                                                     remote_endpoint);
                      conn->socket.async_handshake(asio::ssl::stream_base::server,
                                                   [this, conn](std::error_code handshake_ec) {
