@@ -12,6 +12,14 @@
 #include "glaze/net/http_client.hpp"
 #include "ut/ut.hpp"
 
+#if defined(GLZ_USING_BOOST_ASIO)
+namespace asio
+{
+   using namespace boost::asio;
+   using error_code = boost::system::error_code;
+}
+#endif
+
 using namespace ut;
 
 suite http_client_no_ssl_executor_tests = [] {
