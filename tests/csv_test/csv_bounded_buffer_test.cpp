@@ -15,7 +15,8 @@
 
 using namespace ut;
 
-namespace csv_bounded_buffer_tests {
+namespace csv_bounded_buffer_tests
+{
    struct simple_csv_row
    {
       std::vector<int> id{1, 2, 3};
