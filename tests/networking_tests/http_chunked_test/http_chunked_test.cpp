@@ -720,6 +720,9 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/single-chunk",
+         .body = {},
+         .headers = {},
+         .on_connect = {},
          .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
@@ -753,6 +756,9 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/multi-chunk",
+         .body = {},
+         .headers = {},
+         .on_connect = {},
          .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
@@ -785,6 +791,9 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/large-chunked",
+         .body = {},
+         .headers = {},
+         .on_connect = {},
          .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
@@ -816,6 +825,9 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/empty-chunked",
+         .body = {},
+         .headers = {},
+         .on_connect = {},
          .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
