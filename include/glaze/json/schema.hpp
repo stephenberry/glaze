@@ -38,6 +38,7 @@ namespace glz
    {
       bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
       std::optional<std::string_view> ref{};
+      std::optional<std::variant<std::string_view, std::vector<std::string_view>>> type{};
       using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
       using schema_any = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
@@ -88,7 +89,8 @@ namespace glz
       struct glaze
       {
          using T = schema;
-         static constexpr std::array keys{"$ref", //
+         static constexpr std::array keys{"type", //
+                                          "$ref", //
                                           "title", //
                                           "description", //
                                           "default", //
@@ -123,7 +125,8 @@ namespace glz
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-braces"
 #endif
-         static constexpr glz::tuple value = {&T::ref, //
+         static constexpr glz::tuple value = {&T::type, //
+                                              &T::ref, //
                                               &T::title, //
                                               &T::description, //
                                               &T::defaultValue, //
@@ -744,8 +747,6 @@ namespace glz
             for_each<N>([&]<auto I>() {
                using val_t = std::decay_t<refl_t<T, I>>;
 
-               auto& def = defs[name_v<val_t>];
-
                static constexpr sv key = reflect<T>::keys[I];
                if constexpr (requires_key<T, val_t, Opts>(key)) {
                   req.emplace_back(key);
@@ -788,13 +789,59 @@ namespace glz
                      ref_val = get<schema_index>(to_tie(schema_v));
                   }
                }
-               if (!ref_val.ref) {
-                  validate_ref<name_v<val_t>>();
-                  ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
-               }
 
-               if (!def.type) {
-                  to_json_schema<val_t>::template op<Opts>(def, defs);
+               // Determine if this type can be inlined (bool, string, or nullable versions)
+               constexpr bool can_inline = [] {
+                  using V = val_t;
+                  if constexpr (std::same_as<V, bool> || str_t<V> || char_t<V>) {
+                     return true;
+                  }
+                  else if constexpr (nullable_t<V>) {
+                     using inner = std::decay_t<decltype(*std::declval<V>())>;
+                     return std::same_as<inner, bool> || str_t<inner> || char_t<inner>;
+                  }
+                  else {
+                     return false;
+                  }
+               }();
+
+               if constexpr (can_inline) {
+                  if (!ref_val.ref) {
+                     // Inline the type directly instead of using $defs/$ref
+                     if constexpr (std::same_as<val_t, bool>) {
+                        ref_val.type = sv{"boolean"};
+                     }
+                     else if constexpr (str_t<val_t> || char_t<val_t>) {
+                        ref_val.type = sv{"string"};
+                     }
+                     else if constexpr (nullable_t<val_t>) {
+                        using inner = std::decay_t<decltype(*std::declval<val_t>())>;
+                        if constexpr (std::same_as<inner, bool>) {
+                           ref_val.type = std::vector<sv>{sv{"boolean"}, sv{"null"}};
+                        }
+                        else {
+                           ref_val.type = std::vector<sv>{sv{"string"}, sv{"null"}};
+                        }
+                     }
+                  }
+                  else {
+                     // User explicitly set $ref via json_schema metadata, honor it
+                     auto& def = defs[name_v<val_t>];
+                     if (!def.type) {
+                        to_json_schema<val_t>::template op<Opts>(def, defs);
+                     }
+                  }
+               }
+               else {
+                  if (!ref_val.ref) {
+                     validate_ref<name_v<val_t>>();
+                     ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
+                  }
+
+                  auto& def = defs[name_v<val_t>];
+                  if (!def.type) {
+                     to_json_schema<val_t>::template op<Opts>(def, defs);
+                  }
                }
 
                (*s.properties)[key] = ref_val;
