@@ -246,6 +246,7 @@ struct glz::meta<glz::detail::schematic>
    static constexpr std::string_view name = "glz::detail::schema";
    using T = detail::schematic;
    static constexpr std::array keys{"type", //
+                                    "$ref", //
                                     "properties", //
                                     "prefixItems", //
                                     "items", //
@@ -288,6 +289,7 @@ struct glz::meta<glz::detail::schematic>
 #endif
    [[maybe_unused]] static constexpr glz::tuple value{
       &T::type, //
+      [](auto&& s) -> auto& { return s.attributes.ref; }, //
       &T::properties, //
       &T::prefixItems, //
       &T::items, //
@@ -605,7 +607,24 @@ namespace glz
             for_each<N>([&]<auto I>() {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
-               to_json_schema<V>::template op<Opts>(schema_val, defs);
+
+               // Use $ref for complex types to avoid duplicating large definitions in oneOf.
+               // Exception: tagged variant object alternatives must remain inline because the tag
+               // discriminator property is added to the oneOf entry alongside the object's own
+               // properties, and additionalProperties:false in a $ref'd schema would reject the tag.
+               constexpr bool is_complex = glaze_object_t<V> || reflectable<V> || array_t<V> || writable_map_t<V>;
+               constexpr bool is_tagged_object = (glaze_object_t<V> || reflectable<V>) && !tag_v<T>.empty();
+
+               if constexpr (is_complex && !is_tagged_object) {
+                  auto& def = defs[name_v<V>];
+                  if (!def.type) {
+                     to_json_schema<V>::template op<Opts>(def, defs);
+                  }
+                  schema_val.attributes.ref = join_v<chars<"#/$defs/">, name_v<V>>;
+               }
+               else {
+                  to_json_schema<V>::template op<Opts>(schema_val, defs);
+               }
 
                if (not schema_val.attributes.title) {
                   schema_val.attributes.title = ids[I];
