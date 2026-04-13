@@ -466,7 +466,7 @@ namespace glz
       // Write a variant's held value in block context, ensuring strings get correct indent_level.
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_variant_value(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                int32_t indent_level)
+                                                 int32_t indent_level)
       {
          using V = std::remove_cvref_t<T>;
          if constexpr (is_variant<V>) {

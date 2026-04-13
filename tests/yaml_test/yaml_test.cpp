@@ -6108,7 +6108,7 @@ suite yaml_variant_block_style = [] {
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-            expect(yaml == R"(-
+      expect(yaml == R"(-
   a: 1
   b: 2
 )") << yaml;
@@ -6130,7 +6130,7 @@ suite yaml_variant_block_style = [] {
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-            expect(yaml == R"(-
+      expect(yaml == R"(-
   - 10
   - 20
   - 30
@@ -6197,7 +6197,7 @@ suite yaml_variant_block_style = [] {
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-            expect(yaml == R"(- 42
+      expect(yaml == R"(- 42
 -
   key: 99
 - hello
@@ -6223,7 +6223,7 @@ suite yaml_variant_block_style = [] {
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-            expect(yaml == R"(-
+      expect(yaml == R"(-
   name: test
   value: 42
 )") << yaml;
