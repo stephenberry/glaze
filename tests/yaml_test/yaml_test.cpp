@@ -6097,6 +6097,197 @@ suite yaml_variant_edge_cases = [] {
    };
 };
 
+suite yaml_variant_block_style = [] {
+   // Tests for issue #2447: complex variants in sequences should use block style
+
+   "variant_map_in_sequence_block_style"_test = [] {
+      using var_t = std::variant<int, std::map<std::string, int>>;
+      std::vector<var_t> original;
+      original.emplace_back(std::map<std::string, int>{{"a", 1}, {"b", 2}});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+            expect(yaml == R"(-
+  a: 1
+  b: 2
+)") << yaml;
+
+      std::vector<var_t> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 1u);
+      auto& m = std::get<std::map<std::string, int>>(parsed[0]);
+      expect(m["a"] == 1);
+      expect(m["b"] == 2);
+   };
+
+   "variant_array_in_sequence_block_style"_test = [] {
+      using var_t = std::variant<int, std::vector<int>>;
+      std::vector<var_t> original;
+      original.emplace_back(std::vector<int>{10, 20, 30});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+            expect(yaml == R"(-
+  - 10
+  - 20
+  - 30
+)") << yaml;
+
+      std::vector<var_t> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& v = std::get<std::vector<int>>(parsed[0]);
+      expect(v == std::vector<int>{10, 20, 30});
+   };
+
+   "variant_object_in_sequence_block_style"_test = [] {
+      using var_t = std::variant<int, simple_struct>;
+      std::vector<var_t> original;
+      original.emplace_back(simple_struct{.x = 5, .y = 3.14, .name = "test"});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == R"(- x: 5
+  y: 3.14
+  name: test
+)") << yaml;
+
+      std::vector<var_t> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& s = std::get<simple_struct>(parsed[0]);
+      expect(s.x == 5);
+      expect(s.y == 3.14);
+      expect(s.name == "test");
+   };
+
+   "variant_empty_map_in_sequence"_test = [] {
+      using var_t = std::variant<int, std::map<std::string, int>>;
+      std::vector<var_t> original;
+      original.emplace_back(std::map<std::string, int>{});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "- {}\n") << yaml;
+   };
+
+   "variant_empty_array_in_sequence"_test = [] {
+      using var_t = std::variant<int, std::vector<int>>;
+      std::vector<var_t> original;
+      original.emplace_back(std::vector<int>{});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "- []\n") << yaml;
+   };
+
+   "variant_mixed_simple_and_complex_in_sequence"_test = [] {
+      using var_t = std::variant<int, std::string, std::map<std::string, int>>;
+      std::vector<var_t> original;
+      original.emplace_back(42);
+      original.emplace_back(std::map<std::string, int>{{"key", 99}});
+      original.emplace_back(std::string("hello"));
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+            expect(yaml == R"(- 42
+-
+  key: 99
+- hello
+)") << yaml;
+
+      std::vector<var_t> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 3u);
+      expect(std::get<int>(parsed[0]) == 42);
+      expect(std::get<std::map<std::string, int>>(parsed[1])["key"] == 99);
+      expect(std::get<std::string>(parsed[2]) == "hello");
+   };
+
+   "generic_complex_in_sequence_block_style"_test = [] {
+      // glz::generic wrapping a variant - tests the glaze_value_t path
+      std::vector<glz::generic> original;
+      glz::generic obj;
+      obj["name"] = "test";
+      obj["value"] = 42.0;
+      original.emplace_back(std::move(obj));
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+            expect(yaml == R"(-
+  name: test
+  value: 42
+)") << yaml;
+
+      std::vector<glz::generic> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj2 = std::get<glz::generic::object_t>(parsed[0].data);
+      expect(std::get<std::string>(obj2.at("name").data) == "test");
+      expect(std::get<double>(obj2.at("value").data) == 42.0);
+   };
+
+   "variant_multiline_string_in_mapping"_test = [] {
+      // Tests write_variant_value indent_level fix for variant values in mappings
+      glz::generic doc;
+      doc["script"] = "echo hello\n./run --port=8080";
+      doc["name"] = "service-1";
+
+      std::string yaml;
+      auto wec = glz::write_yaml(doc, yaml);
+      expect(!wec);
+      expect(yaml == R"(script: |-
+  echo hello
+  ./run --port=8080
+
+name: service-1
+)") << yaml;
+
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(obj.at("script").data) == "echo hello\n./run --port=8080");
+      expect(std::get<std::string>(obj.at("name").data) == "service-1");
+   };
+
+   "variant_multiline_string_in_nested_mapping"_test = [] {
+      // Tests indent_level propagation through nested variant mappings
+      glz::generic doc;
+      doc["outer"]["script"] = "line one\nline two\nline three";
+      doc["outer"]["count"] = 42.0;
+
+      std::string yaml;
+      auto wec = glz::write_yaml(doc, yaml);
+      expect(!wec);
+      expect(yaml == R"(outer:
+  script: |-
+    line one
+    line two
+    line three
+
+  count: 42
+)") << yaml;
+
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      auto& outer = std::get<glz::generic::object_t>(root.at("outer").data);
+      expect(std::get<std::string>(outer.at("script").data) == "line one\nline two\nline three");
+      expect(std::get<double>(outer.at("count").data) == 42.0);
+   };
+};
+
 suite generic_colon_in_value_tests = [] {
    "generic_time_format_hhmm"_test = [] {
       // Time format HH:MM should parse as string, not fail as number
