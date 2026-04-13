@@ -182,7 +182,7 @@ suite generic_i64_tests = [] {
       glz::generic_i64 json{};
       expect(glz::read_json(json, "42") == glz::error_code::none);
 
-      int64_t val;
+      int64_t val{};
       auto ec = glz::convert_from_generic(val, json);
       expect(!ec);
       expect(val == 42);
@@ -192,7 +192,7 @@ suite generic_i64_tests = [] {
       glz::generic_i64 json{};
       expect(glz::read_json(json, "42") == glz::error_code::none);
 
-      int val;
+      int val{};
       auto ec = glz::convert_from_generic(val, json);
       expect(!ec);
       expect(val == 42);
@@ -202,7 +202,7 @@ suite generic_i64_tests = [] {
       glz::generic_i64 json{};
       expect(glz::read_json(json, "42") == glz::error_code::none);
 
-      double val;
+      double val{};
       auto ec = glz::convert_from_generic(val, json);
       expect(!ec);
       expect(val == 42.0);
@@ -399,7 +399,7 @@ suite generic_u64_tests = [] {
       glz::generic_u64 json{};
       expect(glz::read_json(json, "42") == glz::error_code::none);
 
-      uint64_t val;
+      uint64_t val{};
       auto ec = glz::convert_from_generic(val, json);
       expect(!ec);
       expect(val == 42ULL);
@@ -409,7 +409,7 @@ suite generic_u64_tests = [] {
       glz::generic_u64 json{};
       expect(glz::read_json(json, "42") == glz::error_code::none);
 
-      double val;
+      double val{};
       auto ec = glz::convert_from_generic(val, json);
       expect(!ec);
       expect(val == 42.0);
