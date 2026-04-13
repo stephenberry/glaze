@@ -764,4 +764,168 @@ suite void_schema_test = [] {
    };
 };
 
+// Issue #2475: variant oneOf should use $ref for complex types instead of duplicating definitions
+struct obj_a
+{
+   int x{};
+   double y{};
+};
+
+struct obj_b
+{
+   std::string name{};
+};
+
+// Separate types for the tagged variant test so the meta specialization
+// doesn't pollute the untagged std::variant<obj_a, obj_b> type.
+struct tagged_a
+{
+   int x{};
+};
+
+struct tagged_b
+{
+   std::string name{};
+};
+
+using tagged_obj_variant = std::variant<tagged_a, tagged_b>;
+template <>
+struct glz::meta<tagged_obj_variant>
+{
+   static constexpr std::string_view tag = "kind";
+};
+
+// Wrapper that uses the same object type both as a property and as a variant alternative
+struct shared_type_wrapper
+{
+   obj_a direct{};
+   std::variant<obj_a, obj_b> choice{};
+};
+
+suite variant_ref_schema_tests = [] {
+   "untagged variant with object alternatives uses $ref"_test = [] {
+      using var_t = std::variant<obj_a, obj_b>;
+      auto schema = glz::write_json_schema<var_t>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema: " << schema;
+      if (!obj) return;
+
+      // oneOf entries should be $ref pointers, not inline definitions
+      expect(obj->oneOf.has_value());
+      expect(obj->oneOf->size() == 2u);
+      for (auto& entry : *obj->oneOf) {
+         expect(entry.attributes.ref.has_value()) << "oneOf entry should have $ref";
+         expect(!entry.type.has_value()) << "oneOf entry with $ref should not have inline type";
+         expect(!entry.properties.has_value()) << "oneOf entry with $ref should not have inline properties";
+      }
+
+      // The object definitions should be in $defs
+      expect(obj->defs.has_value());
+      auto it_a = obj->defs->find(glz::name_v<obj_a>);
+      auto it_b = obj->defs->find(glz::name_v<obj_b>);
+      expect(it_a != obj->defs->end()) << "obj_a should be in $defs";
+      expect(it_b != obj->defs->end()) << "obj_b should be in $defs";
+   };
+
+   "untagged variant with array alternative uses $ref"_test = [] {
+      using var_t = std::variant<std::vector<int>, std::string>;
+      auto schema = glz::write_json_schema<var_t>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema: " << schema;
+      if (!obj) return;
+
+      expect(obj->oneOf.has_value());
+      expect(obj->oneOf->size() == 2u);
+
+      // The vector<int> alternative should use $ref
+      auto& vec_entry = (*obj->oneOf)[0];
+      expect(vec_entry.attributes.ref.has_value()) << "array alternative should use $ref";
+
+      // The string alternative should be inline (simple type)
+      auto& str_entry = (*obj->oneOf)[1];
+      expect(!str_entry.attributes.ref.has_value()) << "string alternative should be inline";
+      expect(str_entry.type.has_value());
+   };
+
+   "untagged variant with map alternative uses $ref"_test = [] {
+      using var_t = std::variant<std::map<std::string, int>, double>;
+      auto schema = glz::write_json_schema<var_t>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema: " << schema;
+      if (!obj) return;
+
+      expect(obj->oneOf.has_value());
+      expect(obj->oneOf->size() == 2u);
+
+      // The map alternative should use $ref
+      auto& map_entry = (*obj->oneOf)[0];
+      expect(map_entry.attributes.ref.has_value()) << "map alternative should use $ref";
+
+      // The double alternative should be inline
+      auto& dbl_entry = (*obj->oneOf)[1];
+      expect(!dbl_entry.attributes.ref.has_value()) << "double alternative should be inline";
+   };
+
+   "mixed variant: complex types get $ref, simple types stay inline"_test = [] {
+      using var_t = std::variant<obj_a, int, std::string, std::vector<double>>;
+      auto schema = glz::write_json_schema<var_t>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema: " << schema;
+      if (!obj) return;
+
+      expect(obj->oneOf.has_value());
+      expect(obj->oneOf->size() == 4u);
+
+      // obj_a (object) → $ref
+      expect((*obj->oneOf)[0].attributes.ref.has_value()) << "object should use $ref";
+      // int (number) → inline
+      expect(!(*obj->oneOf)[1].attributes.ref.has_value()) << "int should be inline";
+      // string → inline
+      expect(!(*obj->oneOf)[2].attributes.ref.has_value()) << "string should be inline";
+      // vector<double> (array) → $ref
+      expect((*obj->oneOf)[3].attributes.ref.has_value()) << "array should use $ref";
+   };
+
+#if !defined(_MSC_VER)
+   "tagged variant object alternatives remain inline"_test = [] {
+      auto schema = glz::write_json_schema<tagged_obj_variant>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema: " << schema;
+      if (!obj) return;
+
+      expect(obj->oneOf.has_value());
+      expect(obj->oneOf->size() == 2u);
+
+      // Tagged object alternatives should NOT use $ref — they need inline expansion
+      // so the tag discriminator property can be part of the properties map
+      for (auto& entry : *obj->oneOf) {
+         expect(!entry.attributes.ref.has_value()) << "tagged object alternative should not use $ref: " << schema;
+         expect(entry.type.has_value()) << "tagged object alternative should have inline type";
+         expect(entry.properties.has_value()) << "tagged object alternative should have inline properties";
+         // Verify the tag property is present
+         expect(entry.properties->count("kind") == 1u) << "tagged alternative should have discriminator property";
+      }
+   };
+#endif
+
+   "shared type between property and variant uses single $defs entry"_test = [] {
+      auto schema = glz::write_json_schema<shared_type_wrapper>().value();
+      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      expect(obj.has_value()) << "Failed to parse schema: " << schema;
+      if (!obj) return;
+
+      // obj_a should appear exactly once in $defs, referenced from both the property and the variant
+      expect(obj->defs.has_value());
+      auto it = obj->defs->find(glz::name_v<obj_a>);
+      expect(it != obj->defs->end()) << "obj_a should be in $defs";
+
+      // The direct property should reference obj_a via $ref
+      expect(obj->properties.has_value());
+      auto prop_it = obj->properties->find("direct");
+      expect(prop_it != obj->properties->end());
+      expect(prop_it->second.ref.has_value());
+      expect(*prop_it->second.ref == std::string("#/$defs/") + std::string(glz::name_v<obj_a>));
+   };
+};
+
 int main() { return 0; }
