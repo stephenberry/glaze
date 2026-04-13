@@ -8,32 +8,35 @@
 // the OpenSSL libraries is sufficient.
 //
 // Build:
-//   cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
-//   cmake --build .
+//   cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build .
+//   cmake --build build
 //
 // Run:
-//   ./repro    (repeat if it passes — ~50% reproduction rate)
+//   ./build/repro    (repeat if it passes — ~50% reproduction rate)
 
 #include <asio.hpp>
-#include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <thread>
 
-// A minimal TCP server using ASIO
+// A minimal async TCP server using ASIO
 class mini_server
 {
   public:
-   void start(uint16_t port)
+   uint16_t start()
    {
       io_ctx_ = std::make_unique<asio::io_context>();
+      // Port 0 = OS assigns a free port
       acceptor_ = std::make_unique<asio::ip::tcp::acceptor>(
-         *io_ctx_, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), port));
+         *io_ctx_, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+      uint16_t port = acceptor_->local_endpoint().port();
 
       do_accept();
-
       worker_ = std::thread([this] { io_ctx_->run(); });
+
+      return port;
    }
 
    void stop()
@@ -43,7 +46,7 @@ class mini_server
          acceptor_->close(ec);
       }
       if (io_ctx_) io_ctx_->stop();
-      if (worker_.joinable()) worker_.join(); // <-- crash here
+      if (worker_.joinable()) worker_.join(); // <-- crash here on MinGW + OpenSSL
    }
 
    ~mini_server() { stop(); }
@@ -53,31 +56,32 @@ class mini_server
    {
       acceptor_->async_accept([this](asio::error_code ec, asio::ip::tcp::socket socket) {
          if (!ec) {
-            // Handle the connection: read request, send response, close
-            auto buf = std::make_shared<asio::streambuf>();
-            asio::async_read_until(socket, *buf, "\r\n\r\n",
-                                   [this, s = std::make_shared<asio::ip::tcp::socket>(std::move(socket)),
-                                    buf](asio::error_code ec, std::size_t) {
-                                      if (!ec) {
-                                         auto response = std::make_shared<std::string>(
-                                            "HTTP/1.1 200 OK\r\n"
-                                            "Content-Length: 4\r\n"
-                                            "Connection: close\r\n"
-                                            "\r\n"
-                                            "pong");
-                                         asio::async_write(*s, asio::buffer(*response),
-                                                           [s, response](asio::error_code, std::size_t) {
-                                                              asio::error_code ec;
-                                                              s->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-                                                           });
-                                      }
-                                   });
+            handle_connection(std::make_shared<asio::ip::tcp::socket>(std::move(socket)));
          }
-         // Accept next connection
          if (acceptor_->is_open()) {
             do_accept();
          }
       });
+   }
+
+   void handle_connection(std::shared_ptr<asio::ip::tcp::socket> sock)
+   {
+      auto buf = std::make_shared<asio::streambuf>();
+      asio::async_read_until(
+         *sock, *buf, "\r\n\r\n", [this, sock, buf](asio::error_code ec, std::size_t) {
+            if (ec) return;
+            auto response = std::make_shared<std::string>(
+               "HTTP/1.1 200 OK\r\n"
+               "Content-Length: 4\r\n"
+               "Connection: close\r\n"
+               "\r\n"
+               "pong");
+            asio::async_write(*sock, asio::buffer(*response),
+                              [sock, response](asio::error_code, std::size_t) {
+                                 asio::error_code ec;
+                                 sock->shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+                              });
+         });
    }
 
    std::unique_ptr<asio::io_context> io_ctx_;
@@ -103,7 +107,8 @@ bool send_get(uint16_t port)
       std::string response{std::istreambuf_iterator<char>(&buf), std::istreambuf_iterator<char>()};
       return response.find("pong") != std::string::npos;
    }
-   catch (...) {
+   catch (const std::exception& e) {
+      std::fprintf(stderr, "GET error: %s\n", e.what());
       return false;
    }
 }
@@ -113,15 +118,14 @@ int main()
    std::fprintf(stderr, "MinGW + OpenSSL heap corruption reproducer\n");
    std::fprintf(stderr, "Repeat 20 rounds of: start server, GET, stop server\n\n");
 
-   constexpr uint16_t port = 19876;
-
    for (int i = 0; i < 20; ++i) {
       std::fprintf(stderr, "round %d... ", i);
 
       mini_server server;
-      server.start(port);
+      uint16_t port = server.start();
 
       // Wait for server to be ready
+      bool ready = false;
       for (int attempt = 0; attempt < 50; ++attempt) {
          std::this_thread::sleep_for(std::chrono::milliseconds(10));
          try {
@@ -129,14 +133,20 @@ int main()
             asio::ip::tcp::socket sock(io);
             sock.connect({asio::ip::make_address("127.0.0.1"), port});
             sock.close();
+            ready = true;
             break;
          }
          catch (...) {
          }
       }
 
+      if (!ready) {
+         std::fprintf(stderr, "FAILED (server not ready on port %d)\n", port);
+         return 1;
+      }
+
       if (!send_get(port)) {
-         std::fprintf(stderr, "FAILED (GET failed)\n");
+         std::fprintf(stderr, "FAILED (GET failed on port %d)\n", port);
          return 1;
       }
 
