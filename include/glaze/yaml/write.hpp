@@ -463,6 +463,36 @@ namespace glz
          }
       }
 
+      // Write a variant's held value in block context, ensuring strings get correct indent_level.
+      template <auto Opts, class T, class B>
+      GLZ_ALWAYS_INLINE void write_variant_value(T&& value, is_context auto&& ctx, B&& b, auto& ix,
+                                                int32_t indent_level)
+      {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (is_variant<V>) {
+            std::visit(
+               [&](auto&& inner) {
+                  using inner_t = std::remove_cvref_t<decltype(inner)>;
+                  if constexpr (str_t<inner_t>) {
+                     write_yaml_string<Opts>(sv{inner}, ctx, b, ix, indent_level);
+                  }
+                  else {
+                     serialize<YAML>::op<Opts>(inner, ctx, b, ix);
+                  }
+               },
+               value);
+         }
+         else if constexpr (glaze_value_t<V>) {
+            write_variant_value<Opts>(get_member(value, meta_wrapper_v<V>), ctx, b, ix, indent_level);
+         }
+         else if constexpr (str_t<V>) {
+            write_yaml_string<Opts>(sv{value}, ctx, b, ix, indent_level);
+         }
+         else {
+            serialize<YAML>::op<Opts>(value, ctx, b, ix);
+         }
+      }
+
       // Write block-style sequence
       template <auto Opts, class T, class B>
       GLZ_ALWAYS_INLINE void write_block_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix,
@@ -571,16 +601,47 @@ namespace glz
             else if constexpr (is_or_wraps_variant<element_t>()) {
                // For variants, check at runtime if they hold a simple type
                if (variant_holds_simple_type(element)) {
-                  serialize<YAML>::op<Opts>(element, ctx, b, ix);
+                  write_variant_value<Opts>(element, ctx, b, ix, indent_level);
                   dump('\n', b, ix);
                }
                else {
-                  // Complex variant content (maps/arrays) uses flow style ({...}, [...]) rather than
-                  // block style. This is a pragmatic choice: proper block-style output would require
-                  // tracking indentation context through the variant visitor, which adds significant
-                  // complexity. Flow style produces valid, parseable YAML that round-trips correctly.
-                  serialize<YAML>::op<flow_context_on<Opts>()>(element, ctx, b, ix);
-                  dump('\n', b, ix);
+                  // Complex variant content (maps/arrays/objects) - write in block style
+                  if constexpr (is_variant<element_t>) {
+                     std::visit(
+                        [&](auto&& inner) {
+                           using inner_t = std::remove_cvref_t<decltype(inner)>;
+                           if constexpr (glaze_object_t<inner_t> || reflectable<inner_t>) {
+                              // Compact form: first key inline after dash
+                              write_block_mapping<Opts>(inner, ctx, b, ix, indent_level + 1, true);
+                           }
+                           else {
+                              if constexpr (writable_map_t<inner_t>) {
+                                 if (inner.empty()) {
+                                    dump("{}\n", b, ix);
+                                    return;
+                                 }
+                              }
+                              else if constexpr (writable_array_t<inner_t>) {
+                                 if constexpr (requires { inner.empty(); }) {
+                                    if (inner.empty()) {
+                                       dump("[]\n", b, ix);
+                                       return;
+                                    }
+                                 }
+                              }
+                              dump('\n', b, ix);
+                              write_block_mapping_nested<Opts>(inner, ctx, b, ix, indent_level + 1);
+                           }
+                        },
+                        element);
+                  }
+                  else {
+                     // glaze_value_t wrapping a variant — simple types were already
+                     // handled by variant_holds_simple_type above, so the held value
+                     // is guaranteed to be a complex type (map/array/object).
+                     dump('\n', b, ix);
+                     write_block_mapping_nested<Opts>(element, ctx, b, ix, indent_level + 1);
+                  }
                }
             }
             else if constexpr (glaze_object_t<element_t> || reflectable<element_t>) {
@@ -990,7 +1051,7 @@ namespace glz
                // Variants and variant-wrappers (e.g., glz::generic) may hold simple values
                if (variant_holds_simple_type(member)) {
                   dump(' ', b, ix);
-                  serialize<YAML>::op<Opts>(member, ctx, b, ix);
+                  write_variant_value<Opts>(member, ctx, b, ix, indent_level);
                   dump('\n', b, ix);
                }
                else {
@@ -1134,7 +1195,7 @@ namespace glz
                   // check at runtime if they hold a simple type
                   if (variant_holds_simple_type(v)) {
                      dump(' ', b, ix);
-                     serialize<YAML>::op<Opts>(v, ctx, b, ix);
+                     write_variant_value<Opts>(v, ctx, b, ix, indent_level);
                      dump('\n', b, ix);
                   }
                   else {
