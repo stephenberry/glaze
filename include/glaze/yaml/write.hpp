@@ -546,27 +546,32 @@ namespace glz
             for (int32_t i = 0; i < spaces; ++i) {
                b[ix++] = ' ';
             }
-            dump("- ", b, ix);
+            dump('-', b, ix);
 
             if constexpr (str_t<element_t>) {
+               dump(' ', b, ix);
                write_yaml_string<Opts>(sv{element}, ctx, b, ix, indent_level);
                dump('\n', b, ix);
             }
             else if constexpr (is_simple_type<element_t>()) {
+               dump(' ', b, ix);
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }
             else if constexpr (nullable_like<element_t>) {
                using inner_t = std::remove_cvref_t<decltype(*element)>;
                if (!element) {
+                  dump(' ', b, ix);
                   dump("null", b, ix);
                   dump('\n', b, ix);
                }
                else if constexpr (str_t<inner_t>) {
+                  dump(' ', b, ix);
                   write_yaml_string<Opts>(sv{*element}, ctx, b, ix, indent_level);
                   dump('\n', b, ix);
                }
                else if constexpr (is_simple_type<inner_t>()) {
+                  dump(' ', b, ix);
                   serialize<YAML>::op<Opts>(*element, ctx, b, ix);
                   dump('\n', b, ix);
                }
@@ -575,20 +580,21 @@ namespace glz
                   bool wrote_empty = false;
                   if constexpr (writable_map_t<inner_t>) {
                      if (element->empty()) {
-                        dump("{}\n", b, ix);
+                        dump(" {}\n", b, ix);
                         wrote_empty = true;
                      }
                   }
                   else if constexpr (writable_array_t<inner_t>) {
                      if constexpr (requires { element->empty(); }) {
                         if (element->empty()) {
-                           dump("[]\n", b, ix);
+                           dump(" []\n", b, ix);
                            wrote_empty = true;
                         }
                      }
                   }
                   if (!wrote_empty) {
                      if constexpr (glaze_object_t<inner_t> || reflectable<inner_t>) {
+                        dump(' ', b, ix);
                         write_block_mapping<Opts>(*element, ctx, b, ix, indent_level + 1, true);
                      }
                      else {
@@ -601,6 +607,7 @@ namespace glz
             else if constexpr (is_or_wraps_variant<element_t>()) {
                // For variants, check at runtime if they hold a simple type
                if (variant_holds_simple_type(element)) {
+                  dump(' ', b, ix);
                   write_variant_value<Opts>(element, ctx, b, ix, indent_level);
                   dump('\n', b, ix);
                }
@@ -612,19 +619,20 @@ namespace glz
                            using inner_t = std::remove_cvref_t<decltype(inner)>;
                            if constexpr (glaze_object_t<inner_t> || reflectable<inner_t>) {
                               // Compact form: first key inline after dash
+                              dump(' ', b, ix);
                               write_block_mapping<Opts>(inner, ctx, b, ix, indent_level + 1, true);
                            }
                            else {
                               if constexpr (writable_map_t<inner_t>) {
                                  if (inner.empty()) {
-                                    dump("{}\n", b, ix);
+                                    dump(" {}\n", b, ix);
                                     return;
                                  }
                               }
                               else if constexpr (writable_array_t<inner_t>) {
                                  if constexpr (requires { inner.empty(); }) {
                                     if (inner.empty()) {
-                                       dump("[]\n", b, ix);
+                                       dump(" []\n", b, ix);
                                        return;
                                     }
                                  }
@@ -646,11 +654,13 @@ namespace glz
             }
             else if constexpr (glaze_object_t<element_t> || reflectable<element_t>) {
                // Compact form: first key inline after dash
+               dump(' ', b, ix);
                write_block_mapping<Opts>(element, ctx, b, ix, indent_level + 1, true);
             }
             else if constexpr (has_custom_meta_v<element_t>) {
                // Types with top-level custom serialization produce scalar output -
                // write inline after dash
+               dump(' ', b, ix);
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }
@@ -662,6 +672,7 @@ namespace glz
             }
             else {
                // Other types (pairs, tuples, etc.) - write inline after dash
+               dump(' ', b, ix);
                serialize<YAML>::op<Opts>(element, ctx, b, ix);
                dump('\n', b, ix);
             }

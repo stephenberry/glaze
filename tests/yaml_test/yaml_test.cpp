@@ -6108,7 +6108,10 @@ suite yaml_variant_block_style = [] {
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-      expect(yaml == "- \n  a: 1\n  b: 2\n") << yaml;
+            expect(yaml == R"(-
+  a: 1
+  b: 2
+)") << yaml;
 
       std::vector<var_t> parsed;
       auto rec = glz::read_yaml(parsed, yaml);
@@ -6127,7 +6130,11 @@ suite yaml_variant_block_style = [] {
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-      expect(yaml == "- \n  - 10\n  - 20\n  - 30\n") << yaml;
+            expect(yaml == R"(-
+  - 10
+  - 20
+  - 30
+)") << yaml;
 
       std::vector<var_t> parsed;
       auto rec = glz::read_yaml(parsed, yaml);
@@ -6190,7 +6197,11 @@ suite yaml_variant_block_style = [] {
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-      expect(yaml == "- 42\n- \n  key: 99\n- hello\n") << yaml;
+            expect(yaml == R"(- 42
+-
+  key: 99
+- hello
+)") << yaml;
 
       std::vector<var_t> parsed;
       auto rec = glz::read_yaml(parsed, yaml);
@@ -6212,7 +6223,10 @@ suite yaml_variant_block_style = [] {
       std::string yaml;
       auto wec = glz::write_yaml(original, yaml);
       expect(!wec);
-      expect(yaml == "- \n  name: test\n  value: 42\n") << yaml;
+            expect(yaml == R"(-
+  name: test
+  value: 42
+)") << yaml;
 
       std::vector<glz::generic> parsed;
       auto rec = glz::read_yaml(parsed, yaml);
