@@ -612,7 +612,7 @@ namespace glz
          if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
             return true;
          }
-         else if constexpr (is_member_function_pointer<V>) {
+         else if constexpr (is_any_function_ptr<V>) {
             return !check_write_function_pointers(Opts);
          }
          else {
@@ -927,8 +927,7 @@ namespace glz
    };
 
    // Nullable types (std::optional, std::unique_ptr, std::shared_ptr)
-   template <nullable_t T>
-      requires(!std::is_array_v<T> && not is_expected<T>)
+   template <nullable_like T>
    struct to<CBOR, T> final
    {
       template <auto Opts>

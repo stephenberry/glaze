@@ -2262,7 +2262,7 @@ namespace glz
                });
             }
             else {
-               static constexpr size_t fixed_max_size = fixed_padding<T>;
+               static constexpr size_t fixed_max_size = Opts.prettify ? 0 : fixed_padding<T>;
                if constexpr (fixed_max_size && not check_write_unchecked(Options)) {
                   if (!ensure_space(ctx, b, ix + fixed_max_size)) [[unlikely]] {
                      return;

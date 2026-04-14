@@ -297,6 +297,14 @@ namespace glz
                skip_value<JSON>::op<Opts>(ctx, it, end);
             }
          }
+         else if constexpr (is_function_ptr_or_ref<V>) {
+            // Function pointers cannot be deserialized from JSON.
+            // When write_function_pointers is enabled the writer emits a type-name string,
+            // but there is nothing meaningful to reconstruct on read — just skip the value.
+            // When write_function_pointers is off the key is never written, so this branch
+            // is unreachable in that case.
+            skip_value<JSON>::op<Opts>(ctx, it, end);
+         }
          else {
             if constexpr (glaze_object_t<T>) {
                from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
@@ -4529,8 +4537,9 @@ namespace glz
    };
 
    template <class T>
-      requires((nullable_t<T> || nullable_value_t<T>) && not is_expected<T> && not std::is_array_v<T> &&
-               not custom_read<T>)
+      requires((nullable_like<T> || nullable_value_t<T>) && not is_expected<T> && not std::is_array_v<T> &&
+               not custom_read<T>) // is_expected and is_array_v are redundant with nullable_like but needed for
+                                   // nullable_value_t
    struct from<JSON, T>
    {
       template <auto Options>

@@ -1079,8 +1079,7 @@ namespace glz
       }
    };
 
-   template <nullable_t T>
-      requires(!std::is_array_v<T> && not is_expected<T>)
+   template <nullable_like T>
    struct to<BEVE, T> final
    {
       template <auto Opts, class B>

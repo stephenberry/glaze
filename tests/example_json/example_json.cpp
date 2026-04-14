@@ -471,7 +471,7 @@ suite schema_generation = [] {
       auto schema = glz::write_json_schema<SchemaDemo>().value_or("error");
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"flag":{"$ref":"#/$defs/bool","description":"A boolean flag"},"name":{"$ref":"#/$defs/std::string","description":"A name for something"},"x":{"$ref":"#/$defs/int32_t","description":"An integer x"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"SchemaDemo"})")
+         R"({"type":"object","properties":{"flag":{"type":"boolean","description":"A boolean flag"},"name":{"type":"string","description":"A name for something"},"x":{"$ref":"#/$defs/int32_t","description":"An integer x"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"SchemaDemo"})")
          << schema;
    };
 };
@@ -500,7 +500,7 @@ suite local_schema_test = [] {
       auto schema = glz::write_json_schema<LocalSchema>().value_or("error");
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"count":{"$ref":"#/$defs/int32_t","description":"A count"},"file":{"$ref":"#/$defs/std::string","description":"A file path"},"valid":{"$ref":"#/$defs/bool","description":"Validity flag"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"LocalSchema"})")
+         R"({"type":"object","properties":{"count":{"$ref":"#/$defs/int32_t","description":"A count"},"file":{"type":"string","description":"A file path"},"valid":{"type":"boolean","description":"Validity flag"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"LocalSchema"})")
          << schema;
    };
 };

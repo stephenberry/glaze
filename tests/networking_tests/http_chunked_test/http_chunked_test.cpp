@@ -13,6 +13,14 @@
 #include "glaze/net/http_server.hpp"
 #include "ut/ut.hpp"
 
+#if defined(GLZ_USING_BOOST_ASIO)
+namespace asio
+{
+   using namespace boost::asio;
+   using error_code = boost::system::error_code;
+}
+#endif
+
 using namespace ut;
 
 // --------------------------------------------------------------------------
@@ -84,7 +92,8 @@ struct chunked_test_server
    void setup_routes()
    {
       server_.on_error([this](std::error_code ec, std::source_location) {
-         if (running_ && ec != asio::error::eof && ec != asio::error::operation_aborted) {
+         if (running_ && ec != make_error_code(asio::error::eof) &&
+             ec != make_error_code(asio::error::operation_aborted)) {
             std::fprintf(stderr, "Server error: %s\n", ec.message().c_str());
          }
       });
@@ -711,6 +720,9 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/single-chunk",
+         .body = {},
+         .headers = {},
+         .on_connect = {},
          .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
@@ -744,6 +756,9 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/multi-chunk",
+         .body = {},
+         .headers = {},
+         .on_connect = {},
          .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
@@ -776,6 +791,9 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/large-chunked",
+         .body = {},
+         .headers = {},
+         .on_connect = {},
          .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {
@@ -807,6 +825,9 @@ suite chunked_streaming_tests = [] {
 
       auto conn = client.stream_request_v2({
          .url = server.base_url() + "/empty-chunked",
+         .body = {},
+         .headers = {},
+         .on_connect = {},
          .on_disconnect = [&] { done_promise.set_value(); },
          .on_data =
             [&](std::string_view data) {

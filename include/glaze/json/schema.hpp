@@ -38,6 +38,7 @@ namespace glz
    {
       bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
       std::optional<std::string_view> ref{};
+      std::optional<std::variant<std::string_view, std::vector<std::string_view>>> type{};
       using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
       using schema_any = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
@@ -88,7 +89,8 @@ namespace glz
       struct glaze
       {
          using T = schema;
-         static constexpr std::array keys{"$ref", //
+         static constexpr std::array keys{"type", //
+                                          "$ref", //
                                           "title", //
                                           "description", //
                                           "default", //
@@ -123,7 +125,8 @@ namespace glz
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-braces"
 #endif
-         static constexpr glz::tuple value = {&T::ref, //
+         static constexpr glz::tuple value = {&T::type, //
+                                              &T::ref, //
                                               &T::title, //
                                               &T::description, //
                                               &T::defaultValue, //
@@ -163,9 +166,10 @@ namespace glz
    {
       struct schematic final
       {
-         std::optional<std::vector<std::string_view>> type{};
+         std::optional<std::variant<std::string_view, std::vector<std::string_view>>> type{};
          std::optional<std::map<std::string_view, schema, std::less<>>> properties{}; // glaze_object
-         std::optional<schema> items{}; // array
+         std::optional<std::vector<schematic>> prefixItems{}; // tuple
+         std::optional<std::variant<bool, schema>> items{}; // array or tuple (false for tuple)
          std::optional<std::variant<bool, schema>> additionalProperties{}; // map
          std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
          std::optional<std::vector<schematic>> oneOf{};
@@ -242,7 +246,9 @@ struct glz::meta<glz::detail::schematic>
    static constexpr std::string_view name = "glz::detail::schema";
    using T = detail::schematic;
    static constexpr std::array keys{"type", //
+                                    "$ref", //
                                     "properties", //
+                                    "prefixItems", //
                                     "items", //
                                     "additionalProperties", //
                                     "$defs", //
@@ -283,7 +289,9 @@ struct glz::meta<glz::detail::schematic>
 #endif
    [[maybe_unused]] static constexpr glz::tuple value{
       &T::type, //
+      [](auto&& s) -> auto& { return s.attributes.ref; }, //
       &T::properties, //
+      &T::prefixItems, //
       &T::items, //
       &T::additionalProperties, //
       &T::defs, //
@@ -336,7 +344,7 @@ namespace glz
          {
             // &T::member
             if constexpr (glaze_t<T> && std::is_member_object_pointer_v<meta_wrapper_t<T>>) {
-               using val_t = member_t<T, meta_wrapper_t<T>>;
+               using val_t = std::remove_cvref_t<member_t<T, meta_wrapper_t<T>>>;
                to_json_schema<val_t>::template op<Opts>(s, defs);
                if constexpr (json_schema_t<T>) {
                   static constexpr auto schema_size = reflect<json_schema_type<T>>::size;
@@ -359,7 +367,7 @@ namespace glz
                }
             }
             else if constexpr (glaze_const_value_t<T>) { // &T::constexpr_member
-               using constexpr_val_t = member_t<T, meta_wrapper_t<T>>;
+               using constexpr_val_t = std::remove_cvref_t<member_t<T, meta_wrapper_t<T>>>;
                static constexpr auto val_v{*glz::meta_wrapper_v<T>};
                if constexpr (glz::glaze_enum_t<constexpr_val_t>) {
                   s.attributes.constant = glz::enum_name_v<val_v>;
@@ -380,8 +388,18 @@ namespace glz
                to_json_schema<InputType>::template op<Opts>(s, defs);
             }
             else {
-               s.type = {"number", "string", "boolean", "object", "array", "null"};
+               s.type = std::vector<sv>{"number", "string", "boolean", "object", "array", "null"};
             }
+         }
+      };
+
+      template <>
+      struct to_json_schema<void>
+      {
+         template <auto Opts>
+         static void op(auto& s, auto&)
+         {
+            s.type = sv{"null"};
          }
       };
 
@@ -393,7 +411,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto&)
          {
-            s.type = {"boolean"};
+            s.type = sv{"boolean"};
          }
       };
 
@@ -405,12 +423,12 @@ namespace glz
          {
             using V = std::decay_t<T>;
             if constexpr (std::integral<V>) {
-               s.type = {"integer"};
+               s.type = sv{"integer"};
                s.attributes.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
                s.attributes.maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
             }
             else {
-               s.type = {"number"};
+               s.type = sv{"number"};
                s.attributes.minimum = std::numeric_limits<V>::lowest();
                s.attributes.maximum = (std::numeric_limits<V>::max)();
             }
@@ -424,7 +442,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto&)
          {
-            s.type = {"string"};
+            s.type = sv{"string"};
          }
       };
 
@@ -434,7 +452,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto&)
          {
-            s.type = {"null"};
+            s.type = sv{"null"};
             s.attributes.constant = std::monostate{};
          }
       };
@@ -445,7 +463,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto&)
          {
-            s.type = {"string"};
+            s.type = sv{"string"};
 
             // TODO use oneOf instead of enum to handle doc comments
             static constexpr auto N = reflect<T>::size;
@@ -474,7 +492,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto&)
          {
-            s.type = {"number", "string", "boolean", "object", "array", "null"};
+            s.type = std::vector<sv>{"number", "string", "boolean", "object", "array", "null"};
          }
       };
 
@@ -485,16 +503,27 @@ namespace glz
          static void op(auto& s, auto& defs)
          {
             using V = std::decay_t<range_value_t<std::decay_t<T>>>;
-            s.type = {"array"};
-            if constexpr (has_fixed_size_container<std::decay_t<T>>) {
-               s.attributes.minItems = get_size<std::decay_t<T>>();
-               s.attributes.maxItems = get_size<std::decay_t<T>>();
+            // When concatenate is true (default), arrays of pairs serialize as objects
+            if constexpr (pair_t<V> && check_concatenate(Opts)) {
+               using ValueType = std::decay_t<glz::tuple_element_t<1, V>>;
+               s.type = sv{"object"};
+               auto& def = defs[name_v<ValueType>];
+               if (!def.type) {
+                  to_json_schema<ValueType>::template op<Opts>(def, defs);
+               }
+               s.additionalProperties = schema{true, join_v<chars<"#/$defs/">, name_v<ValueType>>};
             }
-            auto& def = defs[name_v<V>];
-            if (!def.type) {
-               to_json_schema<V>::template op<Opts>(def, defs);
+            else {
+               s.type = sv{"array"};
+               if constexpr (has_fixed_size_container<std::decay_t<T>>) {
+                  s.attributes.maxItems = get_size<std::decay_t<T>>();
+               }
+               auto& def = defs[name_v<V>];
+               if (!def.type) {
+                  to_json_schema<V>::template op<Opts>(def, defs);
+               }
+               s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
             }
-            s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
          }
       };
 
@@ -505,7 +534,7 @@ namespace glz
          static void op(auto& s, auto& defs)
          {
             using V = std::decay_t<glz::tuple_element_t<1, range_value_t<std::decay_t<T>>>>;
-            s.type = {"object"};
+            s.type = sv{"object"};
             auto& def = defs[name_v<V>];
             if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
@@ -523,10 +552,17 @@ namespace glz
             using V = std::decay_t<decltype(*std::declval<std::decay_t<T>>())>;
             to_json_schema<V>::template op<Opts>(s, defs);
             // to_json_schema above should populate the correct type, let's throw if it wasn't set
-            auto& type = s.type.value();
-            auto it = std::find_if(type.begin(), type.end(), [&](const auto& str) { return str == "null"; });
-            if (it == type.end()) {
-               type.emplace_back("null");
+            auto& type_val = *s.type;
+            if (auto* str = std::get_if<sv>(&type_val)) {
+               if (*str != "null") {
+                  type_val = std::vector<sv>{*str, "null"};
+               }
+            }
+            else {
+               auto& vec = std::get<std::vector<sv>>(type_val);
+               if (std::find(vec.begin(), vec.end(), "null") == vec.end()) {
+                  vec.emplace_back("null");
+               }
             }
          }
       };
@@ -539,24 +575,30 @@ namespace glz
          {
             static constexpr auto N = std::variant_size_v<T>;
             using type_counts = variant_type_count<T>;
-            s.type = std::vector<sv>{};
+            std::vector<sv> type_vec{};
             if constexpr (type_counts::n_number) {
-               (*s.type).emplace_back("number");
+               type_vec.emplace_back("number");
             }
             if constexpr (type_counts::n_string) {
-               (*s.type).emplace_back("string");
+               type_vec.emplace_back("string");
             }
             if constexpr (type_counts::n_bool) {
-               (*s.type).emplace_back("boolean");
+               type_vec.emplace_back("boolean");
             }
             if constexpr (type_counts::n_object) {
-               (*s.type).emplace_back("object");
+               type_vec.emplace_back("object");
             }
             if constexpr (type_counts::n_array) {
-               (*s.type).emplace_back("array");
+               type_vec.emplace_back("array");
             }
             if constexpr (type_counts::n_null) {
-               (*s.type).emplace_back("null");
+               type_vec.emplace_back("null");
+            }
+            if (type_vec.size() == 1) {
+               s.type = type_vec[0];
+            }
+            else {
+               s.type = std::move(type_vec);
             }
             s.oneOf = std::vector<schematic>(N);
 
@@ -565,7 +607,24 @@ namespace glz
             for_each<N>([&]<auto I>() {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
-               to_json_schema<V>::template op<Opts>(schema_val, defs);
+
+               // Use $ref for complex types to avoid duplicating large definitions in oneOf.
+               // Exception: tagged variant object alternatives must remain inline because the tag
+               // discriminator property is added to the oneOf entry alongside the object's own
+               // properties, and additionalProperties:false in a $ref'd schema would reject the tag.
+               constexpr bool is_complex = glaze_object_t<V> || reflectable<V> || array_t<V> || writable_map_t<V>;
+               constexpr bool is_tagged_object = (glaze_object_t<V> || reflectable<V>) && !tag_v<T>.empty();
+
+               if constexpr (is_complex && !is_tagged_object) {
+                  auto& def = defs[name_v<V>];
+                  if (!def.type) {
+                     to_json_schema<V>::template op<Opts>(def, defs);
+                  }
+                  schema_val.attributes.ref = join_v<chars<"#/$defs/">, name_v<V>>;
+               }
+               else {
+                  to_json_schema<V>::template op<Opts>(schema_val, defs);
+               }
 
                if (not schema_val.attributes.title) {
                   schema_val.attributes.title = ids[I];
@@ -584,15 +643,37 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
+         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto&)
+         static void op(auto& s, auto& defs)
          {
-            // TODO: Actually handle this. We can specify a schema per item in items
-            //      We can also do size restrictions on static arrays
-            s.type = {"array"};
+            using V = std::decay_t<T>;
+            s.type = sv{"array"};
+            static constexpr auto N = []() constexpr {
+               if constexpr (glaze_array_t<V>) {
+                  return glz::tuple_size_v<meta_t<V>>;
+               }
+               else {
+                  return glz::tuple_size_v<V>;
+               }
+            }();
+            s.prefixItems = std::vector<schematic>(N);
+            for_each<N>([&]<auto I>() {
+               if constexpr (glaze_array_t<V>) {
+                  using element_t = std::decay_t<member_t<V, decltype(glz::get<I>(meta_v<V>))>>;
+                  auto& item_schema = (*s.prefixItems)[I];
+                  to_json_schema<element_t>::template op<Opts>(item_schema, defs);
+               }
+               else {
+                  using element_t = std::decay_t<glz::tuple_element_t<I, V>>;
+                  auto& item_schema = (*s.prefixItems)[I];
+                  to_json_schema<element_t>::template op<Opts>(item_schema, defs);
+               }
+            });
+            s.items = false;
+            s.attributes.maxItems = N;
          }
       };
 
@@ -655,7 +736,7 @@ namespace glz
          {
             static_assert(json_schema_matches_object_keys<T>());
 
-            s.type = {"object"};
+            s.type = sv{"object"};
 
             using V = std::decay_t<T>;
 
@@ -684,8 +765,6 @@ namespace glz
             s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&]<auto I>() {
                using val_t = std::decay_t<refl_t<T, I>>;
-
-               auto& def = defs[name_v<val_t>];
 
                static constexpr sv key = reflect<T>::keys[I];
                if constexpr (requires_key<T, val_t, Opts>(key)) {
@@ -729,13 +808,59 @@ namespace glz
                      ref_val = get<schema_index>(to_tie(schema_v));
                   }
                }
-               if (!ref_val.ref) {
-                  validate_ref<name_v<val_t>>();
-                  ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
-               }
 
-               if (!def.type) {
-                  to_json_schema<val_t>::template op<Opts>(def, defs);
+               // Determine if this type can be inlined (bool, string, or nullable versions)
+               constexpr bool can_inline = [] {
+                  using V = val_t;
+                  if constexpr (std::same_as<V, bool> || str_t<V> || char_t<V>) {
+                     return true;
+                  }
+                  else if constexpr (nullable_t<V>) {
+                     using inner = std::decay_t<decltype(*std::declval<V>())>;
+                     return std::same_as<inner, bool> || str_t<inner> || char_t<inner>;
+                  }
+                  else {
+                     return false;
+                  }
+               }();
+
+               if constexpr (can_inline) {
+                  if (!ref_val.ref) {
+                     // Inline the type directly instead of using $defs/$ref
+                     if constexpr (std::same_as<val_t, bool>) {
+                        ref_val.type = sv{"boolean"};
+                     }
+                     else if constexpr (str_t<val_t> || char_t<val_t>) {
+                        ref_val.type = sv{"string"};
+                     }
+                     else if constexpr (nullable_t<val_t>) {
+                        using inner = std::decay_t<decltype(*std::declval<val_t>())>;
+                        if constexpr (std::same_as<inner, bool>) {
+                           ref_val.type = std::vector<sv>{sv{"boolean"}, sv{"null"}};
+                        }
+                        else {
+                           ref_val.type = std::vector<sv>{sv{"string"}, sv{"null"}};
+                        }
+                     }
+                  }
+                  else {
+                     // User explicitly set $ref via json_schema metadata, honor it
+                     auto& def = defs[name_v<val_t>];
+                     if (!def.type) {
+                        to_json_schema<val_t>::template op<Opts>(def, defs);
+                     }
+                  }
+               }
+               else {
+                  if (!ref_val.ref) {
+                     validate_ref<name_v<val_t>>();
+                     ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
+                  }
+
+                  auto& def = defs[name_v<val_t>];
+                  if (!def.type) {
+                     to_json_schema<val_t>::template op<Opts>(def, defs);
+                  }
                }
 
                (*s.properties)[key] = ref_val;
