@@ -8697,8 +8697,7 @@ suite yaml_error_on_missing_keys_unknown_keys = [] {
       std::string yaml = R"(x: 1
 z: 99
 )";
-      auto err =
-         glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      auto err = glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
       expect(err.ec == glz::error_code::missing_key);
       expect(std::string_view{err.custom_error_message} == "y");
    };
@@ -8709,8 +8708,7 @@ z: 99
 y: 2
 z: 99
 )";
-      auto err =
-         glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      auto err = glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
       expect(!err) << glz::format_error(err, yaml);
       expect(data.x == 1);
       expect(data.y == 2);
@@ -8719,8 +8717,7 @@ z: 99
    "flow_unknown_key_with_missing"_test = [] {
       yaml_inner data{};
       std::string yaml = R"({x: 1, z: 99})";
-      auto err =
-         glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      auto err = glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
       expect(err.ec == glz::error_code::missing_key);
       expect(std::string_view{err.custom_error_message} == "y");
    };
@@ -8728,8 +8725,7 @@ z: 99
    "flow_unknown_key_all_present"_test = [] {
       yaml_inner data{};
       std::string yaml = R"({x: 1, y: 2, z: 99})";
-      auto err =
-         glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      auto err = glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
       expect(!err) << glz::format_error(err, yaml);
    };
 };
