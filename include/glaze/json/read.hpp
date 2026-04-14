@@ -3737,8 +3737,32 @@ namespace glz
                      return;
                   }
                   auto start = it;
+                  bool first_key = true;
+                  // Parse bifurcation for tagged variants:
+                  //
+                  // Without this optimization, tagged variant parsing always uses two passes:
+                  //   1. Scan all keys to find the tag (e.g. "type"), skipping values
+                  //   2. Reset `it = start` and re-parse the entire object into the resolved type
+                  //
+                  // When the tag is the first key, the second pass redundantly re-reads every
+                  // field that follows it. This lambda avoids that: if the tag was the first key,
+                  // it advances past the trailing comma so the object parser picks up at the
+                  // second field. If the tag was found later, it falls back to the full re-parse.
+                  //
+                  // One exception: if the tag name is also a field on the resolved struct
+                  // (contains_tag), we must re-parse regardless so the value is stored in
+                  // the struct field. This override is applied inside each std::visit lambda.
+                  auto position_after_tag = [&] {
+                     if (first_key) {
+                        if (*it == ',') ++it; // skip comma; handles tag-only objects where *it == '}'
+                     }
+                     else {
+                        it = start; // tag was not the first key, re-parse from the beginning
+                     }
+                  };
                   while (*it != '}') {
                      if (it != start) {
+                        first_key = false;
                         if (match_invalid_end<',', Opts>(ctx, it, end)) {
                            return;
                         }
@@ -3809,7 +3833,7 @@ namespace glz
                                     return;
                                  }
 
-                                 it = start; // we restart our object parsing now that we know the target type
+                                 position_after_tag();
                                  tag_specified_index = type_index; // Store the tag-specified type
                                  if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                                  std::visit(
@@ -3817,6 +3841,9 @@ namespace glz
                                        using V = std::decay_t<decltype(v)>;
                                        constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                        if constexpr (is_object) {
+                                          if constexpr (contains_tag<V, tag_literal>()) {
+                                             it = start; // tag is a struct field, must re-parse
+                                          }
                                           from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
                                                                                                            end);
                                        }
@@ -3851,6 +3878,9 @@ namespace glz
                                                 // std::unique_ptr, or std::shared_ptr
                                              }
                                           }
+                                          if constexpr (contains_tag<memory_type<V>, tag_literal>()) {
+                                             it = start; // tag is a struct field, must re-parse
+                                          }
                                           from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
                                              *v, ctx, it, end);
                                        }
@@ -3872,7 +3902,7 @@ namespace glz
                                     // Use the first unlabeled type as the default
                                     const auto default_type_index = ids_size;
 
-                                    it = start; // we restart our object parsing now that we know the target type
+                                    position_after_tag();
                                     tag_specified_index = default_type_index; // Store the default type index
                                     if (value.index() != default_type_index)
                                        emplace_runtime_variant(value, default_type_index);
@@ -3881,6 +3911,9 @@ namespace glz
                                           using V = std::decay_t<decltype(v)>;
                                           constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                           if constexpr (is_object) {
+                                             if constexpr (contains_tag<V, tag_literal>()) {
+                                                it = start; // tag is a struct field, must re-parse
+                                             }
                                              from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
                                           }
                                           else if constexpr (is_memory_object<V>) {
@@ -3911,6 +3944,9 @@ namespace glz
                                                    ctx.error = error_code::invalid_nullable_read;
                                                    return;
                                                 }
+                                             }
+                                             if constexpr (contains_tag<memory_type<V>, tag_literal>()) {
+                                                it = start; // tag is a struct field, must re-parse
                                              }
                                              from<JSON, memory_type<V>>::template op<opening_handled<Opts>()>(*v, ctx,
                                                                                                               it, end);
@@ -3965,7 +4001,7 @@ namespace glz
                            const auto type_index = variant_id_to_index<T>::op(
                               type_id.data(), type_id.data() + type_id.size(), type_id.size());
                            if (type_index < ids_v<T>.size()) [[likely]] {
-                              it = start;
+                              position_after_tag();
                               tag_specified_index = type_index; // Store the tag-specified type
                               if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                            }
@@ -3975,7 +4011,7 @@ namespace glz
                               constexpr auto variant_size = std::variant_size_v<T>;
                               if constexpr (ids_size < variant_size) {
                                  // Use the first unlabeled type as the default
-                                 it = start;
+                                 position_after_tag();
                                  const auto default_index = ids_size;
                                  tag_specified_index = default_index; // Store the default type index
                                  if (value.index() != default_index) emplace_runtime_variant(value, default_index);
@@ -3986,10 +4022,13 @@ namespace glz
                                  return;
                               }
                            }
-                           // Parse the empty type (handles tag skipping and unknown keys)
+                           // Parse the type (handles tag skipping and unknown keys)
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
+                                 if constexpr (contains_tag<V, tag_literal>()) {
+                                    it = start; // tag is a struct field, must re-parse
+                                 }
                                  from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                               },
                               value);

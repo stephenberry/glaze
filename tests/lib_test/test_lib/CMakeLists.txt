@@ -1,5 +1,12 @@
 project(test_lib)
 
+# Remove stale dylibs from previous builds (e.g. different compiler/config)
+# to prevent lib_loader from loading ABI-incompatible libraries.
+file(GLOB stale_libs "${CMAKE_SOURCE_DIR}/bin/*test_lib*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+if(stale_libs)
+   file(REMOVE ${stale_libs})
+endif()
+
 add_library(${PROJECT_NAME} SHARED ${PROJECT_NAME}.cpp)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "_d")
