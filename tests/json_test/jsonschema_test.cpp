@@ -593,12 +593,14 @@ suite value_type_variant_schema = [] {
 
    "vector<string> items inlined"_test = [] {
       auto schema = glz::write_json_schema<std::vector<std::string>>().value();
-      expect(schema == R"({"type":"array","items":{"type":"string"},"$defs":{},"title":"std::vector<std::string>"})") << schema;
+      expect(schema == R"({"type":"array","items":{"type":"string"},"$defs":{},"title":"std::vector<std::string>"})")
+         << schema;
    };
 
    "vector<bool> items inlined"_test = [] {
       auto schema = glz::write_json_schema<std::vector<bool>>().value();
-      expect(schema == R"({"type":"array","items":{"type":"boolean"},"$defs":{},"title":"std::vector<bool>"})") << schema;
+      expect(schema == R"({"type":"array","items":{"type":"boolean"},"$defs":{},"title":"std::vector<bool>"})")
+         << schema;
    };
 
    "vector<double> items inlined"_test = [] {

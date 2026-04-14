@@ -870,8 +870,7 @@ namespace glz
 
                // Determine if this type can be inlined (bool, string, or nullable versions)
                using inner_val_t = unwrap_nullable_t<val_t>;
-               constexpr bool can_inline =
-                  std::same_as<inner_val_t, bool> || str_t<inner_val_t> || char_t<inner_val_t>;
+               constexpr bool can_inline = std::same_as<inner_val_t, bool> || str_t<inner_val_t> || char_t<inner_val_t>;
 
                if constexpr (can_inline) {
                   if (!ref_val.ref) {
