@@ -1362,6 +1362,19 @@ namespace glz
                         ++member_count;
                      }
                   }
+                  else if constexpr (check_skip_default_members(Options) && has_skippable_default<val_t>) {
+                     decltype(auto) member = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get_member(value, get<I>(t));
+                        }
+                        else {
+                           return get_member(value, get<I>(reflect<T>::values));
+                        }
+                     }();
+                     if (!is_default_value(member)) {
+                        ++member_count;
+                     }
+                  }
                   else {
                      ++member_count;
                   }
@@ -1436,6 +1449,20 @@ namespace glz
                   }
                   else if constexpr (Options.skip_null_members && glaze_value_is_nullable<val_t>()) {
                      if (is_glaze_value_field_null<T, I>(value, t)) {
+                        return;
+                     }
+                  }
+
+                  if constexpr (check_skip_default_members(Options) && has_skippable_default<val_t>) {
+                     decltype(auto) member_val = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get_member(value, get<I>(t));
+                        }
+                        else {
+                           return get_member(value, get<I>(reflect<T>::values));
+                        }
+                     }();
+                     if (is_default_value(member_val)) {
                         return;
                      }
                   }

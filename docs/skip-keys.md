@@ -309,3 +309,74 @@ glz::write_json(resp2, buffer2);
 | Combinable | Can be used with `skip_if` | Can be used with `skip` |
 
 Choose `skip` when you want to permanently exclude fields, and `skip_if` when the decision depends on the data. Use both together for maximum control.
+
+## Automatic Default Skipping with `skip_default_members`
+
+For the common case of skipping members that hold their default/zero value, Glaze provides a high-level `skip_default_members` option that requires no per-type boilerplate.
+
+When enabled, members are skipped if they hold:
+
+| Type | Skipped when |
+|------|-------------|
+| Strings | empty (`""`) |
+| Numbers (int, float) | zero (`0`) |
+| Booleans | `false` |
+| Containers (vector, map, set, etc.) | empty |
+
+### Usage
+
+Define a custom options struct with the option enabled:
+
+```cpp
+struct skip_defaults : glz::opts {
+   bool skip_default_members = true;
+};
+
+struct config {
+   std::string name{};
+   int retries{};
+   double timeout{};
+   bool debug{};
+   std::vector<std::string> tags{};
+   std::map<std::string, int> limits{};
+};
+
+config c{.name = "prod", .retries = 3};
+auto json = glz::write<skip_defaults{}>(c).value_or("error");
+// Output: {"name":"prod","retries":3}
+// timeout (0), debug (false), tags (empty), and limits (empty) are skipped
+```
+
+### Roundtrip Safety
+
+Skipped members are simply absent from the output. When reading back, absent keys leave the corresponding C++ member at its default-constructed value, so roundtrip behavior is preserved:
+
+```cpp
+config c2{};
+glz::read_json(c2, json);
+// c2.name == "prod", c2.retries == 3
+// c2.timeout == 0.0, c2.debug == false, c2.tags == {}, c2.limits == {}
+```
+
+### Combining with Other Skip Methods
+
+`skip_default_members` works alongside the other skip mechanisms. The evaluation order during serialization is:
+
+1. `skip` (compile-time, key-based)
+2. `skip_if` (runtime, value-based)
+3. `skip_null_members` (runtime, nullable types)
+4. `skip_default_members` (runtime, default values)
+
+This means you can use `skip_default_members` for the common cases and still add `skip` or `skip_if` for custom logic.
+
+### Comparison: All Skip Methods
+
+| Feature | `skip` | `skip_if` | `skip_null_members` | `skip_default_members` |
+|---------|--------|-----------|---------------------|------------------------|
+| Scope | Per-type | Per-type | Global | Global |
+| Decision time | Compile-time | Runtime | Runtime | Runtime |
+| Requires `glz::meta` | Yes | Yes | No | No |
+| What it checks | Key name | Key + value | Nullable types | Default values |
+| Default | N/A | N/A | `true` | `false` |
+
+See also [Options](options.md) for the full list of compile time options.

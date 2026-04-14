@@ -72,6 +72,14 @@ target_link_libraries(value_based_skip_test PRIVATE glz_test_common)
 
 add_test(NAME value_based_skip_test COMMAND value_based_skip_test)
 
+## Skip default members test - test for issue #855
+
+add_executable(skip_default_members_test skip_default_members_test.cpp)
+
+target_link_libraries(skip_default_members_test PRIVATE glz_test_common)
+
+add_test(NAME skip_default_members_test COMMAND skip_default_members_test)
+
 ## Nullable lambda test - tests that lambdas returning nullable types can be skipped
 
 add_executable(nullable_lambda_test nullable_lambda_test.cpp)

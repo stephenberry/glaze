@@ -963,6 +963,10 @@ namespace glz
                }
             }
 
+            if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
+               if (is_default_value(member)) return;
+            }
+
             // Write indentation (skip for first field when in compact sequence context)
             if (skip_first_indent) {
                skip_first_indent = false;
@@ -1268,6 +1272,10 @@ namespace glz
                      return;
                   }
                }
+            }
+
+            if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
+               if (is_default_value(member)) return;
             }
 
             if (!first) {
