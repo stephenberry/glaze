@@ -508,11 +508,10 @@ namespace glz
             return [&]<size_t... I>(std::index_sequence<I...>) {
                return ((always_skipped<field_t<T, I>> ||
                         (!write_function_pointers && is_member_function_pointer<field_t<T, I>>) ||
-                        (Opts.skip_null_members &&
-                         (null_t<field_t<T, I>> ||
-                          (is_specialization_v<field_t<T, I>, custom_t> &&
-                           custom_getter_returns_nullable<field_t<T, I>>()) ||
-                          glaze_value_is_nullable<field_t<T, I>>())) ||
+                        (Opts.skip_null_members && (null_t<field_t<T, I>> ||
+                                                    (is_specialization_v<field_t<T, I>, custom_t> &&
+                                                     custom_getter_returns_nullable<field_t<T, I>>()) ||
+                                                    glaze_value_is_nullable<field_t<T, I>>())) ||
                         (check_skip_default_members(Opts) && has_skippable_default<field_t<T, I>>)) ||
                        ...);
             }(std::make_index_sequence<N>{});
