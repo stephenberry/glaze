@@ -8396,4 +8396,442 @@ suite yaml_empty_array_tests = [] {
    };
 };
 
+struct yaml_missing_keys_two
+{
+   int a{};
+   std::string b{};
+};
+
+struct yaml_missing_keys_three
+{
+   int i{};
+   double d{};
+   std::string hello{};
+};
+
+struct yaml_nullable_keys
+{
+   double req{};
+   std::optional<double> opt{};
+   double req2{};
+   std::optional<double> opt2{};
+};
+
+struct yaml_inner
+{
+   int x{};
+   int y{};
+};
+
+struct yaml_outer
+{
+   std::string name{};
+   yaml_inner inner{};
+};
+
+struct yaml_with_shared_ptr
+{
+   int a{};
+   std::shared_ptr<int> b{};
+};
+
+suite yaml_error_on_missing_keys_block = [] {
+   "block_missing_one_key"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 101
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "b");
+   };
+
+   "block_all_keys_present"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 42
+b: hello
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 42);
+      expect(data.b == "hello");
+   };
+
+   "block_all_keys_present_reversed_order"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(b: world
+a: 99
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 99);
+      expect(data.b == "world");
+   };
+
+   "block_three_fields_missing_first"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(d: 3.14
+hello: world
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "i");
+   };
+
+   "block_three_fields_missing_middle"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(i: 42
+hello: world
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "d");
+   };
+
+   "block_three_fields_missing_last"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(i: 42
+d: 3.14
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "hello");
+   };
+
+   "block_three_fields_all_present"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(i: 287
+d: 3.14
+hello: Hello World
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.i == 287);
+      expect(data.d == 3.14);
+      expect(data.hello == "Hello World");
+   };
+
+   "block_disabled_does_not_error"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 101
+)";
+      auto err = glz::read_yaml(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 101);
+   };
+};
+
+suite yaml_error_on_missing_keys_flow = [] {
+   "flow_missing_one_key"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({a: 101})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "b");
+   };
+
+   "flow_all_keys_present"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({a: 42, b: hello})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 42);
+      expect(data.b == "hello");
+   };
+
+   "flow_all_keys_present_reversed"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({b: world, a: 99})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 99);
+      expect(data.b == "world");
+   };
+
+   "flow_empty_mapping"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "a");
+   };
+
+   "flow_three_fields_missing_middle"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"({i: 42, hello: world})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "d");
+   };
+
+   "flow_three_fields_all_present"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"({i: 287, d: 3.14, hello: Hello World})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.i == 287);
+      expect(data.d == 3.14);
+      expect(data.hello == "Hello World");
+   };
+};
+
+suite yaml_error_on_missing_keys_nullable = [] {
+   "optional_not_required_block"_test = [] {
+      yaml_nullable_keys data{};
+      std::string yaml = R"(req: 1
+req2: 2
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.req == 1.0);
+      expect(data.req2 == 2.0);
+      expect(!data.opt.has_value());
+      expect(!data.opt2.has_value());
+   };
+
+   "optional_not_required_flow"_test = [] {
+      yaml_nullable_keys data{};
+      std::string yaml = R"({req: 1, req2: 2})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+   };
+
+   "required_missing_with_optional_present"_test = [] {
+      yaml_nullable_keys data{};
+      std::string yaml = R"(opt: 1
+req2: 2
+opt2: 3
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "req");
+   };
+
+   "all_present_including_optional"_test = [] {
+      yaml_nullable_keys data{};
+      std::string yaml = R"(req: 10
+opt: 20
+req2: 30
+opt2: 40
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.req == 10.0);
+      expect(data.opt.value() == 20.0);
+      expect(data.req2 == 30.0);
+      expect(data.opt2.value() == 40.0);
+   };
+
+   "shared_ptr_not_required"_test = [] {
+      yaml_with_shared_ptr data{};
+      std::string yaml = R"(a: 42
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 42);
+      expect(data.b == nullptr);
+   };
+};
+
+suite yaml_error_on_missing_keys_nested = [] {
+   "nested_inner_key_missing"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(name: test
+inner:
+  x: 1
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+
+   "nested_all_present"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(name: test
+inner:
+  x: 1
+  y: 2
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.name == "test");
+      expect(data.inner.x == 1);
+      expect(data.inner.y == 2);
+   };
+
+   "nested_outer_key_missing"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(inner:
+  x: 1
+  y: 2
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "name");
+   };
+
+   "nested_flow_inner"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(name: test
+inner: {x: 1, y: 2}
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.inner.x == 1);
+      expect(data.inner.y == 2);
+   };
+
+   "nested_flow_inner_missing"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(name: test
+inner: {x: 1}
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+};
+
+suite yaml_error_on_missing_keys_unknown_keys = [] {
+   "block_unknown_key_with_missing"_test = [] {
+      yaml_inner data{};
+      std::string yaml = R"(x: 1
+z: 99
+)";
+      auto err =
+         glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+
+   "block_unknown_key_all_present"_test = [] {
+      yaml_inner data{};
+      std::string yaml = R"(x: 1
+y: 2
+z: 99
+)";
+      auto err =
+         glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.x == 1);
+      expect(data.y == 2);
+   };
+
+   "flow_unknown_key_with_missing"_test = [] {
+      yaml_inner data{};
+      std::string yaml = R"({x: 1, z: 99})";
+      auto err =
+         glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+
+   "flow_unknown_key_all_present"_test = [] {
+      yaml_inner data{};
+      std::string yaml = R"({x: 1, y: 2, z: 99})";
+      auto err =
+         glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+   };
+};
+
+suite yaml_error_on_missing_keys_vector = [] {
+   "vector_all_elements_complete"_test = [] {
+      std::vector<yaml_inner> data{};
+      std::string yaml = R"(- x: 1
+  y: 2
+- x: 3
+  y: 4
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.size() == 2);
+      expect(data[0].x == 1);
+      expect(data[0].y == 2);
+      expect(data[1].x == 3);
+      expect(data[1].y == 4);
+   };
+
+   "vector_second_element_missing_key"_test = [] {
+      std::vector<yaml_inner> data{};
+      std::string yaml = R"(- x: 1
+  y: 2
+- x: 3
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+};
+
+suite yaml_error_on_missing_keys_yaml_opts = [] {
+   "yaml_opts_block"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 101
+)";
+      auto err = glz::read_yaml<glz::yaml::yaml_opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "b");
+   };
+
+   "yaml_opts_flow"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({a: 101})";
+      auto err = glz::read_yaml<glz::yaml::yaml_opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "b");
+   };
+
+   "yaml_opts_success"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 42
+b: hello
+)";
+      auto err = glz::read_yaml<glz::yaml::yaml_opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 42);
+      expect(data.b == "hello");
+   };
+};
+
+suite yaml_error_on_missing_keys_format_error = [] {
+   "format_error_block_missing_b"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 101
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      auto msg = glz::format_error(err, yaml);
+      expect(msg == R"(index 7: missing_key b)") << msg;
+   };
+
+   "format_error_block_missing_hello"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(i: 1
+d: 2.0
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      auto msg = glz::format_error(err, yaml);
+      expect(msg == R"(index 12: missing_key hello)") << msg;
+   };
+
+   "format_error_flow_missing_b"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({a: 101})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      auto msg = glz::format_error(err, yaml);
+      expect(msg == R"(index 8: missing_key b)") << msg;
+   };
+
+   "format_error_flow_empty"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      auto msg = glz::format_error(err, yaml);
+      expect(msg == R"(index 2: missing_key a)") << msg;
+   };
+};
+
 int main() { return 0; }

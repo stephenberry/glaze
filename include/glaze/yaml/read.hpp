@@ -2524,6 +2524,15 @@ namespace glz
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
 
+         decltype(auto) fields = [&]() -> decltype(auto) {
+            if constexpr (Opts.error_on_missing_keys) {
+               return bit_array<N>{};
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
          if (it == end || *it != '{') [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -2537,99 +2546,116 @@ namespace glz
          // Handle empty mapping
          if (it != end && *it == '}') {
             ++it;
-            return;
          }
+         else {
+            while (it != end) {
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
 
-         while (it != end) {
-            skip_flow_ws_and_newlines(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+               if (it != end && *it == '}') {
+                  ++it;
+                  validate_flow_node_adjacent_tail(ctx, it, end);
+                  break;
+               }
 
-            if (it != end && *it == '}') {
-               ++it;
-               validate_flow_node_adjacent_tail(ctx, it, end);
-               return;
-            }
-
-            // Parse key using scratch buffer to avoid allocation
-            ctx.scratch.clear();
-            if (!parse_yaml_key(ctx.scratch, ctx, it, end, true)) {
-               return;
-            }
-
-            // Separation between flow key and ':' may include comments/newlines.
-            // In flow context, newlines are allowed between key and ':'.
-            skip_flow_ws_and_newlines(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            // Expect colon
-            if (it == end || *it != ':') {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            ++it;
-            skip_flow_ws_and_newlines(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            // Look up key and parse value
-            const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
-               ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
-
-            const bool key_matches = index < N && std::string_view{ctx.scratch} == reflect<U>::keys[index];
-
-            if (key_matches) [[likely]] {
-               visit<N>(
-                  [&]<size_t I>() {
-                     if (I == index) {
-                        decltype(auto) member = [&]() -> decltype(auto) {
-                           if constexpr (reflectable<U>) {
-                              return get<I>(to_tie(value));
-                           }
-                           else {
-                              return get_member(value, get<I>(reflect<U>::values));
-                           }
-                        }();
-
-                        using member_type = std::decay_t<decltype(member)>;
-                        from<YAML, member_type>::template op<flow_context_on<Opts>()>(member, ctx, it, end);
-                     }
-                     return !bool(ctx.error);
-                  },
-                  index);
-            }
-            else {
-               if constexpr (Opts.error_on_unknown_keys) {
-                  ctx.error = error_code::unknown_key;
+               // Parse key using scratch buffer to avoid allocation
+               ctx.scratch.clear();
+               if (!parse_yaml_key(ctx.scratch, ctx, it, end, true)) {
                   return;
                }
-               else { // else used to fix MSVC unreachable code warning
-                  skip_yaml_value<Opts>(ctx, it, end, 0, true);
+
+               // Separation between flow key and ':' may include comments/newlines.
+               // In flow context, newlines are allowed between key and ':'.
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // Expect colon
+               if (it == end || *it != ':') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // Look up key and parse value
+               const auto index = decode_hash_with_size<YAML, U, HashInfo, HashInfo.type>::op(
+                  ctx.scratch.data(), ctx.scratch.data() + ctx.scratch.size(), ctx.scratch.size());
+
+               const bool key_matches = index < N && std::string_view{ctx.scratch} == reflect<U>::keys[index];
+
+               if (key_matches) [[likely]] {
+                  if constexpr (Opts.error_on_missing_keys) {
+                     fields[index] = true;
+                  }
+                  visit<N>(
+                     [&]<size_t I>() {
+                        if (I == index) {
+                           decltype(auto) member = [&]() -> decltype(auto) {
+                              if constexpr (reflectable<U>) {
+                                 return get<I>(to_tie(value));
+                              }
+                              else {
+                                 return get_member(value, get<I>(reflect<U>::values));
+                              }
+                           }();
+
+                           using member_type = std::decay_t<decltype(member)>;
+                           from<YAML, member_type>::template op<flow_context_on<Opts>()>(member, ctx, it, end);
+                        }
+                        return !bool(ctx.error);
+                     },
+                     index);
+               }
+               else {
+                  if constexpr (Opts.error_on_unknown_keys) {
+                     ctx.error = error_code::unknown_key;
+                     return;
+                  }
+                  else { // else used to fix MSVC unreachable code warning
+                     skip_yaml_value<Opts>(ctx, it, end, 0, true);
+                  }
+               }
+
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // In flow context, newlines are treated as whitespace (YAML spec).
+               // Use skip_flow_ws_and_newlines so that a newline between a value
+               // and its separator (comma or closing brace) is accepted.
+               skip_flow_ws_and_newlines(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (it != end && *it == '}') {
+                  ++it;
+                  validate_flow_node_adjacent_tail(ctx, it, end);
+                  break;
+               }
+               else if (it != end && *it == ',') {
+                  ++it;
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             }
+         }
 
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            // In flow context, newlines are treated as whitespace (YAML spec).
-            // Use skip_flow_ws_and_newlines so that a newline between a value
-            // and its separator (comma or closing brace) is accepted.
-            skip_flow_ws_and_newlines(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            if (it != end && *it == '}') {
-               ++it;
-               validate_flow_node_adjacent_tail(ctx, it, end);
-               return;
-            }
-            else if (it != end && *it == ',') {
-               ++it;
-            }
-            else {
-               ctx.error = error_code::syntax_error;
-               return;
+         if constexpr (Opts.error_on_missing_keys) {
+            if (bool(ctx.error)) return;
+            constexpr auto req_fields = required_fields<U, Opts>();
+            if ((req_fields & fields) != req_fields) {
+               for (size_t i = 0; i < N; ++i) {
+                  if (not fields[i] && req_fields[i]) {
+                     ctx.custom_error_message = reflect<U>::keys[i];
+                     break;
+                  }
+               }
+               ctx.error = error_code::missing_key;
             }
          }
       }
@@ -3450,6 +3476,15 @@ namespace glz
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
 
+         decltype(auto) fields = [&]() -> decltype(auto) {
+            if constexpr (Opts.error_on_missing_keys) {
+               return bit_array<N>{};
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
          // Clamp to >= 0 so the shared loop uses struct mode (discover_indent = false)
          if (mapping_indent < 0) mapping_indent = 0;
 
@@ -3478,6 +3513,9 @@ namespace glz
                const bool key_matches = index < N && std::string_view{ctx.scratch} == reflect<U>::keys[index];
 
                if (key_matches) [[likely]] {
+                  if constexpr (Opts.error_on_missing_keys) {
+                     fields[index] = true;
+                  }
                   visit<N>(
                      [&]<size_t I>() {
                         if (I == index) {
@@ -3561,6 +3599,20 @@ namespace glz
 
                return !bool(ctx.error);
             });
+
+         if constexpr (Opts.error_on_missing_keys) {
+            if (bool(ctx.error)) return;
+            constexpr auto req_fields = required_fields<U, Opts>();
+            if ((req_fields & fields) != req_fields) {
+               for (size_t i = 0; i < N; ++i) {
+                  if (not fields[i] && req_fields[i]) {
+                     ctx.custom_error_message = reflect<U>::keys[i];
+                     break;
+                  }
+               }
+               ctx.error = error_code::missing_key;
+            }
+         }
       }
 
    } // namespace yaml
