@@ -390,8 +390,7 @@ namespace glz
       }
    };
 
-   template <nullable_t T>
-      requires(!std::is_array_v<T>)
+   template <nullable_like T>
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
@@ -461,7 +460,7 @@ namespace glz
          if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
             return true;
          }
-         else if constexpr (is_member_function_pointer<V>) {
+         else if constexpr (is_any_function_ptr<V>) {
             return !check_write_function_pointers(Opts);
          }
          else {
@@ -528,7 +527,7 @@ namespace glz
          if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
             return true;
          }
-         else if constexpr (is_member_function_pointer<V>) {
+         else if constexpr (is_any_function_ptr<V>) {
             return !check_write_function_pointers(Opts);
          }
          else {

@@ -1671,8 +1671,7 @@ namespace glz
    };
 
    // Nullable types
-   template <nullable_t T>
-      requires(!std::is_array_v<T> && not is_expected<T>)
+   template <nullable_like T>
    struct from<CBOR, T> final
    {
       template <auto Opts>
