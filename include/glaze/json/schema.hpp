@@ -496,6 +496,50 @@ namespace glz
          }
       };
 
+      // Whether a type can be represented as an inline JSON Schema primitive
+      template <class V>
+      constexpr bool schema_primitive = std::same_as<V, bool> || num_t<V> || str_t<V> || char_t<V>;
+
+      // Unwrap nested nullable types (e.g. std::optional<std::optional<std::string>> → std::string)
+      template <class T>
+      struct unwrap_nullable
+      {
+         using type = T;
+      };
+
+      template <nullable_t T>
+      struct unwrap_nullable<T>
+      {
+         using type = typename unwrap_nullable<std::decay_t<decltype(*std::declval<T>())>>::type;
+      };
+
+      template <class T>
+      using unwrap_nullable_t = typename unwrap_nullable<T>::type;
+
+      // Build an inline schema for a primitive type
+      template <class V>
+      schema make_primitive_schema()
+      {
+         schema s{};
+         if constexpr (std::same_as<V, bool>) {
+            s.type = sv{"boolean"};
+         }
+         else if constexpr (str_t<V> || char_t<V>) {
+            s.type = sv{"string"};
+         }
+         else if constexpr (std::integral<V>) {
+            s.type = sv{"integer"};
+            s.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
+            s.maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
+         }
+         else if constexpr (std::floating_point<V>) {
+            s.type = sv{"number"};
+            s.minimum = std::numeric_limits<V>::lowest();
+            s.maximum = (std::numeric_limits<V>::max)();
+         }
+         return s;
+      }
+
       template <array_t T>
       struct to_json_schema<T>
       {
@@ -507,22 +551,32 @@ namespace glz
             if constexpr (pair_t<V> && check_concatenate(Opts)) {
                using ValueType = std::decay_t<glz::tuple_element_t<1, V>>;
                s.type = sv{"object"};
-               auto& def = defs[name_v<ValueType>];
-               if (!def.type) {
-                  to_json_schema<ValueType>::template op<Opts>(def, defs);
+               if constexpr (schema_primitive<ValueType>) {
+                  s.additionalProperties = make_primitive_schema<ValueType>();
                }
-               s.additionalProperties = schema{true, join_v<chars<"#/$defs/">, name_v<ValueType>>};
+               else {
+                  auto& def = defs[name_v<ValueType>];
+                  if (!def.type) {
+                     to_json_schema<ValueType>::template op<Opts>(def, defs);
+                  }
+                  s.additionalProperties = schema{true, join_v<chars<"#/$defs/">, name_v<ValueType>>};
+               }
             }
             else {
                s.type = sv{"array"};
                if constexpr (has_fixed_size_container<std::decay_t<T>>) {
                   s.attributes.maxItems = get_size<std::decay_t<T>>();
                }
-               auto& def = defs[name_v<V>];
-               if (!def.type) {
-                  to_json_schema<V>::template op<Opts>(def, defs);
+               if constexpr (schema_primitive<V>) {
+                  s.items = make_primitive_schema<V>();
                }
-               s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
+               else {
+                  auto& def = defs[name_v<V>];
+                  if (!def.type) {
+                     to_json_schema<V>::template op<Opts>(def, defs);
+                  }
+                  s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
+               }
             }
          }
       };
@@ -535,11 +589,16 @@ namespace glz
          {
             using V = std::decay_t<glz::tuple_element_t<1, range_value_t<std::decay_t<T>>>>;
             s.type = sv{"object"};
-            auto& def = defs[name_v<V>];
-            if (!def.type) {
-               to_json_schema<V>::template op<Opts>(def, defs);
+            if constexpr (schema_primitive<V>) {
+               s.additionalProperties = make_primitive_schema<V>();
             }
-            s.additionalProperties = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
+            else {
+               auto& def = defs[name_v<V>];
+               if (!def.type) {
+                  to_json_schema<V>::template op<Opts>(def, defs);
+               }
+               s.additionalProperties = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
+            }
          }
       };
 
@@ -810,36 +869,27 @@ namespace glz
                }
 
                // Determine if this type can be inlined (bool, string, or nullable versions)
-               constexpr bool can_inline = [] {
-                  using V = val_t;
-                  if constexpr (std::same_as<V, bool> || str_t<V> || char_t<V>) {
-                     return true;
-                  }
-                  else if constexpr (nullable_t<V>) {
-                     using inner = std::decay_t<decltype(*std::declval<V>())>;
-                     return std::same_as<inner, bool> || str_t<inner> || char_t<inner>;
-                  }
-                  else {
-                     return false;
-                  }
-               }();
+               using inner_val_t = unwrap_nullable_t<val_t>;
+               constexpr bool can_inline =
+                  std::same_as<inner_val_t, bool> || str_t<inner_val_t> || char_t<inner_val_t>;
 
                if constexpr (can_inline) {
                   if (!ref_val.ref) {
                      // Inline the type directly instead of using $defs/$ref
-                     if constexpr (std::same_as<val_t, bool>) {
-                        ref_val.type = sv{"boolean"};
-                     }
-                     else if constexpr (str_t<val_t> || char_t<val_t>) {
-                        ref_val.type = sv{"string"};
-                     }
-                     else if constexpr (nullable_t<val_t>) {
-                        using inner = std::decay_t<decltype(*std::declval<val_t>())>;
-                        if constexpr (std::same_as<inner, bool>) {
+                     if constexpr (std::same_as<inner_val_t, bool>) {
+                        if constexpr (nullable_t<val_t>) {
                            ref_val.type = std::vector<sv>{sv{"boolean"}, sv{"null"}};
                         }
                         else {
+                           ref_val.type = sv{"boolean"};
+                        }
+                     }
+                     else {
+                        if constexpr (nullable_t<val_t>) {
                            ref_val.type = std::vector<sv>{sv{"string"}, sv{"null"}};
+                        }
+                        else {
+                           ref_val.type = sv{"string"};
                         }
                      }
                   }

@@ -583,18 +583,38 @@ suite value_type_variant_schema = [] {
       expect(obj->prefixItems->size() == 2);
    };
 
-   "homogeneous array items is schema ref"_test = [] {
+   "homogeneous array items inlines primitive types"_test = [] {
       auto schema = glz::write_json_schema<std::vector<int>>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
-      expect(obj.has_value()) << "Failed to parse schema";
-      expect(obj->type.has_value());
-      expect(std::get<std::string_view>(*obj->type) == "array");
-      // items should be a $ref schema, not a boolean
-      expect(obj->items.has_value());
-      expect(std::holds_alternative<glz::schema>(*obj->items));
-      auto& ref = std::get<glz::schema>(*obj->items);
-      expect(ref.ref.has_value());
-      expect(*ref.ref == "#/$defs/int32_t");
+      expect(
+         schema ==
+         R"({"type":"array","items":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"$defs":{},"title":"std::vector<int32_t>"})")
+         << schema;
+   };
+
+   "vector<string> items inlined"_test = [] {
+      auto schema = glz::write_json_schema<std::vector<std::string>>().value();
+      expect(schema == R"({"type":"array","items":{"type":"string"},"$defs":{},"title":"std::vector<std::string>"})") << schema;
+   };
+
+   "vector<bool> items inlined"_test = [] {
+      auto schema = glz::write_json_schema<std::vector<bool>>().value();
+      expect(schema == R"({"type":"array","items":{"type":"boolean"},"$defs":{},"title":"std::vector<bool>"})") << schema;
+   };
+
+   "vector<double> items inlined"_test = [] {
+      auto schema = glz::write_json_schema<std::vector<double>>().value();
+      expect(
+         schema ==
+         R"({"type":"array","items":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"$defs":{},"title":"std::vector<double>"})")
+         << schema;
+   };
+
+   "map<string,string> additionalProperties inlined"_test = [] {
+      auto schema = glz::write_json_schema<std::map<std::string, std::string>>().value();
+      expect(
+         schema ==
+         R"({"type":"object","additionalProperties":{"type":"string"},"$defs":{},"title":"std::map<std::string,std::string>"})")
+         << schema;
    };
 
    "glaze_array_t schema"_test = [] {
@@ -925,6 +945,25 @@ suite variant_ref_schema_tests = [] {
       expect(prop_it != obj->properties->end());
       expect(prop_it->second.ref.has_value());
       expect(*prop_it->second.ref == std::string("#/$defs/") + std::string(glz::name_v<obj_a>));
+   };
+};
+
+// Issue #2489: nested std::optional should be idempotent for bool and string
+struct nested_optional_obj
+{
+   std::optional<std::string> b1;
+   std::optional<std::optional<std::string>> b2;
+   std::optional<std::optional<bool>> b3;
+   std::optional<std::optional<std::optional<std::string>>> b4;
+};
+
+suite nested_optional_inline_test = [] {
+   "nested optional string and bool inlined"_test = [] {
+      auto schema = glz::write_json_schema<nested_optional_obj>().value();
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"b1":{"type":["string","null"]},"b2":{"type":["string","null"]},"b3":{"type":["boolean","null"]},"b4":{"type":["string","null"]}},"additionalProperties":false,"$defs":{},"title":"nested_optional_obj"})")
+         << schema;
    };
 };
 
