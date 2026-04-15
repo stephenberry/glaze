@@ -7130,9 +7130,7 @@ suite json_logging = [] {
    };
 };
 
-// ============================================================================
 // merge-in-meta tests: glz::merge{&T::a, &T::b} inside glz::meta
-// ============================================================================
 
 namespace merge_meta_test
 {
@@ -7180,6 +7178,19 @@ namespace merge_meta_test
       Dimensions dims{};
       Habitat habitat{};
    };
+
+   // For nested merge test: BearRecord is itself a merge type
+   struct Location
+   {
+      std::string region{};
+      int altitude{};
+   };
+
+   struct LocatedBear
+   {
+      BearRecord record{}; // BearRecord's meta is glz::merge{&T::species, &T::appearance}
+      Location location{};
+   };
 }
 
 template <>
@@ -7208,6 +7219,13 @@ struct glz::meta<merge_meta_test::BearProfile>
 {
    using T = merge_meta_test::BearProfile;
    static constexpr auto value = glz::merge{&T::species, &T::appearance, &T::dims, &T::habitat};
+};
+
+template <>
+struct glz::meta<merge_meta_test::LocatedBear>
+{
+   using T = merge_meta_test::LocatedBear;
+   static constexpr auto value = glz::merge{&T::record, &T::location};
 };
 
 suite merge_meta_tests = [] {
@@ -7316,6 +7334,70 @@ suite merge_meta_tests = [] {
       expect(restored.appearance.weight == original.appearance.weight);
       expect(restored.appearance.color == original.appearance.color);
    };
+
+   "merge_meta_nested_merge"_test = [] {
+      // LocatedBear merges BearRecord (itself a merge) with Location
+      LocatedBear lb{};
+      lb.record.species.name = "Panda";
+      lb.record.species.legs = 4;
+      lb.record.appearance.weight = 100.0;
+      lb.record.appearance.color = "black and white";
+      lb.location.region = "Sichuan";
+      lb.location.altitude = 2500;
+
+      std::string s{};
+      expect(not glz::write_json(lb, s));
+      expect(s == R"({"name":"Panda","legs":4,"weight":100,"color":"black and white","region":"Sichuan","altitude":2500})") << s;
+
+      LocatedBear restored{};
+      expect(not glz::read_json(restored, s));
+      expect(restored.record.species.name == "Panda");
+      expect(restored.record.species.legs == 4);
+      expect(restored.record.appearance.weight == 100.0);
+      expect(restored.record.appearance.color == "black and white");
+      expect(restored.location.region == "Sichuan");
+      expect(restored.location.altitude == 2500);
+   };
+
+   "merge_meta_partial_read"_test = [] {
+      // JSON missing some flattened keys — unmentioned fields keep defaults
+      BearRecord b{};
+      b.species.name = "default";
+      b.species.legs = 99;
+      b.appearance.weight = 0.0;
+      b.appearance.color = "default";
+
+      expect(not glz::read_json(b, R"({"name":"Polar","color":"white"})"));
+      expect(b.species.name == "Polar");
+      expect(b.species.legs == 99); // unchanged
+      expect(b.appearance.weight == 0.0); // unchanged
+      expect(b.appearance.color == "white");
+   };
+
+   "merge_meta_unknown_keys_allowed"_test = [] {
+      BearRecord b{};
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(b, R"({"name":"Polar","legs":4,"extra":true,"weight":450,"color":"white"})");
+      expect(ec == glz::error_code::none);
+      expect(b.species.name == "Polar");
+      expect(b.appearance.weight == 450.0);
+   };
+
+   "merge_meta_unknown_keys_error"_test = [] {
+      BearRecord b{};
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(b, R"({"name":"Polar","unknown_field":42,"weight":450,"color":"white"})");
+      expect(ec != glz::error_code::none);
+   };
+
+   "merge_meta_json_schema"_test = [] {
+      auto schema = glz::write_json_schema<BearRecord>().value_or("error");
+      expect(schema != "error");
+      // Schema should contain all flattened keys
+      expect(schema.find("\"name\"") != std::string::npos) << schema;
+      expect(schema.find("\"legs\"") != std::string::npos) << schema;
+      expect(schema.find("\"weight\"") != std::string::npos) << schema;
+      expect(schema.find("\"color\"") != std::string::npos) << schema;
+   };
+
 };
 
 struct non_cx_values

@@ -592,14 +592,13 @@ struct Habitat {
 struct BearProfile {
    Species species{};
    Appearance appearance{};
-   Dimensions dims{};
    Habitat habitat{};
 };
 
 template <>
 struct glz::meta<BearProfile> {
    using T = BearProfile;
-   static constexpr auto value = glz::merge{&T::species, &T::appearance, &T::dims, &T::habitat};
+   static constexpr auto value = glz::merge{&T::species, &T::appearance, &T::habitat};
 };
 // All fields flattened into one JSON object
 ```

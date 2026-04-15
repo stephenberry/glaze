@@ -8830,4 +8830,56 @@ d: 2.0
    };
 };
 
+// merge-in-meta YAML roundtrip
+
+namespace merge_meta_yaml_test
+{
+   struct Species
+   {
+      std::string name{};
+      int legs{};
+   };
+
+   struct Appearance
+   {
+      double weight{};
+      std::string color{};
+   };
+
+   struct BearRecord
+   {
+      Species species{};
+      Appearance appearance{};
+   };
+}
+
+template <>
+struct glz::meta<merge_meta_yaml_test::BearRecord>
+{
+   using T = merge_meta_yaml_test::BearRecord;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance};
+};
+
+suite merge_meta_yaml_tests = [] {
+   using namespace merge_meta_yaml_test;
+
+   "merge_meta_yaml_roundtrip"_test = [] {
+      BearRecord original{};
+      original.species.name = "Sloth";
+      original.species.legs = 4;
+      original.appearance.weight = 120.0;
+      original.appearance.color = "tan";
+
+      std::string yaml{};
+      expect(not glz::write_yaml(original, yaml));
+
+      BearRecord restored{};
+      expect(not glz::read_yaml(restored, yaml));
+      expect(restored.species.name == original.species.name);
+      expect(restored.species.legs == original.species.legs);
+      expect(restored.appearance.weight == original.appearance.weight);
+      expect(restored.appearance.color == original.appearance.color);
+   };
+};
+
 int main() { return 0; }

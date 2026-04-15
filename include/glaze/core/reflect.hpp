@@ -244,7 +244,7 @@ namespace glz
    // MSVC requires this template specialization for when the tuple size if zero,
    // otherwise MSVC tries to instantiate calls of get<0> in invalid branches
    template <class T>
-      requires((glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) && (tuple_size_v<meta_t<T>> == 0))
+      requires(!glaze_merge_t<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) && (tuple_size_v<meta_t<T>> == 0))
    struct reflect<T>
    {
       static constexpr auto size = 0;
@@ -293,15 +293,9 @@ namespace glz
       using type = member_t<V, decltype(get<I>(values))>;
    };
 
-   // ============================================================================
-   // reflect<T> specialization for merge-in-meta types (glaze_merge_t)
-   // Flattens sub-type fields into a single reflect interface.
-   // ============================================================================
-
    namespace detail
    {
-      // Stateless accessor that chains an outer member pointer with inner sub-field access.
-      // Invocable with the parent type, returns a reference to the target sub-field.
+      // Chains an outer member pointer with inner sub-field access for merge-in-meta types.
       template <class ParentType, size_t OuterIdx, size_t InnerIdx>
       struct merge_accessor
       {
@@ -310,14 +304,11 @@ namespace glz
 
          constexpr decltype(auto) operator()(auto&& parent) const
          {
-            if constexpr (glaze_object_t<SubType> && !glaze_merge_t<SubType>) {
-               return get_member(parent.*outer_ptr, get<InnerIdx>(reflect<SubType>::values));
-            }
-            else if constexpr (glaze_merge_t<SubType>) {
-               // Sub-type is itself a merge — its reflect<SubType>::values contains merge_accessors
+            if constexpr (glaze_object_t<SubType>) {
                return get_member(parent.*outer_ptr, get<InnerIdx>(reflect<SubType>::values));
             }
             else {
+               // Aggregate/reflectable sub-type without glz::meta — access fields via to_tie
                static_assert(reflectable<SubType>,
                   "glz::merge sub-types must be glaze_object_t or reflectable");
                return get<InnerIdx>(to_tie(parent.*outer_ptr));
@@ -363,6 +354,18 @@ namespace glz
          }(std::make_index_sequence<num_merge_members>{});
          return result;
       }();
+
+      static constexpr bool unique_keys = []() constexpr {
+         for (size_t i = 0; i < size; ++i) {
+            for (size_t j = i + 1; j < size; ++j) {
+               if (keys[i] == keys[j]) {
+                  return false;
+               }
+            }
+         }
+         return true;
+      }();
+      static_assert(unique_keys, "glz::merge sub-types must not have duplicate keys");
 
       // Build accessor tuple for a single sub-type at OuterIdx
       template <size_t OuterIdx>
