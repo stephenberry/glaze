@@ -46,6 +46,7 @@ namespace glz
       std::optional<std::string_view> description{};
       std::optional<schema_any> defaultValue{};
       std::optional<bool> deprecated{};
+      std::optional<std::vector<std::string_view>> examples{};
       std::optional<bool> readOnly{};
       std::optional<bool> writeOnly{};
       // validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
@@ -88,7 +89,6 @@ namespace glz
       std::optional<std::variant<bool, std::shared_ptr<schema>>> additionalProperties{};
       std::optional<std::map<std::string_view, schema, std::less<>>> defs{};
       std::optional<std::vector<schema>> oneOf{};
-      std::optional<std::vector<std::string_view>> examples{};
       std::optional<std::vector<std::string_view>> required{};
 
       static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
