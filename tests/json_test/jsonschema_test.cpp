@@ -214,6 +214,24 @@ struct glz::meta<color>
    );
 };
 
+enum struct direction { up, down, left, right };
+
+template <>
+struct glz::meta<direction>
+{
+   using enum direction;
+   static constexpr auto value = enumerate(up, down, left, right);
+};
+
+template <>
+struct glz::json_schema<direction>
+{
+   schema up{.description = "Move upward"};
+   schema down{.description = "Move downward"};
+   schema left{.description = "Move left"};
+   schema right{.description = "Move right"};
+};
+
 struct const_one_enum
 {
    static constexpr color some_var{color::green};
@@ -397,12 +415,25 @@ suite schema_tests = [] {
       }
    };
 
-   "enum description"_test = [] {
-      std::string schema_str = glz::write_json_schema<color>().value_or("error");
+   "enum value description"_test = [] {
+      std::string schema_str = glz::write_json_schema<direction>().value_or("error");
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
       expect[(obj.oneOf.has_value())];
+      auto& entries = obj.oneOf.value();
+      expect(entries.size() == 4);
+
+      std::array<std::string_view, 4> expected_keys{"up", "down", "left", "right"};
+      std::array<std::string_view, 4> expected_descs{"Move upward", "Move downward", "Move left", "Move right"};
+      for (size_t i = 0; i < 4; ++i) {
+         expect[(entries[i].attributes.constant.has_value())];
+         expect(std::get<std::string_view>(entries[i].attributes.constant.value()) == expected_keys[i]);
+         expect[(entries[i].attributes.title.has_value())];
+         expect(entries[i].attributes.title.value() == expected_keys[i]);
+         expect[(entries[i].attributes.description.has_value())];
+         expect(entries[i].attributes.description.value() == expected_descs[i]);
+      }
    };
 
    "fixed array has fixed size"_test = [] {
