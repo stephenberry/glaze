@@ -23,7 +23,7 @@ namespace glz
 
    struct openapi_media_type
    {
-      std::optional<detail::schematic> schema{};
+      std::optional<glz::schema> schema{};
       std::optional<std::string> example{};
    };
 
@@ -40,7 +40,7 @@ namespace glz
       std::string in{}; // "path", "query", "header", or "cookie"
       std::optional<std::string> description{};
       bool required = false;
-      std::optional<detail::schematic> schema{};
+      std::optional<glz::schema> schema{};
    };
 
    struct openapi_response
@@ -51,7 +51,7 @@ namespace glz
 
    struct openapi_components
    {
-      std::optional<std::unordered_map<std::string, detail::schematic>> schemas{};
+      std::optional<std::unordered_map<std::string, glz::schema>> schemas{};
    };
 
    struct openapi_operation

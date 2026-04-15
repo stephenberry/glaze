@@ -37,10 +37,10 @@ namespace glz
    struct schema final
    {
       bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
-      std::optional<std::string_view> ref{};
-      std::optional<std::variant<std::string_view, std::vector<std::string_view>>> type{};
+
       using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
       using schema_any = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
+
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
       std::optional<std::string_view> title{};
       std::optional<std::string_view> description{};
@@ -49,7 +49,7 @@ namespace glz
       std::optional<std::vector<std::string_view>> examples{};
       std::optional<bool> readOnly{};
       std::optional<bool> writeOnly{};
-      // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
+      // validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
       std::optional<schema_any> constant{};
       // string only keywords
       std::optional<uint64_t> minLength{};
@@ -67,14 +67,12 @@ namespace glz
       std::optional<uint64_t> minProperties{};
       std::optional<uint64_t> maxProperties{};
       // std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
-      std::optional<std::vector<std::string_view>> required{};
       // array only keywords
       std::optional<uint64_t> minItems{};
       std::optional<uint64_t> maxItems{};
       std::optional<uint64_t> minContains{};
       std::optional<uint64_t> maxContains{};
       std::optional<bool> uniqueItems{};
-      // properties
       std::optional<std::vector<std::string_view>> enumeration{}; // enum
 
       // out of json schema specification
@@ -82,101 +80,22 @@ namespace glz
       std::optional<bool>
          ExtAdvanced{}; // flag to indicate that the parameter is advanced and can be hidden in default views
 
+      // structural keywords (used internally by schema generation, not typically set by users)
+      std::optional<std::variant<std::string_view, std::vector<std::string_view>>> type{};
+      std::optional<std::string_view> ref{};
+      std::optional<std::map<std::string_view, schema, std::less<>>> properties{};
+      std::optional<std::vector<schema>> prefixItems{};
+      std::optional<std::variant<bool, std::shared_ptr<schema>>> items{};
+      std::optional<std::variant<bool, std::shared_ptr<schema>>> additionalProperties{};
+      std::optional<std::map<std::string_view, schema, std::less<>>> defs{};
+      std::optional<std::vector<schema>> oneOf{};
+      std::optional<std::vector<std::string_view>> required{};
+
       static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
-
-      // TODO switch to using variants when we have write support to get rid of nulls
-      // TODO We should be able to generate the json schema compiletime
-      struct glaze
-      {
-         using T = schema;
-         static constexpr std::array keys{"type", //
-                                          "$ref", //
-                                          "title", //
-                                          "description", //
-                                          "default", //
-                                          "deprecated", //
-                                          "examples", //
-                                          "readOnly", //
-                                          "writeOnly", //
-                                          "const", //
-                                          "minLength", //
-                                          "maxLength", //
-                                          "pattern", //
-                                          "format", //
-                                          "minimum", //
-                                          "maximum", //
-                                          "exclusiveMinimum", //
-                                          "exclusiveMaximum", //
-                                          "multipleOf", //
-                                          "minProperties", //
-                                          "maxProperties", //
-                                          //"dependentRequired", //
-                                          "required", //
-                                          "minItems", //
-                                          "maxItems", //
-                                          "minContains", //
-                                          "maxContains", //
-                                          "uniqueItems", //
-                                          "enum", //
-                                          "ExtUnits", //
-                                          "ExtAdvanced"};
-
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-braces"
-#endif
-         static constexpr glz::tuple value = {&T::type, //
-                                              &T::ref, //
-                                              &T::title, //
-                                              &T::description, //
-                                              &T::defaultValue, //
-                                              &T::deprecated, //
-                                              unquoted<&T::examples>, //
-                                              &T::readOnly, //
-                                              &T::writeOnly, //
-                                              &T::constant, //
-                                              &T::minLength, //
-                                              &T::maxLength, //
-                                              &T::pattern, //
-                                              &T::format, //
-                                              &T::minimum, //
-                                              &T::maximum, //
-                                              &T::exclusiveMinimum, //
-                                              &T::exclusiveMaximum, //
-                                              &T::multipleOf, //
-                                              &T::minProperties, //
-                                              &T::maxProperties, //
-                                              // &T::dependent_required, //
-                                              &T::required, //
-                                              &T::minItems, //
-                                              &T::maxItems, //
-                                              &T::minContains, //
-                                              &T::maxContains, //
-                                              &T::uniqueItems, //
-                                              &T::enumeration, //
-                                              &T::ExtUnits, //
-                                              &T::ExtAdvanced};
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#endif
-      };
    };
 
    namespace detail
    {
-      struct schematic final
-      {
-         std::optional<std::variant<std::string_view, std::vector<std::string_view>>> type{};
-         std::optional<std::map<std::string_view, schema, std::less<>>> properties{}; // glaze_object
-         std::optional<std::vector<schematic>> prefixItems{}; // tuple
-         std::optional<std::variant<bool, schema>> items{}; // array or tuple (false for tuple)
-         std::optional<std::variant<bool, schema>> additionalProperties{}; // map
-         std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
-         std::optional<std::vector<schematic>> oneOf{};
-         std::optional<std::vector<std::string_view>> required{};
-         std::optional<std::vector<std::string_view>> examples{};
-         schema attributes{};
-      };
 
       enum struct defined_formats : uint32_t {
          datetime, //
@@ -241,10 +160,10 @@ struct glz::meta<glz::detail::defined_formats>
 };
 
 template <>
-struct glz::meta<glz::detail::schematic>
+struct glz::meta<glz::schema>
 {
-   static constexpr std::string_view name = "glz::detail::schema";
-   using T = detail::schematic;
+   static constexpr std::string_view name = "glz::schema";
+   using T = glz::schema;
    static constexpr std::array keys{"type", //
                                     "$ref", //
                                     "properties", //
@@ -289,42 +208,42 @@ struct glz::meta<glz::detail::schematic>
 #endif
    [[maybe_unused]] static constexpr glz::tuple value{
       &T::type, //
-      [](auto&& s) -> auto& { return s.attributes.ref; }, //
+      &T::ref, //
       &T::properties, //
       &T::prefixItems, //
       &T::items, //
       &T::additionalProperties, //
       &T::defs, //
       &T::oneOf, //
-      unquoted<&T::examples>, //
+      glz::unquoted<&T::examples>, //
       &T::required, //
-      [](auto&& s) -> auto& { return s.attributes.title; }, //
-      [](auto&& s) -> auto& { return s.attributes.description; }, //
-      [](auto&& s) -> auto& { return s.attributes.defaultValue; }, //
-      [](auto&& s) -> auto& { return s.attributes.deprecated; }, //
-      [](auto&& s) -> auto& { return s.attributes.readOnly; }, //
-      [](auto&& s) -> auto& { return s.attributes.writeOnly; }, //
-      [](auto&& s) -> auto& { return s.attributes.constant; }, //
-      [](auto&& s) -> auto& { return s.attributes.minLength; }, //
-      [](auto&& s) -> auto& { return s.attributes.maxLength; }, //
-      [](auto&& s) -> auto& { return s.attributes.pattern; }, //
-      [](auto&& s) -> auto& { return s.attributes.format; }, //
-      [](auto&& s) -> auto& { return s.attributes.minimum; }, //
-      [](auto&& s) -> auto& { return s.attributes.maximum; }, //
-      [](auto&& s) -> auto& { return s.attributes.exclusiveMinimum; }, //
-      [](auto&& s) -> auto& { return s.attributes.exclusiveMaximum; }, //
-      [](auto&& s) -> auto& { return s.attributes.multipleOf; }, //
-      [](auto&& s) -> auto& { return s.attributes.minProperties; }, //
-      [](auto&& s) -> auto& { return s.attributes.maxProperties; }, //
-      // [](auto&& s) -> auto& { return s.attributes.dependent_required; }, //
-      [](auto&& s) -> auto& { return s.attributes.minItems; }, //
-      [](auto&& s) -> auto& { return s.attributes.maxItems; }, //
-      [](auto&& s) -> auto& { return s.attributes.minContains; }, //
-      [](auto&& s) -> auto& { return s.attributes.maxContains; }, //
-      [](auto&& s) -> auto& { return s.attributes.uniqueItems; }, //
-      [](auto&& s) -> auto& { return s.attributes.enumeration; }, //
-      [](auto&& s) -> auto& { return s.attributes.ExtUnits; }, //
-      [](auto&& s) -> auto& { return s.attributes.ExtAdvanced; }};
+      &T::title, //
+      &T::description, //
+      &T::defaultValue, //
+      &T::deprecated, //
+      &T::readOnly, //
+      &T::writeOnly, //
+      &T::constant, //
+      &T::minLength, //
+      &T::maxLength, //
+      &T::pattern, //
+      &T::format, //
+      &T::minimum, //
+      &T::maximum, //
+      &T::exclusiveMinimum, //
+      &T::exclusiveMaximum, //
+      &T::multipleOf, //
+      &T::minProperties, //
+      &T::maxProperties, //
+      // &T::dependent_required, //
+      &T::minItems, //
+      &T::maxItems, //
+      &T::minContains, //
+      &T::maxContains, //
+      &T::uniqueItems, //
+      &T::enumeration, //
+      &T::ExtUnits, //
+      &T::ExtAdvanced};
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
@@ -336,6 +255,42 @@ namespace glz
 
    namespace detail
    {
+      // Merge annotation/validation metadata from src into dst (non-null src fields overwrite dst).
+      // Does NOT merge structural keywords (type, ref, properties, items, etc.).
+      // Used for applying user json_schema metadata and for preserving sibling keywords during $ref inlining.
+      inline void merge_schema_attrs(schema& dst, schema& src)
+      {
+         auto merge = [](auto& d, auto& s) {
+            if (s) d = std::move(s);
+         };
+         merge(dst.title, src.title);
+         merge(dst.description, src.description);
+         merge(dst.defaultValue, src.defaultValue);
+         merge(dst.deprecated, src.deprecated);
+         merge(dst.readOnly, src.readOnly);
+         merge(dst.writeOnly, src.writeOnly);
+         merge(dst.constant, src.constant);
+         merge(dst.minLength, src.minLength);
+         merge(dst.maxLength, src.maxLength);
+         merge(dst.pattern, src.pattern);
+         merge(dst.format, src.format);
+         merge(dst.minimum, src.minimum);
+         merge(dst.maximum, src.maximum);
+         merge(dst.exclusiveMinimum, src.exclusiveMinimum);
+         merge(dst.exclusiveMaximum, src.exclusiveMaximum);
+         merge(dst.multipleOf, src.multipleOf);
+         merge(dst.minProperties, src.minProperties);
+         merge(dst.maxProperties, src.maxProperties);
+         merge(dst.minItems, src.minItems);
+         merge(dst.maxItems, src.maxItems);
+         merge(dst.minContains, src.minContains);
+         merge(dst.maxContains, src.maxContains);
+         merge(dst.uniqueItems, src.uniqueItems);
+         merge(dst.enumeration, src.enumeration);
+         merge(dst.ExtUnits, src.ExtUnits);
+         merge(dst.ExtAdvanced, src.ExtAdvanced);
+      }
+
       template <class T = void>
       struct to_json_schema
       {
@@ -361,7 +316,8 @@ namespace glz
                      }();
                      if constexpr (schema_index < schema_size) {
                         static const auto schema_v = json_schema_type<T>{};
-                        s.attributes = get<schema_index>(to_tie(schema_v));
+                        auto user_metadata = get<schema_index>(to_tie(schema_v));
+                        merge_schema_attrs(s, user_metadata);
                      }
                   }
                }
@@ -370,11 +326,11 @@ namespace glz
                using constexpr_val_t = std::remove_cvref_t<member_t<T, meta_wrapper_t<T>>>;
                static constexpr auto val_v{*glz::meta_wrapper_v<T>};
                if constexpr (glz::glaze_enum_t<constexpr_val_t>) {
-                  s.attributes.constant = glz::enum_name_v<val_v>;
+                  s.constant = glz::enum_name_v<val_v>;
                }
                else {
                   // General case, needs to be convertible to schema_any
-                  s.attributes.constant = val_v;
+                  s.constant = val_v;
                }
                to_json_schema<constexpr_val_t>::template op<Opts>(s, defs);
             }
@@ -424,13 +380,13 @@ namespace glz
             using V = std::decay_t<T>;
             if constexpr (std::integral<V>) {
                s.type = sv{"integer"};
-               s.attributes.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
-               s.attributes.maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
+               s.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
+               s.maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
             }
             else {
                s.type = sv{"number"};
-               s.attributes.minimum = std::numeric_limits<V>::lowest();
-               s.attributes.maximum = (std::numeric_limits<V>::max)();
+               s.minimum = std::numeric_limits<V>::lowest();
+               s.maximum = (std::numeric_limits<V>::max)();
             }
          }
       };
@@ -453,7 +409,7 @@ namespace glz
          static void op(auto& s, auto&)
          {
             s.type = sv{"null"};
-            s.attributes.constant = std::monostate{};
+            s.constant = std::monostate{};
          }
       };
 
@@ -466,7 +422,7 @@ namespace glz
             s.type = sv{"string"};
 
             static constexpr auto N = reflect<T>::size;
-            s.oneOf = std::vector<schematic>(N);
+            s.oneOf = std::vector<schema>(N);
 
             // Apply json_schema attributes (e.g. description) to each enum value
             if constexpr (json_schema_t<T>) {
@@ -486,7 +442,8 @@ namespace glz
                      }();
                      if constexpr (schema_index < schema_size) {
                         static const auto schema_v = json_schema_type<T>{};
-                        enumeration.attributes = get<schema_index>(to_tie(schema_v));
+                        auto user_metadata = get<schema_index>(to_tie(schema_v));
+                        merge_schema_attrs(enumeration, user_metadata);
                      }
                   });
                }
@@ -495,11 +452,11 @@ namespace glz
             for_each<N>([&]<auto I>() {
                auto& enumeration = (*s.oneOf)[I];
                // Do not override if already set
-               if (!enumeration.attributes.constant.has_value()) {
-                  enumeration.attributes.constant = reflect<T>::keys[I];
+               if (!enumeration.constant.has_value()) {
+                  enumeration.constant = reflect<T>::keys[I];
                }
-               if (!enumeration.attributes.title.has_value()) {
-                  enumeration.attributes.title = reflect<T>::keys[I];
+               if (!enumeration.title.has_value()) {
+                  enumeration.title = reflect<T>::keys[I];
                }
             });
          }
@@ -535,27 +492,35 @@ namespace glz
       template <class T>
       using unwrap_nullable_t = typename unwrap_nullable<T>::type;
 
-      // Build an inline schema for a primitive type
+      // Build an inline schema for a primitive type (for items/additionalProperties)
       template <class V>
-      schema make_primitive_schema()
+      std::shared_ptr<schema> make_primitive_schema()
       {
-         schema s{};
+         auto s = std::make_shared<schema>();
          if constexpr (std::same_as<V, bool>) {
-            s.type = sv{"boolean"};
+            s->type = sv{"boolean"};
          }
          else if constexpr (str_t<V> || char_t<V>) {
-            s.type = sv{"string"};
+            s->type = sv{"string"};
          }
          else if constexpr (std::integral<V>) {
-            s.type = sv{"integer"};
-            s.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
-            s.maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
+            s->type = sv{"integer"};
+            s->minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
+            s->maximum = static_cast<std::uint64_t>((std::numeric_limits<V>::max)());
          }
          else if constexpr (std::floating_point<V>) {
-            s.type = sv{"number"};
-            s.minimum = std::numeric_limits<V>::lowest();
-            s.maximum = (std::numeric_limits<V>::max)();
+            s->type = sv{"number"};
+            s->minimum = std::numeric_limits<V>::lowest();
+            s->maximum = (std::numeric_limits<V>::max)();
          }
+         return s;
+      }
+
+      // Build a $ref schema (for items/additionalProperties)
+      inline std::shared_ptr<schema> make_ref_schema(std::string_view ref)
+      {
+         auto s = std::make_shared<schema>();
+         s->ref = ref;
          return s;
       }
 
@@ -578,13 +543,13 @@ namespace glz
                   if (!def.type) {
                      to_json_schema<ValueType>::template op<Opts>(def, defs);
                   }
-                  s.additionalProperties = schema{true, join_v<chars<"#/$defs/">, name_v<ValueType>>};
+                  s.additionalProperties = make_ref_schema(join_v<chars<"#/$defs/">, name_v<ValueType>>);
                }
             }
             else {
                s.type = sv{"array"};
                if constexpr (has_fixed_size_container<std::decay_t<T>>) {
-                  s.attributes.maxItems = get_size<std::decay_t<T>>();
+                  s.maxItems = get_size<std::decay_t<T>>();
                }
                if constexpr (schema_primitive<V>) {
                   s.items = make_primitive_schema<V>();
@@ -594,7 +559,7 @@ namespace glz
                   if (!def.type) {
                      to_json_schema<V>::template op<Opts>(def, defs);
                   }
-                  s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
+                  s.items = make_ref_schema(join_v<chars<"#/$defs/">, name_v<V>>);
                }
             }
          }
@@ -616,7 +581,7 @@ namespace glz
                if (!def.type) {
                   to_json_schema<V>::template op<Opts>(def, defs);
                }
-               s.additionalProperties = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
+               s.additionalProperties = make_ref_schema(join_v<chars<"#/$defs/">, name_v<V>>);
             }
          }
       };
@@ -678,7 +643,7 @@ namespace glz
             else {
                s.type = std::move(type_vec);
             }
-            s.oneOf = std::vector<schematic>(N);
+            s.oneOf = std::vector<schema>(N);
 
             const auto& ids = ids_v<T>;
 
@@ -698,14 +663,14 @@ namespace glz
                   if (!def.type) {
                      to_json_schema<V>::template op<Opts>(def, defs);
                   }
-                  schema_val.attributes.ref = join_v<chars<"#/$defs/">, name_v<V>>;
+                  schema_val.ref = join_v<chars<"#/$defs/">, name_v<V>>;
                }
                else {
                   to_json_schema<V>::template op<Opts>(schema_val, defs);
                }
 
-               if (not schema_val.attributes.title) {
-                  schema_val.attributes.title = ids[I];
+               if (not schema_val.title) {
+                  schema_val.title = ids[I];
                }
 
                if constexpr ((glaze_object_t<V> || reflectable<V>) && not tag_v<T>.empty()) {
@@ -737,7 +702,7 @@ namespace glz
                   return glz::tuple_size_v<V>;
                }
             }();
-            s.prefixItems = std::vector<schematic>(N);
+            s.prefixItems = std::vector<schema>(N);
             for_each<N>([&]<auto I>() {
                if constexpr (glaze_array_t<V>) {
                   using element_t = std::decay_t<member_t<V, decltype(glz::get<I>(meta_v<V>))>>;
@@ -751,7 +716,7 @@ namespace glz
                }
             });
             s.items = false;
-            s.attributes.maxItems = N;
+            s.maxItems = N;
          }
       };
 
@@ -849,7 +814,7 @@ namespace glz
                   req.emplace_back(key);
                }
 
-               schema ref_val{};
+               schema prop{};
                if constexpr (N > 0 && json_schema_size > 0) {
                   // We need schema_index to be the index within json_schema_type<T>,
                   // but this struct may have fewer keys that don't match the full set of keys in the struct T
@@ -883,7 +848,8 @@ namespace glz
                      // Tested with both creating a std::array and a heap allocated C-style array and storing in a
                      // unique_ptr
                      static const auto schema_v = json_schema_type<T>{};
-                     ref_val = get<schema_index>(to_tie(schema_v));
+                     auto user_metadata = get<schema_index>(to_tie(schema_v));
+                     merge_schema_attrs(prop, user_metadata);
                   }
                }
 
@@ -892,22 +858,22 @@ namespace glz
                constexpr bool can_inline = std::same_as<inner_val_t, bool> || str_t<inner_val_t> || char_t<inner_val_t>;
 
                if constexpr (can_inline) {
-                  if (!ref_val.ref) {
+                  if (!prop.ref) {
                      // Inline the type directly instead of using $defs/$ref
                      if constexpr (std::same_as<inner_val_t, bool>) {
                         if constexpr (nullable_t<val_t>) {
-                           ref_val.type = std::vector<sv>{sv{"boolean"}, sv{"null"}};
+                           prop.type = std::vector<sv>{sv{"boolean"}, sv{"null"}};
                         }
                         else {
-                           ref_val.type = sv{"boolean"};
+                           prop.type = sv{"boolean"};
                         }
                      }
                      else {
                         if constexpr (nullable_t<val_t>) {
-                           ref_val.type = std::vector<sv>{sv{"string"}, sv{"null"}};
+                           prop.type = std::vector<sv>{sv{"string"}, sv{"null"}};
                         }
                         else {
-                           ref_val.type = sv{"string"};
+                           prop.type = sv{"string"};
                         }
                      }
                   }
@@ -920,9 +886,9 @@ namespace glz
                   }
                }
                else {
-                  if (!ref_val.ref) {
+                  if (!prop.ref) {
                      validate_ref<name_v<val_t>>();
-                     ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
+                     prop.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                   }
 
                   auto& def = defs[name_v<val_t>];
@@ -931,7 +897,7 @@ namespace glz
                   }
                }
 
-               (*s.properties)[key] = ref_val;
+               (*s.properties)[key] = std::move(prop);
             });
             if (!req.empty()) {
                s.required = std::move(req);
@@ -939,6 +905,149 @@ namespace glz
             s.additionalProperties = false;
          }
       };
+
+      // Count $ref occurrences in a schema tree.
+      // Note: map keys are string_views pointing to ref values, which are compile-time static storage
+      // (from join_v<...>). If runtime-constructed ref strings are ever introduced, these keys could
+      // dangle after try_inline_ref moves the source schema.
+      inline void count_schema_refs(const schema& s, std::map<std::string_view, size_t>& counts)
+      {
+         if (s.ref) {
+            ++counts[*s.ref];
+         }
+         if (s.properties) {
+            for (const auto& [_, prop] : *s.properties) {
+               count_schema_refs(prop, counts);
+            }
+         }
+         if (s.items) {
+            if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.items)) {
+               if (*ptr) count_schema_refs(**ptr, counts);
+            }
+         }
+         if (s.additionalProperties) {
+            if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.additionalProperties)) {
+               if (*ptr) count_schema_refs(**ptr, counts);
+            }
+         }
+         if (s.oneOf) {
+            for (const auto& entry : *s.oneOf) {
+               count_schema_refs(entry, counts);
+            }
+         }
+         if (s.prefixItems) {
+            for (const auto& entry : *s.prefixItems) {
+               count_schema_refs(entry, counts);
+            }
+         }
+         if (s.defs) {
+            for (const auto& [_, def] : *s.defs) {
+               count_schema_refs(def, counts);
+            }
+         }
+      }
+
+      // Try to inline a single-use $ref node by moving the definition from defs.
+      // Returns true if the node was inlined.
+      inline bool try_inline_ref(schema& node, std::map<std::string_view, schema, std::less<>>& defs,
+                                 const std::map<std::string_view, size_t>& counts)
+      {
+         static constexpr std::string_view prefix = "#/$defs/";
+         if (!node.ref) return false;
+         auto ref = *node.ref;
+         if (!ref.starts_with(prefix)) return false;
+         auto it = counts.find(ref);
+         if (it == counts.end() || it->second != 1) return false;
+         auto def_name = ref.substr(prefix.size());
+         auto def_it = defs.find(def_name);
+         if (def_it == defs.end()) return false;
+
+         // Save sibling metadata before overwriting
+         schema saved_metadata = std::move(node);
+         saved_metadata.ref.reset();
+
+         // Move the definition into this node (safe: single-use means exactly one consumer)
+         node = std::move(def_it->second);
+
+         // Merge saved sibling metadata into the inlined definition
+         merge_schema_attrs(node, saved_metadata);
+         return true;
+      }
+
+      // Inline single-use $ref entries by moving the definition from $defs into the reference site.
+      inline void inline_single_use_refs(schema& s, std::map<std::string_view, schema, std::less<>>& defs,
+                                         const std::map<std::string_view, size_t>& counts)
+      {
+         if (s.properties) {
+            for (auto& [_, prop] : *s.properties) {
+               inline_single_use_refs(prop, defs, counts);
+               if (try_inline_ref(prop, defs, counts)) {
+                  // Re-process the newly inlined content for chained single-use refs
+                  inline_single_use_refs(prop, defs, counts);
+               }
+            }
+         }
+         if (s.items) {
+            if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.items)) {
+               if (*ptr) {
+                  inline_single_use_refs(**ptr, defs, counts);
+                  if (try_inline_ref(**ptr, defs, counts)) {
+                     inline_single_use_refs(**ptr, defs, counts);
+                  }
+               }
+            }
+         }
+         if (s.additionalProperties) {
+            if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.additionalProperties)) {
+               if (*ptr) {
+                  inline_single_use_refs(**ptr, defs, counts);
+                  if (try_inline_ref(**ptr, defs, counts)) {
+                     inline_single_use_refs(**ptr, defs, counts);
+                  }
+               }
+            }
+         }
+         if (s.oneOf) {
+            for (auto& entry : *s.oneOf) {
+               inline_single_use_refs(entry, defs, counts);
+               if (try_inline_ref(entry, defs, counts)) {
+                  inline_single_use_refs(entry, defs, counts);
+               }
+            }
+         }
+         if (s.prefixItems) {
+            for (auto& entry : *s.prefixItems) {
+               inline_single_use_refs(entry, defs, counts);
+               if (try_inline_ref(entry, defs, counts)) {
+                  inline_single_use_refs(entry, defs, counts);
+               }
+            }
+         }
+      }
+
+      // Remove inlined (single-use) entries from $defs
+      inline void prune_inlined_defs(schema& s, const std::map<std::string_view, size_t>& counts)
+      {
+         if (!s.defs) return;
+         static constexpr std::string_view prefix = "#/$defs/";
+         for (auto it = s.defs->begin(); it != s.defs->end();) {
+            // Build the full $ref path for this def entry
+            // Use a local string since string_view concatenation isn't possible
+            std::string full_ref{prefix};
+            full_ref += it->first;
+            auto count_it = counts.find(std::string_view{full_ref});
+            if (count_it != counts.end() && count_it->second == 1) {
+               it = s.defs->erase(it);
+            }
+            else {
+               ++it;
+            }
+         }
+         if (s.defs->empty()) {
+            s.defs.reset();
+         }
+      }
+
    }
 
    // Moved definition outside of write_json_schema to fix MSVC bug
@@ -951,10 +1060,22 @@ namespace glz
    template <class T, auto Opts = opts{}, class Buffer>
    [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer)
    {
-      detail::schematic s{};
+      schema s{};
       s.defs.emplace();
       detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
-      s.attributes.title = name_v<T>;
+      s.title = name_v<T>;
+
+      // Inline single-use $defs entries at their reference sites
+      std::map<std::string_view, size_t> ref_counts;
+      detail::count_schema_refs(s, ref_counts);
+      // First inline refs within defs entries (for chained single-use types)
+      for (auto& [_, def] : *s.defs) {
+         detail::inline_single_use_refs(def, *s.defs, ref_counts);
+      }
+      // Then inline refs in the main schema tree
+      detail::inline_single_use_refs(s, *s.defs, ref_counts);
+      detail::prune_inlined_defs(s, ref_counts);
+
       // Making this static constexpr options to fix MSVC bug
       static constexpr opts options = opts_write_type_info_off<decltype(Opts)>{{Opts}};
       return write<options>(std::move(s), std::forward<Buffer>(buffer));
