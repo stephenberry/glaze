@@ -1079,7 +1079,7 @@ namespace glz
                      openapi_request_body req_body;
                      req_body.required = true;
                      if (auto schema_val =
-                            glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                            glz::read_json<glz::schema>(*route_entry.spec.request_body_schema)) {
                         req_body.content["application/json"].schema = *schema_val;
                      }
                      op.requestBody = req_body;
@@ -1088,7 +1088,7 @@ namespace glz
                      if (!spec.components) spec.components.emplace();
                      if (!spec.components->schemas) spec.components->schemas.emplace();
                      if (auto schema_val =
-                            glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                            glz::read_json<glz::schema>(*route_entry.spec.request_body_schema)) {
                         spec.components->schemas->operator[](*route_entry.spec.request_body_type_name) = *schema_val;
                      }
                   }
@@ -1098,7 +1098,7 @@ namespace glz
                      openapi_response res_obj;
                      res_obj.description = "Successful response";
                      res_obj.content.emplace(); // Emplace the unordered_map
-                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.response_schema)) {
+                     if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.response_schema)) {
                         res_obj.content.value()["application/json"].schema = *schema_val;
                      }
                      op.responses["200"] = res_obj;
@@ -1106,7 +1106,7 @@ namespace glz
                      // Add schema to components
                      if (!spec.components) spec.components.emplace();
                      if (!spec.components->schemas) spec.components->schemas.emplace();
-                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.response_schema)) {
+                     if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.response_schema)) {
                         spec.components->schemas->operator[](*route_entry.spec.response_type_name) = *schema_val;
                      }
                   }
