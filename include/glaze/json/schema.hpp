@@ -96,8 +96,6 @@ namespace glz
 
    namespace detail
    {
-      // Backward compatibility alias
-      using schematic = glz::schema;
 
       enum struct defined_formats : uint32_t {
          datetime, //
@@ -424,7 +422,7 @@ namespace glz
             s.type = sv{"string"};
 
             static constexpr auto N = reflect<T>::size;
-            s.oneOf = std::vector<schematic>(N);
+            s.oneOf = std::vector<schema>(N);
 
             // Apply json_schema attributes (e.g. description) to each enum value
             if constexpr (json_schema_t<T>) {
@@ -494,11 +492,11 @@ namespace glz
       template <class T>
       using unwrap_nullable_t = typename unwrap_nullable<T>::type;
 
-      // Build an inline schematic for a primitive type (for items/additionalProperties)
+      // Build an inline schema for a primitive type (for items/additionalProperties)
       template <class V>
-      std::shared_ptr<schematic> make_primitive_schema()
+      std::shared_ptr<schema> make_primitive_schema()
       {
-         auto s = std::make_shared<schematic>();
+         auto s = std::make_shared<schema>();
          if constexpr (std::same_as<V, bool>) {
             s->type = sv{"boolean"};
          }
@@ -518,10 +516,10 @@ namespace glz
          return s;
       }
 
-      // Build a $ref schematic (for items/additionalProperties)
-      inline std::shared_ptr<schematic> make_ref_schema(std::string_view ref)
+      // Build a $ref schema (for items/additionalProperties)
+      inline std::shared_ptr<schema> make_ref_schema(std::string_view ref)
       {
-         auto s = std::make_shared<schematic>();
+         auto s = std::make_shared<schema>();
          s->ref = ref;
          return s;
       }
@@ -645,7 +643,7 @@ namespace glz
             else {
                s.type = std::move(type_vec);
             }
-            s.oneOf = std::vector<schematic>(N);
+            s.oneOf = std::vector<schema>(N);
 
             const auto& ids = ids_v<T>;
 
@@ -704,7 +702,7 @@ namespace glz
                   return glz::tuple_size_v<V>;
                }
             }();
-            s.prefixItems = std::vector<schematic>(N);
+            s.prefixItems = std::vector<schema>(N);
             for_each<N>([&]<auto I>() {
                if constexpr (glaze_array_t<V>) {
                   using element_t = std::decay_t<member_t<V, decltype(glz::get<I>(meta_v<V>))>>;
@@ -807,7 +805,7 @@ namespace glz
             static constexpr auto json_schema_size = reflect<json_schema_type<T>>::size;
             auto req = s.required.value_or(std::vector<std::string_view>{});
 
-            s.properties = std::map<sv, schematic, std::less<>>();
+            s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&]<auto I>() {
                using val_t = std::decay_t<refl_t<T, I>>;
 
@@ -816,7 +814,7 @@ namespace glz
                   req.emplace_back(key);
                }
 
-               schematic prop{};
+               schema prop{};
                if constexpr (N > 0 && json_schema_size > 0) {
                   // We need schema_index to be the index within json_schema_type<T>,
                   // but this struct may have fewer keys that don't match the full set of keys in the struct T
@@ -923,12 +921,12 @@ namespace glz
             }
          }
          if (s.items) {
-            if (auto* ptr = std::get_if<std::shared_ptr<schematic>>(&*s.items)) {
+            if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.items)) {
                if (*ptr) count_schema_refs(**ptr, counts);
             }
          }
          if (s.additionalProperties) {
-            if (auto* ptr = std::get_if<std::shared_ptr<schematic>>(&*s.additionalProperties)) {
+            if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.additionalProperties)) {
                if (*ptr) count_schema_refs(**ptr, counts);
             }
          }
@@ -951,7 +949,7 @@ namespace glz
 
       // Try to inline a single-use $ref node by moving the definition from defs.
       // Returns true if the node was inlined.
-      inline bool try_inline_ref(schematic& node, std::map<std::string_view, schematic, std::less<>>& defs,
+      inline bool try_inline_ref(schema& node, std::map<std::string_view, schema, std::less<>>& defs,
                                  const std::map<std::string_view, size_t>& counts)
       {
          static constexpr std::string_view prefix = "#/$defs/";
@@ -977,7 +975,7 @@ namespace glz
       }
 
       // Inline single-use $ref entries by moving the definition from $defs into the reference site.
-      inline void inline_single_use_refs(schematic& s, std::map<std::string_view, schematic, std::less<>>& defs,
+      inline void inline_single_use_refs(schema& s, std::map<std::string_view, schema, std::less<>>& defs,
                                          const std::map<std::string_view, size_t>& counts)
       {
          if (s.properties) {
@@ -990,7 +988,7 @@ namespace glz
             }
          }
          if (s.items) {
-            if (auto* ptr = std::get_if<std::shared_ptr<schematic>>(&*s.items)) {
+            if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.items)) {
                if (*ptr) {
                   inline_single_use_refs(**ptr, defs, counts);
                   if (try_inline_ref(**ptr, defs, counts)) {
@@ -1000,7 +998,7 @@ namespace glz
             }
          }
          if (s.additionalProperties) {
-            if (auto* ptr = std::get_if<std::shared_ptr<schematic>>(&*s.additionalProperties)) {
+            if (auto* ptr = std::get_if<std::shared_ptr<schema>>(&*s.additionalProperties)) {
                if (*ptr) {
                   inline_single_use_refs(**ptr, defs, counts);
                   if (try_inline_ref(**ptr, defs, counts)) {
@@ -1028,7 +1026,7 @@ namespace glz
       }
 
       // Remove inlined (single-use) entries from $defs
-      inline void prune_inlined_defs(schematic& s, const std::map<std::string_view, size_t>& counts)
+      inline void prune_inlined_defs(schema& s, const std::map<std::string_view, size_t>& counts)
       {
          if (!s.defs) return;
          static constexpr std::string_view prefix = "#/$defs/";
