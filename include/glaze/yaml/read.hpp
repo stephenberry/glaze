@@ -2750,7 +2750,7 @@ namespace glz
 
          while (it != end) {
             // For fixed-size arrays, stop when we've filled all elements
-            if constexpr (!resizable<V>) {
+            if constexpr (!resizable<V> && !emplaceable<V>) {
                if (adapter.fixed_capacity_reached(value)) {
                   return;
                }
