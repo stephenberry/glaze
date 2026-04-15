@@ -256,7 +256,7 @@ namespace glz
    };
 
    template <class T>
-      requires(!meta_keys<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
+      requires(!meta_keys<T> && !glaze_merge_t<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> != 0))
    struct reflect<T>
    {
@@ -284,6 +284,106 @@ namespace glz
             ((res[I] = get_key_element<T, value_indices[I]>()), ...);
          }(std::make_index_sequence<value_indices.size()>{});
          return res;
+      }();
+
+      template <size_t I>
+      using elem = decltype(get<I>(values));
+
+      template <size_t I>
+      using type = member_t<V, decltype(get<I>(values))>;
+   };
+
+   // ============================================================================
+   // reflect<T> specialization for merge-in-meta types (glaze_merge_t)
+   // Flattens sub-type fields into a single reflect interface.
+   // ============================================================================
+
+   namespace detail
+   {
+      // Stateless accessor that chains an outer member pointer with inner sub-field access.
+      // Invocable with the parent type, returns a reference to the target sub-field.
+      template <class ParentType, size_t OuterIdx, size_t InnerIdx>
+      struct merge_accessor
+      {
+         static constexpr auto outer_ptr = get<OuterIdx>(meta_v<ParentType>);
+         using SubType = std::remove_cvref_t<typename member_value<std::decay_t<decltype(outer_ptr)>>::type>;
+
+         constexpr decltype(auto) operator()(auto&& parent) const
+         {
+            if constexpr (glaze_object_t<SubType> && !glaze_merge_t<SubType>) {
+               return get_member(parent.*outer_ptr, get<InnerIdx>(reflect<SubType>::values));
+            }
+            else if constexpr (glaze_merge_t<SubType>) {
+               // Sub-type is itself a merge — its reflect<SubType>::values contains merge_accessors
+               return get_member(parent.*outer_ptr, get<InnerIdx>(reflect<SubType>::values));
+            }
+            else {
+               static_assert(reflectable<SubType>,
+                  "glz::merge sub-types must be glaze_object_t or reflectable");
+               return get<InnerIdx>(to_tie(parent.*outer_ptr));
+            }
+         }
+      };
+   }
+
+   template <class T>
+      requires(glaze_merge_t<T>)
+   struct reflect<T>
+   {
+      using V = std::remove_cvref_t<T>;
+
+      static constexpr auto num_merge_members = tuple_size_v<meta_t<V>>;
+
+      // Get the sub-type pointed to by the I-th member pointer in the merge
+      template <size_t I>
+      using sub_type_at = std::remove_cvref_t<
+         typename member_value<std::decay_t<decltype(get<I>(meta_v<V>))>>::type>;
+
+      // Total number of flattened fields
+      static constexpr size_t size = []() constexpr {
+         return []<size_t... I>(std::index_sequence<I...>) constexpr {
+            return (reflect<sub_type_at<I>>::size + ... + size_t{0});
+         }(std::make_index_sequence<num_merge_members>{});
+      }();
+
+      // Concatenated keys from all sub-types
+      static constexpr auto keys = []() constexpr {
+         std::array<sv, size> result{};
+         size_t offset = 0;
+         auto copy_keys = [&]<size_t OuterI>() constexpr {
+            using SubType = sub_type_at<OuterI>;
+            constexpr auto sub_size = reflect<SubType>::size;
+            for (size_t j = 0; j < sub_size; ++j) {
+               result[offset + j] = reflect<SubType>::keys[j];
+            }
+            offset += sub_size;
+         };
+         [&]<size_t... I>(std::index_sequence<I...>) constexpr {
+            (copy_keys.template operator()<I>(), ...);
+         }(std::make_index_sequence<num_merge_members>{});
+         return result;
+      }();
+
+      // Build accessor tuple for a single sub-type at OuterIdx
+      template <size_t OuterIdx>
+      static constexpr auto make_sub_accessors()
+      {
+         using SubType = sub_type_at<OuterIdx>;
+         return []<size_t... InnerI>(std::index_sequence<InnerI...>) {
+            return tuple{detail::merge_accessor<V, OuterIdx, InnerI>{}...};
+         }(std::make_index_sequence<reflect<SubType>::size>{});
+      }
+
+      // Flat values tuple: concatenation of all per-sub-type accessor tuples
+      static constexpr auto values = []() constexpr {
+         return []<size_t... OuterI>(std::index_sequence<OuterI...>) {
+            if constexpr (sizeof...(OuterI) == 0) {
+               return tuple{};
+            }
+            else {
+               return tuplet::tuple_cat(make_sub_accessors<OuterI>()...);
+            }
+         }(std::make_index_sequence<num_merge_members>{});
       }();
 
       template <size_t I>

@@ -540,6 +540,103 @@ auto merged = glz::merge{obj1, obj2};
 // Results in: {"key":"second"}
 ```
 
+### Struct Flattening with Merge
+
+`glz::merge` can also be used inside `glz::meta` to flatten multiple sub-structs into a single JSON object. This is useful when you compose a type from reusable components but want a flat JSON representation for both **reading and writing**.
+
+```cpp
+struct Species {
+   std::string name{};
+   int legs{};
+};
+
+struct Appearance {
+   double weight{};
+   std::string color{};
+};
+
+struct BearRecord {
+   Species species{};
+   Appearance appearance{};
+};
+
+template <>
+struct glz::meta<BearRecord> {
+   using T = BearRecord;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance};
+};
+```
+
+`BearRecord` now reads and writes as a single flat object:
+
+```json
+{"name":"Grizzly","legs":4,"weight":300.5,"color":"brown"}
+```
+
+Without `glz::merge`, the default serialization would nest each sub-struct:
+
+```json
+{"species":{"name":"Grizzly","legs":4},"appearance":{"weight":300.5,"color":"brown"}}
+```
+
+#### Merging N Structs
+
+Any number of sub-structs can be merged:
+
+```cpp
+struct Habitat {
+   std::string biome{};
+   bool endangered{};
+};
+
+struct BearProfile {
+   Species species{};
+   Appearance appearance{};
+   Dimensions dims{};
+   Habitat habitat{};
+};
+
+template <>
+struct glz::meta<BearProfile> {
+   using T = BearProfile;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance, &T::dims, &T::habitat};
+};
+// All fields flattened into one JSON object
+```
+
+#### Sub-Structs with Custom Keys
+
+Sub-structs that define their own `glz::meta` will use their custom key names in the merged output:
+
+```cpp
+struct Dimensions {
+   double height{};
+   double width{};
+};
+
+template <>
+struct glz::meta<Dimensions> {
+   using T = Dimensions;
+   static constexpr auto value = glz::object("h", &T::height, "w", &T::width);
+};
+
+struct MeasuredBear {
+   Species species{};
+   Dimensions dims{};
+};
+
+template <>
+struct glz::meta<MeasuredBear> {
+   using T = MeasuredBear;
+   static constexpr auto value = glz::merge{&T::species, &T::dims};
+};
+// Produces: {"name":"Sun","legs":4,"h":1.5,"w":0.8}
+```
+
+#### Format Support
+
+Struct flattening via `glz::merge` works across all Glaze formats (JSON, BEVE, YAML, CBOR, etc.) because it integrates at the reflection layer.
+
 ### Performance Considerations
 
 - **Stack allocation**: Both `glz::obj` and `glz::arr` are stack-allocated, avoiding heap allocations

@@ -7130,6 +7130,194 @@ suite json_logging = [] {
    };
 };
 
+// ============================================================================
+// merge-in-meta tests: glz::merge{&T::a, &T::b} inside glz::meta
+// ============================================================================
+
+namespace merge_meta_test
+{
+   struct Species
+   {
+      std::string name{};
+      int legs{};
+   };
+
+   struct Appearance
+   {
+      double weight{};
+      std::string color{};
+   };
+
+   struct BearRecord
+   {
+      Species species{};
+      Appearance appearance{};
+   };
+
+   // Sub-type with its own glz::meta (custom key names)
+   struct Dimensions
+   {
+      double height{};
+      double width{};
+   };
+
+   struct MeasuredBear
+   {
+      Species species{};
+      Dimensions dims{};
+   };
+
+   struct Habitat
+   {
+      std::string biome{};
+      bool endangered{};
+   };
+
+   struct BearProfile
+   {
+      Species species{};
+      Appearance appearance{};
+      Dimensions dims{};
+      Habitat habitat{};
+   };
+}
+
+template <>
+struct glz::meta<merge_meta_test::Dimensions>
+{
+   using T = merge_meta_test::Dimensions;
+   static constexpr auto value = glz::object("h", &T::height, "w", &T::width);
+};
+
+template <>
+struct glz::meta<merge_meta_test::BearRecord>
+{
+   using T = merge_meta_test::BearRecord;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance};
+};
+
+template <>
+struct glz::meta<merge_meta_test::MeasuredBear>
+{
+   using T = merge_meta_test::MeasuredBear;
+   static constexpr auto value = glz::merge{&T::species, &T::dims};
+};
+
+template <>
+struct glz::meta<merge_meta_test::BearProfile>
+{
+   using T = merge_meta_test::BearProfile;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance, &T::dims, &T::habitat};
+};
+
+suite merge_meta_tests = [] {
+   using namespace merge_meta_test;
+
+   "merge_meta_write"_test = [] {
+      BearRecord b{};
+      b.species.name = "Grizzly";
+      b.species.legs = 4;
+      b.appearance.weight = 300.5;
+      b.appearance.color = "brown";
+
+      std::string s{};
+      expect(not glz::write_json(b, s));
+      expect(s == R"({"name":"Grizzly","legs":4,"weight":300.5,"color":"brown"})") << s;
+   };
+
+   "merge_meta_read"_test = [] {
+      BearRecord b{};
+      expect(not glz::read_json(b, R"({"name":"Polar","legs":4,"weight":450.0,"color":"white"})"));
+      expect(b.species.name == "Polar");
+      expect(b.species.legs == 4);
+      expect(b.appearance.weight == 450.0);
+      expect(b.appearance.color == "white");
+   };
+
+   "merge_meta_roundtrip"_test = [] {
+      BearRecord original{};
+      original.species.name = "Black";
+      original.species.legs = 4;
+      original.appearance.weight = 200.0;
+      original.appearance.color = "black";
+
+      std::string s{};
+      expect(not glz::write_json(original, s));
+
+      BearRecord restored{};
+      expect(not glz::read_json(restored, s));
+      expect(restored.species.name == original.species.name);
+      expect(restored.species.legs == original.species.legs);
+      expect(restored.appearance.weight == original.appearance.weight);
+      expect(restored.appearance.color == original.appearance.color);
+   };
+
+   "merge_meta_with_glaze_object_sub"_test = [] {
+      // Dimensions has its own glz::meta with custom key names "h" and "w"
+      MeasuredBear mb{};
+      mb.species.name = "Sun";
+      mb.species.legs = 4;
+      mb.dims.height = 1.5;
+      mb.dims.width = 0.8;
+
+      std::string s{};
+      expect(not glz::write_json(mb, s));
+      expect(s == R"({"name":"Sun","legs":4,"h":1.5,"w":0.8})") << s;
+
+      MeasuredBear restored{};
+      expect(not glz::read_json(restored, s));
+      expect(restored.species.name == "Sun");
+      expect(restored.species.legs == 4);
+      expect(restored.dims.height == 1.5);
+      expect(restored.dims.width == 0.8);
+   };
+
+   "merge_meta_four_structs"_test = [] {
+      BearProfile bp{};
+      bp.species.name = "Spectacled";
+      bp.species.legs = 4;
+      bp.appearance.weight = 140.0;
+      bp.appearance.color = "black";
+      bp.dims.height = 1.8;
+      bp.dims.width = 0.7;
+      bp.habitat.biome = "cloud forest";
+      bp.habitat.endangered = true;
+
+      std::string s{};
+      expect(not glz::write_json(bp, s));
+      expect(s == R"({"name":"Spectacled","legs":4,"weight":140,"color":"black","h":1.8,"w":0.7,"biome":"cloud forest","endangered":true})") << s;
+
+      BearProfile restored{};
+      expect(not glz::read_json(restored, s));
+      expect(restored.species.name == "Spectacled");
+      expect(restored.species.legs == 4);
+      expect(restored.appearance.weight == 140.0);
+      expect(restored.appearance.color == "black");
+      expect(restored.dims.height == 1.8);
+      expect(restored.dims.width == 0.7);
+      expect(restored.habitat.biome == "cloud forest");
+      expect(restored.habitat.endangered == true);
+   };
+
+   "merge_meta_beve_roundtrip"_test = [] {
+      BearRecord original{};
+      original.species.name = "Kodiak";
+      original.species.legs = 4;
+      original.appearance.weight = 680.0;
+      original.appearance.color = "brown";
+
+      std::vector<std::byte> buffer{};
+      expect(not glz::write_beve(original, buffer));
+
+      BearRecord restored{};
+      expect(not glz::read_beve(restored, buffer));
+      expect(restored.species.name == original.species.name);
+      expect(restored.species.legs == original.species.legs);
+      expect(restored.appearance.weight == original.appearance.weight);
+      expect(restored.appearance.color == original.appearance.color);
+   };
+};
+
 struct non_cx_values
 {
    std::string_view info{"information"};
