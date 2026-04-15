@@ -260,16 +260,15 @@ struct schematic_substitute
    struct glaze
    {
       using T = schematic_substitute;
-      static constexpr auto value = glz::object(
-         "type", &T::type, //
-         "const", &T::constant, //
-         "minimum", &T::minimum, //
-         "maximum", &T::maximum, //
-         "oneOf", &T::oneOf, //
-         "title", &T::title, //
-         "description", &T::description, //
-         "minItems", &T::minItems, //
-         "maxItems", &T::maxItems //
+      static constexpr auto value = glz::object("type", &T::type, //
+                                                "const", &T::constant, //
+                                                "minimum", &T::minimum, //
+                                                "maximum", &T::maximum, //
+                                                "oneOf", &T::oneOf, //
+                                                "title", &T::title, //
+                                                "description", &T::description, //
+                                                "minItems", &T::minItems, //
+                                                "maxItems", &T::maxItems //
       );
    };
 };
@@ -633,14 +632,12 @@ suite value_type_variant_schema = [] {
 
    "vector<string> items inlined"_test = [] {
       auto schema = glz::write_json_schema<std::vector<std::string>>().value();
-      expect(schema == R"({"type":"array","items":{"type":"string"},"title":"std::vector<std::string>"})")
-         << schema;
+      expect(schema == R"({"type":"array","items":{"type":"string"},"title":"std::vector<std::string>"})") << schema;
    };
 
    "vector<bool> items inlined"_test = [] {
       auto schema = glz::write_json_schema<std::vector<bool>>().value();
-      expect(schema == R"({"type":"array","items":{"type":"boolean"},"title":"std::vector<bool>"})")
-         << schema;
+      expect(schema == R"({"type":"array","items":{"type":"boolean"},"title":"std::vector<bool>"})") << schema;
    };
 
    "vector<double> items inlined"_test = [] {
@@ -1041,8 +1038,8 @@ suite schema_round_trip_test = [] {
       std::string re_serialized{};
       auto ec = glz::write<glz::opts{.error_on_unknown_keys = false}>(obj, re_serialized);
       expect(!ec);
-      expect(re_serialized == schema_str) << "round-trip mismatch:\n  original: " << schema_str
-                                          << "\n  re-serialized: " << re_serialized;
+      expect(re_serialized == schema_str)
+         << "round-trip mismatch:\n  original: " << schema_str << "\n  re-serialized: " << re_serialized;
    };
 
    "map schema round-trips through read/write"_test = [] {
@@ -1062,8 +1059,8 @@ suite schema_round_trip_test = [] {
       std::string re_serialized{};
       auto ec = glz::write<glz::opts{.error_on_unknown_keys = false}>(obj, re_serialized);
       expect(!ec);
-      expect(re_serialized == schema_str) << "round-trip mismatch:\n  original: " << schema_str
-                                          << "\n  re-serialized: " << re_serialized;
+      expect(re_serialized == schema_str)
+         << "round-trip mismatch:\n  original: " << schema_str << "\n  re-serialized: " << re_serialized;
    };
 };
 
