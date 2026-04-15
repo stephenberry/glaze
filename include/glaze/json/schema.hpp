@@ -465,14 +465,33 @@ namespace glz
          {
             s.type = sv{"string"};
 
-            // TODO use oneOf instead of enum to handle doc comments
             static constexpr auto N = reflect<T>::size;
-            // s.enumeration = std::vector<std::string_view>(N);
-            // for_each<N>([&]<auto I>() {
-            //    static constexpr auto item = std::get<I>(meta_v<V>);
-            //    (*s.enumeration)[I] = std::get<0>(item);
-            // });
             s.oneOf = std::vector<schematic>(N);
+
+            // Apply json_schema attributes (e.g. description) to each enum value
+            if constexpr (json_schema_t<T>) {
+               static constexpr auto schema_size = reflect<json_schema_type<T>>::size;
+               if constexpr (schema_size > 0) {
+                  for_each<N>([&]<auto I>() {
+                     auto& enumeration = (*s.oneOf)[I];
+                     static constexpr sv enum_key = reflect<T>::keys[I];
+                     constexpr auto schema_index = [] {
+                        const auto& schema_keys = reflect<json_schema_type<T>>::keys;
+                        for (size_t i = 0; i < schema_size; ++i) {
+                           if (schema_keys[i] == enum_key) {
+                              return i;
+                           }
+                        }
+                        return schema_size;
+                     }();
+                     if constexpr (schema_index < schema_size) {
+                        static const auto schema_v = json_schema_type<T>{};
+                        enumeration.attributes = get<schema_index>(to_tie(schema_v));
+                     }
+                  });
+               }
+            }
+
             for_each<N>([&]<auto I>() {
                auto& enumeration = (*s.oneOf)[I];
                // Do not override if already set
