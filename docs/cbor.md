@@ -7,7 +7,7 @@ Glaze provides comprehensive support for [CBOR](https://cbor.io/) (RFC 8949), a 
 **Write CBOR**
 
 ```c++
-#include "glaze/cbor/cbor.hpp"
+#include "glaze/cbor.hpp"
 
 my_struct s{};
 std::string buffer{};
