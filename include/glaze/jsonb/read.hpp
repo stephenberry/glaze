@@ -20,6 +20,7 @@
 #include "glaze/util/bit_array.hpp"
 #include "glaze/util/compare.hpp"
 #include "glaze/util/dump.hpp"
+#include "glaze/util/fast_float.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/parse.hpp"
 
@@ -284,7 +285,9 @@ namespace glz
          if (type_code == jsonb::type::float5 && *start == '+') ++start;
 
          double tmp = 0.0;
-         auto [ptr, ec] = std::from_chars(start, stop, tmp);
+         // Use fast_float rather than std::from_chars: the floating-point overload of
+         // std::from_chars is unavailable on older Apple platforms (pre-macOS 26).
+         auto [ptr, ec] = glz::fast_float::from_chars(start, stop, tmp);
          if (ec != std::errc{} || ptr != stop) [[unlikely]] {
             ctx.error = error_code::parse_number_failure;
             return;
