@@ -367,27 +367,35 @@ namespace glz
       }();
       static_assert(unique_keys, "glz::merge sub-types must not have duplicate keys");
 
-      // Build accessor tuple for a single sub-type at OuterIdx
-      template <size_t OuterIdx>
-      static constexpr auto make_sub_accessors()
+      // Prefix-sum offsets for mapping flat index -> (outer, inner)
+      static constexpr auto sub_offsets = []() constexpr {
+         std::array<size_t, num_merge_members + 1> result{};
+         result[0] = 0;
+         [&]<size_t... I>(std::index_sequence<I...>) constexpr {
+            ((result[I + 1] = result[I] + reflect<sub_type_at<I>>::size), ...);
+         }(std::make_index_sequence<num_merge_members>{});
+         return result;
+      }();
+
+      template <size_t FlatIdx>
+      static consteval size_t flat_outer()
       {
-         using SubType = sub_type_at<OuterIdx>;
-         return []<size_t... InnerI>(std::index_sequence<InnerI...>) {
-            return tuple{detail::merge_accessor<V, OuterIdx, InnerI>{}...};
-         }(std::make_index_sequence<reflect<SubType>::size>{});
+         for (size_t o = 0; o < num_merge_members; ++o) {
+            if (FlatIdx < sub_offsets[o + 1]) return o;
+         }
+         return 0;
       }
 
-      // Flat values tuple: concatenation of all per-sub-type accessor tuples
-      static constexpr auto values = []() constexpr {
-         return []<size_t... OuterI>(std::index_sequence<OuterI...>) {
-            if constexpr (sizeof...(OuterI) == 0) {
-               return tuple{};
-            }
-            else {
-               return tuplet::tuple_cat(make_sub_accessors<OuterI>()...);
-            }
-         }(std::make_index_sequence<num_merge_members>{});
-      }();
+      template <size_t FlatIdx>
+      static consteval size_t flat_inner()
+      {
+         return FlatIdx - sub_offsets[flat_outer<FlatIdx>()];
+      }
+
+      // Flat values tuple built directly — avoids tuplet::tuple_cat (which has GCC issues)
+      static constexpr auto values = []<size_t... I>(std::index_sequence<I...>) {
+         return tuple{detail::merge_accessor<V, flat_outer<I>(), flat_inner<I>()>{}...};
+      }(std::make_index_sequence<size>{});
 
       template <size_t I>
       using elem = decltype(get<I>(values));
