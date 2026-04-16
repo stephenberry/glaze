@@ -62,7 +62,9 @@ Codes 13–15 are reserved by the spec; Glaze returns `error_code::syntax_error`
 
 Arrays and objects store a **payload size in bytes**, not a child count. Since that size isn't known until after the children are written, Glaze's writer reserves a 9-byte header slot (the `u64_follows` form), writes the children, then patches the header with the actual size.
 
-The spec permits non-minimal headers, so blobs Glaze writes are spec-compliant but may be a few bytes larger than the minimal encoding for small containers. SQLite reads them without complaint.
+The spec permits non-minimal headers, so blobs Glaze writes are spec-compliant but may be a few bytes larger than the minimal encoding for small containers.
+
+> **SQLite note:** `json_valid(blob, 4)` accepts Glaze's output (well-formed JSONB with non-minimal headers); `json_valid(blob, 8)` requires canonical minimal-header form and rejects it. All other SQLite JSON/JSONB operations — `json()`, `jsonb()`, `json_extract()`, `json_type()`, `json_array_length()`, path queries, and `WHERE` filters — work correctly against Glaze blobs. See `tests/jsonb_sqlite_test/` for validated cases.
 
 ## Floating-Point Special Values
 

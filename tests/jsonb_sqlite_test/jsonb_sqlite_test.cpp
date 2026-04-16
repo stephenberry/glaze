@@ -103,8 +103,69 @@ namespace
          sqlite3_finalize(s);
          return out;
       }
+
+      // Run `SELECT json_extract(blob, <path>) FROM t LIMIT 1` and return the extracted text.
+      // SQLite's json_extract returns JSON text for containers, or the raw value for scalars.
+      std::string json_extract(const std::string& path)
+      {
+         sqlite3_stmt* s{};
+         if (sqlite3_prepare_v2(db, "SELECT json_extract(blob, ?) FROM t LIMIT 1", -1, &s, nullptr) != SQLITE_OK) {
+            die(sqlite3_errmsg(db));
+         }
+         sqlite3_bind_text(s, 1, path.c_str(), static_cast<int>(path.size()), SQLITE_TRANSIENT);
+         std::string out;
+         if (sqlite3_step(s) == SQLITE_ROW) {
+            const int col_type = sqlite3_column_type(s, 0);
+            if (col_type == SQLITE_NULL) {
+               out = "<NULL>"; // distinguish from an empty string value
+            }
+            else {
+               const unsigned char* txt = sqlite3_column_text(s, 0);
+               if (txt) out.assign(reinterpret_cast<const char*>(txt));
+            }
+         }
+         sqlite3_finalize(s);
+         return out;
+      }
    };
 }
+
+// Shared types with the jsonb_test target, redefined here to keep this translation unit
+// self-contained. Field names must match for json_extract paths to resolve.
+struct sqlite_address
+{
+   std::string street;
+   std::string city;
+   std::string country;
+   std::optional<std::string> postal_code;
+};
+
+struct sqlite_user_profile
+{
+   uint64_t id{};
+   std::string email;
+   std::string display_name;
+   std::optional<sqlite_address> home_address;
+   std::vector<std::string> tags;
+   std::map<std::string, std::string> preferences;
+   bool active = true;
+};
+
+struct sqlite_line_item
+{
+   std::string product_id;
+   std::string name;
+   int quantity{};
+   double unit_price{};
+};
+
+struct sqlite_cart
+{
+   std::string cart_id;
+   std::string user_id;
+   std::vector<sqlite_line_item> items;
+   double total{};
+};
 
 struct person
 {
@@ -403,6 +464,242 @@ suite c_cross_validation = [] {
       auto it_a = o.find("a");
       expect(it_a != o.end());
       expect(it_a->second.get<double>() == 1.5);
+   };
+};
+
+suite d_path_queries = [] {
+   // SQLite's json_extract runs JSON Path-style queries directly on our JSONB blob. This
+   // validates both that Glaze's output is well-formed AND that SQLite can navigate its
+   // nested structure down to specific fields and array indices.
+
+   "extract scalar field from reflected struct"_test = [] {
+      sqlite_db db;
+      sqlite_user_profile u{};
+      u.id = 12345;
+      u.email = "alice@example.com";
+      u.display_name = "Alice";
+      u.tags = {"admin"};
+
+      std::string blob;
+      expect(not glz::write_jsonb(u, blob));
+      db.insert_blob(blob.data(), blob.size());
+
+      expect(db.json_extract("$.id") == "12345");
+      expect(db.json_extract("$.email") == "alice@example.com");
+      expect(db.json_extract("$.display_name") == "Alice");
+      expect(db.json_extract("$.active") == "1"); // SQLite returns boolean true as 1
+   };
+
+   "extract from nested optional struct"_test = [] {
+      sqlite_db db;
+      sqlite_user_profile u{};
+      u.id = 1;
+      u.email = "x@y";
+      u.display_name = "X";
+      u.home_address = sqlite_address{"221B Baker St", "London", "UK", std::string{"NW1 6XE"}};
+
+      std::string blob;
+      expect(not glz::write_jsonb(u, blob));
+      db.insert_blob(blob.data(), blob.size());
+
+      expect(db.json_extract("$.home_address.street") == "221B Baker St");
+      expect(db.json_extract("$.home_address.city") == "London");
+      expect(db.json_extract("$.home_address.postal_code") == "NW1 6XE");
+   };
+
+   "extract array index"_test = [] {
+      sqlite_db db;
+      sqlite_user_profile u{};
+      u.id = 2;
+      u.email = "a@b";
+      u.display_name = "A";
+      u.tags = {"alpha", "beta", "gamma"};
+
+      std::string blob;
+      expect(not glz::write_jsonb(u, blob));
+      db.insert_blob(blob.data(), blob.size());
+
+      expect(db.json_extract("$.tags[0]") == "alpha");
+      expect(db.json_extract("$.tags[1]") == "beta");
+      expect(db.json_extract("$.tags[2]") == "gamma");
+   };
+
+   "extract array length via json_array_length"_test = [] {
+      sqlite_db db;
+      sqlite_user_profile u{};
+      u.id = 3;
+      u.email = "c@d";
+      u.display_name = "C";
+      u.tags = {"t1", "t2", "t3", "t4"};
+      std::string blob;
+      expect(not glz::write_jsonb(u, blob));
+      db.insert_blob(blob.data(), blob.size());
+
+      // Direct SQL.
+      sqlite3_stmt* s{};
+      expect(sqlite3_prepare_v2(db.db, "SELECT json_array_length(blob, '$.tags') FROM t LIMIT 1", -1, &s, nullptr) ==
+             SQLITE_OK);
+      expect(sqlite3_step(s) == SQLITE_ROW);
+      expect(sqlite3_column_int(s, 0) == 4);
+      sqlite3_finalize(s);
+   };
+
+   "extract from nested map value"_test = [] {
+      sqlite_db db;
+      sqlite_user_profile u{};
+      u.id = 4;
+      u.email = "e@f";
+      u.display_name = "E";
+      u.preferences = {{"theme", "dark"}, {"locale", "en-US"}};
+
+      std::string blob;
+      expect(not glz::write_jsonb(u, blob));
+      db.insert_blob(blob.data(), blob.size());
+
+      expect(db.json_extract("$.preferences.theme") == "dark");
+      expect(db.json_extract("$.preferences.locale") == "en-US");
+   };
+
+   "extract from array of reflected structs"_test = [] {
+      sqlite_db db;
+      sqlite_cart c{};
+      c.cart_id = "cart-1";
+      c.user_id = "user-42";
+      c.items = {{"SKU-A", "Widget", 2, 9.99}, {"SKU-B", "Gadget", 1, 29.95}};
+      c.total = 49.93;
+
+      std::string blob;
+      expect(not glz::write_jsonb(c, blob));
+      db.insert_blob(blob.data(), blob.size());
+
+      expect(db.json_extract("$.cart_id") == "cart-1");
+      expect(db.json_extract("$.items[0].product_id") == "SKU-A");
+      expect(db.json_extract("$.items[0].quantity") == "2");
+      expect(db.json_extract("$.items[1].name") == "Gadget");
+      expect(db.json_extract("$.items[1].unit_price") == "29.95");
+      expect(db.json_extract("$.total") == "49.93");
+   };
+
+   "json_type reports correct types"_test = [] {
+      sqlite_db db;
+      sqlite_user_profile u{};
+      u.id = 7;
+      u.email = "g@h";
+      u.display_name = "G";
+      u.tags = {"t"};
+      u.preferences = {{"k", "v"}};
+
+      std::string blob;
+      expect(not glz::write_jsonb(u, blob));
+      db.insert_blob(blob.data(), blob.size());
+
+      auto type_of = [&](const char* path) {
+         sqlite3_stmt* s{};
+         sqlite3_prepare_v2(db.db, "SELECT json_type(blob, ?) FROM t LIMIT 1", -1, &s, nullptr);
+         sqlite3_bind_text(s, 1, path, -1, SQLITE_TRANSIENT);
+         std::string out;
+         if (sqlite3_step(s) == SQLITE_ROW) {
+            const unsigned char* txt = sqlite3_column_text(s, 0);
+            if (txt) out.assign(reinterpret_cast<const char*>(txt));
+         }
+         sqlite3_finalize(s);
+         return out;
+      };
+
+      expect(type_of("$") == "object");
+      expect(type_of("$.id") == "integer");
+      expect(type_of("$.email") == "text");
+      expect(type_of("$.active") == "true");
+      expect(type_of("$.tags") == "array");
+      expect(type_of("$.preferences") == "object");
+   };
+
+   "json_valid accepts our blob"_test = [] {
+      // Our writer emits spec-legal but non-canonical JSONB (always-9-byte container
+      // headers per the documented one-pass strategy). SQLite's json_valid flag 8
+      // requires canonical form; flag 4 accepts any parseable JSONB. We validate with
+      // flag 4, which is the correct check for "SQLite can read this".
+      sqlite_db db;
+      sqlite_cart c{};
+      c.cart_id = "c1";
+      c.user_id = "u1";
+      c.items = {{"P1", "Prod", 1, 1.00}};
+      c.total = 1.00;
+
+      std::string blob;
+      expect(not glz::write_jsonb(c, blob));
+      db.insert_blob(blob.data(), blob.size());
+
+      sqlite3_stmt* s{};
+      sqlite3_prepare_v2(db.db, "SELECT json_valid(blob, 4) FROM t LIMIT 1", -1, &s, nullptr);
+      expect(sqlite3_step(s) == SQLITE_ROW);
+      expect(sqlite3_column_int(s, 0) == 1);
+      sqlite3_finalize(s);
+   };
+
+   "round-trip through SQLite preserves deep structure"_test = [] {
+      sqlite_db db;
+      sqlite_user_profile src{};
+      src.id = 999;
+      src.email = "deep@nested.test";
+      src.display_name = "Nested";
+      src.home_address = sqlite_address{"1 Way", "Spot", "ZZ", std::nullopt};
+      src.tags = {"a", "b", "c"};
+      src.preferences = {{"k1", "v1"}, {"k2", "v2"}};
+
+      std::string blob;
+      expect(not glz::write_jsonb(src, blob));
+      db.insert_blob(blob.data(), blob.size());
+
+      // Re-serialize: SELECT jsonb(json(blob)) — SQLite's canonical re-encoding.
+      sqlite3_stmt* s{};
+      sqlite3_prepare_v2(db.db, "SELECT jsonb(json(blob)) FROM t LIMIT 1", -1, &s, nullptr);
+      expect(sqlite3_step(s) == SQLITE_ROW);
+      const void* data = sqlite3_column_blob(s, 0);
+      const int size = sqlite3_column_bytes(s, 0);
+      std::string canonical(static_cast<const char*>(data), static_cast<size_t>(size));
+      sqlite3_finalize(s);
+
+      // Glaze reads SQLite's canonical form back into our struct — every field preserved.
+      sqlite_user_profile out{};
+      expect(not glz::read_jsonb(out, canonical));
+      expect(out.id == src.id);
+      expect(out.email == src.email);
+      expect(out.display_name == src.display_name);
+      expect(out.home_address.has_value());
+      expect(out.home_address->street == "1 Way");
+      expect(out.tags == src.tags);
+      expect(out.preferences == src.preferences);
+   };
+
+   "schema-level query with real SQL"_test = [] {
+      // A realistic scenario: many rows, each containing JSONB user profiles. Run a SQL
+      // query that filters on a nested JSONB field.
+      sqlite_db db;
+      for (int i = 0; i < 20; ++i) {
+         sqlite_user_profile u{};
+         u.id = static_cast<uint64_t>(i);
+         u.email = "u" + std::to_string(i) + "@test";
+         u.display_name = "User" + std::to_string(i);
+         u.active = (i % 2 == 0);
+         u.tags = {i % 2 == 0 ? "even" : "odd"};
+         std::string blob;
+         expect(not glz::write_jsonb(u, blob));
+         db.insert_blob(blob.data(), blob.size());
+      }
+
+      sqlite3_stmt* s{};
+      sqlite3_prepare_v2(db.db, "SELECT COUNT(*) FROM t WHERE json_extract(blob, '$.active') = 1", -1, &s, nullptr);
+      expect(sqlite3_step(s) == SQLITE_ROW);
+      expect(sqlite3_column_int(s, 0) == 10);
+      sqlite3_finalize(s);
+
+      sqlite3_prepare_v2(db.db, "SELECT json_extract(blob, '$.display_name') FROM t WHERE json_extract(blob, '$.id') = 7",
+                        -1, &s, nullptr);
+      expect(sqlite3_step(s) == SQLITE_ROW);
+      const unsigned char* name = sqlite3_column_text(s, 0);
+      expect(name && std::string(reinterpret_cast<const char*>(name)) == "User7");
+      sqlite3_finalize(s);
    };
 };
 

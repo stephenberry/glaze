@@ -1248,6 +1248,392 @@ suite error_on_missing_keys_tests = [] {
    };
 };
 
+// ---------- Realistic schemas ----------
+
+struct address
+{
+   std::string street;
+   std::string city;
+   std::string country;
+   std::optional<std::string> postal_code;
+   bool operator==(const address&) const = default;
+};
+
+struct user_profile
+{
+   uint64_t id{};
+   std::string email;
+   std::string display_name;
+   std::optional<address> home_address;
+   std::vector<std::string> tags;
+   std::map<std::string, std::string> preferences;
+   bool active = true;
+   bool operator==(const user_profile&) const = default;
+};
+
+struct api_page_meta
+{
+   int total{};
+   int page{};
+   int page_size{};
+   std::optional<std::string> next_cursor;
+   bool operator==(const api_page_meta&) const = default;
+};
+
+struct api_response
+{
+   std::vector<user_profile> items;
+   api_page_meta meta;
+   bool operator==(const api_response&) const = default;
+};
+
+struct logging_config
+{
+   std::string level = "info";
+   std::optional<std::string> file;
+   bool console = true;
+   bool operator==(const logging_config&) const = default;
+};
+
+struct db_config
+{
+   std::string host;
+   int port{};
+   std::optional<std::string> username;
+   std::optional<std::string> password;
+   bool operator==(const db_config&) const = default;
+};
+
+struct app_config
+{
+   std::string name;
+   std::string version;
+   logging_config logging;
+   db_config db;
+   std::vector<std::string> features;
+   std::map<std::string, std::string> env;
+   bool operator==(const app_config&) const = default;
+};
+
+struct line_item
+{
+   std::string product_id;
+   std::string name;
+   int quantity{};
+   double unit_price{};
+   std::optional<double> discount_rate;
+   bool operator==(const line_item&) const = default;
+};
+
+struct shopping_cart
+{
+   std::string cart_id;
+   std::string user_id;
+   std::vector<line_item> items;
+   double subtotal{};
+   double tax{};
+   double total{};
+   std::optional<std::string> coupon_code;
+   bool operator==(const shopping_cart&) const = default;
+};
+
+struct event_log_entry
+{
+   int64_t timestamp_ms{};
+   std::string event_type;
+   std::string source;
+   std::variant<std::string, double, int64_t, bool> value;
+   std::map<std::string, std::string> attributes;
+};
+
+// Measurement data — heavy on numeric arrays (scientific / time-series style)
+struct series
+{
+   std::string name;
+   std::string unit;
+   std::vector<double> values;
+   std::vector<int64_t> timestamps;
+   bool operator==(const series&) const = default;
+};
+
+struct dataset
+{
+   std::string id;
+   std::string description;
+   std::vector<series> signals;
+   std::map<std::string, std::string> metadata;
+   bool operator==(const dataset&) const = default;
+};
+
+suite realistic_scenarios = [] {
+   "user profile round-trip"_test = [] {
+      user_profile u{};
+      u.id = 12345;
+      u.email = "alice@example.com";
+      u.display_name = "Alice Q. Developer";
+      u.home_address = address{"742 Evergreen Terrace", "Springfield", "US", std::string{"49007"}};
+      u.tags = {"admin", "beta-tester", "vip"};
+      u.preferences = {{"theme", "dark"}, {"locale", "en-US"}, {"tz", "America/Chicago"}};
+      u.active = true;
+
+      std::string buf;
+      expect(not glz::write_jsonb(u, buf));
+      user_profile out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == u);
+   };
+
+   "user profile with null optional address and skip_null_members"_test = [] {
+      user_profile u{};
+      u.id = 7;
+      u.email = "bob@example.com";
+      u.display_name = "Bob";
+      // home_address left nullopt
+      u.tags = {};
+      u.preferences = {};
+
+      std::string buf;
+      constexpr glz::opts O{.format = glz::JSONB, .skip_null_members = true};
+      expect(not glz::write<O>(u, buf));
+
+      // Confirm the null home_address did not get serialized — converted JSON must not contain "home_address".
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value().find("home_address") == std::string::npos);
+
+      // Round-trip should still work.
+      user_profile out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.id == 7);
+      expect(!out.home_address.has_value());
+   };
+
+   "paginated api response round-trip"_test = [] {
+      api_response r{};
+      for (int i = 0; i < 10; ++i) {
+         user_profile u{};
+         u.id = static_cast<uint64_t>(1000 + i);
+         u.email = "u" + std::to_string(i) + "@test";
+         u.display_name = "User" + std::to_string(i);
+         u.tags = {"t-" + std::to_string(i)};
+         r.items.push_back(std::move(u));
+      }
+      r.meta.total = 137;
+      r.meta.page = 1;
+      r.meta.page_size = 10;
+      r.meta.next_cursor = std::string{"eyJvZmZzZXQiOjEwfQ=="};
+
+      std::string buf;
+      expect(not glz::write_jsonb(r, buf));
+      api_response out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == r);
+      expect(out.items.size() == 10);
+      expect(out.meta.next_cursor.value() == "eyJvZmZzZXQiOjEwfQ==");
+   };
+
+   "app config with skip_null_members"_test = [] {
+      app_config c{};
+      c.name = "glaze-service";
+      c.version = "1.2.3";
+      c.logging.level = "debug";
+      c.logging.file = std::string{"/var/log/glaze.log"};
+      c.db.host = "localhost";
+      c.db.port = 5432;
+      // db.username and db.password left null deliberately
+      c.features = {"feature-a", "feature-b"};
+      c.env = {{"ENV", "prod"}, {"REGION", "us-east-1"}};
+
+      std::string buf;
+      constexpr glz::opts O{.format = glz::JSONB, .skip_null_members = true};
+      expect(not glz::write<O>(c, buf));
+
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      // Passwords must not leak into output when null.
+      expect(j.value().find("password") == std::string::npos);
+      expect(j.value().find("username") == std::string::npos);
+
+      // Round-trip: reload with skip_null_members inherits defaults for missing optionals.
+      app_config out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.name == c.name);
+      expect(out.db.host == "localhost");
+      expect(out.db.port == 5432);
+      expect(!out.db.username.has_value());
+      expect(!out.db.password.has_value());
+      expect(out.features == c.features);
+      expect(out.env == c.env);
+   };
+
+   "shopping cart numerical precision"_test = [] {
+      shopping_cart cart{};
+      cart.cart_id = "cart-42";
+      cart.user_id = "user-99";
+      cart.items = {
+         {"SKU-001", "Widget", 3, 9.99, std::nullopt},
+         {"SKU-002", "Gadget", 1, 29.95, std::optional<double>{0.10}},
+         {"SKU-003", "Doohickey", 2, 4.50, std::nullopt},
+      };
+      cart.subtotal = 68.86;
+      cart.tax = 5.51;
+      cart.total = 74.37;
+      cart.coupon_code = std::string{"SAVE10"};
+
+      std::string buf;
+      expect(not glz::write_jsonb(cart, buf));
+      shopping_cart out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == cart);
+      expect(out.items[1].discount_rate.value() == 0.10);
+   };
+
+   "event log with variant payload"_test = [] {
+      // A homogeneous vector of entries, each with a variant-typed value.
+      std::vector<event_log_entry> log;
+      {
+         event_log_entry e{};
+         e.timestamp_ms = 1713300000000LL;
+         e.event_type = "login";
+         e.source = "auth-svc";
+         e.value = std::string{"ok"};
+         e.attributes = {{"ip", "10.0.0.5"}};
+         log.push_back(e);
+      }
+      {
+         event_log_entry e{};
+         e.timestamp_ms = 1713300001000LL;
+         e.event_type = "latency";
+         e.source = "api-svc";
+         e.value = 42.7;
+         e.attributes = {{"endpoint", "/users"}};
+         log.push_back(e);
+      }
+      {
+         event_log_entry e{};
+         e.timestamp_ms = 1713300002000LL;
+         e.event_type = "count";
+         e.source = "worker";
+         e.value = int64_t{1337};
+         log.push_back(e);
+      }
+      {
+         event_log_entry e{};
+         e.timestamp_ms = 1713300003000LL;
+         e.event_type = "healthy";
+         e.source = "probe";
+         e.value = true;
+         log.push_back(e);
+      }
+
+      std::string buf;
+      expect(not glz::write_jsonb(log, buf));
+      std::vector<event_log_entry> out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.size() == log.size());
+      expect(std::get<std::string>(out[0].value) == "ok");
+      expect(std::get<double>(out[1].value) == 42.7);
+      expect(std::get<int64_t>(out[2].value) == 1337);
+      expect(std::get<bool>(out[3].value) == true);
+      expect(out[0].attributes.at("ip") == "10.0.0.5");
+   };
+
+   "scientific dataset with heavy numeric arrays"_test = [] {
+      dataset d{};
+      d.id = "run-2026-04-16-001";
+      d.description = "voltage sweep";
+      d.metadata = {{"operator", "K. Tesla"}, {"bench", "lab-3"}};
+
+      series v{}, t{};
+      v.name = "voltage";
+      v.unit = "V";
+      t.name = "current";
+      t.unit = "A";
+      for (int i = 0; i < 500; ++i) {
+         v.values.push_back(0.01 * i);
+         v.timestamps.push_back(1'000'000 + i * 1000);
+         t.values.push_back(std::sin(0.01 * i));
+         t.timestamps.push_back(1'000'000 + i * 1000);
+      }
+      d.signals = {std::move(v), std::move(t)};
+
+      std::string buf;
+      expect(not glz::write_jsonb(d, buf));
+      dataset out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == d);
+   };
+
+   "round-trip stability: write-read-write produces identical bytes"_test = [] {
+      // Byte-level stability matters when blobs are used as keys / hashed / signed.
+      user_profile u{};
+      u.id = 42;
+      u.email = "stable@example.com";
+      u.display_name = "Stability";
+      u.home_address = address{"1 Main", "Anywhere", "US", std::nullopt};
+      u.tags = {"alpha", "beta", "gamma"};
+      u.preferences = {{"k1", "v1"}, {"k2", "v2"}};
+
+      std::string first;
+      expect(not glz::write_jsonb(u, first));
+
+      user_profile parsed{};
+      expect(not glz::read_jsonb(parsed, first));
+
+      std::string second;
+      expect(not glz::write_jsonb(parsed, second));
+
+      expect(first == second);
+   };
+
+   "large map of profiles"_test = [] {
+      // 200 keys exercises a u16-size-header object payload.
+      std::map<std::string, user_profile> users;
+      for (int i = 0; i < 200; ++i) {
+         user_profile u{};
+         u.id = static_cast<uint64_t>(i);
+         u.email = "user" + std::to_string(i) + "@example.com";
+         u.display_name = "User " + std::to_string(i);
+         u.tags = {"t"};
+         users.emplace("key_" + std::to_string(i), std::move(u));
+      }
+
+      std::string buf;
+      expect(not glz::write_jsonb(users, buf));
+      std::map<std::string, user_profile> out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.size() == 200);
+      expect(out["key_123"].email == "user123@example.com");
+   };
+
+   "nested optional optional"_test = [] {
+      // std::optional<std::optional<int>> — unusual but should round-trip.
+      std::optional<std::optional<int>> v = std::optional<int>{5};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+      std::optional<std::optional<int>> out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.has_value());
+      expect(out->has_value());
+      expect(**out == 5);
+   };
+
+   "vector of variant with mixed types"_test = [] {
+      using V = std::variant<int, std::string, double, bool>;
+      std::vector<V> v = {V{42}, V{std::string{"hello"}}, V{3.14}, V{true}, V{-7}};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+      std::vector<V> out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.size() == v.size());
+      expect(std::get<int>(out[0]) == 42);
+      expect(std::get<std::string>(out[1]) == "hello");
+      expect(std::get<double>(out[2]) == 3.14);
+      expect(std::get<bool>(out[3]) == true);
+      expect(std::get<int>(out[4]) == -7);
+   };
+};
+
 #if __cpp_exceptions
 suite exception_api_tests = [] {
    "ex::write_jsonb and ex::read_jsonb round-trip"_test = [] {
