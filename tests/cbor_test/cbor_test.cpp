@@ -2673,8 +2673,6 @@ void max_length_wrapper_cbor_tests()
 
 void chrono_tests()
 {
-   using namespace std::chrono_literals;
-
    "duration_seconds"_test = [] {
       std::chrono::seconds v{3600};
       std::string buffer{};
@@ -2720,19 +2718,19 @@ void chrono_tests()
    };
 
    "epoch_millis_roundtrip"_test = [] {
+      // Use a power-of-2 fractional second (0.125s) so float64 round-trips losslessly.
       glz::epoch_millis v{};
       using sys_duration = std::chrono::system_clock::duration;
       v.value = std::chrono::system_clock::time_point{
-         std::chrono::duration_cast<sys_duration>(std::chrono::milliseconds{1700000000123LL})};
+         std::chrono::duration_cast<sys_duration>(std::chrono::milliseconds{1700000000125LL})};
       std::string buffer{};
       expect(not glz::write_cbor(v, buffer));
 
-      // RFC 8949 §3.4.2: sub-second tag-1 value is emitted as a tag-4 decimal fraction.
-      // 0xC1 (tag 1) 0xC4 (tag 4) 0x82 (array[2]) 0x22 (-3) <mantissa=1700000000123>
+      // RFC 8949 §3.4.2: tag 1 sub-second must be encoded as a float; we emit float64.
+      // 0xC1 (tag 1) 0xFB (float64) <8 bytes big-endian IEEE 754 double>
+      expect(buffer.size() == 10u);
       expect(static_cast<uint8_t>(buffer[0]) == 0xC1);
-      expect(static_cast<uint8_t>(buffer[1]) == 0xC4);
-      expect(static_cast<uint8_t>(buffer[2]) == 0x82);
-      expect(static_cast<uint8_t>(buffer[3]) == 0x22); // nint -3 (10^-3 = milli)
+      expect(static_cast<uint8_t>(buffer[1]) == 0xFB);
 
       glz::epoch_millis result{};
       expect(not glz::read_cbor(result, buffer));
@@ -2743,21 +2741,41 @@ void chrono_tests()
       glz::epoch_micros v{};
       using sys_duration = std::chrono::system_clock::duration;
       v.value = std::chrono::system_clock::time_point{
-         std::chrono::duration_cast<sys_duration>(std::chrono::microseconds{1700000000123456LL})};
+         std::chrono::duration_cast<sys_duration>(std::chrono::microseconds{1700000000125000LL})};
       std::string buffer{};
       expect(not glz::write_cbor(v, buffer));
 
       expect(static_cast<uint8_t>(buffer[0]) == 0xC1);
-      expect(static_cast<uint8_t>(buffer[1]) == 0xC4);
-      expect(static_cast<uint8_t>(buffer[2]) == 0x82);
-      expect(static_cast<uint8_t>(buffer[3]) == 0x25); // nint -6
+      expect(static_cast<uint8_t>(buffer[1]) == 0xFB);
 
       glz::epoch_micros result{};
       expect(not glz::read_cbor(result, buffer));
       expect(result == v);
    };
 
-   "epoch_nanos_roundtrip"_test = [] {
+   "epoch_nanos_roundtrip_exact"_test = [] {
+      // For a value whose seconds form is exactly representable as a float64, the
+      // round-trip is lossless even for nanosecond Duration.
+      glz::epoch_nanos v{};
+      using sys_duration = std::chrono::system_clock::duration;
+      v.value = std::chrono::system_clock::time_point{
+         std::chrono::duration_cast<sys_duration>(std::chrono::nanoseconds{1700000000125000000LL})};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+
+      expect(static_cast<uint8_t>(buffer[0]) == 0xC1);
+      expect(static_cast<uint8_t>(buffer[1]) == 0xFB);
+
+      glz::epoch_nanos result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "epoch_nanos_precision_loss_documented"_test = [] {
+      // float64 cannot hold a modern nanosecond-precision epoch losslessly: the
+      // 53-bit mantissa is exceeded once nanoseconds-since-epoch goes above 2^53.
+      // For realistic modern timestamps the round-trip error is on the order of
+      // a few hundred nanoseconds. This test pins that behavior.
       glz::epoch_nanos v{};
       using sys_duration = std::chrono::system_clock::duration;
       v.value = std::chrono::system_clock::time_point{
@@ -2765,15 +2783,12 @@ void chrono_tests()
       std::string buffer{};
       expect(not glz::write_cbor(v, buffer));
 
-      // Tag 1 + tag 4 + [-9, mantissa] preserves full nanosecond precision.
-      expect(static_cast<uint8_t>(buffer[0]) == 0xC1);
-      expect(static_cast<uint8_t>(buffer[1]) == 0xC4);
-      expect(static_cast<uint8_t>(buffer[2]) == 0x82);
-      expect(static_cast<uint8_t>(buffer[3]) == 0x28); // nint -9
-
       glz::epoch_nanos result{};
       expect(not glz::read_cbor(result, buffer));
-      expect(result == v);
+      const auto diff_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                              result.value.time_since_epoch() - v.value.time_since_epoch())
+                              .count();
+      expect(std::abs(diff_ns) < 1000) << "epoch_nanos via float64 should roundtrip within ~1 microsecond";
    };
 
    "epoch_seconds_negative"_test = [] {
@@ -2910,23 +2925,22 @@ void chrono_tests()
       expect(buffer.substr(2) == "2013-03-21T20:04:00Z");
    };
 
-   "epoch_millis_from_external_decimal_fraction"_test = [] {
-      // Externally produced: tag 1 + tag 4 + [-3, 1363896240500]
+   "reject_tag1_with_decimal_fraction_content"_test = [] {
+      // RFC 8949 §3.4.2 forbids nested tags inside tag 1. Reject tag 1 + tag 4.
       std::string buffer;
       buffer.push_back(static_cast<char>(0xC1)); // tag 1
-      buffer.push_back(static_cast<char>(0xC4)); // tag 4
+      buffer.push_back(static_cast<char>(0xC4)); // tag 4 (illegal here)
       buffer.push_back(static_cast<char>(0x82)); // array[2]
       buffer.push_back(static_cast<char>(0x22)); // nint -3
-      buffer.push_back(static_cast<char>(0x1B)); // uint64_follows
+      buffer.push_back(static_cast<char>(0x1B));
       const uint64_t mantissa = 1363896240500ULL;
       for (int i = 7; i >= 0; --i) {
          buffer.push_back(static_cast<char>((mantissa >> (i * 8)) & 0xFF));
       }
 
       glz::epoch_millis result{};
-      expect(not glz::read_cbor(result, buffer));
-      const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(result.value.time_since_epoch()).count();
-      expect(ms == 1363896240500LL);
+      auto ec = glz::read_cbor(result, buffer);
+      expect(bool(ec));
    };
 
    // ----- Invalid-tag rejection -----
@@ -3081,6 +3095,41 @@ void chrono_tests()
       TP v{std::chrono::seconds{327511900800LL}}; // ~year 12345
       std::string buffer{};
       auto ec = glz::write_cbor(v, buffer);
+      expect(bool(ec));
+   };
+
+   // ----- Overflow guards on read -----
+
+   "reject_tag1_integer_overflowing_sys_duration"_test = [] {
+      // system_clock::duration is usually nanoseconds or microseconds. INT64_MAX seconds
+      // overflows either. The reader must reject rather than UB-wrap via duration_cast.
+      std::string buffer;
+      buffer.push_back(static_cast<char>(0xC1)); // tag 1
+      buffer.push_back(static_cast<char>(0x1B)); // uint64_follows
+      const uint64_t huge = static_cast<uint64_t>(INT64_MAX);
+      for (int i = 7; i >= 0; --i) {
+         buffer.push_back(static_cast<char>((huge >> (i * 8)) & 0xFF));
+      }
+
+      glz::epoch_seconds result{};
+      auto ec = glz::read_cbor(result, buffer);
+      expect(bool(ec));
+   };
+
+   "reject_tag1_float_overflowing_sys_duration"_test = [] {
+      // A finite but out-of-range float (1e18 seconds ≈ year 3.17e10) must not UB-wrap.
+      std::string buffer;
+      buffer.push_back(static_cast<char>(0xC1));
+      buffer.push_back(static_cast<char>(0xFB));
+      const double huge = 1.0e18;
+      uint64_t bits;
+      std::memcpy(&bits, &huge, sizeof(double));
+      for (int i = 7; i >= 0; --i) {
+         buffer.push_back(static_cast<char>((bits >> (i * 8)) & 0xFF));
+      }
+
+      glz::epoch_millis result{};
+      auto ec = glz::read_cbor(result, buffer);
       expect(bool(ec));
    };
 }

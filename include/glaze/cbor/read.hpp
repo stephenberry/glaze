@@ -1995,19 +1995,17 @@ namespace glz
 
    namespace cbor_detail
    {
-      // Decode a CBOR tag-1 payload into a system_clock::time_point.
-      // `it` points at the first byte of the content; accepts:
-      //   - unsigned/negative integer (seconds since epoch)
-      //   - float16/32/64 (fractional seconds; NaN/Inf rejected)
-      //   - tag 4 decimal fraction [exponent, mantissa] (seconds = mantissa * 10^exponent)
-      // Anything else sets ctx.error.
+      // Decode a CBOR tag-1 payload (RFC 8949 §3.4.2) into a system_clock::time_point.
+      // Accepts unsigned/negative integer seconds or float16/32/64 seconds (NaN/Inf rejected).
+      // Nested tags (e.g. tag 4 decimal fractions) are forbidden by §3.4.2 and rejected here.
+      // Values that would overflow system_clock::duration are rejected rather than wrapping.
       template <auto Opts>
       inline void decode_tag1_payload(is_context auto& ctx, auto& it, auto end,
                                       std::chrono::system_clock::time_point& tp) noexcept
       {
          using namespace cbor;
          using namespace std::chrono;
-         using sys_duration = system_clock::duration;
+         using sys_dur = system_clock::duration;
 
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
@@ -2019,12 +2017,21 @@ namespace glz
          const uint8_t mt = get_major_type(initial);
          const uint8_t ai = get_additional_info(initial);
 
+         // duration_cast<sys_dur>(seconds{secs}) overflows if secs exceeds the seconds-
+         // range sys_dur can represent. Compute the bounds from sys_dur::max/min.
+         constexpr int64_t max_seconds = duration_cast<seconds>(sys_dur::max()).count();
+         constexpr int64_t min_seconds = duration_cast<seconds>(sys_dur::min()).count();
+
          if (mt == major::uint || mt == major::nint) {
             int64_t secs{};
             from<CBOR, int64_t>::template op<Opts>(secs, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            tp = system_clock::time_point{duration_cast<sys_duration>(seconds{secs})};
+            if (secs > max_seconds || secs < min_seconds) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
+            tp = system_clock::time_point{duration_cast<sys_dur>(seconds{secs})};
          }
          else if (mt == major::simple && (ai == simple::float16 || ai == simple::float32 || ai == simple::float64)) {
             double d{};
@@ -2035,71 +2042,17 @@ namespace glz
                ctx.error = error_code::parse_error;
                return;
             }
+            // Guard against a finite-but-out-of-range double silently wrapping inside
+            // duration_cast (the cast multiplies by sys_dur::period::den and casts to int64).
+            if (!(d >= static_cast<double>(min_seconds) && d <= static_cast<double>(max_seconds))) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
             using fsec = duration<double>;
-            tp = system_clock::time_point{duration_cast<sys_duration>(fsec{d})};
-         }
-         else if (mt == major::tag) {
-            ++it;
-            const uint64_t inner_tag = decode_arg(ctx, it, end, ai);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            if (inner_tag != semantic_tag::decimal_fraction) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            if (it >= end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            uint8_t arr_initial;
-            std::memcpy(&arr_initial, it, 1);
-            ++it;
-            if (get_major_type(arr_initial) != major::array) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            const uint64_t count = decode_arg(ctx, it, end, get_additional_info(arr_initial));
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            if (count != 2) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            int64_t exponent{};
-            int64_t mantissa{};
-            from<CBOR, int64_t>::template op<Opts>(exponent, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            from<CBOR, int64_t>::template op<Opts>(mantissa, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            // seconds = mantissa * 10^exponent. Keep integer math for the common
-            // sub-second cases so nanosecond precision survives round-trips.
-            if (exponent == -3) {
-               tp = system_clock::time_point{duration_cast<sys_duration>(milliseconds{mantissa})};
-            }
-            else if (exponent == -6) {
-               tp = system_clock::time_point{duration_cast<sys_duration>(microseconds{mantissa})};
-            }
-            else if (exponent == -9) {
-               tp = system_clock::time_point{duration_cast<sys_duration>(nanoseconds{mantissa})};
-            }
-            else if (exponent == 0) {
-               tp = system_clock::time_point{duration_cast<sys_duration>(seconds{mantissa})};
-            }
-            else {
-               // Uncommon exponent: fall back to double. May lose precision.
-               const double secs = static_cast<double>(mantissa) * std::pow(10.0, static_cast<double>(exponent));
-               if (!std::isfinite(secs)) [[unlikely]] {
-                  ctx.error = error_code::parse_error;
-                  return;
-               }
-               using fsec = duration<double>;
-               tp = system_clock::time_point{duration_cast<sys_duration>(fsec{secs})};
-            }
+            tp = system_clock::time_point{duration_cast<sys_dur>(fsec{d})};
          }
          else [[unlikely]] {
+            // Per RFC 8949 §3.4.2, other content types (including nested tags) are invalid.
             ctx.error = error_code::syntax_error;
          }
       }

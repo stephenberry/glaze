@@ -1252,10 +1252,15 @@ namespace glz
    };
 
    // epoch_time wrapper - RFC 8949 §3.4.2 tag 1 (epoch-based date/time).
-   //   Period >= 1 second     -> tag 1 + integer seconds
-   //   Period of 10^-3/-6/-9  -> tag 1 + tag 4 decimal fraction [exp, mantissa]
-   //                             (seconds = mantissa * 10^exp, so full precision is preserved)
-   //   Other sub-second Period -> tag 1 + float64 seconds (fallback)
+   // Per §3.4.2 the tag 1 content MUST be an unsigned/negative integer (major types 0 or 1)
+   // or a floating-point number (major type 7 with additional info 25/26/27). Nested tags
+   // are forbidden, which rules out tag 4 decimal fractions.
+   //   Period >= 1 second: tag 1 + integer seconds (lossless)
+   //   Sub-second Period:  tag 1 + float64 seconds
+   // For nanosecond Durations, float64's 53-bit mantissa cannot hold a modern epoch's
+   // nanosecond count exactly; round-trips have ~ULP-scale loss (~100 ns at year 2025).
+   // Applications needing lossless nanosecond timestamps can use RFC 9581 tag 1001 in a
+   // custom wrapper, or encode the nanosecond count as a bare integer type.
    template <class Duration>
    struct to<CBOR, epoch_time<Duration>> final
    {
@@ -1273,26 +1278,7 @@ namespace glz
             const auto secs = duration_cast<seconds>(wrapper.value.time_since_epoch()).count();
             to<CBOR, int64_t>::template op<Opts>(static_cast<int64_t>(secs), ctx, b, ix);
          }
-         else if constexpr (std::ratio_equal_v<Period, std::milli> || std::ratio_equal_v<Period, std::micro> ||
-                            std::ratio_equal_v<Period, std::nano>) {
-            constexpr int exponent = std::ratio_equal_v<Period, std::milli>   ? -3
-                                     : std::ratio_equal_v<Period, std::micro> ? -6
-                                                                              : -9;
-            const auto mantissa = duration_cast<Duration>(wrapper.value.time_since_epoch()).count();
-
-            // Tag 4 (decimal fraction) + 2-element array: [exponent, mantissa]
-            if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::decimal_fraction, b, ix))
-               [[unlikely]] {
-               return;
-            }
-            if (!cbor_detail::dump_byte(ctx, cbor::initial_byte(cbor::major::array, 2), b, ix)) [[unlikely]] {
-               return;
-            }
-            to<CBOR, int64_t>::template op<Opts>(static_cast<int64_t>(exponent), ctx, b, ix);
-            to<CBOR, int64_t>::template op<Opts>(static_cast<int64_t>(mantissa), ctx, b, ix);
-         }
          else {
-            // Uncommon Period: fall back to float64 seconds. May lose precision.
             const double secs = duration<double>{wrapper.value.time_since_epoch()}.count();
             to<CBOR, double>::template op<Opts>(secs, ctx, b, ix);
          }
