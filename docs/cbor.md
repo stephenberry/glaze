@@ -229,3 +229,79 @@ Following RFC 8949 preferred serialization, Glaze automatically uses the smalles
 - Double-precision (64-bit) as fallback
 
 This reduces message size while preserving exact values.
+
+## Date and Time (std::chrono)
+
+Glaze serializes `std::chrono` types to CBOR using the standard semantic tags defined by RFC 8949. See [chrono documentation](./chrono.md) for the shared concepts; this section covers the CBOR-specific wire format.
+
+### Wire format
+
+| Type | Encoding | Source |
+|------|----------|--------|
+| `std::chrono::duration<Rep, Period>` | Bare integer count in the duration's native units | — |
+| `std::chrono::system_clock::time_point` | Tag 0 + text string (RFC 3339 date/time) | RFC 8949 §3.4.1 |
+| `glz::epoch_seconds` (Period ≥ 1s) | Tag 1 + integer seconds since epoch | RFC 8949 §3.4.2 |
+| `glz::epoch_millis` / `epoch_micros` / `epoch_nanos` | Tag 1 + float64 seconds since epoch | RFC 8949 §3.4.2 |
+| `std::chrono::steady_clock::time_point` | Bare integer count (no tag) | — |
+
+RFC 8949 §3.4.2 restricts tag 1 content to integers (major types 0/1) or floating-point numbers (major type 7, additional info 25/26/27). Nested tags — including tag 4 decimal fractions — are explicitly forbidden as tag 1 content, so sub-second precision is carried via float64.
+
+### Example
+
+```c++
+#include "glaze/cbor.hpp"
+#include <chrono>
+
+struct Event {
+    std::chrono::system_clock::time_point timestamp;  // tag 0 + RFC 3339 string
+    glz::epoch_millis logged_at;                      // tag 1 + float64 seconds
+    std::chrono::milliseconds duration;               // bare integer
+};
+
+Event e{};
+e.timestamp  = std::chrono::system_clock::now();
+e.logged_at  = std::chrono::system_clock::now();
+e.duration   = std::chrono::milliseconds{2500};
+
+std::string buffer;
+glz::write_cbor(e, buffer);
+
+Event parsed;
+glz::read_cbor(parsed, buffer);
+```
+
+The canonical RFC 8949 §3.4.2 example `2013-03-21T20:04:00Z` encoded as `glz::epoch_seconds` produces exactly `0xC1 0x1A 0x51 0x4B 0x67 0xB0`.
+
+### Precision
+
+Float64 has ~15–17 significant decimal digits:
+
+- `epoch_millis` — lossless round-trip for any realistic modern epoch.
+- `epoch_micros` — lossless through approximately year 2255.
+- `epoch_nanos` — for modern timestamps, round-trip error is on the order of ~100 ns (the mantissa is exceeded once nanoseconds-since-1970 surpasses 2^53). Applications needing lossless nanosecond wire precision can use a bare integer type or build an RFC 9581 tag 1001 wrapper.
+
+`system_clock::time_point` (tag 0 string) carries precision matching the time point's `Duration` template parameter — seconds, milliseconds, microseconds, or nanoseconds fractional digits are written as appropriate.
+
+### Decoder behavior
+
+**`system_clock::time_point` accepts:**
+- Tag 0 + text string (canonical, what Glaze writes)
+- Tag 1 + integer or float seconds (converted from epoch)
+- Bare text string without a tag (lenient — for producers that omit tag 0)
+
+Bare numbers and other shapes are rejected, since a unitless number has no defined meaning for a calendar time point.
+
+**`epoch_time<Duration>` accepts:**
+- Tag 1 + integer or float16/32/64 seconds (canonical)
+- Bare integer or float without a tag (lenient — same semantics)
+
+Nested tags inside tag 1 are rejected per RFC 8949 §3.4.2.
+
+Note: `system_clock::time_point` and `epoch_time<Duration>` do **not** cross-read — they pick different wire tags on write, so the type you read into must match the wire form you expect. Pick the type on both sides to match your protocol.
+
+### Safety
+
+- **NaN / Infinity** on tag-1 float payloads are rejected as meaningless timestamps.
+- **Integer and float seconds** are bounds-checked against the range `system_clock::duration` can represent, so an adversarial wire value cannot overflow `std::chrono::duration_cast`.
+- **Out-of-range years** on write — RFC 3339 requires a 4-digit year; times outside `[0000, 9999]` return an error instead of emitting corrupt digits.
+- **Leap seconds** (`:60`) are rejected on read, matching the JSON backend. `std::chrono::system_clock` uses Unix time and does not model leap seconds.
