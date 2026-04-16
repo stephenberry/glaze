@@ -1115,6 +1115,151 @@ namespace glz
       }
    };
 
+   // std::chrono::duration - bare numeric count in the duration's native units
+   template <is_duration T>
+   struct to<CBOR, T> final
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<CBOR, Rep>::template op<Opts>(value.count(), ctx, b, ix);
+      }
+   };
+
+   // system_clock::time_point - tag 0 (RFC 3339 date/time string)
+   template <is_system_time_point T>
+   struct to<CBOR, T> final
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using namespace std::chrono;
+         using TP = std::remove_cvref_t<T>;
+         using Duration = typename TP::duration;
+
+         // Write tag 0 (RFC 3339 date/time string)
+         if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::datetime_string, b, ix)) [[unlikely]] {
+            return;
+         }
+
+         constexpr size_t frac_digits = []() constexpr {
+            using Period = typename Duration::period;
+            if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+               return 0;
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
+               return 3;
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
+               return 6;
+            }
+            else {
+               return 9;
+            }
+         }();
+
+         // "YYYY-MM-DDTHH:MM:SS[.fffffffff]Z"
+         constexpr size_t str_len = 20 + (frac_digits > 0 ? 1 + frac_digits : 0);
+
+         if (!cbor_detail::encode_arg_cx<str_len>(ctx, cbor::major::tstr, b, ix)) [[unlikely]] {
+            return;
+         }
+
+         if (!ensure_space(ctx, b, ix + str_len + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+
+         const auto dp = floor<days>(value);
+         const year_month_day ymd{dp};
+         const hh_mm_ss tod{floor<Duration>(value - dp)};
+         const int yr = static_cast<int>(ymd.year());
+         const unsigned mo = static_cast<unsigned>(ymd.month());
+         const unsigned dy = static_cast<unsigned>(ymd.day());
+         const auto hr = static_cast<unsigned>(tod.hours().count());
+         const auto mi = static_cast<unsigned>(tod.minutes().count());
+         const auto sc = static_cast<unsigned>(tod.seconds().count());
+
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
+               b[ix + i - 1] = static_cast<typename std::decay_t<decltype(b)>::value_type>('0' + val % 10);
+               val /= 10;
+            }
+            ix += N;
+         };
+
+         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
+         b[ix++] = '-';
+         write_digits.template operator()<2>(mo);
+         b[ix++] = '-';
+         write_digits.template operator()<2>(dy);
+         b[ix++] = 'T';
+         write_digits.template operator()<2>(hr);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(mi);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(sc);
+
+         if constexpr (frac_digits > 0) {
+            b[ix++] = '.';
+            const auto subsec = tod.subseconds();
+            if constexpr (frac_digits == 3) {
+               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+            }
+            else if constexpr (frac_digits == 6) {
+               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+            }
+            else {
+               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+            }
+         }
+
+         b[ix++] = 'Z';
+      }
+   };
+
+   // steady_clock::time_point - bare count in native duration (epoch is implementation-defined)
+   template <is_steady_time_point T>
+   struct to<CBOR, T> final
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         to<CBOR, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, b, ix);
+      }
+   };
+
+   // high_resolution_clock::time_point when it's a distinct type (rare)
+   template <is_high_res_time_point T>
+   struct to<CBOR, T> final
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         to<CBOR, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, b, ix);
+      }
+   };
+
+   // epoch_time wrapper - tag 1 (epoch-based date/time) + integer count in Duration units
+   template <class Duration>
+   struct to<CBOR, epoch_time<Duration>> final
+   {
+      template <auto Opts>
+      static void op(auto&& wrapper, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::datetime_epoch, b, ix)) [[unlikely]] {
+            return;
+         }
+         using Rep = typename Duration::rep;
+         const auto count = std::chrono::duration_cast<Duration>(wrapper.value.time_since_epoch()).count();
+         to<CBOR, Rep>::template op<Opts>(count, ctx, b, ix);
+      }
+   };
+
    // ===== High-level write APIs =====
 
    template <write_supported<CBOR> T, class Buffer>

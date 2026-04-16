@@ -4,8 +4,11 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
+#include <string_view>
 #include <type_traits>
 
+#include "glaze/core/context.hpp"
 #include "glaze/core/traits.hpp"
 
 namespace glz
@@ -122,4 +125,131 @@ namespace glz
    template <class Duration>
    struct specified<epoch_time<Duration>> : std::true_type
    {};
+
+   namespace chrono_detail
+   {
+      // Parse an RFC 3339 / ISO 8601 date-time string into a system_clock time_point.
+      // On failure, sets ec to parse_error and leaves value unchanged.
+      template <is_system_time_point TP>
+      inline void parse_iso8601(std::string_view str, TP& value, error_code& ec) noexcept
+      {
+         // Minimum: YYYY-MM-DDTHH:MM:SS = 19 chars (timezone optional, defaults to UTC)
+         if (str.size() < 19) {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         const char* s = str.data();
+         const auto n = str.size();
+
+         auto parse_digits = [&s](size_t start, size_t count) -> int {
+            int val = 0;
+            for (size_t i = 0; i < count; ++i) {
+               const char c = s[start + i];
+               if (c < '0' || c > '9') return -1;
+               val = val * 10 + (c - '0');
+            }
+            return val;
+         };
+
+         const int yr = parse_digits(0, 4);
+         const int mo = parse_digits(5, 2);
+         const int dy = parse_digits(8, 2);
+         const int hr = parse_digits(11, 2);
+         const int mi = parse_digits(14, 2);
+         const int sc = parse_digits(17, 2);
+
+         if (yr < 0 || mo < 0 || dy < 0 || hr < 0 || mi < 0 || sc < 0 || s[4] != '-' || s[7] != '-' || s[10] != 'T' ||
+             s[13] != ':' || s[16] != ':') {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         if (mo < 1 || mo > 12 || dy < 1 || dy > 31 || hr > 23 || mi > 59 || sc > 59) {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         size_t pos = 19;
+         int64_t subsec_nanos = 0;
+         if (pos < n && s[pos] == '.') {
+            ++pos;
+            int64_t frac = 0;
+            int digits = 0;
+            while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
+               if (digits < 9) {
+                  frac = frac * 10 + (s[pos] - '0');
+                  ++digits;
+               }
+               ++pos;
+            }
+            if (digits == 0) {
+               ec = error_code::parse_error;
+               return;
+            }
+            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
+                                                10000,      1000,      100,      10,      1};
+            subsec_nanos = frac * scale[digits];
+         }
+
+         int tz_offset_seconds = 0;
+         if (pos < n) {
+            if (s[pos] == 'Z') {
+               ++pos;
+            }
+            else if (s[pos] == '+' || s[pos] == '-') {
+               const int utc_adjustment = (s[pos] == '+') ? -1 : 1;
+               ++pos;
+               if (pos + 2 > n) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               const int tz_hour = parse_digits(pos, 2);
+               if (tz_hour < 0 || tz_hour > 23) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               pos += 2;
+               int tz_min = 0;
+               bool has_tz_colon = false;
+               if (pos < n && s[pos] == ':') {
+                  ++pos;
+                  has_tz_colon = true;
+               }
+               if (pos + 2 <= n) {
+                  const int m = parse_digits(pos, 2);
+                  if (m < 0 || m > 59) {
+                     ec = error_code::parse_error;
+                     return;
+                  }
+                  tz_min = m;
+                  pos += 2;
+               }
+               else if (has_tz_colon) {
+                  ec = error_code::parse_error;
+                  return;
+               }
+               tz_offset_seconds = utc_adjustment * (tz_hour * 3600 + tz_min * 60);
+            }
+         }
+
+         if (pos != n) {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         using namespace std::chrono;
+         const auto ymd = year_month_day{year{yr}, month{static_cast<unsigned>(mo)}, day{static_cast<unsigned>(dy)}};
+         if (!ymd.ok()) {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         const auto tp = sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} +
+                         nanoseconds{subsec_nanos};
+
+         using Duration = typename std::remove_cvref_t<TP>::duration;
+         value = time_point_cast<Duration>(tp);
+      }
+   }
 }

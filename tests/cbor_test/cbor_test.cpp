@@ -5,6 +5,7 @@
 
 #include <bit>
 #include <bitset>
+#include <chrono>
 #include <complex>
 #include <deque>
 #include <expected>
@@ -2670,6 +2671,217 @@ void max_length_wrapper_cbor_tests()
    };
 }
 
+void chrono_tests()
+{
+   using namespace std::chrono_literals;
+
+   "duration_seconds"_test = [] {
+      std::chrono::seconds v{3600};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+      std::chrono::seconds result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "duration_milliseconds"_test = [] {
+      std::chrono::milliseconds v{12345};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+      std::chrono::milliseconds result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "duration_negative"_test = [] {
+      std::chrono::seconds v{-42};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+      std::chrono::seconds result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "epoch_seconds_roundtrip"_test = [] {
+      glz::epoch_seconds v{};
+      using sys_duration = std::chrono::system_clock::duration;
+      v.value = std::chrono::system_clock::time_point{
+         std::chrono::duration_cast<sys_duration>(std::chrono::seconds{1700000000})};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+
+      // Expect tag 1 followed by integer
+      expect(buffer.size() >= 2u);
+      expect(static_cast<uint8_t>(buffer[0]) == 0xC1); // tag 1
+
+      glz::epoch_seconds result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "epoch_millis_roundtrip"_test = [] {
+      glz::epoch_millis v{};
+      using sys_duration = std::chrono::system_clock::duration;
+      v.value = std::chrono::system_clock::time_point{
+         std::chrono::duration_cast<sys_duration>(std::chrono::milliseconds{1700000000123LL})};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+
+      expect(static_cast<uint8_t>(buffer[0]) == 0xC1); // tag 1
+
+      glz::epoch_millis result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "epoch_nanos_roundtrip"_test = [] {
+      glz::epoch_nanos v{};
+      using sys_duration = std::chrono::system_clock::duration;
+      v.value = std::chrono::system_clock::time_point{
+         std::chrono::duration_cast<sys_duration>(std::chrono::nanoseconds{1700000000123456789LL})};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+
+      expect(static_cast<uint8_t>(buffer[0]) == 0xC1); // tag 1
+
+      glz::epoch_nanos result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "epoch_seconds_negative"_test = [] {
+      glz::epoch_seconds v{};
+      using sys_duration = std::chrono::system_clock::duration;
+      v.value = std::chrono::system_clock::time_point{
+         std::chrono::duration_cast<sys_duration>(std::chrono::seconds{-1234567})};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+
+      glz::epoch_seconds result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "epoch_example_rfc8949"_test = [] {
+      // RFC 8949 section 3.4.2 example: 2013-03-21T20:04:00Z = 1363896240 seconds
+      glz::epoch_seconds v{};
+      using sys_duration = std::chrono::system_clock::duration;
+      v.value = std::chrono::system_clock::time_point{
+         std::chrono::duration_cast<sys_duration>(std::chrono::seconds{1363896240})};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+
+      // Expected CBOR: 0xC1 0x1A 0x51 0x4B 0x67 0xB0
+      expect(buffer.size() == 6u);
+      expect(static_cast<uint8_t>(buffer[0]) == 0xC1);
+      expect(static_cast<uint8_t>(buffer[1]) == 0x1A);
+      expect(static_cast<uint8_t>(buffer[2]) == 0x51);
+      expect(static_cast<uint8_t>(buffer[3]) == 0x4B);
+      expect(static_cast<uint8_t>(buffer[4]) == 0x67);
+      expect(static_cast<uint8_t>(buffer[5]) == 0xB0);
+   };
+
+   "epoch_float_read"_test = [] {
+      // Construct tag 1 + float64 value "1363896240.5"
+      // 0xC1 0xFB <8 bytes big-endian double>
+      std::string buffer;
+      buffer.push_back(static_cast<char>(0xC1));
+      buffer.push_back(static_cast<char>(0xFB));
+      const double secs = 1363896240.5;
+      uint64_t bits;
+      std::memcpy(&bits, &secs, sizeof(double));
+      for (int i = 7; i >= 0; --i) {
+         buffer.push_back(static_cast<char>((bits >> (i * 8)) & 0xFF));
+      }
+
+      glz::epoch_millis result{};
+      expect(not glz::read_cbor(result, buffer));
+      const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(result.value.time_since_epoch()).count();
+      expect(ms == 1363896240500LL);
+   };
+
+   "system_clock_seconds"_test = [] {
+      using TP = std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>;
+      TP v{std::chrono::seconds{1363896240}};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+
+      // Tag 0 + tstr of "2013-03-21T20:04:00Z"
+      expect(static_cast<uint8_t>(buffer[0]) == 0xC0);
+
+      TP result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "system_clock_millis"_test = [] {
+      using TP = std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>;
+      TP v{std::chrono::milliseconds{1700000000123LL}};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+
+      expect(static_cast<uint8_t>(buffer[0]) == 0xC0);
+
+      TP result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+   "system_clock_from_epoch_integer"_test = [] {
+      // A tag-1 value should also be readable into a system_clock::time_point.
+      // Build: 0xC1 0x1A 0x51 0x4B 0x67 0xB0 (tag 1 + 1363896240)
+      std::string buffer;
+      buffer.push_back(static_cast<char>(0xC1));
+      buffer.push_back(static_cast<char>(0x1A));
+      buffer.push_back(static_cast<char>(0x51));
+      buffer.push_back(static_cast<char>(0x4B));
+      buffer.push_back(static_cast<char>(0x67));
+      buffer.push_back(static_cast<char>(0xB0));
+
+      using TP = std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>;
+      TP result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result.time_since_epoch().count() == 1363896240LL);
+   };
+
+   "steady_clock_roundtrip"_test = [] {
+      std::chrono::steady_clock::time_point v{std::chrono::steady_clock::duration{123456789}};
+      std::string buffer{};
+      expect(not glz::write_cbor(v, buffer));
+      std::chrono::steady_clock::time_point result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result == v);
+   };
+
+}
+
+struct ChronoEvent
+{
+   glz::epoch_millis ts{};
+   std::chrono::milliseconds duration{};
+};
+
+void chrono_struct_tests()
+{
+   using namespace std::chrono_literals;
+
+   "chrono_in_struct"_test = [] {
+      ChronoEvent e{};
+      using sys_duration = std::chrono::system_clock::duration;
+      e.ts.value = std::chrono::system_clock::time_point{
+         std::chrono::duration_cast<sys_duration>(std::chrono::milliseconds{1700000000500LL})};
+      e.duration = 2500ms;
+
+      std::string buffer{};
+      expect(not glz::write_cbor(e, buffer));
+
+      ChronoEvent result{};
+      expect(not glz::read_cbor(result, buffer));
+      expect(result.ts == e.ts);
+      expect(result.duration == e.duration);
+   };
+}
+
 int main()
 {
    basic_types_tests();
@@ -2706,6 +2918,8 @@ int main()
    bounded_buffer_tests();
    allocation_limits_tests();
    max_length_wrapper_cbor_tests();
+   chrono_tests();
+   chrono_struct_tests();
 #if __cpp_exceptions
    exceptions_tests();
 #endif
