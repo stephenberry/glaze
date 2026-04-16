@@ -33,6 +33,35 @@ namespace
       std::abort();
    }
 
+   // Probe whether the linked SQLite build includes the JSON1 extension (json()/jsonb()).
+   // macOS ships a system SQLite without JSON1 so the symbols link fine but the functions
+   // error at query time. We check once, cache the result, and skip all suites if missing.
+   bool sqlite_has_jsonb()
+   {
+      static const bool value = [] {
+         sqlite3* db{};
+         if (sqlite3_open(":memory:", &db) != SQLITE_OK) {
+            if (db) sqlite3_close(db);
+            return false;
+         }
+         sqlite3_stmt* s{};
+         bool ok = false;
+         if (sqlite3_prepare_v2(db, "SELECT jsonb('null')", -1, &s, nullptr) == SQLITE_OK) {
+            ok = (sqlite3_step(s) == SQLITE_ROW);
+            sqlite3_finalize(s);
+         }
+         sqlite3_close(db);
+         if (!ok) {
+            std::fprintf(stderr,
+                         "jsonb_sqlite_test: linked SQLite (%s) lacks the JSON1 extension — all suites "
+                         "skipped\n(this is expected on macOS, which ships SQLite without JSON support).\n",
+                         sqlite3_libversion());
+         }
+         return ok;
+      }();
+      return value;
+   }
+
    // RAII wrapper around an in-memory SQLite DB. Test-harness-level SQLite failures abort the
    // process (they should never happen in a correctly set up test environment).
    struct sqlite_db
@@ -189,6 +218,7 @@ static std::string normalize_json(const std::string& s)
 }
 
 suite a_glaze_to_sqlite = [] {
+   if (!sqlite_has_jsonb()) return;
    "scalar int round-trip through SQLite"_test = [] {
       sqlite_db db;
       std::string blob;
@@ -309,6 +339,7 @@ suite a_glaze_to_sqlite = [] {
 };
 
 suite b_sqlite_to_glaze = [] {
+   if (!sqlite_has_jsonb()) return;
    "read SQLite-produced blob for int"_test = [] {
       sqlite_db db;
       const std::string blob = db.sqlite_jsonb("42");
@@ -373,6 +404,7 @@ suite b_sqlite_to_glaze = [] {
 };
 
 suite c_cross_validation = [] {
+   if (!sqlite_has_jsonb()) return;
    // For scalar types that map cleanly to a single JSONB element, verify byte-for-byte
    // equivalence with SQLite's jsonb() output.
    "null byte-equivalent"_test = [] {
@@ -468,6 +500,7 @@ suite c_cross_validation = [] {
 };
 
 suite d_path_queries = [] {
+   if (!sqlite_has_jsonb()) return;
    // SQLite's json_extract runs JSON Path-style queries directly on our JSONB blob. This
    // validates both that Glaze's output is well-formed AND that SQLite can navigate its
    // nested structure down to specific fields and array indices.
