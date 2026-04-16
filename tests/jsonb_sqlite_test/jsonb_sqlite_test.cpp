@@ -363,6 +363,47 @@ suite c_cross_validation = [] {
       expect(not glz::read_jsonb(out, sqlite_blob));
       expect(out == "hi");
    };
+
+   // generic_i64: routes integer JSON through the int64_t variant alternative, producing INT
+   // output that should match SQLite byte-for-byte.
+   "generic_i64 integer byte-equivalent"_test = [] {
+      sqlite_db db;
+      const auto sqlite_blob = db.sqlite_jsonb("42");
+      glz::generic_i64 v;
+      expect(not glz::read_json(v, "42"));
+      std::string glaze_blob;
+      expect(not glz::write_jsonb(v, glaze_blob));
+      expect(sqlite_blob == glaze_blob);
+   };
+
+   "generic_i64 negative integer byte-equivalent"_test = [] {
+      sqlite_db db;
+      const auto sqlite_blob = db.sqlite_jsonb("-1234567");
+      glz::generic_i64 v;
+      expect(not glz::read_json(v, "-1234567"));
+      std::string glaze_blob;
+      expect(not glz::write_jsonb(v, glaze_blob));
+      expect(sqlite_blob == glaze_blob);
+   };
+
+   "generic round-trip through SQLite"_test = [] {
+      sqlite_db db;
+      // Write complex value via generic → JSONB → SQLite → JSON → generic.
+      glz::generic src;
+      expect(not glz::read_json(src, R"({"a":1.5,"b":[true,null,"x"]})"));
+      std::string blob;
+      expect(not glz::write_jsonb(src, blob));
+      db.insert_blob(blob.data(), blob.size());
+      const auto out_json = db.select_json_of_blob();
+      glz::generic round;
+      expect(not glz::read_json(round, out_json));
+      // Validate key fields preserved.
+      expect(round.is_object());
+      const auto& o = round.get_object();
+      auto it_a = o.find("a");
+      expect(it_a != o.end());
+      expect(it_a->second.get<double>() == 1.5);
+   };
 };
 
 int main() { return 0; }

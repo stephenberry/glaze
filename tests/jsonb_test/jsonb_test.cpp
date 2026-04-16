@@ -707,4 +707,122 @@ suite hash_lookup_tests = [] {
    };
 };
 
+suite generic_tests = [] {
+   "generic scalar round-trips"_test = [] {
+      {
+         glz::generic g = nullptr;
+         std::string buf;
+         expect(not glz::write_jsonb(g, buf));
+         glz::generic out;
+         expect(not glz::read_jsonb(out, buf));
+         expect(out.is_null());
+      }
+      {
+         glz::generic g = true;
+         std::string buf;
+         expect(not glz::write_jsonb(g, buf));
+         glz::generic out;
+         expect(not glz::read_jsonb(out, buf));
+         expect(out.is_boolean());
+         expect(out.get<bool>() == true);
+      }
+      {
+         glz::generic g = "hello";
+         std::string buf;
+         expect(not glz::write_jsonb(g, buf));
+         glz::generic out;
+         expect(not glz::read_jsonb(out, buf));
+         expect(out.is_string());
+         expect(out.get<std::string>() == "hello");
+      }
+   };
+
+   "generic number — default f64 mode"_test = [] {
+      glz::generic g = 42.5;
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      // Header byte: type should be FLOAT (5) since generic<f64> always stores doubles.
+      expect(glz::jsonb::get_type(static_cast<uint8_t>(buf[0])) == glz::jsonb::type::float_);
+      glz::generic out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.get<double>() == 42.5);
+   };
+
+   "generic_i64 emits INT for integer values"_test = [] {
+      glz::generic_i64 g;
+      g.data = int64_t{42};
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      expect(glz::jsonb::get_type(static_cast<uint8_t>(buf[0])) == glz::jsonb::type::int_);
+      glz::generic_i64 out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.is_int64());
+      expect(out.get<int64_t>() == 42);
+   };
+
+   "generic_u64 preserves large unsigned"_test = [] {
+      glz::generic_u64 g;
+      g.data = uint64_t{9876543210123456789ULL};
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      glz::generic_u64 out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.is_uint64());
+      expect(out.get<uint64_t>() == 9876543210123456789ULL);
+   };
+
+   "generic array round-trip"_test = [] {
+      glz::generic g;
+      glz::generic::array_t arr;
+      arr.emplace_back(); arr.back().data = 1.0;
+      arr.emplace_back(); arr.back().data = std::string("two");
+      arr.emplace_back(); arr.back().data = true;
+      g.data = std::move(arr);
+
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      expect(glz::jsonb::get_type(static_cast<uint8_t>(buf[0])) == glz::jsonb::type::array);
+      glz::generic out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.is_array());
+      const auto& a = out.get_array();
+      expect(a.size() == 3);
+      expect(a[0].get<double>() == 1.0);
+      expect(a[1].get<std::string>() == "two");
+      expect(a[2].get<bool>() == true);
+   };
+
+   "generic object round-trip"_test = [] {
+      glz::generic g;
+      glz::generic::object_t obj;
+      glz::generic a; a.data = 1.0;
+      glz::generic b; b.data = std::string("s");
+      obj.insert(std::make_pair(std::string("a"), std::move(a)));
+      obj.insert(std::make_pair(std::string("b"), std::move(b)));
+      g.data = std::move(obj);
+
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      expect(glz::jsonb::get_type(static_cast<uint8_t>(buf[0])) == glz::jsonb::type::object);
+      glz::generic out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.is_object());
+      const auto& o = out.get_object();
+      expect(o.size() == 2);
+   };
+
+   "generic round-trips through JSON parse"_test = [] {
+      glz::generic g;
+      expect(not glz::read_json(g, R"({"x":1.5,"y":[true,null,"z"]})"));
+      std::string buf;
+      expect(not glz::write_jsonb(g, buf));
+      glz::generic out;
+      expect(not glz::read_jsonb(out, buf));
+      // Dump back to JSON and compare after normalizing key order.
+      std::string dumped;
+      expect(not glz::write_json(out, dumped));
+      expect(dumped == R"({"x":1.5,"y":[true,null,"z"]})");
+   };
+};
+
 int main() { return 0; }

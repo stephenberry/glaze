@@ -14,6 +14,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/json/generic.hpp"
 #include "glaze/jsonb/header.hpp"
 #include "glaze/jsonb/skip.hpp"
 #include "glaze/util/compare.hpp"
@@ -1037,6 +1038,105 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
       {
          ctx.error = error_code::attempt_read_hidden;
+      }
+   };
+
+   // Generic JSON value — peek the type code and dispatch to the appropriate variant alternative.
+   template <num_mode Mode, template <class> class MapType>
+   struct from<JSONB, generic_json<Mode, MapType>> final
+   {
+      template <auto Opts>
+      static void op(auto& value, is_context auto& ctx, auto& it, auto end)
+      {
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         using G = std::decay_t<decltype(value)>;
+         using array_t = typename G::array_t;
+         using object_t = typename G::object_t;
+
+         // Peek the type code without advancing.
+         uint8_t initial;
+         std::memcpy(&initial, it, 1);
+         const uint8_t tc = jsonb::get_type(initial);
+
+         switch (tc) {
+         case jsonb::type::null_: {
+            std::nullptr_t n;
+            from<JSONB, std::nullptr_t>::template op<Opts>(n, ctx, it, end);
+            if (bool(ctx.error)) return;
+            value.data = nullptr;
+            return;
+         }
+         case jsonb::type::true_:
+         case jsonb::type::false_: {
+            bool b = false;
+            from<JSONB, bool>::template op<Opts>(b, ctx, it, end);
+            if (bool(ctx.error)) return;
+            value.data = b;
+            return;
+         }
+         case jsonb::type::int_:
+         case jsonb::type::int5: {
+            // Prefer the widest integer alternative available in this Mode, fall back to double.
+            if constexpr (Mode == num_mode::u64) {
+               uint64_t u{};
+               from<JSONB, uint64_t>::template op<Opts>(u, ctx, it, end);
+               if (bool(ctx.error)) return;
+               value.data = u;
+            }
+            else if constexpr (Mode == num_mode::i64) {
+               int64_t i{};
+               from<JSONB, int64_t>::template op<Opts>(i, ctx, it, end);
+               if (bool(ctx.error)) return;
+               value.data = i;
+            }
+            else {
+               double d{};
+               from<JSONB, double>::template op<Opts>(d, ctx, it, end);
+               if (bool(ctx.error)) return;
+               value.data = d;
+            }
+            return;
+         }
+         case jsonb::type::float_:
+         case jsonb::type::float5: {
+            double d{};
+            from<JSONB, double>::template op<Opts>(d, ctx, it, end);
+            if (bool(ctx.error)) return;
+            value.data = d;
+            return;
+         }
+         case jsonb::type::text:
+         case jsonb::type::textj:
+         case jsonb::type::text5:
+         case jsonb::type::textraw: {
+            std::string s;
+            from<JSONB, std::string>::template op<Opts>(s, ctx, it, end);
+            if (bool(ctx.error)) return;
+            value.data = std::move(s);
+            return;
+         }
+         case jsonb::type::array: {
+            array_t a;
+            from<JSONB, array_t>::template op<Opts>(a, ctx, it, end);
+            if (bool(ctx.error)) return;
+            value.data = std::move(a);
+            return;
+         }
+         case jsonb::type::object: {
+            object_t o;
+            from<JSONB, object_t>::template op<Opts>(o, ctx, it, end);
+            if (bool(ctx.error)) return;
+            value.data = std::move(o);
+            return;
+         }
+         default:
+            ctx.error = error_code::syntax_error;
+            return;
+         }
       }
    };
 
