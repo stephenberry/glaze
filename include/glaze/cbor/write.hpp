@@ -1162,6 +1162,16 @@ namespace glz
          // "YYYY-MM-DDTHH:MM:SS[.fffffffff]Z"
          constexpr size_t str_len = 20 + (frac_digits > 0 ? 1 + frac_digits : 0);
 
+         const auto dp = floor<days>(value);
+         const year_month_day ymd{dp};
+         const int yr = static_cast<int>(ymd.year());
+         // RFC 3339 requires 4-digit year in [0000, 9999]. Reject out-of-range values
+         // rather than silently corrupting the output with overflowed digits.
+         if (yr < 0 || yr > 9999) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
          if (!cbor_detail::encode_arg_cx<str_len>(ctx, cbor::major::tstr, b, ix)) [[unlikely]] {
             return;
          }
@@ -1170,10 +1180,7 @@ namespace glz
             return;
          }
 
-         const auto dp = floor<days>(value);
-         const year_month_day ymd{dp};
          const hh_mm_ss tod{floor<Duration>(value - dp)};
-         const int yr = static_cast<int>(ymd.year());
          const unsigned mo = static_cast<unsigned>(ymd.month());
          const unsigned dy = static_cast<unsigned>(ymd.day());
          const auto hr = static_cast<unsigned>(tod.hours().count());
@@ -1244,19 +1251,51 @@ namespace glz
       }
    };
 
-   // epoch_time wrapper - tag 1 (epoch-based date/time) + integer count in Duration units
+   // epoch_time wrapper - RFC 8949 §3.4.2 tag 1 (epoch-based date/time).
+   //   Period >= 1 second     -> tag 1 + integer seconds
+   //   Period of 10^-3/-6/-9  -> tag 1 + tag 4 decimal fraction [exp, mantissa]
+   //                             (seconds = mantissa * 10^exp, so full precision is preserved)
+   //   Other sub-second Period -> tag 1 + float64 seconds (fallback)
    template <class Duration>
    struct to<CBOR, epoch_time<Duration>> final
    {
       template <auto Opts>
       static void op(auto&& wrapper, is_context auto&& ctx, auto&& b, auto& ix)
       {
+         using namespace std::chrono;
+         using Period = typename Duration::period;
+
          if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::datetime_epoch, b, ix)) [[unlikely]] {
             return;
          }
-         using Rep = typename Duration::rep;
-         const auto count = std::chrono::duration_cast<Duration>(wrapper.value.time_since_epoch()).count();
-         to<CBOR, Rep>::template op<Opts>(count, ctx, b, ix);
+
+         if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+            const auto secs = duration_cast<seconds>(wrapper.value.time_since_epoch()).count();
+            to<CBOR, int64_t>::template op<Opts>(static_cast<int64_t>(secs), ctx, b, ix);
+         }
+         else if constexpr (std::ratio_equal_v<Period, std::milli> || std::ratio_equal_v<Period, std::micro> ||
+                            std::ratio_equal_v<Period, std::nano>) {
+            constexpr int exponent = std::ratio_equal_v<Period, std::milli>   ? -3
+                                     : std::ratio_equal_v<Period, std::micro> ? -6
+                                                                              : -9;
+            const auto mantissa = duration_cast<Duration>(wrapper.value.time_since_epoch()).count();
+
+            // Tag 4 (decimal fraction) + 2-element array: [exponent, mantissa]
+            if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::decimal_fraction, b, ix))
+               [[unlikely]] {
+               return;
+            }
+            if (!cbor_detail::dump_byte(ctx, cbor::initial_byte(cbor::major::array, 2), b, ix)) [[unlikely]] {
+               return;
+            }
+            to<CBOR, int64_t>::template op<Opts>(static_cast<int64_t>(exponent), ctx, b, ix);
+            to<CBOR, int64_t>::template op<Opts>(static_cast<int64_t>(mantissa), ctx, b, ix);
+         }
+         else {
+            // Uncommon Period: fall back to float64 seconds. May lose precision.
+            const double secs = duration<double>{wrapper.value.time_since_epoch()}.count();
+            to<CBOR, double>::template op<Opts>(secs, ctx, b, ix);
+         }
       }
    };
 

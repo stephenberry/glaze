@@ -198,6 +198,9 @@ namespace glz
                ++pos;
             }
             else if (s[pos] == '+' || s[pos] == '-') {
+               // UTC = local - offset. "+05:30" means local is 5h30 ahead of UTC, so we
+               // subtract 5h30 (multiplier -1); "-08:00" means local is behind UTC, so we add
+               // 8h (multiplier +1).
                const int utc_adjustment = (s[pos] == '+') ? -1 : 1;
                ++pos;
                if (pos + 2 > n) {

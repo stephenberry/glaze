@@ -1993,7 +1993,120 @@ namespace glz
       }
    };
 
-   // system_clock::time_point - accepts tag 0 (RFC 3339 string) or tag 1 (epoch seconds)
+   namespace cbor_detail
+   {
+      // Decode a CBOR tag-1 payload into a system_clock::time_point.
+      // `it` points at the first byte of the content; accepts:
+      //   - unsigned/negative integer (seconds since epoch)
+      //   - float16/32/64 (fractional seconds; NaN/Inf rejected)
+      //   - tag 4 decimal fraction [exponent, mantissa] (seconds = mantissa * 10^exponent)
+      // Anything else sets ctx.error.
+      template <auto Opts>
+      inline void decode_tag1_payload(is_context auto& ctx, auto& it, auto end,
+                                      std::chrono::system_clock::time_point& tp) noexcept
+      {
+         using namespace cbor;
+         using namespace std::chrono;
+         using sys_duration = system_clock::duration;
+
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         uint8_t initial;
+         std::memcpy(&initial, it, 1);
+         const uint8_t mt = get_major_type(initial);
+         const uint8_t ai = get_additional_info(initial);
+
+         if (mt == major::uint || mt == major::nint) {
+            int64_t secs{};
+            from<CBOR, int64_t>::template op<Opts>(secs, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            tp = system_clock::time_point{duration_cast<sys_duration>(seconds{secs})};
+         }
+         else if (mt == major::simple && (ai == simple::float16 || ai == simple::float32 || ai == simple::float64)) {
+            double d{};
+            from<CBOR, double>::template op<Opts>(d, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if (!std::isfinite(d)) [[unlikely]] {
+               ctx.error = error_code::parse_error;
+               return;
+            }
+            using fsec = duration<double>;
+            tp = system_clock::time_point{duration_cast<sys_duration>(fsec{d})};
+         }
+         else if (mt == major::tag) {
+            ++it;
+            const uint64_t inner_tag = decode_arg(ctx, it, end, ai);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if (inner_tag != semantic_tag::decimal_fraction) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            if (it >= end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            uint8_t arr_initial;
+            std::memcpy(&arr_initial, it, 1);
+            ++it;
+            if (get_major_type(arr_initial) != major::array) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            const uint64_t count = decode_arg(ctx, it, end, get_additional_info(arr_initial));
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if (count != 2) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            int64_t exponent{};
+            int64_t mantissa{};
+            from<CBOR, int64_t>::template op<Opts>(exponent, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            from<CBOR, int64_t>::template op<Opts>(mantissa, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            // seconds = mantissa * 10^exponent. Keep integer math for the common
+            // sub-second cases so nanosecond precision survives round-trips.
+            if (exponent == -3) {
+               tp = system_clock::time_point{duration_cast<sys_duration>(milliseconds{mantissa})};
+            }
+            else if (exponent == -6) {
+               tp = system_clock::time_point{duration_cast<sys_duration>(microseconds{mantissa})};
+            }
+            else if (exponent == -9) {
+               tp = system_clock::time_point{duration_cast<sys_duration>(nanoseconds{mantissa})};
+            }
+            else if (exponent == 0) {
+               tp = system_clock::time_point{duration_cast<sys_duration>(seconds{mantissa})};
+            }
+            else {
+               // Uncommon exponent: fall back to double. May lose precision.
+               const double secs = static_cast<double>(mantissa) * std::pow(10.0, static_cast<double>(exponent));
+               if (!std::isfinite(secs)) [[unlikely]] {
+                  ctx.error = error_code::parse_error;
+                  return;
+               }
+               using fsec = duration<double>;
+               tp = system_clock::time_point{duration_cast<sys_duration>(fsec{secs})};
+            }
+         }
+         else [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+         }
+      }
+   }
+
+   // system_clock::time_point - accepts tag 0 (RFC 3339 string), tag 1 (epoch seconds / tag-4
+   // decimal fraction), or a bare RFC 3339 string (no tag, for interop).
    template <is_system_time_point T>
    struct from<CBOR, T>
    {
@@ -2010,60 +2123,52 @@ namespace glz
          uint8_t initial;
          std::memcpy(&initial, it, 1);
 
-         uint64_t tag = semantic_tag::datetime_string;
-         bool has_tag = false;
          if (get_major_type(initial) == major::tag) {
             ++it;
-            tag = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
+            const uint64_t tag = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
             if (bool(ctx.error)) [[unlikely]]
                return;
-            if (tag != semantic_tag::datetime_string && tag != semantic_tag::datetime_epoch) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            has_tag = true;
             if (it >= end) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
-            std::memcpy(&initial, it, 1);
-         }
 
-         const uint8_t mt = get_major_type(initial);
-
-         if (mt == major::tstr) {
-            // RFC 3339 / ISO 8601 date/time string
-            if (has_tag && tag != semantic_tag::datetime_string) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
+            if (tag == semantic_tag::datetime_string) {
+               // RFC 8949 §3.4.1: tag 0 content MUST be a text string.
+               uint8_t content;
+               std::memcpy(&content, it, 1);
+               if (get_major_type(content) != major::tstr) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               std::string_view str;
+               from<CBOR, std::string_view>::template op<Opts>(str, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               chrono_detail::parse_iso8601(str, value, ctx.error);
             }
+            else if (tag == semantic_tag::datetime_epoch) {
+               std::chrono::system_clock::time_point tp{};
+               cbor_detail::decode_tag1_payload<Opts>(ctx, it, end, tp);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               using Duration = typename std::remove_cvref_t<T>::duration;
+               value = std::chrono::time_point_cast<Duration>(tp);
+            }
+            else [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+            }
+         }
+         else if (get_major_type(initial) == major::tstr) {
+            // Bare RFC 3339 string (no tag). Lenient for interop with producers that omit tag 0.
             std::string_view str;
             from<CBOR, std::string_view>::template op<Opts>(str, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             chrono_detail::parse_iso8601(str, value, ctx.error);
          }
-         else if (mt == major::uint || mt == major::nint) {
-            // Epoch integer seconds
-            int64_t secs{};
-            from<CBOR, int64_t>::template op<Opts>(secs, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            using Duration = typename std::remove_cvref_t<T>::duration;
-            value = std::chrono::time_point_cast<Duration>(std::chrono::system_clock::time_point{} +
-                                                           std::chrono::seconds{secs});
-         }
-         else if (mt == major::simple) {
-            // Epoch floating-point seconds
-            double d{};
-            from<CBOR, double>::template op<Opts>(d, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            using Duration = typename std::remove_cvref_t<T>::duration;
-            using fsec = std::chrono::duration<double>;
-            value = std::chrono::time_point_cast<Duration>(std::chrono::system_clock::time_point{} + fsec{d});
-         }
          else [[unlikely]] {
+            // A bare number has no defined unit for a time_point; require a tag.
             ctx.error = error_code::syntax_error;
          }
       }
@@ -2103,7 +2208,8 @@ namespace glz
       }
    };
 
-   // epoch_time wrapper - reads tag 1 + integer count (Duration units), or bare number for robustness
+   // epoch_time wrapper - reads tag 1 payload (integer seconds, float seconds, or tag-4 decimal
+   // fraction), or a bare number interpreted as seconds since epoch (for interop).
    template <class Duration>
    struct from<CBOR, epoch_time<Duration>>
    {
@@ -2120,7 +2226,6 @@ namespace glz
          uint8_t initial;
          std::memcpy(&initial, it, 1);
 
-         // Optional tag 1
          if (get_major_type(initial) == major::tag) {
             ++it;
             const uint64_t tag = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
@@ -2130,37 +2235,13 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
-            if (it >= end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-            std::memcpy(&initial, it, 1);
          }
 
-         using sys_duration = std::chrono::system_clock::duration;
-         const uint8_t mt = get_major_type(initial);
-
-         if (mt == major::uint || mt == major::nint) {
-            using Rep = typename Duration::rep;
-            Rep count{};
-            from<CBOR, Rep>::template op<Opts>(count, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            wrapper.value = std::chrono::system_clock::time_point{
-               std::chrono::duration_cast<sys_duration>(Duration{count})};
-         }
-         else if (mt == major::simple) {
-            // Floating-point: per RFC 8949 tag 1, the value is seconds since epoch
-            double d{};
-            from<CBOR, double>::template op<Opts>(d, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            using fsec = std::chrono::duration<double>;
-            wrapper.value = std::chrono::system_clock::time_point{std::chrono::duration_cast<sys_duration>(fsec{d})};
-         }
-         else [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-         }
+         std::chrono::system_clock::time_point tp{};
+         cbor_detail::decode_tag1_payload<Opts>(ctx, it, end, tp);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         wrapper.value = tp;
       }
    };
 
