@@ -17,6 +17,7 @@
 #include "glaze/json/generic.hpp"
 #include "glaze/jsonb/header.hpp"
 #include "glaze/jsonb/skip.hpp"
+#include "glaze/util/bit_array.hpp"
 #include "glaze/util/compare.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
@@ -678,6 +679,18 @@ namespace glz
          const auto stop = it + sz;
          static constexpr auto N = reflect<T>::size;
 
+         // Track which fields have been read. Only materialized when needed — an empty pointer
+         // type when both error_on_missing_keys and partial_read are off, so the compiler
+         // erases the tracking entirely.
+         auto fields = [&]() -> decltype(auto) {
+            if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+               return bit_array<N>{};
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
          // Hash-based lookup against a key byte-range. Returns true on a full match (key
          // parsed into its member), false if no field matched (caller must skip the value).
          // Advances `it` past the value on match; on miss `it` is unchanged.
@@ -700,6 +713,9 @@ namespace glz
                         }
                         else {
                            parse<JSONB>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                        }
+                        if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+                           fields[I] = true;
                         }
                      }
                   },
@@ -775,6 +791,20 @@ namespace glz
 
          if (it != stop) [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         if constexpr (Opts.error_on_missing_keys) {
+            static constexpr auto req_fields = required_fields<T, Opts>();
+            if ((req_fields & fields) != req_fields) {
+               for (size_t i = 0; i < N; ++i) {
+                  if (!fields[i] && req_fields[i]) {
+                     ctx.custom_error_message = reflect<T>::keys[i];
+                     break;
+                  }
+               }
+               ctx.error = error_code::missing_key;
+            }
          }
       }
    };

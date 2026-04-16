@@ -103,3 +103,21 @@ expected<string>  glz::jsonb_to_json(const Buffer& jsonb);
 ```
 
 Use `glz::set_jsonb<Opts>()` to compose `JSONB` with other `glz::opts` fields.
+
+## Supported Options
+
+The following `glz::opts` fields influence JSONB read/write:
+
+| Option | Default | Effect |
+|---|---|---|
+| `error_on_unknown_keys` | `true` | Error vs silently skip unknown object keys on read |
+| `error_on_missing_keys` | `false` | Error if a required (non-nullable) reflected field is absent on read |
+| `skip_null_members` | `true` | Omit null `optional`/`unique_ptr`/`shared_ptr` fields when writing objects |
+| `error_on_const_read` | *(custom)* | Error vs silently skip when the target is const |
+| `skip_default_members` | *(custom)* | Omit fields equal to their zero/empty value when writing. Must be added via a custom opts struct |
+| `max_string_length` | *(custom)* | Cap string allocation size on read |
+| `write_function_pointers` | *(custom)* | Emit vs skip member function pointers in reflected objects |
+
+Options marked *(custom)* are not part of the base `glz::opts` struct — define a custom opts struct inheriting from `glz::opts` and add the field.
+
+Options that apply only to text formats (`prettify`, `minified`, `comments`, `null_terminated`, `indentation_char`, `escape_control_characters`) have no effect on JSONB.

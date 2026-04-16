@@ -1086,6 +1086,168 @@ suite expected_tests = [] {
    };
 };
 
+struct with_optionals
+{
+   int id{};
+   std::optional<std::string> nickname{};
+   std::unique_ptr<int> score{};
+};
+
+struct with_defaults
+{
+   // skip_default_members compares against the zero/empty value, not the declared
+   // initializer — so these are all zero-initialized defaults.
+   int a{};
+   int b{};
+   std::string s{};
+   std::vector<int> v{};
+};
+
+struct required_fields_struct
+{
+   std::string name;
+   int age{};
+   std::optional<std::string> nickname;
+};
+
+suite skip_null_members_tests = [] {
+   "skip_null_members=true omits null optional + unique_ptr"_test = [] {
+      with_optionals v{.id = 5};
+      std::string buf;
+      constexpr glz::opts O{.format = glz::JSONB, .skip_null_members = true};
+      expect(not glz::write<O>(v, buf));
+
+      // Convert to JSON to inspect structure.
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == R"({"id":5})");
+   };
+
+   "skip_null_members=false (explicit) emits nulls"_test = [] {
+      with_optionals v{.id = 5};
+      std::string buf;
+      constexpr glz::opts O{.format = glz::JSONB, .skip_null_members = false};
+      expect(not glz::write<O>(v, buf));
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == R"({"id":5,"nickname":null,"score":null})");
+   };
+
+   "skip_null_members with set optional keeps it"_test = [] {
+      with_optionals v{.id = 5, .nickname = "Al"};
+      std::string buf;
+      constexpr glz::opts O{.format = glz::JSONB, .skip_null_members = true};
+      expect(not glz::write<O>(v, buf));
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == R"({"id":5,"nickname":"Al"})");
+   };
+};
+
+suite skip_default_members_tests = [] {
+   // check_skip_default_members is off by default; define a custom opts struct that enables it.
+   struct opts_with_default_skip : glz::opts {
+      bool skip_default_members = true;
+   };
+
+   "skip_default_members omits zero/empty-valued fields"_test = [] {
+      with_defaults v{}; // all zero/empty
+      std::string buf;
+      constexpr opts_with_default_skip O{{.format = glz::JSONB}};
+      expect(not glz::write<O>(v, buf));
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == "{}");
+   };
+
+   "skip_default_members keeps non-zero fields"_test = [] {
+      with_defaults v{};
+      v.b = 99;
+      v.s = "changed";
+      v.v = {1};
+      std::string buf;
+      constexpr opts_with_default_skip O{{.format = glz::JSONB}};
+      expect(not glz::write<O>(v, buf));
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == R"({"b":99,"s":"changed","v":[1]})");
+   };
+};
+
+suite error_on_missing_keys_tests = [] {
+   "missing required field errors"_test = [] {
+      // Build JSONB for {"age":30} — "name" is missing and required (non-nullable).
+      std::string buf;
+      buf.resize(9);
+      const size_t payload_start = buf.size();
+      auto push_textraw = [&](std::string_view s) {
+         buf.push_back(static_cast<char>((s.size() << 4) | 10u));
+         buf.append(s.data(), s.size());
+      };
+      push_textraw("age");
+      buf.push_back(static_cast<char>((2u << 4) | 3u));
+      buf.append("30");
+      const uint64_t payload_size = buf.size() - payload_start;
+      buf[0] = static_cast<char>((15u << 4) | 12u);
+      uint64_t v = payload_size;
+      if constexpr (std::endian::native == std::endian::little) v = std::byteswap(v);
+      std::memcpy(&buf[1], &v, 8);
+
+      required_fields_struct out{};
+      constexpr glz::opts O{.format = glz::JSONB, .error_on_missing_keys = true};
+      auto ec = glz::read<O>(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::missing_key);
+      expect(ec.custom_error_message == "name"); // the first missing required key
+   };
+
+   "all required fields present → no error"_test = [] {
+      required_fields_struct src{"Bob", 40, std::nullopt};
+      std::string buf;
+      expect(not glz::write_jsonb(src, buf));
+      required_fields_struct out{};
+      constexpr glz::opts O{.format = glz::JSONB, .error_on_missing_keys = true};
+      expect(not glz::read<O>(out, buf));
+      expect(out.name == "Bob");
+      expect(out.age == 40);
+   };
+
+   "missing nullable field is allowed"_test = [] {
+      required_fields_struct src{"Eve", 22, std::nullopt};
+      std::string buf;
+      // Write with skip_null_members to exclude the nullable "nickname" field entirely.
+      constexpr glz::opts write_opts{.format = glz::JSONB, .skip_null_members = true};
+      expect(not glz::write<write_opts>(src, buf));
+
+      required_fields_struct out{};
+      constexpr glz::opts read_opts{.format = glz::JSONB, .error_on_missing_keys = true};
+      expect(not glz::read<read_opts>(out, buf));
+      expect(out.name == "Eve");
+      expect(!out.nickname.has_value());
+   };
+
+   "error_on_missing_keys=false (default) tolerates missing required field"_test = [] {
+      // Same buffer as the first test above — name missing.
+      std::string buf;
+      buf.resize(9);
+      const size_t payload_start = buf.size();
+      buf.push_back(static_cast<char>((3u << 4) | 10u));
+      buf.append("age");
+      buf.push_back(static_cast<char>((2u << 4) | 3u));
+      buf.append("30");
+      const uint64_t payload_size = buf.size() - payload_start;
+      buf[0] = static_cast<char>((15u << 4) | 12u);
+      uint64_t v = payload_size;
+      if constexpr (std::endian::native == std::endian::little) v = std::byteswap(v);
+      std::memcpy(&buf[1], &v, 8);
+
+      required_fields_struct out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.age == 30);
+      expect(out.name.empty()); // default
+   };
+};
+
 #if __cpp_exceptions
 suite exception_api_tests = [] {
    "ex::write_jsonb and ex::read_jsonb round-trip"_test = [] {

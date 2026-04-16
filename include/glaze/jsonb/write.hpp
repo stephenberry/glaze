@@ -351,12 +351,7 @@ namespace glz
                return;
             }
             else {
-               static constexpr sv key = reflect<T>::keys[I];
-
-               // Write key as TEXTRAW (reflected keys are raw identifier bytes).
-               jsonb_detail::write_scalar(ctx, jsonb::type::textraw, key.data(), key.size(), b, ix);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               using val_t = field_t<T, I>;
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
@@ -366,6 +361,47 @@ namespace glz
                      return get<I>(reflect<T>::values);
                   }
                }();
+
+               // skip_null_members: drop nullable fields whose value is null. This mirrors
+               // CBOR's per-member null checks, but simpler because JSONB's payload-size
+               // container header is patched at the end, so we just elide the key + value.
+               if constexpr (Opts.skip_null_members && null_t<val_t>) {
+                  if constexpr (always_null_t<val_t>) {
+                     return;
+                  }
+                  else {
+                     const auto is_null = [&]() {
+                        if constexpr (nullable_wrapper<val_t>) {
+                           return !bool(member(value).val);
+                        }
+                        else if constexpr (nullable_value_t<val_t>) {
+                           return !get_member(value, member).has_value();
+                        }
+                        else {
+                           return !bool(get_member(value, member));
+                        }
+                     }();
+                     if (is_null) return;
+                  }
+               }
+               else if constexpr (is_specialization_v<val_t, custom_t> && Opts.skip_null_members &&
+                                  custom_getter_returns_nullable<val_t>()) {
+                  if (is_custom_field_null<T, I>(value, t, ctx)) return;
+               }
+               else if constexpr (Opts.skip_null_members && glaze_value_is_nullable<val_t>()) {
+                  if (is_glaze_value_field_null<T, I>(value, t)) return;
+               }
+
+               // skip_default_members: drop fields whose value equals the default-constructed
+               // value. Requires a comparable type (see has_skippable_default).
+               if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
+                  if (is_default_value(get_member(value, member))) return;
+               }
+
+               static constexpr sv key = reflect<T>::keys[I];
+               jsonb_detail::write_scalar(ctx, jsonb::type::textraw, key.data(), key.size(), b, ix);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
 
                serialize<JSONB>::op<Opts>(get_member(value, member), ctx, b, ix);
             }
