@@ -49,13 +49,13 @@ namespace glz
 
       // Converting constructor: accepts any type constructible to T
       template <class U>
-         requires(!std::same_as<std::decay_t<U>, boxed> && std::is_constructible_v<T, U&&>)
+         requires(!std::same_as<std::decay_t<U>, boxed> && std::is_constructible_v<T, U &&>)
       boxed(U&& val) : ptr(std::make_unique<T>(std::forward<U>(val)))
       {}
 
       // Converting assignment
       template <class U>
-         requires(!std::same_as<std::decay_t<U>, boxed> && std::is_constructible_v<T, U&&>)
+         requires(!std::same_as<std::decay_t<U>, boxed> && std::is_constructible_v<T, U &&>)
       boxed& operator=(U&& val)
       {
          ptr = std::make_unique<T>(std::forward<U>(val));
