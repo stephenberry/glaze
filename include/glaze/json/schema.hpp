@@ -182,6 +182,7 @@ namespace glz
       boxed<std::variant<bool, std::shared_ptr<schema>>> additionalProperties{};
       boxed<std::map<std::string_view, schema, std::less<>>> defs{};
       boxed<std::vector<schema>> oneOf{};
+      boxed<std::vector<schema>> anyOf{};
       boxed<std::vector<std::string_view>> required{};
 
       static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
@@ -265,6 +266,7 @@ struct glz::meta<glz::schema>
                                     "additionalProperties", //
                                     "$defs", //
                                     "oneOf", //
+                                    "anyOf", //
                                     "examples", //
                                     "required", //
                                     "title", //
@@ -307,6 +309,7 @@ struct glz::meta<glz::schema>
                                                       &T::additionalProperties, //
                                                       &T::defs, //
                                                       &T::oneOf, //
+                                                      &T::anyOf, //
                                                       glz::unquoted<&T::examples>, //
                                                       &T::required, //
                                                       &T::title, //
@@ -618,6 +621,21 @@ namespace glz
          return s;
       }
 
+      // Build an anyOf pair wrapping a $ref to `ref` together with a null type.
+      // Canonicalizes std::optional<T> so the optional itself is never added to $defs.
+      inline std::vector<schema> make_nullable_ref_anyof(std::string_view ref)
+      {
+         std::vector<schema> vec;
+         vec.reserve(2);
+         schema ref_s{};
+         ref_s.ref = ref;
+         vec.emplace_back(std::move(ref_s));
+         schema null_s{};
+         null_s.type = sv{"null"};
+         vec.emplace_back(std::move(null_s));
+         return vec;
+      }
+
       template <array_t T>
       struct to_json_schema<T>
       {
@@ -631,6 +649,23 @@ namespace glz
                s.type = sv{"object"};
                if constexpr (schema_primitive<ValueType>) {
                   s.additionalProperties = make_primitive_schema<ValueType>();
+               }
+               else if constexpr (nullable_t<ValueType>) {
+                  using InnerVT = unwrap_nullable_t<ValueType>;
+                  if constexpr (schema_primitive<InnerVT>) {
+                     auto inner = make_primitive_schema<InnerVT>();
+                     inner->type = std::vector<sv>{std::get<sv>(*inner->type), sv{"null"}};
+                     s.additionalProperties = std::move(inner);
+                  }
+                  else {
+                     auto& def = defs[name_v<InnerVT>];
+                     if (!def.type) {
+                        to_json_schema<InnerVT>::template op<Opts>(def, defs);
+                     }
+                     auto wrapper = std::make_shared<schema>();
+                     wrapper->anyOf = make_nullable_ref_anyof(join_v<chars<"#/$defs/">, name_v<InnerVT>>);
+                     s.additionalProperties = std::move(wrapper);
+                  }
                }
                else {
                   auto& def = defs[name_v<ValueType>];
@@ -647,6 +682,23 @@ namespace glz
                }
                if constexpr (schema_primitive<V>) {
                   s.items = make_primitive_schema<V>();
+               }
+               else if constexpr (nullable_t<V>) {
+                  using InnerV = unwrap_nullable_t<V>;
+                  if constexpr (schema_primitive<InnerV>) {
+                     auto inner = make_primitive_schema<InnerV>();
+                     inner->type = std::vector<sv>{std::get<sv>(*inner->type), sv{"null"}};
+                     s.items = std::move(inner);
+                  }
+                  else {
+                     auto& def = defs[name_v<InnerV>];
+                     if (!def.type) {
+                        to_json_schema<InnerV>::template op<Opts>(def, defs);
+                     }
+                     auto wrapper = std::make_shared<schema>();
+                     wrapper->anyOf = make_nullable_ref_anyof(join_v<chars<"#/$defs/">, name_v<InnerV>>);
+                     s.items = std::move(wrapper);
+                  }
                }
                else {
                   auto& def = defs[name_v<V>];
@@ -669,6 +721,23 @@ namespace glz
             s.type = sv{"object"};
             if constexpr (schema_primitive<V>) {
                s.additionalProperties = make_primitive_schema<V>();
+            }
+            else if constexpr (nullable_t<V>) {
+               using InnerV = unwrap_nullable_t<V>;
+               if constexpr (schema_primitive<InnerV>) {
+                  auto inner = make_primitive_schema<InnerV>();
+                  inner->type = std::vector<sv>{std::get<sv>(*inner->type), sv{"null"}};
+                  s.additionalProperties = std::move(inner);
+               }
+               else {
+                  auto& def = defs[name_v<InnerV>];
+                  if (!def.type) {
+                     to_json_schema<InnerV>::template op<Opts>(def, defs);
+                  }
+                  auto wrapper = std::make_shared<schema>();
+                  wrapper->anyOf = make_nullable_ref_anyof(join_v<chars<"#/$defs/">, name_v<InnerV>>);
+                  s.additionalProperties = std::move(wrapper);
+               }
             }
             else {
                auto& def = defs[name_v<V>];
@@ -979,6 +1048,18 @@ namespace glz
                      }
                   }
                }
+               else if constexpr (nullable_t<val_t>) {
+                  // Canonicalize std::optional<T> (and other nullables) so the wrapper itself
+                  // is never placed in $defs. Inner type T is referenced via anyOf + null.
+                  validate_ref<name_v<inner_val_t>>();
+                  auto& def = defs[name_v<inner_val_t>];
+                  if (!def.type) {
+                     to_json_schema<inner_val_t>::template op<Opts>(def, defs);
+                  }
+                  if (!prop.ref) {
+                     prop.anyOf = make_nullable_ref_anyof(join_v<chars<"#/$defs/">, name_v<inner_val_t>>);
+                  }
+               }
                else {
                   if (!prop.ref) {
                      validate_ref<name_v<val_t>>();
@@ -1041,6 +1122,11 @@ namespace glz
          }
          if (s.oneOf) {
             for (const auto& entry : *s.oneOf) {
+               count_schema_refs(entry, counts);
+            }
+         }
+         if (s.anyOf) {
+            for (const auto& entry : *s.anyOf) {
                count_schema_refs(entry, counts);
             }
          }
@@ -1121,6 +1207,14 @@ namespace glz
          }
          if (s.oneOf) {
             for (auto& entry : *s.oneOf) {
+               inline_single_use_refs(entry, defs, counts);
+               if (try_inline_ref(entry, defs, counts)) {
+                  inline_single_use_refs(entry, defs, counts);
+               }
+            }
+         }
+         if (s.anyOf) {
+            for (auto& entry : *s.anyOf) {
                inline_single_use_refs(entry, defs, counts);
                if (try_inline_ref(entry, defs, counts)) {
                   inline_single_use_refs(entry, defs, counts);
