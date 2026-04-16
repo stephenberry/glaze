@@ -2754,12 +2754,14 @@ void chrono_tests()
    };
 
    "epoch_nanos_roundtrip_exact"_test = [] {
-      // For a value whose seconds form is exactly representable as a float64, the
-      // round-trip is lossless even for nanosecond Duration.
+      // 9000000.125 s ≈ 104 days after epoch. The nanosecond count (9e15) sits just
+      // under 2^53 so double-precision holds it exactly on every platform, including
+      // Linux libstdc++ where system_clock::duration is nanoseconds. The integer
+      // portion needs more than float32's 24-bit mantissa, so the writer picks float64.
       glz::epoch_nanos v{};
       using sys_duration = std::chrono::system_clock::duration;
       v.value = std::chrono::system_clock::time_point{
-         std::chrono::duration_cast<sys_duration>(std::chrono::nanoseconds{1700000000125000000LL})};
+         std::chrono::duration_cast<sys_duration>(std::chrono::nanoseconds{9000000125000000LL})};
       std::string buffer{};
       expect(not glz::write_cbor(v, buffer));
 

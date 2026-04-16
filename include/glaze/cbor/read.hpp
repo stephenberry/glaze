@@ -1999,7 +1999,12 @@ namespace glz
       // Accepts unsigned/negative integer seconds or float16/32/64 seconds (NaN/Inf rejected).
       // Nested tags (e.g. tag 4 decimal fractions) are forbidden by §3.4.2 and rejected here.
       // Values that would overflow system_clock::duration are rejected rather than wrapping.
-      template <auto Opts>
+      //
+      // The `Duration` template parameter names the wire-level precision the caller cares
+      // about. For the float path, casting fsec -> Duration -> sys_dur when Duration is
+      // coarser than sys_dur keeps the integer count under 2^53 (critical on platforms
+      // where sys_dur is nanoseconds and the raw count for a modern epoch exceeds that).
+      template <auto Opts, class Duration = std::chrono::system_clock::duration>
       inline void decode_tag1_payload(is_context auto& ctx, auto& it, auto end,
                                       std::chrono::system_clock::time_point& tp) noexcept
       {
@@ -2049,7 +2054,16 @@ namespace glz
                return;
             }
             using fsec = duration<double>;
-            tp = system_clock::time_point{duration_cast<sys_dur>(fsec{d})};
+            if constexpr (std::ratio_greater_v<typename Duration::period, typename sys_dur::period>) {
+               // Duration is coarser than sys_dur: fsec -> Duration -> sys_dur routes the
+               // lossy-in-double step through the smaller integer count, then scales up
+               // with exact integer math. This avoids precision loss when sys_dur is ns.
+               const auto dur = duration_cast<Duration>(fsec{d});
+               tp = system_clock::time_point{duration_cast<sys_dur>(dur)};
+            }
+            else {
+               tp = system_clock::time_point{duration_cast<sys_dur>(fsec{d})};
+            }
          }
          else [[unlikely]] {
             // Per RFC 8949 §3.4.2, other content types (including nested tags) are invalid.
@@ -2106,11 +2120,11 @@ namespace glz
                chrono_detail::parse_iso8601(str, value, ctx.error);
             }
             else if (tag == semantic_tag::datetime_epoch) {
+               using Duration = typename std::remove_cvref_t<T>::duration;
                std::chrono::system_clock::time_point tp{};
-               cbor_detail::decode_tag1_payload<Opts>(ctx, it, end, tp);
+               cbor_detail::decode_tag1_payload<Opts, Duration>(ctx, it, end, tp);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               using Duration = typename std::remove_cvref_t<T>::duration;
                value = std::chrono::time_point_cast<Duration>(tp);
             }
             else [[unlikely]] {
@@ -2200,7 +2214,7 @@ namespace glz
          }
 
          std::chrono::system_clock::time_point tp{};
-         cbor_detail::decode_tag1_payload<Opts>(ctx, it, end, tp);
+         cbor_detail::decode_tag1_payload<Opts, Duration>(ctx, it, end, tp);
          if (bool(ctx.error)) [[unlikely]]
             return;
          wrapper.value = tp;

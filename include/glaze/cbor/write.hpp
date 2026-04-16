@@ -1279,8 +1279,22 @@ namespace glz
             to<CBOR, int64_t>::template op<Opts>(static_cast<int64_t>(secs), ctx, b, ix);
          }
          else {
-            const double secs = duration<double>{wrapper.value.time_since_epoch()}.count();
-            to<CBOR, double>::template op<Opts>(secs, ctx, b, ix);
+            // To keep the double conversion lossless we need the source integer count
+            // to fit within 2^53. wrapper.value's time_since_epoch() is in system_clock::
+            // duration units (often nanoseconds on Linux, microseconds on macOS); for a
+            // modern epoch the nanosecond count is ~1.7e18, well beyond 2^53. Casting
+            // through the coarser of Duration and system_clock::duration keeps the
+            // integer count small enough to survive the conversion to double seconds.
+            using sys_dur = std::chrono::system_clock::duration;
+            if constexpr (std::ratio_greater_v<Period, typename sys_dur::period>) {
+               const auto dur = duration_cast<Duration>(wrapper.value.time_since_epoch());
+               const double secs = duration<double>{dur}.count();
+               to<CBOR, double>::template op<Opts>(secs, ctx, b, ix);
+            }
+            else {
+               const double secs = duration<double>{wrapper.value.time_since_epoch()}.count();
+               to<CBOR, double>::template op<Opts>(secs, ctx, b, ix);
+            }
          }
       }
    };
