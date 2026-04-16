@@ -6,6 +6,7 @@ Formats Supported:
 - [JSON](https://stephenberry.github.io/glaze/json/) | `glaze/json.hpp`
 - [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding) | `glaze/beve.hpp`
 - [CBOR](https://stephenberry.github.io/glaze/cbor/) (Concise Binary Object Representation) | `glaze/cbor.hpp`
+- [JSONB](https://stephenberry.github.io/glaze/jsonb/) (SQLite Binary JSON) | `glaze/jsonb.hpp`
 - [CSV](https://stephenberry.github.io/glaze/csv/) (Comma Separated Value) | `glaze/csv.hpp`
 - [MessagePack](https://stephenberry.github.io/glaze/msgpack/) | `glaze/msgpack.hpp`
 - [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation) | `glaze/stencil/stencil.hpp`
