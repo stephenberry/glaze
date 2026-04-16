@@ -457,6 +457,30 @@ namespace glz
       }
    };
 
+   // std::expected — serialize the value on success; on error, wrap as {"unexpected": <error>}
+   template <is_expected T>
+   struct to<JSONB, T> final
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         if (value) {
+            if constexpr (not std::is_void_v<typename std::decay_t<T>::value_type>) {
+               serialize<JSONB>::op<Opts>(*value, ctx, b, ix);
+            }
+            else {
+               // void value type on success → emit empty object
+               size_t header_pos{};
+               if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) return;
+               jsonb::patch_header_9(b, header_pos, jsonb::type::object, 0);
+            }
+         }
+         else {
+            serialize<JSONB>::op<Opts>(unexpected_wrapper{&value.error()}, ctx, b, ix);
+         }
+      }
+   };
+
    // Variants — serialize as [index, value] array (parallels CBOR encoding)
    template <is_variant T>
    struct to<JSONB, T> final

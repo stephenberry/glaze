@@ -931,6 +931,102 @@ namespace glz
       }
    };
 
+   // std::expected — on read, peek the first payload bytes to decide whether we're looking
+   // at an error wrapper ({"unexpected": ...}) or the value itself.
+   template <is_expected T>
+   struct from<JSONB, T> final
+   {
+      template <auto Opts>
+      static void op(auto& value, is_context auto& ctx, auto& it, auto end)
+      {
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         auto parse_val = [&] {
+            if constexpr (not std::is_void_v<typename std::decay_t<T>::value_type>) {
+               if (value) {
+                  parse<JSONB>::op<Opts>(*value, ctx, it, end);
+               }
+               else {
+                  value.emplace();
+                  parse<JSONB>::op<Opts>(*value, ctx, it, end);
+               }
+            }
+            else {
+               value.emplace();
+            }
+         };
+
+         // Peek the outer type code without advancing.
+         uint8_t initial;
+         std::memcpy(&initial, it, 1);
+         if (jsonb::get_type(initial) != jsonb::type::object) {
+            // Not an object → must be the value directly.
+            parse_val();
+            return;
+         }
+
+         // It's an object. We need to decide: is it {"unexpected": <error>} or a value that
+         // happens to be an object? Save the position, consume the object header, then look
+         // at the first key.
+         const auto start = it;
+         uint8_t obj_tc{};
+         uint64_t obj_sz{};
+         if (!jsonb::read_header(ctx, it, end, obj_tc, obj_sz)) return;
+         if (static_cast<uint64_t>(end - it) < obj_sz) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         const auto payload_end = it + obj_sz;
+
+         if (obj_sz == 0) {
+            // Empty object: for void-value expected, emplace success; otherwise rewind and
+            // let the value type decide (maybe it's an empty object-typed value).
+            if constexpr (std::is_void_v<typename std::decay_t<T>::value_type>) {
+               value.emplace();
+               return;
+            }
+            it = start;
+            parse_val();
+            return;
+         }
+
+         // Try to read the first key. If it's TEXT/TEXTRAW equal to "unexpected", this is an
+         // error wrapper. Otherwise rewind to `start` and parse as value.
+         auto key_scan_it = it;
+         uint8_t key_tc{};
+         uint64_t key_sz{};
+         if (!jsonb::read_header(ctx, key_scan_it, payload_end, key_tc, key_sz)) return;
+
+         static constexpr sv unexpected_key = "unexpected";
+         const bool is_literal_text = (key_tc == jsonb::type::text || key_tc == jsonb::type::textraw);
+         if (is_literal_text && key_sz == unexpected_key.size() &&
+             static_cast<uint64_t>(payload_end - key_scan_it) >= key_sz &&
+             std::memcmp(key_scan_it, unexpected_key.data(), key_sz) == 0) {
+            // It's an unexpected wrapper. Advance past the key and parse the error value.
+            key_scan_it += key_sz;
+            it = key_scan_it;
+            using error_type = typename std::decay_t<T>::error_type;
+            std::decay_t<error_type> error{};
+            parse<JSONB>::op<Opts>(error, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            if (it != payload_end) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            value = glz::unexpected(std::move(error));
+            return;
+         }
+
+         // Not an unexpected wrapper. Rewind and parse as the value.
+         it = start;
+         parse_val();
+      }
+   };
+
    // Variants — expect a 2-element array [index, value]
    template <is_variant T>
    struct from<JSONB, T> final
@@ -1166,7 +1262,7 @@ namespace glz
       ctx.current_file = file_name;
       const auto file_error = file_to_buffer(buffer, ctx.current_file);
       if (bool(file_error)) [[unlikely]] {
-         return error_ctx{file_error};
+         return error_ctx{0, file_error};
       }
       return read<set_jsonb<Opts>()>(value, buffer, ctx);
    }
