@@ -458,15 +458,15 @@ suite schema_tests = [] {
       std::string schema_str_nreq =
          glz::write_json_schema<T, glz::opts{.error_on_missing_keys = false}>().value_or("error");
 
-      // Single-use $defs are inlined directly into properties
+      // Integer types use $ref to named definitions rather than being inlined
       expect(
          schema_str_req ==
-         R"({"type":"object","properties":{"important":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"unimportant":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"additionalProperties":false,"required":["important"],"title":"error_on_missing_keys_test"})")
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})")
          << schema_str_req;
 
       expect(
          schema_str_nreq ==
-         R"({"type":"object","properties":{"important":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"unimportant":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"additionalProperties":false,"title":"error_on_missing_keys_test"})")
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})")
          << schema_str_nreq;
    };
 
@@ -622,11 +622,11 @@ suite value_type_variant_schema = [] {
       expect(obj->prefixItems->size() == 2);
    };
 
-   "homogeneous array items inlines primitive types"_test = [] {
+   "homogeneous array integer items use ref"_test = [] {
       auto schema = glz::write_json_schema<std::vector<int>>().value();
       expect(
          schema ==
-         R"({"type":"array","items":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"title":"std::vector<int32_t>"})")
+         R"({"type":"array","items":{"$ref":"#/$defs/int32_t"},"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"std::vector<int32_t>"})")
          << schema;
    };
 
@@ -640,11 +640,11 @@ suite value_type_variant_schema = [] {
       expect(schema == R"({"type":"array","items":{"type":"boolean"},"title":"std::vector<bool>"})") << schema;
    };
 
-   "vector<double> items inlined"_test = [] {
+   "vector<double> items use ref"_test = [] {
       auto schema = glz::write_json_schema<std::vector<double>>().value();
       expect(
          schema ==
-         R"({"type":"array","items":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"title":"std::vector<double>"})")
+         R"({"type":"array","items":{"$ref":"#/$defs/double"},"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}},"title":"std::vector<double>"})")
          << schema;
    };
 

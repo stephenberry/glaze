@@ -471,9 +471,11 @@ namespace glz
          }
       };
 
-      // Whether a type can be represented as an inline JSON Schema primitive
+      // Whether a type can be represented as an inline JSON Schema primitive.
+      // Numeric types are excluded so they always use $ref to named definitions,
+      // keeping min/max ranges from being repeated at every use site.
       template <class V>
-      constexpr bool schema_primitive = std::same_as<V, bool> || num_t<V> || str_t<V> || char_t<V>;
+      constexpr bool schema_primitive = std::same_as<V, bool> || str_t<V> || char_t<V>;
 
       // Unwrap nested nullable types (e.g. std::optional<std::optional<std::string>> → std::string)
       template <class T>
@@ -905,6 +907,21 @@ namespace glz
          }
       };
 
+      // Whether a schema definition represents a numeric type (integer or number).
+      // Used to exempt numeric definitions from single-use inlining.
+      inline bool is_numeric_schema(const schema& s)
+      {
+         if (!s.type) return false;
+         auto is_num = [](sv t) { return t == "integer" || t == "number"; };
+         if (auto* str = std::get_if<sv>(&*s.type)) {
+            return is_num(*str);
+         }
+         if (auto* vec = std::get_if<std::vector<sv>>(&*s.type)) {
+            return std::any_of(vec->begin(), vec->end(), is_num);
+         }
+         return false;
+      }
+
       // Count $ref occurrences in a schema tree.
       // Note: map keys are string_views pointing to ref values, which are compile-time static storage
       // (from join_v<...>). If runtime-constructed ref strings are ever introduced, these keys could
@@ -960,6 +977,9 @@ namespace glz
          auto def_name = ref.substr(prefix.size());
          auto def_it = defs.find(def_name);
          if (def_it == defs.end()) return false;
+
+         // Never inline numeric definitions — keeps min/max ranges in a single named $defs entry
+         if (is_numeric_schema(def_it->second)) return false;
 
          // Save sibling metadata before overwriting
          schema saved_metadata = std::move(node);
@@ -1035,7 +1055,7 @@ namespace glz
             std::string full_ref{prefix};
             full_ref += it->first;
             auto count_it = counts.find(std::string_view{full_ref});
-            if (count_it != counts.end() && count_it->second == 1) {
+            if (count_it != counts.end() && count_it->second == 1 && !is_numeric_schema(it->second)) {
                it = s.defs->erase(it);
             }
             else {
