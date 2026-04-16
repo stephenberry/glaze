@@ -23,6 +23,99 @@
 
 namespace glz
 {
+   // Heap-allocated nullable wrapper. Same API as std::optional<T> but stores the value
+   // behind a unique_ptr (8 bytes inline) instead of inline (sizeof(T) + padding).
+   // Used by schema to reduce its per-instance size for sparsely populated fields.
+   template <class T>
+   struct boxed final
+   {
+      using value_type = T;
+
+      std::unique_ptr<T> ptr{};
+
+      boxed() noexcept = default;
+
+      boxed(const boxed& other) : ptr(other.ptr ? std::make_unique<T>(*other.ptr) : nullptr) {}
+      boxed& operator=(const boxed& other)
+      {
+         if (this != &other) {
+            ptr = other.ptr ? std::make_unique<T>(*other.ptr) : nullptr;
+         }
+         return *this;
+      }
+
+      boxed(boxed&&) noexcept = default;
+      boxed& operator=(boxed&&) noexcept = default;
+
+      // Converting constructor: accepts any type constructible to T
+      template <class U>
+         requires(!std::same_as<std::decay_t<U>, boxed> && std::is_constructible_v<T, U &&>)
+      boxed(U&& val) : ptr(std::make_unique<T>(std::forward<U>(val)))
+      {}
+
+      // Converting assignment
+      template <class U>
+         requires(!std::same_as<std::decay_t<U>, boxed> && std::is_constructible_v<T, U &&>)
+      boxed& operator=(U&& val)
+      {
+         ptr = std::make_unique<T>(std::forward<U>(val));
+         return *this;
+      }
+
+      explicit operator bool() const noexcept { return ptr != nullptr; }
+      bool has_value() const noexcept { return ptr != nullptr; }
+
+      T& operator*() noexcept { return *ptr; }
+      const T& operator*() const noexcept { return *ptr; }
+      T* operator->() noexcept { return ptr.get(); }
+      const T* operator->() const noexcept { return ptr.get(); }
+
+      T& value() { return *ptr; }
+      const T& value() const { return *ptr; }
+
+      void reset() noexcept { ptr.reset(); }
+
+      template <class... Args>
+      T& emplace(Args&&... args)
+      {
+         ptr = std::make_unique<T>(std::forward<Args>(args)...);
+         return *ptr;
+      }
+
+      T value_or(T default_val) const { return ptr ? *ptr : std::move(default_val); }
+   };
+
+   // Nullable string view: 16 bytes instead of optional<string_view>'s 24 bytes.
+   // Null when data == nullptr. Satisfies nullable_t so Glaze skips it with skip_null_members.
+   struct sv_opt final
+   {
+      const char* data{};
+      size_t size{};
+
+      constexpr sv_opt() noexcept = default;
+      constexpr sv_opt(const char* str) noexcept : data(str), size(str ? std::char_traits<char>::length(str) : 0) {}
+      constexpr sv_opt(std::string_view sv) noexcept : data(sv.data()), size(sv.size()) {}
+      constexpr sv_opt(const char* str, size_t len) noexcept : data(str), size(len) {}
+      constexpr sv_opt& operator=(std::string_view sv) noexcept
+      {
+         data = sv.data();
+         size = sv.size();
+         return *this;
+      }
+
+      explicit constexpr operator bool() const noexcept { return data != nullptr; }
+      constexpr bool has_value() const noexcept { return data != nullptr; }
+      constexpr operator std::string_view() const noexcept { return {data, size}; }
+      constexpr std::string_view operator*() const noexcept { return {data, size}; }
+      constexpr std::string_view value() const noexcept { return {data, size}; }
+
+      constexpr void reset() noexcept
+      {
+         data = {};
+         size = {};
+      }
+   };
+
    namespace detail
    {
       enum struct defined_formats : uint32_t;
@@ -36,25 +129,25 @@ namespace glz
    }
    struct schema final
    {
-      bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
+      bool reflection_helper{}; // needed to support automatic reflection
 
-      using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
+      using schema_number = boxed<std::variant<int64_t, uint64_t, double>>;
       using schema_any = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
 
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
-      std::optional<std::string_view> title{};
-      std::optional<std::string_view> description{};
-      std::optional<schema_any> defaultValue{};
+      sv_opt title{};
+      sv_opt description{};
+      boxed<schema_any> defaultValue{};
       std::optional<bool> deprecated{};
-      std::optional<std::vector<std::string_view>> examples{};
+      boxed<std::vector<std::string_view>> examples{};
       std::optional<bool> readOnly{};
       std::optional<bool> writeOnly{};
       // validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
-      std::optional<schema_any> constant{};
+      boxed<schema_any> constant{};
       // string only keywords
-      std::optional<uint64_t> minLength{};
-      std::optional<uint64_t> maxLength{};
-      std::optional<std::string_view> pattern{};
+      boxed<uint64_t> minLength{};
+      boxed<uint64_t> maxLength{};
+      sv_opt pattern{};
       // https://www.learnjsonschema.com/2020-12/format-annotation/format/
       std::optional<detail::defined_formats> format{};
       // number only keywords
@@ -64,32 +157,32 @@ namespace glz
       schema_number exclusiveMaximum{};
       schema_number multipleOf{};
       // object only keywords
-      std::optional<uint64_t> minProperties{};
-      std::optional<uint64_t> maxProperties{};
+      boxed<uint64_t> minProperties{};
+      boxed<uint64_t> maxProperties{};
       // std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
       // array only keywords
-      std::optional<uint64_t> minItems{};
-      std::optional<uint64_t> maxItems{};
-      std::optional<uint64_t> minContains{};
-      std::optional<uint64_t> maxContains{};
+      boxed<uint64_t> minItems{};
+      boxed<uint64_t> maxItems{};
+      boxed<uint64_t> minContains{};
+      boxed<uint64_t> maxContains{};
       std::optional<bool> uniqueItems{};
-      std::optional<std::vector<std::string_view>> enumeration{}; // enum
+      boxed<std::vector<std::string_view>> enumeration{}; // enum
 
       // out of json schema specification
-      std::optional<detail::ExtUnits> ExtUnits{};
+      boxed<detail::ExtUnits> ExtUnits{};
       std::optional<bool>
          ExtAdvanced{}; // flag to indicate that the parameter is advanced and can be hidden in default views
 
       // structural keywords (used internally by schema generation, not typically set by users)
-      std::optional<std::variant<std::string_view, std::vector<std::string_view>>> type{};
-      std::optional<std::string_view> ref{};
-      std::optional<std::map<std::string_view, schema, std::less<>>> properties{};
-      std::optional<std::vector<schema>> prefixItems{};
-      std::optional<std::variant<bool, std::shared_ptr<schema>>> items{};
-      std::optional<std::variant<bool, std::shared_ptr<schema>>> additionalProperties{};
-      std::optional<std::map<std::string_view, schema, std::less<>>> defs{};
-      std::optional<std::vector<schema>> oneOf{};
-      std::optional<std::vector<std::string_view>> required{};
+      boxed<std::variant<std::string_view, std::vector<std::string_view>>> type{};
+      sv_opt ref{};
+      boxed<std::map<std::string_view, schema, std::less<>>> properties{};
+      boxed<std::vector<schema>> prefixItems{};
+      boxed<std::variant<bool, std::shared_ptr<schema>>> items{};
+      boxed<std::variant<bool, std::shared_ptr<schema>>> additionalProperties{};
+      boxed<std::map<std::string_view, schema, std::less<>>> defs{};
+      boxed<std::vector<schema>> oneOf{};
+      boxed<std::vector<std::string_view>> required{};
 
       static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
    };
@@ -1110,4 +1203,19 @@ namespace glz
       }
       return {buffer};
    }
+
+   // Custom reader for sv_opt: delegates to string_view reader, then assigns to sv_opt.
+   template <>
+   struct from<JSON, sv_opt>
+   {
+      template <auto Opts>
+      static void op(sv_opt& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         std::string_view sv;
+         from<JSON, std::string_view>::template op<Opts>(sv, ctx, std::forward<decltype(it)>(it), end);
+         if (!bool(ctx.error)) {
+            value = sv;
+         }
+      }
+   };
 }

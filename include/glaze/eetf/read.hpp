@@ -102,9 +102,9 @@ namespace glz
          requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
       {
-         // TODO Check version
          const auto version = decode_version(ctx, it);
-         if (version != eetf_magic_version) { // TODO find in erlang files
+         // This version number is not in public headers - use as magic number
+         if (version != eetf_magic_version) {
             ctx.error = error_code::version_mismatch;
             return;
          }
@@ -408,6 +408,11 @@ namespace glz
          }
       }
    };
+
+   // is_variant
+   // Can't effectly parse into std::variant. Only if trying to parse all of underlying variant' types one by one. But
+   // this approach can (and would) add a place for errors - because undelying data can hold "similar" types in EETF
+   // terms
 
    template <uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, class Buffer>
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept
