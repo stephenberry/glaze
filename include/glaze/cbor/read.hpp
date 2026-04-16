@@ -2058,8 +2058,13 @@ namespace glz
       }
    }
 
-   // system_clock::time_point - accepts tag 0 (RFC 3339 string), tag 1 (epoch seconds / tag-4
-   // decimal fraction), or a bare RFC 3339 string (no tag, for interop).
+   // system_clock::time_point - decoder accepts:
+   //   - tag 0 + tstr (RFC 8949 §3.4.1 canonical; what glaze writes)
+   //   - tag 1 + int/float seconds (RFC 8949 §3.4.2; converted from epoch)
+   //   - bare tstr (no tag) - lenient for producers that omit tag 0
+   // Bare numbers and any other shape are rejected: the unit would be ambiguous.
+   // Note: this does NOT cross-read with epoch_time<Duration>, which writes tag 1
+   // directly; decode into the type that matches the wire form you expect.
    template <is_system_time_point T>
    struct from<CBOR, T>
    {
@@ -2161,8 +2166,12 @@ namespace glz
       }
    };
 
-   // epoch_time wrapper - reads tag 1 payload (integer seconds, float seconds, or tag-4 decimal
-   // fraction), or a bare number interpreted as seconds since epoch (for interop).
+   // epoch_time wrapper - decoder accepts:
+   //   - tag 1 + integer seconds (RFC 8949 §3.4.2; what glaze writes for Period >= 1s)
+   //   - tag 1 + float16/32/64 seconds (§3.4.2; what glaze writes for sub-second Periods)
+   //   - bare integer or float (no tag) - lenient for producers that omit tag 1; same semantics
+   // Nested tags (e.g. tag 4 decimal fraction) are rejected per §3.4.2.
+   // Note: this does NOT cross-read with is_system_time_point, which writes tag 0 strings.
    template <class Duration>
    struct from<CBOR, epoch_time<Duration>>
    {

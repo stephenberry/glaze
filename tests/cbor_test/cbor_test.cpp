@@ -3132,6 +3132,55 @@ void chrono_tests()
       auto ec = glz::read_cbor(result, buffer);
       expect(bool(ec));
    };
+
+   // ----- Raw-bytes tests for read paths -----
+
+   "read_raw_tag1_negative_integer"_test = [] {
+      // 0xC1 0x3A 0x00 0x12 0xD6 0x86 = tag 1 + CBOR nint (value = -1 - 0x0012D686 = -1234567)
+      std::string buffer;
+      const uint8_t bytes[] = {0xC1, 0x3A, 0x00, 0x12, 0xD6, 0x86};
+      for (auto byte : bytes) buffer.push_back(static_cast<char>(byte));
+
+      glz::epoch_seconds result{};
+      expect(not glz::read_cbor(result, buffer));
+      const auto secs =
+         std::chrono::duration_cast<std::chrono::seconds>(result.value.time_since_epoch()).count();
+      expect(secs == -1234567LL);
+   };
+
+   "read_raw_tag1_float32"_test = [] {
+      // 0xC1 0xFA <4 bytes big-endian float32>
+      std::string buffer;
+      buffer.push_back(static_cast<char>(0xC1));
+      buffer.push_back(static_cast<char>(0xFA));
+      const float secs = 3600.25f; // exactly representable in float32
+      uint32_t bits;
+      std::memcpy(&bits, &secs, sizeof(float));
+      for (int i = 3; i >= 0; --i) {
+         buffer.push_back(static_cast<char>((bits >> (i * 8)) & 0xFF));
+      }
+
+      glz::epoch_millis result{};
+      expect(not glz::read_cbor(result, buffer));
+      const auto ms =
+         std::chrono::duration_cast<std::chrono::milliseconds>(result.value.time_since_epoch()).count();
+      expect(ms == 3600250LL);
+   };
+
+   "read_raw_tag1_float16"_test = [] {
+      // 0xC1 0xF9 <2 bytes big-endian float16>. 1.0 as binary16 = 0x3C00.
+      std::string buffer;
+      buffer.push_back(static_cast<char>(0xC1));
+      buffer.push_back(static_cast<char>(0xF9));
+      buffer.push_back(static_cast<char>(0x3C));
+      buffer.push_back(static_cast<char>(0x00));
+
+      glz::epoch_millis result{};
+      expect(not glz::read_cbor(result, buffer));
+      const auto ms =
+         std::chrono::duration_cast<std::chrono::milliseconds>(result.value.time_since_epoch()).count();
+      expect(ms == 1000LL);
+   };
 }
 
 struct ChronoEvent
