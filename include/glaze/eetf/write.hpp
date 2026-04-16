@@ -1,11 +1,11 @@
 #pragma once
 
-#include <glaze/core/buffer_traits.hpp>
-#include <glaze/core/reflect.hpp>
-#include <glaze/core/write.hpp>
-
 #include "defs.hpp"
 #include "ei.hpp"
+#include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/reflect.hpp"
+#include "glaze/core/write.hpp"
+#include "glaze/util/variant.hpp"
 #include "opts.hpp"
 
 namespace glz
@@ -14,6 +14,14 @@ namespace glz
    template <>
    struct serialize<EETF>
    {
+      template <auto Opts, class T, class... Args>
+         requires(not check_no_header(Opts))
+      GLZ_ALWAYS_INLINE static void op(T&& value, Args&&... args) noexcept
+      {
+         encode_version(std::forward<Args>(args)...);
+         op<no_header_on<Opts>()>(std::forward<T>(value), std::forward<Args>(args)...);
+      }
+
       template <auto Opts, class T, class... Args>
          requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Args&&... args) noexcept
@@ -289,6 +297,16 @@ namespace glz
                flush_buffer(b, ix);
             }
          });
+      }
+   };
+
+   template <is_variant T>
+   struct to<EETF, T> final
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         std::visit([&](auto&& v) { serialize<EETF>::op<Opts>(v, ctx, b, ix); }, value);
       }
    };
 
