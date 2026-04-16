@@ -458,15 +458,16 @@ suite schema_tests = [] {
       std::string schema_str_nreq =
          glz::write_json_schema<T, glz::opts{.error_on_missing_keys = false}>().value_or("error");
 
-      // Integer types use $ref to named definitions rather than being inlined
+      // Integer types use $ref to named definitions rather than being inlined.
+      // std::optional<T> is canonicalized to anyOf:[ref-to-T, null] and never appears in $defs.
       expect(
          schema_str_req ==
-         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})")
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})")
          << schema_str_req;
 
       expect(
          schema_str_nreq ==
-         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})")
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})")
          << schema_str_nreq;
    };
 
@@ -998,6 +999,97 @@ suite nested_optional_inline_test = [] {
       expect(
          schema ==
          R"({"type":"object","properties":{"b1":{"type":["string","null"]},"b2":{"type":["string","null"]},"b3":{"type":["boolean","null"]},"b4":{"type":["string","null"]}},"additionalProperties":false,"title":"nested_optional_obj"})")
+         << schema;
+   };
+};
+
+// Issue #2498: std::optional<T> should never be referenced in $defs.
+// Instead, T goes into $defs and the use-site references T via anyOf + null.
+namespace issue_2498
+{
+   struct A
+   {};
+   struct B
+   {
+      std::optional<A> aOpt{};
+   };
+   struct Named
+   {
+      int x{};
+      struct glaze
+      {
+         static constexpr std::string_view name = "somename";
+      };
+   };
+   struct HoldsNamed
+   {
+      std::optional<Named> n{};
+   };
+   struct HoldsOptionalVector
+   {
+      std::optional<std::vector<A>> v{};
+   };
+   struct HoldsVectorOfOptional
+   {
+      std::vector<std::optional<A>> v{};
+   };
+   struct HoldsMapOfOptional
+   {
+      std::map<std::string, std::optional<A>> m{};
+   };
+   struct MultiUse
+   {
+      A required_a{};
+      std::optional<A> optional_a{};
+   };
+}
+
+suite optional_never_referenced_test = [] {
+   "optional of struct expands inline via anyOf"_test = [] {
+      auto schema = glz::write_json_schema<issue_2498::B>().value();
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"aOpt":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"title":"issue_2498::B"})")
+         << schema;
+   };
+
+   "optional of named struct still omits std::optional from $defs"_test = [] {
+      auto schema = glz::write_json_schema<issue_2498::HoldsNamed>().value();
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"n":{"anyOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"issue_2498::HoldsNamed"})")
+         << schema;
+   };
+
+   "optional wrapping a vector canonicalizes to anyOf"_test = [] {
+      auto schema = glz::write_json_schema<issue_2498::HoldsOptionalVector>().value();
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"v":{"anyOf":[{"type":"array","items":{"type":"object","properties":{},"additionalProperties":false}},{"type":"null"}]}},"additionalProperties":false,"title":"issue_2498::HoldsOptionalVector"})")
+         << schema;
+   };
+
+   "array items of nullable type emit anyOf at the item level"_test = [] {
+      auto schema = glz::write_json_schema<issue_2498::HoldsVectorOfOptional>().value();
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"v":{"type":"array","items":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}}},"additionalProperties":false,"title":"issue_2498::HoldsVectorOfOptional"})")
+         << schema;
+   };
+
+   "map values of nullable type emit anyOf at the value level"_test = [] {
+      auto schema = glz::write_json_schema<issue_2498::HoldsMapOfOptional>().value();
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"m":{"type":"object","additionalProperties":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}}},"additionalProperties":false,"title":"issue_2498::HoldsMapOfOptional"})")
+         << schema;
+   };
+
+   "multi-use inner type stays in $defs and is referenced via anyOf"_test = [] {
+      auto schema = glz::write_json_schema<issue_2498::MultiUse>().value();
+      expect(
+         schema ==
+         R"({"type":"object","properties":{"optional_a":{"anyOf":[{"$ref":"#/$defs/issue_2498::A"},{"type":"null"}]},"required_a":{"$ref":"#/$defs/issue_2498::A"}},"additionalProperties":false,"$defs":{"issue_2498::A":{"type":"object","properties":{},"additionalProperties":false}},"title":"issue_2498::MultiUse"})")
          << schema;
    };
 };
