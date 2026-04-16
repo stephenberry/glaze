@@ -677,31 +677,46 @@ namespace glz
          const auto stop = it + sz;
          static constexpr auto N = reflect<T>::size;
 
-         // Helper: linear scan on an already-materialized key (used for TEXTJ/TEXT5 keys whose
-         // payloads must be unescape-decoded before comparison).
-         auto linear_match_and_parse = [&](sv key) {
-            bool matched = false;
-            for_each<N>([&]<size_t I>() {
-               if (matched || bool(ctx.error)) return;
-               static constexpr auto TargetKey = get<I>(reflect<T>::keys);
-               static constexpr auto Length = TargetKey.size();
-               if (Length == key.size() && std::memcmp(TargetKey.data(), key.data(), Length) == 0) {
-                  matched = true;
-                  if constexpr (reflectable<T>) {
-                     parse<JSONB>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
-                  }
-                  else {
-                     parse<JSONB>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
-                  }
-               }
-            });
-            return matched;
+         // Hash-based lookup against a key byte-range. Returns true on a full match (key
+         // parsed into its member), false if no field matched (caller must skip the value).
+         // Advances `it` past the value on match; on miss `it` is unchanged.
+         auto hash_match_and_parse = [&](const char* key_data, size_t key_len) {
+            if constexpr (N > 0) {
+               static constexpr auto HashInfo = hash_info<T>;
+               const auto index = decode_hash_with_size<JSONB, T, HashInfo, HashInfo.type>::op(
+                  key_data, key_data + key_len, key_len);
+               if (index >= N) return false;
+
+               bool matched = false;
+               visit<N>(
+                  [&]<size_t I>() {
+                     static constexpr auto TargetKey = get<I>(reflect<T>::keys);
+                     static constexpr auto Length = TargetKey.size();
+                     if ((Length == key_len) && compare<Length>(TargetKey.data(), key_data)) [[likely]] {
+                        matched = true;
+                        if constexpr (reflectable<T>) {
+                           parse<JSONB>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
+                        }
+                        else {
+                           parse<JSONB>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                        }
+                     }
+                  },
+                  index);
+               return matched;
+            }
+            else {
+               (void)key_data;
+               (void)key_len;
+               return false;
+            }
          };
 
          std::string key_scratch;
          while (it < stop) {
-            // Read key header directly so we can branch on TEXT variant and take the
-            // hash-accelerated fast path for literal TEXT/TEXTRAW keys.
+            // Read key header first so we can branch on TEXT variant. Literal TEXT/TEXTRAW
+            // keys hash directly from the buffer; TEXTJ/TEXT5 keys must be escape-decoded
+            // into a scratch string before hashing.
             uint8_t key_tc{};
             uint64_t key_sz{};
             if (!jsonb::read_header(ctx, it, stop, key_tc, key_sz)) return;
@@ -719,73 +734,30 @@ namespace glz
 
             if constexpr (N > 0) {
                bool matched = false;
-
                if (literal_key) {
-                  // Fast path: hash the first few bytes directly at `it` without copying.
-                  static constexpr auto HashInfo = hash_info<T>;
-                  if constexpr (HashInfo.N > 0) {
-                     const auto index = decode_hash_with_size<JSONB, T, HashInfo, HashInfo.type>::op(
-                        reinterpret_cast<const char*>(it), reinterpret_cast<const char*>(stop),
-                        static_cast<size_t>(key_sz));
-                     if (index < N) [[likely]] {
-                        const sv key{reinterpret_cast<const char*>(it), static_cast<size_t>(key_sz)};
-                        it += key_sz;
-                        visit<N>(
-                           [&]<size_t I>() {
-                              static constexpr auto TargetKey = get<I>(reflect<T>::keys);
-                              static constexpr auto Length = TargetKey.size();
-                              if ((Length == key.size()) &&
-                                  compare<Length>(TargetKey.data(), key.data())) [[likely]] {
-                                 matched = true;
-                                 if constexpr (reflectable<T>) {
-                                    parse<JSONB>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
-                                 }
-                                 else {
-                                    parse<JSONB>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it,
-                                                           end);
-                                 }
-                              }
-                           },
-                           index);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
-                     else {
-                        // Hash did not find a candidate — unknown key. Advance past key bytes
-                        // and skip the value below.
-                        it += key_sz;
-                     }
-                  }
-                  else {
-                     // No hash info (degenerate case): fall back to linear scan.
-                     const sv key{reinterpret_cast<const char*>(it), static_cast<size_t>(key_sz)};
-                     it += key_sz;
-                     matched = linear_match_and_parse(key);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
+                  const char* key_data = reinterpret_cast<const char*>(it);
+                  const size_t key_len = static_cast<size_t>(key_sz);
+                  it += key_sz;
+                  matched = hash_match_and_parse(key_data, key_len);
                }
                else {
-                  // Escaped key: must decode before comparing.
                   jsonb_detail::decode_text(ctx, key_tc, it, stop, static_cast<size_t>(key_sz), key_scratch);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   it += key_sz;
-                  matched = linear_match_and_parse(sv{key_scratch.data(), key_scratch.size()});
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                  matched = hash_match_and_parse(key_scratch.data(), key_scratch.size());
                }
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
 
                if (!matched) {
                   if constexpr (Opts.error_on_unknown_keys) {
                      ctx.error = error_code::unknown_key;
                      return;
                   }
-                  else {
-                     skip_value<JSONB>::op<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
+                  skip_value<JSONB>::op<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
             }
             else if constexpr (Opts.error_on_unknown_keys) {
@@ -793,7 +765,7 @@ namespace glz
                return;
             }
             else {
-               it += key_sz; // skip key bytes
+               it += key_sz;
                skip_value<JSONB>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
