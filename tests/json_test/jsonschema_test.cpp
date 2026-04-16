@@ -55,7 +55,13 @@ struct test_case
 };
 
 template <class T>
-concept is_optional = glz::is_specialization_v<T, std::optional>;
+concept has_variant_value = requires {
+   typename T::value_type;
+   requires glz::is_variant<typename T::value_type>;
+} && requires(T t) {
+   { t.has_value() } -> std::convertible_to<bool>;
+   { t.value() } -> std::convertible_to<typename T::value_type>;
+};
 
 template <auto Member, typename Value>
 auto expect_property(const test_case& test, std::string_view key, Value value)
@@ -67,15 +73,9 @@ auto expect_property(const test_case& test, std::string_view key, Value value)
    auto prop_value = glz::get_member(prop, Member);
    expect[prop_value.has_value()];
    using prop_value_t = std::decay_t<decltype(prop_value)>;
-   if constexpr (is_optional<prop_value_t> && glz::is_variant<typename prop_value_t::value_type>) {
+   if constexpr (has_variant_value<prop_value_t>) {
       expect[std::holds_alternative<Value>(prop_value.value())];
       expect(std::get<Value>(prop_value.value()) == value);
-   }
-   else if constexpr (is_optional<prop_value_t> && glz::is_span<typename prop_value_t::value_type>) {
-      expect(fatal(prop_value.value().size() == value.size()));
-      for (std::size_t i = 0; i < prop_value.value().size(); ++i) {
-         expect(prop_value.value()[i] == value[i]);
-      }
    }
    else {
       expect(prop_value.value() == value);
