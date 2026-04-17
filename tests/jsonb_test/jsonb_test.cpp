@@ -430,6 +430,48 @@ suite spec_tests = [] {
       expect(out == 255);
    };
 
+   "parse INT5 negative hex payload"_test = [] {
+      // JSON5 permits an optional leading sign before the 0x prefix. SQLite produces
+      // payloads like "-0x1A"; the reader used to reject these while jsonb_to_json handled
+      // them, so the two paths disagreed.
+      std::string buf;
+      buf.push_back(static_cast<char>((5u << 4) | 4u)); // INT5, size 5
+      buf += "-0x1A";
+      int out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == -26);
+   };
+
+   "parse INT5 positive-signed hex payload"_test = [] {
+      std::string buf;
+      buf.push_back(static_cast<char>((5u << 4) | 4u)); // INT5, size 5
+      buf += "+0xFF";
+      int out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == 255);
+   };
+
+   "parse INT5 negative hex into unsigned rejected"_test = [] {
+      std::string buf;
+      buf.push_back(static_cast<char>((5u << 4) | 4u)); // INT5, size 5
+      buf += "-0x1A";
+      unsigned out = 0;
+      auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+   };
+
+   "parse INT5 negative hex edge case (INT_MIN-adjacent)"_test = [] {
+      // -0x80000000 is exactly int32_t min; the two's-complement unsigned-magnitude trick
+      // must handle this without UB.
+      std::string buf;
+      const std::string payload = "-0x80000000";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 4u));
+      buf += payload;
+      int32_t out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == std::numeric_limits<int32_t>::min());
+   };
+
    "reserved type codes 13/14/15 rejected"_test = [] {
       for (uint8_t code : {uint8_t(13), uint8_t(14), uint8_t(15)}) {
          std::string buf;

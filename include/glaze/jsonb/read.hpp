@@ -216,20 +216,43 @@ namespace glz
          const char* stop = p + n;
 
          if (type_code == jsonb::type::int5) {
-            // JSON5: allow leading '+', hex (0x...), leading '.', NaN, Infinity aren't ints.
-            if (*start == '+') ++start;
-            // Detect hex.
+            // JSON5: allow optional leading sign, followed by decimal digits or a 0x/0X hex
+            // prefix. Peek and strip the sign first so the hex branch covers "-0x1A" too
+            // (previously only '+' was stripped, so negative hex fell through to decimal
+            // parsing and always failed — see converter in jsonb_to_json.hpp for the
+            // matching logic).
+            bool negative = false;
+            if (start < stop && (*start == '+' || *start == '-')) {
+               negative = (*start == '-');
+               ++start;
+            }
             if ((stop - start) >= 2 && start[0] == '0' && (start[1] == 'x' || start[1] == 'X')) {
                start += 2;
-               unsigned long long tmp = 0;
-               auto [ptr, ec] = std::from_chars(start, stop, tmp, 16);
+               unsigned long long mag = 0;
+               auto [ptr, ec] = std::from_chars(start, stop, mag, 16);
                if (ec != std::errc{} || ptr != stop) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
-               // The sign is implicit in INT5: a leading '-' would have appeared before the 0x.
-               out = static_cast<T>(tmp);
+               if (negative) {
+                  if constexpr (std::is_signed_v<T>) {
+                     // Negate via unsigned arithmetic to avoid UB at INT_MIN.
+                     out = static_cast<T>(static_cast<unsigned long long>(0) - mag);
+                  }
+                  else {
+                     // Unsigned target can't represent a negative value.
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+               }
+               else {
+                  out = static_cast<T>(mag);
+               }
                return;
+            }
+            // Not hex — keep the stripped sign so the decimal path below sees it.
+            if (negative) {
+               --start; // restore the '-' for std::from_chars
             }
          }
 
