@@ -540,37 +540,19 @@ namespace glz
       }
    };
 
-   // Variants — serialize as [index, value] array (parallels CBOR encoding)
+   // Variants — serialize the active alternative directly, mirroring Glaze's JSON
+   // convention. The reader deduces which alternative was written from the JSONB
+   // type code byte (NULL/bool/INT/FLOAT/TEXT*/ARRAY/OBJECT), so no [index, value]
+   // wrapper is needed. JSONB's type granularity is finer than JSON's (INT and
+   // FLOAT are distinct), which lets variant<int, double> auto-deduce here even
+   // though it cannot in JSON.
    template <is_variant T>
    struct to<JSONB, T> final
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         using Variant = std::decay_t<decltype(value)>;
-
-         size_t header_pos{};
-         if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
-            return;
-         }
-         const size_t payload_start = ix;
-
-         std::visit(
-            [&](auto&& v) {
-               using V = std::decay_t<decltype(v)>;
-               static constexpr uint64_t index = []<size_t... I>(std::index_sequence<I...>) {
-                  return ((std::is_same_v<V, std::variant_alternative_t<I, Variant>> * I) + ...);
-               }(std::make_index_sequence<std::variant_size_v<Variant>>{});
-
-               to<JSONB, uint64_t>::template op<Opts>(index, ctx, b, ix);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               serialize<JSONB>::op<Opts>(v, ctx, b, ix);
-            },
-            value);
-
-         const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
-         jsonb::patch_header_9(b, header_pos, jsonb::type::array, payload_size);
+         std::visit([&](auto&& v) { serialize<JSONB>::op<Opts>(v, ctx, b, ix); }, value);
       }
    };
 

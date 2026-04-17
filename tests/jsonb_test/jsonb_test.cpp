@@ -350,6 +350,57 @@ suite container_tests = [] {
       expect(std::get<std::string>(out) == "hello");
    };
 
+   "variant writes bare alternative (no [index, value] wrapper)"_test = [] {
+      using V = std::variant<int, std::string, double>;
+      V v = std::string("hi");
+      std::string variant_buf;
+      expect(not glz::write_jsonb(v, variant_buf));
+
+      // The variant blob must be byte-identical to the blob you'd get writing the
+      // active alternative directly — no array wrapper, no index prefix.
+      std::string direct_buf;
+      expect(not glz::write_jsonb(std::string("hi"), direct_buf));
+      expect(variant_buf == direct_buf);
+   };
+
+   "variant deduces int vs double from JSONB type code"_test = [] {
+      // JSONB's INT and FLOAT type codes are distinct, so this variant auto-deduces
+      // even though Glaze's JSON convention can't distinguish numeric alternatives.
+      using V = std::variant<int64_t, double, std::string, bool>;
+
+      V v = int64_t{42};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+      V out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(std::holds_alternative<int64_t>(out));
+      expect(std::get<int64_t>(out) == 42);
+
+      v = 3.14;
+      buf.clear();
+      expect(not glz::write_jsonb(v, buf));
+      expect(not glz::read_jsonb(out, buf));
+      expect(std::holds_alternative<double>(out));
+      expect(std::get<double>(out) == 3.14);
+
+      v = true;
+      buf.clear();
+      expect(not glz::write_jsonb(v, buf));
+      expect(not glz::read_jsonb(out, buf));
+      expect(std::holds_alternative<bool>(out));
+      expect(std::get<bool>(out) == true);
+   };
+
+   "variant with null alternative round-trips through NULL element"_test = [] {
+      using V = std::variant<std::nullptr_t, int, std::string>;
+      V v = nullptr;
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+      V out = 42;
+      expect(not glz::read_jsonb(out, buf));
+      expect(std::holds_alternative<std::nullptr_t>(out));
+   };
+
 };
 
 suite error_tests = [] {

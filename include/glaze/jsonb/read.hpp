@@ -990,48 +990,167 @@ namespace glz
       }
    };
 
-   // Variants — expect a 2-element array [index, value]
+   namespace jsonb_detail
+   {
+      // JSONB variant alternative category traits. Distinct from the JSON-side traits
+      // because JSONB carries enough type information on the wire to tell INT from FLOAT,
+      // so we can auto-deduce variant<int, double> here even though JSON cannot.
+      template <class T>
+      struct is_jsonb_variant_int : std::bool_constant<int_t<T>>
+      {};
+      template <class T>
+      struct is_jsonb_variant_float : std::bool_constant<std::floating_point<std::remove_cvref_t<T>>>
+      {};
+      template <class T>
+      struct is_jsonb_variant_bool : std::bool_constant<bool_t<T>>
+      {};
+      template <class T>
+      struct is_jsonb_variant_null : std::bool_constant<null_t<T>>
+      {};
+      template <class T>
+      struct is_jsonb_variant_str : std::bool_constant<str_t<T>>
+      {};
+      template <class T>
+      struct is_jsonb_variant_array
+         : std::bool_constant<writable_array_t<T> || readable_array_t<T> || tuple_t<T> || is_std_tuple<T> ||
+                              glaze_array_t<T>>
+      {};
+      template <class T>
+      struct is_jsonb_variant_object
+         : std::bool_constant<writable_map_t<T> || readable_map_t<T> || pair_t<T> || glaze_object_t<T> ||
+                              reflectable<T>>
+      {};
+
+      // First alternative index whose type matches Trait, or std::variant_npos if none.
+      // Local copy so jsonb/read.hpp doesn't need to include json/read.hpp just for this.
+      template <class Variant, template <class> class Trait>
+      struct first_index_impl;
+
+      template <template <class> class Trait, class... Ts>
+      struct first_index_impl<std::variant<Ts...>, Trait>
+      {
+         static constexpr size_t find()
+         {
+            size_t result = std::variant_npos;
+            size_t idx = 0;
+            ((Trait<Ts>::value && result == std::variant_npos ? (result = idx, ++idx) : ++idx), ...);
+            return result;
+         }
+         static constexpr size_t value = find();
+      };
+
+      template <class Variant, template <class> class Trait>
+      constexpr size_t first_index_v = first_index_impl<Variant, Trait>::value;
+
+      // True if the variant has at most one alternative per JSONB category, so the
+      // active alternative can be picked from the JSONB type code byte alone.
+      template <is_variant T>
+      consteval bool variant_jsonb_auto_deducible()
+      {
+         constexpr auto N = std::variant_size_v<T>;
+         size_t bools = 0, ints = 0, floats = 0, strings = 0, arrays = 0, objects = 0, nulls = 0;
+         [&]<size_t... I>(std::index_sequence<I...>) {
+            (([&]<size_t Idx>() {
+                using V = std::decay_t<std::variant_alternative_t<Idx, T>>;
+                bools += is_jsonb_variant_bool<V>::value;
+                ints += is_jsonb_variant_int<V>::value;
+                floats += is_jsonb_variant_float<V>::value;
+                strings += is_jsonb_variant_str<V>::value;
+                arrays += is_jsonb_variant_array<V>::value;
+                objects += is_jsonb_variant_object<V>::value;
+                nulls += is_jsonb_variant_null<V>::value;
+             }.template operator()<I>()),
+             ...);
+         }(std::make_index_sequence<N>{});
+         return bools <= 1 && ints <= 1 && floats <= 1 && strings <= 1 && arrays <= 1 && objects <= 1 && nulls <= 1;
+      }
+   }
+
+   // Variants — JSON-style: serialize the active alternative directly, deduce on read
+   // from the JSONB type code byte.
    template <is_variant T>
    struct from<JSONB, T> final
    {
+      static_assert(jsonb_detail::variant_jsonb_auto_deducible<T>(),
+                    "JSONB variant alternatives must be unique per JSONB category "
+                    "(at most one each of: bool, int, float, string, array, object, null)");
+
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
          jsonb_detail::depth_guard g{ctx};
          if (!g) return;
-         uint8_t tc{};
-         uint64_t sz{};
-         if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
-         if (tc != jsonb::type::array) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+
+         if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
          }
-         const auto stop = it + sz;
-
-         uint64_t type_index{};
-         parse<JSONB>::op<Opts>(type_index, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
+         const uint8_t tc = jsonb::get_type(static_cast<uint8_t>(*it));
 
          using V = std::decay_t<decltype(value)>;
-         if (type_index >= std::variant_size_v<V>) [[unlikely]] {
+         constexpr size_t bool_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_bool>;
+         constexpr size_t int_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_int>;
+         constexpr size_t float_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_float>;
+         constexpr size_t str_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_str>;
+         constexpr size_t array_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_array>;
+         constexpr size_t object_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_object>;
+         constexpr size_t null_idx = jsonb_detail::first_index_v<V, jsonb_detail::is_jsonb_variant_null>;
+
+         auto dispatch = [&]<size_t Idx>() {
+            if constexpr (Idx == std::variant_npos) {
+               ctx.error = error_code::no_matching_variant_type;
+            }
+            else {
+               if (value.index() != Idx) {
+                  emplace_runtime_variant(value, Idx);
+               }
+               std::visit([&](auto& v) { parse<JSONB>::op<Opts>(v, ctx, it, end); }, value);
+            }
+         };
+
+         switch (tc) {
+         case jsonb::type::null_:
+            dispatch.template operator()<null_idx>();
+            return;
+         case jsonb::type::true_:
+         case jsonb::type::false_:
+            dispatch.template operator()<bool_idx>();
+            return;
+         case jsonb::type::int_:
+         case jsonb::type::int5:
+            // Prefer integer alternative; fall back to float if the variant has only float.
+            if constexpr (int_idx != std::variant_npos) {
+               dispatch.template operator()<int_idx>();
+            }
+            else {
+               dispatch.template operator()<float_idx>();
+            }
+            return;
+         case jsonb::type::float_:
+         case jsonb::type::float5:
+            // Prefer float alternative; fall back to int if the variant has only int.
+            if constexpr (float_idx != std::variant_npos) {
+               dispatch.template operator()<float_idx>();
+            }
+            else {
+               dispatch.template operator()<int_idx>();
+            }
+            return;
+         case jsonb::type::text:
+         case jsonb::type::textj:
+         case jsonb::type::text5:
+         case jsonb::type::textraw:
+            dispatch.template operator()<str_idx>();
+            return;
+         case jsonb::type::array:
+            dispatch.template operator()<array_idx>();
+            return;
+         case jsonb::type::object:
+            dispatch.template operator()<object_idx>();
+            return;
+         default:
             ctx.error = error_code::syntax_error;
             return;
-         }
-
-         if (value.index() != type_index) {
-            emplace_runtime_variant(value, type_index);
-         }
-
-         std::visit([&](auto& v) { parse<JSONB>::op<Opts>(v, ctx, it, end); }, value);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         if (it != stop) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
          }
       }
    };

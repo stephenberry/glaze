@@ -100,7 +100,17 @@ Standard JSON has no representation for `NaN`, `Infinity`, or `-Infinity`. JSONB
 
 ## Variants
 
-`std::variant` is serialized as a two-element array `[index, value]`, matching Glaze's CBOR convention.
+Variants follow the same pattern as Glaze's JSON handling: the **active alternative is serialized directly**, with no wrapping array or index prefix. On read, Glaze deduces the alternative from the JSONB type code byte.
+
+```c++
+std::variant<int, std::string> v = std::string("hi");
+std::string buf;
+glz::write_jsonb(v, buf);   // identical bytes to writing the std::string directly
+```
+
+Auto-deduction requires that the variant has **at most one alternative per JSONB category** (bool, int, float, string, array, object, null). Because JSONB has distinct INT and FLOAT type codes, `std::variant<int, double>` auto-deduces in JSONB even though it cannot in Glaze's JSON. The check is enforced at compile time via `static_assert` on the reader.
+
+> **Note:** Tagged variants (via `tag_v<T>`) are not yet supported on JSONB. If you need to disambiguate alternatives that share a JSONB category, restructure the variant or use a wrapper type.
 
 ## Generic / Schemaless Values
 
