@@ -32,6 +32,32 @@ namespace glz
       // decode_json_escape, decode_json5_escape, and decode_text moved to text_decode.hpp
       // so the JSONB→JSON converter can reuse them.
 
+      // RAII guard that bumps ctx.depth on entry to a container reader and pops it on
+      // destruction. Errors with exceeded_max_recursive_depth if the cap (256) would be
+      // exceeded — deeply nested blobs can stack-overflow otherwise, and untrusted blobs
+      // (e.g. from user-supplied SQLite JSONB columns) are a real DoS vector.
+      template <class Ctx>
+      struct depth_guard
+      {
+         Ctx& ctx;
+         bool entered = false;
+
+         depth_guard(Ctx& c) : ctx(c)
+         {
+            if (ctx.depth >= max_recursive_depth_limit) [[unlikely]] {
+               ctx.error = error_code::exceeded_max_recursive_depth;
+               return;
+            }
+            ++ctx.depth;
+            entered = true;
+         }
+         ~depth_guard()
+         {
+            if (entered) --ctx.depth;
+         }
+         explicit operator bool() const noexcept { return entered; }
+      };
+
       // Parse a JSONB integer payload (INT or INT5) and store into target.
       template <class T>
       inline void parse_int_payload(is_context auto& ctx, uint8_t type_code, const char* p, size_t n, T& out) noexcept
@@ -389,6 +415,8 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         jsonb_detail::depth_guard g{ctx};
+         if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
@@ -448,6 +476,8 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         jsonb_detail::depth_guard g{ctx};
+         if (!g) return;
          using Key = typename std::remove_cvref_t<T>::key_type;
          static_assert(str_t<Key> || std::same_as<Key, std::string>,
                        "JSONB objects only support string keys (types 7-10).");
@@ -501,6 +531,8 @@ namespace glz
       template <auto Opts>
       static void op(T& value, is_context auto& ctx, auto& it, auto end)
       {
+         jsonb_detail::depth_guard g{ctx};
+         if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
@@ -533,6 +565,8 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         jsonb_detail::depth_guard g{ctx};
+         if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
@@ -685,6 +719,8 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         jsonb_detail::depth_guard g{ctx};
+         if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
@@ -728,6 +764,8 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         jsonb_detail::depth_guard g{ctx};
+         if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
@@ -844,6 +882,8 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         jsonb_detail::depth_guard g{ctx};
+         if (!g) return;
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
@@ -939,6 +979,8 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto& ctx, auto& it, auto end)
       {
+         jsonb_detail::depth_guard g{ctx};
+         if (!g) return;
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;

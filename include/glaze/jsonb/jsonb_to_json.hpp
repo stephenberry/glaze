@@ -42,11 +42,12 @@ namespace glz
       }
 
       template <auto Opts, class B>
-      inline void jsonb_to_json_value(is_context auto& ctx, const uint8_t*& it, const uint8_t* end, B& out, size_t& ix);
+      inline void jsonb_to_json_value(is_context auto& ctx, const uint8_t*& it, const uint8_t* end, B& out, size_t& ix,
+                                      uint32_t depth);
 
       template <auto Opts, class B>
       inline void jsonb_to_json_container(is_context auto& ctx, const uint8_t* it, const uint8_t* stop, B& out,
-                                          size_t& ix, char open, char close)
+                                          size_t& ix, char open, char close, uint32_t depth)
       {
          if (!ensure_space(ctx, out, ix + 2 + write_padding_bytes)) return;
          out[ix++] = static_cast<typename std::decay_t<B>::value_type>(open);
@@ -57,7 +58,7 @@ namespace glz
                out[ix++] = static_cast<typename std::decay_t<B>::value_type>(',');
             }
             first = false;
-            jsonb_to_json_value<Opts>(ctx, it, stop, out, ix);
+            jsonb_to_json_value<Opts>(ctx, it, stop, out, ix, depth);
             if (bool(ctx.error)) return;
 
             // For objects, the next child is a key's matching value: emit ':' between key and value.
@@ -68,7 +69,7 @@ namespace glz
                }
                if (!ensure_space(ctx, out, ix + 1 + write_padding_bytes)) return;
                out[ix++] = static_cast<typename std::decay_t<B>::value_type>(':');
-               jsonb_to_json_value<Opts>(ctx, it, stop, out, ix);
+               jsonb_to_json_value<Opts>(ctx, it, stop, out, ix, depth);
                if (bool(ctx.error)) return;
             }
          }
@@ -81,8 +82,16 @@ namespace glz
       }
 
       template <auto Opts, class B>
-      inline void jsonb_to_json_value(is_context auto& ctx, const uint8_t*& it, const uint8_t* end, B& out, size_t& ix)
+      inline void jsonb_to_json_value(is_context auto& ctx, const uint8_t*& it, const uint8_t* end, B& out, size_t& ix,
+                                      uint32_t depth)
       {
+         // DoS protection: cap recursion on pathologically nested blobs so untrusted input
+         // can't blow the stack. Only containers bump depth below; scalar emission leaves
+         // it alone. Matches the limit used by CBOR's converter.
+         if (depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
@@ -198,13 +207,13 @@ namespace glz
          case jsonb::type::array: {
             const uint8_t* arr_stop = payload + sz;
             const uint8_t* ait = payload;
-            jsonb_to_json_container<Opts>(ctx, ait, arr_stop, out, ix, '[', ']');
+            jsonb_to_json_container<Opts>(ctx, ait, arr_stop, out, ix, '[', ']', depth + 1);
             return;
          }
          case jsonb::type::object: {
             const uint8_t* obj_stop = payload + sz;
             const uint8_t* oit = payload;
-            jsonb_to_json_container<Opts>(ctx, oit, obj_stop, out, ix, '{', '}');
+            jsonb_to_json_container<Opts>(ctx, oit, obj_stop, out, ix, '{', '}', depth + 1);
             return;
          }
          default:
@@ -229,7 +238,7 @@ namespace glz
          return {0, error_code::unexpected_end};
       }
 
-      jsonb_detail::jsonb_to_json_value<Opts>(ctx, it, end, out, ix);
+      jsonb_detail::jsonb_to_json_value<Opts>(ctx, it, end, out, ix, 0);
       if (bool(ctx.error)) {
          return {0, ctx.error};
       }

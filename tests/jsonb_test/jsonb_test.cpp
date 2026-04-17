@@ -533,6 +533,61 @@ suite spec_tests = [] {
       expect(j.value() == "false");
    };
 
+   "deeply nested array rejected at depth cap"_test = [] {
+      // Build an array-of-array-of-array... 1000 levels deep. Each level is a 9-byte
+      // u64_follows ARRAY header whose payload contains exactly one nested element.
+      // Without a recursion cap, this would stack-overflow the reader.
+      const int levels = 1000;
+      std::string buf;
+      // Payload sizes grow from innermost outward; the innermost element is an empty
+      // array (9 bytes: header-with-size-0).
+      std::vector<std::string> frames;
+      {
+         std::string leaf;
+         leaf.resize(9);
+         leaf[0] = static_cast<char>((15u << 4) | 11u); // ARRAY, u64_follows, size 0
+         for (int i = 1; i < 9; ++i) leaf[i] = 0;
+         frames.push_back(std::move(leaf));
+      }
+      for (int i = 1; i < levels; ++i) {
+         std::string wrapper;
+         wrapper.resize(9);
+         const uint64_t payload_size = frames.back().size();
+         wrapper[0] = static_cast<char>((15u << 4) | 11u);
+         uint64_t v = payload_size;
+         if constexpr (std::endian::native == std::endian::little) v = std::byteswap(v);
+         std::memcpy(&wrapper[1], &v, 8);
+         wrapper += frames.back();
+         frames.push_back(std::move(wrapper));
+      }
+      buf = frames.back();
+
+      // Reader: glz::generic handles arbitrary nesting, so depth_guard is the stopping
+      // condition (not a type-shape mismatch).
+      glz::generic out;
+      auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::exceeded_max_recursive_depth);
+
+      // Converter: same input, exceeds depth cap.
+      auto j = glz::jsonb_to_json(buf);
+      expect(!j.has_value());
+      expect(j.error().ec == glz::error_code::exceeded_max_recursive_depth);
+   };
+
+   "reasonably-nested blob within depth cap succeeds"_test = [] {
+      // Ten levels of nesting is comfortably under the 256 cap.
+      std::vector<std::vector<std::vector<std::vector<std::vector<int>>>>> v{{{{{1, 2, 3}}}}};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+      decltype(v) out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == v);
+      // Converter also succeeds.
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+   };
+
    "reserved type codes 13/14/15 rejected"_test = [] {
       for (uint8_t code : {uint8_t(13), uint8_t(14), uint8_t(15)}) {
          std::string buf;
