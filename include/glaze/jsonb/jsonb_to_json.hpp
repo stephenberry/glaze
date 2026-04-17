@@ -141,18 +141,18 @@ namespace glz
                neg = true;
                ++p;
             }
-            long long value = 0;
+            int64_t value = 0;
             if (e - p >= 2 && p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
-               unsigned long long tmp = 0;
+               uint64_t tmp = 0;
                auto [ptr, ec] = std::from_chars(p + 2, e, tmp, 16);
                if (ec != std::errc{} || ptr != e) {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
-               value = neg ? -static_cast<long long>(tmp) : static_cast<long long>(tmp);
+               value = neg ? -static_cast<int64_t>(tmp) : static_cast<int64_t>(tmp);
             }
             else {
-               long long tmp = 0;
+               int64_t tmp = 0;
                auto [ptr, ec] = std::from_chars(p, e, tmp, 10);
                if (ec != std::errc{} || ptr != e) {
                   ctx.error = error_code::parse_number_failure;
@@ -160,7 +160,7 @@ namespace glz
                }
                value = neg ? -tmp : tmp;
             }
-            to<JSON, long long>::template op<Opts>(value, ctx, out, ix);
+            to<JSON, int64_t>::template op<Opts>(value, ctx, out, ix);
             return;
          }
          case jsonb::type::float5: {

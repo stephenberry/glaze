@@ -83,7 +83,7 @@ namespace glz
             }
             if ((stop - start) >= 2 && start[0] == '0' && (start[1] == 'x' || start[1] == 'X')) {
                start += 2;
-               unsigned long long mag = 0;
+               uint64_t mag = 0;
                auto [ptr, ec] = std::from_chars(start, stop, mag, 16);
                if (ec != std::errc{} || ptr != stop) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
@@ -92,14 +92,13 @@ namespace glz
                if (negative) {
                   if constexpr (std::is_signed_v<T>) {
                      // |min()| == max() + 1 for two's complement; allow that edge case.
-                     constexpr auto max_neg_mag =
-                        static_cast<unsigned long long>((std::numeric_limits<T>::max)()) + 1ull;
+                     constexpr auto max_neg_mag = static_cast<uint64_t>((std::numeric_limits<T>::max)()) + 1u;
                      if (mag > max_neg_mag) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
                      // Negate via unsigned arithmetic to avoid UB at INT_MIN.
-                     out = static_cast<T>(static_cast<unsigned long long>(0) - mag);
+                     out = static_cast<T>(uint64_t{0} - mag);
                   }
                   else {
                      // Unsigned target can't represent a negative value.
@@ -108,7 +107,7 @@ namespace glz
                   }
                }
                else {
-                  if (mag > static_cast<unsigned long long>((std::numeric_limits<T>::max)())) [[unlikely]] {
+                  if (mag > static_cast<uint64_t>((std::numeric_limits<T>::max)())) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -124,7 +123,7 @@ namespace glz
 
          // Default: decimal.
          if constexpr (std::is_signed_v<T>) {
-            long long tmp = 0;
+            int64_t tmp = 0;
             auto [ptr, ec] = std::from_chars(start, stop, tmp, 10);
             if (ec != std::errc{} || ptr != stop) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
@@ -137,7 +136,7 @@ namespace glz
             out = static_cast<T>(tmp);
          }
          else {
-            unsigned long long tmp = 0;
+            uint64_t tmp = 0;
             auto [ptr, ec] = std::from_chars(start, stop, tmp, 10);
             if (ec != std::errc{} || ptr != stop) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
