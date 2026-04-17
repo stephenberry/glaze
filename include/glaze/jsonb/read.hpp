@@ -9,6 +9,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <utility>
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
@@ -107,7 +108,7 @@ namespace glz
                   }
                }
                else {
-                  if (mag > static_cast<uint64_t>((std::numeric_limits<T>::max)())) [[unlikely]] {
+                  if (!std::in_range<T>(mag)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -122,32 +123,18 @@ namespace glz
          }
 
          // Default: decimal.
-         if constexpr (std::is_signed_v<T>) {
-            int64_t tmp = 0;
-            auto [ptr, ec] = std::from_chars(start, stop, tmp, 10);
-            if (ec != std::errc{} || ptr != stop) [[unlikely]] {
-               ctx.error = error_code::parse_number_failure;
-               return;
-            }
-            if (tmp < (std::numeric_limits<T>::min)() || tmp > (std::numeric_limits<T>::max)()) [[unlikely]] {
-               ctx.error = error_code::parse_number_failure;
-               return;
-            }
-            out = static_cast<T>(tmp);
+         using Wide = std::conditional_t<std::is_signed_v<T>, int64_t, uint64_t>;
+         Wide tmp = 0;
+         auto [ptr, ec] = std::from_chars(start, stop, tmp, 10);
+         if (ec != std::errc{} || ptr != stop) [[unlikely]] {
+            ctx.error = error_code::parse_number_failure;
+            return;
          }
-         else {
-            uint64_t tmp = 0;
-            auto [ptr, ec] = std::from_chars(start, stop, tmp, 10);
-            if (ec != std::errc{} || ptr != stop) [[unlikely]] {
-               ctx.error = error_code::parse_number_failure;
-               return;
-            }
-            if (tmp > (std::numeric_limits<T>::max)()) [[unlikely]] {
-               ctx.error = error_code::parse_number_failure;
-               return;
-            }
-            out = static_cast<T>(tmp);
+         if (!std::in_range<T>(tmp)) [[unlikely]] {
+            ctx.error = error_code::parse_number_failure;
+            return;
          }
+         out = static_cast<T>(tmp);
       }
 
       // Parse a JSONB float/double payload (FLOAT, FLOAT5, INT, or INT5) into a floating target.
