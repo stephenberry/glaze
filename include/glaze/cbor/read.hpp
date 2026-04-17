@@ -2024,8 +2024,8 @@ namespace glz
 
          // duration_cast<sys_dur>(seconds{secs}) overflows if secs exceeds the seconds-
          // range sys_dur can represent. Compute the bounds from sys_dur::max/min.
-         constexpr int64_t max_seconds = duration_cast<seconds>(sys_dur::max()).count();
-         constexpr int64_t min_seconds = duration_cast<seconds>(sys_dur::min()).count();
+         constexpr int64_t max_seconds = duration_cast<seconds>((sys_dur::max)()).count();
+         constexpr int64_t min_seconds = duration_cast<seconds>((sys_dur::min)()).count();
 
          if (mt == major::uint || mt == major::nint) {
             int64_t secs{};
