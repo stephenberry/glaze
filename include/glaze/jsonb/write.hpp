@@ -327,15 +327,10 @@ namespace glz
       }
    };
 
-   // Reflected objects / glaze-meta structs
-   template <class T>
-      requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
-   struct to<JSONB, T> final
+   namespace jsonb_detail
    {
-      static constexpr auto N = reflect<T>::size;
-
-      template <auto Opts, size_t I>
-      static consteval bool should_skip_field()
+      template <class T, auto Opts, size_t I>
+      consteval bool should_skip_reflected_field()
       {
          using V = field_t<T, I>;
          if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
@@ -349,11 +344,17 @@ namespace glz
          }
       }
 
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      // Write the (key, value) pairs of a reflected struct without an enclosing OBJECT
+      // header. Used both by the reflected writer (which wraps the call with header
+      // reservation/patching) and by the tagged-variant writer (which writes a tag pair
+      // first, then this body).
+      template <auto Opts, class T, class B, class IX>
+      void write_reflected_body(T&& value, is_context auto& ctx, B&& b, IX& ix)
       {
+         using DT = std::remove_cvref_t<T>;
+         static constexpr auto N = reflect<DT>::size;
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T>) {
+            if constexpr (reflectable<DT>) {
                return to_tie(value);
             }
             else {
@@ -361,33 +362,24 @@ namespace glz
             }
          }();
 
-         size_t header_pos{};
-         if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
-            return;
-         }
-         const size_t payload_start = ix;
-
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
-            if constexpr (should_skip_field<Opts, I>()) {
+            if constexpr (should_skip_reflected_field<DT, Opts, I>()) {
                return;
             }
             else {
-               using val_t = field_t<T, I>;
+               using val_t = field_t<DT, I>;
 
                decltype(auto) member = [&]() -> decltype(auto) {
-                  if constexpr (reflectable<T>) {
+                  if constexpr (reflectable<DT>) {
                      return get<I>(t);
                   }
                   else {
-                     return get<I>(reflect<T>::values);
+                     return get<I>(reflect<DT>::values);
                   }
                }();
 
-               // skip_null_members: drop nullable fields whose value is null. This mirrors
-               // CBOR's per-member null checks, but simpler because JSONB's payload-size
-               // container header is patched at the end, so we just elide the key + value.
                if constexpr (Opts.skip_null_members && null_t<val_t>) {
                   if constexpr (always_null_t<val_t>) {
                      return;
@@ -409,26 +401,52 @@ namespace glz
                }
                else if constexpr (is_specialization_v<val_t, custom_t> && Opts.skip_null_members &&
                                   custom_getter_returns_nullable<val_t>()) {
-                  if (is_custom_field_null<T, I>(value, t, ctx)) return;
+                  if (is_custom_field_null<DT, I>(value, t, ctx)) return;
                }
                else if constexpr (Opts.skip_null_members && glaze_value_is_nullable<val_t>()) {
-                  if (is_glaze_value_field_null<T, I>(value, t)) return;
+                  if (is_glaze_value_field_null<DT, I>(value, t)) return;
                }
 
-               // skip_default_members: drop fields whose value equals the default-constructed
-               // value. Requires a comparable type (see has_skippable_default).
                if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
                   if (is_default_value(get_member(value, member))) return;
                }
 
-               static constexpr sv key = reflect<T>::keys[I];
-               jsonb_detail::write_scalar(ctx, jsonb::type::textraw, key.data(), key.size(), b, ix);
+               static constexpr sv key = reflect<DT>::keys[I];
+               jsonb_detail::write_scalar(ctx, jsonb::type::text, key.data(), key.size(), b, ix);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
                serialize<JSONB>::op<Opts>(get_member(value, member), ctx, b, ix);
             }
          });
+      }
+   }
+
+   // Reflected objects / glaze-meta structs
+   template <class T>
+      requires((glaze_object_t<T> || reflectable<T>) && !custom_write<T>)
+   struct to<JSONB, T> final
+   {
+      static constexpr auto N = reflect<T>::size;
+
+      template <auto Opts, size_t I>
+      static consteval bool should_skip_field()
+      {
+         return jsonb_detail::should_skip_reflected_field<T, Opts, I>();
+      }
+
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         size_t header_pos{};
+         if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
+            return;
+         }
+         const size_t payload_start = ix;
+
+         jsonb_detail::write_reflected_body<Opts>(value, ctx, b, ix);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
 
          const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
          jsonb::patch_header_9(b, header_pos, jsonb::type::object, payload_size);
@@ -546,13 +564,58 @@ namespace glz
    // wrapper is needed. JSONB's type granularity is finer than JSON's (INT and
    // FLOAT are distinct), which lets variant<int, double> auto-deduce here even
    // though it cannot in JSON.
+   //
+   // When the variant has a non-empty `tag_v<T>` and the active alternative is a
+   // reflected struct, the writer wraps it as `{tag_v: id, ...inlined fields}`
+   // (Glaze's JSON tagged-variant convention). The reader expects the tag to be
+   // the first key.
    template <is_variant T>
    struct to<JSONB, T> final
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         std::visit([&](auto&& v) { serialize<JSONB>::op<Opts>(v, ctx, b, ix); }, value);
+         std::visit(
+            [&](auto&& v) {
+               using V = std::decay_t<decltype(v)>;
+               constexpr bool is_reflected_object = glaze_object_t<V> || reflectable<V>;
+               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() && is_reflected_object) {
+                  size_t header_pos{};
+                  if (!jsonb_detail::reserve_container_header(ctx, b, ix, header_pos)) [[unlikely]] {
+                     return;
+                  }
+                  const size_t payload_start = ix;
+
+                  // Write the tag key + id pair first, then the alternative's fields inline.
+                  static constexpr auto tag = tag_v<T>;
+                  jsonb_detail::write_scalar(ctx, jsonb::type::text, tag.data(), tag.size(), b, ix);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+                  if constexpr (std::integral<id_type>) {
+                     to<JSONB, id_type>::template op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                  }
+                  else {
+                     // String id (typically a struct name); emit as a TEXT element.
+                     const sv id = ids_v<T>[value.index()];
+                     to<JSONB, sv>::template op<Opts>(id, ctx, b, ix);
+                  }
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  jsonb_detail::write_reflected_body<Opts>(v, ctx, b, ix);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  const uint64_t payload_size = static_cast<uint64_t>(ix - payload_start);
+                  jsonb::patch_header_9(b, header_pos, jsonb::type::object, payload_size);
+               }
+               else {
+                  serialize<JSONB>::op<Opts>(v, ctx, b, ix);
+               }
+            },
+            value);
       }
    };
 

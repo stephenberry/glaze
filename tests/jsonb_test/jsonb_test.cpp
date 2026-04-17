@@ -25,6 +25,62 @@ using namespace ut;
 static_assert(glz::write_supported<int, glz::JSONB>);
 static_assert(glz::read_supported<int, glz::JSONB>);
 
+// --- Tagged variant test types (used by suite tagged_variant_tests below) ---
+
+struct put_op
+{
+   std::string path{};
+   int value = 0;
+   bool operator==(const put_op&) const = default;
+};
+
+struct delete_op
+{
+   std::string path{};
+   bool recursive = false;
+   bool operator==(const delete_op&) const = default;
+};
+
+using tagged_op = std::variant<put_op, delete_op>;
+
+template <>
+struct glz::meta<tagged_op>
+{
+   static constexpr std::string_view tag = "op";
+   static constexpr auto ids = std::array{"put", "delete"};
+};
+
+// Integer-id variant (uses default ids = struct name? — no, integers must be explicit)
+struct shape_circle
+{
+   double radius = 1.0;
+   bool operator==(const shape_circle&) const = default;
+};
+struct shape_square
+{
+   double side = 1.0;
+   bool operator==(const shape_square&) const = default;
+};
+
+using tagged_shape = std::variant<shape_circle, shape_square>;
+
+template <>
+struct glz::meta<tagged_shape>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr auto ids = std::array<int, 2>{1, 2};
+};
+
+// Variant with multiple object alternatives — only valid because it has a tag.
+using tagged_multi_obj = std::variant<put_op, delete_op, shape_circle>;
+
+template <>
+struct glz::meta<tagged_multi_obj>
+{
+   static constexpr std::string_view tag = "t";
+   static constexpr auto ids = std::array{"put", "del", "circle"};
+};
+
 struct simple_struct
 {
    int i = 287;
@@ -401,6 +457,109 @@ suite container_tests = [] {
       expect(std::holds_alternative<std::nullptr_t>(out));
    };
 
+};
+
+suite tagged_variant_tests = [] {
+   "tagged variant: string id round-trip (first alternative)"_test = [] {
+      tagged_op v = put_op{"/users/42", 7};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+
+      tagged_op out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(std::holds_alternative<put_op>(out));
+      expect(std::get<put_op>(out) == std::get<put_op>(v));
+   };
+
+   "tagged variant: string id round-trip (second alternative)"_test = [] {
+      tagged_op v = delete_op{"/sessions", true};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+
+      tagged_op out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(std::holds_alternative<delete_op>(out));
+      expect(std::get<delete_op>(out) == std::get<delete_op>(v));
+   };
+
+   "tagged variant: written as OBJECT not bare alternative"_test = [] {
+      // The blob must be an OBJECT (type 12), not the alternative's own OBJECT-shape
+      // wrapped bare — i.e., it has the wrapping tag in addition to the struct fields.
+      tagged_op v = put_op{"/x", 1};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+      expect((static_cast<uint8_t>(buf[0]) & 0x0Fu) == 12u); // OBJECT type code
+
+      // And it should NOT be byte-identical to writing the alternative directly,
+      // because the tagged write injects the tag pair.
+      std::string direct;
+      expect(not glz::write_jsonb(put_op{"/x", 1}, direct));
+      expect(buf != direct);
+      expect(buf.size() > direct.size());
+   };
+
+   "tagged variant: integer id round-trip"_test = [] {
+      tagged_shape v = shape_square{2.5};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+
+      tagged_shape out{};
+      expect(not glz::read_jsonb(out, buf));
+      expect(std::holds_alternative<shape_square>(out));
+      expect(std::get<shape_square>(out).side == 2.5);
+   };
+
+   "tagged variant: multiple object alternatives disambiguated by tag"_test = [] {
+      // Without a tag this would fail variant_jsonb_auto_deducible (3 object alts).
+      tagged_multi_obj v = shape_circle{3.0};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+
+      tagged_multi_obj out = put_op{"/foo", 1};
+      expect(not glz::read_jsonb(out, buf));
+      expect(std::holds_alternative<shape_circle>(out));
+      expect(std::get<shape_circle>(out).radius == 3.0);
+   };
+
+   "tagged variant: vector of mixed alternatives round-trips"_test = [] {
+      std::vector<tagged_op> ops{
+         put_op{"/a", 1},
+         delete_op{"/b", true},
+         put_op{"/c", 99},
+         delete_op{"/d", false},
+      };
+      std::string buf;
+      expect(not glz::write_jsonb(ops, buf));
+
+      std::vector<tagged_op> out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out.size() == ops.size());
+      expect(std::get<put_op>(out[0]).path == "/a");
+      expect(std::get<delete_op>(out[1]).path == "/b");
+      expect(std::get<put_op>(out[2]).value == 99);
+      expect(std::get<delete_op>(out[3]).recursive == false);
+   };
+
+   "tagged variant: unknown id rejected"_test = [] {
+      // Build a blob by hand: OBJECT with tag "op" → "bogus", forcing
+      // variant_id_to_index to fail.
+      // Simplest: write a put_op blob, then we just confirm a malformed tag value path.
+      tagged_op v = put_op{};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+
+      // Find and replace the tag value "put" with "xxx" (same length) to force unknown.
+      const auto put_pos = buf.find("put");
+      expect(put_pos != std::string::npos);
+      buf[put_pos] = 'x';
+      buf[put_pos + 1] = 'x';
+      buf[put_pos + 2] = 'x';
+
+      tagged_op out{};
+      const auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::no_matching_variant_type);
+   };
 };
 
 suite error_tests = [] {

@@ -575,6 +575,154 @@ namespace glz
       }
    };
 
+   namespace jsonb_detail
+   {
+      // Read the (key, value) pair body of an OBJECT into the reflected fields of `value`.
+      // Assumes the OBJECT header has already been consumed; `[it, stop)` is the payload
+      // range. Keys equal to `skip_key` (when non-empty) are silently skipped — used to
+      // route past the tag in a tagged variant. The depth guard is not bumped here, so
+      // the caller must own one if needed.
+      template <auto Opts, class T, class It>
+      void read_object_body(T& value, is_context auto& ctx, It& it, It stop, sv skip_key = {})
+      {
+         using DT = std::remove_cvref_t<T>;
+         static constexpr auto N = reflect<DT>::size;
+
+         auto fields = [&]() -> decltype(auto) {
+            if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+               return bit_array<N>{};
+            }
+            else {
+               return nullptr;
+            }
+         }();
+
+         auto hash_match_and_parse = [&](const char* key_data, size_t key_len) {
+            if constexpr (N > 0) {
+               static constexpr auto HashInfo = hash_info<DT>;
+               const auto index = decode_hash_with_size<JSONB, DT, HashInfo, HashInfo.type>::op(
+                  key_data, key_data + key_len, key_len);
+               if (index >= N) return false;
+
+               bool matched = false;
+               visit<N>(
+                  [&]<size_t I>() {
+                     static constexpr auto TargetKey = get<I>(reflect<DT>::keys);
+                     static constexpr auto Length = TargetKey.size();
+                     if ((Length == key_len) && compare<Length>(TargetKey.data(), key_data)) [[likely]] {
+                        matched = true;
+                        if constexpr (reflectable<DT>) {
+                           parse<JSONB>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, stop);
+                        }
+                        else {
+                           parse<JSONB>::op<Opts>(get_member(value, get<I>(reflect<DT>::values)), ctx, it, stop);
+                        }
+                        if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+                           fields[I] = true;
+                        }
+                     }
+                  },
+                  index);
+               return matched;
+            }
+            else {
+               (void)key_data;
+               (void)key_len;
+               return false;
+            }
+         };
+
+         std::string key_scratch;
+         while (it < stop) {
+            uint8_t key_tc{};
+            uint64_t key_sz{};
+            if (!jsonb::read_header(ctx, it, stop, key_tc, key_sz)) return;
+            if (static_cast<uint64_t>(stop - it) < key_sz) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
+            const bool literal_key = (key_tc == jsonb::type::text || key_tc == jsonb::type::textraw);
+            const bool escaped_key = (key_tc == jsonb::type::textj || key_tc == jsonb::type::text5);
+            if (!literal_key && !escaped_key) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            // Materialize the key bytes either as a view into the buffer (literal) or into a
+            // scratch buffer (escape-encoded).
+            const char* key_data{};
+            size_t key_len{};
+            if (literal_key) {
+               key_data = reinterpret_cast<const char*>(it);
+               key_len = static_cast<size_t>(key_sz);
+               it += key_sz;
+            }
+            else {
+               jsonb_detail::decode_text(ctx, key_tc, it, stop, static_cast<size_t>(key_sz), key_scratch);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               it += key_sz;
+               key_data = key_scratch.data();
+               key_len = key_scratch.size();
+            }
+
+            // Skip key (e.g., tag in a tagged variant) — drop the value silently regardless
+            // of error_on_unknown_keys.
+            if (!skip_key.empty() && key_len == skip_key.size() &&
+                std::memcmp(key_data, skip_key.data(), key_len) == 0) {
+               skip_value<JSONB>::op<Opts>(ctx, it, stop);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               continue;
+            }
+
+            if constexpr (N > 0) {
+               const bool matched = hash_match_and_parse(key_data, key_len);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               if (!matched) {
+                  if constexpr (Opts.error_on_unknown_keys) {
+                     ctx.error = error_code::unknown_key;
+                     return;
+                  }
+                  skip_value<JSONB>::op<Opts>(ctx, it, stop);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+            }
+            else if constexpr (Opts.error_on_unknown_keys) {
+               ctx.error = error_code::unknown_key;
+               return;
+            }
+            else {
+               skip_value<JSONB>::op<Opts>(ctx, it, stop);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+         }
+
+         if (it != stop) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         if constexpr (Opts.error_on_missing_keys) {
+            static constexpr auto req_fields = required_fields<DT, Opts>();
+            if ((req_fields & fields) != req_fields) {
+               for (size_t i = 0; i < N; ++i) {
+                  if (!fields[i] && req_fields[i]) {
+                     ctx.custom_error_message = reflect<DT>::keys[i];
+                     break;
+                  }
+               }
+               ctx.error = error_code::missing_key;
+            }
+         }
+      }
+   }
+
    // Reflected objects
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)
@@ -597,135 +745,7 @@ namespace glz
             return;
          }
          const auto stop = it + sz;
-         static constexpr auto N = reflect<T>::size;
-
-         // Track which fields have been read. Only materialized when needed — an empty pointer
-         // type when both error_on_missing_keys and partial_read are off, so the compiler
-         // erases the tracking entirely.
-         auto fields = [&]() -> decltype(auto) {
-            if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
-               return bit_array<N>{};
-            }
-            else {
-               return nullptr;
-            }
-         }();
-
-         // Hash-based lookup against a key byte-range. Returns true on a full match (key
-         // parsed into its member), false if no field matched (caller must skip the value).
-         // Advances `it` past the value on match; on miss `it` is unchanged.
-         auto hash_match_and_parse = [&](const char* key_data, size_t key_len) {
-            if constexpr (N > 0) {
-               static constexpr auto HashInfo = hash_info<T>;
-               const auto index = decode_hash_with_size<JSONB, T, HashInfo, HashInfo.type>::op(
-                  key_data, key_data + key_len, key_len);
-               if (index >= N) return false;
-
-               bool matched = false;
-               visit<N>(
-                  [&]<size_t I>() {
-                     static constexpr auto TargetKey = get<I>(reflect<T>::keys);
-                     static constexpr auto Length = TargetKey.size();
-                     if ((Length == key_len) && compare<Length>(TargetKey.data(), key_data)) [[likely]] {
-                        matched = true;
-                        if constexpr (reflectable<T>) {
-                           parse<JSONB>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
-                        }
-                        else {
-                           parse<JSONB>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
-                        }
-                        if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
-                           fields[I] = true;
-                        }
-                     }
-                  },
-                  index);
-               return matched;
-            }
-            else {
-               (void)key_data;
-               (void)key_len;
-               return false;
-            }
-         };
-
-         std::string key_scratch;
-         while (it < stop) {
-            // Read key header first so we can branch on TEXT variant. Literal TEXT/TEXTRAW
-            // keys hash directly from the buffer; TEXTJ/TEXT5 keys must be escape-decoded
-            // into a scratch string before hashing.
-            uint8_t key_tc{};
-            uint64_t key_sz{};
-            if (!jsonb::read_header(ctx, it, stop, key_tc, key_sz)) return;
-            if (static_cast<uint64_t>(stop - it) < key_sz) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-
-            const bool literal_key = (key_tc == jsonb::type::text || key_tc == jsonb::type::textraw);
-            const bool escaped_key = (key_tc == jsonb::type::textj || key_tc == jsonb::type::text5);
-            if (!literal_key && !escaped_key) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-
-            if constexpr (N > 0) {
-               bool matched = false;
-               if (literal_key) {
-                  const char* key_data = reinterpret_cast<const char*>(it);
-                  const size_t key_len = static_cast<size_t>(key_sz);
-                  it += key_sz;
-                  matched = hash_match_and_parse(key_data, key_len);
-               }
-               else {
-                  jsonb_detail::decode_text(ctx, key_tc, it, stop, static_cast<size_t>(key_sz), key_scratch);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  it += key_sz;
-                  matched = hash_match_and_parse(key_scratch.data(), key_scratch.size());
-               }
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
-               if (!matched) {
-                  if constexpr (Opts.error_on_unknown_keys) {
-                     ctx.error = error_code::unknown_key;
-                     return;
-                  }
-                  skip_value<JSONB>::op<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-               }
-            }
-            else if constexpr (Opts.error_on_unknown_keys) {
-               ctx.error = error_code::unknown_key;
-               return;
-            }
-            else {
-               it += key_sz;
-               skip_value<JSONB>::op<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
-         }
-
-         if (it != stop) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-
-         if constexpr (Opts.error_on_missing_keys) {
-            static constexpr auto req_fields = required_fields<T, Opts>();
-            if ((req_fields & fields) != req_fields) {
-               for (size_t i = 0; i < N; ++i) {
-                  if (!fields[i] && req_fields[i]) {
-                     ctx.custom_error_message = reflect<T>::keys[i];
-                     break;
-                  }
-               }
-               ctx.error = error_code::missing_key;
-            }
-         }
+         jsonb_detail::read_object_body<Opts>(value, ctx, it, stop);
       }
    };
 
@@ -1042,8 +1062,10 @@ namespace glz
       template <class Variant, template <class> class Trait>
       constexpr size_t first_index_v = first_index_impl<Variant, Trait>::value;
 
-      // True if the variant has at most one alternative per JSONB category, so the
-      // active alternative can be picked from the JSONB type code byte alone.
+      // True if the variant can be deduced from the JSONB type code byte. Each scalar
+      // category (bool, int, float, string, array, null) may have at most one
+      // alternative. Multiple object alternatives are allowed only when `tag_v<T>` is
+      // non-empty — the tag picks among them on read.
       template <is_variant T>
       consteval bool variant_jsonb_auto_deducible()
       {
@@ -1062,7 +1084,8 @@ namespace glz
              }.template operator()<I>()),
              ...);
          }(std::make_index_sequence<N>{});
-         return bools <= 1 && ints <= 1 && floats <= 1 && strings <= 1 && arrays <= 1 && objects <= 1 && nulls <= 1;
+         const bool object_ok = objects <= 1 || not tag_v<T>.empty();
+         return bools <= 1 && ints <= 1 && floats <= 1 && strings <= 1 && arrays <= 1 && nulls <= 1 && object_ok;
       }
    }
 
@@ -1146,8 +1169,100 @@ namespace glz
             dispatch.template operator()<array_idx>();
             return;
          case jsonb::type::object:
-            dispatch.template operator()<object_idx>();
-            return;
+            if constexpr (not tag_v<V>.empty()) {
+               // Tagged dispatch: read the OBJECT header, then the first (key, value)
+               // pair which must carry the tag and resolve to a type id. The remaining
+               // body is parsed into the resolved alternative with the tag key skipped.
+               uint8_t obj_tc{};
+               uint64_t obj_sz{};
+               if (!jsonb::read_header(ctx, it, end, obj_tc, obj_sz)) return;
+               if (static_cast<uint64_t>(end - it) < obj_sz) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               const auto stop = it + obj_sz;
+               const auto body_start = it;
+
+               // First key — must be the tag.
+               uint8_t key_tc{};
+               uint64_t key_sz{};
+               if (!jsonb::read_header(ctx, it, stop, key_tc, key_sz)) return;
+               if (static_cast<uint64_t>(stop - it) < key_sz) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               const bool literal_key = (key_tc == jsonb::type::text || key_tc == jsonb::type::textraw);
+               std::string key_scratch;
+               sv first_key{};
+               if (literal_key) {
+                  first_key = sv{reinterpret_cast<const char*>(it), static_cast<size_t>(key_sz)};
+                  it += key_sz;
+               }
+               else if (key_tc == jsonb::type::textj || key_tc == jsonb::type::text5) {
+                  jsonb_detail::decode_text(ctx, key_tc, it, stop, static_cast<size_t>(key_sz), key_scratch);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  it += key_sz;
+                  first_key = sv{key_scratch.data(), key_scratch.size()};
+               }
+               else [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               if (first_key != tag_v<V>) [[unlikely]] {
+                  // Tag must be the first key — Glaze's writer always puts it first.
+                  ctx.error = error_code::no_matching_variant_type;
+                  return;
+               }
+
+               using id_type = std::decay_t<decltype(ids_v<V>[0])>;
+               size_t type_index{};
+               if constexpr (std::integral<id_type>) {
+                  id_type id{};
+                  parse<JSONB>::op<Opts>(id, ctx, it, stop);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  type_index = variant_id_to_index<V>::op(id);
+               }
+               else {
+                  std::string id_buf;
+                  parse<JSONB>::op<Opts>(id_buf, ctx, it, stop);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  type_index = variant_id_to_index<V>::op(id_buf.data(), id_buf.data() + id_buf.size(), id_buf.size());
+               }
+
+               if (type_index >= std::variant_size_v<V>) [[unlikely]] {
+                  ctx.error = error_code::no_matching_variant_type;
+                  return;
+               }
+               if (value.index() != type_index) {
+                  emplace_runtime_variant(value, type_index);
+               }
+
+               // Parse the rest of the object body into the resolved alternative.
+               // We rewind to body_start so a tag-as-also-a-field case still picks up the
+               // value; the helper silently skips any second occurrence of the tag key.
+               it = body_start;
+               std::visit(
+                  [&](auto& v) {
+                     using V_alt = std::decay_t<decltype(v)>;
+                     if constexpr (glaze_object_t<V_alt> || reflectable<V_alt>) {
+                        jsonb_detail::read_object_body<Opts>(v, ctx, it, stop, tag_v<V>);
+                     }
+                     else {
+                        // Non-object alternative resolved by tag — invalid encoding.
+                        ctx.error = error_code::no_matching_variant_type;
+                     }
+                  },
+                  value);
+               return;
+            }
+            else {
+               dispatch.template operator()<object_idx>();
+               return;
+            }
          default:
             ctx.error = error_code::syntax_error;
             return;

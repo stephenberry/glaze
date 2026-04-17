@@ -110,7 +110,27 @@ glz::write_jsonb(v, buf);   // identical bytes to writing the std::string direct
 
 Auto-deduction requires that the variant has **at most one alternative per JSONB category** (bool, int, float, string, array, object, null). Because JSONB has distinct INT and FLOAT type codes, `std::variant<int, double>` auto-deduces in JSONB even though it cannot in Glaze's JSON. The check is enforced at compile time via `static_assert` on the reader.
 
-> **Note:** Tagged variants (via `tag_v<T>`) are not yet supported on JSONB. If you need to disambiguate alternatives that share a JSONB category, restructure the variant or use a wrapper type.
+### Tagged variants
+
+When the variant has a `tag_v<T>` (set via `glz::meta<T>::tag`) and the active alternative is a reflected struct, the writer emits an OBJECT with the tag pair prepended:
+
+```c++
+struct put_op { std::string path; int value; };
+struct delete_op { std::string path; bool recursive; };
+
+using op = std::variant<put_op, delete_op>;
+template <> struct glz::meta<op> {
+   static constexpr std::string_view tag = "op";
+   static constexpr auto ids = std::array{"put", "delete"};
+};
+
+op v = put_op{"/users/42", 7};
+glz::write_jsonb(v, buf);   // OBJECT { "op": "put", "path": "/users/42", "value": 7 }
+```
+
+Tagged variants relax the auto-deducibility check: multiple object alternatives are allowed, since the tag picks among them on read. String ids and integer ids both work.
+
+**Reader constraint:** the tag must be the **first key** in the OBJECT. Glaze's writer always emits it first, so round-trips work; external producers must follow the same convention or the reader returns `no_matching_variant_type`.
 
 ## Generic / Schemaless Values
 
