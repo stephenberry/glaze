@@ -217,3 +217,17 @@ TOML has native datetime types (not quoted strings). When using `glz::write_toml
 - Durations and other time points → Numeric values
 
 See [TOML Documentation](./toml.md#datetime-support) for full details.
+
+## CBOR Datetime Support
+
+CBOR has standard semantic tags for dates and times defined in RFC 8949. When using `glz::write_cbor` / `glz::read_cbor`, chrono types use these tags:
+
+- `system_clock::time_point` → tag 0 + RFC 3339 date/time text string (`2024-06-15T10:30:45Z`)
+- `epoch_seconds` → tag 1 + integer seconds since Unix epoch
+- `epoch_millis` / `epoch_micros` / `epoch_nanos` → tag 1 + float64 seconds since epoch
+- `std::chrono::duration` → bare integer count in the duration's native units
+- `std::chrono::steady_clock::time_point` → bare integer count (no tag)
+
+Sub-second `epoch_time` precision is carried via float64 because RFC 8949 §3.4.2 forbids nested tags (including tag 4 decimal fractions) as tag 1 content. `epoch_millis` and `epoch_micros` round-trip losslessly for realistic epochs; `epoch_nanos` loses ~100 ns of precision on modern timestamps once the nanosecond count exceeds 2^53.
+
+See [CBOR Documentation](./cbor.md#date-and-time-stdchrono) for wire-format tables, decoder leniency rules, and safety guarantees.
