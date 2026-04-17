@@ -49,18 +49,42 @@ JSONB encodes every value with a 1–9 byte header (type nibble + payload-size n
 | 4 | INT5 | (not emitted) | `std::integral`, `std::floating_point` |
 | 5 | FLOAT | finite `float`, `double` | `std::floating_point`, `std::integral` |
 | 6 | FLOAT5 | `NaN`, `Infinity`, `-Infinity` | `std::floating_point` |
-| 7 | TEXT | (not emitted) | `std::string`, `std::string_view` |
-| 8 | TEXTJ | (not emitted) | `std::string` (with JSON escape decoding) |
-| 9 | TEXT5 | (not emitted) | `std::string` (with JSON5 escape decoding) |
-| 10 | TEXTRAW | `std::string`, string literals, reflected field names | `std::string`, `std::string_view` |
+| 7 | TEXT | `std::string`, string literals, reflected field names *(when no JSON escape is needed)* | `std::string`, `std::string_view` |
+| 8 | TEXTJ | (not emitted, see below) | `std::string` (with JSON escape decoding) |
+| 9 | TEXT5 | (not emitted, see below) | `std::string` (with JSON5 escape decoding) |
+| 10 | TEXTRAW | `std::string`, string literals, reflected field names *(when any byte <0x20, `"`, or `\` is present)* | `std::string`, `std::string_view` |
 | 11 | ARRAY | `std::vector`, tuples, ranges, `std::array`, reflected `glaze_array` | same |
 | 12 | OBJECT | `std::map`, `std::unordered_map`, `std::pair`, reflected structs | same |
 
 Codes 13–15 are reserved by the spec; Glaze returns `error_code::syntax_error` on read if any appear.
 
+### String type selection: TEXT vs TEXTRAW
+
+The writer pre-scans every string and picks the tightest spec-conformant type:
+
+* **TEXT (7)** — payload is already a valid JSON string body, so downstream JSON emitters (SQLite's `json()`, Glaze's own `jsonb_to_json`) just wrap it in quotes and `memcpy` — no per-byte scan.
+* **TEXTRAW (10)** — payload contains at least one byte that would require JSON escaping (any byte <0x20, an unescaped `"`, or an unescaped `\`). Downstream JSON emitters run the full escape writer.
+
+The scan is one O(n) pass on write that spares every future JSON emission from scanning the payload. For the common case (clean ASCII / UTF-8 with no control chars or quotes), strings round-trip with zero scanning on the read side.
+
+### Why TEXTJ and TEXT5 are never emitted
+
+* **TEXTJ** would require the payload to already contain JSON backslash escapes (`\n`, `\"`, `\uXXXX`, etc). Glaze starts from raw `std::string` bytes, so emitting TEXTJ would mean scanning *and* inserting escapes — strictly more work than TEXTRAW, and a larger blob. The only payoff would be letting JSON emitters memcpy the body verbatim — but that property already holds for TEXT (which we do emit), without the embedded escapes. So TEXTJ never wins over the TEXT/TEXTRAW pair when the source is raw bytes.
+* **TEXT5** carries JSON5-only escapes (`\xNN`, `\'`, line continuations, `\v`, `\0`). It's only useful when the producer was a JSON5 parser preserving original escaping. Glaze has no JSON5 input pipeline, so there are no JSON5 escapes to preserve.
+
+The reader handles all four text types for interop with SQLite or hand-crafted blobs.
+
 ### Forward-compatibility: NULL / TRUE / FALSE with non-zero payload
 
 Per the SQLite JSONB spec, legacy readers **must** interpret element types 0 (NULL), 1 (TRUE), and 2 (FALSE) as their nominal value even when the payload size is non-zero, so that future spec extensions that store information in those payload bytes don't break older readers. Glaze skips any payload bytes and keeps the nominal value — it does not reject such elements as malformed.
+
+### Integer narrowing on read
+
+JSONB INT and INT5 payloads are spec'd to fit in 64 bits. When reading into a narrower target type (e.g. `int8_t`, `uint16_t`), Glaze bounds-checks the parsed value against `numeric_limits<T>::min()` / `max()` and returns `error_code::parse_number_failure` if the value won't fit, rather than silently truncating. The two's-complement edge case `|min()| == max()+1` is allowed for negative INT5 hex (so `-0x80000000` fits cleanly into `int32_t`).
+
+### DoS protection
+
+Container readers and the JSONB→JSON converter cap recursion at `max_recursive_depth_limit` (256) and return `error_code::exceeded_max_recursive_depth` on overflow, so untrusted blobs cannot blow the stack with pathological nesting.
 
 ## Container Encoding Strategy
 
@@ -77,6 +101,10 @@ Standard JSON has no representation for `NaN`, `Infinity`, or `-Infinity`. JSONB
 ## Variants
 
 `std::variant` is serialized as a two-element array `[index, value]`, matching Glaze's CBOR convention.
+
+## Generic / Schemaless Values
+
+`glz::generic` (and `glz::generic_json` for the typed variant) round-trips natively, letting you read or write JSONB without a fixed C++ schema. Useful for inspecting unknown blobs or building values dynamically.
 
 ## SQLite Interop
 
@@ -109,6 +137,20 @@ expected<string>  glz::jsonb_to_json(const Buffer& jsonb);
 ```
 
 Use `glz::set_jsonb<Opts>()` to compose `JSONB` with other `glz::opts` fields.
+
+## Exceptions Interface
+
+`#include "glaze/exceptions/jsonb_exceptions.hpp"` for throwing variants under the `glz::ex::` namespace:
+
+```c++
+glz::ex::write_jsonb(value, buffer);
+glz::ex::read_jsonb(value, buffer);
+glz::ex::write_file_jsonb(value, "file.jsonb", scratch);
+glz::ex::read_file_jsonb(value, "file.jsonb", scratch);
+auto json = glz::ex::jsonb_to_json(buffer);    // returns std::string
+```
+
+Each throws `std::runtime_error` on failure. Available only when `__cpp_exceptions` is set.
 
 ## Supported Options
 
