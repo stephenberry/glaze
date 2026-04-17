@@ -135,8 +135,9 @@ suite header_tests = [] {
       std::string buf;
       const std::string s = "Hello";
       expect(not glz::write_jsonb(s, buf));
-      // TEXTRAW (type 10), inline size 5 => header (5<<4)|10 = 0x5A
-      expect(static_cast<uint8_t>(buf[0]) == ((5u << 4) | 10u));
+      // No bytes needing escape, so writer emits TEXT (type 7), inline size 5 =>
+      // header (5<<4)|7 = 0x57.
+      expect(static_cast<uint8_t>(buf[0]) == ((5u << 4) | 7u));
       std::string out;
       expect(not glz::read_jsonb(out, buf));
       expect(out == s);
@@ -146,8 +147,8 @@ suite header_tests = [] {
       std::string buf;
       const std::string s = "Hello, world!";
       expect(not glz::write_jsonb(s, buf));
-      // Size 13 > 11 inline limit, so header is 2 bytes: (12<<4)|10 = 0xCA then 0x0D
-      expect(static_cast<uint8_t>(buf[0]) == ((12u << 4) | 10u));
+      // Size 13 > 11 inline limit, so header is 2 bytes: (12<<4)|7 = 0xC7 then 0x0D
+      expect(static_cast<uint8_t>(buf[0]) == ((12u << 4) | 7u));
       expect(static_cast<uint8_t>(buf[1]) == 13u);
       std::string out;
       expect(not glz::read_jsonb(out, buf));
@@ -167,12 +168,74 @@ suite header_tests = [] {
       std::string s(100, 'x');
       std::string buf;
       expect(not glz::write_jsonb(s, buf));
-      // Header byte: size_nibble = 12 (u8_follows), type = 10 (TEXTRAW)
-      expect(static_cast<uint8_t>(buf[0]) == ((12u << 4) | 10u));
+      // Header byte: size_nibble = 12 (u8_follows), type = 7 (TEXT)
+      expect(static_cast<uint8_t>(buf[0]) == ((12u << 4) | 7u));
       expect(static_cast<uint8_t>(buf[1]) == 100u);
       std::string out;
       expect(not glz::read_jsonb(out, buf));
       expect(out == s);
+   };
+
+   "string with embedded quote written as TEXTRAW"_test = [] {
+      std::string buf;
+      const std::string s = "hi\"there";
+      expect(not glz::write_jsonb(s, buf));
+      // Contains '"' → needs JSON escape → TEXTRAW (type 10).
+      expect(static_cast<uint8_t>(buf[0]) == ((8u << 4) | 10u));
+      std::string out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == s);
+   };
+
+   "string with embedded backslash written as TEXTRAW"_test = [] {
+      std::string buf;
+      const std::string s = "a\\b";
+      expect(not glz::write_jsonb(s, buf));
+      expect(static_cast<uint8_t>(buf[0]) == ((3u << 4) | 10u));
+      std::string out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == s);
+   };
+
+   "string with control char written as TEXTRAW"_test = [] {
+      std::string buf;
+      const std::string s = std::string("a") + std::string(1, '\n') + "b";
+      expect(not glz::write_jsonb(s, buf));
+      expect(static_cast<uint8_t>(buf[0]) == ((3u << 4) | 10u));
+      std::string out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == s);
+   };
+
+   "UTF-8 high-byte string written as TEXT"_test = [] {
+      // Bytes >= 0x80 don't need JSON escaping, so a plain UTF-8 payload is TEXT.
+      std::string buf;
+      const std::string s = "caf\xC3\xA9"; // "café" in UTF-8
+      expect(not glz::write_jsonb(s, buf));
+      expect((static_cast<uint8_t>(buf[0]) & 0x0Fu) == 7u);
+      std::string out;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == s);
+   };
+
+   "TEXT payload converts directly to JSON without scan"_test = [] {
+      const std::string s = "Hello world";
+      std::string blob;
+      expect(not glz::write_jsonb(s, blob));
+      auto json = glz::jsonb_to_json(blob);
+      expect(json.has_value());
+      expect(json.value() == "\"Hello world\"");
+   };
+
+   "TEXTRAW payload gets escape-converted to JSON"_test = [] {
+      const std::string s = "line1\nline2";
+      std::string blob;
+      expect(not glz::write_jsonb(s, blob));
+      // Sanity: this payload requires escaping so it's TEXTRAW.
+      expect((static_cast<uint8_t>(blob[0]) & 0x0Fu) == 10u);
+      auto json = glz::jsonb_to_json(blob);
+      expect(json.has_value());
+      expect(json.value() == "\"line1\\nline2\"");
    };
 };
 
@@ -286,6 +349,7 @@ suite container_tests = [] {
       expect(std::holds_alternative<std::string>(out));
       expect(std::get<std::string>(out) == "hello");
    };
+
 };
 
 suite error_tests = [] {

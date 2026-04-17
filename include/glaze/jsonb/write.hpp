@@ -174,7 +174,29 @@ namespace glz
       }
    };
 
-   // Text strings (UTF-8)
+   namespace jsonb_detail
+   {
+      // True if any byte in [data, data+size) is a control character (<0x20), an unescaped
+      // double quote, or an unescaped backslash — i.e. the payload could not stand as the
+      // body of a JSON string literal without modification.
+      GLZ_ALWAYS_INLINE bool string_needs_json_escape(const char* data, size_t size) noexcept
+      {
+         for (size_t i = 0; i < size; ++i) {
+            const auto c = static_cast<uint8_t>(data[i]);
+            if (c < 0x20 || c == '"' || c == '\\') {
+               return true;
+            }
+         }
+         return false;
+      }
+   }
+
+   // Text strings (UTF-8). Pre-scan to pick the tightest spec-conformant type:
+   //   * TEXT (7)    — payload is already a valid JSON string body, so downstream JSON
+   //                   emitters can just wrap it in quotes and memcpy.
+   //   * TEXTRAW (10) — payload contains bytes that would require JSON escaping.
+   // This costs one O(n) byte scan on write but spares every future JSON emission (SQLite's
+   // `json()` and Glaze's own converter included) from scanning the payload.
    template <str_t T>
    struct to<JSONB, T> final
    {
@@ -190,9 +212,10 @@ namespace glz
             }
          }();
 
-         // Emit as TEXTRAW: the bytes are raw UTF-8 as the C++ program holds them.
-         // A consumer rendering to JSON must escape them.
-         jsonb_detail::write_scalar(ctx, jsonb::type::textraw, str.data(), str.size(), b, ix);
+         const uint8_t tc = jsonb_detail::string_needs_json_escape(str.data(), str.size())
+                               ? jsonb::type::textraw
+                               : jsonb::type::text;
+         jsonb_detail::write_scalar(ctx, tc, str.data(), str.size(), b, ix);
       }
    };
 

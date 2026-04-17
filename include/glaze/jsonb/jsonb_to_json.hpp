@@ -183,8 +183,12 @@ namespace glz
             return;
          }
          case jsonb::type::text:
+            // Spec: TEXT payload is already a valid JSON string body (no control chars,
+            // no unescaped " or \), so wrap in quotes and memcpy — no scan needed.
+            emit_json_escaped_body(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
+            return;
          case jsonb::type::textraw:
-            // Raw bytes — run through the JSON string escape writer.
+            // Raw bytes that may require escaping — run through the JSON string writer.
             emit_raw_string_as_json<Opts>(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
             return;
          case jsonb::type::textj: {
