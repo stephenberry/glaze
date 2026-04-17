@@ -636,6 +636,60 @@ suite converter_tests = [] {
       // Expected: "a\uD83D\uDE00"
       expect(j.value() == std::string("\"") + payload + "\"");
    };
+
+   "jsonb_to_json TEXT5 with \\x produces strict JSON"_test = [] {
+      // TEXT5 payload "A\x20B" decodes to "A B" (space). Raw pass-through would emit
+      // "A\x20B" which is invalid JSON.
+      const std::string payload = "A\\x20B";
+      std::string buf;
+      buf.push_back(static_cast<char>((payload.size() << 4) | 9u)); // TEXT5
+      buf += payload;
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == R"("A B")");
+   };
+
+   "jsonb_to_json TEXT5 with \\' produces strict JSON"_test = [] {
+      // TEXT5 payload "it\\'s" decodes to "it's" — raw pass-through would emit \' which
+      // is invalid JSON.
+      const std::string payload = "it\\'s";
+      std::string buf;
+      buf.push_back(static_cast<char>((payload.size() << 4) | 9u));
+      buf += payload;
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == R"("it's")");
+   };
+
+   "jsonb_to_json TEXT5 with \\v produces strict JSON"_test = [] {
+      // TEXT5 payload "x\\vy" decodes to "x\vy" (vertical tab) — the JSON writer will
+      // escape control chars per RFC 8259.
+      const std::string payload = "x\\vy";
+      std::string buf;
+      buf.push_back(static_cast<char>((payload.size() << 4) | 9u));
+      buf += payload;
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      // The JSON writer escapes vertical tab as \u000B (or similar).
+      expect(j.value().find("\\v") == std::string::npos); // no JSON5 escape in output
+      expect(j.value().front() == '"' && j.value().back() == '"');
+   };
+
+   "jsonb_to_json TEXT5 with line continuation produces strict JSON"_test = [] {
+      // TEXT5 payload "ab\\\nc" — the \<LF> line continuation decodes to nothing, so
+      // the output is "abc".
+      std::string payload;
+      payload.append("ab");
+      payload.push_back('\\');
+      payload.push_back('\n');
+      payload.append("c");
+      std::string buf;
+      buf.push_back(static_cast<char>((payload.size() << 4) | 9u));
+      buf += payload;
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == R"("abc")");
+   };
 };
 
 suite large_container_tests = [] {

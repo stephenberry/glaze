@@ -7,4 +7,5 @@
 #include "glaze/jsonb/jsonb_to_json.hpp"
 #include "glaze/jsonb/read.hpp"
 #include "glaze/jsonb/skip.hpp"
+#include "glaze/jsonb/text_decode.hpp"
 #include "glaze/jsonb/write.hpp"

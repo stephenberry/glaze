@@ -12,6 +12,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/jsonb/header.hpp"
+#include "glaze/jsonb/text_decode.hpp"
 
 namespace glz
 {
@@ -177,16 +178,23 @@ namespace glz
             // Raw bytes — run through the JSON string escape writer.
             emit_raw_string_as_json<Opts>(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
             return;
-         case jsonb::type::textj:
-            // Already valid JSON string body — emit wrapped in quotes.
+         case jsonb::type::textj: {
+            // TEXTJ payload is already a valid JSON string body by spec. Emitting it
+            // verbatim wrapped in quotes is correct.
             emit_json_escaped_body(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
             return;
-         case jsonb::type::text5:
-            // JSON5 escapes are a superset. Best effort: emit as a JSON string body. Callers
-            // that know the payload is strictly JSON-compatible can rely on this; otherwise
-            // output may include JSON5 escapes that don't round-trip as strict JSON.
-            emit_json_escaped_body(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
+         }
+         case jsonb::type::text5: {
+            // TEXT5 payloads may contain JSON5-only escapes (\xNN, \', \v, \0, line
+            // continuations) that are not valid JSON. Decode to raw UTF-8 and re-emit via
+            // the JSON string writer so the output is always strict JSON.
+            std::string scratch;
+            jsonb_detail::decode_text(ctx, jsonb::type::text5, payload, payload + sz,
+                                      static_cast<size_t>(sz), scratch);
+            if (bool(ctx.error)) return;
+            emit_raw_string_as_json<Opts>(ctx, scratch.data(), scratch.size(), out, ix);
             return;
+         }
          case jsonb::type::array: {
             const uint8_t* arr_stop = payload + sz;
             const uint8_t* ait = payload;
