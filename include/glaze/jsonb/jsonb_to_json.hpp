@@ -93,29 +93,20 @@ namespace glz
          it += sz;
 
          switch (tc) {
+         // Spec: legacy implementations must interpret type 0/1/2 as null/true/false
+         // even when the payload size is non-zero (forward-compatibility for future spec
+         // extensions). Payload bytes are already skipped by `it += sz` above.
          case jsonb::type::null_:
-            if (sz != 0) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
             if (!ensure_space(ctx, out, ix + 4 + write_padding_bytes)) return;
             std::memcpy(&out[ix], "null", 4);
             ix += 4;
             return;
          case jsonb::type::true_:
-            if (sz != 0) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
             if (!ensure_space(ctx, out, ix + 4 + write_padding_bytes)) return;
             std::memcpy(&out[ix], "true", 4);
             ix += 4;
             return;
          case jsonb::type::false_:
-            if (sz != 0) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
             if (!ensure_space(ctx, out, ix + 5 + write_padding_bytes)) return;
             std::memcpy(&out[ix], "false", 5);
             ix += 5;

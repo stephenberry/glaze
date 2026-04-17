@@ -341,7 +341,10 @@ namespace glz
       }
    };
 
-   // Null
+   // Null. Per the SQLite JSONB spec: "Legacy implementations that see an element type
+   // of 0 with a non-zero payload size should continue to interpret that element as 'null'
+   // for compatibility." We tolerate the payload bytes (skip past them) rather than
+   // rejecting, so a future spec extension that uses the payload won't break us.
    template <always_null_t T>
    struct from<JSONB, T>
    {
@@ -351,9 +354,15 @@ namespace glz
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
-         if (tc != jsonb::type::null_ || sz != 0) [[unlikely]] {
+         if (tc != jsonb::type::null_) [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
          }
+         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         it += sz;
       }
    };
 
@@ -368,7 +377,9 @@ namespace glz
       }
    };
 
-   // Boolean
+   // Boolean. Per the SQLite JSONB spec: "Legacy implementations that see an element
+   // type of 1 [or 2] with a non-zero payload size should continue to interpret that
+   // element as 'true' [or 'false'] for compatibility." Tolerate the payload bytes.
    template <boolean_like T>
    struct from<JSONB, T>
    {
@@ -378,10 +389,6 @@ namespace glz
          uint8_t tc{};
          uint64_t sz{};
          if (!jsonb::read_header(ctx, it, end, tc, sz)) return;
-         if (sz != 0) [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
          if (tc == jsonb::type::true_) {
             value = true;
          }
@@ -390,7 +397,13 @@ namespace glz
          }
          else [[unlikely]] {
             ctx.error = error_code::syntax_error;
+            return;
          }
+         if (static_cast<uint64_t>(end - it) < sz) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         it += sz;
       }
    };
 
@@ -926,8 +939,13 @@ namespace glz
          uint8_t initial;
          std::memcpy(&initial, it, 1);
 
-         if (jsonb::get_type(initial) == jsonb::type::null_ && jsonb::get_size_nibble(initial) == 0) {
-            ++it;
+         // Accept any null element (size 0 or, per spec, non-zero payload that a legacy
+         // reader must still interpret as null). Delegate to the null reader so it handles
+         // the full header + optional payload skip.
+         if (jsonb::get_type(initial) == jsonb::type::null_) {
+            std::nullptr_t n;
+            from<JSONB, std::nullptr_t>::template op<Opts>(n, ctx, it, end);
+            if (bool(ctx.error)) return;
             if constexpr (requires { value.reset(); }) {
                value.reset();
             }
@@ -964,8 +982,10 @@ namespace glz
          }
          uint8_t initial;
          std::memcpy(&initial, it, 1);
-         if (jsonb::get_type(initial) == jsonb::type::null_ && jsonb::get_size_nibble(initial) == 0) {
-            ++it;
+         if (jsonb::get_type(initial) == jsonb::type::null_) {
+            std::nullptr_t n;
+            from<JSONB, std::nullptr_t>::template op<Opts>(n, ctx, it, end);
+            if (bool(ctx.error)) return;
             if constexpr (requires { value.reset(); }) {
                value.reset();
             }

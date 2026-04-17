@@ -58,6 +58,10 @@ JSONB encodes every value with a 1–9 byte header (type nibble + payload-size n
 
 Codes 13–15 are reserved by the spec; Glaze returns `error_code::syntax_error` on read if any appear.
 
+### Forward-compatibility: NULL / TRUE / FALSE with non-zero payload
+
+Per the SQLite JSONB spec, legacy readers **must** interpret element types 0 (NULL), 1 (TRUE), and 2 (FALSE) as their nominal value even when the payload size is non-zero, so that future spec extensions that store information in those payload bytes don't break older readers. Glaze skips any payload bytes and keeps the nominal value — it does not reject such elements as malformed.
+
 ## Container Encoding Strategy
 
 Arrays and objects store a **payload size in bytes**, not a child count. Since that size isn't known until after the children are written, Glaze's writer reserves a 9-byte header slot (the `u64_follows` form), writes the children, then patches the header with the actual size.

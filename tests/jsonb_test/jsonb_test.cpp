@@ -472,6 +472,67 @@ suite spec_tests = [] {
       expect(out == std::numeric_limits<int32_t>::min());
    };
 
+   "NULL with non-zero payload tolerated (forward compatibility)"_test = [] {
+      // Spec: "Legacy implementations that see an element type of 0 with a non-zero
+      // payload size should continue to interpret that element as 'null' for
+      // compatibility." Build a NULL with a 3-byte payload of arbitrary bytes.
+      std::string buf;
+      buf.push_back(static_cast<char>((3u << 4) | 0u)); // NULL, size 3
+      buf += "abc";
+      std::nullptr_t out;
+      expect(not glz::read_jsonb(out, buf));
+   };
+
+   "TRUE with non-zero payload tolerated"_test = [] {
+      std::string buf;
+      buf.push_back(static_cast<char>((2u << 4) | 1u)); // TRUE, size 2
+      buf += "XY";
+      bool out = false;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == true);
+   };
+
+   "FALSE with non-zero payload tolerated"_test = [] {
+      std::string buf;
+      buf.push_back(static_cast<char>((2u << 4) | 2u)); // FALSE, size 2
+      buf += "ZZ";
+      bool out = true;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == false);
+   };
+
+   "optional<int> with non-zero-payload null tolerated"_test = [] {
+      std::string buf;
+      buf.push_back(static_cast<char>((2u << 4) | 0u)); // NULL, size 2
+      buf += "??";
+      std::optional<int> out = 42;
+      expect(not glz::read_jsonb(out, buf));
+      expect(!out.has_value());
+   };
+
+   "jsonb_to_json renders NULL/TRUE/FALSE with non-zero payload"_test = [] {
+      std::string buf;
+      buf.push_back(static_cast<char>((3u << 4) | 0u));
+      buf += "xxx";
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == "null");
+
+      buf.clear();
+      buf.push_back(static_cast<char>((1u << 4) | 1u));
+      buf += "t";
+      j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == "true");
+
+      buf.clear();
+      buf.push_back(static_cast<char>((2u << 4) | 2u));
+      buf += "f!";
+      j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == "false");
+   };
+
    "reserved type codes 13/14/15 rejected"_test = [] {
       for (uint8_t code : {uint8_t(13), uint8_t(14), uint8_t(15)}) {
          std::string buf;
