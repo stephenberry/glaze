@@ -949,18 +949,37 @@ suite robustness_tests = [] {
    };
 
    "extra bytes after value rejected at top level"_test = [] {
+      // Per the SQLite JSONB spec: "The element must exactly fill the BLOB." Trailing
+      // bytes after a valid top-level element must be rejected.
       std::string buf;
       expect(not glz::write_jsonb(42, buf));
+      const auto original_size = buf.size();
       buf.append(3, '\0');
       int out = 0;
       auto ec = glz::read_jsonb(out, buf);
-      // The reader should detect this. Even if it doesn't error, the decoded value should
-      // match — but we prefer strict validation per the spec.
-      // Note: current read<> driver behavior varies; accept either outcome but require value
-      // to be 42 if no error.
-      if (!ec) {
-         expect(out == 42);
-      }
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
+      // ec.count should report how many bytes of the input were successfully parsed
+      // (the valid element), so diagnostic tools can point at the trailing garbage.
+      expect(ec.count == original_size);
+   };
+
+   "exact-fill check: single-byte valid blob accepted"_test = [] {
+      // Sanity: a minimal 1-byte blob (NULL = 0x00) where count == buffer.size() succeeds.
+      std::string buf{static_cast<char>(0x00)};
+      std::nullptr_t out;
+      expect(not glz::read_jsonb(out, buf));
+   };
+
+   "exact-fill check: trailing byte after container rejected"_test = [] {
+      std::vector<int> v{1, 2, 3};
+      std::string buf;
+      expect(not glz::write_jsonb(v, buf));
+      buf.push_back('X');
+      std::vector<int> out;
+      auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::syntax_error);
    };
 
    "container with mismatched payload size"_test = [] {

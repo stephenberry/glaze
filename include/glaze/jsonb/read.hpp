@@ -1270,20 +1270,39 @@ namespace glz
    };
 
    // ===== High-level read APIs =====
+   //
+   // Per the SQLite JSONB spec: "A valid JSONB BLOB consists of a single JSON element.
+   // The element must exactly fill the BLOB." Glaze's core parse only advances across
+   // one element; trailing bytes after a valid top-level element would otherwise be
+   // silently ignored. Enforce the spec at the public boundary by comparing bytes
+   // consumed (ec.count) against the input size.
+   namespace jsonb_detail
+   {
+      template <class Buffer>
+      GLZ_ALWAYS_INLINE error_ctx enforce_exact_fill(const Buffer& buffer, error_ctx ec) noexcept
+      {
+         if (!ec && ec.count != buffer.size()) [[unlikely]] {
+            return {ec.count, error_code::syntax_error};
+         }
+         return ec;
+      }
+   }
 
    template <read_supported<JSONB> T, class Buffer>
    [[nodiscard]] inline error_ctx read_jsonb(T&& value, Buffer&& buffer)
    {
-      return read<opts{.format = JSONB}>(value, std::forward<Buffer>(buffer));
+      auto ec = read<opts{.format = JSONB}>(value, buffer);
+      return jsonb_detail::enforce_exact_fill(buffer, ec);
    }
 
    template <read_supported<JSONB> T, class Buffer>
    [[nodiscard]] inline expected<T, error_ctx> read_jsonb(Buffer&& buffer)
    {
       T value{};
-      const auto pe = read<opts{.format = JSONB}>(value, std::forward<Buffer>(buffer));
-      if (pe) [[unlikely]] {
-         return unexpected(pe);
+      auto ec = read<opts{.format = JSONB}>(value, buffer);
+      ec = jsonb_detail::enforce_exact_fill(buffer, ec);
+      if (ec) [[unlikely]] {
+         return unexpected(ec);
       }
       return value;
    }
@@ -1297,6 +1316,7 @@ namespace glz
       if (bool(file_error)) [[unlikely]] {
          return error_ctx{0, file_error};
       }
-      return read<set_jsonb<Opts>()>(value, buffer, ctx);
+      auto ec = read<set_jsonb<Opts>()>(value, buffer, ctx);
+      return jsonb_detail::enforce_exact_fill(buffer, ec);
    }
 }
