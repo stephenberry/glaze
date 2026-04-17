@@ -533,7 +533,7 @@ suite spec_tests = [] {
       buf += payload;
       int32_t out = 0;
       expect(not glz::read_jsonb(out, buf));
-      expect(out == std::numeric_limits<int32_t>::min());
+      expect(out == (std::numeric_limits<int32_t>::min)());
    };
 
    "INT decimal overflow into narrower signed target rejected"_test = [] {
@@ -1214,8 +1214,8 @@ suite generic_tests = [] {
 
 suite integer_boundary_tests = [] {
    "int8_t extremes"_test = [] {
-      for (int8_t v : {std::numeric_limits<int8_t>::min(), int8_t{-1}, int8_t{0}, int8_t{1},
-                      std::numeric_limits<int8_t>::max()}) {
+      for (int8_t v : {(std::numeric_limits<int8_t>::min)(), int8_t{-1}, int8_t{0}, int8_t{1},
+                      (std::numeric_limits<int8_t>::max)()}) {
          std::string buf;
          expect(not glz::write_jsonb(v, buf));
          int8_t out = 0;
@@ -1226,7 +1226,7 @@ suite integer_boundary_tests = [] {
 
    "int32_t extremes"_test = [] {
       for (int32_t v :
-           {std::numeric_limits<int32_t>::min(), int32_t{-1}, int32_t{0}, std::numeric_limits<int32_t>::max()}) {
+           {(std::numeric_limits<int32_t>::min)(), int32_t{-1}, int32_t{0}, (std::numeric_limits<int32_t>::max)()}) {
          std::string buf;
          expect(not glz::write_jsonb(v, buf));
          int32_t out = 0;
@@ -1236,8 +1236,8 @@ suite integer_boundary_tests = [] {
    };
 
    "int64_t extremes"_test = [] {
-      for (int64_t v : {std::numeric_limits<int64_t>::min(), int64_t{-1}, int64_t{0}, int64_t{1},
-                       std::numeric_limits<int64_t>::max()}) {
+      for (int64_t v : {(std::numeric_limits<int64_t>::min)(), int64_t{-1}, int64_t{0}, int64_t{1},
+                       (std::numeric_limits<int64_t>::max)()}) {
          std::string buf;
          expect(not glz::write_jsonb(v, buf));
          int64_t out = 0;
@@ -1248,7 +1248,7 @@ suite integer_boundary_tests = [] {
 
    "uint64_t extremes"_test = [] {
       for (uint64_t v :
-           {uint64_t{0}, uint64_t{1}, uint64_t{255}, uint64_t{65535}, std::numeric_limits<uint64_t>::max()}) {
+           {uint64_t{0}, uint64_t{1}, uint64_t{255}, uint64_t{65535}, (std::numeric_limits<uint64_t>::max)()}) {
          std::string buf;
          expect(not glz::write_jsonb(v, buf));
          uint64_t out = 0;
@@ -1282,7 +1282,7 @@ suite float_edge_tests = [] {
    };
 
    "largest finite"_test = [] {
-      double v = std::numeric_limits<double>::max();
+      double v = (std::numeric_limits<double>::max)();
       std::string buf;
       expect(not glz::write_jsonb(v, buf));
       double out = 0;
