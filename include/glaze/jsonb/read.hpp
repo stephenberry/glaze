@@ -91,6 +91,13 @@ namespace glz
                }
                if (negative) {
                   if constexpr (std::is_signed_v<T>) {
+                     // |min()| == max() + 1 for two's complement; allow that edge case.
+                     constexpr auto max_neg_mag =
+                        static_cast<unsigned long long>((std::numeric_limits<T>::max)()) + 1ull;
+                     if (mag > max_neg_mag) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
                      // Negate via unsigned arithmetic to avoid UB at INT_MIN.
                      out = static_cast<T>(static_cast<unsigned long long>(0) - mag);
                   }
@@ -101,6 +108,10 @@ namespace glz
                   }
                }
                else {
+                  if (mag > static_cast<unsigned long long>((std::numeric_limits<T>::max)())) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
                   out = static_cast<T>(mag);
                }
                return;
@@ -119,12 +130,20 @@ namespace glz
                ctx.error = error_code::parse_number_failure;
                return;
             }
+            if (tmp < (std::numeric_limits<T>::min)() || tmp > (std::numeric_limits<T>::max)()) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
             out = static_cast<T>(tmp);
          }
          else {
             unsigned long long tmp = 0;
             auto [ptr, ec] = std::from_chars(start, stop, tmp, 10);
             if (ec != std::errc{} || ptr != stop) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
+            if (tmp > (std::numeric_limits<T>::max)()) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
                return;
             }

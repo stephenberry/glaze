@@ -472,6 +472,112 @@ suite spec_tests = [] {
       expect(out == std::numeric_limits<int32_t>::min());
    };
 
+   "INT decimal overflow into narrower signed target rejected"_test = [] {
+      // "1000" fits a long long but not int8_t — must be parse_number_failure,
+      // not a silent wrap to -24.
+      std::string buf;
+      const std::string payload = "1000";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 3u)); // INT, size 4
+      buf += payload;
+      int8_t out = 0;
+      const auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::parse_number_failure);
+   };
+
+   "INT decimal overflow into narrower unsigned target rejected"_test = [] {
+      // "300" > uint8_t max (255) — must reject rather than wrap to 44.
+      std::string buf;
+      const std::string payload = "300";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 3u)); // INT, size 3
+      buf += payload;
+      uint8_t out = 0;
+      const auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::parse_number_failure);
+   };
+
+   "INT negative into unsigned target rejected"_test = [] {
+      std::string buf;
+      const std::string payload = "-1";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 3u)); // INT, size 2
+      buf += payload;
+      uint32_t out = 0;
+      const auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::parse_number_failure);
+   };
+
+   "INT signed underflow into narrower target rejected"_test = [] {
+      // "-200" fits long long but < int8_t min (-128).
+      std::string buf;
+      const std::string payload = "-200";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 3u)); // INT, size 4
+      buf += payload;
+      int8_t out = 0;
+      const auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::parse_number_failure);
+   };
+
+   "INT decimal boundary fits narrower target"_test = [] {
+      // int8_t max (127) must still read cleanly.
+      std::string buf;
+      const std::string payload = "127";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 3u)); // INT, size 3
+      buf += payload;
+      int8_t out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == 127);
+   };
+
+   "INT5 hex overflow into narrower signed target rejected"_test = [] {
+      // 0x1FF = 511; does not fit int8_t.
+      std::string buf;
+      const std::string payload = "0x1FF";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 4u)); // INT5, size 5
+      buf += payload;
+      int8_t out = 0;
+      const auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::parse_number_failure);
+   };
+
+   "INT5 hex overflow into narrower unsigned target rejected"_test = [] {
+      // 0x1FF = 511; does not fit uint8_t.
+      std::string buf;
+      const std::string payload = "0x1FF";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 4u)); // INT5, size 5
+      buf += payload;
+      uint8_t out = 0;
+      const auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::parse_number_failure);
+   };
+
+   "INT5 negative hex past int32 min rejected"_test = [] {
+      // -0x80000001 is one less than int32_t min.
+      std::string buf;
+      const std::string payload = "-0x80000001";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 4u)); // INT5, size 11
+      buf += payload;
+      int32_t out = 0;
+      const auto ec = glz::read_jsonb(out, buf);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::parse_number_failure);
+   };
+
+   "INT5 hex boundary fits signed target"_test = [] {
+      // 0x7F is exactly int8_t max.
+      std::string buf;
+      const std::string payload = "0x7F";
+      buf.push_back(static_cast<char>((payload.size() << 4) | 4u)); // INT5, size 4
+      buf += payload;
+      int8_t out = 0;
+      expect(not glz::read_jsonb(out, buf));
+      expect(out == 127);
+   };
+
    "NULL with non-zero payload tolerated (forward compatibility)"_test = [] {
       // Spec: "Legacy implementations that see an element type of 0 with a non-zero
       // payload size should continue to interpret that element as 'null' for
