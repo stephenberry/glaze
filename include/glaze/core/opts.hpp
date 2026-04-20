@@ -20,6 +20,7 @@ namespace glz
    inline constexpr uint32_t INVALID = 0;
    inline constexpr uint32_t BEVE = 1;
    inline constexpr uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
+   inline constexpr uint32_t JSONB = 3; // SQLite JSONB binary JSON format - https://sqlite.org/jsonb.html
    inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t MSGPACK = 30;
@@ -1423,6 +1424,14 @@ namespace glz
    {
       auto ret = Opts;
       ret.format = CBOR;
+      return ret;
+   }
+
+   template <auto Opts>
+   constexpr auto set_jsonb()
+   {
+      auto ret = Opts;
+      ret.format = JSONB;
       return ret;
    }
 
