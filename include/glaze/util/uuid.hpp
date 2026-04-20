@@ -107,12 +107,24 @@ struct std::hash<glz::uuid>
 {
    [[nodiscard]] size_t operator()(const glz::uuid& u) const noexcept
    {
-      // FNV-1a over the 16 bytes. Deterministic and allocation-free.
-      size_t h = 14695981039346656037ULL;
-      for (auto b : u.bytes) {
-         h ^= b;
-         h *= 1099511628211ULL;
+      // FNV-1a over the 16 bytes. Deterministic and allocation-free. The
+      // offset basis and prime are width-specific so this compiles cleanly on
+      // 32-bit platforms where size_t is 32 bits.
+      if constexpr (sizeof(size_t) >= 8) {
+         uint64_t h = 14695981039346656037ULL;
+         for (auto b : u.bytes) {
+            h ^= b;
+            h *= 1099511628211ULL;
+         }
+         return static_cast<size_t>(h);
       }
-      return h;
+      else {
+         uint32_t h = 2166136261u;
+         for (auto b : u.bytes) {
+            h ^= b;
+            h *= 16777619u;
+         }
+         return static_cast<size_t>(h);
+      }
    }
 };
