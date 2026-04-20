@@ -122,6 +122,20 @@ namespace glz
       }
    }
 
+   // Named helper instead of IIFE so MSVC's lambda name mangling doesn't alias it
+   // against unrelated IIFEs at deeper template instantiation depths.
+   template <class Tuple, template <class> class Predicate, size_t... Is>
+   consteval auto filter_indices_expand(std::index_sequence<Is...>)
+   {
+      constexpr bool matches[] = {Predicate<glz::tuple_element_t<Is, Tuple>>::value...};
+      constexpr size_t count = (matches[Is] + ...);
+
+      std::array<size_t, count> indices{};
+      size_t index = 0;
+      ((void)((matches[Is] ? (indices[index++] = Is, true) : false)), ...);
+      return indices;
+   }
+
    // Get indices of elements satisfying a predicate
    template <class Tuple, template <class> class Predicate>
    consteval auto filter_indices()
@@ -131,15 +145,7 @@ namespace glz
          return std::array<size_t, 0>{};
       }
       else {
-         return []<size_t... Is>(std::index_sequence<Is...>) constexpr {
-            constexpr bool matches[] = {Predicate<glz::tuple_element_t<Is, Tuple>>::value...};
-            constexpr size_t count = (matches[Is] + ...);
-
-            std::array<size_t, count> indices{};
-            size_t index = 0;
-            ((void)((matches[Is] ? (indices[index++] = Is, true) : false)), ...);
-            return indices;
-         }(std::make_index_sequence<N>{});
+         return filter_indices_expand<Tuple, Predicate>(std::make_index_sequence<N>{});
       }
    }
 
