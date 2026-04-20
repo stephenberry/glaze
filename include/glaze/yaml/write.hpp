@@ -228,7 +228,7 @@ namespace glz
       // Write a literal block scalar (|)
       template <class B>
       inline void write_literal_block(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level, uint8_t indent_width, char chomping)
+                                      int32_t indent_level, uint8_t indent_width, char chomping)
       {
          if (!ensure_space(ctx, b, ix + str.size() + 64 + write_padding_bytes)) [[unlikely]] {
             return;
@@ -281,7 +281,7 @@ namespace glz
 #endif
       template <auto Opts, class B>
       inline void write_yaml_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                               int32_t indent_level = 0)
+                                    int32_t indent_level = 0)
       {
          constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
@@ -410,12 +410,11 @@ namespace glz
    {
       // Forward declarations for helpers used in block sequences
       template <auto Opts, class T, class B>
-      inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                        int32_t indent_level);
+      inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level);
 
       template <auto Opts, class T, class B>
-      inline void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level, bool skip_first_indent = false);
+      inline void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
+                                      bool skip_first_indent = false);
 
       // Helper to check if a type is "simple" (writes on same line)
       template <class T>
@@ -465,8 +464,7 @@ namespace glz
 
       // Write a variant's held value in block context, ensuring strings get correct indent_level.
       template <auto Opts, class T, class B>
-      inline void write_variant_value(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level)
+      inline void write_variant_value(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
       {
          using V = std::remove_cvref_t<T>;
          if constexpr (is_variant<V>) {
@@ -495,8 +493,7 @@ namespace glz
 
       // Write block-style sequence
       template <auto Opts, class T, class B>
-      inline void write_block_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                  int32_t indent_level)
+      inline void write_block_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
       {
          constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
@@ -914,13 +911,12 @@ namespace glz
    {
       // Forward declaration for nested object helper
       template <auto Opts, class T, class B>
-      inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                        int32_t indent_level);
+      inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level);
 
       // Write block-style mapping
       template <auto Opts, class T, class B>
-      inline void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level, bool skip_first_indent)
+      inline void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
+                                      bool skip_first_indent)
       {
          using V = std::remove_cvref_t<T>;
          constexpr auto N = reflect<V>::size;
@@ -1108,8 +1104,7 @@ namespace glz
 
       // Helper for nested objects
       template <auto Opts, class T, class B>
-      inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                        int32_t indent_level)
+      inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
       {
          using V = std::remove_cvref_t<T>;
 

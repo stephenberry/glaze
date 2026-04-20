@@ -655,7 +655,7 @@ namespace glz::yaml
    // Returns false and sets ctx.error on indentation violations.
    template <class Ctx>
    inline bool skip_folded_line_indent(const char*& src, const char* src_end, Ctx& ctx,
-                                                  int* indent_out = nullptr) noexcept
+                                       int* indent_out = nullptr) noexcept
    {
       bool saw_space = false;
       int indent_count = 0;
@@ -1112,10 +1112,7 @@ namespace glz::yaml
    }
 
    // Check if character is a YAML indicator that needs quoting
-   inline constexpr bool is_yaml_indicator(char c) noexcept
-   {
-      return yaml_indicator_table[static_cast<uint8_t>(c)];
-   }
+   inline constexpr bool is_yaml_indicator(char c) noexcept { return yaml_indicator_table[static_cast<uint8_t>(c)]; }
 
    // Check if string needs quoting when written
    inline bool needs_quoting(std::string_view s) noexcept

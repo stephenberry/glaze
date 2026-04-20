@@ -283,8 +283,7 @@ namespace glz
       // Returns true when caller should stop (alias consumed, tolerated empty anchor, or syntax/error).
       template <auto Opts, node_property_policy Policy = node_property_policy{}, class T, class Ctx, class It,
                 class End>
-      inline bool parse_node_properties(T&& value, Ctx& ctx, It& it, End end,
-                                                   node_property_state& state) noexcept
+      inline bool parse_node_properties(T&& value, Ctx& ctx, It& it, End end, node_property_state& state) noexcept
       {
          state.has_anchor = false;
          state.anchor_name.clear();
@@ -341,7 +340,7 @@ namespace glz
       template <auto Opts, node_property_policy PropertyPolicy = node_property_policy{}, bool AllowEmptyInput = false,
                 class T, class Ctx, class It, class End, class TagValidator>
       inline bool parse_node_preamble(T&& value, Ctx& ctx, It& it, End end, node_preamble_state& preamble,
-                                                 TagValidator&& tag_validator) noexcept
+                                      TagValidator&& tag_validator) noexcept
       {
          skip_inline_ws(it, end);
 
@@ -970,8 +969,7 @@ namespace glz
       // - A single newline between lines becomes a single space
       // - Blank lines are preserved as literal newlines
       template <class Ctx, class It, class End>
-      inline void parse_plain_scalar_multiline(std::string& value, Ctx& ctx, It& it, End end,
-                                                          int32_t base_indent)
+      inline void parse_plain_scalar_multiline(std::string& value, Ctx& ctx, It& it, End end, int32_t base_indent)
       {
          value.clear();
 
