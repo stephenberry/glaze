@@ -7228,6 +7228,110 @@ struct glz::meta<merge_meta_test::LocatedBear>
    static constexpr auto value = glz::merge{&T::record, &T::location};
 };
 
+namespace merge_meta_test
+{
+   // Plain aggregates with no glz::meta — exercises merge_accessor's reflectable
+   // branch unambiguously (Species/Appearance above are also reflectable, but mixing
+   // with Dimensions in MeasuredBear obscures which branch each sub-type takes).
+   struct PlainPoint
+   {
+      double x{};
+      double y{};
+   };
+
+   struct PlainColor
+   {
+      uint8_t r{};
+      uint8_t g{};
+      uint8_t b{};
+   };
+
+   struct PlainShape
+   {
+      PlainPoint origin{};
+      PlainColor color{};
+   };
+
+   // Single-element merge — the simplest realistic case.
+   struct SingleWrap
+   {
+      Species inner{};
+   };
+
+   // Nullable fields inside a merged sub-type — drives the skip_null_members path.
+   struct CoreFields
+   {
+      std::string id{};
+   };
+
+   struct OptionalFields
+   {
+      std::optional<int> count{};
+      std::optional<std::string> tag{};
+   };
+
+   struct PartialBear
+   {
+      CoreFields core{};
+      OptionalFields opts{};
+   };
+
+   // custom_t inside a merged sub-type — verifies field-level custom handlers
+   // still resolve correctly when reached through a merge_accessor.
+   struct CounterPart
+   {
+      int value{};
+      int get_count() const { return value; }
+      void set_count(int v) { value = v; }
+   };
+
+   struct LabelPart
+   {
+      std::string label{};
+   };
+
+   struct CounterLabel
+   {
+      CounterPart counter{};
+      LabelPart label{};
+   };
+}
+
+template <>
+struct glz::meta<merge_meta_test::PlainShape>
+{
+   using T = merge_meta_test::PlainShape;
+   static constexpr auto value = glz::merge{&T::origin, &T::color};
+};
+
+template <>
+struct glz::meta<merge_meta_test::SingleWrap>
+{
+   using T = merge_meta_test::SingleWrap;
+   static constexpr auto value = glz::merge{&T::inner};
+};
+
+template <>
+struct glz::meta<merge_meta_test::PartialBear>
+{
+   using T = merge_meta_test::PartialBear;
+   static constexpr auto value = glz::merge{&T::core, &T::opts};
+};
+
+template <>
+struct glz::meta<merge_meta_test::CounterPart>
+{
+   using T = merge_meta_test::CounterPart;
+   static constexpr auto value = glz::object("count", glz::custom<&T::set_count, &T::get_count>);
+};
+
+template <>
+struct glz::meta<merge_meta_test::CounterLabel>
+{
+   using T = merge_meta_test::CounterLabel;
+   static constexpr auto value = glz::merge{&T::counter, &T::label};
+};
+
 suite merge_meta_tests = [] {
    using namespace merge_meta_test;
 
@@ -7396,6 +7500,160 @@ suite merge_meta_tests = [] {
       expect(schema.find("\"legs\"") != std::string::npos) << schema;
       expect(schema.find("\"weight\"") != std::string::npos) << schema;
       expect(schema.find("\"color\"") != std::string::npos) << schema;
+   };
+
+   "merge_meta_all_reflectable_sub_types"_test = [] {
+      // Both PlainPoint and PlainColor are aggregates without glz::meta, so every
+      // sub-type takes the reflectable branch of merge_accessor::operator().
+      PlainShape s{};
+      s.origin.x = 1.5;
+      s.origin.y = 2.5;
+      s.color.r = 200;
+      s.color.g = 100;
+      s.color.b = 50;
+
+      std::string out{};
+      expect(not glz::write_json(s, out));
+      expect(out == R"({"x":1.5,"y":2.5,"r":200,"g":100,"b":50})") << out;
+
+      PlainShape restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.origin.x == 1.5);
+      expect(restored.origin.y == 2.5);
+      expect(restored.color.r == 200);
+      expect(restored.color.g == 100);
+      expect(restored.color.b == 50);
+   };
+
+   "merge_meta_single_element"_test = [] {
+      SingleWrap w{};
+      w.inner.name = "Cat";
+      w.inner.legs = 4;
+
+      std::string out{};
+      expect(not glz::write_json(w, out));
+      expect(out == R"({"name":"Cat","legs":4})") << out;
+
+      SingleWrap restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.inner.name == "Cat");
+      expect(restored.inner.legs == 4);
+   };
+
+   "merge_meta_skip_null_members_all_null"_test = [] {
+      PartialBear b{};
+      b.core.id = "id-1";
+      // opts.count and opts.tag are nullopt
+
+      std::string skipped{};
+      expect(not glz::write<glz::opts{.skip_null_members = true}>(b, skipped));
+      expect(skipped == R"({"id":"id-1"})") << skipped;
+
+      std::string kept{};
+      expect(not glz::write<glz::opts{.skip_null_members = false}>(b, kept));
+      expect(kept == R"({"id":"id-1","count":null,"tag":null})") << kept;
+   };
+
+   "merge_meta_skip_null_members_partial"_test = [] {
+      PartialBear b{};
+      b.core.id = "id-2";
+      b.opts.count = 7;
+      // opts.tag is nullopt
+
+      std::string out{};
+      expect(not glz::write<glz::opts{.skip_null_members = true}>(b, out));
+      expect(out == R"({"id":"id-2","count":7})") << out;
+
+      // Roundtrip preserves the present field.
+      PartialBear restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.core.id == "id-2");
+      expect(restored.opts.count.has_value());
+      expect(restored.opts.count.value() == 7);
+      expect(not restored.opts.tag.has_value());
+   };
+
+   "merge_meta_prettify_roundtrip"_test = [] {
+      BearRecord b{};
+      b.species.name = "Sloth";
+      b.species.legs = 4;
+      b.appearance.weight = 70.0;
+      b.appearance.color = "tan";
+
+      std::string out{};
+      expect(not glz::write<glz::opts{.prettify = true}>(b, out));
+      // Prettify must produce a multi-line, indented object.
+      expect(out.find('\n') != std::string::npos) << out;
+      expect(out.find("   \"name\"") != std::string::npos) << out;
+      expect(out.find("   \"color\"") != std::string::npos) << out;
+
+      // Roundtrip survives prettified input.
+      BearRecord restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.species.name == "Sloth");
+      expect(restored.appearance.color == "tan");
+   };
+
+   "merge_meta_error_on_missing_keys"_test = [] {
+      BearRecord b{};
+      // weight + color missing — must error when error_on_missing_keys is set.
+      auto ec = glz::read<glz::opts{.error_on_missing_keys = true}>(
+         b, R"({"name":"Polar","legs":4})");
+      expect(ec != glz::error_code::none);
+
+      // Complete object — must succeed.
+      BearRecord b2{};
+      auto ec2 = glz::read<glz::opts{.error_on_missing_keys = true}>(
+         b2, R"({"name":"Polar","legs":4,"weight":450,"color":"white"})");
+      expect(ec2 == glz::error_code::none) << glz::format_error(ec2);
+      expect(b2.species.name == "Polar");
+      expect(b2.appearance.weight == 450.0);
+   };
+
+   "merge_meta_custom_handler_in_subtype"_test = [] {
+      // CounterPart's "count" key is bound via glz::custom to set_count/get_count.
+      // Verifies that field-level custom handlers in a merged sub-type still work.
+      CounterLabel cl{};
+      cl.counter.value = 42;
+      cl.label.label = "answer";
+
+      std::string out{};
+      expect(not glz::write_json(cl, out));
+      expect(out == R"({"count":42,"label":"answer"})") << out;
+
+      CounterLabel restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.counter.value == 42);
+      expect(restored.label.label == "answer");
+   };
+
+   "merge_meta_in_vector"_test = [] {
+      // Merge type as the value type of a container — exercises the standard
+      // array-of-objects path with a merge type.
+      std::vector<BearRecord> bears{};
+      BearRecord a{};
+      a.species.name = "Brown";
+      a.species.legs = 4;
+      a.appearance.weight = 300.0;
+      a.appearance.color = "brown";
+      BearRecord b{};
+      b.species.name = "Black";
+      b.species.legs = 4;
+      b.appearance.weight = 200.0;
+      b.appearance.color = "black";
+      bears.push_back(a);
+      bears.push_back(b);
+
+      std::string out{};
+      expect(not glz::write_json(bears, out));
+      expect(out == R"([{"name":"Brown","legs":4,"weight":300,"color":"brown"},)"
+                    R"({"name":"Black","legs":4,"weight":200,"color":"black"}])") << out;
+
+      std::vector<BearRecord> restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.size() == 2);
+      expect(restored[0].species.name == "Brown");
+      expect(restored[1].appearance.color == "black");
    };
 
 };
