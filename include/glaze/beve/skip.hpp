@@ -239,10 +239,65 @@ namespace glz
    }
 
    template <auto Opts>
-   GLZ_ALWAYS_INLINE void skip_additional_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE void skip_beve_extensions(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      const auto ext_tag = uint8_t(*it);
+      const uint8_t subtype = (ext_tag >> 3) & 0b11;
       ++it;
-      skip_value<BEVE>::op<Opts>(ctx, it, end);
+
+      switch (subtype) {
+      case 0: // delimiter: no payload
+         return;
+      case 1: { // variant: [compressed_int index] [value]
+         skip_compressed_int(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         skip_value<BEVE>::op<Opts>(ctx, it, end);
+         break;
+      }
+      case 2: { // matrix: [matrix_header] [extents (typed array)] [value (typed array)]
+         ++it; // skip matrix header
+         skip_value<BEVE>::op<Opts>(ctx, it, end); // skip extents
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         skip_value<BEVE>::op<Opts>(ctx, it, end); // skip value
+         break;
+      }
+      case 3: { // complex: [complex_header] [data...]
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         const auto complex_header = uint8_t(*it);
+         ++it;
+         const uint8_t elem_byte_count = byte_count_lookup[complex_header >> 5];
+         const bool is_array = (complex_header & 1) != 0;
+         if (is_array) {
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            const uint64_t total = uint64_t(elem_byte_count) * 2 * n;
+            if (uint64_t(end - it) < total) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            it += total;
+         }
+         else {
+            const uint64_t total = uint64_t(elem_byte_count) * 2;
+            if (uint64_t(end - it) < total) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            it += total;
+         }
+         break;
+      }
+      default:
+         ctx.error = error_code::syntax_error;
+      }
    }
 
    template <auto Opts>
@@ -279,7 +334,7 @@ namespace glz
          break;
       }
       case tag::extensions: {
-         skip_additional_beve<Opts>(ctx, it, end);
+         skip_beve_extensions<Opts>(ctx, it, end);
          break;
       }
       default:

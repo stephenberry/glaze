@@ -297,6 +297,14 @@ namespace glz
                skip_value<JSON>::op<Opts>(ctx, it, end);
             }
          }
+         else if constexpr (is_function_ptr_or_ref<V>) {
+            // Function pointers cannot be deserialized from JSON.
+            // When write_function_pointers is enabled the writer emits a type-name string,
+            // but there is nothing meaningful to reconstruct on read — just skip the value.
+            // When write_function_pointers is off the key is never written, so this branch
+            // is unreachable in that case.
+            skip_value<JSON>::op<Opts>(ctx, it, end);
+         }
          else {
             if constexpr (glaze_object_t<T>) {
                from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
@@ -3729,8 +3737,32 @@ namespace glz
                      return;
                   }
                   auto start = it;
+                  bool first_key = true;
+                  // Parse bifurcation for tagged variants:
+                  //
+                  // Without this optimization, tagged variant parsing always uses two passes:
+                  //   1. Scan all keys to find the tag (e.g. "type"), skipping values
+                  //   2. Reset `it = start` and re-parse the entire object into the resolved type
+                  //
+                  // When the tag is the first key, the second pass redundantly re-reads every
+                  // field that follows it. This lambda avoids that: if the tag was the first key,
+                  // it advances past the trailing comma so the object parser picks up at the
+                  // second field. If the tag was found later, it falls back to the full re-parse.
+                  //
+                  // One exception: if the tag name is also a field on the resolved struct
+                  // (contains_tag), we must re-parse regardless so the value is stored in
+                  // the struct field. This override is applied inside each std::visit lambda.
+                  auto position_after_tag = [&] {
+                     if (first_key) {
+                        if (*it == ',') ++it; // skip comma; handles tag-only objects where *it == '}'
+                     }
+                     else {
+                        it = start; // tag was not the first key, re-parse from the beginning
+                     }
+                  };
                   while (*it != '}') {
                      if (it != start) {
+                        first_key = false;
                         if (match_invalid_end<',', Opts>(ctx, it, end)) {
                            return;
                         }
@@ -3801,7 +3833,7 @@ namespace glz
                                     return;
                                  }
 
-                                 it = start; // we restart our object parsing now that we know the target type
+                                 position_after_tag();
                                  tag_specified_index = type_index; // Store the tag-specified type
                                  if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                                  std::visit(
@@ -3809,6 +3841,9 @@ namespace glz
                                        using V = std::decay_t<decltype(v)>;
                                        constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                        if constexpr (is_object) {
+                                          if constexpr (contains_tag<V, tag_literal>()) {
+                                             it = start; // tag is a struct field, must re-parse
+                                          }
                                           from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
                                                                                                            end);
                                        }
@@ -3843,6 +3878,9 @@ namespace glz
                                                 // std::unique_ptr, or std::shared_ptr
                                              }
                                           }
+                                          if constexpr (contains_tag<memory_type<V>, tag_literal>()) {
+                                             it = start; // tag is a struct field, must re-parse
+                                          }
                                           from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
                                              *v, ctx, it, end);
                                        }
@@ -3864,7 +3902,7 @@ namespace glz
                                     // Use the first unlabeled type as the default
                                     const auto default_type_index = ids_size;
 
-                                    it = start; // we restart our object parsing now that we know the target type
+                                    position_after_tag();
                                     tag_specified_index = default_type_index; // Store the default type index
                                     if (value.index() != default_type_index)
                                        emplace_runtime_variant(value, default_type_index);
@@ -3873,6 +3911,9 @@ namespace glz
                                           using V = std::decay_t<decltype(v)>;
                                           constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                           if constexpr (is_object) {
+                                             if constexpr (contains_tag<V, tag_literal>()) {
+                                                it = start; // tag is a struct field, must re-parse
+                                             }
                                              from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
                                           }
                                           else if constexpr (is_memory_object<V>) {
@@ -3903,6 +3944,9 @@ namespace glz
                                                    ctx.error = error_code::invalid_nullable_read;
                                                    return;
                                                 }
+                                             }
+                                             if constexpr (contains_tag<memory_type<V>, tag_literal>()) {
+                                                it = start; // tag is a struct field, must re-parse
                                              }
                                              from<JSON, memory_type<V>>::template op<opening_handled<Opts>()>(*v, ctx,
                                                                                                               it, end);
@@ -3957,7 +4001,7 @@ namespace glz
                            const auto type_index = variant_id_to_index<T>::op(
                               type_id.data(), type_id.data() + type_id.size(), type_id.size());
                            if (type_index < ids_v<T>.size()) [[likely]] {
-                              it = start;
+                              position_after_tag();
                               tag_specified_index = type_index; // Store the tag-specified type
                               if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                            }
@@ -3967,7 +4011,7 @@ namespace glz
                               constexpr auto variant_size = std::variant_size_v<T>;
                               if constexpr (ids_size < variant_size) {
                                  // Use the first unlabeled type as the default
-                                 it = start;
+                                 position_after_tag();
                                  const auto default_index = ids_size;
                                  tag_specified_index = default_index; // Store the default type index
                                  if (value.index() != default_index) emplace_runtime_variant(value, default_index);
@@ -3978,10 +4022,13 @@ namespace glz
                                  return;
                               }
                            }
-                           // Parse the empty type (handles tag skipping and unknown keys)
+                           // Parse the type (handles tag skipping and unknown keys)
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
+                                 if constexpr (contains_tag<V, tag_literal>()) {
+                                    it = start; // tag is a struct field, must re-parse
+                                 }
                                  from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                               },
                               value);
@@ -4529,8 +4576,9 @@ namespace glz
    };
 
    template <class T>
-      requires((nullable_t<T> || nullable_value_t<T>) && not is_expected<T> && not std::is_array_v<T> &&
-               not custom_read<T>)
+      requires((nullable_like<T> || nullable_value_t<T>) && not is_expected<T> && not std::is_array_v<T> &&
+               not custom_read<T>) // is_expected and is_array_v are redundant with nullable_like but needed for
+                                   // nullable_value_t
    struct from<JSON, T>
    {
       template <auto Options>
@@ -4653,7 +4701,6 @@ namespace glz
    };
 
    // system_clock::time_point: parse from ISO 8601 string
-   // Fast manual parser - no heap allocations, direct character parsing
    template <is_system_time_point T>
       requires(not custom_read<T>)
    struct from<JSON, T>
@@ -4663,139 +4710,9 @@ namespace glz
       {
          std::string_view str;
          from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
-
          if (bool(ctx.error)) [[unlikely]]
             return;
-
-         // Minimum: YYYY-MM-DDTHH:MM:SS = 19 chars (timezone is optional, defaults to UTC)
-         if (str.size() < 19) [[unlikely]] {
-            ctx.error = error_code::parse_error;
-            return;
-         }
-
-         const char* s = str.data();
-         const auto n = str.size();
-
-         // Helper to parse N digits
-         auto parse_digits = [&s](size_t start, size_t count) -> int {
-            int val = 0;
-            for (size_t i = 0; i < count; ++i) {
-               const char c = s[start + i];
-               if (c < '0' || c > '9') return -1;
-               val = val * 10 + (c - '0');
-            }
-            return val;
-         };
-
-         // YYYY-MM-DDTHH:MM:SS
-         const int yr = parse_digits(0, 4);
-         const int mo = parse_digits(5, 2);
-         const int dy = parse_digits(8, 2);
-         const int hr = parse_digits(11, 2);
-         const int mi = parse_digits(14, 2);
-         const int sc = parse_digits(17, 2);
-
-         if (yr < 0 || mo < 0 || dy < 0 || hr < 0 || mi < 0 || sc < 0 || s[4] != '-' || s[7] != '-' || s[10] != 'T' ||
-             s[13] != ':' || s[16] != ':') [[unlikely]] {
-            ctx.error = error_code::parse_error;
-            return;
-         }
-
-         // Validate ranges (leap seconds not supported - std::chrono::system_clock uses Unix time)
-         if (mo < 1 || mo > 12 || dy < 1 || dy > 31 || hr > 23 || mi > 59 || sc > 59) [[unlikely]] {
-            ctx.error = error_code::parse_error;
-            return;
-         }
-
-         // Parse optional fractional seconds
-         size_t pos = 19;
-         int64_t subsec_nanos = 0;
-         if (pos < n && s[pos] == '.') {
-            ++pos;
-            int64_t frac = 0;
-            int digits = 0;
-            while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
-               if (digits < 9) {
-                  frac = frac * 10 + (s[pos] - '0');
-                  ++digits;
-               }
-               ++pos;
-            }
-            if (digits == 0) [[unlikely]] {
-               ctx.error = error_code::parse_error;
-               return;
-            }
-            // Scale to nanoseconds
-            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
-                                                10000,      1000,      100,      10,      1};
-            subsec_nanos = frac * scale[digits];
-         }
-
-         // Parse timezone: Z or +HH:MM or -HH:MM (defaults to UTC if missing)
-         int tz_offset_seconds = 0;
-         if (pos < n) {
-            if (s[pos] == 'Z') {
-               ++pos; // consume 'Z'
-            }
-            else if (s[pos] == '+' || s[pos] == '-') {
-               // +05:00 means local is ahead of UTC, so subtract to get UTC (multiply by -1)
-               // -08:00 means local is behind UTC, so add to get UTC (multiply by +1)
-               const int utc_adjustment = (s[pos] == '+') ? -1 : 1;
-               ++pos;
-               if (pos + 2 > n) [[unlikely]] {
-                  ctx.error = error_code::parse_error;
-                  return;
-               }
-               const int tz_hour = parse_digits(pos, 2);
-               if (tz_hour < 0 || tz_hour > 23) [[unlikely]] {
-                  ctx.error = error_code::parse_error;
-                  return;
-               }
-               pos += 2;
-               int tz_min = 0;
-               bool has_tz_colon = false;
-               if (pos < n && s[pos] == ':') {
-                  ++pos;
-                  has_tz_colon = true;
-               }
-               if (pos + 2 <= n) {
-                  const int m = parse_digits(pos, 2);
-                  if (m < 0 || m > 59) [[unlikely]] {
-                     ctx.error = error_code::parse_error;
-                     return;
-                  }
-                  tz_min = m;
-                  pos += 2;
-               }
-               else if (has_tz_colon) [[unlikely]] {
-                  // Colon present but minutes missing or incomplete
-                  ctx.error = error_code::parse_error;
-                  return;
-               }
-               tz_offset_seconds = utc_adjustment * (tz_hour * 3600 + tz_min * 60);
-            }
-         }
-
-         // Reject trailing characters
-         if (pos != n) [[unlikely]] {
-            ctx.error = error_code::parse_error;
-            return;
-         }
-
-         // Construct time_point using std::chrono calendar types
-         using namespace std::chrono;
-
-         const auto ymd = year_month_day{year{yr}, month{static_cast<unsigned>(mo)}, day{static_cast<unsigned>(dy)}};
-         if (!ymd.ok()) [[unlikely]] {
-            ctx.error = error_code::parse_error;
-            return;
-         }
-
-         const auto tp = sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} +
-                         nanoseconds{subsec_nanos};
-
-         using Duration = typename std::remove_cvref_t<T>::duration;
-         value = time_point_cast<Duration>(tp);
+         chrono_detail::parse_iso8601(str, value, ctx.error);
       }
    };
 

@@ -16,6 +16,7 @@ namespace glz::eetf
       bool error_on_unknown_keys{true};
       bool shrink_to_fit{false};
       uint32_t internal{};
+      bool prettify{false};
    };
 
 } // namespace glz::eetf

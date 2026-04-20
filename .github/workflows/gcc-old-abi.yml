@@ -32,7 +32,7 @@ jobs:
       CXX: g++-${{matrix.gcc}}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Configure CMake
       run: |
@@ -73,7 +73,7 @@ jobs:
           python3
         update-ca-certificates
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Prepare build directory
       run: cmake -E make_directory "$GITHUB_WORKSPACE/build"

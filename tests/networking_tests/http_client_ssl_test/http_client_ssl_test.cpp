@@ -245,11 +245,11 @@ struct TestResponse
 // Helper to suppress expected errors
 bool should_suppress_error(const std::error_code& ec)
 {
-   if (ec == asio::error::eof) return true;
-   if (ec == asio::error::connection_reset) return true;
-   if (ec == asio::error::operation_aborted) return true;
-   if (ec == asio::error::bad_descriptor) return true;
-   if (ec == asio::error::broken_pipe) return true;
+   if (ec == make_error_code(asio::error::eof)) return true;
+   if (ec == make_error_code(asio::error::connection_reset)) return true;
+   if (ec == make_error_code(asio::error::operation_aborted)) return true;
+   if (ec == make_error_code(asio::error::bad_descriptor)) return true;
+   if (ec == make_error_code(asio::error::broken_pipe)) return true;
    return false;
 }
 

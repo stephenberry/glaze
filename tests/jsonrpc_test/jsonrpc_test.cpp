@@ -458,4 +458,43 @@ ut::suite struct_test_cases = [] {
    };*/
 };
 
+// Regression test: optional fields must not persist across JSON-RPC calls
+struct optional_params
+{
+   std::string action{};
+   std::optional<int> priority{};
+   std::optional<std::string> label{};
+};
+
+struct optional_result
+{
+   bool had_priority{};
+   bool had_label{};
+};
+
+ut::suite stale_optional_jsonrpc_regression = [] {
+   rpc::server<rpc::method<"cmd", optional_params, optional_result>> server;
+
+   server.on<"cmd">([](const optional_params& p) -> optional_result {
+      return {.had_priority = p.priority.has_value(), .had_label = p.label.has_value()};
+   });
+
+   ut::test("optional fields not stale across jsonrpc calls") = [&server] {
+      // Call 1: both optionals present
+      std::string response = server.call(
+         R"({"jsonrpc":"2.0","method":"cmd","params":{"action":"first","priority":5,"label":"urgent"},"id":1})");
+      ut::expect(response == R"({"jsonrpc":"2.0","result":{"had_priority":true,"had_label":true},"id":1})");
+
+      // Call 2: optionals absent — must not carry over from Call 1
+      response = server.call(R"({"jsonrpc":"2.0","method":"cmd","params":{"action":"second"},"id":2})");
+      ut::expect(response == R"({"jsonrpc":"2.0","result":{"had_priority":false,"had_label":false},"id":2})")
+         << "optional fields must not persist: " << response;
+
+      // Call 3: only one optional present
+      response = server.call(R"({"jsonrpc":"2.0","method":"cmd","params":{"action":"third","priority":10},"id":3})");
+      ut::expect(response == R"({"jsonrpc":"2.0","result":{"had_priority":true,"had_label":false},"id":3})")
+         << "only priority should be set: " << response;
+   };
+};
+
 int main() { return 0; }

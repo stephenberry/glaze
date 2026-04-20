@@ -300,12 +300,6 @@ namespace glz
    template <class T>
    struct meta;
 
-   template <std::pair V>
-   struct make_static
-   {
-      static constexpr auto value = V;
-   };
-
 #if GLZ_HAS_CONSTEXPR_STRING
    // Concept for when rename_key returns exactly std::string (allocates)
    // Requires constexpr std::string support (not available with _GLIBCXX_USE_CXX11_ABI=0)

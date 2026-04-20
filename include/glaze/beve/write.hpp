@@ -721,7 +721,7 @@ namespace glz
                constexpr auto num_bytes = (N + 7) / 8;
                std::array<uint8_t, num_bytes> bytes{};
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
-                  for (size_t bit_i = 7; bit_i < 8 && i < N; --bit_i, ++i) {
+                  for (size_t bit_i = 0; bit_i < 8 && i < N; ++bit_i, ++i) {
                      bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
                }
@@ -737,7 +737,7 @@ namespace glz
                }
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                   uint8_t byte{};
-                  for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
+                  for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
                      byte |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
                   dump_type(ctx, byte, b, ix);
@@ -1079,8 +1079,7 @@ namespace glz
       }
    };
 
-   template <nullable_t T>
-      requires(!std::is_array_v<T> && not is_expected<T>)
+   template <nullable_like T>
    struct to<BEVE, T> final
    {
       template <auto Opts, class B>
@@ -1363,6 +1362,19 @@ namespace glz
                         ++member_count;
                      }
                   }
+                  else if constexpr (check_skip_default_members(Options) && has_skippable_default<val_t>) {
+                     decltype(auto) member = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get_member(value, get<I>(t));
+                        }
+                        else {
+                           return get_member(value, get<I>(reflect<T>::values));
+                        }
+                     }();
+                     if (!is_default_value(member)) {
+                        ++member_count;
+                     }
+                  }
                   else {
                      ++member_count;
                   }
@@ -1437,6 +1449,20 @@ namespace glz
                   }
                   else if constexpr (Options.skip_null_members && glaze_value_is_nullable<val_t>()) {
                      if (is_glaze_value_field_null<T, I>(value, t)) {
+                        return;
+                     }
+                  }
+
+                  if constexpr (check_skip_default_members(Options) && has_skippable_default<val_t>) {
+                     decltype(auto) member_val = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get_member(value, get<I>(t));
+                        }
+                        else {
+                           return get_member(value, get<I>(reflect<T>::values));
+                        }
+                     }();
+                     if (is_default_value(member_val)) {
                         return;
                      }
                   }

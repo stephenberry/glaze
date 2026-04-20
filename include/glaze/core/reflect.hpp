@@ -265,7 +265,14 @@ namespace glz
 
       static constexpr auto values = [] {
          return [&]<size_t... I>(std::index_sequence<I...>) { //
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
             return tuple{get<value_indices[I]>(meta_v<T>)...}; //
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
 
@@ -464,6 +471,31 @@ namespace glz
       }
    }
 
+   // A type whose default value can be detected at runtime for skip_default_members
+   template <class T>
+   concept has_skippable_default = str_t<T> || bool_t<T> || num_t<T> || (range<T> && !str_t<T> && has_empty<T>);
+
+   // Check if a member value equals its default (for skip_default_members)
+   template <class T>
+   GLZ_ALWAYS_INLINE bool is_default_value(const T& value)
+   {
+      if constexpr (str_t<T> && has_empty<T>) {
+         return value.empty();
+      }
+      else if constexpr (bool_t<T>) {
+         return !value;
+      }
+      else if constexpr (num_t<T>) {
+         return value == T{0};
+      }
+      else if constexpr (range<T> && has_empty<T>) {
+         return value.empty();
+      }
+      else {
+         return false;
+      }
+   }
+
    template <auto Opts, class T>
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
@@ -471,24 +503,16 @@ namespace glz
          if constexpr (meta_has_skip<T> || meta_has_skip_if<T>) {
             return true;
          }
-         else if constexpr (Opts.skip_null_members) {
-            // if any type could be null then we might skip
-            constexpr bool write_function_pointers = check_write_function_pointers(Opts);
-            return [&]<size_t... I>(std::index_sequence<I...>) {
-               return (
-                  (always_skipped<field_t<T, I>> ||
-                   (!write_function_pointers && is_member_function_pointer<field_t<T, I>>) || null_t<field_t<T, I>> ||
-                   (is_specialization_v<field_t<T, I>, custom_t> && custom_getter_returns_nullable<field_t<T, I>>()) ||
-                   glaze_value_is_nullable<field_t<T, I>>()) ||
-                  ...);
-            }(std::make_index_sequence<N>{});
-         }
          else {
-            // if we have an always_skipped type then we return true
             constexpr bool write_function_pointers = check_write_function_pointers(Opts);
             return [&]<size_t... I>(std::index_sequence<I...>) {
                return ((always_skipped<field_t<T, I>> ||
-                        (!write_function_pointers && is_member_function_pointer<field_t<T, I>>)) ||
+                        (!write_function_pointers && is_member_function_pointer<field_t<T, I>>) ||
+                        (Opts.skip_null_members && (null_t<field_t<T, I>> ||
+                                                    (is_specialization_v<field_t<T, I>, custom_t> &&
+                                                     custom_getter_returns_nullable<field_t<T, I>>()) ||
+                                                    glaze_value_is_nullable<field_t<T, I>>())) ||
+                        (check_skip_default_members(Opts) && has_skippable_default<field_t<T, I>>)) ||
                        ...);
             }(std::make_index_sequence<N>{});
          }
@@ -1390,8 +1414,6 @@ namespace glz
 
    inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings)
    {
-      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
-#if !defined(_MSC_VER)
       const auto N = input_strings.size();
       if (N == 0) {
          return {};
@@ -1456,9 +1478,6 @@ namespace glz
       }
 
       return info;
-#else
-      return {};
-#endif
    }
 
    template <class T>

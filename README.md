@@ -6,6 +6,7 @@ Formats Supported:
 - [JSON](https://stephenberry.github.io/glaze/json/) | `glaze/json.hpp`
 - [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding) | `glaze/beve.hpp`
 - [CBOR](https://stephenberry.github.io/glaze/cbor/) (Concise Binary Object Representation) | `glaze/cbor.hpp`
+- [JSONB](https://stephenberry.github.io/glaze/jsonb/) (SQLite Binary JSON) | `glaze/jsonb.hpp`
 - [CSV](https://stephenberry.github.io/glaze/csv/) (Comma Separated Value) | `glaze/csv.hpp`
 - [MessagePack](https://stephenberry.github.io/glaze/msgpack/) | `glaze/msgpack.hpp`
 - [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation) | `glaze/stencil/stencil.hpp`
@@ -18,14 +19,16 @@ Formats Supported:
 >
 > Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
 
-## With C++23 & C++26 compile time reflection for MSVC, Clang, and GCC!
+## With C++23 compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
 - See [example on Compiler Explorer](https://gcc.godbolt.org/z/T4To5fKfz)
 
 ## C++26 P2996 Reflection Support
 
-Glaze now supports [P2996 "Reflection for C++26"](https://wg21.link/P2996). When enabled, P2996 unlocks capabilities that aren't possible with traditional compile-time reflection:
+Glaze now supports [P2996 "Reflection for C++26"](https://wg21.link/P2996). When enabled, P2996 unlocks capabilities that aren't possible with traditional compile-time reflection.
+
+<details><summary>P2996 reflection capabilities and examples:</summary>
 
 - **Non-aggregate types** — classes with constructors, virtual functions, and inheritance just work
 - **Automatic enum serialization** — no `glz::meta` needed, enums serialize to strings automatically
@@ -60,6 +63,8 @@ auto color_json = glz::write<reflect_enums_opts{}>(c).value_or("error");
 
 Supported compilers: [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) (`-std=c++26 -freflection`) and [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996). See the [P2996 documentation](https://stephenberry.github.io/glaze/p2996-reflection/) for setup and details.
 
+</details>
+
 ## [📖 Documentation](https://stephenberry.github.io/glaze/)
 
 See this README, the [Glaze Documentation Page](https://stephenberry.github.io/glaze/), or [docs folder](https://github.com/stephenberry/glaze/tree/main/docs) for documentation.
@@ -71,14 +76,12 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
   - [C++26 P2996 reflection](https://stephenberry.github.io/glaze/p2996-reflection/) support — non-aggregates, automatic enums, unlimited members
 - JSON [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) compliance with UTF-8 validation
 - Standard C++ library support
-- Header only
+- Header only (separate format headers avoid compilation overhead)
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Powerful wrappers to modify read/write behavior ([Wrappers](https://stephenberry.github.io/glaze/wrappers/))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](https://stephenberry.github.io/glaze/unknown-keys/) in a fast and flexible manner
-- Direct memory access through [JSON pointer syntax](https://stephenberry.github.io/glaze/json-pointer-syntax/)
-- [JMESPath](https://stephenberry.github.io/glaze/JMESPath/) querying
 - No exceptions (compiles with `-fno-exceptions`)
   - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](https://stephenberry.github.io/glaze/exceptions/)
 - No runtime type information necessary (compiles with `-fno-rtti`)
@@ -253,7 +256,7 @@ The buffer refills automatically during parsing, enabling reading of arbitrarily
 - Tested for both 64bit and 32bit
 - Supports both little-endian and big-endian systems
 
-[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux. Big-endian is tested via QEMU emulation on s390x.
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (Visual Studio 2026 MSVC Build Tools 14.50), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux. Big-endian is tested via QEMU emulation on s390x.
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 

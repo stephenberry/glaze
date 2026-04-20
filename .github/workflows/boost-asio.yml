@@ -33,7 +33,7 @@ jobs:
       CXX: ${{ matrix.compiler.name == 'gcc' && 'g++' || 'clang++' }}-${{matrix.compiler.version}}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install clang
         if: matrix.compiler.name == 'clang'

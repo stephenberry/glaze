@@ -505,6 +505,18 @@ namespace glz
        * Default: 0 (unlimited)
        */
       uint32_t max_requests_per_connection = 0;
+
+      /**
+       * @brief Maximum allowed request body size in bytes
+       *
+       * Requests whose Content-Length exceeds this limit are rejected with
+       * HTTP 413 (Payload Too Large) before the body is allocated or read.
+       * Only applies to Content-Length-based requests (the server does not
+       * currently support chunked request Transfer-Encoding).
+       * Set to 0 for no limit.
+       * Default: 100 MB
+       */
+      size_t max_request_body_size = http_default_max_body_size;
    };
 
    // Server implementation using non-blocking asio with WebSocket support
@@ -1066,8 +1078,7 @@ namespace glz
                   if (route_entry.spec.request_body_schema) {
                      openapi_request_body req_body;
                      req_body.required = true;
-                     if (auto schema_val =
-                            glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                     if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.request_body_schema)) {
                         req_body.content["application/json"].schema = *schema_val;
                      }
                      op.requestBody = req_body;
@@ -1075,8 +1086,7 @@ namespace glz
                      // Add schema to components
                      if (!spec.components) spec.components.emplace();
                      if (!spec.components->schemas) spec.components->schemas.emplace();
-                     if (auto schema_val =
-                            glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                     if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.request_body_schema)) {
                         spec.components->schemas->operator[](*route_entry.spec.request_body_type_name) = *schema_val;
                      }
                   }
@@ -1086,7 +1096,7 @@ namespace glz
                      openapi_response res_obj;
                      res_obj.description = "Successful response";
                      res_obj.content.emplace(); // Emplace the unordered_map
-                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.response_schema)) {
+                     if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.response_schema)) {
                         res_obj.content.value()["application/json"].schema = *schema_val;
                      }
                      op.responses["200"] = res_obj;
@@ -1094,7 +1104,7 @@ namespace glz
                      // Add schema to components
                      if (!spec.components) spec.components.emplace();
                      if (!spec.components->schemas) spec.components->schemas.emplace();
-                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.response_schema)) {
+                     if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.response_schema)) {
                         spec.components->schemas->operator[](*route_entry.spec.response_type_name) = *schema_val;
                      }
                   }
@@ -1358,6 +1368,17 @@ namespace glz
          return *this;
       }
 
+      // Set maximum request body size in bytes (0 = unlimited).
+      // Requests exceeding this are rejected with HTTP 413.
+      // Must be configured before starting the server; not safe to change while serving.
+      inline http_server& max_request_body_size(size_t max_size)
+      {
+         conn_config_.max_request_body_size = max_size;
+         return *this;
+      }
+
+      size_t max_request_body_size() const { return conn_config_.max_request_body_size; }
+
       /**
        * @brief Wait for a shutdown signal
        *
@@ -1390,7 +1411,7 @@ namespace glz
       std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
       std::vector<std::thread> threads;
       http_router root_router;
-      bool running = false;
+      std::atomic<bool> running{false};
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
@@ -1728,6 +1749,12 @@ namespace glz
                send_error_response_with_close(conn, 400, "Bad Request");
                return;
             }
+         }
+
+         // Reject oversized request bodies before allocating memory
+         if (conn_config_.max_request_body_size > 0 && content_length > conn_config_.max_request_body_size) {
+            send_error_response_with_close(conn, 413, "Payload Too Large");
+            return;
          }
 
          // Body bytes in the buffer start at headers_end

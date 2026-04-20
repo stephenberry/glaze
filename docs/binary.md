@@ -590,7 +590,7 @@ if (!ec) {
 }
 ```
 
-On error, `count` indicates where the parse error occurred. This field is available for all read operations (`read_beve`, `read_json`, `read_cbor`, `read_msgpack`).
+On error, `count` indicates where the parse error occurred. This field is available for all read operations (`read_beve`, `read_json`, `read_cbor`, `read_jsonb`, `read_msgpack`).
 
 ### Example: Streaming Workflow
 
