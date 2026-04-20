@@ -4,7 +4,6 @@
 #include <limits>
 
 #include "glaze/containers/ordered_small_map.hpp"
-#include "glaze/core/feature_test.hpp"
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/async.hpp"
 #include "glaze/thread/async_string.hpp"
@@ -54,12 +53,11 @@ suite starter = [] {
 })");
    };
 
-#if GLZ_HAS_CONSTEXPR_STRING
    "json_schema"_test = [] {
       const std::string schema = glz::ex::write_json_schema<my_struct>();
       expect(
          schema ==
-         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double","default":3.14},"hello":{"type":"string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"uint64_t":{"type":"integer","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
+         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"uint64_t":{"type":"integer","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
 
@@ -68,10 +66,9 @@ suite starter = [] {
       glz::ex::write_json_schema<my_struct>(schema);
       expect(
          schema ==
-         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double","default":3.14},"hello":{"type":"string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"uint64_t":{"type":"integer","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
+         R"({"type":"object","properties":{"arr":{"type":"array","items":{"$ref":"#/$defs/uint64_t"},"maxItems":3},"d":{"$ref":"#/$defs/double"},"hello":{"type":"string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"uint64_t":{"type":"integer","minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
-#endif
 };
 
 suite basic_types = [] {

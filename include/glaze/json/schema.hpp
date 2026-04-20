@@ -513,20 +513,36 @@ namespace glz
       }
 
       // Returns the pre-extracted defaults array for T, or an all-nullopt array
-      // when T is not extractable (e.g. missing default constructor). Kept as a
-      // named helper rather than an in-place lambda because MSVC cannot deduce
-      // the common return type of an immediately-invoked lambda whose branches
-      // mix a consteval call with a braced std::array initialization.
-      template <class T>
+      // when disabled or when T is not extractable (e.g. missing default ctor).
+      // Kept as a named helper rather than an in-place lambda because MSVC cannot
+      // deduce the common return type of an immediately-invoked lambda whose
+      // branches mix a consteval call with a braced std::array initialization.
+      template <class T, bool Enable>
       consteval auto defaults_array_for()
       {
-         if constexpr (can_extract_defaults<T>) {
+         if constexpr (Enable && can_extract_defaults<T>) {
             return extract_all_defaults<T>();
          }
          else {
             constexpr auto N = reflect<T>::size;
             std::array<std::optional<schema::schema_any>, N> empty{};
             return empty;
+         }
+      }
+
+      // Opt-in: populate JSON Schema "default" from each primitive member's
+      // default-constructed value. Off by default — C++ default-initialization
+      // often differs in meaning from JSON Schema's "default" keyword (which
+      // recommends a value to consumers when the field is omitted). Enable
+      // via a custom opts struct:
+      //   struct my_opts : glz::opts { bool schema_auto_defaults = true; };
+      consteval bool check_schema_auto_defaults(auto&& Opts)
+      {
+         if constexpr (requires { Opts.schema_auto_defaults; }) {
+            return Opts.schema_auto_defaults;
+         }
+         else {
+            return false;
          }
       }
 
@@ -1114,9 +1130,10 @@ namespace glz
 
             s.properties = std::map<sv, schema, std::less<>>();
 
-            // Extract all primitive defaults in a single T{} construction (once per type).
-            // Empty array when V is not extractable (no default ctor, etc.).
-            static constexpr auto defaults = defaults_array_for<V>();
+            // Extract all primitive defaults in a single T{} construction (once per type),
+            // but only when the caller opts in via Opts.schema_auto_defaults = true.
+            // Empty array otherwise, or when V is not extractable (no default ctor, etc.).
+            static constexpr auto defaults = defaults_array_for<V, check_schema_auto_defaults(Opts)>();
 
             for_each<N>([&]<auto I>() {
                using val_t = std::decay_t<refl_t<T, I>>;

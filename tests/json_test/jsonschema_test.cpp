@@ -449,7 +449,7 @@ suite schema_tests = [] {
       std::string schema_str = glz::write_json_schema<required_meta>().value_or("error");
       expect(
          schema_str ==
-         R"({"type":"object","properties":{"a":{"$ref":"#/$defs/int32_t","default":0},"b":{"$ref":"#/$defs/int32_t","default":0},"reserved_1":{"$ref":"#/$defs/int32_t","default":0},"reserved_2":{"$ref":"#/$defs/int32_t","default":0}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})")
+         R"({"type":"object","properties":{"a":{"$ref":"#/$defs/int32_t"},"b":{"$ref":"#/$defs/int32_t"},"reserved_1":{"$ref":"#/$defs/int32_t"},"reserved_2":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})")
          << schema_str;
    };
 
@@ -464,12 +464,12 @@ suite schema_tests = [] {
       // std::optional<T> is canonicalized to anyOf:[ref-to-T, null] and never appears in $defs.
       expect(
          schema_str_req ==
-         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t","default":0},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})")
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})")
          << schema_str_req;
 
       expect(
          schema_str_nreq ==
-         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t","default":0},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})")
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})")
          << schema_str_nreq;
    };
 
@@ -1079,7 +1079,7 @@ suite optional_never_referenced_test = [] {
       auto schema = glz::write_json_schema<issue_2498::HoldsNamed>().value();
       expect(eq(
          schema,
-         R"({"type":"object","properties":{"n":{"anyOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/int32_t","default":0}},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"issue_2498::HoldsNamed"})"))
+         R"({"type":"object","properties":{"n":{"anyOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"issue_2498::HoldsNamed"})"))
          << schema;
    };
 
@@ -1214,9 +1214,29 @@ struct nested_defaults
    auto_defaults inner{}; // nested struct with defaults
 };
 
+// Opt in to primitive-member default extraction for these tests.
+struct auto_defaults_opts : glz::opts
+{
+   bool schema_auto_defaults = true;
+};
+
 suite auto_default_tests = [] {
-   "auto_defaults extracts primitive defaults"_test = [] {
+   "default opts emit no auto-extracted defaults"_test = [] {
+      // With the default options, primitive member defaults are not extracted.
       std::string schema_str = glz::write_json_schema<auto_defaults>().value_or("error");
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+      expect(obj.properties.has_value());
+      auto& props = *obj.properties;
+      expect(props.contains("flag"));
+      expect(!props.at("flag").defaultValue.has_value()) << schema_str;
+      expect(!props.at("count").defaultValue.has_value()) << schema_str;
+      expect(!props.at("ratio").defaultValue.has_value()) << schema_str;
+   };
+
+   "auto_defaults extracts primitive defaults"_test = [] {
+      std::string schema_str = glz::write_json_schema<auto_defaults, auto_defaults_opts{}>().value_or("error");
 
       // Parse and check defaults
       glz::schema obj{};
@@ -1262,7 +1282,7 @@ suite auto_default_tests = [] {
    "mixed_defaults extracts primitive defaults even with non-trivial members"_test = [] {
       // mixed_defaults contains std::string and std::vector, but with C++20 transient constexpr allocation
       // we can still extract defaults for primitive members
-      std::string schema_str = glz::write_json_schema<mixed_defaults>().value_or("error");
+      std::string schema_str = glz::write_json_schema<mixed_defaults, auto_defaults_opts{}>().value_or("error");
 
       glz::schema obj{};
       auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
@@ -1288,7 +1308,7 @@ suite auto_default_tests = [] {
 #endif
 
    "explicit json_schema default overrides struct default"_test = [] {
-      std::string schema_str = glz::write_json_schema<explicit_override>().value_or("error");
+      std::string schema_str = glz::write_json_schema<explicit_override, auto_defaults_opts{}>().value_or("error");
 
       glz::schema obj{};
       auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
@@ -1305,7 +1325,7 @@ suite auto_default_tests = [] {
    };
 
    "nested struct defaults work in inlined definition"_test = [] {
-      std::string schema_str = glz::write_json_schema<nested_defaults>().value_or("error");
+      std::string schema_str = glz::write_json_schema<nested_defaults, auto_defaults_opts{}>().value_or("error");
 
       glz::schema obj{};
       auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);

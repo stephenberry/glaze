@@ -4510,23 +4510,18 @@ suite json_performance = [] {
    };
 };
 
-#if GLZ_HAS_CONSTEXPR_STRING
 suite json_schema = [] {
    "json schema"_test = [] {
       Thing obj{};
       std::string schema = glz::write_json_schema<Thing>().value_or("error");
       // Note: Check schema and sample output against a json schema validator like https://www.jsonschemavalidator.net/
       // when you update this string
-      // Note: Primitive member defaults are auto-extracted using C++20 transient constexpr allocation.
-      // Types like sub_thing with std::string can have their primitive members (like double a) extracted.
-      // Thing itself has a custom constructor, so its direct members don't get defaults extracted.
       expect(
          schema ==
-         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"deque":{"type":"array","items":{"$ref":"#/$defs/double"}},"i":{"$ref":"#/$defs/int32_t"},"list":{"type":"array","items":{"$ref":"#/$defs/int32_t"}},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"mapi":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"sptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double","default":3.14},"b":{"type":"string"},"c":{"$ref":"#/$defs/double","default":999.342494903},"d":{"$ref":"#/$defs/double","default":1E-12},"e":{"$ref":"#/$defs/double","default":203082348402.1},"f":{"$ref":"#/$defs/float","default":89.08899688720703},"g":{"$ref":"#/$defs/double","default":12380.00000013},"h":{"$ref":"#/$defs/double","default":1000000.000001}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"v":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double","default":0}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double","default":0}},"additionalProperties":false,"title":"var2_t"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"array","prefixItems":[{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}],"items":false,"maxItems":3},"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double","default":3.14},"b":{"type":"string"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
+         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"deque":{"type":"array","items":{"$ref":"#/$defs/double"}},"i":{"$ref":"#/$defs/int32_t"},"list":{"type":"array","items":{"$ref":"#/$defs/int32_t"}},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"mapi":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"sptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"v":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"array","prefixItems":[{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}],"items":false,"maxItems":3},"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
          << schema;
    };
 };
-#endif
 
 // custom type handling
 struct date
@@ -9851,7 +9846,6 @@ struct glz::json_schema<meta_schema_t>
 static_assert(glz::json_schema_t<meta_schema_t>);
 static_assert(glz::detail::count_members<glz::json_schema_type<meta_schema_t>> > 0);
 
-#if GLZ_HAS_CONSTEXPR_STRING
 suite meta_schema_tests = [] {
    "meta_schema"_test = [] {
       meta_schema_t obj;
@@ -9862,7 +9856,7 @@ suite meta_schema_tests = [] {
       const auto json_schema = glz::write_json_schema<meta_schema_t>().value_or("error");
       expect(
          json_schema ==
-         R"({"type":"object","properties":{"file_name":{"type":"string","description":"provide a file name to load"},"is_valid":{"type":"boolean","description":"for validation","default":false},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","default":0}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"meta_schema_t"})")
+         R"({"type":"object","properties":{"file_name":{"type":"string","description":"provide a file name to load"},"is_valid":{"type":"boolean","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"meta_schema_t"})")
          << json_schema;
    };
 
@@ -9883,13 +9877,11 @@ suite meta_schema_tests = [] {
       },
       "is_valid": {
          "type": "boolean",
-         "description": "for validation",
-         "default": false
+         "description": "for validation"
       },
       "x": {
          "$ref": "#/$defs/int32_t",
-         "description": "x is a special integer",
-         "default": 0
+         "description": "x is a special integer"
       }
    },
    "additionalProperties": false,
@@ -9904,7 +9896,6 @@ suite meta_schema_tests = [] {
 })") << json_schema;
    };
 };
-#endif
 
 suite glz_text_tests = [] {
    "glz_text"_test = [] {
