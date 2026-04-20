@@ -250,7 +250,8 @@ namespace glz
    // MSVC requires this template specialization for when the tuple size if zero,
    // otherwise MSVC tries to instantiate calls of get<0> in invalid branches
    template <class T>
-      requires(!glaze_merge_t<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) && (tuple_size_v<meta_t<T>> == 0))
+      requires(!glaze_merge_t<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
+               (tuple_size_v<meta_t<T>> == 0))
    struct reflect<T>
    {
       static constexpr auto size = 0;
@@ -315,8 +316,7 @@ namespace glz
             }
             else {
                // Aggregate/reflectable sub-type without glz::meta — access fields via to_tie
-               static_assert(reflectable<SubType>,
-                  "glz::merge sub-types must be glaze_object_t or reflectable");
+               static_assert(reflectable<SubType>, "glz::merge sub-types must be glaze_object_t or reflectable");
                return get<InnerIdx>(to_tie(parent.*outer_ptr));
             }
          }
@@ -339,8 +339,7 @@ namespace glz
 
       // Get the sub-type pointed to by the I-th member pointer in the merge
       template <size_t I>
-      using sub_type_at = std::remove_cvref_t<
-         typename member_value<std::decay_t<decltype(get<I>(meta_v<V>))>>::type>;
+      using sub_type_at = std::remove_cvref_t<typename member_value<std::decay_t<decltype(get<I>(meta_v<V>))>>::type>;
 
       // Per-sub-type sizes — computed once and reused below.
       static constexpr auto sub_sizes = []<size_t... I>(std::index_sequence<I...>) constexpr {

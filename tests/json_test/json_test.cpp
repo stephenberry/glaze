@@ -7407,7 +7407,10 @@ suite merge_meta_tests = [] {
 
       std::string s{};
       expect(not glz::write_json(bp, s));
-      expect(s == R"({"name":"Spectacled","legs":4,"weight":140,"color":"black","h":1.8,"w":0.7,"biome":"cloud forest","endangered":true})") << s;
+      expect(
+         s ==
+         R"({"name":"Spectacled","legs":4,"weight":140,"color":"black","h":1.8,"w":0.7,"biome":"cloud forest","endangered":true})")
+         << s;
 
       BearProfile restored{};
       expect(not glz::read_json(restored, s));
@@ -7451,7 +7454,9 @@ suite merge_meta_tests = [] {
 
       std::string s{};
       expect(not glz::write_json(lb, s));
-      expect(s == R"({"name":"Panda","legs":4,"weight":100,"color":"black and white","region":"Sichuan","altitude":2500})") << s;
+      expect(s ==
+             R"({"name":"Panda","legs":4,"weight":100,"color":"black and white","region":"Sichuan","altitude":2500})")
+         << s;
 
       LocatedBear restored{};
       expect(not glz::read_json(restored, s));
@@ -7480,7 +7485,8 @@ suite merge_meta_tests = [] {
 
    "merge_meta_unknown_keys_allowed"_test = [] {
       BearRecord b{};
-      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(b, R"({"name":"Polar","legs":4,"extra":true,"weight":450,"color":"white"})");
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(
+         b, R"({"name":"Polar","legs":4,"extra":true,"weight":450,"color":"white"})");
       expect(ec == glz::error_code::none);
       expect(b.species.name == "Polar");
       expect(b.appearance.weight == 450.0);
@@ -7488,7 +7494,8 @@ suite merge_meta_tests = [] {
 
    "merge_meta_unknown_keys_error"_test = [] {
       BearRecord b{};
-      auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(b, R"({"name":"Polar","unknown_field":42,"weight":450,"color":"white"})");
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(
+         b, R"({"name":"Polar","unknown_field":42,"weight":450,"color":"white"})");
       expect(ec != glz::error_code::none);
    };
 
@@ -7597,8 +7604,7 @@ suite merge_meta_tests = [] {
    "merge_meta_error_on_missing_keys"_test = [] {
       BearRecord b{};
       // weight + color missing — must error when error_on_missing_keys is set.
-      auto ec = glz::read<glz::opts{.error_on_missing_keys = true}>(
-         b, R"({"name":"Polar","legs":4})");
+      auto ec = glz::read<glz::opts{.error_on_missing_keys = true}>(b, R"({"name":"Polar","legs":4})");
       expect(ec != glz::error_code::none);
 
       // Complete object — must succeed.
@@ -7647,7 +7653,8 @@ suite merge_meta_tests = [] {
       std::string out{};
       expect(not glz::write_json(bears, out));
       expect(out == R"([{"name":"Brown","legs":4,"weight":300,"color":"brown"},)"
-                    R"({"name":"Black","legs":4,"weight":200,"color":"black"}])") << out;
+                    R"({"name":"Black","legs":4,"weight":200,"color":"black"}])")
+         << out;
 
       std::vector<BearRecord> restored{};
       expect(not glz::read_json(restored, out));
@@ -7655,7 +7662,6 @@ suite merge_meta_tests = [] {
       expect(restored[0].species.name == "Brown");
       expect(restored[1].appearance.color == "black");
    };
-
 };
 
 struct non_cx_values
