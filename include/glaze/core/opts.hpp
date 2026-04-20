@@ -566,8 +566,7 @@ namespace glz
    consteval char csv_delimiter()
    {
       if constexpr (requires { Opts.delimiter; }) {
-         static_assert(is_valid_csv_delimiter(Opts.delimiter),
-                       "CSV delimiter must be one of: ',' '\\t' '|' ';'");
+         static_assert(is_valid_csv_delimiter(Opts.delimiter), "CSV delimiter must be one of: ',' '\\t' '|' ';'");
          return Opts.delimiter;
       }
       else {
