@@ -76,14 +76,12 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
   - [C++26 P2996 reflection](https://stephenberry.github.io/glaze/p2996-reflection/) support — non-aggregates, automatic enums, unlimited members
 - JSON [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) compliance with UTF-8 validation
 - Standard C++ library support
-- Header only
+- Header only (separate format headers avoid compilation overhead)
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Powerful wrappers to modify read/write behavior ([Wrappers](https://stephenberry.github.io/glaze/wrappers/))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](https://stephenberry.github.io/glaze/unknown-keys/) in a fast and flexible manner
-- Direct memory access through [JSON pointer syntax](https://stephenberry.github.io/glaze/json-pointer-syntax/)
-- [JMESPath](https://stephenberry.github.io/glaze/JMESPath/) querying
 - No exceptions (compiles with `-fno-exceptions`)
   - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](https://stephenberry.github.io/glaze/exceptions/)
 - No runtime type information necessary (compiles with `-fno-rtti`)
