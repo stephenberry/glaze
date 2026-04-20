@@ -256,6 +256,48 @@ std::unordered_map<std::string, std::string> config = {{"host", "localhost"}};
 // Serialize to JSON objects: {"Alice":95,"Bob":87}
 ```
 
+For non-string composite keys, Glaze can also serialize map-like containers as flat JSON arrays via the optional wrapper in `glaze/json/flatten_map.hpp`:
+
+```cpp
+#include "glaze/json/flatten_map.hpp"
+
+struct pair_hash
+{
+   size_t operator()(const std::pair<int, int>& value) const noexcept
+   {
+      return std::hash<int>{}(value.first) ^ (std::hash<int>{}(value.second) << 1);
+   }
+};
+
+using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+struct payload
+{
+   map_t map{};
+};
+
+template <>
+struct glz::meta<payload>
+{
+   using T = payload;
+   static constexpr auto value = glz::object("map", glz::flatten_map<&T::map>);
+};
+
+payload value{};
+value.map[{1, 2}] = "example";
+value.map[{3, 4}] = "another";
+
+std::string json{};
+glz::write_json(glz::flatten_map<&payload::map>(value), json);
+// json == [1,2,"example",3,4,"another"] (ordering depends on the container)
+
+payload parsed{};
+auto wrapped = glz::flatten_map<&payload::map>(parsed);
+glz::read_json(wrapped, json);
+```
+
+This format flattens each entry into the surrounding array as `[key elements..., mapped value]`. It is intended for map-like containers with fixed-size keys such as `std::pair`, tuples, Glaze arrays, and `std::array`.
+
 ### Optional and Nullable Types
 
 ```cpp
