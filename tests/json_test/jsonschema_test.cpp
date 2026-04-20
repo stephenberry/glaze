@@ -51,11 +51,17 @@ struct glz::json_schema<schema_obj>
 struct test_case
 {
    std::string schema_str = glz::write_json_schema<schema_obj>().value_or("error");
-   glz::expected<glz::detail::schematic, glz::error_ctx> obj{glz::read_json<glz::detail::schematic>(schema_str)};
+   glz::expected<glz::schema, glz::error_ctx> obj{glz::read_json<glz::schema>(schema_str)};
 };
 
 template <class T>
-concept is_optional = glz::is_specialization_v<T, std::optional>;
+concept has_variant_value = requires {
+   typename T::value_type;
+   requires glz::is_variant<typename T::value_type>;
+} && requires(T t) {
+   { t.has_value() } -> std::convertible_to<bool>;
+   { t.value() } -> std::convertible_to<typename T::value_type>;
+};
 
 template <auto Member, typename Value>
 auto expect_property(const test_case& test, std::string_view key, Value value)
@@ -67,15 +73,9 @@ auto expect_property(const test_case& test, std::string_view key, Value value)
    auto prop_value = glz::get_member(prop, Member);
    expect[prop_value.has_value()];
    using prop_value_t = std::decay_t<decltype(prop_value)>;
-   if constexpr (is_optional<prop_value_t> && glz::is_variant<typename prop_value_t::value_type>) {
+   if constexpr (has_variant_value<prop_value_t>) {
       expect[std::holds_alternative<Value>(prop_value.value())];
       expect(std::get<Value>(prop_value.value()) == value);
-   }
-   else if constexpr (is_optional<prop_value_t> && glz::is_span<typename prop_value_t::value_type>) {
-      expect(fatal(prop_value.value().size() == value.size()));
-      for (std::size_t i = 0; i < prop_value.value().size(); ++i) {
-         expect(prop_value.value()[i] == value[i]);
-      }
    }
    else {
       expect(prop_value.value() == value);
@@ -243,37 +243,32 @@ struct glz::meta<const_one_enum>
    static constexpr auto value = &const_one_enum::some_var;
 };
 
-// This is a simplified version of the schematic struct
+// This is a simplified version of the schema struct
 // Since we cannot deduce the variant currently when reading when many number formats are available
 struct schematic_substitute
 {
    using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
    std::optional<std::variant<std::string_view, std::vector<std::string_view>>> type{};
    std::optional<std::vector<schematic_substitute>> oneOf{};
-   struct schema
-   {
-      std::optional<std::string_view> title{};
-      std::optional<std::string_view> description{};
-      std::optional<std::variant<std::monostate, bool, std::int64_t, std::string_view>> constant{};
-      schema_number minimum{};
-      schema_number maximum{};
-      std::optional<std::uint64_t> minItems{};
-      std::optional<std::uint64_t> maxItems{};
-   };
-   schema attributes{};
+   std::optional<std::string_view> title{};
+   std::optional<std::string_view> description{};
+   std::optional<std::variant<std::monostate, bool, std::int64_t, std::string_view>> constant{};
+   schema_number minimum{};
+   schema_number maximum{};
+   std::optional<std::uint64_t> minItems{};
+   std::optional<std::uint64_t> maxItems{};
    struct glaze
    {
       using T = schematic_substitute;
-      static constexpr auto value = glz::object(
-         "type", &T::type, //
-         "const", [](auto&& self) -> auto& { return self.attributes.constant; }, //
-         "minimum", [](auto&& self) -> auto& { return self.attributes.minimum; }, //
-         "maximum", [](auto&& self) -> auto& { return self.attributes.maximum; }, //
-         "oneOf", &T::oneOf, //
-         "title", [](auto&& self) -> auto& { return self.attributes.title; }, //
-         "description", [](auto&& self) -> auto& { return self.attributes.description; }, //
-         "minItems", [](auto&& self) -> auto& { return self.attributes.minItems; }, //
-         "maxItems", [](auto&& self) -> auto& { return self.attributes.maxItems; } //
+      static constexpr auto value = glz::object("type", &T::type, //
+                                                "const", &T::constant, //
+                                                "minimum", &T::minimum, //
+                                                "maximum", &T::maximum, //
+                                                "oneOf", &T::oneOf, //
+                                                "title", &T::title, //
+                                                "description", &T::description, //
+                                                "minItems", &T::minItems, //
+                                                "maxItems", &T::maxItems //
       );
    };
 };
@@ -364,9 +359,9 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect[obj.attributes.constant.has_value()];
-      expect[std::holds_alternative<std::int64_t>(obj.attributes.constant.value())];
-      expect[std::get<std::int64_t>(obj.attributes.constant.value()) == const_one_number::some_var];
+      expect[obj.constant.has_value()];
+      expect[std::holds_alternative<std::int64_t>(obj.constant.value())];
+      expect[std::get<std::int64_t>(obj.constant.value()) == const_one_number::some_var];
    };
 
    "Constexpr enum is constant"_test = [] {
@@ -374,9 +369,9 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect[(obj.attributes.constant.has_value())];
-      expect[(std::holds_alternative<std::string_view>(obj.attributes.constant.value()))];
-      expect(std::get<std::string_view>(obj.attributes.constant.value()) == "green");
+      expect[(obj.constant.has_value())];
+      expect[(std::holds_alternative<std::string_view>(obj.constant.value()))];
+      expect(std::get<std::string_view>(obj.constant.value()) == "green");
    };
 
    "number has minimum"_test = [] {
@@ -385,9 +380,9 @@ suite schema_tests = [] {
          schematic_substitute obj{};
          auto err = read_json_ignore_unknown(obj, schema_str);
          expect(!err) << format_error(err, schema_str);
-         expect[(obj.attributes.minimum.has_value())];
-         expect[(std::holds_alternative<std::int64_t>(obj.attributes.minimum.value()))];
-         expect(std::get<std::int64_t>(obj.attributes.minimum.value()) == std::numeric_limits<number_t>::lowest());
+         expect[(obj.minimum.has_value())];
+         expect[(std::holds_alternative<std::int64_t>(obj.minimum.value()))];
+         expect(std::get<std::int64_t>(obj.minimum.value()) == std::numeric_limits<number_t>::lowest());
       };
       test(std::int64_t{});
       test(std::uint8_t{});
@@ -398,7 +393,7 @@ suite schema_tests = [] {
       std::string schema_str = glz::write_json_schema<std::monostate>().value_or("error");
       // reading null will of course leave the std::optional as empty, therefore check if
       // null is actually written in the schema
-      expect(schema_str == R"({"type":"null","$defs":{},"title":"std::monostate","const":null})");
+      expect(schema_str == R"({"type":"null","title":"std::monostate","const":null})");
    };
 
    "enum oneOf has title and constant"_test = [] {
@@ -408,10 +403,10 @@ suite schema_tests = [] {
       expect(!err) << format_error(err, schema_str);
       expect[(obj.oneOf.has_value())];
       for (const auto& oneOf : obj.oneOf.value()) {
-         expect[(oneOf.attributes.title.has_value())];
-         expect[(oneOf.attributes.constant.has_value())];
-         expect[(std::holds_alternative<std::string_view>(oneOf.attributes.constant.value()))];
-         expect(std::get<std::string_view>(oneOf.attributes.constant.value()) == oneOf.attributes.title.value());
+         expect[(oneOf.title.has_value())];
+         expect[(oneOf.constant.has_value())];
+         expect[(std::holds_alternative<std::string_view>(oneOf.constant.value()))];
+         expect(std::get<std::string_view>(oneOf.constant.value()) == oneOf.title.value());
       }
    };
 
@@ -427,12 +422,12 @@ suite schema_tests = [] {
       std::array<std::string_view, 4> expected_keys{"up", "down", "left", "right"};
       std::array<std::string_view, 4> expected_descs{"Move upward", "Move downward", "Move left", "Move right"};
       for (size_t i = 0; i < 4; ++i) {
-         expect[(entries[i].attributes.constant.has_value())];
-         expect(std::get<std::string_view>(entries[i].attributes.constant.value()) == expected_keys[i]);
-         expect[(entries[i].attributes.title.has_value())];
-         expect(entries[i].attributes.title.value() == expected_keys[i]);
-         expect[(entries[i].attributes.description.has_value())];
-         expect(entries[i].attributes.description.value() == expected_descs[i]);
+         expect[(entries[i].constant.has_value())];
+         expect(std::get<std::string_view>(entries[i].constant.value()) == expected_keys[i]);
+         expect[(entries[i].title.has_value())];
+         expect(entries[i].title.value() == expected_keys[i]);
+         expect[(entries[i].description.has_value())];
+         expect(entries[i].description.value() == expected_descs[i]);
       }
    };
 
@@ -444,9 +439,9 @@ suite schema_tests = [] {
       expect[(obj.type.has_value())];
       expect(std::get<std::string_view>(*obj.type) == "array");
       // check maxItems (minItems not set because Glaze allows partial reading)
-      expect[(!obj.attributes.minItems.has_value())];
-      expect[(obj.attributes.maxItems.has_value())];
-      expect(obj.attributes.maxItems.value() == 42);
+      expect[(!obj.minItems.has_value())];
+      expect[(obj.maxItems.has_value())];
+      expect(obj.maxItems.value() == 42);
    };
 
    "required_key meta is correctly used"_test = [] {
@@ -463,13 +458,17 @@ suite schema_tests = [] {
       std::string schema_str_nreq =
          glz::write_json_schema<T, glz::opts{.error_on_missing_keys = false}>().value_or("error");
 
+      // Integer types use $ref to named definitions rather than being inlined.
+      // std::optional<T> is canonicalized to anyOf:[ref-to-T, null] and never appears in $defs.
       expect(
          schema_str_req ==
-         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})");
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})")
+         << schema_str_req;
 
       expect(
          schema_str_nreq ==
-         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})");
+         R"({"type":"object","properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"anyOf":[{"$ref":"#/$defs/int32_t"},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})")
+         << schema_str_nreq;
    };
 
    // Demonstrates using error_on_missing_keys to mark all non-nullable fields as required in JSON schema
@@ -478,7 +477,7 @@ suite schema_tests = [] {
       auto schema = glz::write_json_schema<Person, glz::opts{.error_on_missing_keys = true}>().value_or("error");
 
       // Parse the schema to verify the required fields
-      glz::detail::schematic obj{};
+      glz::schema obj{};
       auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema);
       expect(!err) << glz::format_error(err, schema);
 
@@ -490,15 +489,24 @@ suite schema_tests = [] {
       expect(std::find(req.begin(), req.end(), "address") != req.end());
       expect(std::find(req.begin(), req.end(), "nickname") == req.end()); // nullable, not required
 
-      // Verify Address definition also has required fields: street, city (but NOT apartment)
-      expect(obj.defs.has_value());
-      auto address_it = obj.defs->find("Address");
-      expect(address_it != obj.defs->end());
-      expect(address_it->second.required.has_value());
-      auto& addr_req = *address_it->second.required;
-      expect(std::find(addr_req.begin(), addr_req.end(), "street") != addr_req.end());
-      expect(std::find(addr_req.begin(), addr_req.end(), "city") != addr_req.end());
-      expect(std::find(addr_req.begin(), addr_req.end(), "apartment") == addr_req.end()); // nullable, not required
+      // Verify Address (inlined into properties) also has required fields: street, city (but NOT apartment)
+      // Address is single-use so it gets inlined. Use generic parse to check nested structure.
+      glz::generic_u64 doc{};
+      auto err2 = glz::read_json(doc, schema);
+      expect(!err2) << "Failed to parse schema as generic";
+      auto& root = doc.get<glz::generic_u64::object_t>();
+      auto& props = root.at("properties").get<glz::generic_u64::object_t>();
+      auto& addr = props.at("address").get<glz::generic_u64::object_t>();
+      auto addr_req_it = addr.find("required");
+      expect(addr_req_it != addr.end()) << "inlined Address should have required";
+      auto& addr_req_arr = addr_req_it->second.get<glz::generic_u64::array_t>();
+      auto has_req = [&](const std::string& key) {
+         return std::any_of(addr_req_arr.begin(), addr_req_arr.end(),
+                            [&](const auto& v) { return v.template get<std::string>() == key; });
+      };
+      expect(has_req("street"));
+      expect(has_req("city"));
+      expect(!has_req("apartment")); // nullable, not required
    };
 };
 
@@ -527,15 +535,16 @@ struct cpp_class
 suite value_type_schema = [] {
    "value_type_json_schema"_test = [] {
       auto s = glz::write_json_schema<cpp_class>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(s);
+      auto obj = glz::read_json<glz::schema>(s);
       expect(obj.has_value()) << "Failed to parse schema";
 
-      // The $defs/identifier definition should have the description from json_schema<identifier>
-      expect(obj->defs.has_value());
-      auto it = obj->defs->find("identifier");
-      expect(it != obj->defs->end());
-      expect(it->second.attributes.description.has_value());
-      expect(*it->second.attributes.description == "C++ identifier");
+      // identifier is single-use so it gets inlined into the property
+      // The property should carry the description from json_schema<identifier>
+      expect(obj->properties.has_value());
+      auto it = obj->properties->find("name");
+      expect(it != obj->properties->end());
+      expect(it->second.description.has_value());
+      expect(*it->second.description == "C++ identifier");
    };
 };
 
@@ -564,13 +573,13 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<tuple_t>().value();
       expect(
          schema ==
-         R"({"type":"array","prefixItems":[{"type":"integer","minimum":-2147483648,"maximum":2147483647},{"type":"string"},{"type":"boolean"}],"items":false,"$defs":{},"title":"std::tuple<int32_t,std::string,bool>","maxItems":3})")
+         R"({"type":"array","prefixItems":[{"type":"integer","minimum":-2147483648,"maximum":2147483647},{"type":"string"},{"type":"boolean"}],"items":false,"title":"std::tuple<int32_t,std::string,bool>","maxItems":3})")
          << schema;
    };
 
    "single element tuple"_test = [] {
       auto schema = glz::write_json_schema<std::tuple<int>>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema";
       expect(obj->prefixItems.has_value());
       expect(obj->prefixItems->size() == 1);
@@ -580,7 +589,7 @@ suite value_type_variant_schema = [] {
 
    "glz::tuple schema"_test = [] {
       auto schema = glz::write_json_schema<glz::tuple<int, std::string>>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema";
       expect(obj->type.has_value());
       expect(std::get<std::string_view>(*obj->type) == "array");
@@ -593,7 +602,7 @@ suite value_type_variant_schema = [] {
    "nested tuple schema"_test = [] {
       using nested_t = std::tuple<int, std::tuple<double, bool>>;
       auto schema = glz::write_json_schema<nested_t>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema";
       expect(obj->prefixItems.has_value());
       expect(obj->prefixItems->size() == 2);
@@ -608,37 +617,35 @@ suite value_type_variant_schema = [] {
    "tuple with object type populates defs"_test = [] {
       using tuple_t = std::tuple<int, schema_obj>;
       auto schema = glz::write_json_schema<tuple_t>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema";
       expect(obj->prefixItems.has_value());
       expect(obj->prefixItems->size() == 2);
    };
 
-   "homogeneous array items inlines primitive types"_test = [] {
+   "homogeneous array integer items use ref"_test = [] {
       auto schema = glz::write_json_schema<std::vector<int>>().value();
       expect(
          schema ==
-         R"({"type":"array","items":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"$defs":{},"title":"std::vector<int32_t>"})")
+         R"({"type":"array","items":{"$ref":"#/$defs/int32_t"},"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"std::vector<int32_t>"})")
          << schema;
    };
 
    "vector<string> items inlined"_test = [] {
       auto schema = glz::write_json_schema<std::vector<std::string>>().value();
-      expect(schema == R"({"type":"array","items":{"type":"string"},"$defs":{},"title":"std::vector<std::string>"})")
-         << schema;
+      expect(schema == R"({"type":"array","items":{"type":"string"},"title":"std::vector<std::string>"})") << schema;
    };
 
    "vector<bool> items inlined"_test = [] {
       auto schema = glz::write_json_schema<std::vector<bool>>().value();
-      expect(schema == R"({"type":"array","items":{"type":"boolean"},"$defs":{},"title":"std::vector<bool>"})")
-         << schema;
+      expect(schema == R"({"type":"array","items":{"type":"boolean"},"title":"std::vector<bool>"})") << schema;
    };
 
-   "vector<double> items inlined"_test = [] {
+   "vector<double> items use ref"_test = [] {
       auto schema = glz::write_json_schema<std::vector<double>>().value();
       expect(
          schema ==
-         R"({"type":"array","items":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"$defs":{},"title":"std::vector<double>"})")
+         R"({"type":"array","items":{"$ref":"#/$defs/double"},"$defs":{"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}},"title":"std::vector<double>"})")
          << schema;
    };
 
@@ -646,13 +653,13 @@ suite value_type_variant_schema = [] {
       auto schema = glz::write_json_schema<std::map<std::string, std::string>>().value();
       expect(
          schema ==
-         R"({"type":"object","additionalProperties":{"type":"string"},"$defs":{},"title":"std::map<std::string,std::string>"})")
+         R"({"type":"object","additionalProperties":{"type":"string"},"title":"std::map<std::string,std::string>"})")
          << schema;
    };
 
    "glaze_array_t schema"_test = [] {
       auto schema = glz::write_json_schema<point3d>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema";
       expect(obj->type.has_value());
       expect(std::get<std::string_view>(*obj->type) == "array");
@@ -665,19 +672,24 @@ suite value_type_variant_schema = [] {
 
    "value_type_variant_json_schema"_test = [] {
       auto s = glz::write_json_schema<cpp_class_variant>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(s);
-      expect(obj.has_value()) << "Failed to parse schema";
 
-      // The variant definition should include "string" in its type array
-      expect(obj->defs.has_value());
-      using variant_t = std::variant<identifier, std::nullopt_t>;
-      auto it = obj->defs->find(glz::name_v<variant_t>);
-      expect(it != obj->defs->end()) << "missing def for: " << std::string(glz::name_v<variant_t>);
-      if (it == obj->defs->end()) return; // avoid segfault on missing key
-      expect(it->second.type.has_value());
-      auto& types = std::get<std::vector<std::string_view>>(*it->second.type);
-      expect(std::find(types.begin(), types.end(), "string") != types.end()) << "missing string type";
-      expect(std::find(types.begin(), types.end(), "null") != types.end()) << "missing null type";
+      // The variant is single-use so it gets inlined into the property.
+      // Parse as generic to verify the variant type array in the inlined property.
+      glz::generic_u64 doc{};
+      auto err = glz::read_json(doc, s);
+      expect(!err) << "Failed to parse schema as generic";
+      auto& root = doc.get<glz::generic_u64::object_t>();
+      auto& props = root.at("properties").get<glz::generic_u64::object_t>();
+      auto& name_prop = props.at("name").get<glz::generic_u64::object_t>();
+      auto type_it = name_prop.find("type");
+      expect(type_it != name_prop.end()) << "inlined variant should have type";
+      auto& type_arr = type_it->second.get<glz::generic_u64::array_t>();
+      auto has_type = [&](const std::string& t) {
+         return std::any_of(type_arr.begin(), type_arr.end(),
+                            [&](const auto& v) { return v.template get<std::string>() == t; });
+      };
+      expect(has_type("string")) << "missing string type";
+      expect(has_type("null")) << "missing null type";
    };
 };
 
@@ -686,7 +698,7 @@ suite vector_pair_schema_test = [] {
       // std::vector<std::pair<std::string, int>> serializes as a JSON object by default (concatenate=true)
       // The schema should reflect this by generating an object type, not an array type
       auto schema = glz::write_json_schema<std::vector<std::pair<std::string, int>>>().value_or("error");
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
       expect(obj->type.has_value());
@@ -696,7 +708,7 @@ suite vector_pair_schema_test = [] {
 
    "vector_pair_string_uint64_schema"_test = [] {
       auto schema = glz::write_json_schema<std::vector<std::pair<std::string, uint64_t>>>().value_or("error");
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
       expect(obj->type.has_value());
@@ -763,7 +775,7 @@ static_assert(glz::glaze_const_value_t<const_value_wrapper>);
 suite meta_value_schema_test = [] {
    "holds_bool schema"_test = [] {
       auto schema = glz::write_json_schema<holds_bool>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
       expect(obj->type.has_value());
@@ -772,7 +784,7 @@ suite meta_value_schema_test = [] {
 
    "holds_int schema"_test = [] {
       auto schema = glz::write_json_schema<holds_int>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
       expect(obj->type.has_value());
@@ -781,7 +793,7 @@ suite meta_value_schema_test = [] {
 
    "holds_string schema"_test = [] {
       auto schema = glz::write_json_schema<holds_string>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
       expect(obj->type.has_value());
@@ -790,7 +802,7 @@ suite meta_value_schema_test = [] {
 
    "holds_optional schema"_test = [] {
       auto schema = glz::write_json_schema<holds_optional>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
       expect(obj->type.has_value());
@@ -801,7 +813,7 @@ suite meta_value_schema_test = [] {
 
    "const_value_wrapper schema"_test = [] {
       auto schema = glz::write_json_schema<const_value_wrapper>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "failed to parse schema";
       if (!obj) return;
       expect(obj->type.has_value());
@@ -813,7 +825,7 @@ suite meta_value_schema_test = [] {
 suite void_schema_test = [] {
    "void schema is null"_test = [] {
       auto schema = glz::write_json_schema<void>().value();
-      expect(schema == R"({"type":"null","$defs":{},"title":"void"})") << schema;
+      expect(schema == R"({"type":"null","title":"void"})") << schema;
    };
 };
 
@@ -856,93 +868,83 @@ struct shared_type_wrapper
 };
 
 suite variant_ref_schema_tests = [] {
-   "untagged variant with object alternatives uses $ref"_test = [] {
+   "untagged variant with object alternatives inlined when single-use"_test = [] {
       using var_t = std::variant<obj_a, obj_b>;
       auto schema = glz::write_json_schema<var_t>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema: " << schema;
       if (!obj) return;
 
-      // oneOf entries should be $ref pointers, not inline definitions
+      // Single-use alternatives are inlined directly in oneOf
       expect(obj->oneOf.has_value());
       expect(obj->oneOf->size() == 2u);
       for (auto& entry : *obj->oneOf) {
-         expect(entry.attributes.ref.has_value()) << "oneOf entry should have $ref";
-         expect(!entry.type.has_value()) << "oneOf entry with $ref should not have inline type";
-         expect(!entry.properties.has_value()) << "oneOf entry with $ref should not have inline properties";
+         expect(!entry.ref.has_value()) << "single-use oneOf entry should be inlined";
+         expect(entry.type.has_value()) << "inlined oneOf entry should have type";
+         expect(entry.properties.has_value()) << "inlined oneOf entry should have properties";
       }
-
-      // The object definitions should be in $defs
-      expect(obj->defs.has_value());
-      auto it_a = obj->defs->find(glz::name_v<obj_a>);
-      auto it_b = obj->defs->find(glz::name_v<obj_b>);
-      expect(it_a != obj->defs->end()) << "obj_a should be in $defs";
-      expect(it_b != obj->defs->end()) << "obj_b should be in $defs";
    };
 
-   "untagged variant with array alternative uses $ref"_test = [] {
+   "untagged variant with array alternative inlined when single-use"_test = [] {
       using var_t = std::variant<std::vector<int>, std::string>;
       auto schema = glz::write_json_schema<var_t>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema: " << schema;
       if (!obj) return;
 
       expect(obj->oneOf.has_value());
       expect(obj->oneOf->size() == 2u);
 
-      // The vector<int> alternative should use $ref
+      // Both alternatives are single-use and inlined
       auto& vec_entry = (*obj->oneOf)[0];
-      expect(vec_entry.attributes.ref.has_value()) << "array alternative should use $ref";
+      expect(!vec_entry.ref.has_value()) << "single-use array alternative should be inlined";
+      expect(vec_entry.type.has_value());
 
-      // The string alternative should be inline (simple type)
       auto& str_entry = (*obj->oneOf)[1];
-      expect(!str_entry.attributes.ref.has_value()) << "string alternative should be inline";
+      expect(!str_entry.ref.has_value()) << "string alternative should be inline";
       expect(str_entry.type.has_value());
    };
 
-   "untagged variant with map alternative uses $ref"_test = [] {
+   "untagged variant with map alternative inlined when single-use"_test = [] {
       using var_t = std::variant<std::map<std::string, int>, double>;
       auto schema = glz::write_json_schema<var_t>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema: " << schema;
       if (!obj) return;
 
       expect(obj->oneOf.has_value());
       expect(obj->oneOf->size() == 2u);
 
-      // The map alternative should use $ref
+      // Both alternatives are single-use and inlined
       auto& map_entry = (*obj->oneOf)[0];
-      expect(map_entry.attributes.ref.has_value()) << "map alternative should use $ref";
+      expect(!map_entry.ref.has_value()) << "single-use map alternative should be inlined";
+      expect(map_entry.type.has_value());
 
-      // The double alternative should be inline
       auto& dbl_entry = (*obj->oneOf)[1];
-      expect(!dbl_entry.attributes.ref.has_value()) << "double alternative should be inline";
+      expect(!dbl_entry.ref.has_value()) << "double alternative should be inline";
    };
 
-   "mixed variant: complex types get $ref, simple types stay inline"_test = [] {
+   "mixed variant: all single-use types inlined"_test = [] {
       using var_t = std::variant<obj_a, int, std::string, std::vector<double>>;
       auto schema = glz::write_json_schema<var_t>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema: " << schema;
       if (!obj) return;
 
       expect(obj->oneOf.has_value());
       expect(obj->oneOf->size() == 4u);
 
-      // obj_a (object) → $ref
-      expect((*obj->oneOf)[0].attributes.ref.has_value()) << "object should use $ref";
-      // int (number) → inline
-      expect(!(*obj->oneOf)[1].attributes.ref.has_value()) << "int should be inline";
-      // string → inline
-      expect(!(*obj->oneOf)[2].attributes.ref.has_value()) << "string should be inline";
-      // vector<double> (array) → $ref
-      expect((*obj->oneOf)[3].attributes.ref.has_value()) << "array should use $ref";
+      // All alternatives are single-use and inlined
+      for (auto& entry : *obj->oneOf) {
+         expect(!entry.ref.has_value()) << "single-use alternative should be inlined";
+         expect(entry.type.has_value()) << "inlined alternative should have type";
+      }
    };
 
 #if !defined(_MSC_VER)
    "tagged variant object alternatives remain inline"_test = [] {
       auto schema = glz::write_json_schema<tagged_obj_variant>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
+      auto obj = glz::read_json<glz::schema>(schema);
       expect(obj.has_value()) << "Failed to parse schema: " << schema;
       if (!obj) return;
 
@@ -952,7 +954,7 @@ suite variant_ref_schema_tests = [] {
       // Tagged object alternatives should NOT use $ref — they need inline expansion
       // so the tag discriminator property can be part of the properties map
       for (auto& entry : *obj->oneOf) {
-         expect(!entry.attributes.ref.has_value()) << "tagged object alternative should not use $ref: " << schema;
+         expect(!entry.ref.has_value()) << "tagged object alternative should not use $ref: " << schema;
          expect(entry.type.has_value()) << "tagged object alternative should have inline type";
          expect(entry.properties.has_value()) << "tagged object alternative should have inline properties";
          // Verify the tag property is present
@@ -963,19 +965,20 @@ suite variant_ref_schema_tests = [] {
 
    "shared type between property and variant uses single $defs entry"_test = [] {
       auto schema = glz::write_json_schema<shared_type_wrapper>().value();
-      auto obj = glz::read_json<glz::detail::schematic>(schema);
-      expect(obj.has_value()) << "Failed to parse schema: " << schema;
-      if (!obj) return;
+      // Use error_on_unknown_keys=false because inlined variant introduces keys (oneOf) not in schema type
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema);
+      expect(!err) << "Failed to parse schema: " << schema;
 
-      // obj_a should appear exactly once in $defs, referenced from both the property and the variant
-      expect(obj->defs.has_value());
-      auto it = obj->defs->find(glz::name_v<obj_a>);
-      expect(it != obj->defs->end()) << "obj_a should be in $defs";
+      // obj_a appears in $defs because it is referenced from both the property and the variant (count=2)
+      expect(obj.defs.has_value());
+      auto it = obj.defs->find(glz::name_v<obj_a>);
+      expect(it != obj.defs->end()) << "obj_a should be in $defs";
 
       // The direct property should reference obj_a via $ref
-      expect(obj->properties.has_value());
-      auto prop_it = obj->properties->find("direct");
-      expect(prop_it != obj->properties->end());
+      expect(obj.properties.has_value());
+      auto prop_it = obj.properties->find("direct");
+      expect(prop_it != obj.properties->end());
       expect(prop_it->second.ref.has_value());
       expect(*prop_it->second.ref == std::string("#/$defs/") + std::string(glz::name_v<obj_a>));
    };
@@ -995,8 +998,181 @@ suite nested_optional_inline_test = [] {
       auto schema = glz::write_json_schema<nested_optional_obj>().value();
       expect(
          schema ==
-         R"({"type":"object","properties":{"b1":{"type":["string","null"]},"b2":{"type":["string","null"]},"b3":{"type":["boolean","null"]},"b4":{"type":["string","null"]}},"additionalProperties":false,"$defs":{},"title":"nested_optional_obj"})")
+         R"({"type":"object","properties":{"b1":{"type":["string","null"]},"b2":{"type":["string","null"]},"b3":{"type":["boolean","null"]},"b4":{"type":["string","null"]}},"additionalProperties":false,"title":"nested_optional_obj"})")
          << schema;
+   };
+};
+
+// Issue #2498: std::optional<T> should never be referenced in $defs.
+// Instead, T goes into $defs and the use-site references T via anyOf + null.
+namespace issue_2498
+{
+   struct A
+   {};
+   struct B
+   {
+      std::optional<A> aOpt{};
+   };
+   struct Named
+   {
+      int x{};
+      struct glaze
+      {
+         static constexpr std::string_view name = "somename";
+      };
+   };
+   struct HoldsNamed
+   {
+      std::optional<Named> n{};
+   };
+   struct HoldsOptionalVector
+   {
+      std::optional<std::vector<A>> v{};
+   };
+   struct HoldsVectorOfOptional
+   {
+      std::vector<std::optional<A>> v{};
+   };
+   struct HoldsMapOfOptional
+   {
+      std::map<std::string, std::optional<A>> m{};
+   };
+   struct MultiUse
+   {
+      A required_a{};
+      std::optional<A> optional_a{};
+   };
+}
+
+// P2996 type-name compiler portability: Bloomberg clang-p2996 returns unqualified names
+// from std::meta::display_string_of (e.g., "B"), while GCC 16's reflection returns fully
+// qualified names (e.g., "issue_2498::B"). Traditional (non-P2996) reflection also returns
+// qualified names. Until qualified_name_of is available in Bloomberg clang-p2996
+// (see include/glaze/reflection/get_name.hpp), normalize both sides of the schema
+// comparison by stripping the known namespace prefix before comparing. This way a single
+// expected string matches all three reflection backends.
+static std::string normalize_issue_2498_ns(std::string s)
+{
+   static constexpr std::string_view prefix = "issue_2498::";
+   for (auto pos = s.find(prefix); pos != std::string::npos; pos = s.find(prefix, pos)) {
+      s.erase(pos, prefix.size());
+   }
+   return s;
+}
+
+suite optional_never_referenced_test = [] {
+   auto eq = [](const std::string& schema, std::string_view expected) {
+      return normalize_issue_2498_ns(schema) == normalize_issue_2498_ns(std::string{expected});
+   };
+
+   "optional of struct expands inline via anyOf"_test = [eq] {
+      auto schema = glz::write_json_schema<issue_2498::B>().value();
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"aOpt":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"title":"issue_2498::B"})"))
+         << schema;
+   };
+
+   "optional of named struct still omits std::optional from $defs"_test = [eq] {
+      auto schema = glz::write_json_schema<issue_2498::HoldsNamed>().value();
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"n":{"anyOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"issue_2498::HoldsNamed"})"))
+         << schema;
+   };
+
+   "optional wrapping a vector canonicalizes to anyOf"_test = [eq] {
+      auto schema = glz::write_json_schema<issue_2498::HoldsOptionalVector>().value();
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"v":{"anyOf":[{"type":"array","items":{"type":"object","properties":{},"additionalProperties":false}},{"type":"null"}]}},"additionalProperties":false,"title":"issue_2498::HoldsOptionalVector"})"))
+         << schema;
+   };
+
+   "array items of nullable type emit anyOf at the item level"_test = [eq] {
+      auto schema = glz::write_json_schema<issue_2498::HoldsVectorOfOptional>().value();
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"v":{"type":"array","items":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}}},"additionalProperties":false,"title":"issue_2498::HoldsVectorOfOptional"})"))
+         << schema;
+   };
+
+   "map values of nullable type emit anyOf at the value level"_test = [eq] {
+      auto schema = glz::write_json_schema<issue_2498::HoldsMapOfOptional>().value();
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"m":{"type":"object","additionalProperties":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}}},"additionalProperties":false,"title":"issue_2498::HoldsMapOfOptional"})"))
+         << schema;
+   };
+
+   "multi-use inner type stays in $defs and is referenced via anyOf"_test = [eq] {
+      auto schema = glz::write_json_schema<issue_2498::MultiUse>().value();
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"optional_a":{"anyOf":[{"$ref":"#/$defs/issue_2498::A"},{"type":"null"}]},"required_a":{"$ref":"#/$defs/issue_2498::A"}},"additionalProperties":false,"$defs":{"issue_2498::A":{"type":"object","properties":{},"additionalProperties":false}},"title":"issue_2498::MultiUse"})"))
+         << schema;
+   };
+};
+
+struct round_trip_inner
+{
+   int a{};
+   std::string b{};
+};
+
+struct round_trip_val
+{
+   double x{};
+};
+
+// Verify round-trip correctness for schemas with shared_ptr<schema> items/additionalProperties
+suite schema_round_trip_test = [] {
+   "array schema round-trips through read/write"_test = [] {
+      // Generate a schema with complex items (shared_ptr<schema> path)
+      auto schema_str = glz::write_json_schema<std::vector<round_trip_inner>>().value();
+
+      // Read it back
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+
+      // Verify structural fields survived the round-trip
+      expect(obj.type.has_value());
+      expect(std::get<std::string_view>(*obj.type) == "array");
+      expect(obj.items.has_value());
+      auto* item_ptr = std::get_if<std::shared_ptr<glz::schema>>(&*obj.items);
+      expect(item_ptr != nullptr) << "items should be a schema, not bool";
+      expect(*item_ptr != nullptr) << "items shared_ptr should not be null";
+      expect((*item_ptr)->type.has_value());
+      expect(std::get<std::string_view>(*(*item_ptr)->type) == "object");
+
+      // Re-serialize and compare
+      std::string re_serialized{};
+      auto ec = glz::write<glz::opts{.error_on_unknown_keys = false}>(obj, re_serialized);
+      expect(!ec);
+      expect(re_serialized == schema_str)
+         << "round-trip mismatch:\n  original: " << schema_str << "\n  re-serialized: " << re_serialized;
+   };
+
+   "map schema round-trips through read/write"_test = [] {
+      auto schema_str = glz::write_json_schema<std::map<std::string, round_trip_val>>().value();
+
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+
+      expect(obj.type.has_value());
+      expect(std::get<std::string_view>(*obj.type) == "object");
+      expect(obj.additionalProperties.has_value());
+      auto* ap_ptr = std::get_if<std::shared_ptr<glz::schema>>(&*obj.additionalProperties);
+      expect(ap_ptr != nullptr) << "additionalProperties should be a schema, not bool";
+      expect(*ap_ptr != nullptr);
+
+      std::string re_serialized{};
+      auto ec = glz::write<glz::opts{.error_on_unknown_keys = false}>(obj, re_serialized);
+      expect(!ec);
+      expect(re_serialized == schema_str)
+         << "round-trip mismatch:\n  original: " << schema_str << "\n  re-serialized: " << re_serialized;
    };
 };
 

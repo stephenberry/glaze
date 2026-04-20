@@ -167,10 +167,10 @@ suite tagged_variant_tests = [] {
       // P2996 reflection: Bloomberg Clang returns unqualified names, GCC returns qualified names
       // Accept both forms for the title
       auto expected_qualified =
-         R"({"type":"object","$defs":{"std::map<std::string,int32_t>":{"type":"object","additionalProperties":{"type":"integer","minimum":-2147483648,"maximum":2147483647}}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"std::variant<put_action, delete_action>"})";
+         R"({"type":"object","$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"std::variant<put_action, delete_action>"})";
 #if GLZ_REFLECTION26
       auto expected_unqualified =
-         R"({"type":"object","$defs":{"std::map<std::string,int32_t>":{"type":"object","additionalProperties":{"type":"integer","minimum":-2147483648,"maximum":2147483647}}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"variant<put_action, delete_action>"})";
+         R"({"type":"object","$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"action":{"const":"PUT"},"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}}},"additionalProperties":false,"required":["action"],"title":"PUT"},{"type":"object","properties":{"action":{"const":"DELETE"},"data":{"type":"string"}},"additionalProperties":false,"required":["action"],"title":"DELETE"}],"title":"variant<put_action, delete_action>"})";
       expect(s == expected_qualified || s == expected_unqualified) << s;
 #else
       expect(s == expected_qualified) << s;
@@ -211,10 +211,10 @@ suite tagged_variant_tests = [] {
       // P2996 reflection: Bloomberg Clang returns unqualified names, GCC returns qualified names
       // Accept both forms for the title
       auto expected_qualified =
-         R"({"type":["object","null"],"$defs":{"std::map<std::string,int32_t>":{"type":"object","additionalProperties":{"type":"integer","minimum":-2147483648,"maximum":2147483647}}},"oneOf":[{"type":"object","properties":{"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"null","title":"std::monostate","const":null}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})";
+         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"null","title":"std::monostate","const":null}],"title":"std::shared_ptr<std::variant<put_action, delete_action, std::monostate>>"})";
 #if GLZ_REFLECTION26
       auto expected_unqualified =
-         R"({"type":["object","null"],"$defs":{"std::map<std::string,int32_t>":{"type":"object","additionalProperties":{"type":"integer","minimum":-2147483648,"maximum":2147483647}}},"oneOf":[{"type":"object","properties":{"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"null","title":"std::monostate","const":null}],"title":"std::shared_ptr<variant<put_action, delete_action, monostate>>"})";
+         R"({"type":["object","null"],"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"oneOf":[{"type":"object","properties":{"data":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"],"title":"put_action"},{"type":"object","properties":{"data":{"type":"string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"],"title":"delete_action"},{"type":"null","title":"std::monostate","const":null}],"title":"std::shared_ptr<variant<put_action, delete_action, monostate>>"})";
       expect(schema == expected_qualified || schema == expected_unqualified) << schema;
 #else
       expect(schema == expected_qualified) << schema;
@@ -670,7 +670,7 @@ suite empty_variant_objects = [] {
       const auto s = glz::write_json_schema<var_schema>().value_or("error");
       expect(
          s ==
-         R"({"type":"object","properties":{"$schema":{"type":"string"},"variant":{"$ref":"#/$defs/vari"}},"additionalProperties":false,"$defs":{"vari":{"type":"object","oneOf":[{"type":"object","properties":{"type":{"const":"varx"}},"additionalProperties":false,"required":["type"],"title":"varx"},{"type":"object","properties":{"type":{"const":"vary"}},"additionalProperties":false,"required":["type"],"title":"vary"}]}},"title":"var_schema"})")
+         R"({"type":"object","properties":{"$schema":{"type":"string"},"variant":{"type":"object","oneOf":[{"type":"object","properties":{"type":{"const":"varx"}},"additionalProperties":false,"required":["type"],"title":"varx"},{"type":"object","properties":{"type":{"const":"vary"}},"additionalProperties":false,"required":["type"],"title":"vary"}]}},"additionalProperties":false,"title":"var_schema"})")
          << s;
    };
 };

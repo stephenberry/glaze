@@ -73,6 +73,11 @@ struct seq_string_struct
    std::vector<std::string> items{};
 };
 
+struct set_string_struct
+{
+   std::set<std::string> items{};
+};
+
 template <>
 struct glz::meta<nested_struct>
 {
@@ -1864,6 +1869,42 @@ suite yaml_container_tests = [] {
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
       expect(parsed == original);
+   };
+
+   "set_block_sequence"_test = [] {
+      std::string yaml = R"(- 5
+- 3
+- 1
+- 4
+- 2
+)";
+      std::set<int> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == std::set<int>{1, 2, 3, 4, 5});
+   };
+
+   "set_string_block_sequence"_test = [] {
+      std::string yaml = R"(- apple
+- banana
+- cherry
+)";
+      std::set<std::string> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == std::set<std::string>{"apple", "banana", "cherry"});
+   };
+
+   "set_block_sequence_in_struct"_test = [] {
+      std::string yaml = R"(items:
+  - s1
+  - s2
+  - s3
+)";
+      set_string_struct parsed{};
+      auto rec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.items == std::set<std::string>{"s1", "s2", "s3"});
    };
 
    "vector_of_vectors_flow"_test = [] {
