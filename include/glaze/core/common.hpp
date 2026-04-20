@@ -440,7 +440,12 @@ namespace glz
 
    template <class T>
    concept glaze_object_t = glaze_t<T> && (is_specialization_v<meta_wrapper_t<T>, detail::Object> ||
-                                           (not std::is_enum_v<std::decay_t<T>> && meta_keys<T>));
+                                           (not std::is_enum_v<std::decay_t<T>> && meta_keys<T>) ||
+                                           is_specialization_v<meta_wrapper_t<T>, glz::merge>);
+
+   // Detects types whose glz::meta value is a glz::merge of member pointers
+   template <class T>
+   concept glaze_merge_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, glz::merge>;
 
    template <class T>
    concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Enum>;
