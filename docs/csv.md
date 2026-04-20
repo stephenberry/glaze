@@ -131,10 +131,53 @@ Options:
 - `validate_rectangular` — enforce equal column counts across rows on read.
   - On failure, `read` returns `constraint_violated` and sets a message in `ctx.custom_error_message`.
 
+## Custom Delimiters
+
+By default, Glaze uses a comma (`,`) as the field delimiter. You can change this via the `delimiter` option in `opts_csv` to support other common formats like TSV, pipe-delimited, or semicolon-delimited files.
+
+Supported delimiters: `,`  `\t`  `|`  `;`
+
+```c++
+// Semicolon-delimited (common in European locales)
+glz::read<glz::opts_csv{.delimiter = ';'}>(obj, input);
+glz::write<glz::opts_csv{.delimiter = ';'}>(obj, output);
+
+// Tab-separated (TSV)
+glz::read<glz::opts_csv{.delimiter = '\t'}>(obj, input);
+
+// Pipe-delimited
+glz::read<glz::opts_csv{.delimiter = '|'}>(obj, input);
+```
+
+The delimiter option works with all CSV features: structs, maps, 2D arrays, vectors of structs, quoting, and both row-wise and column-wise layouts.
+
+```c++
+// Semicolon-delimited column-wise struct
+std::string input =
+   R"(num1;num2;maybe
+11;22;1
+33;44;0)";
+
+my_struct obj{};
+glz::read<glz::opts_csv{.layout = glz::colwise, .delimiter = ';'}>(obj, input);
+
+// Pipe-delimited 2D array
+std::string tsv = "1|2|3\n4|5|6";
+std::vector<std::vector<int>> matrix;
+glz::read<glz::opts_csv{.use_headers = false, .delimiter = '|'}>(matrix, tsv);
+```
+
+Using an unsupported delimiter character produces a compile-time error:
+
+```c++
+// Compile error: CSV delimiter must be one of: ',' '\t' '|' ';'
+glz::write<glz::opts_csv{.delimiter = '.'}>(obj, out);
+```
+
 ## CSV Quoting and Special Values
 
 - Strings and chars are quoted when needed; embedded quotes are escaped by doubling them.
-- Quoted fields preserve commas, quotes, and newlines (handles both `\n` and `\r\n`).
+- Quoted fields preserve delimiters, quotes, and newlines (handles both `\n` and `\r\n`).
 - Empty fields are parsed as default values (e.g., `0` for numbers, empty string for strings, `false` for booleans).
 - Booleans accept `true`/`false` (case-insensitive) and `0`/`1`; empty boolean fields default to `false`.
 
