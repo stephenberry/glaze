@@ -427,9 +427,12 @@ namespace glz
       template <class T>
       constexpr bool is_schema_default_convertible = is_schema_default_convertible_raw<std::decay_t<T>>;
 
-      // Per-member extraction helpers (avoids nested lambdas in fold expressions, which ICE GCC 13)
+      // Per-member extraction helpers.
+      // Avoids nested lambdas in fold expressions (ICEs GCC 13). Declared constexpr rather
+      // than consteval so GCC accepts non-constexpr local references from the consteval
+      // caller — consteval helpers would require constant-expression arguments.
       template <size_t I, class Tied>
-      consteval auto extract_default_from_tie(Tied& tied) -> std::optional<schema::schema_any>
+      constexpr auto extract_default_from_tie(Tied& tied) -> std::optional<schema::schema_any>
       {
          using val_t = std::decay_t<decltype(get<I>(tied))>;
          if constexpr (is_schema_default_convertible<val_t>) {
@@ -441,7 +444,7 @@ namespace glz
       }
 
       template <class T, size_t I>
-      consteval auto extract_default_from_member(T& instance) -> std::optional<schema::schema_any>
+      constexpr auto extract_default_from_member(T& instance) -> std::optional<schema::schema_any>
       {
          using member_type = std::decay_t<decltype(get<I>(reflect<T>::values))>;
          if constexpr (std::is_member_object_pointer_v<member_type>) {
