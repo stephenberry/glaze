@@ -26,7 +26,9 @@ Formats Supported:
 
 ## C++26 P2996 Reflection Support
 
-Glaze now supports [P2996 "Reflection for C++26"](https://wg21.link/P2996). When enabled, P2996 unlocks capabilities that aren't possible with traditional compile-time reflection:
+Glaze now supports [P2996 "Reflection for C++26"](https://wg21.link/P2996). When enabled, P2996 unlocks capabilities that aren't possible with traditional compile-time reflection.
+
+<details><summary>P2996 reflection capabilities and examples:</summary>
 
 - **Non-aggregate types** — classes with constructors, virtual functions, and inheritance just work
 - **Automatic enum serialization** — no `glz::meta` needed, enums serialize to strings automatically
@@ -60,6 +62,8 @@ auto color_json = glz::write<reflect_enums_opts{}>(c).value_or("error");
 ```
 
 Supported compilers: [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) (`-std=c++26 -freflection`) and [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996). See the [P2996 documentation](https://stephenberry.github.io/glaze/p2996-reflection/) for setup and details.
+
+</details>
 
 ## [📖 Documentation](https://stephenberry.github.io/glaze/)
 
