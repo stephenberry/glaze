@@ -520,11 +520,11 @@ namespace glz
       template <class T>
       consteval auto defaults_array_for()
       {
-         constexpr auto N = reflect<T>::size;
          if constexpr (can_extract_defaults<T>) {
             return extract_all_defaults<T>();
          }
          else {
+            constexpr auto N = reflect<T>::size;
             std::array<std::optional<schema::schema_any>, N> empty{};
             return empty;
          }
