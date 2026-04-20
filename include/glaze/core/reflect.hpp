@@ -321,6 +321,12 @@ namespace glz
             }
          }
       };
+
+      struct merge_index_pair
+      {
+         size_t outer;
+         size_t inner;
+      };
    }
 
    template <class T>
@@ -336,11 +342,16 @@ namespace glz
       using sub_type_at = std::remove_cvref_t<
          typename member_value<std::decay_t<decltype(get<I>(meta_v<V>))>>::type>;
 
+      // Per-sub-type sizes — computed once and reused below.
+      static constexpr auto sub_sizes = []<size_t... I>(std::index_sequence<I...>) constexpr {
+         return std::array<size_t, num_merge_members>{reflect<sub_type_at<I>>::size...};
+      }(std::make_index_sequence<num_merge_members>{});
+
       // Total number of flattened fields
       static constexpr size_t size = []() constexpr {
-         return []<size_t... I>(std::index_sequence<I...>) constexpr {
-            return (reflect<sub_type_at<I>>::size + ... + size_t{0});
-         }(std::make_index_sequence<num_merge_members>{});
+         size_t total = 0;
+         for (auto s : sub_sizes) total += s;
+         return total;
       }();
 
       // Concatenated keys from all sub-types
@@ -373,34 +384,23 @@ namespace glz
       }();
       static_assert(unique_keys, "glz::merge sub-types must not have duplicate keys");
 
-      // Prefix-sum offsets for mapping flat index -> (outer, inner)
-      static constexpr auto sub_offsets = []() constexpr {
-         std::array<size_t, num_merge_members + 1> result{};
-         result[0] = 0;
-         [&]<size_t... I>(std::index_sequence<I...>) constexpr {
-            ((result[I + 1] = result[I] + reflect<sub_type_at<I>>::size), ...);
-         }(std::make_index_sequence<num_merge_members>{});
+      // Pre-computed (outer, inner) pair for each flat index. Lets `values`
+      // build merge_accessor types via array lookups rather than per-index
+      // consteval function template instantiations.
+      static constexpr auto flat_layout = []() constexpr {
+         std::array<detail::merge_index_pair, size> result{};
+         size_t flat = 0;
+         for (size_t o = 0; o < num_merge_members; ++o) {
+            for (size_t i = 0; i < sub_sizes[o]; ++i) {
+               result[flat++] = {o, i};
+            }
+         }
          return result;
       }();
 
-      template <size_t FlatIdx>
-      static consteval size_t flat_outer()
-      {
-         for (size_t o = 0; o < num_merge_members; ++o) {
-            if (FlatIdx < sub_offsets[o + 1]) return o;
-         }
-         return 0;
-      }
-
-      template <size_t FlatIdx>
-      static consteval size_t flat_inner()
-      {
-         return FlatIdx - sub_offsets[flat_outer<FlatIdx>()];
-      }
-
       // Flat values tuple built directly — avoids tuplet::tuple_cat (which has GCC issues)
       static constexpr auto values = []<size_t... I>(std::index_sequence<I...>) {
-         return tuple{detail::merge_accessor<V, flat_outer<I>(), flat_inner<I>()>{}...};
+         return tuple{detail::merge_accessor<V, flat_layout[I].outer, flat_layout[I].inner>{}...};
       }(std::make_index_sequence<size>{});
 
       template <size_t I>
