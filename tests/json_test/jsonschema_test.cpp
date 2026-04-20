@@ -1214,6 +1214,17 @@ struct nested_defaults
    auto_defaults inner{}; // nested struct with defaults
 };
 
+// Value-init members should NOT emit a "default" — they are sentinel-init,
+// not a deliberate recommendation. Only non-sentinel inits get extracted.
+struct value_init_defaults
+{
+   bool flag_true{true}; // deliberate non-zero → extract
+   bool flag_false{false}; // matches bool{} → skip
+   int zero{}; // matches int{} → skip
+   int nonzero{7}; // deliberate → extract
+   double ratio_zero{0.0}; // matches double{} → skip
+};
+
 // Opt in to primitive-member default extraction for these tests.
 struct auto_defaults_opts : glz::opts
 {
@@ -1322,6 +1333,27 @@ suite auto_default_tests = [] {
       expect(props.at("value").defaultValue.has_value());
       expect(std::holds_alternative<int64_t>(props.at("value").defaultValue.value()));
       expect(std::get<int64_t>(props.at("value").defaultValue.value()) == 99);
+   };
+
+   "value-init members are filtered out"_test = [] {
+      std::string schema_str =
+         glz::write_json_schema<value_init_defaults, auto_defaults_opts{}>().value_or("error");
+      glz::schema obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema_str);
+      expect(!err) << glz::format_error(err, schema_str);
+      expect(obj.properties.has_value());
+      auto& props = *obj.properties;
+
+      // Deliberate non-sentinel values: extracted
+      expect(props.at("flag_true").defaultValue.has_value()) << schema_str;
+      expect(std::get<bool>(props.at("flag_true").defaultValue.value()) == true);
+      expect(props.at("nonzero").defaultValue.has_value()) << schema_str;
+      expect(std::get<int64_t>(props.at("nonzero").defaultValue.value()) == 7);
+
+      // Value-init cases: filtered
+      expect(!props.at("flag_false").defaultValue.has_value()) << schema_str;
+      expect(!props.at("zero").defaultValue.has_value()) << schema_str;
+      expect(!props.at("ratio_zero").defaultValue.has_value()) << schema_str;
    };
 
    "nested struct defaults work in inlined definition"_test = [] {

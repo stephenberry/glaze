@@ -431,11 +431,21 @@ namespace glz
       // Avoids nested lambdas in fold expressions (ICEs GCC 13). Declared constexpr rather
       // than consteval so GCC accepts non-constexpr local references from the consteval
       // caller — consteval helpers would require constant-expression arguments.
+      //
+      // Skips emitting when the member value equals its value-initialized form. C++
+      // default-init uses a sentinel (0, 0.0, false, {}) that rarely matches JSON Schema's
+      // "default" semantics of "recommended value when the field is omitted". Filtering
+      // keeps the feature useful for deliberate non-sentinel values (flag{true},
+      // count{42}) while dropping the noisy all-zero cases. Users who genuinely want
+      // "default":0 can set it explicitly via glz::json_schema<T>.
       template <size_t I, class Tied>
       constexpr auto extract_default_from_tie(Tied& tied) -> std::optional<schema::schema_any>
       {
          using val_t = std::decay_t<decltype(get<I>(tied))>;
          if constexpr (is_schema_default_convertible<val_t>) {
+            if (get<I>(tied) == val_t{}) {
+               return std::nullopt;
+            }
             return to_schema_default(get<I>(tied));
          }
          else {
@@ -451,6 +461,9 @@ namespace glz
             constexpr auto member_ptr = get<I>(reflect<T>::values);
             using val_t = std::decay_t<decltype(instance.*member_ptr)>;
             if constexpr (is_schema_default_convertible<val_t>) {
+               if (instance.*member_ptr == val_t{}) {
+                  return std::nullopt;
+               }
                return to_schema_default(instance.*member_ptr);
             }
             else {
