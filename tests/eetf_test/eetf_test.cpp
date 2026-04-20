@@ -5,8 +5,11 @@
 
 #include <array>
 #include <cstdint>
+#include <map>
 #include <string>
+#include <variant>
 
+#include "glaze/eetf/eetf_to_json.hpp"
 #include "glaze/eetf/read.hpp"
 #include "glaze/eetf/wrappers.hpp"
 #include "glaze/eetf/write.hpp"
@@ -140,6 +143,36 @@ suite etf_tests = [] {
       trace.end("read_proplist_term_meta");
    };
 
+   "roundtrip_map_as_term (string)"_test = [] {
+      trace.begin("roundtrip_map_as_term (string)");
+      std::map<std::string, int> m = {{"first", 1}, {"second", 2}, {"third", 3}}, v;
+      std::vector<std::uint8_t> buff;
+      auto ec = glz::write_term(m, buff);
+
+      expect(not ec) << glz::format_error(ec, "can't write map");
+
+      ec = glz::read_term(v, buff);
+      expect(not ec) << glz::format_error(ec, "can't read map");
+
+      expect(m == v);
+      trace.end("roundtrip_map_as_term (string)");
+   };
+
+   "roundtrip_map_as_term (atom)"_test = [] {
+      trace.begin("roundtrip_map_as_term (atom)");
+      std::map<glz::eetf::atom, int> m = {{"first"_atom, 1}, {"second"_atom, 2}, {"third"_atom, 3}}, v;
+      std::vector<std::uint8_t> buff;
+      auto ec = glz::write_term(m, buff);
+
+      expect(not ec) << glz::format_error(ec, "can't write map");
+
+      ec = glz::read_term(v, buff);
+      expect(not ec) << glz::format_error(ec, "can't read map");
+
+      expect(m == v);
+      trace.end("roundtrip_map_as_term (atom)");
+   };
+
    "write_term"_test = [] {
       trace.begin("write_term");
       my_struct sw{.i = 123, .d = 2.71827, .hello = "Hello write", .a = "qwe"_atom, .arr = {45, 67, 89}};
@@ -231,6 +264,161 @@ suite etf_tests = [] {
       expect(r.a == "qwe");
 
       trace.end("read_write_string_as_atom");
+   };
+
+   "roundtrip_map_as_proplist"_test = [] {
+      trace.begin("roundtrip_map_as_proplist");
+      std::map<std::string, int> m = {{"first", 1}, {"second", 2}, {"third", 3}}, v;
+      std::vector<std::uint8_t> buff;
+      auto ec = glz::write_term<glz::eetf::proplist_layout>(m, buff);
+
+      expect(not ec) << glz::format_error(ec, "can't write map");
+
+      ec = glz::read_term<glz::eetf::proplist_layout>(v, buff);
+      expect(not ec) << glz::format_error(ec, "can't read map");
+
+      expect(m == v);
+      trace.end("roundtrip_map_as_proplist");
+   };
+
+   "write_variant"_test = [] {
+      using Doubles = std::vector<double>;
+      using V = std::variant<int, Doubles>;
+      V v = Doubles{1.2, 3.4, 5.6};
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      // can't parse into std::variant (see comment in eetf/read.cpp)
+      Doubles res;
+      expect(not glz::read_term(res, buffer));
+      expect(res == std::get<Doubles>(v));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"([1.2,3.4,5.6])") << json;
+   };
+};
+
+suite eetf_to_json_tests = [] {
+   "eetf_to_json true"_test = [] {
+      bool b = true;
+      std::string buffer{};
+      expect(not glz::write_term(b, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"(true)");
+   };
+
+   "eetf_to_json false"_test = [] {
+      bool b = false;
+      std::string buffer{};
+      expect(not glz::write_term(b, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"(false)");
+   };
+
+   "eetf_to_json double"_test = [] {
+      double v = 3.14;
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"(3.14)") << json;
+      double res{};
+      expect(!glz::read_json(res, json));
+      expect(v == res);
+   };
+
+   "eetf_to_json string"_test = [] {
+      std::string v = "Hello World";
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"("Hello World")") << json;
+   };
+
+   "eetf_to_json atom"_test = [] {
+      auto v = "hello"_atom;
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"("hello")") << json;
+   };
+
+   "eetf_to_json std::map"_test = [] {
+      std::map<std::string, int> v = {{"first", 1}, {"second", 2}, {"third", 3}};
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"({"first":1,"second":2,"third":3})") << json;
+
+      expect(!glz::eetf_to_json<glz::opts{.prettify = true}>(buffer, json));
+      expect(json ==
+             R"({
+   "first": 1,
+   "second": 2,
+   "third": 3
+})") << json;
+   };
+
+   "eetf_to_json std::vector<int32_t>"_test = [] {
+      std::vector<int32_t> v = {1, 2, 3, 4, 5};
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"([1,2,3,4,5])") << json;
+   };
+
+   "eetf_to_json empty std::vector"_test = [] {
+      std::vector<int32_t> v{};
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"([])") << json;
+   };
+
+   "eetf_to_json std::vector<double>"_test = [] {
+      std::vector<double> v = {1.0, 2.0, 3.0, 4.0, 5.0};
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"([1,2,3,4,5])") << json;
+   };
+
+   "eetf_to_json std::vector<std::string>"_test = [] {
+      std::vector<std::string> v = {"one", "two", "three"};
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"(["one","two","three"])") << json;
+   };
+
+   "eetf_to_json std::tuple<int, std::string>"_test = [] {
+      std::tuple<int, std::string> v = {99, "spiders"};
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"([99,"spiders"])") << json;
    };
 };
 

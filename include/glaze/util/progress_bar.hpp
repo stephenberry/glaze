@@ -4,7 +4,7 @@
 #pragma once
 
 #include <cmath>
-#include <iostream>
+#include <ostream>
 #include <string>
 
 namespace glz

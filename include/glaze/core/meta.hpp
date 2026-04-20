@@ -721,6 +721,60 @@ namespace glz
       }
    }();
 
+   // Compile-time string listing the variant type IDs (e.g. "TYPE_A, TYPE_B, TYPE_C")
+   // Used for error messages when no matching variant type is found
+   namespace detail
+   {
+      template <is_variant T>
+      inline constexpr size_t variant_ids_string_len = [] {
+         constexpr auto& ids = ids_v<T>;
+         constexpr auto N = ids.size();
+         size_t len = 17; // "supported types: "
+         for (size_t i = 0; i < N; ++i) {
+            if (i > 0) len += 2; // ", "
+            len += ids[i].size();
+         }
+         return len;
+      }();
+
+      template <is_variant T, size_t Len>
+      inline constexpr auto variant_ids_joined = [] {
+         constexpr auto& ids = ids_v<T>;
+         constexpr auto N = ids.size();
+         std::array<char, Len + 1> arr{};
+         const char* prefix = "supported types: ";
+         size_t pos = 0;
+         for (size_t i = 0; i < 17; ++i) arr[pos++] = prefix[i];
+         for (size_t i = 0; i < N; ++i) {
+            if (i > 0) {
+               arr[pos++] = ',';
+               arr[pos++] = ' ';
+            }
+            for (auto c : ids[i]) arr[pos++] = c;
+         }
+         arr[Len] = '\0';
+         return arr;
+      }();
+   }
+
+   template <is_variant T>
+   inline constexpr std::string_view variant_ids_string_v = [] {
+      constexpr auto& ids = ids_v<T>;
+      constexpr auto N = ids.size();
+
+      if constexpr (N == 0) {
+         return std::string_view{};
+      }
+      else if constexpr (std::is_same_v<std::decay_t<decltype(ids[0])>, std::string_view>) {
+         constexpr auto Len = detail::variant_ids_string_len<T>;
+         constexpr auto& arr = detail::variant_ids_joined<T, Len>;
+         return std::string_view{arr.data(), Len};
+      }
+      else {
+         return std::string_view{};
+      }
+   }();
+
    template <class T>
    concept versioned = requires { meta<std::decay_t<T>>::version; };
 

@@ -305,6 +305,93 @@ Returns `glz::expected<beve_header, error_ctx>`. Possible errors:
 - `error_code::unexpected_end` - Buffer too small to contain header
 - `error_code::syntax_error` - Invalid tag byte
 
+## Aligned Typed Arrays (Zero-Copy)
+
+BEVE typed arrays store contiguous numerical data in a compact layout. With aligned typed arrays, the data payload is padded so it begins at a memory offset that satisfies the element type's alignment requirement. This enables zero-copy access — a decoder can hand back a `std::span<const T>` pointing directly into the message buffer with no copies or allocations.
+
+### Writing Aligned Arrays
+
+Enable alignment with the `aligned_arrays` option:
+
+```c++
+struct aligned_opts : glz::opts
+{
+   bool aligned_arrays = true;
+};
+
+std::vector<double> data = {1.0, 2.0, 3.0, 4.0};
+std::string buffer;
+constexpr aligned_opts opts{glz::opts{.format = glz::BEVE}};
+glz::write<opts>(data, buffer);
+```
+
+Single-byte types (`int8_t`, `uint8_t`) use the standard typed array format since alignment provides no benefit.
+
+### Zero-Copy Reading with `std::span<const T>`
+
+Read directly into a `std::span<const T>` to get a zero-copy view into the buffer:
+
+```c++
+std::span<const double> span;
+glz::read<glz::opts{.format = glz::BEVE}>(span, buffer);
+
+// span.data() points directly into buffer — no copy was made
+// span is properly aligned for the element type
+```
+
+The span specialization requires an aligned typed array in the buffer. Reading a standard (non-aligned) typed array into `std::span<const T>` produces an error, since alignment cannot be guaranteed.
+
+> [!IMPORTANT]
+> The buffer must outlive the span. The span points into the buffer's memory.
+
+### Zero-Copy Struct Members
+
+Structs can contain `std::span<const T>` members alongside owning types. Write with owning containers, read back with spans:
+
+```c++
+// Write-side struct (owns data)
+struct sensor_packet {
+   std::string name;
+   std::vector<double> readings;
+};
+
+// Read-side struct (zero-copy view)
+struct sensor_view {
+   std::string name;
+   std::span<const double> readings;  // points into buffer
+};
+
+// Write
+sensor_packet packet{"sensor_1", {1.0, 2.0, 3.0}};
+std::string buffer;
+glz::write<opts>(packet, buffer);
+
+// Read — readings is zero-copy, name is copied
+sensor_view view;
+glz::read<glz::opts{.format = glz::BEVE}>(view, buffer);
+// view.readings.data() points into buffer
+```
+
+> [!NOTE]
+> Zero-copy span reading requires little-endian systems (BEVE wire format is little-endian). On big-endian systems, use `std::vector` which copies and byte-swaps as needed.
+
+### Wire Format
+
+The aligned typed array layout is:
+
+```
+ALIGNED_HEADER | NUMERIC_HEADER | SIZE | PADDING_LENGTH | PADDING | DATA
+```
+
+- **ALIGNED_HEADER** — 1 byte (`0x5C`), identifies this as an aligned typed array
+- **NUMERIC_HEADER** — 1 byte, encodes the element type (same as a standard numeric typed array header)
+- **SIZE** — compressed unsigned integer, element count
+- **PADDING_LENGTH** — 1 byte, number of padding bytes that follow
+- **PADDING** — 0 to `alignment - 1` bytes so DATA starts at an aligned offset
+- **DATA** — raw element data, identical to a standard typed array payload
+
+The overhead is 2 extra bytes (numeric header + padding length) plus at most `alignment - 1` bytes of padding. For large arrays this is negligible.
+
 ## Untagged Binary
 
 By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_beve_untagged` and `glz::read_beve_untagged`.
@@ -503,7 +590,7 @@ if (!ec) {
 }
 ```
 
-On error, `count` indicates where the parse error occurred. This field is available for all read operations (`read_beve`, `read_json`, `read_cbor`, `read_msgpack`).
+On error, `count` indicates where the parse error occurred. This field is available for all read operations (`read_beve`, `read_json`, `read_cbor`, `read_jsonb`, `read_msgpack`).
 
 ### Example: Streaming Workflow
 

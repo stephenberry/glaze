@@ -449,21 +449,21 @@ suite json_read_streaming_tests = [] {
       {
          std::istringstream iss("42");
          glz::istream_buffer<> buffer(iss);
-         int val;
+         int val{};
          expect(!glz::read_json(val, buffer));
          expect(val == 42);
       }
       {
          std::istringstream iss("3.14159");
          glz::istream_buffer<> buffer(iss);
-         double val;
+         double val{};
          expect(!glz::read_json(val, buffer));
          expect(val > 3.14 && val < 3.15);
       }
       {
          std::istringstream iss("true");
          glz::istream_buffer<> buffer(iss);
-         bool val;
+         bool val{};
          expect(!glz::read_json(val, buffer));
          expect(val == true);
       }
@@ -3621,7 +3621,7 @@ suite streaming_special_types_input_tests = [] {
       std::istringstream iss("\"Active\"");
       glz::istream_buffer<> buffer(iss);
 
-      Status s;
+      Status s{};
       auto ec = glz::read_json(s, buffer);
 
       expect(!ec) << "Error: " << int(ec.ec);
@@ -3811,7 +3811,7 @@ suite input_documentation_example_tests = [] {
       std::istringstream iss("123");
       glz::istream_buffer<> buffer(iss); // Alias for basic_istream_buffer<std::istream>
 
-      int val;
+      int val{};
       auto ec = glz::read_json(val, buffer);
 
       expect(!ec);

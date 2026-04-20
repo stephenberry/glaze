@@ -30,7 +30,6 @@
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
-#include "glaze/util/utility.hpp"
 #include "glaze/util/validate.hpp"
 #include "glaze/util/variant.hpp"
 
@@ -397,12 +396,6 @@ namespace glz
    template <class T>
    concept always_skipped = is_includer<T> || std::same_as<T, hidden> || std::same_as<T, skip>;
 
-   template <class T>
-   concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
-      bool(t);
-      { *t };
-   };
-
    // Detect function pointers and function references (which should not be treated as nullable)
    template <class T>
    concept is_function_ptr_or_ref =
@@ -415,7 +408,13 @@ namespace glz
    concept is_any_function_ptr = is_member_function_pointer<T> || is_function_ptr_or_ref<T>;
 
    template <class T>
-   concept nullable_like = nullable_t<T> && !is_expected<T> && !std::is_array_v<T> && !is_function_ptr_or_ref<T>;
+   concept nullable_t = !meta_value_t<T> && !str_t<T> && !is_function_ptr_or_ref<T> && requires(T t) {
+      bool(t);
+      { *t };
+   };
+
+   template <class T>
+   concept nullable_like = nullable_t<T> && !is_expected<T> && !std::is_array_v<T>;
 
    // For optional like types that cannot overload `operator bool()`
    template <class T>
@@ -441,7 +440,12 @@ namespace glz
 
    template <class T>
    concept glaze_object_t = glaze_t<T> && (is_specialization_v<meta_wrapper_t<T>, detail::Object> ||
-                                           (not std::is_enum_v<std::decay_t<T>> && meta_keys<T>));
+                                           (not std::is_enum_v<std::decay_t<T>> && meta_keys<T>) ||
+                                           is_specialization_v<meta_wrapper_t<T>, glz::merge>);
+
+   // Detects types whose glz::meta value is a glz::merge of member pointers
+   template <class T>
+   concept glaze_merge_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, glz::merge>;
 
    template <class T>
    concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Enum>;

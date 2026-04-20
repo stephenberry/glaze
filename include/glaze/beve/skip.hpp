@@ -104,6 +104,43 @@ namespace glz
    inline void skip_typed_array_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       const auto tag = uint8_t(*it);
+
+      // Check for aligned typed array (category 3, sub-type 2)
+      if (tag == tag::aligned_typed_array) {
+         ++it; // skip aligned header
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         const auto numeric_tag = uint8_t(*it);
+         // Verify bits 0-2 are typed_array tag
+         if ((numeric_tag & 0b00000'111) != tag::typed_array) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         const uint8_t elem_byte_count = byte_count_lookup[numeric_tag >> 5];
+         ++it; // skip numeric header
+         const auto n = int_from_compressed(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         // Read padding length byte
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         const uint8_t padding = uint8_t(*it);
+         ++it;
+         if (padding >= elem_byte_count) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         if (uint64_t(end - it) < padding + elem_byte_count * n) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+         it += padding + elem_byte_count * n;
+         return;
+      }
+
       const uint8_t type = (tag & 0b000'11'000) >> 3;
       switch (type) {
       case 0: // floating point (fallthrough)
@@ -123,10 +160,10 @@ namespace glz
          break;
       }
       case 3: { // bool or string
-         // Bit 5 indicates string (1) vs boolean (0)
-         const bool is_string = (tag & 0b00'1'00'000) >> 5;
+         // Bits 5-7 encode sub-type: 0=boolean, 1=string
+         const uint8_t subtype = tag >> 5;
          ++it;
-         if (is_string) {
+         if (subtype == 1) {
             // String array: count of strings, then each string has length prefix + data
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -145,7 +182,7 @@ namespace glz
                it += length;
             }
          }
-         else {
+         else if (subtype == 0) {
             // Boolean array: count of bools, packed into bytes
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -158,6 +195,9 @@ namespace glz
                return;
             }
             it += num_bytes;
+         }
+         else {
+            ctx.error = error_code::syntax_error;
          }
          break;
       }
@@ -199,10 +239,65 @@ namespace glz
    }
 
    template <auto Opts>
-   GLZ_ALWAYS_INLINE void skip_additional_beve(is_context auto&& ctx, auto&& it, auto end) noexcept
+   GLZ_ALWAYS_INLINE void skip_beve_extensions(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      const auto ext_tag = uint8_t(*it);
+      const uint8_t subtype = (ext_tag >> 3) & 0b11;
       ++it;
-      skip_value<BEVE>::op<Opts>(ctx, it, end);
+
+      switch (subtype) {
+      case 0: // delimiter: no payload
+         return;
+      case 1: { // variant: [compressed_int index] [value]
+         skip_compressed_int(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         skip_value<BEVE>::op<Opts>(ctx, it, end);
+         break;
+      }
+      case 2: { // matrix: [matrix_header] [extents (typed array)] [value (typed array)]
+         ++it; // skip matrix header
+         skip_value<BEVE>::op<Opts>(ctx, it, end); // skip extents
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         skip_value<BEVE>::op<Opts>(ctx, it, end); // skip value
+         break;
+      }
+      case 3: { // complex: [complex_header] [data...]
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         const auto complex_header = uint8_t(*it);
+         ++it;
+         const uint8_t elem_byte_count = byte_count_lookup[complex_header >> 5];
+         const bool is_array = (complex_header & 1) != 0;
+         if (is_array) {
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            const uint64_t total = uint64_t(elem_byte_count) * 2 * n;
+            if (uint64_t(end - it) < total) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            it += total;
+         }
+         else {
+            const uint64_t total = uint64_t(elem_byte_count) * 2;
+            if (uint64_t(end - it) < total) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            it += total;
+         }
+         break;
+      }
+      default:
+         ctx.error = error_code::syntax_error;
+      }
    }
 
    template <auto Opts>
@@ -239,7 +334,7 @@ namespace glz
          break;
       }
       case tag::extensions: {
-         skip_additional_beve<Opts>(ctx, it, end);
+         skip_beve_extensions<Opts>(ctx, it, end);
          break;
       }
       default:

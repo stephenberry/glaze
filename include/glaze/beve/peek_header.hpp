@@ -160,16 +160,32 @@ namespace glz
          break;
       }
       case tag::typed_array: {
-         // Typed array: tag + compressed_int(element_count)
-         if (size < 2) [[unlikely]] {
-            return unexpected(error_ctx{1, error_code::unexpected_end});
+         // Check for aligned typed array (category 3, sub-type 2)
+         if (info.tag == tag::aligned_typed_array) {
+            // Aligned typed array: aligned_header + numeric_header + compressed_int(count) + padding_length
+            if (size < 3) [[unlikely]] {
+               return unexpected(error_ctx{1, error_code::unexpected_end});
+            }
+            // data[1] is the numeric header byte
+            const size_t int_size = detail::peek_compressed_int_size(data + 2, size - 2);
+            if (int_size == 0 || size < 2 + int_size + 1) [[unlikely]] {
+               return unexpected(error_ctx{2, error_code::unexpected_end});
+            }
+            info.count = detail::peek_compressed_int_value(data + 2, size - 2);
+            info.header_size = 2 + int_size + 1; // +1 for padding_length byte
          }
-         const size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
-         if (int_size == 0 || size < 1 + int_size) [[unlikely]] {
-            return unexpected(error_ctx{1, error_code::unexpected_end});
+         else {
+            // Standard typed array: tag + compressed_int(element_count)
+            if (size < 2) [[unlikely]] {
+               return unexpected(error_ctx{1, error_code::unexpected_end});
+            }
+            const size_t int_size = detail::peek_compressed_int_size(data + 1, size - 1);
+            if (int_size == 0 || size < 1 + int_size) [[unlikely]] {
+               return unexpected(error_ctx{1, error_code::unexpected_end});
+            }
+            info.count = detail::peek_compressed_int_value(data + 1, size - 1);
+            info.header_size = 1 + int_size;
          }
-         info.count = detail::peek_compressed_int_value(data + 1, size - 1);
-         info.header_size = 1 + int_size;
          break;
       }
       case tag::generic_array: {

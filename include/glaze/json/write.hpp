@@ -770,6 +770,11 @@ namespace glz
                if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                   return value ? value : "";
                }
+               else if constexpr (array_char_t<T>) {
+                  const auto* start = value.data();
+                  const auto* end = static_cast<const char*>(std::memchr(start, '\0', value.size()));
+                  return sv{start, end ? size_t(end - start) : value.size()};
+               }
                else if constexpr (u8str_t<T>) {
                   return sv{reinterpret_cast<const char*>(value.data()), value.size()};
                }
@@ -2187,6 +2192,25 @@ namespace glz
                            if (is_null) return;
                         }
                      }
+                     else if constexpr (is_specialization_v<val_t, custom_t> && Opts.skip_null_members &&
+                                        custom_getter_returns_nullable<val_t>()) {
+                        if (is_custom_field_null<T, I>(value, t, ctx)) return;
+                     }
+                     else if constexpr (Opts.skip_null_members && glaze_value_is_nullable<val_t>()) {
+                        if (is_glaze_value_field_null<T, I>(value, t)) return;
+                     }
+
+                     if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
+                        decltype(auto) member = [&]() -> decltype(auto) {
+                           if constexpr (reflectable<T>) {
+                              return get_member(value, get<I>(t));
+                           }
+                           else {
+                              return get_member(value, get<I>(reflect<T>::values));
+                           }
+                        }();
+                        if (is_default_value(member)) return;
+                     }
 
                      if constexpr (Opts.prettify) {
                         if (!ensure_space(ctx, b, ix + padding + ctx.depth)) [[unlikely]] {
@@ -2238,7 +2262,7 @@ namespace glz
                });
             }
             else {
-               static constexpr size_t fixed_max_size = fixed_padding<T>;
+               static constexpr size_t fixed_max_size = Opts.prettify ? 0 : fixed_padding<T>;
                if constexpr (fixed_max_size && not check_write_unchecked(Options)) {
                   if (!ensure_space(ctx, b, ix + fixed_max_size)) [[unlikely]] {
                      return;

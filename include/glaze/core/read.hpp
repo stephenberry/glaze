@@ -31,6 +31,25 @@ namespace glz
       return std::pair{it, end};
    }
 
+   template <auto Opts, is_context Ctx>
+   GLZ_ALWAYS_INLINE void finalize_read_context(Ctx&& ctx) noexcept
+   {
+      // We don't do depth validation for partial reading
+      if constexpr (check_partial_read(Opts)) {
+         if (ctx.error == error_code::partial_read_complete) [[likely]] {
+            ctx.error = error_code::none;
+         }
+         else if (ctx.error == error_code::end_reached && ctx.depth == 0) {
+            ctx.error = error_code::none;
+         }
+      }
+      else {
+         if (ctx.error == error_code::end_reached && ctx.depth == 0) {
+            ctx.error = error_code::none;
+         }
+      }
+   }
+
    template <auto Opts, class T>
       requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx)
@@ -87,20 +106,7 @@ namespace glz
       }
 
    finish:
-      // We don't do depth validation for partial reading
-      if constexpr (check_partial_read(Opts)) {
-         if (ctx.error == error_code::partial_read_complete) [[likely]] {
-            ctx.error = error_code::none;
-         }
-         else if (ctx.error == error_code::end_reached && ctx.depth == 0) {
-            ctx.error = error_code::none;
-         }
-      }
-      else {
-         if (ctx.error == error_code::end_reached && ctx.depth == 0) {
-            ctx.error = error_code::none;
-         }
-      }
+      finalize_read_context<Opts>(ctx);
 
       if constexpr (use_padded) {
          // Restore the original buffer state
@@ -114,7 +120,7 @@ namespace glz
       requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer)
    {
-      context ctx{};
+      format_context_t<Opts.format> ctx{};
       return read<Opts>(value, buffer, ctx);
    }
 
@@ -140,7 +146,7 @@ namespace glz
       requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
    {
-      context ctx{};
+      format_context_t<Opts.format> ctx{};
       return read<Opts>(value, std::forward<Buffer>(buffer), ctx);
    }
 
@@ -185,11 +191,7 @@ namespace glz
       const size_t final_consumed = static_cast<size_t>(it - ctx.stream.data());
       consume_buffer(buffer, final_consumed);
 
-      // Handle end_reached as success when parsing completed at depth 0
-      // (same logic as non-streaming read)
-      if (ctx.error == error_code::end_reached && ctx.depth == 0) {
-         ctx.error = error_code::none;
-      }
+      finalize_read_context<StreamingOpts>(ctx);
 
       if (bool(ctx.error)) {
          return {buffer.bytes_consumed(), ctx.error, ctx.custom_error_message};

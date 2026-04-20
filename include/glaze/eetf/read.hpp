@@ -9,6 +9,81 @@
 
 namespace glz
 {
+   namespace detail
+   {
+      template <is_context Ctx, class It0, class It1>
+      class field_iterator
+      {
+        public:
+         template <typename F>
+         field_iterator(F&& header_parser, Ctx&& ctx, It0&& it, It1 end)
+         {
+            term_header = header_parser(ctx, it);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            if (check_offset(ctx, it, end, term_header.second)) return;
+            std::advance(it, term_header.second);
+         }
+
+         field_iterator(error_code ec, Ctx&& ctx) : term_header{-1ull, -1ull} { ctx.error = ec; }
+
+         template <auto Opts>
+         bool next(Ctx&& ctx, It0&& it, It1 end)
+         {
+            if (term_header.first == 0) {
+               return false;
+            }
+
+            if constexpr (Opts.layout == glz::eetf::proplist_layout) {
+               const auto header = decode_tuple_header(ctx, it);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return false;
+               }
+
+               if (header.first != 2) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return false;
+               }
+
+               if ((it + header.second) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return false;
+               }
+
+               std::advance(it, header.second);
+            }
+
+            term_header.first -= 1;
+            return true;
+         }
+
+         bool empty() const { return term_header.first == 0; }
+
+        private:
+         header_pair term_header;
+      };
+
+      template <auto Opts, is_context Ctx, class It0, class It1>
+      static auto make_term_iterator(Ctx&& ctx, It0&& it, It1 end)
+      {
+         using fi = field_iterator<Ctx, It0, It1>;
+         const auto tag = get_type(ctx, it);
+         if (bool(ctx.error)) [[unlikely]] {
+            return fi(ctx.error, ctx);
+         }
+
+         if (eetf::is_map(tag) && Opts.layout == glz::eetf::map_layout) {
+            return fi(decode_map_header<Ctx, It0>, ctx, it, end);
+         }
+         else if (eetf::is_list(tag) && Opts.layout == glz::eetf::proplist_layout) {
+            return fi(decode_list_header<Ctx, It0>, ctx, it, end);
+         }
+
+         return fi(error_code::invalid_header, ctx);
+      }
+   } // namespace detail
 
    template <>
    struct skip_value<EETF>
@@ -27,9 +102,9 @@ namespace glz
          requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
       {
-         // TODO Check version
          const auto version = decode_version(ctx, it);
-         if (version != 131) { // TODO find in erlang files
+         // This version number is not in public headers - use as magic number
+         if (version != eetf_magic_version) {
             ctx.error = error_code::version_mismatch;
             return;
          }
@@ -202,79 +277,6 @@ namespace glz
       requires glaze_object_t<T> || reflectable<T>
    struct from<EETF, T> final
    {
-      template <is_context Ctx, class It0, class It1>
-      class field_iterator
-      {
-        public:
-         template <typename F>
-         field_iterator(F&& f, Ctx&& ctx, It0&& it, It1 end)
-         {
-            term_header = f(ctx, it);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-
-            CHECK_OFFSET(term_header.second);
-            std::advance(it, term_header.second);
-         }
-
-         field_iterator(error_code ec, Ctx&& ctx) : term_header{-1ull, -1ull} { ctx.error = ec; }
-
-         template <auto Opts>
-         bool next(Ctx&& ctx, It0&& it, It1 end)
-         {
-            if (term_header.first == 0) {
-               return false;
-            }
-
-            if constexpr (Opts.layout == glz::eetf::proplist_layout) {
-               const auto header = decode_tuple_header(ctx, it);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return false;
-               }
-
-               if (header.first != 2) [[unlikely]] {
-                  ctx.error = error_code::syntax_error;
-                  return false;
-               }
-
-               if ((it + header.second) > end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return false;
-               }
-
-               std::advance(it, header.second);
-            }
-
-            term_header.first -= 1;
-            return true;
-         }
-
-         bool empty() const { return term_header.first == 0; }
-
-        private:
-         header_pair term_header;
-      };
-
-      template <auto Opts, is_context Ctx, class It0, class It1>
-      static auto make_term_iterator(Ctx&& ctx, It0&& it, It1 end)
-      {
-         using fi = field_iterator<Ctx, It0, It1>;
-         const auto tag = get_type(ctx, it);
-         if (bool(ctx.error)) [[unlikely]] {
-            return fi(ctx.error, ctx);
-         }
-
-         if (eetf::is_map(tag) && Opts.layout == glz::eetf::map_layout) {
-            return fi(decode_map_header<Ctx, It0>, ctx, it, end);
-         }
-         else if (eetf::is_list(tag) && Opts.layout == glz::eetf::proplist_layout) {
-            return fi(decode_list_header<Ctx, It0>, ctx, it, end);
-         }
-
-         return fi(error_code::invalid_header, ctx);
-      }
-
       template <auto Opts, is_context Ctx, class It0, class It1>
       static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
       {
@@ -282,11 +284,11 @@ namespace glz
             return;
          }
 
-         if (it == end) {
+         if (invalid_end(ctx, it, end)) {
             return;
          }
 
-         auto term_it = make_term_iterator<Opts>(ctx, it, end);
+         auto term_it = detail::make_term_iterator<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -368,6 +370,49 @@ namespace glz
          }
       }
    };
+
+   template <readable_map_t T>
+   struct from<EETF, T> final
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      {
+         using Key = typename T::key_type;
+
+         if (invalid_end(ctx, it, end)) [[unlikely]] {
+            return;
+         }
+
+         auto term_it = detail::make_term_iterator<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         // empty term
+         if (term_it.empty()) [[unlikely]] {
+            return;
+         }
+
+         while (term_it.template next<Opts>(ctx, it, end)) {
+            // read key
+            Key key{};
+            parse<EETF>::op<no_header_on<Opts>()>(key, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            // read value
+            parse<EETF>::op<no_header_on<Opts>()>(value[key], ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+         }
+      }
+   };
+
+   // is_variant
+   // Can't effectly parse into std::variant. Only if trying to parse all of underlying variant' types one by one. But
+   // this approach can (and would) add a place for errors - because undelying data can hold "similar" types in EETF
+   // terms
 
    template <uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, class Buffer>
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept

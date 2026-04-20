@@ -1,11 +1,11 @@
 #pragma once
 
-#include <glaze/core/buffer_traits.hpp>
-#include <glaze/core/reflect.hpp>
-#include <glaze/core/write.hpp>
-
 #include "defs.hpp"
 #include "ei.hpp"
+#include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/reflect.hpp"
+#include "glaze/core/write.hpp"
+#include "glaze/util/variant.hpp"
 #include "opts.hpp"
 
 namespace glz
@@ -14,6 +14,14 @@ namespace glz
    template <>
    struct serialize<EETF>
    {
+      template <auto Opts, class T, class... Args>
+         requires(not check_no_header(Opts))
+      GLZ_ALWAYS_INLINE static void op(T&& value, Args&&... args) noexcept
+      {
+         encode_version(std::forward<Args>(args)...);
+         op<no_header_on<Opts>()>(std::forward<T>(value), std::forward<Args>(args)...);
+      }
+
       template <auto Opts, class T, class... Args>
          requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Args&&... args) noexcept
@@ -27,7 +35,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -46,7 +54,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -65,7 +73,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -85,7 +93,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -104,7 +112,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -124,7 +132,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -159,7 +167,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -175,14 +183,16 @@ namespace glz
             return;
          }
 
-         for (auto& i : value) {
-            serialize<EETF>::op<Opts>(i, ctx, b, ix);
-            if constexpr (is_output_streaming<B>) {
-               flush_buffer(b, ix);
+         if (n > 0) {
+            for (auto& i : value) {
+               serialize<EETF>::op<Opts>(i, ctx, b, ix);
+               if constexpr (is_output_streaming<B>) {
+                  flush_buffer(b, ix);
+               }
             }
-         }
 
-         encode_list_tail(ctx, b, ix);
+            encode_list_tail(ctx, b, ix);
+         }
       }
    };
 
@@ -191,7 +201,7 @@ namespace glz
    {
       template <auto Opts, class V, class... Args>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
          op<no_header_on<Opts>()>(std::forward<V>(v), std::forward<Args>(args)...);
@@ -199,15 +209,25 @@ namespace glz
 
       template <auto Opts, is_context Ctx, class B>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, size_t& ix) noexcept
       {
          const auto n = value.size();
-         encode_map_header(n, ctx, b, ix);
+
+         if constexpr (Opts.layout == eetf::map_layout) {
+            encode_map_header(n, ctx, b, ix);
+         }
+         else {
+            encode_list_header(n, ctx, b, ix);
+         }
+
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
 
          for (auto&& [k, v] : value) {
+            if constexpr (Opts.layout == eetf::proplist_layout) {
+               encode_tuple_header(2, ctx, b, ix);
+            }
             serialize<EETF>::op<Opts>(k, ctx, b, ix);
             serialize<EETF>::op<Opts>(v, ctx, b, ix);
             if constexpr (is_output_streaming<B>) {
@@ -277,6 +297,16 @@ namespace glz
                flush_buffer(b, ix);
             }
          });
+      }
+   };
+
+   template <is_variant T>
+   struct to<EETF, T> final
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         std::visit([&](auto&& v) { serialize<EETF>::op<Opts>(v, ctx, b, ix); }, value);
       }
    };
 

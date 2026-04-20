@@ -5,7 +5,7 @@ out/
 **/lib*/
 **/_build*/
 
-# CMake spesific settings
+# CMake specific settings
 CMakeUserPresets.json
 **/CMakeFiles/
 **/CMakeCache.txt
@@ -49,7 +49,6 @@ Thumbs.db
 
 # Allow mock test data
 !tests/mock_json_test/json/*.json
-alabastar.beve
 *.jsonc
 *.csv
 *.beve
@@ -62,3 +61,4 @@ pr_description.md
 /size_tests
 /tmp_benchmark
 /exterior
+pr.md

@@ -35,7 +35,6 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #include <atomic>
 #include <cassert>
 #include <coroutine>
-#include <iostream>
 #include <span>
 
 #include "glaze/rpc/registry.hpp"

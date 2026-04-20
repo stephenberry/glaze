@@ -20,6 +20,7 @@ namespace glz
    inline constexpr uint32_t INVALID = 0;
    inline constexpr uint32_t BEVE = 1;
    inline constexpr uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
+   inline constexpr uint32_t JSONB = 3; // SQLite JSONB binary JSON format - https://sqlite.org/jsonb.html
    inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t MSGPACK = 30;
@@ -114,6 +115,7 @@ namespace glz
       uint8_t layout = rowwise; // CSV row wise output/input
       bool use_headers = true; // Whether to write column/row headers in CSV format
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      char delimiter = ','; // field delimiter character (e.g. ',', ';', '|', '\t')
 
       // New options for headerless CSV support
       bool skip_header_row =
@@ -164,6 +166,10 @@ namespace glz
    // ---
    // bool shrink_to_fit = false;
    // Shrinks dynamic containers to new size to save memory
+
+   // ---
+   // bool error_on_missing_array_elements = false;
+   // Require arrays to have all elements expected by the target type (tuples, glaze_array_t, tuple_t)
 
    // ---
    // bool error_on_const_read = false;
@@ -287,6 +293,13 @@ namespace glz
    // Can be combined with 'raw' to write completely unprocessed string content.
 
    // ---
+   // bool aligned_arrays = false;
+   // When true, BEVE typed arrays for numeric types use alignment padding so that the data payload
+   // begins at a memory offset that is a multiple of the element size. This enables zero-copy
+   // access via std::span<T> directly into the message buffer, eliminating copy and allocation overhead.
+   // Only applies to BEVE format. The alignment padding is deterministic and does not need to be stored.
+
+   // ---
    // bool structs_as_arrays = false;
    // Serialize/deserialize structs as arrays without field keys.
    // Useful for binary formats or when field names add unnecessary overhead.
@@ -361,6 +374,16 @@ namespace glz
    {
       if constexpr (requires { Opts.append_arrays; }) {
          return Opts.append_arrays;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_error_on_missing_array_elements(auto&& Opts)
+   {
+      if constexpr (requires { Opts.error_on_missing_array_elements; }) {
+         return Opts.error_on_missing_array_elements;
       }
       else {
          return false;
@@ -457,6 +480,16 @@ namespace glz
       }
    }
 
+   consteval bool check_skip_default_members(auto&& Opts)
+   {
+      if constexpr (requires { Opts.skip_default_members; }) {
+         return Opts.skip_default_members;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_shrink_to_fit(auto&& Opts)
    {
       if constexpr (requires { Opts.shrink_to_fit; }) {
@@ -514,6 +547,31 @@ namespace glz
       }
       else {
          return false;
+      }
+   }
+
+   consteval bool is_valid_csv_delimiter(char c)
+   {
+      switch (c) {
+      case ',':
+      case '\t':
+      case '|':
+      case ';':
+         return true;
+      default:
+         return false;
+      }
+   }
+
+   template <auto Opts>
+   consteval char csv_delimiter()
+   {
+      if constexpr (requires { Opts.delimiter; }) {
+         static_assert(is_valid_csv_delimiter(Opts.delimiter), "CSV delimiter must be one of: ',' '\\t' '|' ';'");
+         return Opts.delimiter;
+      }
+      else {
+         return ',';
       }
    }
 
@@ -755,6 +813,16 @@ namespace glz
    {
       if constexpr (requires { Opts.qualified_type_names; }) {
          return Opts.qualified_type_names;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_aligned_arrays(auto&& Opts)
+   {
+      if constexpr (requires { Opts.aligned_arrays; }) {
+         return Opts.aligned_arrays;
       }
       else {
          return false;
@@ -1360,6 +1428,14 @@ namespace glz
    }
 
    template <auto Opts>
+   constexpr auto set_jsonb()
+   {
+      auto ret = Opts;
+      ret.format = JSONB;
+      return ret;
+   }
+
+   template <auto Opts>
    constexpr auto set_json()
    {
       auto ret = Opts;
@@ -1424,6 +1500,17 @@ namespace glz
    template <uint32_t Format>
    struct serialize
    {};
+
+   // Default context type for a format.
+   // Formats that need a richer context (e.g. YAML) specialize this.
+   template <uint32_t Format>
+   struct format_context
+   {
+      using type = context;
+   };
+
+   template <uint32_t Format>
+   using format_context_t = typename format_context<Format>::type;
 
    template <uint32_t Format>
    struct serialize_partial

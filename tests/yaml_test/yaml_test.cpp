@@ -73,6 +73,11 @@ struct seq_string_struct
    std::vector<std::string> items{};
 };
 
+struct set_string_struct
+{
+   std::set<std::string> items{};
+};
+
 template <>
 struct glz::meta<nested_struct>
 {
@@ -183,6 +188,131 @@ struct glz::meta<yaml_custom_read_struct>
 {
    using T = yaml_custom_read_struct;
    static constexpr auto value = object("value", custom<&T::read_value, &T::value>);
+};
+
+// Struct with custom lambda-based read/write for YAML custom_t testing
+struct yaml_custom_lambda_struct
+{
+   std::string label{};
+   int score{};
+
+   bool operator==(const yaml_custom_lambda_struct&) const = default;
+};
+
+template <>
+struct glz::meta<yaml_custom_lambda_struct>
+{
+   using T = yaml_custom_lambda_struct;
+
+   static constexpr auto read_fn = [](T& t, const std::string& str) {
+      auto pos = str.find('|');
+      if (pos != std::string::npos) {
+         t.label = str.substr(0, pos);
+         t.score = std::stoi(str.substr(pos + 1));
+      }
+   };
+
+   static constexpr auto write_fn = [](const T& t) -> std::string { return t.label + "|" + std::to_string(t.score); };
+
+   static constexpr auto value = object("data", glz::custom<read_fn, write_fn>);
+};
+
+// Struct with custom field alongside regular fields
+struct yaml_custom_mixed_struct
+{
+   std::string name{};
+   yaml_custom_lambda_struct item{};
+   int count{};
+
+   bool operator==(const yaml_custom_mixed_struct&) const = default;
+};
+
+template <>
+struct glz::meta<yaml_custom_mixed_struct>
+{
+   using T = yaml_custom_mixed_struct;
+   static constexpr auto value = object("name", &T::name, "item", &T::item, "count", &T::count);
+};
+
+// Struct with top-level custom serialization (serializes as a single scalar string)
+struct yaml_custom_scalar_struct
+{
+   std::string key{};
+   int val{};
+
+   bool operator==(const yaml_custom_scalar_struct&) const = default;
+};
+
+template <>
+struct glz::meta<yaml_custom_scalar_struct>
+{
+   using T = yaml_custom_scalar_struct;
+
+   static constexpr auto read_fn = [](T& t, const std::string& str) {
+      auto pos = str.find(':');
+      if (pos != std::string::npos) {
+         t.key = str.substr(0, pos);
+         t.val = std::stoi(str.substr(pos + 1));
+      }
+   };
+
+   static constexpr auto write_fn = [](const T& t) -> std::string { return t.key + ":" + std::to_string(t.val); };
+
+   static constexpr auto value = glz::custom<read_fn, write_fn>;
+};
+
+// Struct with compile-time skip for YAML
+struct yaml_skip_struct
+{
+   std::string id{};
+   std::string secret{};
+   int count{};
+};
+
+template <>
+struct glz::meta<yaml_skip_struct>
+{
+   static constexpr bool skip(const std::string_view key, const glz::meta_context&) { return key == "secret"; }
+};
+
+// Struct with runtime skip_if for YAML
+struct yaml_skip_if_struct
+{
+   std::string name{};
+   int age{};
+   std::string city{};
+};
+
+template <>
+struct glz::meta<yaml_skip_if_struct>
+{
+   template <class V>
+   static constexpr bool skip_if(V&& value, std::string_view key, const glz::meta_context&)
+   {
+      using D = std::decay_t<V>;
+      if constexpr (std::same_as<D, int>) {
+         return key == "age" && value == 0;
+      }
+      else {
+         return false;
+      }
+   }
+};
+
+// Struct for empty array tests
+struct yaml_empty_array_struct
+{
+   std::string name{"hello"};
+   std::vector<int> items{};
+   bool operator==(const yaml_empty_array_struct&) const = default;
+};
+
+struct yaml_multi_empty_arrays_struct
+{
+   std::vector<int> a{};
+   std::vector<std::string> b{};
+   int x{42};
+   bool operator==(const yaml_multi_empty_arrays_struct&) const = default;
 };
 
 suite yaml_write_tests = [] {
@@ -770,6 +900,53 @@ suite yaml_writer_edge_case_tests = [] {
       auto wec = glz::write_yaml(value, yaml);
       expect(!wec);
       expect(yaml == "'a:b': 1\n'x#y': 2\n");
+   };
+
+   "write_scalar_quotes_string_with_comma"_test = [] {
+      const std::string original = "hello, world";
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+      expect(yaml == "'hello, world'");
+
+      std::string parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_scalar_quotes_string_with_only_comma"_test = [] {
+      const std::string original = "a,b,c";
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+      expect(yaml == "'a,b,c'");
+
+      std::string parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "write_map_keys_with_comma_are_quoted"_test = [] {
+      std::map<std::string, int> value{{"a,b", 1}};
+      std::string yaml{};
+      auto ec = glz::write_yaml(value, yaml);
+      expect(!ec);
+      expect(yaml == "'a,b': 1\n");
+   };
+
+   "write_struct_with_comma_in_string_roundtrip"_test = [] {
+      simple_struct original{7, 2.5, "one, two, three"};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      simple_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.x == original.x);
+      expect(parsed.name == original.name);
    };
 
    "write_flow_map_with_multiline_scalar_roundtrip"_test = [] {
@@ -1692,6 +1869,42 @@ suite yaml_container_tests = [] {
       auto rec = glz::read_yaml(parsed, yaml);
       expect(!rec) << glz::format_error(rec, yaml);
       expect(parsed == original);
+   };
+
+   "set_block_sequence"_test = [] {
+      std::string yaml = R"(- 5
+- 3
+- 1
+- 4
+- 2
+)";
+      std::set<int> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == std::set<int>{1, 2, 3, 4, 5});
+   };
+
+   "set_string_block_sequence"_test = [] {
+      std::string yaml = R"(- apple
+- banana
+- cherry
+)";
+      std::set<std::string> parsed{};
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed == std::set<std::string>{"apple", "banana", "cherry"});
+   };
+
+   "set_block_sequence_in_struct"_test = [] {
+      std::string yaml = R"(items:
+  - s1
+  - s2
+  - s3
+)";
+      set_string_struct parsed{};
+      auto rec = glz::read_yaml<glz::opts{.error_on_unknown_keys = false}>(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.items == std::set<std::string>{"s1", "s2", "s3"});
    };
 
    "vector_of_vectors_flow"_test = [] {
@@ -5925,6 +6138,197 @@ suite yaml_variant_edge_cases = [] {
    };
 };
 
+suite yaml_variant_block_style = [] {
+   // Tests for issue #2447: complex variants in sequences should use block style
+
+   "variant_map_in_sequence_block_style"_test = [] {
+      using var_t = std::variant<int, std::map<std::string, int>>;
+      std::vector<var_t> original;
+      original.emplace_back(std::map<std::string, int>{{"a", 1}, {"b", 2}});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == R"(-
+  a: 1
+  b: 2
+)") << yaml;
+
+      std::vector<var_t> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 1u);
+      auto& m = std::get<std::map<std::string, int>>(parsed[0]);
+      expect(m["a"] == 1);
+      expect(m["b"] == 2);
+   };
+
+   "variant_array_in_sequence_block_style"_test = [] {
+      using var_t = std::variant<int, std::vector<int>>;
+      std::vector<var_t> original;
+      original.emplace_back(std::vector<int>{10, 20, 30});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == R"(-
+  - 10
+  - 20
+  - 30
+)") << yaml;
+
+      std::vector<var_t> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& v = std::get<std::vector<int>>(parsed[0]);
+      expect(v == std::vector<int>{10, 20, 30});
+   };
+
+   "variant_object_in_sequence_block_style"_test = [] {
+      using var_t = std::variant<int, simple_struct>;
+      std::vector<var_t> original;
+      original.emplace_back(simple_struct{.x = 5, .y = 3.14, .name = "test"});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == R"(- x: 5
+  y: 3.14
+  name: test
+)") << yaml;
+
+      std::vector<var_t> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& s = std::get<simple_struct>(parsed[0]);
+      expect(s.x == 5);
+      expect(s.y == 3.14);
+      expect(s.name == "test");
+   };
+
+   "variant_empty_map_in_sequence"_test = [] {
+      using var_t = std::variant<int, std::map<std::string, int>>;
+      std::vector<var_t> original;
+      original.emplace_back(std::map<std::string, int>{});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "- {}\n") << yaml;
+   };
+
+   "variant_empty_array_in_sequence"_test = [] {
+      using var_t = std::variant<int, std::vector<int>>;
+      std::vector<var_t> original;
+      original.emplace_back(std::vector<int>{});
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == "- []\n") << yaml;
+   };
+
+   "variant_mixed_simple_and_complex_in_sequence"_test = [] {
+      using var_t = std::variant<int, std::string, std::map<std::string, int>>;
+      std::vector<var_t> original;
+      original.emplace_back(42);
+      original.emplace_back(std::map<std::string, int>{{"key", 99}});
+      original.emplace_back(std::string("hello"));
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == R"(- 42
+-
+  key: 99
+- hello
+)") << yaml;
+
+      std::vector<var_t> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.size() == 3u);
+      expect(std::get<int>(parsed[0]) == 42);
+      expect(std::get<std::map<std::string, int>>(parsed[1])["key"] == 99);
+      expect(std::get<std::string>(parsed[2]) == "hello");
+   };
+
+   "generic_complex_in_sequence_block_style"_test = [] {
+      // glz::generic wrapping a variant - tests the glaze_value_t path
+      std::vector<glz::generic> original;
+      glz::generic obj;
+      obj["name"] = "test";
+      obj["value"] = 42.0;
+      original.emplace_back(std::move(obj));
+
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+      expect(yaml == R"(-
+  name: test
+  value: 42
+)") << yaml;
+
+      std::vector<glz::generic> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj2 = std::get<glz::generic::object_t>(parsed[0].data);
+      expect(std::get<std::string>(obj2.at("name").data) == "test");
+      expect(std::get<double>(obj2.at("value").data) == 42.0);
+   };
+
+   "variant_multiline_string_in_mapping"_test = [] {
+      // Tests write_variant_value indent_level fix for variant values in mappings
+      glz::generic doc;
+      doc["script"] = "echo hello\n./run --port=8080";
+      doc["name"] = "service-1";
+
+      std::string yaml;
+      auto wec = glz::write_yaml(doc, yaml);
+      expect(!wec);
+      expect(yaml == R"(script: |-
+  echo hello
+  ./run --port=8080
+
+name: service-1
+)") << yaml;
+
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& obj = std::get<glz::generic::object_t>(parsed.data);
+      expect(std::get<std::string>(obj.at("script").data) == "echo hello\n./run --port=8080");
+      expect(std::get<std::string>(obj.at("name").data) == "service-1");
+   };
+
+   "variant_multiline_string_in_nested_mapping"_test = [] {
+      // Tests indent_level propagation through nested variant mappings
+      glz::generic doc;
+      doc["outer"]["script"] = "line one\nline two\nline three";
+      doc["outer"]["count"] = 42.0;
+
+      std::string yaml;
+      auto wec = glz::write_yaml(doc, yaml);
+      expect(!wec);
+      expect(yaml == R"(outer:
+  script: |-
+    line one
+    line two
+    line three
+
+  count: 42
+)") << yaml;
+
+      glz::generic parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      auto& root = std::get<glz::generic::object_t>(parsed.data);
+      auto& outer = std::get<glz::generic::object_t>(root.at("outer").data);
+      expect(std::get<std::string>(outer.at("script").data) == "line one\nline two\nline three");
+      expect(std::get<double>(outer.at("count").data) == 42.0);
+   };
+};
+
 suite generic_colon_in_value_tests = [] {
    "generic_time_format_hhmm"_test = [] {
       // Time format HH:MM should parse as string, not fail as number
@@ -6028,6 +6432,77 @@ suite generic_malformed_flow_tests = [] {
       expect(!rec) << glz::format_error(rec, yaml);
       auto& obj = std::get<glz::generic::object_t>(parsed.data);
       expect(std::holds_alternative<glz::generic::object_t>(obj["note"].data));
+   };
+};
+
+// Issue #2379: glz::generic_u64 (and generic_i64) should work with YAML
+suite yaml_generic_u64_parsing_tests = [] {
+   "generic_u64_block_mapping_multiple_entries"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+city: NYC)";
+      glz::generic_u64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.holds<glz::generic_u64::object_t>());
+
+      auto& obj = parsed.get<glz::generic_u64::object_t>();
+      expect(obj.size() == 3u);
+      expect(obj.at("name").get<std::string>() == "Alice");
+      expect(obj.at("age").get<uint64_t>() == 30u);
+      expect(obj.at("city").get<std::string>() == "NYC");
+   };
+
+   "generic_u64_roundtrip"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+active: true)";
+      glz::generic_u64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      std::string output;
+      auto wec = glz::write_yaml(parsed, output);
+      expect(!wec);
+
+      glz::generic_u64 reparsed;
+      auto rec2 = glz::read_yaml(reparsed, output);
+      expect(!rec2) << glz::format_error(rec2, output);
+      expect(reparsed.holds<glz::generic_u64::object_t>());
+
+      auto& obj = reparsed.get<glz::generic_u64::object_t>();
+      expect(obj.size() == 3u);
+   };
+
+   "generic_u64_negative_numbers"_test = [] {
+      std::string yaml = R"(positive: 42
+negative: -5
+decimal: 3.14)";
+      glz::generic_u64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+
+      auto& obj = parsed.get<glz::generic_u64::object_t>();
+      expect(obj.size() == 3u);
+      expect(obj.at("positive").get<uint64_t>() == 42u);
+      expect(obj.at("negative").get<int64_t>() == -5);
+      expect(obj.at("decimal").get<double>() == 3.14);
+   };
+
+   "generic_i64_block_mapping"_test = [] {
+      std::string yaml = R"(name: Alice
+age: 30
+score: -10)";
+      glz::generic_i64 parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed.holds<glz::generic_i64::object_t>());
+
+      auto& obj = parsed.get<glz::generic_i64::object_t>();
+      expect(obj.size() == 3u);
+      expect(obj.at("name").get<std::string>() == "Alice");
+      expect(obj.at("age").get<int64_t>() == 30);
+      expect(obj.at("score").get<int64_t>() == -10);
    };
 };
 
@@ -7689,6 +8164,762 @@ suite nullable_empty_container_in_collections_tests = [] {
       if (parsed.size() == 1u) {
          expect(parsed[0].has_value()) << "engaged empty map inside vector should round-trip as engaged";
       }
+   };
+};
+
+// Test that glz::read with opts{.format = YAML} works (issue #2380)
+suite generic_read_yaml_format = [] {
+   "glz::read with format YAML"_test = [] {
+      constexpr auto options = glz::opts{.format = glz::YAML};
+
+      std::string yaml = R"(name: John
+age: 30)";
+
+      std::map<std::string, glz::generic> obj;
+      auto ec = glz::read<options>(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.size() == 2u);
+   };
+
+   "glz::read generic with format YAML"_test = [] {
+      constexpr auto options = glz::opts{.format = glz::YAML};
+
+      std::string yaml = "hello";
+
+      glz::generic obj;
+      auto ec = glz::read<options>(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+   };
+
+   "glz::read with format YAML vector"_test = [] {
+      constexpr auto options = glz::opts{.format = glz::YAML};
+
+      std::string yaml = R"(- 1
+- 2
+- 3)";
+
+      std::vector<int> obj;
+      auto ec = glz::read<options>(obj, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(obj.size() == 3u);
+      expect(obj == std::vector<int>{1, 2, 3});
+   };
+};
+
+suite yaml_compact_sequence_tests = [] {
+   "write_compact_sequence_of_objects"_test = [] {
+      std::vector<simple_struct> vec{{1, 2.0, "a"}, {3, 4.0, "b"}};
+      std::string yaml;
+      auto ec = glz::write_yaml(vec, yaml);
+      expect(!ec);
+      // First key should be inline after dash: "- x:" not "-\n  x:"
+      expect(yaml.find("- x:") != std::string::npos) << yaml;
+      expect(yaml.find("-\n") == std::string::npos) << "should not have expanded dash";
+   };
+
+   "write_compact_sequence_roundtrip"_test = [] {
+      std::vector<simple_struct> original{{1, 2.0, "a"}, {3, 4.0, "b"}};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      std::vector<simple_struct> parsed;
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.size() == 2u);
+      expect(parsed[0].x == 1);
+      expect(parsed[0].name == "a");
+      expect(parsed[1].x == 3);
+      expect(parsed[1].name == "b");
+   };
+
+   "write_compact_nested_sequence_of_objects"_test = [] {
+      nested_struct obj{"hello", {1, 2.0, "inner"}, {10, 20}};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      // numbers sequence should have simple scalars (no compaction needed)
+      expect(yaml.find("- 10") != std::string::npos);
+   };
+
+   "write_compact_sequence_in_struct_roundtrip"_test = [] {
+      // nested_struct has a vector<int> (simple sequence) and nested object
+      nested_struct original{"eng", {1, 2.0, "Alice"}, {10, 20, 30}};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      nested_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.title == "eng");
+      expect(parsed.data.x == 1);
+      expect(parsed.data.name == "Alice");
+      expect(parsed.numbers == std::vector<int>{10, 20, 30});
+   };
+
+   "write_compact_optional_objects_in_sequence"_test = [] {
+      std::vector<std::optional<simple_struct>> vec{simple_struct{1, 2.0, "a"}, std::nullopt};
+      std::string yaml;
+      auto ec = glz::write_yaml(vec, yaml);
+      expect(!ec);
+      expect(yaml.find("- x:") != std::string::npos) << yaml;
+      expect(yaml.find("- null") != std::string::npos) << yaml;
+
+      std::vector<std::optional<simple_struct>> parsed;
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.size() == 2u);
+      expect(parsed[0].has_value());
+      expect(parsed[0]->x == 1);
+      expect(!parsed[1].has_value());
+   };
+};
+
+suite yaml_skip_tests = [] {
+   "yaml_write_skip_excludes_field"_test = [] {
+      yaml_skip_struct obj{"abc", "top_secret", 42};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml.find("id: abc") != std::string::npos);
+      expect(yaml.find("count: 42") != std::string::npos);
+      expect(yaml.find("secret") == std::string::npos) << "secret field should be skipped";
+   };
+
+   "yaml_write_skip_if_excludes_default_value"_test = [] {
+      yaml_skip_if_struct obj{"Alice", 0, "NYC"};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml.find("name: Alice") != std::string::npos);
+      expect(yaml.find("city: NYC") != std::string::npos);
+      expect(yaml.find("age") == std::string::npos) << "age should be skipped when 0";
+   };
+
+   "yaml_write_skip_if_includes_nondefault_value"_test = [] {
+      yaml_skip_if_struct obj{"Bob", 30, "LA"};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml.find("name: Bob") != std::string::npos);
+      expect(yaml.find("age: 30") != std::string::npos);
+      expect(yaml.find("city: LA") != std::string::npos);
+   };
+};
+
+suite yaml_custom_write_tests = [] {
+   "yaml_custom_lambda_write_inline"_test = [] {
+      yaml_custom_lambda_struct obj{"hello", 99};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      // Custom type should be written inline (key: value), not on next line
+      expect(yaml.find("data: hello|99") != std::string::npos) << yaml;
+   };
+
+   "yaml_custom_lambda_roundtrip"_test = [] {
+      yaml_custom_lambda_struct original{"test", 42};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      yaml_custom_lambda_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "yaml_custom_mixed_struct_roundtrip"_test = [] {
+      yaml_custom_mixed_struct original{"widget", {"fast", 10}, 3};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+      // The custom field inside nested struct should be inline
+      expect(yaml.find("data: fast|10") != std::string::npos) << yaml;
+
+      yaml_custom_mixed_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.name == original.name);
+      expect(parsed.item == original.item);
+      expect(parsed.count == original.count);
+   };
+
+   "yaml_custom_read_struct_roundtrip"_test = [] {
+      // Existing custom read struct: write outputs int, read parses string to int
+      yaml_custom_read_struct original{};
+      original.value = 77;
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      yaml_custom_read_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.value == 77);
+   };
+
+   "yaml_custom_scalar_sequence_inline"_test = [] {
+      std::vector<yaml_custom_scalar_struct> vec{{"a", 1}, {"b", 2}, {"c", 3}};
+      std::string yaml;
+      auto ec = glz::write_yaml(vec, yaml);
+      expect(!ec);
+      // Values should be inline after dash, not at column 0
+      expect(yaml.find("- 'a:1'") != std::string::npos) << yaml;
+      expect(yaml.find("- 'b:2'") != std::string::npos) << yaml;
+      // Should NOT have value at column 0 after newline
+      expect(yaml.find("\n'") == std::string::npos) << "value should not be at column 0";
+   };
+
+   "yaml_custom_scalar_sequence_roundtrip"_test = [] {
+      std::vector<yaml_custom_scalar_struct> original{{"x", 10}, {"y", 20}};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      std::vector<yaml_custom_scalar_struct> parsed;
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed.size() == 2u);
+      expect(parsed[0] == original[0]);
+      expect(parsed[1] == original[1]);
+   };
+
+   "yaml_custom_scalar_sequence_in_struct_roundtrip"_test = [] {
+      yaml_custom_mixed_struct outer{"container", {"fast", 10}, 5};
+      std::string yaml;
+      auto ec = glz::write_yaml(outer, yaml);
+      expect(!ec);
+
+      yaml_custom_mixed_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == outer);
+   };
+};
+
+suite yaml_empty_array_tests = [] {
+   "empty_array_field_inline"_test = [] {
+      yaml_empty_array_struct obj{};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml == "name: hello\nitems: []\n") << yaml;
+   };
+
+   "empty_array_field_roundtrip"_test = [] {
+      yaml_empty_array_struct original{};
+      std::string yaml;
+      auto ec = glz::write_yaml(original, yaml);
+      expect(!ec);
+
+      yaml_empty_array_struct parsed{};
+      ec = glz::read_yaml(parsed, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(parsed == original);
+   };
+
+   "non_empty_array_field_unchanged"_test = [] {
+      yaml_empty_array_struct obj{"hello", {1, 2, 3}};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml == "name: hello\nitems:\n  - 1\n  - 2\n  - 3\n") << yaml;
+   };
+
+   "multiple_empty_arrays"_test = [] {
+      yaml_multi_empty_arrays_struct obj{};
+      std::string yaml;
+      auto ec = glz::write_yaml(obj, yaml);
+      expect(!ec);
+      expect(yaml == "a: []\nb: []\nx: 42\n") << yaml;
+   };
+};
+
+struct yaml_missing_keys_two
+{
+   int a{};
+   std::string b{};
+};
+
+struct yaml_missing_keys_three
+{
+   int i{};
+   double d{};
+   std::string hello{};
+};
+
+struct yaml_nullable_keys
+{
+   double req{};
+   std::optional<double> opt{};
+   double req2{};
+   std::optional<double> opt2{};
+};
+
+struct yaml_inner
+{
+   int x{};
+   int y{};
+};
+
+struct yaml_outer
+{
+   std::string name{};
+   yaml_inner inner{};
+};
+
+struct yaml_with_shared_ptr
+{
+   int a{};
+   std::shared_ptr<int> b{};
+};
+
+suite yaml_error_on_missing_keys_block = [] {
+   "block_missing_one_key"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 101
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "b");
+   };
+
+   "block_all_keys_present"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 42
+b: hello
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 42);
+      expect(data.b == "hello");
+   };
+
+   "block_all_keys_present_reversed_order"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(b: world
+a: 99
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 99);
+      expect(data.b == "world");
+   };
+
+   "block_three_fields_missing_first"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(d: 3.14
+hello: world
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "i");
+   };
+
+   "block_three_fields_missing_middle"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(i: 42
+hello: world
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "d");
+   };
+
+   "block_three_fields_missing_last"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(i: 42
+d: 3.14
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "hello");
+   };
+
+   "block_three_fields_all_present"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(i: 287
+d: 3.14
+hello: Hello World
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.i == 287);
+      expect(data.d == 3.14);
+      expect(data.hello == "Hello World");
+   };
+
+   "block_disabled_does_not_error"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 101
+)";
+      auto err = glz::read_yaml(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 101);
+   };
+};
+
+suite yaml_error_on_missing_keys_flow = [] {
+   "flow_missing_one_key"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({a: 101})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "b");
+   };
+
+   "flow_all_keys_present"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({a: 42, b: hello})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 42);
+      expect(data.b == "hello");
+   };
+
+   "flow_all_keys_present_reversed"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({b: world, a: 99})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 99);
+      expect(data.b == "world");
+   };
+
+   "flow_empty_mapping"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "a");
+   };
+
+   "flow_three_fields_missing_middle"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"({i: 42, hello: world})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "d");
+   };
+
+   "flow_three_fields_all_present"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"({i: 287, d: 3.14, hello: Hello World})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.i == 287);
+      expect(data.d == 3.14);
+      expect(data.hello == "Hello World");
+   };
+};
+
+suite yaml_error_on_missing_keys_nullable = [] {
+   "optional_not_required_block"_test = [] {
+      yaml_nullable_keys data{};
+      std::string yaml = R"(req: 1
+req2: 2
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.req == 1.0);
+      expect(data.req2 == 2.0);
+      expect(!data.opt.has_value());
+      expect(!data.opt2.has_value());
+   };
+
+   "optional_not_required_flow"_test = [] {
+      yaml_nullable_keys data{};
+      std::string yaml = R"({req: 1, req2: 2})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+   };
+
+   "required_missing_with_optional_present"_test = [] {
+      yaml_nullable_keys data{};
+      std::string yaml = R"(opt: 1
+req2: 2
+opt2: 3
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "req");
+   };
+
+   "all_present_including_optional"_test = [] {
+      yaml_nullable_keys data{};
+      std::string yaml = R"(req: 10
+opt: 20
+req2: 30
+opt2: 40
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.req == 10.0);
+      expect(data.opt.value() == 20.0);
+      expect(data.req2 == 30.0);
+      expect(data.opt2.value() == 40.0);
+   };
+
+   "shared_ptr_not_required"_test = [] {
+      yaml_with_shared_ptr data{};
+      std::string yaml = R"(a: 42
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 42);
+      expect(data.b == nullptr);
+   };
+};
+
+suite yaml_error_on_missing_keys_nested = [] {
+   "nested_inner_key_missing"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(name: test
+inner:
+  x: 1
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+
+   "nested_all_present"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(name: test
+inner:
+  x: 1
+  y: 2
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.name == "test");
+      expect(data.inner.x == 1);
+      expect(data.inner.y == 2);
+   };
+
+   "nested_outer_key_missing"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(inner:
+  x: 1
+  y: 2
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "name");
+   };
+
+   "nested_flow_inner"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(name: test
+inner: {x: 1, y: 2}
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.inner.x == 1);
+      expect(data.inner.y == 2);
+   };
+
+   "nested_flow_inner_missing"_test = [] {
+      yaml_outer data{};
+      std::string yaml = R"(name: test
+inner: {x: 1}
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+};
+
+suite yaml_error_on_missing_keys_unknown_keys = [] {
+   "block_unknown_key_with_missing"_test = [] {
+      yaml_inner data{};
+      std::string yaml = R"(x: 1
+z: 99
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+
+   "block_unknown_key_all_present"_test = [] {
+      yaml_inner data{};
+      std::string yaml = R"(x: 1
+y: 2
+z: 99
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.x == 1);
+      expect(data.y == 2);
+   };
+
+   "flow_unknown_key_with_missing"_test = [] {
+      yaml_inner data{};
+      std::string yaml = R"({x: 1, z: 99})";
+      auto err = glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+
+   "flow_unknown_key_all_present"_test = [] {
+      yaml_inner data{};
+      std::string yaml = R"({x: 1, y: 2, z: 99})";
+      auto err = glz::read_yaml<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+   };
+};
+
+suite yaml_error_on_missing_keys_vector = [] {
+   "vector_all_elements_complete"_test = [] {
+      std::vector<yaml_inner> data{};
+      std::string yaml = R"(- x: 1
+  y: 2
+- x: 3
+  y: 4
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.size() == 2);
+      expect(data[0].x == 1);
+      expect(data[0].y == 2);
+      expect(data[1].x == 3);
+      expect(data[1].y == 4);
+   };
+
+   "vector_second_element_missing_key"_test = [] {
+      std::vector<yaml_inner> data{};
+      std::string yaml = R"(- x: 1
+  y: 2
+- x: 3
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "y");
+   };
+};
+
+suite yaml_error_on_missing_keys_yaml_opts = [] {
+   "yaml_opts_block"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 101
+)";
+      auto err = glz::read_yaml<glz::yaml::yaml_opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "b");
+   };
+
+   "yaml_opts_flow"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({a: 101})";
+      auto err = glz::read_yaml<glz::yaml::yaml_opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      expect(std::string_view{err.custom_error_message} == "b");
+   };
+
+   "yaml_opts_success"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 42
+b: hello
+)";
+      auto err = glz::read_yaml<glz::yaml::yaml_opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(!err) << glz::format_error(err, yaml);
+      expect(data.a == 42);
+      expect(data.b == "hello");
+   };
+};
+
+suite yaml_error_on_missing_keys_format_error = [] {
+   "format_error_block_missing_b"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"(a: 101
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      auto msg = glz::format_error(err, yaml);
+      expect(msg == R"(index 7: missing_key b)") << msg;
+   };
+
+   "format_error_block_missing_hello"_test = [] {
+      yaml_missing_keys_three data{};
+      std::string yaml = R"(i: 1
+d: 2.0
+)";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      auto msg = glz::format_error(err, yaml);
+      expect(msg == R"(index 12: missing_key hello)") << msg;
+   };
+
+   "format_error_flow_missing_b"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({a: 101})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      auto msg = glz::format_error(err, yaml);
+      expect(msg == R"(index 8: missing_key b)") << msg;
+   };
+
+   "format_error_flow_empty"_test = [] {
+      yaml_missing_keys_two data{};
+      std::string yaml = R"({})";
+      auto err = glz::read_yaml<glz::opts{.error_on_missing_keys = true}>(data, yaml);
+      expect(err.ec == glz::error_code::missing_key);
+      auto msg = glz::format_error(err, yaml);
+      expect(msg == R"(index 2: missing_key a)") << msg;
+   };
+};
+
+// merge-in-meta YAML roundtrip
+
+namespace merge_meta_yaml_test
+{
+   struct Species
+   {
+      std::string name{};
+      int legs{};
+   };
+
+   struct Appearance
+   {
+      double weight{};
+      std::string color{};
+   };
+
+   struct BearRecord
+   {
+      Species species{};
+      Appearance appearance{};
+   };
+}
+
+template <>
+struct glz::meta<merge_meta_yaml_test::BearRecord>
+{
+   using T = merge_meta_yaml_test::BearRecord;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance};
+};
+
+suite merge_meta_yaml_tests = [] {
+   using namespace merge_meta_yaml_test;
+
+   "merge_meta_yaml_roundtrip"_test = [] {
+      BearRecord original{};
+      original.species.name = "Sloth";
+      original.species.legs = 4;
+      original.appearance.weight = 120.0;
+      original.appearance.color = "tan";
+
+      std::string yaml{};
+      expect(not glz::write_yaml(original, yaml));
+
+      BearRecord restored{};
+      expect(not glz::read_yaml(restored, yaml));
+      expect(restored.species.name == original.species.name);
+      expect(restored.species.legs == original.species.legs);
+      expect(restored.appearance.weight == original.appearance.weight);
+      expect(restored.appearance.color == original.appearance.color);
    };
 };
 

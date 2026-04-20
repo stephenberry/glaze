@@ -269,6 +269,131 @@ namespace glz
             break;
          }
          case tag::typed_array: {
+            // Check for aligned typed array (tag == 0x5C)
+            if (tag == tag::aligned_typed_array) {
+               ++it; // skip aligned header
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               // Read the numeric header byte
+               const auto numeric_tag = uint8_t(*it);
+               if ((numeric_tag & 0b00000'111) != tag::typed_array) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it; // skip numeric header
+               const auto value_type_inner = (numeric_tag & 0b000'11'000) >> 3;
+               const uint8_t byte_count_inner = byte_count_lookup[numeric_tag >> 5];
+
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+
+               // Read padding length byte and skip padding
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               const uint8_t padding = uint8_t(*it);
+               ++it;
+               if (padding >= byte_count_inner) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               if (uint64_t(end - it) < padding + byte_count_inner * n) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               it += padding;
+
+               // Now decode as a normal numeric typed array
+               dump('[', out, ix);
+
+               auto write_aligned_array = [&]<class T>(T&& value) {
+                  for (size_t i = 0; i < n; ++i) {
+                     if ((it + sizeof(T)) > end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                     using V = std::remove_cvref_t<T>;
+                     std::memcpy(&value, it, sizeof(V));
+                     if constexpr (std::endian::native == std::endian::big) {
+                        byteswap_le(value);
+                     }
+                     to<JSON, T>::template op<Opts>(value, ctx, out, ix);
+                     it += sizeof(T);
+                     if (i != n - 1) {
+                        dump(',', out, ix);
+                     }
+                  }
+               };
+
+               switch (value_type_inner) {
+               case 0: {
+                  switch (byte_count_inner) {
+                  case 4:
+                     write_aligned_array(float{});
+                     break;
+                  case 8:
+                     write_aligned_array(double{});
+                     break;
+                  default:
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  break;
+               }
+               case 1: {
+                  switch (byte_count_inner) {
+                  case 1:
+                     write_aligned_array(int8_t{});
+                     break;
+                  case 2:
+                     write_aligned_array(int16_t{});
+                     break;
+                  case 4:
+                     write_aligned_array(int32_t{});
+                     break;
+                  case 8:
+                     write_aligned_array(int64_t{});
+                     break;
+                  default:
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  break;
+               }
+               case 2: {
+                  switch (byte_count_inner) {
+                  case 1:
+                     write_aligned_array(uint8_t{});
+                     break;
+                  case 2:
+                     write_aligned_array(uint16_t{});
+                     break;
+                  case 4:
+                     write_aligned_array(uint32_t{});
+                     break;
+                  case 8:
+                     write_aligned_array(uint64_t{});
+                     break;
+                  default:
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  break;
+               }
+               default:
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               dump(']', out, ix);
+               break;
+            }
+
             ++it;
             const auto value_type = (tag & 0b000'11'000) >> 3;
             const uint8_t byte_count = byte_count_lookup[tag >> 5];
