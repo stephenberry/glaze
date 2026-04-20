@@ -2787,8 +2787,8 @@ void chrono_tests()
 
       glz::epoch_nanos result{};
       expect(not glz::read_cbor(result, buffer));
-      const auto diff_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                              result.value.time_since_epoch() - v.value.time_since_epoch())
+      const auto diff_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(result.value.time_since_epoch() -
+                                                                                v.value.time_since_epoch())
                               .count();
       expect(std::abs(diff_ns) < 1000) << "epoch_nanos via float64 should roundtrip within ~1 microsecond";
    };
@@ -3145,8 +3145,7 @@ void chrono_tests()
 
       glz::epoch_seconds result{};
       expect(not glz::read_cbor(result, buffer));
-      const auto secs =
-         std::chrono::duration_cast<std::chrono::seconds>(result.value.time_since_epoch()).count();
+      const auto secs = std::chrono::duration_cast<std::chrono::seconds>(result.value.time_since_epoch()).count();
       expect(secs == -1234567LL);
    };
 
@@ -3164,8 +3163,7 @@ void chrono_tests()
 
       glz::epoch_millis result{};
       expect(not glz::read_cbor(result, buffer));
-      const auto ms =
-         std::chrono::duration_cast<std::chrono::milliseconds>(result.value.time_since_epoch()).count();
+      const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(result.value.time_since_epoch()).count();
       expect(ms == 3600250LL);
    };
 
@@ -3179,8 +3177,7 @@ void chrono_tests()
 
       glz::epoch_millis result{};
       expect(not glz::read_cbor(result, buffer));
-      const auto ms =
-         std::chrono::duration_cast<std::chrono::milliseconds>(result.value.time_since_epoch()).count();
+      const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(result.value.time_since_epoch()).count();
       expect(ms == 1000LL);
    };
 }

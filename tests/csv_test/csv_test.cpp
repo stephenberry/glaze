@@ -2399,4 +2399,165 @@ normal,")" + long_text + R"(")";
    };
 };
 
+struct csv_delim_point
+{
+   int x{};
+   int y{};
+};
+
+struct csv_delim_simple
+{
+   std::vector<int> num1{};
+   std::deque<float> num2{};
+   std::vector<bool> maybe{};
+};
+
+suite csv_delimiter_tests = [] {
+   "pipe delimiter colwise struct"_test = [] {
+      std::string input =
+         R"(num1|num2|maybe|v3s[0]|v3s[1]|v3s[2]
+11|22|1|1|1|1
+33|44|1|2|2|2
+55|66|0|3|3|3)";
+
+      my_struct obj{};
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .delimiter = '|'}>(obj, input));
+
+      expect(obj.num1[0] == 11);
+      expect(obj.num1[1] == 33);
+      expect(obj.num2[0] == 22.0f);
+      expect(obj.maybe[0] == true);
+      expect(obj.maybe[2] == false);
+      expect(obj.v3s[0] == std::array{1, 1, 1});
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .delimiter = '|'}>(obj, out));
+      expect(out ==
+             R"(num1|num2|maybe|v3s[0]|v3s[1]|v3s[2]
+11|22|1|1|1|1
+33|44|1|2|2|2
+55|66|0|3|3|3
+)");
+   };
+
+   "semicolon delimiter rowwise struct"_test = [] {
+      std::string input =
+         R"(num1;1;2;3
+num2;4.5;5.5;6.5
+maybe;1;0;1)";
+
+      csv_delim_simple obj{};
+      expect(!glz::read<glz::opts_csv{.layout = glz::rowwise, .delimiter = ';'}>(obj, input));
+
+      expect(obj.num1[0] == 1);
+      expect(obj.num1[1] == 2);
+      expect(obj.num1[2] == 3);
+      expect(obj.num2[0] == 4.5f);
+      expect(obj.maybe[1] == false);
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{.layout = glz::rowwise, .delimiter = ';'}>(obj, out));
+      expect(out ==
+             R"(num1;1;2;3
+num2;4.5;5.5;6.5
+maybe;1;0;1
+)");
+   };
+
+   "tab delimiter 2d array"_test = [] {
+      std::string input = "1\t2\t3\n4\t5\t6";
+
+      std::vector<std::vector<int>> matrix;
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .delimiter = '\t'}>(matrix, input));
+
+      expect(matrix.size() == 2);
+      expect(matrix[0][0] == 1);
+      expect(matrix[0][2] == 3);
+      expect(matrix[1][1] == 5);
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{.use_headers = false, .delimiter = '\t'}>(matrix, out));
+      expect(out == "1\t2\t3\n4\t5\t6\n");
+   };
+
+   "pipe delimiter 2d array single row"_test = [] {
+      std::string input = "10|20|30|40";
+
+      std::vector<std::vector<int>> arr;
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .delimiter = '|'}>(arr, input));
+
+      expect(arr.size() == 1);
+      expect(arr[0].size() == 4);
+      expect(arr[0][0] == 10);
+      expect(arr[0][3] == 40);
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{.use_headers = false, .delimiter = '|'}>(arr, out));
+      expect(out == "10|20|30|40\n");
+   };
+
+   "semicolon delimiter map"_test = [] {
+      std::map<std::string, std::vector<int>> map;
+      map["x"] = {1, 2, 3};
+      map["y"] = {4, 5, 6};
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{.layout = glz::rowwise, .delimiter = ';'}>(map, out));
+      expect(out ==
+             R"(x;1;2;3
+y;4;5;6
+)");
+
+      std::map<std::string, std::vector<int>> map2;
+      expect(!glz::read<glz::opts_csv{.layout = glz::rowwise, .delimiter = ';'}>(map2, out));
+      expect(map2["x"] == std::vector{1, 2, 3});
+      expect(map2["y"] == std::vector{4, 5, 6});
+   };
+
+   "pipe delimiter string quoting"_test = [] {
+      std::string input = R"("hello|world"|simple|"has""quote")";
+
+      std::vector<std::vector<std::string>> arr;
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .delimiter = '|'}>(arr, input));
+
+      expect(arr.size() == 1);
+      expect(arr[0].size() == 3);
+      expect(arr[0][0] == "hello|world");
+      expect(arr[0][1] == "simple");
+      expect(arr[0][2] == "has\"quote");
+   };
+
+   "semicolon delimiter vector of structs"_test = [] {
+      std::vector<csv_delim_point> original = {{1, 2}, {3, 4}, {5, 6}};
+
+      std::string out{};
+      expect(not glz::write<glz::opts_csv{.delimiter = ';'}>(original, out));
+      expect(out ==
+             R"(x;y
+1;2
+3;4
+5;6
+)");
+
+      std::vector<csv_delim_point> points;
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .delimiter = ';'}>(points, out));
+
+      expect(points.size() == 3);
+      expect(points[0].x == 1);
+      expect(points[0].y == 2);
+      expect(points[2].x == 5);
+      expect(points[2].y == 6);
+   };
+
+   "default delimiter unchanged"_test = [] {
+      std::string input = "1,2,3";
+      std::vector<std::vector<int>> arr;
+      expect(!glz::read<glz::opts_csv{.use_headers = false}>(arr, input));
+      expect(arr.size() == 1);
+      expect(arr[0].size() == 3);
+      expect(arr[0][0] == 1);
+      expect(arr[0][2] == 3);
+   };
+};
+
 int main() { return 0; }

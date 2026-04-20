@@ -115,6 +115,7 @@ namespace glz
       uint8_t layout = rowwise; // CSV row wise output/input
       bool use_headers = true; // Whether to write column/row headers in CSV format
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      char delimiter = ','; // field delimiter character (e.g. ',', ';', '|', '\t')
 
       // New options for headerless CSV support
       bool skip_header_row =
@@ -546,6 +547,31 @@ namespace glz
       }
       else {
          return false;
+      }
+   }
+
+   consteval bool is_valid_csv_delimiter(char c)
+   {
+      switch (c) {
+      case ',':
+      case '\t':
+      case '|':
+      case ';':
+         return true;
+      default:
+         return false;
+      }
+   }
+
+   template <auto Opts>
+   consteval char csv_delimiter()
+   {
+      if constexpr (requires { Opts.delimiter; }) {
+         static_assert(is_valid_csv_delimiter(Opts.delimiter), "CSV delimiter must be one of: ',' '\\t' '|' ';'");
+         return Opts.delimiter;
+      }
+      else {
+         return ',';
       }
    }
 
