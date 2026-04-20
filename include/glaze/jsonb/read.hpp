@@ -587,8 +587,8 @@ namespace glz
          auto hash_match_and_parse = [&](const char* key_data, size_t key_len) {
             if constexpr (N > 0) {
                static constexpr auto HashInfo = hash_info<DT>;
-               const auto index = decode_hash_with_size<JSONB, DT, HashInfo, HashInfo.type>::op(
-                  key_data, key_data + key_len, key_len);
+               const auto index =
+                  decode_hash_with_size<JSONB, DT, HashInfo, HashInfo.type>::op(key_data, key_data + key_len, key_len);
                if (index >= N) return false;
 
                bool matched = false;
@@ -1018,14 +1018,12 @@ namespace glz
       struct is_jsonb_variant_str : std::bool_constant<str_t<T>>
       {};
       template <class T>
-      struct is_jsonb_variant_array
-         : std::bool_constant<writable_array_t<T> || readable_array_t<T> || tuple_t<T> || is_std_tuple<T> ||
-                              glaze_array_t<T>>
+      struct is_jsonb_variant_array : std::bool_constant<writable_array_t<T> || readable_array_t<T> || tuple_t<T> ||
+                                                         is_std_tuple<T> || glaze_array_t<T>>
       {};
       template <class T>
-      struct is_jsonb_variant_object
-         : std::bool_constant<writable_map_t<T> || readable_map_t<T> || pair_t<T> || glaze_object_t<T> ||
-                              reflectable<T>>
+      struct is_jsonb_variant_object : std::bool_constant<writable_map_t<T> || readable_map_t<T> || pair_t<T> ||
+                                                          glaze_object_t<T> || reflectable<T>>
       {};
 
       // First alternative index whose type matches Trait, or std::variant_npos if none.

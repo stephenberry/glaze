@@ -1067,43 +1067,49 @@ suite optional_never_referenced_test = [] {
 
    "optional of struct expands inline via anyOf"_test = [eq] {
       auto schema = glz::write_json_schema<issue_2498::B>().value();
-      expect(eq(schema,
-                R"({"type":"object","properties":{"aOpt":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"title":"issue_2498::B"})"))
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"aOpt":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"title":"issue_2498::B"})"))
          << schema;
    };
 
    "optional of named struct still omits std::optional from $defs"_test = [eq] {
       auto schema = glz::write_json_schema<issue_2498::HoldsNamed>().value();
-      expect(eq(schema,
-                R"({"type":"object","properties":{"n":{"anyOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"issue_2498::HoldsNamed"})"))
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"n":{"anyOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false},{"type":"null"}]}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"issue_2498::HoldsNamed"})"))
          << schema;
    };
 
    "optional wrapping a vector canonicalizes to anyOf"_test = [eq] {
       auto schema = glz::write_json_schema<issue_2498::HoldsOptionalVector>().value();
-      expect(eq(schema,
-                R"({"type":"object","properties":{"v":{"anyOf":[{"type":"array","items":{"type":"object","properties":{},"additionalProperties":false}},{"type":"null"}]}},"additionalProperties":false,"title":"issue_2498::HoldsOptionalVector"})"))
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"v":{"anyOf":[{"type":"array","items":{"type":"object","properties":{},"additionalProperties":false}},{"type":"null"}]}},"additionalProperties":false,"title":"issue_2498::HoldsOptionalVector"})"))
          << schema;
    };
 
    "array items of nullable type emit anyOf at the item level"_test = [eq] {
       auto schema = glz::write_json_schema<issue_2498::HoldsVectorOfOptional>().value();
-      expect(eq(schema,
-                R"({"type":"object","properties":{"v":{"type":"array","items":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}}},"additionalProperties":false,"title":"issue_2498::HoldsVectorOfOptional"})"))
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"v":{"type":"array","items":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}}},"additionalProperties":false,"title":"issue_2498::HoldsVectorOfOptional"})"))
          << schema;
    };
 
    "map values of nullable type emit anyOf at the value level"_test = [eq] {
       auto schema = glz::write_json_schema<issue_2498::HoldsMapOfOptional>().value();
-      expect(eq(schema,
-                R"({"type":"object","properties":{"m":{"type":"object","additionalProperties":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}}},"additionalProperties":false,"title":"issue_2498::HoldsMapOfOptional"})"))
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"m":{"type":"object","additionalProperties":{"anyOf":[{"type":"object","properties":{},"additionalProperties":false},{"type":"null"}]}}},"additionalProperties":false,"title":"issue_2498::HoldsMapOfOptional"})"))
          << schema;
    };
 
    "multi-use inner type stays in $defs and is referenced via anyOf"_test = [eq] {
       auto schema = glz::write_json_schema<issue_2498::MultiUse>().value();
-      expect(eq(schema,
-                R"({"type":"object","properties":{"optional_a":{"anyOf":[{"$ref":"#/$defs/issue_2498::A"},{"type":"null"}]},"required_a":{"$ref":"#/$defs/issue_2498::A"}},"additionalProperties":false,"$defs":{"issue_2498::A":{"type":"object","properties":{},"additionalProperties":false}},"title":"issue_2498::MultiUse"})"))
+      expect(eq(
+         schema,
+         R"({"type":"object","properties":{"optional_a":{"anyOf":[{"$ref":"#/$defs/issue_2498::A"},{"type":"null"}]},"required_a":{"$ref":"#/$defs/issue_2498::A"}},"additionalProperties":false,"$defs":{"issue_2498::A":{"type":"object","properties":{},"additionalProperties":false}},"title":"issue_2498::MultiUse"})"))
          << schema;
    };
 };

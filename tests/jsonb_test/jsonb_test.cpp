@@ -456,7 +456,6 @@ suite container_tests = [] {
       expect(not glz::read_jsonb(out, buf));
       expect(std::holds_alternative<std::nullptr_t>(out));
    };
-
 };
 
 suite tagged_variant_tests = [] {
@@ -1159,8 +1158,7 @@ suite large_container_tests = [] {
 
    "unicode in string round-trip"_test = [] {
       // UTF-8 encoded: "héllo · 世界 · 🌍"
-      std::string s =
-         "h\xC3\xA9llo \xC2\xB7 \xE4\xB8\x96\xE7\x95\x8C \xC2\xB7 \xF0\x9F\x8C\x8D";
+      std::string s = "h\xC3\xA9llo \xC2\xB7 \xE4\xB8\x96\xE7\x95\x8C \xC2\xB7 \xF0\x9F\x8C\x8D";
       std::string buf;
       expect(not glz::write_jsonb(s, buf));
       std::string out;
@@ -1251,8 +1249,12 @@ suite hash_lookup_tests = [] {
       const size_t payload_start = buf.size();
       auto push_textraw = [&](std::string_view s) {
          const size_t n = s.size();
-         if (n <= 11) buf.push_back(static_cast<char>((n << 4) | 10u));
-         else { buf.push_back(static_cast<char>((12u << 4) | 10u)); buf.push_back(static_cast<char>(n)); }
+         if (n <= 11)
+            buf.push_back(static_cast<char>((n << 4) | 10u));
+         else {
+            buf.push_back(static_cast<char>((12u << 4) | 10u));
+            buf.push_back(static_cast<char>(n));
+         }
          buf.append(s.data(), s.size());
       };
       auto push_int = [&](int v) {
@@ -1260,8 +1262,10 @@ suite hash_lookup_tests = [] {
          buf.push_back(static_cast<char>((digits.size() << 4) | 3u));
          buf.append(digits);
       };
-      push_textraw("alpha"); push_int(1);
-      push_textraw("unknown"); push_textraw("ignoreme");
+      push_textraw("alpha");
+      push_int(1);
+      push_textraw("unknown");
+      push_textraw("ignoreme");
       const uint64_t payload_size = buf.size() - payload_start;
       buf[0] = static_cast<char>((15u << 4) | 12u);
       uint64_t v = payload_size;
@@ -1371,9 +1375,12 @@ suite generic_tests = [] {
    "generic array round-trip"_test = [] {
       glz::generic g;
       glz::generic::array_t arr;
-      arr.emplace_back(); arr.back().data = 1.0;
-      arr.emplace_back(); arr.back().data = std::string("two");
-      arr.emplace_back(); arr.back().data = true;
+      arr.emplace_back();
+      arr.back().data = 1.0;
+      arr.emplace_back();
+      arr.back().data = std::string("two");
+      arr.emplace_back();
+      arr.back().data = true;
       g.data = std::move(arr);
 
       std::string buf;
@@ -1392,8 +1399,10 @@ suite generic_tests = [] {
    "generic object round-trip"_test = [] {
       glz::generic g;
       glz::generic::object_t obj;
-      glz::generic a; a.data = 1.0;
-      glz::generic b; b.data = std::string("s");
+      glz::generic a;
+      a.data = 1.0;
+      glz::generic b;
+      b.data = std::string("s");
       obj.insert(std::make_pair(std::string("a"), std::move(a)));
       obj.insert(std::make_pair(std::string("b"), std::move(b)));
       g.data = std::move(obj);
@@ -1425,7 +1434,7 @@ suite generic_tests = [] {
 suite integer_boundary_tests = [] {
    "int8_t extremes"_test = [] {
       for (int8_t v : {(std::numeric_limits<int8_t>::min)(), int8_t{-1}, int8_t{0}, int8_t{1},
-                      (std::numeric_limits<int8_t>::max)()}) {
+                       (std::numeric_limits<int8_t>::max)()}) {
          std::string buf;
          expect(not glz::write_jsonb(v, buf));
          int8_t out = 0;
@@ -1447,7 +1456,7 @@ suite integer_boundary_tests = [] {
 
    "int64_t extremes"_test = [] {
       for (int64_t v : {(std::numeric_limits<int64_t>::min)(), int64_t{-1}, int64_t{0}, int64_t{1},
-                       (std::numeric_limits<int64_t>::max)()}) {
+                        (std::numeric_limits<int64_t>::max)()}) {
          std::string buf;
          expect(not glz::write_jsonb(v, buf));
          int64_t out = 0;
@@ -1757,7 +1766,8 @@ suite skip_null_members_tests = [] {
 
 suite skip_default_members_tests = [] {
    // check_skip_default_members is off by default; define a custom opts struct that enables it.
-   struct opts_with_default_skip : glz::opts {
+   struct opts_with_default_skip : glz::opts
+   {
       bool skip_default_members = true;
    };
 

@@ -189,7 +189,8 @@ namespace glz
             return;
          case jsonb::type::textraw:
             // Raw bytes that may require escaping — run through the JSON string writer.
-            emit_raw_string_as_json<Opts>(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out, ix);
+            emit_raw_string_as_json<Opts>(ctx, reinterpret_cast<const char*>(payload), static_cast<size_t>(sz), out,
+                                          ix);
             return;
          case jsonb::type::textj: {
             // TEXTJ payload is already a valid JSON string body by spec. Emitting it
@@ -202,8 +203,7 @@ namespace glz
             // continuations) that are not valid JSON. Decode to raw UTF-8 and re-emit via
             // the JSON string writer so the output is always strict JSON.
             std::string scratch;
-            jsonb_detail::decode_text(ctx, jsonb::type::text5, payload, payload + sz,
-                                      static_cast<size_t>(sz), scratch);
+            jsonb_detail::decode_text(ctx, jsonb::type::text5, payload, payload + sz, static_cast<size_t>(sz), scratch);
             if (bool(ctx.error)) return;
             emit_raw_string_as_json<Opts>(ctx, scratch.data(), scratch.size(), out, ix);
             return;

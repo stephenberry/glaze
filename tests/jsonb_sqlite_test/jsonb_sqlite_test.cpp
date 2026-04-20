@@ -96,7 +96,8 @@ namespace
       void insert_blob(const void* data, size_t size)
       {
          sqlite3_stmt* s{};
-         if (sqlite3_prepare_v2(db, "INSERT INTO t(blob) VALUES (?)", -1, &s, nullptr) != SQLITE_OK) die(sqlite3_errmsg(db));
+         if (sqlite3_prepare_v2(db, "INSERT INTO t(blob) VALUES (?)", -1, &s, nullptr) != SQLITE_OK)
+            die(sqlite3_errmsg(db));
          sqlite3_bind_blob(s, 1, data, static_cast<int>(size), SQLITE_TRANSIENT);
          if (sqlite3_step(s) != SQLITE_DONE) {
             sqlite3_finalize(s);
@@ -108,7 +109,8 @@ namespace
       std::string select_json_of_blob()
       {
          sqlite3_stmt* s{};
-         if (sqlite3_prepare_v2(db, "SELECT json(blob) FROM t LIMIT 1", -1, &s, nullptr) != SQLITE_OK) die(sqlite3_errmsg(db));
+         if (sqlite3_prepare_v2(db, "SELECT json(blob) FROM t LIMIT 1", -1, &s, nullptr) != SQLITE_OK)
+            die(sqlite3_errmsg(db));
          std::string out;
          if (sqlite3_step(s) == SQLITE_ROW) {
             const unsigned char* txt = sqlite3_column_text(s, 0);
@@ -727,8 +729,9 @@ suite d_path_queries = [] {
       expect(sqlite3_column_int(s, 0) == 10);
       sqlite3_finalize(s);
 
-      sqlite3_prepare_v2(db.db, "SELECT json_extract(blob, '$.display_name') FROM t WHERE json_extract(blob, '$.id') = 7",
-                        -1, &s, nullptr);
+      sqlite3_prepare_v2(db.db,
+                         "SELECT json_extract(blob, '$.display_name') FROM t WHERE json_extract(blob, '$.id') = 7", -1,
+                         &s, nullptr);
       expect(sqlite3_step(s) == SQLITE_ROW);
       const unsigned char* name = sqlite3_column_text(s, 0);
       expect(name && std::string(reinterpret_cast<const char*>(name)) == "User7");

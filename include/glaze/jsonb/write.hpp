@@ -79,7 +79,8 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         b[ix] = static_cast<typename std::decay_t<decltype(b)>::value_type>(jsonb::make_initial(jsonb::type::null_, 0));
+         b[ix] =
+            static_cast<typename std::decay_t<decltype(b)>::value_type>(jsonb::make_initial(jsonb::type::null_, 0));
          ++ix;
       }
    };
@@ -94,7 +95,8 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 1 + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         const uint8_t byte = value ? jsonb::make_initial(jsonb::type::true_, 0) : jsonb::make_initial(jsonb::type::false_, 0);
+         const uint8_t byte =
+            value ? jsonb::make_initial(jsonb::type::true_, 0) : jsonb::make_initial(jsonb::type::false_, 0);
          b[ix] = static_cast<typename std::decay_t<decltype(b)>::value_type>(byte);
          ++ix;
       }
@@ -212,9 +214,8 @@ namespace glz
             }
          }();
 
-         const uint8_t tc = jsonb_detail::string_needs_json_escape(str.data(), str.size())
-                               ? jsonb::type::textraw
-                               : jsonb::type::text;
+         const uint8_t tc =
+            jsonb_detail::string_needs_json_escape(str.data(), str.size()) ? jsonb::type::textraw : jsonb::type::text;
          jsonb_detail::write_scalar(ctx, tc, str.data(), str.size(), b, ix);
       }
    };
