@@ -748,6 +748,30 @@ void map_tests()
          expect(result[item.first] == item.second);
       }
    };
+
+   "map_skips_empty_optional_by_default"_test = [] {
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}, {"c", 3}};
+      std::string buf;
+      expect(not glz::write_cbor(in, buf));
+      std::map<std::string, std::optional<int>> out{};
+      expect(not glz::read_cbor(out, buf));
+      expect(out.size() == 2);
+      expect(out.count("b") == 0);
+      expect(out.at("a").value() == 1);
+      expect(out.at("c").value() == 3);
+   };
+
+   "map_preserves_nulls_when_skip_disabled"_test = [] {
+      constexpr auto preserve = glz::opts{.format = glz::CBOR, .skip_null_members = false};
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}};
+      std::string buf;
+      expect(not glz::write<preserve>(in, buf));
+      std::map<std::string, std::optional<int>> out{};
+      expect(not glz::read<preserve>(out, buf));
+      expect(out.size() == 2);
+      expect(out.at("a").value() == 1);
+      expect(!out.at("b").has_value());
+   };
 }
 
 void object_tests()

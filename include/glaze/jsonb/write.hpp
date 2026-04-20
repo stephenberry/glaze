@@ -288,7 +288,14 @@ namespace glz
          }
          const size_t payload_start = ix;
 
+         using map_t = std::remove_cvref_t<decltype(value)>;
+         using val_t = std::remove_cvref_t<detail::iterator_second_type<map_t>>;
+         constexpr bool may_skip = null_t<val_t> && Opts.skip_null_members;
+
          for (auto&& [k, v] : value) {
+            if constexpr (may_skip) {
+               if (skip_member<Opts>(v)) continue;
+            }
             serialize<JSONB>::op<Opts>(k, ctx, b, ix);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -711,10 +718,10 @@ namespace glz
 
    // ===== High-level write APIs =====
 
-   template <write_supported<JSONB> T, class Buffer>
+   template <auto Opts = opts{}, write_supported<JSONB> T, class Buffer>
    [[nodiscard]] error_ctx write_jsonb(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = JSONB}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<set_jsonb<Opts>()>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <auto Opts = opts{}, write_supported<JSONB> T>

@@ -384,12 +384,45 @@ int main()
                   .tags = {{"zones", {0, 1}}},
                },
             },
-         .metrics = {{"errors", {{1, 2, 3}}}, {"warnings", std::nullopt}},
+         // "warnings" would be std::nullopt, but skip_null_members (default) drops empty
+         // optionals in maps just like struct fields. A dedicated test below covers that path.
+         .metrics = {{"errors", {{1, 2, 3}}}},
          .header = std::make_tuple(2024, std::string{"glaze-msgpack"}, true),
          .status = 200,
       };
 
       expect_roundtrip_equal(batch);
+   };
+
+   "msgpack map skips empty optional values by default"_test = [] {
+      // skip_null_members defaults to true. Empty optional values in a map should
+      // be dropped on write (matching the struct-field behavior); non-empty ones
+      // and non-null value types are unaffected.
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}, {"c", 3}};
+      auto encoded = glz::write_msgpack(in);
+      expect(bool(encoded));
+
+      std::map<std::string, std::optional<int>> decoded{};
+      auto ec = glz::read_msgpack(decoded, std::string_view{encoded.value()});
+      expect(not ec);
+      expect(decoded.size() == 2);
+      expect(decoded.count("b") == 0);
+      expect(decoded.at("a").value() == 1);
+      expect(decoded.at("c").value() == 3);
+   };
+
+   "msgpack map preserves nulls when skip_null_members=false"_test = [] {
+      constexpr auto preserve = glz::opts{.format = glz::MSGPACK, .skip_null_members = false};
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}};
+      auto encoded = glz::write<preserve>(in);
+      expect(bool(encoded));
+
+      std::map<std::string, std::optional<int>> decoded{};
+      auto ec = glz::read<preserve>(decoded, std::string_view{encoded.value()});
+      expect(not ec);
+      expect(decoded.size() == 2);
+      expect(decoded.at("a").value() == 1);
+      expect(!decoded.at("b").has_value());
    };
 
    "msgpack structs_as_arrays roundtrip"_test = [] {

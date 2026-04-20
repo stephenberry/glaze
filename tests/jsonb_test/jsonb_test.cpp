@@ -1762,6 +1762,27 @@ suite skip_null_members_tests = [] {
       expect(j.has_value());
       expect(j.value() == R"({"id":5,"nickname":"Al"})");
    };
+
+   "skip_null_members drops empty optionals from map values"_test = [] {
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}, {"c", 3}};
+      std::string buf;
+      constexpr glz::opts O{.format = glz::JSONB};
+      expect(not glz::write<O>(in, buf));
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      // Ordered map → predictable key order.
+      expect(j.value() == R"({"a":1,"c":3})");
+   };
+
+   "skip_null_members=false preserves map nulls"_test = [] {
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}};
+      std::string buf;
+      constexpr glz::opts O{.format = glz::JSONB, .skip_null_members = false};
+      expect(not glz::write<O>(in, buf));
+      auto j = glz::jsonb_to_json(buf);
+      expect(j.has_value());
+      expect(j.value() == R"({"a":1,"b":null})");
+   };
 };
 
 suite skip_default_members_tests = [] {
