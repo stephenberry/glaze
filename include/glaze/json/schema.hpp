@@ -498,7 +498,10 @@ namespace glz
          return result;
       }
 
-      // SFINAE-friendly check: can we extract defaults for this type?
+      // SFINAE-friendly probe: consteval-call failure propagates as "not a constant
+      // expression" at the integral_constant<int, ...> substitution, which is
+      // SFINAE-detectable. A variable-template initializer failure is not — so
+      // the probe has to call extract_all_defaults_impl directly.
       template <class T>
       consteval int check_extractable()
       {
@@ -511,13 +514,12 @@ namespace glz
          (reflectable<T> || glaze_object_t<T>) && std::default_initializable<T> &&
          requires { typename std::integral_constant<int, check_extractable<T>()>; };
 
-      // Public entry point: returns cached array of defaults for type T
+      // Variable-template cache, guarded by can_extract_defaults so it's only
+      // ever instantiated for types the probe has already cleared. The cache
+      // value is computed once per T; repeated accesses at call sites are free.
       template <class T>
          requires can_extract_defaults<T>
-      consteval auto extract_all_defaults()
-      {
-         return extract_all_defaults_impl<T>();
-      }
+      inline constexpr auto cached_defaults = extract_all_defaults_impl<T>();
 
       // Returns the pre-extracted defaults array for T, or an all-nullopt array
       // when disabled or when T is not extractable (e.g. missing default ctor).
@@ -528,7 +530,7 @@ namespace glz
       consteval auto defaults_array_for()
       {
          if constexpr (Enable && can_extract_defaults<T>) {
-            return extract_all_defaults<T>();
+            return cached_defaults<T>;
          }
          else {
             constexpr auto N = reflect<T>::size;
