@@ -19,7 +19,7 @@ Formats Supported:
 >
 > Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
 
-## With C++23 & C++26 compile time reflection for MSVC, Clang, and GCC!
+## With C++23 compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
 - See [example on Compiler Explorer](https://gcc.godbolt.org/z/T4To5fKfz)
