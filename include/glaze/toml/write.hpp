@@ -38,7 +38,7 @@ namespace glz
    struct serialize<TOML>
    {
       template <auto Opts, class T, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          to<TOML, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                              std::forward<B>(b), std::forward<IX>(ix));
@@ -50,7 +50,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
+      static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          to<TOML, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
@@ -62,7 +62,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if (value) {
             serialize<TOML>::op<Opts>(*value, ctx, b, ix);
@@ -77,7 +77,7 @@ namespace glz
    struct to<TOML, std::nullptr_t>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(std::nullptr_t, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(std::nullptr_t, is_context auto&& ctx, B&& b, auto& ix)
       {
          // Write empty string as placeholder for null
          // Note: TOML doesn't support null natively
@@ -92,7 +92,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(const bool value, is_context auto&& ctx, B&& b, auto& ix)
       {
          static constexpr auto checked = not check_write_unchecked(Opts);
          if constexpr (checked) {
@@ -127,7 +127,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          // Numbers can be up to ~25 chars for doubles
          if (!ensure_space(ctx, b, ix + 32 + write_padding_bytes)) [[unlikely]] {
@@ -152,7 +152,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const sv str = get_enum_name(value);
          if (!str.empty()) {
@@ -181,7 +181,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          // serialize as underlying number
          serialize<TOML>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
@@ -199,7 +199,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using Rep = typename std::remove_cvref_t<T>::rep;
          to<TOML, Rep>::template op<Opts>(value.count(), ctx, b, ix);
@@ -410,7 +410,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using Duration = typename std::remove_cvref_t<T>::duration;
          using Rep = typename Duration::rep;
@@ -425,7 +425,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          // Treat like steady_clock - serialize as count since epoch is implementation-defined
          using Duration = typename std::remove_cvref_t<T>::duration;
@@ -602,7 +602,7 @@ namespace glz
 
    template <auto Opts, bool minified_check = true, class B>
       requires(Opts.format == TOML)
-   GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&& ctx, B&& b, auto& ix)
+   inline void write_array_entry_separator(is_context auto&& ctx, B&& b, auto& ix)
    {
       if constexpr (minified_check) {
          if (!ensure_space(ctx, b, ix + 2)) [[unlikely]] {
@@ -618,7 +618,7 @@ namespace glz
 
    template <auto Opts, bool minified_check = true, class B>
       requires(Opts.format == TOML)
-   GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&& ctx, B&& b, auto& ix)
+   inline void write_object_entry_separator(is_context auto&& ctx, B&& b, auto& ix)
    {
       if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
          return;
@@ -1150,7 +1150,7 @@ namespace glz
 
       // Helper to write an array element - uses inline table format for objects when in inline mode
       template <auto Opts, class V, class B>
-      GLZ_ALWAYS_INLINE static void write_element(V&& element, is_context auto&& ctx, B&& b, auto& ix)
+      static void write_element(V&& element, is_context auto&& ctx, B&& b, auto& ix)
       {
          using val_t = std::remove_cvref_t<V>;
          constexpr bool is_object_type = glaze_object_t<val_t> || reflectable<val_t>;
@@ -1168,7 +1168,7 @@ namespace glz
       // --- Array-like container writer ---
       template <auto Opts, class B>
          requires(writable_array_t<T> && (map_like_array ? check_concatenate(Opts) == false : true))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (empty_range(value)) {
             if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
@@ -1276,7 +1276,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class V, size_t N, class... Args>
-      GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
+      static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
       {
          serialize<TOML>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
       }
@@ -1337,7 +1337,7 @@ namespace glz
    struct to<TOML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
             return;
