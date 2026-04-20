@@ -475,31 +475,25 @@ namespace glz
          }
       }
 
-      // Extract all primitive defaults from a reflectable type in one T{} construction
+      // Extract all primitive defaults from T in one T{} construction. Branches on the
+      // access pattern: glaze_object_t goes through reflect<T>::values member pointers,
+      // reflectable types go through to_tie(instance). glaze_object_t wins if a type
+      // happens to satisfy both.
       template <class T>
-         requires(reflectable<T> && std::default_initializable<T>)
-      consteval auto extract_all_defaults_impl()
-      {
-         constexpr auto N = reflect<T>::size;
-         std::array<std::optional<schema::schema_any>, N> result{};
-         T instance{};
-         auto tied = to_tie(instance);
-         [&]<size_t... Is>(std::index_sequence<Is...>) {
-            ((result[Is] = extract_default_from_tie<Is>(tied)), ...);
-         }(std::make_index_sequence<N>{});
-         return result;
-      }
-
-      // Extract all primitive defaults from a glaze_object_t type in one T{} construction
-      template <class T>
-         requires(glaze_object_t<T> && std::default_initializable<T>)
+         requires((reflectable<T> || glaze_object_t<T>) && std::default_initializable<T>)
       consteval auto extract_all_defaults_impl()
       {
          constexpr auto N = reflect<T>::size;
          std::array<std::optional<schema::schema_any>, N> result{};
          T instance{};
          [&]<size_t... Is>(std::index_sequence<Is...>) {
-            ((result[Is] = extract_default_from_member<T, Is>(instance)), ...);
+            if constexpr (glaze_object_t<T>) {
+               ((result[Is] = extract_default_from_member<T, Is>(instance)), ...);
+            }
+            else {
+               auto tied = to_tie(instance);
+               ((result[Is] = extract_default_from_tie<Is>(tied)), ...);
+            }
          }(std::make_index_sequence<N>{});
          return result;
       }
