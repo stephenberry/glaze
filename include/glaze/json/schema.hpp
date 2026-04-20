@@ -512,6 +512,24 @@ namespace glz
          return extract_all_defaults_impl<T>();
       }
 
+      // Returns the pre-extracted defaults array for T, or an all-nullopt array
+      // when T is not extractable (e.g. missing default constructor). Kept as a
+      // named helper rather than an in-place lambda because MSVC cannot deduce
+      // the common return type of an immediately-invoked lambda whose branches
+      // mix a consteval call with a braced std::array initialization.
+      template <class T>
+      consteval auto defaults_array_for()
+      {
+         constexpr auto N = reflect<T>::size;
+         if constexpr (can_extract_defaults<T>) {
+            return extract_all_defaults<T>();
+         }
+         else {
+            std::array<std::optional<schema::schema_any>, N> empty{};
+            return empty;
+         }
+      }
+
       template <class T = void>
       struct to_json_schema
       {
@@ -1096,15 +1114,9 @@ namespace glz
 
             s.properties = std::map<sv, schema, std::less<>>();
 
-            // Extract all primitive defaults in a single T{} construction (once per type)
-            static constexpr auto defaults = [] {
-               if constexpr (can_extract_defaults<V>) {
-                  return extract_all_defaults<V>();
-               }
-               else {
-                  return std::array<std::optional<schema::schema_any>, N>{};
-               }
-            }();
+            // Extract all primitive defaults in a single T{} construction (once per type).
+            // Empty array when V is not extractable (no default ctor, etc.).
+            static constexpr auto defaults = defaults_array_for<V>();
 
             for_each<N>([&]<auto I>() {
                using val_t = std::decay_t<refl_t<T, I>>;
