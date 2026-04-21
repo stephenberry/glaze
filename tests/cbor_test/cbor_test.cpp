@@ -3233,6 +3233,59 @@ void chrono_struct_tests()
    };
 }
 
+namespace merge_meta_cbor_test
+{
+   struct Species
+   {
+      std::string name{};
+      int legs{};
+   };
+
+   struct Appearance
+   {
+      double weight{};
+      std::string color{};
+   };
+
+   struct BearRecord
+   {
+      Species species{};
+      Appearance appearance{};
+   };
+}
+
+template <>
+struct glz::meta<merge_meta_cbor_test::BearRecord>
+{
+   using T = merge_meta_cbor_test::BearRecord;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance};
+};
+
+void merge_meta_tests()
+{
+   using namespace merge_meta_cbor_test;
+
+   "merge_meta_cbor_roundtrip"_test = [] {
+      // CBOR shares reflect<T> with BEVE/JSON; this confirms merge flattening
+      // round-trips through the CBOR writer/reader as well.
+      BearRecord original{};
+      original.species.name = "Brown";
+      original.species.legs = 4;
+      original.appearance.weight = 250.0;
+      original.appearance.color = "brown";
+
+      std::string buffer{};
+      expect(not glz::write_cbor(original, buffer));
+
+      BearRecord restored{};
+      expect(not glz::read_cbor(restored, buffer));
+      expect(restored.species.name == original.species.name);
+      expect(restored.species.legs == original.species.legs);
+      expect(restored.appearance.weight == original.appearance.weight);
+      expect(restored.appearance.color == original.appearance.color);
+   };
+}
+
 int main()
 {
    basic_types_tests();
@@ -3271,6 +3324,7 @@ int main()
    max_length_wrapper_cbor_tests();
    chrono_tests();
    chrono_struct_tests();
+   merge_meta_tests();
 #if __cpp_exceptions
    exceptions_tests();
 #endif

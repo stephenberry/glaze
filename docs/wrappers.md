@@ -33,6 +33,7 @@ glz::float_format<&T::x, "{:.2f}"> // Format floats using std::format syntax (C+
 glz::custom<&T::read, &T::write> // Calls custom read and write std::functions, lambdas, or member functions
 glz::manage<&T::x, &T::read_x, &T::write_x> // Calls read_x() after reading x and calls write_x() before writing x
 glz::as_array<&T::member> // Treat a reflected/member-annotated type as a positional array for read and write
+glz::flatten_map<&T::member> // Flatten map-like containers into a JSON array [key..., value, ...]
 ```
 
 ## Associated glz::opts
@@ -274,6 +275,62 @@ expect(written ==
        R"({"id":1,"person":["Joe","Doe","London","Chamber St"]})"
 );
 ```
+
+## flatten_map
+
+Flatten a map-like container or range of pairs into a JSON array. This wrapper lives in the optional header `glaze/json/flatten_map.hpp`.
+
+```c++
+#include "glaze/json/flatten_map.hpp"
+```
+
+Use `glz::flatten_map<&T::member>` inside `glz::object` when the member is a map-like container with a fixed-size key, such as `std::pair<int, int>`.
+
+```c++
+struct pair_hash
+{
+   size_t operator()(const std::pair<int, int>& value) const noexcept
+   {
+      return std::hash<int>{}(value.first) ^ (std::hash<int>{}(value.second) << 1);
+   }
+};
+
+struct payload
+{
+   std::unordered_map<std::pair<int, int>, std::string, pair_hash> map{};
+};
+
+template <>
+struct glz::meta<payload>
+{
+   using T = payload;
+   static constexpr auto value = glz::object("map", glz::flatten_map<&T::map>);
+};
+```
+
+In use:
+
+```c++
+payload value{};
+value.map[{1, 2}] = "example";
+
+std::string json{};
+expect(!glz::write_json(glz::flatten_map<&payload::map>(value), json));
+expect(json == R"([1,2,"example"])");
+
+payload parsed{};
+auto wrapped = glz::flatten_map<&payload::map>(parsed);
+expect(!glz::read_json(wrapped, json));
+expect(parsed.map.at({1, 2}) == "example");
+```
+
+The wrapper flattens each entry as `[key elements..., mapped value]`, so multiple entries look like:
+
+```json
+[1,2,"example",3,4,"another"]
+```
+
+This is intended for pair-ranges and map-like containers whose keys can be flattened without additional metadata, including `std::pair`, tuples, Glaze arrays, and fixed-size containers like `std::array`.
 
 ## string_as_number
 

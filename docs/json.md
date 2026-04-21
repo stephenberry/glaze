@@ -256,6 +256,48 @@ std::unordered_map<std::string, std::string> config = {{"host", "localhost"}};
 // Serialize to JSON objects: {"Alice":95,"Bob":87}
 ```
 
+For non-string composite keys, Glaze can also serialize map-like containers as flat JSON arrays via the optional wrapper in `glaze/json/flatten_map.hpp`:
+
+```cpp
+#include "glaze/json/flatten_map.hpp"
+
+struct pair_hash
+{
+   size_t operator()(const std::pair<int, int>& value) const noexcept
+   {
+      return std::hash<int>{}(value.first) ^ (std::hash<int>{}(value.second) << 1);
+   }
+};
+
+using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+struct payload
+{
+   map_t map{};
+};
+
+template <>
+struct glz::meta<payload>
+{
+   using T = payload;
+   static constexpr auto value = glz::object("map", glz::flatten_map<&T::map>);
+};
+
+payload value{};
+value.map[{1, 2}] = "example";
+value.map[{3, 4}] = "another";
+
+std::string json{};
+glz::write_json(glz::flatten_map<&payload::map>(value), json);
+// json == [1,2,"example",3,4,"another"] (ordering depends on the container)
+
+payload parsed{};
+auto wrapped = glz::flatten_map<&payload::map>(parsed);
+glz::read_json(wrapped, json);
+```
+
+This format flattens each entry into the surrounding array as `[key elements..., mapped value]`. It is intended for map-like containers with fixed-size keys such as `std::pair`, tuples, Glaze arrays, and `std::array`.
+
 ### Optional and Nullable Types
 
 ```cpp
@@ -539,6 +581,102 @@ auto obj2 = glz::obj{"key", "second"};
 auto merged = glz::merge{obj1, obj2};
 // Results in: {"key":"second"}
 ```
+
+### Struct Flattening with Merge
+
+`glz::merge` can also be used inside `glz::meta` to flatten multiple sub-structs into a single JSON object. This is useful when you compose a type from reusable components but want a flat JSON representation for both **reading and writing**.
+
+```cpp
+struct Species {
+   std::string name{};
+   int legs{};
+};
+
+struct Appearance {
+   double weight{};
+   std::string color{};
+};
+
+struct BearRecord {
+   Species species{};
+   Appearance appearance{};
+};
+
+template <>
+struct glz::meta<BearRecord> {
+   using T = BearRecord;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance};
+};
+```
+
+`BearRecord` now reads and writes as a single flat object:
+
+```json
+{"name":"Grizzly","legs":4,"weight":300.5,"color":"brown"}
+```
+
+Without `glz::merge`, the default serialization would nest each sub-struct:
+
+```json
+{"species":{"name":"Grizzly","legs":4},"appearance":{"weight":300.5,"color":"brown"}}
+```
+
+#### Merging N Structs
+
+Any number of sub-structs can be merged:
+
+```cpp
+struct Habitat {
+   std::string biome{};
+   bool endangered{};
+};
+
+struct BearProfile {
+   Species species{};
+   Appearance appearance{};
+   Habitat habitat{};
+};
+
+template <>
+struct glz::meta<BearProfile> {
+   using T = BearProfile;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance, &T::habitat};
+};
+// All fields flattened into one JSON object
+```
+
+#### Sub-Structs with Custom Keys
+
+Sub-structs that define their own `glz::meta` will use their custom key names in the merged output:
+
+```cpp
+struct Dimensions {
+   double height{};
+   double width{};
+};
+
+template <>
+struct glz::meta<Dimensions> {
+   using T = Dimensions;
+   static constexpr auto value = glz::object("h", &T::height, "w", &T::width);
+};
+
+struct MeasuredBear {
+   Species species{};
+   Dimensions dims{};
+};
+
+template <>
+struct glz::meta<MeasuredBear> {
+   using T = MeasuredBear;
+   static constexpr auto value = glz::merge{&T::species, &T::dims};
+};
+// Produces: {"name":"Sun","legs":4,"h":1.5,"w":0.8}
+```
+
+#### Format Support
+
+Struct flattening via `glz::merge` works across all Glaze formats (JSON, BEVE, YAML, CBOR, etc.) because it integrates at the reflection layer.
 
 ### Performance Considerations
 

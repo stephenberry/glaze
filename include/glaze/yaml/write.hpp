@@ -24,7 +24,7 @@ namespace glz
    struct serialize<YAML>
    {
       template <auto Opts, class T, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          to<YAML, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                              std::forward<B>(b), std::forward<IX>(ix));
@@ -37,7 +37,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
+      static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          to<YAML, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
@@ -50,7 +50,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
          if (value) {
             serialize<YAML>::op<Opts>(*value, ctx, b, ix);
@@ -69,7 +69,7 @@ namespace glz
    struct to<YAML, std::nullptr_t>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(std::nullptr_t, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(std::nullptr_t, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
             return;
@@ -83,7 +83,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(const bool value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
             return;
@@ -115,7 +115,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (!ensure_space(ctx, b, ix + 32 + write_padding_bytes)) [[unlikely]] {
             return;
@@ -145,7 +145,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
             return;
@@ -160,7 +160,7 @@ namespace glz
    {
       // Write a YAML double-quoted string with proper escaping
       template <class B>
-      GLZ_ALWAYS_INLINE void write_double_quoted_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix)
+      inline void write_double_quoted_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix)
       {
          // Estimate max size: original + quotes + escapes
          if (!ensure_space(ctx, b, ix + str.size() * 2 + 3 + write_padding_bytes)) [[unlikely]] {
@@ -207,7 +207,7 @@ namespace glz
 
       // Write a YAML single-quoted string (only ' needs escaping as '')
       template <class B>
-      GLZ_ALWAYS_INLINE void write_single_quoted_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix)
+      inline void write_single_quoted_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (!ensure_space(ctx, b, ix + str.size() * 2 + 3 + write_padding_bytes)) [[unlikely]] {
             return;
@@ -227,8 +227,8 @@ namespace glz
 
       // Write a literal block scalar (|)
       template <class B>
-      GLZ_ALWAYS_INLINE void write_literal_block(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level, uint8_t indent_width, char chomping)
+      inline void write_literal_block(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
+                                      int32_t indent_level, uint8_t indent_width, char chomping)
       {
          if (!ensure_space(ctx, b, ix + str.size() + 64 + write_padding_bytes)) [[unlikely]] {
             return;
@@ -280,8 +280,8 @@ namespace glz
 #pragma warning(disable : 4702) // unreachable code from if constexpr
 #endif
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE void write_yaml_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
-                                               int32_t indent_level = 0)
+      inline void write_yaml_string(std::string_view str, is_context auto&& ctx, B&& b, auto& ix,
+                                    int32_t indent_level = 0)
       {
          constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
@@ -367,7 +367,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const sv str{value};
          yaml::write_yaml_string<Opts>(str, ctx, b, ix);
@@ -380,7 +380,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const sv str = get_enum_name(value);
          if (!str.empty()) {
@@ -399,7 +399,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          serialize<YAML>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
                                    std::forward<Args>(args)...);
@@ -410,12 +410,11 @@ namespace glz
    {
       // Forward declarations for helpers used in block sequences
       template <auto Opts, class T, class B>
-      GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                        int32_t indent_level);
+      inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level);
 
       template <auto Opts, class T, class B>
-      GLZ_ALWAYS_INLINE void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level, bool skip_first_indent = false);
+      inline void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
+                                      bool skip_first_indent = false);
 
       // Helper to check if a type is "simple" (writes on same line)
       template <class T>
@@ -427,7 +426,7 @@ namespace glz
 
       // Runtime check if a variant currently holds a simple type
       template <class T>
-      GLZ_ALWAYS_INLINE bool variant_holds_simple_type([[maybe_unused]] const T& value)
+      inline bool variant_holds_simple_type([[maybe_unused]] const T& value)
       {
          if constexpr (is_variant<T>) {
             return std::visit(
@@ -465,8 +464,7 @@ namespace glz
 
       // Write a variant's held value in block context, ensuring strings get correct indent_level.
       template <auto Opts, class T, class B>
-      GLZ_ALWAYS_INLINE void write_variant_value(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level)
+      inline void write_variant_value(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
       {
          using V = std::remove_cvref_t<T>;
          if constexpr (is_variant<V>) {
@@ -495,8 +493,7 @@ namespace glz
 
       // Write block-style sequence
       template <auto Opts, class T, class B>
-      GLZ_ALWAYS_INLINE void write_block_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                  int32_t indent_level)
+      inline void write_block_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
       {
          constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
 
@@ -681,7 +678,7 @@ namespace glz
 
       // Write flow-style sequence
       template <auto Opts, class T, class B>
-      GLZ_ALWAYS_INLINE void write_flow_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix)
+      inline void write_flow_sequence(T&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
             return;
@@ -710,7 +707,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
             yaml::write_flow_sequence<Opts>(value, ctx, b, ix);
@@ -732,7 +729,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -841,7 +838,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          const auto& [key, val] = value;
 
@@ -914,13 +911,12 @@ namespace glz
    {
       // Forward declaration for nested object helper
       template <auto Opts, class T, class B>
-      GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                        int32_t indent_level);
+      inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level);
 
       // Write block-style mapping
       template <auto Opts, class T, class B>
-      GLZ_ALWAYS_INLINE void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                 int32_t indent_level, bool skip_first_indent)
+      inline void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
+                                      bool skip_first_indent)
       {
          using V = std::remove_cvref_t<T>;
          constexpr auto N = reflect<V>::size;
@@ -1108,8 +1104,7 @@ namespace glz
 
       // Helper for nested objects
       template <auto Opts, class T, class B>
-      GLZ_ALWAYS_INLINE void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix,
-                                                        int32_t indent_level)
+      inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
       {
          using V = std::remove_cvref_t<T>;
 
@@ -1237,7 +1232,7 @@ namespace glz
 
       // Write flow-style mapping
       template <auto Opts, class T, class B>
-      GLZ_ALWAYS_INLINE void write_flow_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix)
+      inline void write_flow_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using V = std::remove_cvref_t<T>;
          constexpr auto N = reflect<V>::size;
@@ -1302,7 +1297,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
             yaml::write_flow_mapping<Opts>(value, ctx, b, ix);
@@ -1322,7 +1317,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
             // Flow style
@@ -1370,7 +1365,7 @@ namespace glz
    struct to<YAML, T>
    {
       template <auto Opts, class B>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          std::visit([&](auto&& v) { serialize<YAML>::op<Opts>(v, ctx, b, ix); }, value);
       }

@@ -25,7 +25,7 @@ namespace glz
    struct parse<YAML>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
+      static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          if constexpr (requires { ctx.stream_begin; }) {
             if (!ctx.stream_begin && it != end) {
@@ -189,7 +189,7 @@ namespace glz
    struct from<YAML, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1 end)
+      static void op(Value&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<YAML, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
@@ -246,7 +246,7 @@ namespace glz
       }
 
       template <class It, class End>
-      GLZ_ALWAYS_INLINE bool alias_token_is_mapping_key(It it, End end) noexcept
+      inline bool alias_token_is_mapping_key(It it, End end) noexcept
       {
          if (it == end || *it != '*') return false;
          ++it; // skip '*'
@@ -283,8 +283,7 @@ namespace glz
       // Returns true when caller should stop (alias consumed, tolerated empty anchor, or syntax/error).
       template <auto Opts, node_property_policy Policy = node_property_policy{}, class T, class Ctx, class It,
                 class End>
-      GLZ_ALWAYS_INLINE bool parse_node_properties(T&& value, Ctx& ctx, It& it, End end,
-                                                   node_property_state& state) noexcept
+      inline bool parse_node_properties(T&& value, Ctx& ctx, It& it, End end, node_property_state& state) noexcept
       {
          state.has_anchor = false;
          state.anchor_name.clear();
@@ -331,7 +330,7 @@ namespace glz
       }
 
       template <class Ctx, class It>
-      GLZ_ALWAYS_INLINE void finalize_node_anchor(node_property_state& state, Ctx& ctx, It it) noexcept
+      inline void finalize_node_anchor(node_property_state& state, Ctx& ctx, It it) noexcept
       {
          if (state.has_anchor && !bool(ctx.error)) {
             ctx.anchors[std::move(state.anchor_name)] = {state.anchor_start, &*it, state.anchor_indent};
@@ -340,8 +339,8 @@ namespace glz
 
       template <auto Opts, node_property_policy PropertyPolicy = node_property_policy{}, bool AllowEmptyInput = false,
                 class T, class Ctx, class It, class End, class TagValidator>
-      GLZ_ALWAYS_INLINE bool parse_node_preamble(T&& value, Ctx& ctx, It& it, End end, node_preamble_state& preamble,
-                                                 TagValidator&& tag_validator) noexcept
+      inline bool parse_node_preamble(T&& value, Ctx& ctx, It& it, End end, node_preamble_state& preamble,
+                                      TagValidator&& tag_validator) noexcept
       {
          skip_inline_ws(it, end);
 
@@ -381,7 +380,7 @@ namespace glz
       // SWAR-optimized double-quoted string parsing
       // Uses 8-byte chunks for fast scanning and copying
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_double_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
+      inline void parse_double_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
       {
          static constexpr size_t string_padding_bytes = 8;
 
@@ -624,7 +623,7 @@ namespace glz
       // Only escape is '' -> ' (doubled single quote)
       // Line breaks are folded: single newline -> space, blank line -> newline
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_single_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
+      inline void parse_single_quoted_string(std::string& value, Ctx& ctx, It& it, End end)
       {
          static constexpr size_t string_padding_bytes = 8;
 
@@ -731,7 +730,7 @@ namespace glz
       }
 
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void skip_flow_ws_and_newlines(Ctx& ctx, It& it, End end, bool* saw_line_break = nullptr)
+      inline void skip_flow_ws_and_newlines(Ctx& ctx, It& it, End end, bool* saw_line_break = nullptr)
       {
          bool at_line_start = false;
          bool saw_separation_ws = false;
@@ -809,7 +808,7 @@ namespace glz
       }
 
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void validate_flow_node_adjacent_tail(Ctx& ctx, It& it, End end)
+      inline void validate_flow_node_adjacent_tail(Ctx& ctx, It& it, End end)
       {
          if (it == end) return;
          const char c = *it;
@@ -827,7 +826,7 @@ namespace glz
       // or stream separators (--- / ...). This catches malformed trailing content such as:
       // "[a] ]", "[a]#comment" (without separation), or "[a]\ntrailing".
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void validate_root_flow_tail_after_close(Ctx& ctx, It& it, End end)
+      inline void validate_root_flow_tail_after_close(Ctx& ctx, It& it, End end)
       {
          auto is_document_start = [&](auto pos) {
             if (end - pos >= 3 && pos[0] == '-' && pos[1] == '-' && pos[2] == '-') {
@@ -881,7 +880,7 @@ namespace glz
 
       // Parse a plain scalar (unquoted)
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_plain_scalar(std::string& value, Ctx& ctx, It& it, End end, bool in_flow)
+      inline void parse_plain_scalar(std::string& value, Ctx& ctx, It& it, End end, bool in_flow)
       {
          value.clear();
 
@@ -970,8 +969,7 @@ namespace glz
       // - A single newline between lines becomes a single space
       // - Blank lines are preserved as literal newlines
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_plain_scalar_multiline(std::string& value, Ctx& ctx, It& it, End end,
-                                                          int32_t base_indent)
+      inline void parse_plain_scalar_multiline(std::string& value, Ctx& ctx, It& it, End end, int32_t base_indent)
       {
          value.clear();
 
@@ -1139,7 +1137,7 @@ namespace glz
 
       // Parse a block scalar (| or >)
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_block_scalar(std::string& value, Ctx& ctx, It& it, End end, int32_t base_indent)
+      inline void parse_block_scalar(std::string& value, Ctx& ctx, It& it, End end, int32_t base_indent)
       {
          if (it == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
@@ -1348,7 +1346,7 @@ namespace glz
 
       // Parse a YAML key (unquoted or quoted)
       template <class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE bool parse_yaml_key(std::string& key, Ctx& ctx, It& it, End end, bool in_flow)
+      inline bool parse_yaml_key(std::string& key, Ctx& ctx, It& it, End end, bool in_flow)
       {
          key.clear();
          skip_inline_ws(it, end);
@@ -2242,7 +2240,7 @@ namespace glz
    {
       // Parse flow sequence [item, item, ...]
       template <auto Opts, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_flow_sequence(T&& value, Ctx& ctx, It& it, End end)
+      inline void parse_flow_sequence(T&& value, Ctx& ctx, It& it, End end)
       {
          using V = std::remove_cvref_t<T>;
          using value_type = typename V::value_type;
@@ -2251,7 +2249,7 @@ namespace glz
          {
             size_t index = 0;
 
-            GLZ_ALWAYS_INLINE bool fixed_capacity_reached(const V& container) const noexcept
+            inline bool fixed_capacity_reached(const V& container) const noexcept
             {
                if constexpr (!resizable<V>) {
                   return index >= container.size();
@@ -2262,9 +2260,9 @@ namespace glz
                }
             }
 
-            GLZ_ALWAYS_INLINE void commit_fixed_slot() noexcept { ++index; }
+            inline void commit_fixed_slot() noexcept { ++index; }
 
-            GLZ_ALWAYS_INLINE void append(V& container, value_type&& element) noexcept
+            inline void append(V& container, value_type&& element) noexcept
             {
                if constexpr (emplace_backable<V>) {
                   container.emplace_back(std::move(element));
@@ -2518,7 +2516,7 @@ namespace glz
 
       // Parse flow mapping {key: value, ...}
       template <auto Opts, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_flow_mapping(T&& value, Ctx& ctx, It& it, End end)
+      inline void parse_flow_mapping(T&& value, Ctx& ctx, It& it, End end)
       {
          using U = std::remove_cvref_t<T>;
          static constexpr auto N = reflect<U>::size;
@@ -2663,7 +2661,7 @@ namespace glz
       // Detects a plain "key: value" mapping indicator in an inline block-map
       // value segment, while ignoring quoted strings and nested flow collections.
       template <class It, class End>
-      GLZ_ALWAYS_INLINE bool inline_value_has_plain_mapping_indicator(It pos, End end) noexcept
+      inline bool inline_value_has_plain_mapping_indicator(It pos, End end) noexcept
       {
          int flow_depth = 0;
          while (pos != end) {
@@ -2707,7 +2705,7 @@ namespace glz
       // - item1
       // - item2
       template <auto Opts, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_block_sequence(T&& value, Ctx& ctx, It& it, End end, int32_t sequence_indent)
+      inline void parse_block_sequence(T&& value, Ctx& ctx, It& it, End end, int32_t sequence_indent)
       {
          using V = std::remove_cvref_t<T>;
          using value_type = typename V::value_type;
@@ -2716,7 +2714,7 @@ namespace glz
          {
             size_t index = 0;
 
-            GLZ_ALWAYS_INLINE bool fixed_capacity_reached(const V& container) const noexcept
+            inline bool fixed_capacity_reached(const V& container) const noexcept
             {
                if constexpr (!resizable<V>) {
                   return index >= container.size();
@@ -2727,9 +2725,9 @@ namespace glz
                }
             }
 
-            GLZ_ALWAYS_INLINE void commit_fixed_slot() noexcept { ++index; }
+            inline void commit_fixed_slot() noexcept { ++index; }
 
-            GLZ_ALWAYS_INLINE void append(V& container, value_type&& element) noexcept
+            inline void append(V& container, value_type&& element) noexcept
             {
                if constexpr (emplace_backable<V>) {
                   container.emplace_back(std::move(element));
@@ -3471,7 +3469,7 @@ namespace glz
       // key1: value1
       // key2: value2
       template <auto Opts, class T, class Ctx, class It, class End>
-      GLZ_ALWAYS_INLINE void parse_block_mapping(T&& value, Ctx& ctx, It& it, End end, int32_t mapping_indent)
+      inline void parse_block_mapping(T&& value, Ctx& ctx, It& it, End end, int32_t mapping_indent)
       {
          using U = std::remove_cvref_t<T>;
          static constexpr auto N = reflect<U>::size;
@@ -4813,7 +4811,7 @@ namespace glz
    // Quick check for implicit single-pair flow mappings used as sequence entries
    // (e.g. `"k":v`, `{k: v}:v`, `k: v`) up to the next top-level flow delimiter.
    template <class It, class End>
-   GLZ_ALWAYS_INLINE bool line_could_be_flow_mapping(It it, End end)
+   inline bool line_could_be_flow_mapping(It it, End end)
    {
       int flow_depth = 0;
       bool prev_was_whitespace = true;
@@ -4896,7 +4894,7 @@ namespace glz
    // fails with a syntax error, that error is propagated (not silently caught)
    // to avoid hiding malformed content.
    template <class Variant, auto Opts>
-   GLZ_ALWAYS_INLINE bool try_parse_block_mapping_into_variant(auto&& value, auto&& ctx, auto&& it, auto end)
+   inline bool try_parse_block_mapping_into_variant(auto&& value, auto&& ctx, auto&& it, auto end)
    {
       using counts = yaml_variant_type_count<Variant>;
       if constexpr (counts::n_object == 0) {
@@ -4939,7 +4937,7 @@ namespace glz
 #pragma warning(disable : 4702) // unreachable code from if constexpr
 #endif
    template <class Variant, auto Opts>
-   GLZ_ALWAYS_INLINE void parse_block_mapping_or_string(auto&& value, auto&& ctx, auto&& it, auto end)
+   inline void parse_block_mapping_or_string(auto&& value, auto&& ctx, auto&& it, auto end)
    {
       if constexpr (yaml::check_flow_context(Opts)) {
          // In flow context, only treat plain content as an implicit "key: value"
