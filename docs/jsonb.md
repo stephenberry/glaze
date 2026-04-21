@@ -78,9 +78,16 @@ The reader handles all four text types for interop with SQLite or hand-crafted b
 
 Per the SQLite JSONB spec, legacy readers **must** interpret element types 0 (NULL), 1 (TRUE), and 2 (FALSE) as their nominal value even when the payload size is non-zero, so that future spec extensions that store information in those payload bytes don't break older readers. Glaze skips any payload bytes and keeps the nominal value — it does not reject such elements as malformed.
 
-### Integer narrowing on read
+### Numeric range on read
 
-JSONB INT and INT5 payloads are spec'd to fit in 64 bits. When reading into a narrower target type (e.g. `int8_t`, `uint16_t`), Glaze bounds-checks the parsed value against `numeric_limits<T>::min()` / `max()` and returns `error_code::parse_number_failure` if the value won't fit, rather than silently truncating. The two's-complement edge case `|min()| == max()+1` is allowed for negative INT5 hex (so `-0x80000000` fits cleanly into `int32_t`).
+The SQLite JSONB spec does **not** cap INT/INT5 at 64 bits or FLOAT/FLOAT5 at IEEE-754 binary64 — the payload is ASCII text and the spec leaves magnitude open-ended. Producers in languages with arbitrary-precision numerics (e.g. Python `int`, `float`) can legitimately emit payloads that overflow these widths.
+
+Glaze's reader parses INT/INT5 through `int64_t` / `uint64_t` and FLOAT/FLOAT5 through `double` as intermediates, then bounds-checks into the destination type. A payload that exceeds those intermediates returns `error_code::parse_number_failure` rather than silently truncating or saturating. In practice:
+
+* **Integers:** values outside `[INT64_MIN, UINT64_MAX]` fail. Within that range, values are bounds-checked against the target type (`int8_t`, `uint16_t`, etc). The two's-complement edge case `|min()| == max()+1` is allowed for negative INT5 hex (so `-0x80000000` fits cleanly into `int32_t`).
+* **Floats:** values whose ASCII form fast-float cannot convert to `double` fail. Finite values beyond `double`'s range round to `±infinity` per IEEE-754, which is then cast to the target float type.
+
+If you need to consume blobs produced by arbitrary-precision writers, pre-validate or route those fields through a string alternative before reading.
 
 ### DoS protection
 
@@ -96,7 +103,15 @@ The spec permits non-minimal headers, so blobs Glaze writes are spec-compliant b
 
 ## Floating-Point Special Values
 
-Standard JSON has no representation for `NaN`, `Infinity`, or `-Infinity`. JSONB inherits JSON5's ability to represent them via the FLOAT5 element type, and Glaze writes them as FLOAT5 automatically. `jsonb_to_json` renders them as JSON `null` when emitting strict JSON.
+Standard JSON has no representation for `NaN`, `Infinity`, or `-Infinity`. JSONB inherits JSON5's ability to represent them via the FLOAT5 element type, and Glaze writes them as FLOAT5 automatically. `jsonb_to_json` matches SQLite's `json()` convention on output:
+
+| FLOAT5 payload | `jsonb_to_json` output |
+|---|---|
+| `NaN` | `null` |
+| `Infinity`, `+Infinity` | `9e999` |
+| `-Infinity` | `-9e999` |
+
+`9e999` is outside the representable range of IEEE-754 binary64, so a strict-JSON parser reading the output into `double` yields `±infinity`, round-tripping the value. Parsers targeting a wider float type (`long double`, or 128-bit formats on some platforms) may accept `9e999` as a finite number since `10^999` fits in those ranges, so the infinity semantic is lost. If you need exact fidelity across float widths, keep the value in JSONB rather than routing it through the JSON text form.
 
 ## Variants
 
