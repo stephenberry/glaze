@@ -209,8 +209,8 @@ namespace glz
                }
             }
 
-            // After closing quote, expect comma, newline, or end of input
-            if (it != end && *it != ',' && *it != '\n' && *it != '\r') {
+            // After closing quote, expect delimiter, newline, or end of input
+            if (it != end && *it != csv_delimiter<Opts>() && *it != '\n' && *it != '\r') {
                // Invalid character after closing quote
                ctx.error = error_code::syntax_error;
                return;
@@ -218,7 +218,7 @@ namespace glz
          }
          else {
             // Unquoted field
-            while (it != end && *it != ',' && *it != '\n' && *it != '\r') {
+            while (it != end && *it != csv_delimiter<Opts>() && *it != '\n' && *it != '\r') {
                value.push_back(*it);
                ++it;
             }
@@ -278,14 +278,14 @@ namespace glz
             --closing;
             field = std::string_view(content_begin, static_cast<size_t>(closing - content_begin));
 
-            if (it != end && *it != ',' && *it != '\n' && *it != '\r') {
+            if (it != end && *it != csv_delimiter<Opts>() && *it != '\n' && *it != '\r') {
                ctx.error = error_code::syntax_error;
                return;
             }
          }
          else {
             auto content_begin = it;
-            while (it != end && *it != ',' && *it != '\n' && *it != '\r') {
+            while (it != end && *it != csv_delimiter<Opts>() && *it != '\n' && *it != '\r') {
                ++it;
             }
             field = std::string_view(content_begin, static_cast<size_t>(it - content_begin));
@@ -416,8 +416,8 @@ namespace glz
 
          auto start = it;
 
-         // Skip to end of field (comma, newline, or end)
-         while (it != end && *it != ',' && *it != '\n' && *it != '\r') {
+         // Skip to end of field (delimiter, newline, or end)
+         while (it != end && *it != csv_delimiter<Opts>() && *it != '\n' && *it != '\r') {
             ++it;
          }
 
@@ -478,7 +478,7 @@ namespace glz
    };
 
    // Utility to quickly count cells in a row for pre-allocation
-   template <class It>
+   template <char delim = ',', class It>
    inline size_t count_csv_cells(It start, It end) noexcept
    {
       if (start == end) {
@@ -492,7 +492,7 @@ namespace glz
          if (*start == '"') {
             in_quotes = !in_quotes;
          }
-         else if (*start == ',' && !in_quotes) {
+         else if (*start == delim && !in_quotes) {
             ++count;
          }
          else if ((*start == '\n' || *start == '\r') && !in_quotes) {
@@ -574,11 +574,11 @@ namespace glz
 
                   // Check for field separator or end of row
                   if (it != end) {
-                     if (*it == ',') {
+                     if (*it == csv_delimiter<Opts>()) {
                         ++it;
-                        // Handle trailing comma
+                        // Handle trailing delimiter
                         if (it == end || *it == '\n' || *it == '\r') {
-                           // Add empty value for trailing comma
+                           // Add empty value for trailing delimiter
                            if (col_index >= temp_cols.size()) {
                               temp_cols.resize(col_index + 1);
                            }
@@ -691,7 +691,7 @@ namespace glz
                while (row_end != end && *row_end != '\n' && *row_end != '\r') {
                   ++row_end;
                }
-               const auto estimated_cells = count_csv_cells(row_start, row_end);
+               const auto estimated_cells = count_csv_cells<csv_delimiter<Opts>()>(row_start, row_end);
                if (estimated_cells > 0) {
                   row.reserve(estimated_cells);
                }
@@ -745,9 +745,9 @@ namespace glz
                   break;
                }
 
-               if (*it == ',') {
+               if (*it == csv_delimiter<Opts>()) {
                   ++it;
-                  // Handle trailing comma by adding empty value
+                  // Handle trailing delimiter by adding empty value
                   if (it == end || *it == '\n' || *it == '\r') {
                      Value empty_value{};
                      if constexpr (emplace_backable<Row>) {
@@ -832,6 +832,7 @@ namespace glz
       }
    }
 
+   template <char delim = ','>
    inline auto read_column_wise_keys(auto&& ctx, auto&& it, auto end)
    {
       std::vector<std::pair<sv, size_t>> keys;
@@ -858,7 +859,7 @@ namespace glz
 
       auto start = it;
       while (it != end) {
-         if (*it == ',') {
+         if (*it == delim) {
             read_key(start, it);
             ++it;
             start = it;
@@ -898,7 +899,7 @@ namespace glz
          if constexpr (check_layout(Opts) == rowwise) {
             while (it != end) {
                auto start = it;
-               goto_delim<','>(it, end);
+               goto_delim<csv_delimiter<Opts>()>(it, end);
                sv key{start, static_cast<size_t>(it - start)};
 
                size_t csv_index{};
@@ -915,7 +916,7 @@ namespace glz
                   }
                }
 
-               if (it == end || *it != ',') [[unlikely]] {
+               if (it == end || *it != csv_delimiter<Opts>()) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -962,7 +963,7 @@ namespace glz
                         break;
                      }
 
-                     if (*it == ',') {
+                     if (*it == csv_delimiter<Opts>()) {
                         ++it;
                      }
                      else {
@@ -991,7 +992,7 @@ namespace glz
                         break;
                      }
 
-                     if (*it == ',') {
+                     if (*it == csv_delimiter<Opts>()) {
                         ++it;
                      }
                      else {
@@ -1004,7 +1005,7 @@ namespace glz
          }
          else // column wise
          {
-            const auto keys = read_column_wise_keys(ctx, it, end);
+            const auto keys = read_column_wise_keys<csv_delimiter<Opts>()>(ctx, it, end);
 
             if (bool(ctx.error)) {
                return;
@@ -1050,7 +1051,7 @@ namespace glz
                      parse<CSV>::op<Opts>(member, ctx, it, end);
                   }
 
-                  if (it != end && *it == ',') {
+                  if (it != end && *it == csv_delimiter<Opts>()) {
                      ++it;
                   }
                }
@@ -1100,7 +1101,7 @@ namespace glz
             std::vector<size_t> member_indices;
 
             if constexpr (check_use_headers(Opts)) {
-               auto headers = read_column_wise_keys(ctx, it, end);
+               auto headers = read_column_wise_keys<csv_delimiter<Opts>()>(ctx, it, end);
 
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -1161,7 +1162,7 @@ namespace glz
                   }
 
                   if (i < n_cols - 1) {
-                     if (it == end || *it != ',') [[unlikely]] {
+                     if (it == end || *it != csv_delimiter<Opts>()) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
@@ -1258,7 +1259,7 @@ namespace glz
 
                      // Handle field separator
                      if constexpr (I < N - 1) {
-                        if (it != end && *it == ',') {
+                        if (it != end && *it == csv_delimiter<Opts>()) {
                            ++it;
                         }
                         else if (it == end || *it == '\n' || *it == '\r') {
@@ -1286,7 +1287,7 @@ namespace glz
                      else if (*it == '\n') {
                         ++it;
                      }
-                     else if (*it == ',') {
+                     else if (*it == csv_delimiter<Opts>()) {
                         // Extra fields in row - error
                         ctx.error = error_code::syntax_error;
                         return;
@@ -1316,7 +1317,7 @@ namespace glz
          if constexpr (check_layout(Opts) == rowwise) {
             while (it != end) {
                auto start = it;
-               goto_delim<','>(it, end);
+               goto_delim<csv_delimiter<Opts>()>(it, end);
                sv key{start, static_cast<size_t>(it - start)};
 
                size_t csv_index{};
@@ -1333,7 +1334,7 @@ namespace glz
                   }
                }
 
-               if (it == end || *it != ',') [[unlikely]] {
+               if (it == end || *it != csv_delimiter<Opts>()) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -1399,7 +1400,7 @@ namespace glz
                                  break;
                               }
 
-                              if (*it == ',') [[likely]] {
+                              if (*it == csv_delimiter<Opts>()) [[likely]] {
                                  ++it;
                               }
                               else [[unlikely]] {
@@ -1432,7 +1433,7 @@ namespace glz
                                  break;
                               }
 
-                              if (*it == ',') [[likely]] {
+                              if (*it == csv_delimiter<Opts>()) [[likely]] {
                                  ++it;
                               }
                               else [[unlikely]] {
@@ -1456,7 +1457,7 @@ namespace glz
          }
          else // column wise
          {
-            const auto keys = read_column_wise_keys(ctx, it, end);
+            const auto keys = read_column_wise_keys<csv_delimiter<Opts>()>(ctx, it, end);
 
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -1530,7 +1531,7 @@ namespace glz
                      }
 
                      at_end = it == end;
-                     if (!at_end && *it == ',') {
+                     if (!at_end && *it == csv_delimiter<Opts>()) {
                         ++it;
                         at_end = it == end;
                      }

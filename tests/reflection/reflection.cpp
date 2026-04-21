@@ -196,6 +196,17 @@ suite variant_tagging_reflectable = [] {
       expect(vehicle->model == "Truck");
       expect(vehicle->wheels == 6);
    };
+
+   "tag-only object (no other fields)"_test = [] {
+      ReflectableVariant variant;
+      std::string json = R"({"type":"person"})";
+      auto ec = glz::read_json(variant, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<Person>(variant));
+      // Fields should be default-initialized
+      expect(std::get<Person>(variant).name == "");
+      expect(std::get<Person>(variant).age == 0);
+   };
 };
 
 // Test structs with a field that matches the tag name (shouldn't get double-tagged)

@@ -249,8 +249,8 @@ namespace glz
 
       context ctx{};
 
-      // skip magic version
-      const int version = (unsigned char)*it++;
+      // Check format version
+      const auto version = decode_version(ctx, it);
       if (eetf_magic_version != version) {
          return {1, error_code::version_mismatch};
       }

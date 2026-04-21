@@ -1028,6 +1028,27 @@ struct opts_concatenate : glz::opts
    bool concatenate = true;
 };
 
+struct pair_hash
+{
+   std::size_t operator()(const std::pair<int, int>& value) const noexcept
+   {
+      return std::hash<int>{}(value.first) ^ (std::hash<int>{}(value.second) << 1);
+   }
+};
+
+template <class Map>
+struct flatten_map_box
+{
+   Map map{};
+};
+
+template <class Map>
+struct glz::meta<flatten_map_box<Map>>
+{
+   using T = flatten_map_box<Map>;
+   static constexpr auto value = glz::object("map", glz::flatten_map<&T::map>);
+};
+
 suite container_types = [] {
    using namespace ut;
    "vector int roundtrip"_test = [] {
@@ -1112,6 +1133,60 @@ suite container_types = [] {
    "1": 2,
    "3": 4
 })") << s;
+   };
+   "unordered_map pair key raw array roundtrip"_test = [] {
+      using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+      flatten_map_box<map_t> box{};
+      box.map[{1, 2}] = "example";
+
+      std::string buffer{};
+      expect(not glz::write_json(glz::flatten_map<&flatten_map_box<map_t>::map>(box), buffer));
+      expect(buffer == R"([1,2,"example"])") << buffer;
+
+      flatten_map_box<map_t> parsed{};
+      auto wrapped = glz::flatten_map<&flatten_map_box<map_t>::map>(parsed);
+      expect(not glz::read_json(wrapped, buffer));
+      expect(parsed.map == box.map);
+   };
+   "flatten_map wrapper direct roundtrip"_test = [] {
+      using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+      struct payload
+      {
+         map_t map{};
+      };
+
+      payload value{};
+      value.map[{1, 2}] = "example";
+
+      std::string buffer{};
+      expect(not glz::write_json(glz::flatten_map<&payload::map>(value), buffer));
+      expect(buffer == R"([1,2,"example"])") << buffer;
+
+      payload parsed{};
+      auto wrapped = glz::flatten_map<&payload::map>(parsed);
+      expect(not glz::read_json(wrapped, buffer));
+      expect(parsed.map == value.map);
+   };
+   "unordered_map pair key raw array multi entry roundtrip"_test = [] {
+      using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+      flatten_map_box<map_t> parsed{};
+      auto wrapped = glz::flatten_map<&flatten_map_box<map_t>::map>(parsed);
+      expect(not glz::read_json(wrapped, R"([1,2,"a",3,4,"b"])"));
+      expect(parsed.map.size() == size_t{2});
+      expect(parsed.map.at({1, 2}) == "a");
+      expect(parsed.map.at({3, 4}) == "b");
+
+      std::vector<std::pair<std::pair<int, int>, std::string>> entries(parsed.map.begin(), parsed.map.end());
+      std::sort(entries.begin(), entries.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+
+      flatten_map_box<decltype(entries)> vec_box{entries};
+
+      std::string buffer{};
+      expect(not glz::write_json(glz::flatten_map<&flatten_map_box<decltype(entries)>::map>(vec_box), buffer));
+      expect(buffer == R"([1,2,"a",3,4,"b"])") << buffer;
    };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
@@ -4539,7 +4614,7 @@ suite json_schema = [] {
       // when you update this string
       expect(
          schema ==
-         R"({"type":"object","properties":{"array":{"$ref":"#/$defs/std::array<std::string,4>"},"b":{"$ref":"#/$defs/bool"},"c":{"$ref":"#/$defs/char"},"color":{"$ref":"#/$defs/Color"},"d":{"$ref":"#/$defs/double"},"deque":{"$ref":"#/$defs/std::deque<double>"},"i":{"$ref":"#/$defs/int32_t"},"list":{"$ref":"#/$defs/std::list<int32_t>"},"map":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"mapi":{"$ref":"#/$defs/std::map<int32_t,double>"},"optional":{"$ref":"#/$defs/std::optional<V3>"},"sptr":{"$ref":"#/$defs/std::shared_ptr<sub_thing>"},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"$ref":"#/$defs/std::array<sub_thing2,1>"},"thing_ptr":{"$ref":"#/$defs/sub_thing*"},"v":{"$ref":"#/$defs/std::variant<var1_t,var2_t>"},"vb":{"$ref":"#/$defs/std::vector<bool>"},"vec3":{"$ref":"#/$defs/V3"},"vector":{"$ref":"#/$defs/std::vector<V3>"}},"additionalProperties":false,"$defs":{"Color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"V3":{"type":"array","prefixItems":[{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}],"items":false,"maxItems":3},"bool":{"type":"boolean"},"char":{"type":"string"},"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::array<std::string,4>":{"type":"array","items":{"$ref":"#/$defs/std::string"},"maxItems":4},"std::array<sub_thing2,1>":{"type":"array","items":{"$ref":"#/$defs/sub_thing2"},"maxItems":1},"std::deque<double>":{"type":"array","items":{"$ref":"#/$defs/double"}},"std::list<int32_t>":{"type":"array","items":{"$ref":"#/$defs/int32_t"}},"std::map<int32_t,double>":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"std::map<std::string,int32_t>":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::optional<V3>":{"type":["array","null"],"prefixItems":[{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}],"items":false,"maxItems":3},"std::shared_ptr<sub_thing>":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"std::string":{"type":"string"},"std::variant<var1_t,var2_t>":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"std::vector<V3>":{"type":"array","items":{"$ref":"#/$defs/V3"}},"std::vector<bool>":{"type":"array","items":{"$ref":"#/$defs/bool"}},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing*":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing2":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
+         R"({"type":"object","properties":{"array":{"type":"array","items":{"type":"string"},"maxItems":4},"b":{"type":"boolean"},"c":{"type":"string"},"color":{"type":"string","oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"d":{"$ref":"#/$defs/double"},"deque":{"type":"array","items":{"$ref":"#/$defs/double"}},"i":{"$ref":"#/$defs/int32_t"},"list":{"type":"array","items":{"$ref":"#/$defs/int32_t"}},"map":{"type":"object","additionalProperties":{"$ref":"#/$defs/int32_t"}},"mapi":{"type":"object","additionalProperties":{"$ref":"#/$defs/double"}},"optional":{"anyOf":[{"$ref":"#/$defs/V3"},{"type":"null"}]},"sptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"type":"array","items":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false},"maxItems":1},"thing_ptr":{"anyOf":[{"$ref":"#/$defs/sub_thing"},{"type":"null"}]},"v":{"type":"object","oneOf":[{"type":"object","properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var1_t"},{"type":"object","properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false,"title":"var2_t"}]},"vb":{"type":"array","items":{"type":"boolean"}},"vec3":{"$ref":"#/$defs/V3"},"vector":{"type":"array","items":{"$ref":"#/$defs/V3"}}},"additionalProperties":false,"$defs":{"V3":{"type":"array","prefixItems":[{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308}],"items":false,"maxItems":3},"double":{"type":"number","minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":"number","minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"sub_thing":{"type":"object","properties":{"a":{"$ref":"#/$defs/double"},"b":{"type":"string"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"],"title":"Thing"})")
          << schema;
    };
 };
@@ -7145,6 +7220,540 @@ suite json_logging = [] {
                                  buffer));
 
       expect(buffer == R"({"my_arr":[],"data":{"hello":"goodbye"}})") << buffer;
+   };
+};
+
+// merge-in-meta tests: glz::merge{&T::a, &T::b} inside glz::meta
+
+namespace merge_meta_test
+{
+   struct Species
+   {
+      std::string name{};
+      int legs{};
+   };
+
+   struct Appearance
+   {
+      double weight{};
+      std::string color{};
+   };
+
+   struct BearRecord
+   {
+      Species species{};
+      Appearance appearance{};
+   };
+
+   // Sub-type with its own glz::meta (custom key names)
+   struct Dimensions
+   {
+      double height{};
+      double width{};
+   };
+
+   struct MeasuredBear
+   {
+      Species species{};
+      Dimensions dims{};
+   };
+
+   struct Habitat
+   {
+      std::string biome{};
+      bool endangered{};
+   };
+
+   struct BearProfile
+   {
+      Species species{};
+      Appearance appearance{};
+      Dimensions dims{};
+      Habitat habitat{};
+   };
+
+   // For nested merge test: BearRecord is itself a merge type
+   struct Location
+   {
+      std::string region{};
+      int altitude{};
+   };
+
+   struct LocatedBear
+   {
+      BearRecord record{}; // BearRecord's meta is glz::merge{&T::species, &T::appearance}
+      Location location{};
+   };
+}
+
+template <>
+struct glz::meta<merge_meta_test::Dimensions>
+{
+   using T = merge_meta_test::Dimensions;
+   static constexpr auto value = glz::object("h", &T::height, "w", &T::width);
+};
+
+template <>
+struct glz::meta<merge_meta_test::BearRecord>
+{
+   using T = merge_meta_test::BearRecord;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance};
+};
+
+template <>
+struct glz::meta<merge_meta_test::MeasuredBear>
+{
+   using T = merge_meta_test::MeasuredBear;
+   static constexpr auto value = glz::merge{&T::species, &T::dims};
+};
+
+template <>
+struct glz::meta<merge_meta_test::BearProfile>
+{
+   using T = merge_meta_test::BearProfile;
+   static constexpr auto value = glz::merge{&T::species, &T::appearance, &T::dims, &T::habitat};
+};
+
+template <>
+struct glz::meta<merge_meta_test::LocatedBear>
+{
+   using T = merge_meta_test::LocatedBear;
+   static constexpr auto value = glz::merge{&T::record, &T::location};
+};
+
+namespace merge_meta_test
+{
+   // Plain aggregates with no glz::meta — exercises merge_accessor's reflectable
+   // branch unambiguously (Species/Appearance above are also reflectable, but mixing
+   // with Dimensions in MeasuredBear obscures which branch each sub-type takes).
+   struct PlainPoint
+   {
+      double x{};
+      double y{};
+   };
+
+   struct PlainColor
+   {
+      uint8_t r{};
+      uint8_t g{};
+      uint8_t b{};
+   };
+
+   struct PlainShape
+   {
+      PlainPoint origin{};
+      PlainColor color{};
+   };
+
+   // Single-element merge — the simplest realistic case.
+   struct SingleWrap
+   {
+      Species inner{};
+   };
+
+   // Nullable fields inside a merged sub-type — drives the skip_null_members path.
+   struct CoreFields
+   {
+      std::string id{};
+   };
+
+   struct OptionalFields
+   {
+      std::optional<int> count{};
+      std::optional<std::string> tag{};
+   };
+
+   struct PartialBear
+   {
+      CoreFields core{};
+      OptionalFields opts{};
+   };
+
+   // custom_t inside a merged sub-type — verifies field-level custom handlers
+   // still resolve correctly when reached through a merge_accessor.
+   struct CounterPart
+   {
+      int value{};
+      int get_count() const { return value; }
+      void set_count(int v) { value = v; }
+   };
+
+   struct LabelPart
+   {
+      std::string label{};
+   };
+
+   struct CounterLabel
+   {
+      CounterPart counter{};
+      LabelPart label{};
+   };
+}
+
+template <>
+struct glz::meta<merge_meta_test::PlainShape>
+{
+   using T = merge_meta_test::PlainShape;
+   static constexpr auto value = glz::merge{&T::origin, &T::color};
+};
+
+template <>
+struct glz::meta<merge_meta_test::SingleWrap>
+{
+   using T = merge_meta_test::SingleWrap;
+   static constexpr auto value = glz::merge{&T::inner};
+};
+
+template <>
+struct glz::meta<merge_meta_test::PartialBear>
+{
+   using T = merge_meta_test::PartialBear;
+   static constexpr auto value = glz::merge{&T::core, &T::opts};
+};
+
+template <>
+struct glz::meta<merge_meta_test::CounterPart>
+{
+   using T = merge_meta_test::CounterPart;
+   static constexpr auto value = glz::object("count", glz::custom<&T::set_count, &T::get_count>);
+};
+
+template <>
+struct glz::meta<merge_meta_test::CounterLabel>
+{
+   using T = merge_meta_test::CounterLabel;
+   static constexpr auto value = glz::merge{&T::counter, &T::label};
+};
+
+suite merge_meta_tests = [] {
+   using namespace merge_meta_test;
+
+   "merge_meta_write"_test = [] {
+      BearRecord b{};
+      b.species.name = "Grizzly";
+      b.species.legs = 4;
+      b.appearance.weight = 300.5;
+      b.appearance.color = "brown";
+
+      std::string s{};
+      expect(not glz::write_json(b, s));
+      expect(s == R"({"name":"Grizzly","legs":4,"weight":300.5,"color":"brown"})") << s;
+   };
+
+   "merge_meta_read"_test = [] {
+      BearRecord b{};
+      expect(not glz::read_json(b, R"({"name":"Polar","legs":4,"weight":450.0,"color":"white"})"));
+      expect(b.species.name == "Polar");
+      expect(b.species.legs == 4);
+      expect(b.appearance.weight == 450.0);
+      expect(b.appearance.color == "white");
+   };
+
+   "merge_meta_roundtrip"_test = [] {
+      BearRecord original{};
+      original.species.name = "Black";
+      original.species.legs = 4;
+      original.appearance.weight = 200.0;
+      original.appearance.color = "black";
+
+      std::string s{};
+      expect(not glz::write_json(original, s));
+
+      BearRecord restored{};
+      expect(not glz::read_json(restored, s));
+      expect(restored.species.name == original.species.name);
+      expect(restored.species.legs == original.species.legs);
+      expect(restored.appearance.weight == original.appearance.weight);
+      expect(restored.appearance.color == original.appearance.color);
+   };
+
+   "merge_meta_with_glaze_object_sub"_test = [] {
+      // Dimensions has its own glz::meta with custom key names "h" and "w"
+      MeasuredBear mb{};
+      mb.species.name = "Sun";
+      mb.species.legs = 4;
+      mb.dims.height = 1.5;
+      mb.dims.width = 0.8;
+
+      std::string s{};
+      expect(not glz::write_json(mb, s));
+      expect(s == R"({"name":"Sun","legs":4,"h":1.5,"w":0.8})") << s;
+
+      MeasuredBear restored{};
+      expect(not glz::read_json(restored, s));
+      expect(restored.species.name == "Sun");
+      expect(restored.species.legs == 4);
+      expect(restored.dims.height == 1.5);
+      expect(restored.dims.width == 0.8);
+   };
+
+   "merge_meta_four_structs"_test = [] {
+      BearProfile bp{};
+      bp.species.name = "Spectacled";
+      bp.species.legs = 4;
+      bp.appearance.weight = 140.0;
+      bp.appearance.color = "black";
+      bp.dims.height = 1.8;
+      bp.dims.width = 0.7;
+      bp.habitat.biome = "cloud forest";
+      bp.habitat.endangered = true;
+
+      std::string s{};
+      expect(not glz::write_json(bp, s));
+      expect(
+         s ==
+         R"({"name":"Spectacled","legs":4,"weight":140,"color":"black","h":1.8,"w":0.7,"biome":"cloud forest","endangered":true})")
+         << s;
+
+      BearProfile restored{};
+      expect(not glz::read_json(restored, s));
+      expect(restored.species.name == "Spectacled");
+      expect(restored.species.legs == 4);
+      expect(restored.appearance.weight == 140.0);
+      expect(restored.appearance.color == "black");
+      expect(restored.dims.height == 1.8);
+      expect(restored.dims.width == 0.7);
+      expect(restored.habitat.biome == "cloud forest");
+      expect(restored.habitat.endangered == true);
+   };
+
+   "merge_meta_beve_roundtrip"_test = [] {
+      BearRecord original{};
+      original.species.name = "Kodiak";
+      original.species.legs = 4;
+      original.appearance.weight = 680.0;
+      original.appearance.color = "brown";
+
+      std::vector<std::byte> buffer{};
+      expect(not glz::write_beve(original, buffer));
+
+      BearRecord restored{};
+      expect(not glz::read_beve(restored, buffer));
+      expect(restored.species.name == original.species.name);
+      expect(restored.species.legs == original.species.legs);
+      expect(restored.appearance.weight == original.appearance.weight);
+      expect(restored.appearance.color == original.appearance.color);
+   };
+
+   "merge_meta_nested_merge"_test = [] {
+      // LocatedBear merges BearRecord (itself a merge) with Location
+      LocatedBear lb{};
+      lb.record.species.name = "Panda";
+      lb.record.species.legs = 4;
+      lb.record.appearance.weight = 100.0;
+      lb.record.appearance.color = "black and white";
+      lb.location.region = "Sichuan";
+      lb.location.altitude = 2500;
+
+      std::string s{};
+      expect(not glz::write_json(lb, s));
+      expect(s ==
+             R"({"name":"Panda","legs":4,"weight":100,"color":"black and white","region":"Sichuan","altitude":2500})")
+         << s;
+
+      LocatedBear restored{};
+      expect(not glz::read_json(restored, s));
+      expect(restored.record.species.name == "Panda");
+      expect(restored.record.species.legs == 4);
+      expect(restored.record.appearance.weight == 100.0);
+      expect(restored.record.appearance.color == "black and white");
+      expect(restored.location.region == "Sichuan");
+      expect(restored.location.altitude == 2500);
+   };
+
+   "merge_meta_partial_read"_test = [] {
+      // JSON missing some flattened keys — unmentioned fields keep defaults
+      BearRecord b{};
+      b.species.name = "default";
+      b.species.legs = 99;
+      b.appearance.weight = 0.0;
+      b.appearance.color = "default";
+
+      expect(not glz::read_json(b, R"({"name":"Polar","color":"white"})"));
+      expect(b.species.name == "Polar");
+      expect(b.species.legs == 99); // unchanged
+      expect(b.appearance.weight == 0.0); // unchanged
+      expect(b.appearance.color == "white");
+   };
+
+   "merge_meta_unknown_keys_allowed"_test = [] {
+      BearRecord b{};
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(
+         b, R"({"name":"Polar","legs":4,"extra":true,"weight":450,"color":"white"})");
+      expect(ec == glz::error_code::none);
+      expect(b.species.name == "Polar");
+      expect(b.appearance.weight == 450.0);
+   };
+
+   "merge_meta_unknown_keys_error"_test = [] {
+      BearRecord b{};
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(
+         b, R"({"name":"Polar","unknown_field":42,"weight":450,"color":"white"})");
+      expect(ec != glz::error_code::none);
+   };
+
+   "merge_meta_json_schema"_test = [] {
+      auto schema = glz::write_json_schema<BearRecord>().value_or("error");
+      expect(schema != "error");
+      // Schema should contain all flattened keys
+      expect(schema.find("\"name\"") != std::string::npos) << schema;
+      expect(schema.find("\"legs\"") != std::string::npos) << schema;
+      expect(schema.find("\"weight\"") != std::string::npos) << schema;
+      expect(schema.find("\"color\"") != std::string::npos) << schema;
+   };
+
+   "merge_meta_all_reflectable_sub_types"_test = [] {
+      // Both PlainPoint and PlainColor are aggregates without glz::meta, so every
+      // sub-type takes the reflectable branch of merge_accessor::operator().
+      PlainShape s{};
+      s.origin.x = 1.5;
+      s.origin.y = 2.5;
+      s.color.r = 200;
+      s.color.g = 100;
+      s.color.b = 50;
+
+      std::string out{};
+      expect(not glz::write_json(s, out));
+      expect(out == R"({"x":1.5,"y":2.5,"r":200,"g":100,"b":50})") << out;
+
+      PlainShape restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.origin.x == 1.5);
+      expect(restored.origin.y == 2.5);
+      expect(restored.color.r == 200);
+      expect(restored.color.g == 100);
+      expect(restored.color.b == 50);
+   };
+
+   "merge_meta_single_element"_test = [] {
+      SingleWrap w{};
+      w.inner.name = "Cat";
+      w.inner.legs = 4;
+
+      std::string out{};
+      expect(not glz::write_json(w, out));
+      expect(out == R"({"name":"Cat","legs":4})") << out;
+
+      SingleWrap restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.inner.name == "Cat");
+      expect(restored.inner.legs == 4);
+   };
+
+   "merge_meta_skip_null_members_all_null"_test = [] {
+      PartialBear b{};
+      b.core.id = "id-1";
+      // opts.count and opts.tag are nullopt
+
+      std::string skipped{};
+      expect(not glz::write<glz::opts{.skip_null_members = true}>(b, skipped));
+      expect(skipped == R"({"id":"id-1"})") << skipped;
+
+      std::string kept{};
+      expect(not glz::write<glz::opts{.skip_null_members = false}>(b, kept));
+      expect(kept == R"({"id":"id-1","count":null,"tag":null})") << kept;
+   };
+
+   "merge_meta_skip_null_members_partial"_test = [] {
+      PartialBear b{};
+      b.core.id = "id-2";
+      b.opts.count = 7;
+      // opts.tag is nullopt
+
+      std::string out{};
+      expect(not glz::write<glz::opts{.skip_null_members = true}>(b, out));
+      expect(out == R"({"id":"id-2","count":7})") << out;
+
+      // Roundtrip preserves the present field.
+      PartialBear restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.core.id == "id-2");
+      expect(restored.opts.count.has_value());
+      expect(restored.opts.count.value() == 7);
+      expect(not restored.opts.tag.has_value());
+   };
+
+   "merge_meta_prettify_roundtrip"_test = [] {
+      BearRecord b{};
+      b.species.name = "Sloth";
+      b.species.legs = 4;
+      b.appearance.weight = 70.0;
+      b.appearance.color = "tan";
+
+      std::string out{};
+      expect(not glz::write<glz::opts{.prettify = true}>(b, out));
+      // Prettify must produce a multi-line, indented object.
+      expect(out.find('\n') != std::string::npos) << out;
+      expect(out.find("   \"name\"") != std::string::npos) << out;
+      expect(out.find("   \"color\"") != std::string::npos) << out;
+
+      // Roundtrip survives prettified input.
+      BearRecord restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.species.name == "Sloth");
+      expect(restored.appearance.color == "tan");
+   };
+
+   "merge_meta_error_on_missing_keys"_test = [] {
+      BearRecord b{};
+      // weight + color missing — must error when error_on_missing_keys is set.
+      auto ec = glz::read<glz::opts{.error_on_missing_keys = true}>(b, R"({"name":"Polar","legs":4})");
+      expect(ec != glz::error_code::none);
+
+      // Complete object — must succeed.
+      BearRecord b2{};
+      auto ec2 = glz::read<glz::opts{.error_on_missing_keys = true}>(
+         b2, R"({"name":"Polar","legs":4,"weight":450,"color":"white"})");
+      expect(ec2 == glz::error_code::none) << glz::format_error(ec2);
+      expect(b2.species.name == "Polar");
+      expect(b2.appearance.weight == 450.0);
+   };
+
+   "merge_meta_custom_handler_in_subtype"_test = [] {
+      // CounterPart's "count" key is bound via glz::custom to set_count/get_count.
+      // Verifies that field-level custom handlers in a merged sub-type still work.
+      CounterLabel cl{};
+      cl.counter.value = 42;
+      cl.label.label = "answer";
+
+      std::string out{};
+      expect(not glz::write_json(cl, out));
+      expect(out == R"({"count":42,"label":"answer"})") << out;
+
+      CounterLabel restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.counter.value == 42);
+      expect(restored.label.label == "answer");
+   };
+
+   "merge_meta_in_vector"_test = [] {
+      // Merge type as the value type of a container — exercises the standard
+      // array-of-objects path with a merge type.
+      std::vector<BearRecord> bears{};
+      BearRecord a{};
+      a.species.name = "Brown";
+      a.species.legs = 4;
+      a.appearance.weight = 300.0;
+      a.appearance.color = "brown";
+      BearRecord b{};
+      b.species.name = "Black";
+      b.species.legs = 4;
+      b.appearance.weight = 200.0;
+      b.appearance.color = "black";
+      bears.push_back(a);
+      bears.push_back(b);
+
+      std::string out{};
+      expect(not glz::write_json(bears, out));
+      expect(out == R"([{"name":"Brown","legs":4,"weight":300,"color":"brown"},)"
+                    R"({"name":"Black","legs":4,"weight":200,"color":"black"}])")
+         << out;
+
+      std::vector<BearRecord> restored{};
+      expect(not glz::read_json(restored, out));
+      expect(restored.size() == 2);
+      expect(restored[0].species.name == "Brown");
+      expect(restored[1].appearance.color == "black");
    };
 };
 
@@ -9874,7 +10483,7 @@ suite meta_schema_tests = [] {
       const auto json_schema = glz::write_json_schema<meta_schema_t>().value_or("error");
       expect(
          json_schema ==
-         R"({"type":"object","properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"bool":{"type":"boolean"},"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647},"std::string":{"type":"string"}},"title":"meta_schema_t"})")
+         R"({"type":"object","properties":{"file_name":{"type":"string","description":"provide a file name to load"},"is_valid":{"type":"boolean","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"int32_t":{"type":"integer","minimum":-2147483648,"maximum":2147483647}},"title":"meta_schema_t"})")
          << json_schema;
    };
 
@@ -9890,11 +10499,11 @@ suite meta_schema_tests = [] {
    "type": "object",
    "properties": {
       "file_name": {
-         "$ref": "#/$defs/std::string",
+         "type": "string",
          "description": "provide a file name to load"
       },
       "is_valid": {
-         "$ref": "#/$defs/bool",
+         "type": "boolean",
          "description": "for validation"
       },
       "x": {
@@ -9904,16 +10513,10 @@ suite meta_schema_tests = [] {
    },
    "additionalProperties": false,
    "$defs": {
-      "bool": {
-         "type": "boolean"
-      },
       "int32_t": {
          "type": "integer",
          "minimum": -2147483648,
          "maximum": 2147483647
-      },
-      "std::string": {
-         "type": "string"
       }
    },
    "title": "meta_schema_t"

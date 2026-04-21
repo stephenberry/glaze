@@ -23,6 +23,7 @@ export namespace glz
    inline constexpr uint32_t INVALID = 0;
    inline constexpr uint32_t BEVE = 1;
    inline constexpr uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
+   inline constexpr uint32_t JSONB = 3; // SQLite JSONB binary JSON format - https://sqlite.org/jsonb.html
    inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t MSGPACK = 30;
@@ -117,6 +118,7 @@ export namespace glz
       uint8_t layout = rowwise; // CSV row wise output/input
       bool use_headers = true; // Whether to write column/row headers in CSV format
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      char delimiter = ','; // field delimiter character (e.g. ',', ';', '|', '\t')
 
       // New options for headerless CSV support
       bool skip_header_row =
@@ -481,6 +483,16 @@ export namespace glz
       }
    }
 
+   consteval bool check_skip_default_members(auto&& Opts)
+   {
+      if constexpr (requires { Opts.skip_default_members; }) {
+         return Opts.skip_default_members;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_shrink_to_fit(auto&& Opts)
    {
       if constexpr (requires { Opts.shrink_to_fit; }) {
@@ -538,6 +550,31 @@ export namespace glz
       }
       else {
          return false;
+      }
+   }
+
+   consteval bool is_valid_csv_delimiter(char c)
+   {
+      switch (c) {
+      case ',':
+      case '\t':
+      case '|':
+      case ';':
+         return true;
+      default:
+         return false;
+      }
+   }
+
+   template <auto Opts>
+   consteval char csv_delimiter()
+   {
+      if constexpr (requires { Opts.delimiter; }) {
+         static_assert(is_valid_csv_delimiter(Opts.delimiter), "CSV delimiter must be one of: ',' '\\t' '|' ';'");
+         return Opts.delimiter;
+      }
+      else {
+         return ',';
       }
    }
 
@@ -1393,6 +1430,14 @@ export namespace glz
    {
       auto ret = Opts;
       ret.format = CBOR;
+      return ret;
+   }
+
+   template <auto Opts>
+   constexpr auto set_jsonb()
+   {
+      auto ret = Opts;
+      ret.format = JSONB;
       return ret;
    }
 

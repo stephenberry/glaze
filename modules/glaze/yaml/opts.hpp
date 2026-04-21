@@ -20,6 +20,7 @@ namespace glz::yaml
    {
       uint32_t format = YAML;
       bool error_on_unknown_keys{true};
+      bool error_on_missing_keys{false}; // Require all non-nullable keys to be present
       bool skip_null_members{true}; // Skip writing null members
       uint8_t indent_width{2}; // Spaces per indent level for writing
       bool flow_style{false}; // Use flow style (compact) for output

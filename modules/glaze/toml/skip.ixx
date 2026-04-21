@@ -12,7 +12,7 @@ import glaze.core.opts;
 namespace glz::toml
 {
    template <class It, class End>
-   GLZ_ALWAYS_INLINE void skip_comment(It& it, End end) noexcept
+   inline void skip_comment(It& it, End end) noexcept
    {
       while (it != end && *it != '\n' && *it != '\r') {
          ++it;
@@ -234,7 +234,7 @@ namespace glz
    struct skip_value<TOML>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto end) noexcept
+      static void op(is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          toml::skip_value_impl<Opts>(ctx, it, end);
       }

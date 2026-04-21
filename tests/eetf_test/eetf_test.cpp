@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <variant>
 
 #include "glaze/eetf/eetf_to_json.hpp"
 #include "glaze/eetf/read.hpp"
@@ -281,6 +282,23 @@ suite etf_tests = [] {
 
       expect(m == v);
       trace.end("roundtrip_map_as_proplist");
+   };
+
+   "write_variant"_test = [] {
+      using Doubles = std::vector<double>;
+      using V = std::variant<int, Doubles>;
+      V v = Doubles{1.2, 3.4, 5.6};
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      // can't parse into std::variant (see comment in eetf/read.cpp)
+      Doubles res;
+      expect(not glz::read_term(res, buffer));
+      expect(res == std::get<Doubles>(v));
+
+      std::string json{};
+      expect(!glz::eetf_to_json(buffer, json));
+      expect(json == R"([1.2,3.4,5.6])") << json;
    };
 };
 

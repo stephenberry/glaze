@@ -44,14 +44,14 @@ namespace glz
    struct parse<TOML>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
+      static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::remove_cvref_t<T>;
          from<TOML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
    };
 
-   GLZ_ALWAYS_INLINE constexpr int toml_hex_to_int(const char c) noexcept
+   inline constexpr int toml_hex_to_int(const char c) noexcept
    {
       if (c >= '0' && c <= '9') return c - '0';
       if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
@@ -60,7 +60,7 @@ namespace glz
    }
 
    template <class It, class End>
-   GLZ_ALWAYS_INLINE bool append_toml_unicode_escape_u(std::string& out, It& it, End end) noexcept
+   inline bool append_toml_unicode_escape_u(std::string& out, It& it, End end) noexcept
    {
       auto hex_it = it;
       ++hex_it; // first hex digit after 'u'
@@ -86,7 +86,7 @@ namespace glz
    }
 
    template <class It, class End>
-   GLZ_ALWAYS_INLINE bool append_toml_unicode_escape_U(std::string& out, It& it, End end) noexcept
+   inline bool append_toml_unicode_escape_U(std::string& out, It& it, End end) noexcept
    {
       auto hex_it = it;
       ++hex_it; // first hex digit after 'U'
@@ -120,7 +120,7 @@ namespace glz
    }
 
    template <class It, class End>
-   GLZ_ALWAYS_INLINE bool append_toml_basic_escape(std::string& out, It& it, End end) noexcept
+   inline bool append_toml_basic_escape(std::string& out, It& it, End end) noexcept
    {
       switch (*it) {
       case '"':
@@ -171,7 +171,7 @@ namespace glz
 
    // Parse TOML key (bare key or quoted key)
    template <class Ctx, class It, class End>
-   GLZ_ALWAYS_INLINE bool parse_toml_key(std::string& key, Ctx& ctx, It&& it, End end) noexcept
+   inline bool parse_toml_key(std::string& key, Ctx& ctx, It&& it, End end) noexcept
    {
       key.clear();
       skip_ws_and_comments(it, end);
@@ -243,7 +243,7 @@ namespace glz
    }
 
    template <class Ctx, class It, class End>
-   GLZ_ALWAYS_INLINE bool parse_toml_key(std::vector<std::string>& keys, Ctx& ctx, It& it, End end) noexcept
+   inline bool parse_toml_key(std::vector<std::string>& keys, Ctx& ctx, It& it, End end) noexcept
    {
       keys.clear();
       skip_ws_and_comments(it, end);
@@ -1019,7 +1019,7 @@ namespace glz
    struct from<TOML, T>
    {
       template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          using Rep = typename std::remove_cvref_t<T>::rep;
          Rep count{};
@@ -1386,7 +1386,7 @@ namespace glz
    struct from<TOML, T>
    {
       template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          using Duration = typename std::remove_cvref_t<T>::duration;
          using Rep = typename Duration::rep;
@@ -1404,7 +1404,7 @@ namespace glz
    struct from<TOML, T>
    {
       template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          // Treat like steady_clock - parse as count
          using Duration = typename std::remove_cvref_t<T>::duration;
@@ -1566,7 +1566,7 @@ namespace glz
    namespace detail
    {
       template <auto Opts, class T, class It, class End, class Ctx>
-      GLZ_ALWAYS_INLINE void parse_toml_object_members(T&& value, It&& it, End end, Ctx&& ctx, bool is_inline_table)
+      inline void parse_toml_object_members(T&& value, It&& it, End end, Ctx&& ctx, bool is_inline_table)
       {
          using U = std::remove_cvref_t<T>;
          static constexpr auto N = reflect<U>::size;
@@ -1716,7 +1716,7 @@ namespace glz
    }
 
    template <auto Opts, class T>
-   GLZ_ALWAYS_INLINE bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
    {
       if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
          return true;
@@ -1772,7 +1772,7 @@ namespace glz
    // Helper to resolve an array-of-tables path and emplace a new element
    // Returns true if successful, false if error
    template <auto Opts, class T>
-   GLZ_ALWAYS_INLINE bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
    {
       if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
          ctx.error = error_code::syntax_error;
@@ -1887,7 +1887,7 @@ namespace glz
 
       // Helper to resolve a dotted key path into a nested map, creating entries as needed
       // Returns a reference to the innermost value where data should be stored
-      // Note: Not GLZ_ALWAYS_INLINE because this function is recursive
+      // Note: Not inline because this function is recursive
       template <auto Opts, class T>
       bool resolve_nested_map(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
       {
@@ -1978,7 +1978,7 @@ namespace glz
 
       // Helper to ensure a path of nested maps exists (for table section headers)
       // This creates the nested map structure without parsing a value
-      // Note: Not GLZ_ALWAYS_INLINE because this function is recursive
+      // Note: Not inline because this function is recursive
       template <auto Opts, class T>
       bool ensure_map_path(T& root, std::span<std::string> path, auto& ctx)
       {
@@ -2124,7 +2124,7 @@ namespace glz
 
       // Parse inline table {...} into a map
       template <auto Opts, class T>
-      GLZ_ALWAYS_INLINE void parse_toml_inline_table_map(T& value, auto& it, auto& end, auto& ctx)
+      inline void parse_toml_inline_table_map(T& value, auto& it, auto& end, auto& ctx)
       {
          // Already consumed the opening '{'
          skip_ws_and_comments(it, end);

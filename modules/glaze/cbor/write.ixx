@@ -634,7 +634,7 @@ namespace glz
          if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
             return true;
          }
-         else if constexpr (is_member_function_pointer<V>) {
+         else if constexpr (is_any_function_ptr<V>) {
             return !check_write_function_pointers(Opts);
          }
          else {
@@ -715,6 +715,19 @@ namespace glz
                         ++member_count;
                      }
                   }
+                  else if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
+                     decltype(auto) member = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get_member(value, get<I>(t));
+                        }
+                        else {
+                           return get_member(value, get<I>(reflect<T>::values));
+                        }
+                     }();
+                     if (!is_default_value(member)) {
+                        ++member_count;
+                     }
+                  }
                   else {
                      ++member_count;
                   }
@@ -774,6 +787,20 @@ namespace glz
                   }
                   else if constexpr (Opts.skip_null_members && glaze_value_is_nullable<val_t>()) {
                      if (is_glaze_value_field_null<T, I>(value, t)) {
+                        return;
+                     }
+                  }
+
+                  if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
+                     decltype(auto) member_val = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get_member(value, get<I>(t));
+                        }
+                        else {
+                           return get_member(value, get<I>(reflect<T>::values));
+                        }
+                     }();
+                     if (is_default_value(member_val)) {
                         return;
                      }
                   }
@@ -922,8 +949,7 @@ namespace glz
    };
 
    // Nullable types (std::optional, std::unique_ptr, std::shared_ptr)
-   template <nullable_t T>
-      requires(!std::is_array_v<T> && not is_expected<T>)
+   template <nullable_like T>
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -1107,6 +1133,190 @@ namespace glz
          }
          else {
             cbor_detail::dump_byte(ctx, cbor::initial_byte(cbor::major::simple, cbor::simple::null_value), b, ix);
+         }
+      }
+   };
+
+   // std::chrono::duration - bare numeric count in the duration's native units
+   template <is_duration T>
+   struct to<CBOR, T> final
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         to<CBOR, Rep>::template op<Opts>(value.count(), ctx, b, ix);
+      }
+   };
+
+   // system_clock::time_point - tag 0 (RFC 3339 date/time string)
+   template <is_system_time_point T>
+   struct to<CBOR, T> final
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using namespace std::chrono;
+         using TP = std::remove_cvref_t<T>;
+         using Duration = typename TP::duration;
+
+         // Write tag 0 (RFC 3339 date/time string)
+         if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::datetime_string, b, ix)) [[unlikely]] {
+            return;
+         }
+
+         constexpr size_t frac_digits = []() constexpr {
+            using Period = typename Duration::period;
+            if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+               return 0;
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
+               return 3;
+            }
+            else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
+               return 6;
+            }
+            else {
+               return 9;
+            }
+         }();
+
+         // "YYYY-MM-DDTHH:MM:SS[.fffffffff]Z"
+         constexpr size_t str_len = 20 + (frac_digits > 0 ? 1 + frac_digits : 0);
+
+         const auto dp = floor<days>(value);
+         const year_month_day ymd{dp};
+         const int yr = static_cast<int>(ymd.year());
+         // RFC 3339 requires 4-digit year in [0000, 9999]. Reject out-of-range values
+         // rather than silently corrupting the output with overflowed digits.
+         if (yr < 0 || yr > 9999) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         if (!cbor_detail::encode_arg_cx<str_len>(ctx, cbor::major::tstr, b, ix)) [[unlikely]] {
+            return;
+         }
+
+         if (!ensure_space(ctx, b, ix + str_len + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+
+         const hh_mm_ss tod{floor<Duration>(value - dp)};
+         const unsigned mo = static_cast<unsigned>(ymd.month());
+         const unsigned dy = static_cast<unsigned>(ymd.day());
+         const auto hr = static_cast<unsigned>(tod.hours().count());
+         const auto mi = static_cast<unsigned>(tod.minutes().count());
+         const auto sc = static_cast<unsigned>(tod.seconds().count());
+
+         auto write_digits = [&]<size_t N>(uint64_t val) {
+            for (size_t i = N; i > 0; --i) {
+               b[ix + i - 1] = static_cast<typename std::decay_t<decltype(b)>::value_type>('0' + val % 10);
+               val /= 10;
+            }
+            ix += N;
+         };
+
+         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
+         b[ix++] = '-';
+         write_digits.template operator()<2>(mo);
+         b[ix++] = '-';
+         write_digits.template operator()<2>(dy);
+         b[ix++] = 'T';
+         write_digits.template operator()<2>(hr);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(mi);
+         b[ix++] = ':';
+         write_digits.template operator()<2>(sc);
+
+         if constexpr (frac_digits > 0) {
+            b[ix++] = '.';
+            const auto subsec = tod.subseconds();
+            if constexpr (frac_digits == 3) {
+               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+            }
+            else if constexpr (frac_digits == 6) {
+               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+            }
+            else {
+               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+            }
+         }
+
+         b[ix++] = 'Z';
+      }
+   };
+
+   // steady_clock::time_point - bare count in native duration (epoch is implementation-defined)
+   template <is_steady_time_point T>
+   struct to<CBOR, T> final
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         to<CBOR, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, b, ix);
+      }
+   };
+
+   // high_resolution_clock::time_point when it's a distinct type (rare)
+   template <is_high_res_time_point T>
+   struct to<CBOR, T> final
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         to<CBOR, Rep>::template op<Opts>(value.time_since_epoch().count(), ctx, b, ix);
+      }
+   };
+
+   // epoch_time wrapper - RFC 8949 §3.4.2 tag 1 (epoch-based date/time).
+   // Per §3.4.2 the tag 1 content MUST be an unsigned/negative integer (major types 0 or 1)
+   // or a floating-point number (major type 7 with additional info 25/26/27). Nested tags
+   // are forbidden, which rules out tag 4 decimal fractions.
+   //   Period >= 1 second: tag 1 + integer seconds (lossless)
+   //   Sub-second Period:  tag 1 + float64 seconds
+   // For nanosecond Durations, float64's 53-bit mantissa cannot hold a modern epoch's
+   // nanosecond count exactly; round-trips have ~ULP-scale loss (~100 ns at year 2025).
+   // Applications needing lossless nanosecond timestamps can use RFC 9581 tag 1001 in a
+   // custom wrapper, or encode the nanosecond count as a bare integer type.
+   template <class Duration>
+   struct to<CBOR, epoch_time<Duration>> final
+   {
+      template <auto Opts>
+      static void op(auto&& wrapper, is_context auto&& ctx, auto&& b, auto& ix)
+      {
+         using namespace std::chrono;
+         using Period = typename Duration::period;
+
+         if (!cbor_detail::encode_arg(ctx, cbor::major::tag, cbor::semantic_tag::datetime_epoch, b, ix)) [[unlikely]] {
+            return;
+         }
+
+         if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+            const auto secs = duration_cast<seconds>(wrapper.value.time_since_epoch()).count();
+            to<CBOR, int64_t>::template op<Opts>(static_cast<int64_t>(secs), ctx, b, ix);
+         }
+         else {
+            // To keep the double conversion lossless we need the source integer count
+            // to fit within 2^53. wrapper.value's time_since_epoch() is in system_clock::
+            // duration units (often nanoseconds on Linux, microseconds on macOS); for a
+            // modern epoch the nanosecond count is ~1.7e18, well beyond 2^53. Casting
+            // through the coarser of Duration and system_clock::duration keeps the
+            // integer count small enough to survive the conversion to double seconds.
+            using sys_dur = std::chrono::system_clock::duration;
+            if constexpr (std::ratio_greater_v<Period, typename sys_dur::period>) {
+               const auto dur = duration_cast<Duration>(wrapper.value.time_since_epoch());
+               const double secs = duration<double>{dur}.count();
+               to<CBOR, double>::template op<Opts>(secs, ctx, b, ix);
+            }
+            else {
+               const double secs = duration<double>{wrapper.value.time_since_epoch()}.count();
+               to<CBOR, double>::template op<Opts>(secs, ctx, b, ix);
+            }
          }
       }
    };

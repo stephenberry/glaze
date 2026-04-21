@@ -9,8 +9,8 @@ import glaze.core.common;
 namespace glz
 {
    // Skip whitespace and comments
-   export template <class It, class End>
-   GLZ_ALWAYS_INLINE void skip_ws_and_comments(It&& it, End end) noexcept
+   template <class It, class End>
+   inline void skip_ws_and_comments(It&& it, End end) noexcept
    {
       while (it != end) {
          if (*it == ' ' || *it == '\t') {
@@ -28,8 +28,8 @@ namespace glz
    }
 
    // Skip to next line
-   export template <class Ctx, class It, class End>
-   GLZ_ALWAYS_INLINE bool skip_to_next_line(Ctx&, It&& it, End end) noexcept
+   template <class Ctx, class It, class End>
+   inline bool skip_to_next_line(Ctx&, It&& it, End end) noexcept
    {
       while (it != end && *it != '\n' && *it != '\r') {
          ++it;

@@ -36,7 +36,7 @@ namespace glz
                      continue;
                   }
 
-                  if (*it == ',' || *it == '\n' || *it == '\r') {
+                  if (*it == csv_delimiter<Opts>() || *it == '\n' || *it == '\r') {
                      return;
                   }
 
@@ -50,7 +50,7 @@ namespace glz
          else {
             while (it != end) {
                const auto ch = *it;
-               if (ch == ',' || ch == '\n' || ch == '\r') {
+               if (ch == csv_delimiter<Opts>() || ch == '\n' || ch == '\r') {
                   return;
                }
                ++it;

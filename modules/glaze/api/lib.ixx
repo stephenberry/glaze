@@ -114,7 +114,7 @@ namespace glz
             const auto ptr = reinterpret_cast<create>(GetProcAddress(loaded_lib, "glz_iface"));
 #endif
 #else
-            const auto ptr = reinterpret_cast<create>(dlsym(loaded_lib, "glz_iface"));
+            auto* ptr = reinterpret_cast<create>(dlsym(loaded_lib, "glz_iface"));
 #endif
             if (ptr) {
                std::shared_ptr<glz::iface> shared_iface_ptr = ptr()();
