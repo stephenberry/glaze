@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 
+#include "glaze/base64/base64.hpp"
 #include "glaze/bson/header.hpp"
 #include "glaze/bson/read.hpp"
 #include "glaze/core/opts.hpp"
@@ -61,8 +62,9 @@ namespace glz
       template <class B>
       GLZ_ALWAYS_INLINE void emit_char(is_context auto& ctx, B& out, size_t& ix, char c) noexcept
       {
+         using V = typename std::decay_t<B>::value_type;
          if (!ensure_space(ctx, out, ix + 1 + write_padding_bytes)) return;
-         out[ix++] = static_cast<typename std::decay_t<B>::value_type>(c);
+         out[ix++] = static_cast<V>(c);
       }
 
       template <auto Opts, class B>
@@ -75,49 +77,13 @@ namespace glz
       template <class B>
       inline void emit_hex_bytes(is_context auto& ctx, const uint8_t* bytes, size_t n, B& out, size_t& ix) noexcept
       {
+         using V = typename std::decay_t<B>::value_type;
          static constexpr char digits[] = "0123456789abcdef";
          if (!ensure_space(ctx, out, ix + 2 * n + write_padding_bytes)) return;
          for (size_t i = 0; i < n; ++i) {
             const uint8_t b = bytes[i];
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(digits[b >> 4]);
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(digits[b & 0x0F]);
-         }
-      }
-
-      // RFC 4648 base64, no line breaks. `=` padding only.
-      template <class B>
-      inline void emit_base64(is_context auto& ctx, const uint8_t* bytes, size_t n, B& out, size_t& ix) noexcept
-      {
-         static constexpr char alphabet[] =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-         const size_t full_triples = n / 3;
-         const size_t rem = n % 3;
-         const size_t out_len = 4 * (full_triples + (rem ? 1 : 0));
-         if (!ensure_space(ctx, out, ix + out_len + write_padding_bytes)) return;
-
-         for (size_t i = 0; i < full_triples; ++i) {
-            const uint8_t b0 = bytes[3 * i];
-            const uint8_t b1 = bytes[3 * i + 1];
-            const uint8_t b2 = bytes[3 * i + 2];
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(alphabet[b0 >> 2]);
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(alphabet[((b0 & 0x03) << 4) | (b1 >> 4)]);
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(alphabet[((b1 & 0x0F) << 2) | (b2 >> 6)]);
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(alphabet[b2 & 0x3F]);
-         }
-         if (rem == 1) {
-            const uint8_t b0 = bytes[3 * full_triples];
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(alphabet[b0 >> 2]);
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(alphabet[(b0 & 0x03) << 4]);
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>('=');
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>('=');
-         }
-         else if (rem == 2) {
-            const uint8_t b0 = bytes[3 * full_triples];
-            const uint8_t b1 = bytes[3 * full_triples + 1];
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(alphabet[b0 >> 2]);
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(alphabet[((b0 & 0x03) << 4) | (b1 >> 4)]);
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>(alphabet[(b1 & 0x0F) << 2]);
-            out[ix++] = static_cast<typename std::decay_t<B>::value_type>('=');
+            out[ix++] = static_cast<V>(digits[b >> 4]);
+            out[ix++] = static_cast<V>(digits[b & 0x0F]);
          }
       }
 
@@ -253,7 +219,7 @@ namespace glz
 
             emit_literal(ctx, out, ix, R"({"$binary":{"base64":")");
             if (bool(ctx.error)) return;
-            emit_base64(ctx, payload, static_cast<size_t>(payload_len), out, ix);
+            write_base64_to(ctx, payload, static_cast<size_t>(payload_len), out, ix);
             if (bool(ctx.error)) return;
             emit_literal(ctx, out, ix, R"(","subType":")");
             if (bool(ctx.error)) return;
