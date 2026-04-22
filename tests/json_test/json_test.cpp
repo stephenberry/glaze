@@ -8109,6 +8109,34 @@ suite enum_map = [] {
    };
 };
 
+enum class NamedEnumKeys { A, B, C };
+
+template <>
+struct glz::meta<NamedEnumKeys>
+{
+   static constexpr auto keys = std::array<std::string_view, 3>{{"A", "B", "C"}};
+   static constexpr auto value = std::array<NamedEnumKeys, 3>{{NamedEnumKeys::A, NamedEnumKeys::B, NamedEnumKeys::C}};
+};
+
+suite named_enum_map_keys = [] {
+   "map with keys/value array named enum"_test = [] {
+      constexpr std::string_view input = R"({"A":0.5,"C":12})";
+      using Data = std::map<NamedEnumKeys, double>;
+      auto result = glz::read_json<Data>(input);
+      expect(result.has_value());
+      if (result.has_value()) {
+         auto& data = result.value();
+         expect(data.at(NamedEnumKeys::A) == 0.5);
+         expect(data.at(NamedEnumKeys::C) == 12);
+      }
+
+      std::string out;
+      Data roundtrip{{NamedEnumKeys::A, 0.5}, {NamedEnumKeys::C, 12}};
+      expect(not glz::write_json(roundtrip, out));
+      expect(out == R"({"A":0.5,"C":12})") << out;
+   };
+};
+
 suite obj_handling = [] {
    "obj handling"_test = [] {
       size_t cnt = 0;
