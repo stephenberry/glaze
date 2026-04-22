@@ -1197,7 +1197,7 @@ namespace glz
    template <auto Opts, class Key, class Value, is_context Ctx, class B>
    GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, B&& b, auto& ix)
    {
-      if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || mimics_str_t<Key> || custom_str_t<Key> ||
+      if constexpr (str_t<Key> || char_t<Key> || is_named_enum<Key> || mimics_str_t<Key> || custom_str_t<Key> ||
                     check_quoted_num(Opts)) {
          to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
       }
