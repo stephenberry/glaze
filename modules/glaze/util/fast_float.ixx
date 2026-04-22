@@ -96,6 +96,9 @@
 
 module;
 
+#include <cassert>
+#include <cstring>
+
 #if ((defined(_WIN32) || defined(_WIN64)) && !defined(__clang__)) ||           \
     (defined(_M_ARM64) && !defined(__MINGW32__))
 #include <intrin.h>
@@ -111,9 +114,6 @@ module;
 export module glaze.util.fast_float;
 
 import std;
-
-#include <cassert>
-#include <cstring>
 
 using std::uint8_t;
 using std::uint16_t;
@@ -1142,7 +1142,7 @@ to_float(bool negative, adjusted_mantissa am, T &value) {
 #if GLZ_FASTFLOAT_HAS_BIT_CAST
   value = std::bit_cast<T>(word);
 #else
-  ::memcpy(&value, &word, sizeof(T));
+  std::memcpy(&value, &word, sizeof(T));
 #endif
 }
 
@@ -1423,7 +1423,7 @@ namespace glz::fast_float {
  * `fast_float::chars_format::general` which allows both `fixed` and
  * `scientific`.
  */
-template <typename T, typename UC = char,
+export template <typename T, typename UC = char,
           typename = GLZ_FASTFLOAT_ENABLE_IF(is_supported_float_type<T>::value)>
 GLZ_FASTFLOAT_CONSTEXPR20 from_chars_result_t<UC>
 from_chars(UC const *first, UC const *last, T &value,
@@ -1502,7 +1502,7 @@ read8_to_u64(UC const *chars) {
     return val;
   }
   uint64_t val;
-  ::memcpy(&val, chars, sizeof(uint64_t));
+  std::memcpy(&val, chars, sizeof(uint64_t));
 #if GLZ_FASTFLOAT_IS_BIG_ENDIAN == 1
   // Need to read as-if the number was in little-endian order.
   val = byteswap(val);
@@ -3704,7 +3704,7 @@ to_extended(T value) noexcept {
 #if GLZ_FASTFLOAT_HAS_BIT_CAST
   bits = std::bit_cast<equiv_uint>(value);
 #else
-  ::memcpy(&bits, &value, sizeof(T));
+  std::memcpy(&bits, &value, sizeof(T));
 #endif
   if ((bits & exponent_mask) == 0) {
     // denormal
@@ -3817,7 +3817,7 @@ skip_zeros(UC const *&first, UC const *last) noexcept {
   uint64_t val;
   while (!cpp20_and_in_constexpr() &&
          std::distance(first, last) >= cmp_len) {
-    ::memcpy(&val, first, sizeof(uint64_t));
+    std::memcpy(&val, first, sizeof(uint64_t));
     if (val != cmp_zeros) {
       break;
     }
@@ -3850,7 +3850,7 @@ is_truncated(UC const *first, UC const *last) noexcept {
   uint64_t val;
   while (!cpp20_and_in_constexpr() &&
          std::distance(first, last) >= cmp_len) {
-    ::memcpy(&val, first, sizeof(uint64_t));
+    std::memcpy(&val, first, sizeof(uint64_t));
     if (val != cmp_zeros) {
       return true;
     }

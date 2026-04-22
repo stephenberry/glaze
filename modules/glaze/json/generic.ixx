@@ -1109,18 +1109,6 @@ export namespace glz
       return {};
    }
 
-   // Fallback for non-primitive/non-container types:
-   // deserialize from the generic JSON value via JSON text.
-   template <class T, num_mode Mode>
-   error_ctx convert_from_generic(T& result, const generic_json<Mode>& source)
-   {
-      auto buffer = source.dump();
-      if (!buffer) {
-         return buffer.error();
-      }
-      return read_json(result, *buffer);
-   }
-
    // Concept to determine if a type needs deserialization from generic
    // These are container types that can't be directly referenced from glz::generic
    // because they're not the exact types stored in generic's variant

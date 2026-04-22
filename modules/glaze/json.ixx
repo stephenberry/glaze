@@ -22,6 +22,7 @@ export import glaze.core.write;
 export import glaze.core.wrapper_traits;
 
 export import glaze.json.escape_unicode;
+export import glaze.json.flatten_map;
 export import glaze.json.float_format;
 export import glaze.json.generic;
 export import glaze.json.invoke;
@@ -40,6 +41,7 @@ export import glaze.json.raw_string;
 export import glaze.json.read;
 export import glaze.json.schema;
 export import glaze.json.skip;
+export import glaze.json.study;
 export import glaze.json.wrappers;
 export import glaze.json.write;
 

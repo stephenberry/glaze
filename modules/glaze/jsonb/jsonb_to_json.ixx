@@ -1,18 +1,29 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.jsonb.jsonb_to_json;
 
-#pragma once
+import std;
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <string>
-#include <string_view>
+import glaze.jsonb.header;
+import glaze.jsonb.text_decode;
 
-#include "glaze/core/opts.hpp"
-#include "glaze/json/write.hpp"
-#include "glaze/jsonb/header.hpp"
-#include "glaze/jsonb/text_decode.hpp"
+import glaze.core.buffer_traits;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.opts;
+
+import glaze.json.write;
+
+import glaze.util.expected;
+import glaze.util.string_literal;
+
+import glaze.concepts.container_concepts;
+
+using std::int64_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 namespace glz
 {
@@ -242,7 +253,7 @@ namespace glz
    }
 
    // Convert a JSONB blob to JSON text.
-   template <auto Opts = glz::opts{}, class JSONBBuffer, class JSONBuffer>
+   export template <auto Opts = glz::opts{}, class JSONBBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx jsonb_to_json(const JSONBBuffer& input, JSONBuffer& out)
    {
       size_t ix{};
@@ -269,7 +280,7 @@ namespace glz
       return {};
    }
 
-   template <auto Opts = glz::opts{}, class JSONBBuffer>
+   export template <auto Opts = glz::opts{}, class JSONBBuffer>
    [[nodiscard]] inline expected<std::string, error_ctx> jsonb_to_json(const JSONBBuffer& input)
    {
       std::string out;

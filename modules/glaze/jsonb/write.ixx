@@ -1,26 +1,47 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.jsonb.write;
 
-#pragma once
+import std;
 
-#include <array>
-#include <charconv>
-#include <cmath>
-#include <cstdint>
-#include <cstring>
-#include <limits>
+import glaze.json.generic;
+import glaze.jsonb.header;
 
-#include "glaze/core/buffer_traits.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/core/to.hpp"
-#include "glaze/core/write.hpp"
-#include "glaze/core/write_chars.hpp"
-#include "glaze/json/generic.hpp"
-#include "glaze/jsonb/header.hpp"
-#include "glaze/util/dump.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/variant.hpp"
+import glaze.concepts.container_concepts;
+
+import glaze.core.buffer_traits;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.custom;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.reflect;
+import glaze.core.to;
+import glaze.core.write;
+import glaze.core.write_chars;
+
+import glaze.file.file_ops;
+
+import glaze.reflection.to_tuple;
+
+import glaze.util.expected;
+import glaze.util.for_each;
+import glaze.util.tuple;
+import glaze.util.type_traits;
+import glaze.util.variant;
+import glaze.util.itoa;
+import glaze.util.string_literal;
+
+import glaze.tuplet;
+
+#include "glaze/util/inline.hpp"
+
+using std::int64_t;
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 namespace glz
 {
@@ -711,19 +732,19 @@ namespace glz
 
    // ===== High-level write APIs =====
 
-   template <write_supported<JSONB> T, class Buffer>
+   export template <write_supported<JSONB> T, class Buffer>
    [[nodiscard]] error_ctx write_jsonb(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = JSONB}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <auto Opts = opts{}, write_supported<JSONB> T>
+   export template <auto Opts = opts{}, write_supported<JSONB> T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_jsonb(T&& value)
    {
       return write<set_jsonb<Opts>()>(std::forward<T>(value));
    }
 
-   template <auto Opts = opts{}, write_supported<JSONB> T>
+   export template <auto Opts = opts{}, write_supported<JSONB> T>
    [[nodiscard]] inline error_code write_file_jsonb(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_jsonb<Opts>()>(std::forward<T>(value), buffer);

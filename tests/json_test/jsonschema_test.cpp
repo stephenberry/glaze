@@ -4,6 +4,8 @@
 import std;
 
 import glaze.json;
+import glaze.tuplet;
+import glaze.util.variant;
 
 import ut;
 

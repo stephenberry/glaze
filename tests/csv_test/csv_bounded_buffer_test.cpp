@@ -1,17 +1,23 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+
 // Bounded buffer overflow tests for CSV format
 // These tests deliberately use undersized buffers to verify that ensure_space()
 // properly returns buffer_overflow before any write occurs. GCC's optimizer
 // emits false-positive -Wstringop-overflow warnings because it cannot prove
 // the early-return path is always taken; suppressed via CMake for this target.
 
-#include <array>
-#include <span>
-#include <string>
-#include <vector>
 
-#include "glaze/csv/read.hpp"
-#include "glaze/csv/write.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.core.context;
+import glaze.core.opts;
+import glaze.core.write;
+
+import glaze.csv.read;
+import glaze.csv.write;
+
+import ut;
 
 using namespace ut;
 

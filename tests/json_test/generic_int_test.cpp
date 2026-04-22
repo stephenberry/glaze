@@ -6,6 +6,7 @@ import glaze.json;
 import ut;
 
 using std::uint64_t;
+using std::int64_t;
 
 using namespace ut;
 

@@ -31,10 +31,6 @@ import glaze.reflection.to_tuple;
 
 #include "glaze/util/inline.hpp"
 
-#if GLZ_REFLECTION26
-#include <meta>
-#endif
-
 #if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
 #pragma warning(push)
@@ -616,11 +612,11 @@ namespace glz
    }
 
    // A type whose default value can be detected at runtime for skip_default_members
-   template <class T>
+   export template <class T>
    concept has_skippable_default = str_t<T> || bool_t<T> || num_t<T> || (range<T> && !str_t<T> && has_empty<T>);
 
    // Check if a member value equals its default (for skip_default_members)
-   template <class T>
+   export template <class T>
    GLZ_ALWAYS_INLINE bool is_default_value(const T& value)
    {
       if constexpr (str_t<T> && has_empty<T>) {
@@ -640,7 +636,7 @@ namespace glz
       }
    }
 
-   template <auto Opts, class T>
+   export template <auto Opts, class T>
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
          constexpr auto N = reflect<T>::size;

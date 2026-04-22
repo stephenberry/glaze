@@ -1,30 +1,51 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.jsonb.read;
 
-#pragma once
+import std;
 
-#include <charconv>
-#include <cmath>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <string>
-#include <utility>
+import glaze.json.generic;
+import glaze.jsonb.header;
+import glaze.jsonb.skip;
+import glaze.jsonb.text_decode;
 
-#include "glaze/core/opts.hpp"
-#include "glaze/core/read.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/file/file_ops.hpp"
-#include "glaze/json/generic.hpp"
-#include "glaze/jsonb/header.hpp"
-#include "glaze/jsonb/skip.hpp"
-#include "glaze/jsonb/text_decode.hpp"
-#include "glaze/util/bit_array.hpp"
-#include "glaze/util/compare.hpp"
-#include "glaze/util/dump.hpp"
-#include "glaze/util/fast_float.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/parse.hpp"
+import glaze.concepts.container_concepts;
+
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.custom;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+
+import glaze.file.file_ops;
+
+import glaze.reflection.to_tuple;
+
+import glaze.util.bit_array;
+import glaze.util.compare;
+import glaze.util.expected;
+import glaze.util.for_each;
+import glaze.util.fast_float;
+import glaze.util.tuple;
+import glaze.util.type_traits;
+import glaze.util.variant;
+import glaze.util.string_literal;
+
+import glaze.tuplet;
+
+#include "glaze/util/inline.hpp"
+
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 namespace glz
 {
@@ -1439,14 +1460,14 @@ namespace glz
       }
    }
 
-   template <read_supported<JSONB> T, class Buffer>
+   export template <read_supported<JSONB> T, class Buffer>
    [[nodiscard]] inline error_ctx read_jsonb(T&& value, Buffer&& buffer)
    {
       auto ec = read<opts{.format = JSONB}>(value, buffer);
       return jsonb_detail::enforce_exact_fill(buffer, ec);
    }
 
-   template <read_supported<JSONB> T, class Buffer>
+   export template <read_supported<JSONB> T, class Buffer>
    [[nodiscard]] inline expected<T, error_ctx> read_jsonb(Buffer&& buffer)
    {
       T value{};
@@ -1458,7 +1479,7 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, read_supported<JSONB> T>
+   export template <auto Opts = opts{}, read_supported<JSONB> T>
    [[nodiscard]] inline error_ctx read_file_jsonb(T& value, const sv file_name, auto&& buffer)
    {
       context ctx{};

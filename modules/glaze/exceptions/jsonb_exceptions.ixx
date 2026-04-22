@@ -1,16 +1,21 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#pragma once
+// For the license information refer to glaze.ixx
+export module glaze.exceptions.jsonb_exceptions;
 
 #if __cpp_exceptions
 
-#include "glaze/exceptions/core_exceptions.hpp"
-#include "glaze/jsonb.hpp"
+import std;
+
+import glaze.core.context;
+import glaze.core.opts;
+
+import glaze.jsonb;
+
+import glaze.util.string_literal;
 
 namespace glz::ex
 {
-   template <class T, class Buffer>
+   export template <class T, class Buffer>
    void read_jsonb(T& value, Buffer&& buffer)
    {
       const auto ec = glz::read_jsonb(value, std::forward<Buffer>(buffer));
@@ -19,7 +24,7 @@ namespace glz::ex
       }
    }
 
-   template <class T, class Buffer>
+   export template <class T, class Buffer>
    [[nodiscard]] T read_jsonb(Buffer&& buffer)
    {
       const auto ex = glz::read_jsonb<T>(std::forward<Buffer>(buffer));
@@ -29,7 +34,7 @@ namespace glz::ex
       return ex.value();
    }
 
-   template <auto Opts = opts{}, class T>
+   export template <auto Opts = opts{}, class T>
    void read_file_jsonb(T& value, const sv file_name, auto&& buffer)
    {
       const auto ec = glz::read_file_jsonb<Opts>(value, file_name, buffer);
@@ -44,7 +49,7 @@ namespace glz::ex
 
 namespace glz::ex
 {
-   template <class T, class Buffer>
+   export template <class T, class Buffer>
    void write_jsonb(T&& value, Buffer&& buffer)
    {
       const auto ec = glz::write_jsonb(std::forward<T>(value), std::forward<Buffer>(buffer));
@@ -53,7 +58,7 @@ namespace glz::ex
       }
    }
 
-   template <class T>
+   export template <class T>
    [[nodiscard]] auto write_jsonb(T&& value)
    {
       auto result = glz::write_jsonb(std::forward<T>(value));
@@ -65,7 +70,7 @@ namespace glz::ex
       }
    }
 
-   template <auto Opts = opts{}, class T>
+   export template <auto Opts = opts{}, class T>
    void write_file_jsonb(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = glz::write_file_jsonb<Opts>(std::forward<T>(value), file_name, buffer);
@@ -78,7 +83,7 @@ namespace glz::ex
    }
 
    // Convert JSONB to JSON, throwing on error.
-   template <class JSONBBuffer>
+   export template <class JSONBBuffer>
    [[nodiscard]] std::string jsonb_to_json(const JSONBBuffer& input)
    {
       auto result = glz::jsonb_to_json(input);

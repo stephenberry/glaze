@@ -1,11 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.jsonb.skip;
 
-#pragma once
+import std;
 
-#include "glaze/core/context.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/jsonb/header.hpp"
+import glaze.jsonb.header;
+
+import glaze.core.context;
+import glaze.core.opts;
+
+#include "glaze/util/inline.hpp"
+
+using std::uint8_t;
+using std::uint64_t;
 
 namespace glz
 {

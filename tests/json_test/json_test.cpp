@@ -3,43 +3,26 @@
 
 import std;
 
-import glaze.api.impl;
-import glaze.beve.read;
-import glaze.beve.write;
-import glaze.json;
-import glaze.json.write;
-import glaze.json.study;
-import glaze.json.prettify;
-import glaze.containers.flat_map;
+import glaze;
+
 import glaze.core.array_apply;
-import glaze.core.cast;
-import glaze.core.common;
-import glaze.core.context;
 import glaze.core.constraint;
-import glaze.core.custom;
-import glaze.core.manage;
-import glaze.core.meta;
 import glaze.core.std_error_code;
-import glaze.core.opts;
-import glaze.core.read;
-import glaze.core.seek;
 import glaze.core.to;
-import glaze.core.write;
-import glaze.core.as_array_wrapper;
+
 import glaze.file.hostname_include;
-import glaze.file.read_directory;
 import glaze.file.raw_or_file;
-import glaze.file.write_directory;
+
+import glaze.api.impl;
 import glaze.hardware.volatile_array;
 import glaze.concepts.container_concepts;
-import glaze.json.invoke;
 import glaze.record.recorder;
-import glaze.thread.atomic;
 import glaze.thread.threadpool;
 import glaze.trace;
 import glaze.tuplet;
 import glaze.reflection.to_tuple;
-import glaze.util.expected;
+import glaze.containers.flat_map;
+
 import glaze.util.for_each;
 import glaze.util.string_literal;
 import glaze.util.type_traits;

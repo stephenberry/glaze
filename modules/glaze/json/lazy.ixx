@@ -13,6 +13,7 @@ import glaze.core.context;
 import glaze.core.opts;
 
 import glaze.util.expected;
+import glaze.util.dump;
 import glaze.util.parse;
 import glaze.util.string_literal;
 import glaze.util.atoi;

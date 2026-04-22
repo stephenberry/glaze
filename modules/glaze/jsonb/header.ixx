@@ -1,14 +1,18 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.jsonb.header;
 
-#pragma once
+import std;
 
-#include <bit>
-#include <cstdint>
-#include <cstring>
+import glaze.core.context;
 
-#include "glaze/core/context.hpp"
 #include "glaze/util/inline.hpp"
+
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 // SQLite JSONB binary format - https://sqlite.org/jsonb.html
 //
@@ -22,7 +26,7 @@
 //     15    -> next 8 bytes are uint64 BE payload size, header is 9 bytes
 // The header is NOT required to be in its minimal form.
 
-namespace glz::jsonb
+export namespace glz::jsonb
 {
    namespace type
    {

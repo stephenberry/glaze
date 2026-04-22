@@ -5,6 +5,7 @@ export module glaze.cbor.read;
 import glaze.cbor.header;
 import glaze.cbor.skip;
 
+import glaze.core.chrono;
 import glaze.core.opts;
 import glaze.core.read;
 import glaze.core.reflect;
@@ -32,6 +33,7 @@ using std::uint8_t;
 using std::uint16_t;
 using std::uint32_t;
 using std::uint64_t;
+using std::int64_t;
 using std::size_t;
 
 namespace glz
@@ -2277,4 +2279,3 @@ namespace glz
       return read<set_cbor<Opts>()>(value, buffer, ctx);
    }
 }
-

@@ -7,7 +7,7 @@ if(stale_libs)
    file(REMOVE ${stale_libs})
 endif()
 
-add_library(${PROJECT_NAME} SHARED ${PROJECT_NAME}.cpp)
+add_library(${PROJECT_NAME} SHARED)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "_d")
 set_target_properties(${PROJECT_NAME} PROPERTIES RELWITHDEBINFO_POSTFIX "_rd")

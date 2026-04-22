@@ -5,7 +5,9 @@ import std;
 
 
 import glaze.beve;
+import glaze.core.buffer_traits;
 import glaze.core.ostream_buffer;
+import glaze.core.streaming_state;
 import glaze.json;
 
 import ut;

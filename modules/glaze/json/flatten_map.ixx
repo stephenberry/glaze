@@ -1,13 +1,29 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.json.flatten_map;
 
-#pragma once
+import std;
 
-#include "glaze/core/common.hpp"
-#include "glaze/core/read.hpp"
-#include "glaze/core/write.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/json/write.hpp"
+import glaze.json.read;
+import glaze.json.write;
+
+import glaze.core.context;
+import glaze.core.common;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+import glaze.core.meta;
+import glaze.core.write;
+
+import glaze.util.dump;
+import glaze.util.tuple;
+import glaze.util.type_traits;
+
+import glaze.tuplet;
+
+import glaze.concepts.container_concepts;
+
+using std::size_t;
 
 namespace glz
 {
@@ -29,7 +45,7 @@ namespace glz
       };
    }
 
-   template <auto MemPtr>
+   export template <auto MemPtr>
    inline constexpr auto flatten_map = flatten_map_impl<MemPtr>();
 
    template <auto Opts, class T, class B>

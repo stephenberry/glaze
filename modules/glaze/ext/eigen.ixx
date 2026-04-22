@@ -21,6 +21,8 @@ import glaze.json.write;
 
 import glaze.concepts.container_concepts;
 
+import glaze.util.dump;
+
 using std::uint8_t;
 using std::uint64_t;
 

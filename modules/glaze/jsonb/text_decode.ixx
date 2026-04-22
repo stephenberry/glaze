@@ -1,7 +1,12 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+export module glaze.jsonb.text_decode;
 
-#pragma once
+import std;
+
+import glaze.core.context;
+import glaze.jsonb.header;
+import glaze.util.parse;
 
 // Text-variant escape decoders shared by the JSONB reader (from<JSONB, string>) and the
 // JSONB→JSON converter (jsonb_to_json). TEXTJ carries RFC 8259 JSON escapes, TEXT5 carries
@@ -9,15 +14,10 @@
 // unescape-decoded to raw UTF-8 before being used as a C++ string or re-emitted as a strict
 // JSON string literal.
 
-#include <cstdint>
-#include <cstring>
-#include <string>
-#include <string_view>
-
-#include "glaze/core/context.hpp"
-#include "glaze/jsonb/header.hpp"
-#include "glaze/util/inline.hpp"
-#include "glaze/util/parse.hpp"
+using std::int32_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::size_t;
 
 namespace glz::jsonb_detail
 {
@@ -158,7 +158,7 @@ namespace glz::jsonb_detail
    // Read string bytes [it, it+size) into an out-string, applying the appropriate unescape
    // rule for the type code. TEXT and TEXTRAW pass through as raw UTF-8; TEXTJ decodes JSON
    // escapes; TEXT5 decodes JSON5 escapes.
-   template <class It>
+   export template <class It>
    inline void decode_text(is_context auto& ctx, uint8_t type_code, It it, It end, size_t size,
                            std::string& out) noexcept
    {

@@ -4,7 +4,7 @@ add_executable(${PROJECT_NAME} inplace_vector_test.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)
 
 add_executable(${PROJECT_NAME}_noexceptions inplace_vector_test.cpp)
-target_link_libraries(${PROJECT_NAME}_noexceptions PRIVATE glz_test_common)
+target_link_libraries(${PROJECT_NAME}_noexceptions PRIVATE glz_test_noexceptions)
 
 if (MINGW)
     target_compile_options(${PROJECT_NAME} PRIVATE "-Wa,-mbig-obj")

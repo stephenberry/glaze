@@ -3,15 +3,9 @@
 
 import std;
 
-import glaze.cbor;
+import glaze;
 import glaze.base64;
 import glaze.exceptions;
-
-import glaze.core.common;
-import glaze.core.context;
-import glaze.core.meta;
-import glaze.core.opts;
-import glaze.core.read;
 
 import ut;
 
@@ -3112,7 +3106,7 @@ void chrono_tests()
       std::string buffer;
       buffer.push_back(static_cast<char>(0xC1)); // tag 1
       buffer.push_back(static_cast<char>(0x1B)); // uint64_follows
-      const uint64_t huge = static_cast<uint64_t>(INT64_MAX);
+      const uint64_t huge = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
       for (int i = 7; i >= 0; --i) {
          buffer.push_back(static_cast<char>((huge >> (i * 8)) & 0xFF));
       }

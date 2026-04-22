@@ -4,6 +4,7 @@ export module glaze.cbor.write;
 
 import glaze.cbor.header;
 
+import glaze.core.chrono;
 import glaze.core.buffer_traits;
 import glaze.core.opts;
 import glaze.core.reflect;
@@ -33,6 +34,7 @@ using std::uint8_t;
 using std::uint16_t;
 using std::uint32_t;
 using std::uint64_t;
+using std::int64_t;
 using std::size_t;
 
 namespace glz

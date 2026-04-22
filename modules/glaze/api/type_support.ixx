@@ -5,6 +5,7 @@ export module glaze.api.type_support;
 import std;
 
 import glaze.core.meta;
+import glaze.reflection.get_name;
 import glaze.util.for_each;
 import glaze.util.string_literal;
 

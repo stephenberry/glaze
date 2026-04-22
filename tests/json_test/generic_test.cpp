@@ -9,6 +9,10 @@ import glaze.containers.ordered_map;
 
 import ut;
 
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 
 // User-defined map aliases for testing bring-your-own-map with generic_json

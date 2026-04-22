@@ -8,6 +8,7 @@ target_sources(glaze_glaze
     FILES
       modules/glaze/glaze.ixx
       modules/glaze/json.ixx
+      modules/glaze/jsonb.ixx
       modules/glaze/cbor.ixx
       modules/glaze/beve.ixx
       modules/glaze/csv.ixx
@@ -83,7 +84,7 @@ target_sources(glaze_glaze
     modules/glaze/json/study.ixx
     modules/glaze/json/wrappers.ixx
     modules/glaze/json/write.ixx
-
+    modules/glaze/json/flatten_map.ixx
 )
 
 # utils
@@ -260,6 +261,19 @@ target_sources(glaze_glaze
     modules/glaze/cbor/write.ixx
 )
 
+# jsonb
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/jsonb/header.ixx
+    modules/glaze/jsonb/jsonb_to_json.ixx
+    modules/glaze/jsonb/read.ixx
+    modules/glaze/jsonb/skip.ixx
+    modules/glaze/jsonb/text_decode.ixx
+    modules/glaze/jsonb/write.ixx
+)
+
 # containers
 target_sources(glaze_glaze
   PUBLIC
@@ -316,6 +330,7 @@ target_sources(glaze_glaze
     modules/glaze/exceptions/csv_exceptions.ixx
     modules/glaze/exceptions/json_exceptions.ixx
     modules/glaze/exceptions/json_schema_exceptions.ixx
+    modules/glaze/exceptions/jsonb_exceptions.ixx
     modules/glaze/exceptions/msgpack_exceptions.ixx
 )
 

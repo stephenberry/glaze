@@ -5,6 +5,8 @@ import std;
 import glaze;
 import ut;
 
+import glaze.reflection.to_tuple;
+
 #include "glaze/core/feature_test.hpp"
 
 using std::uint8_t;

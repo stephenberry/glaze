@@ -4,7 +4,11 @@ export module glaze.core.chrono;
 
 import std;
 
+import glaze.core.context;
 import glaze.core.traits;
+
+using std::int64_t;
+using std::size_t;
 
 export namespace glz
 {

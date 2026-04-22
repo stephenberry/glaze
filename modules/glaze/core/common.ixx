@@ -403,13 +403,13 @@ namespace glz
    export template <class T>
    concept is_any_function_ptr = is_member_function_pointer<T> || is_function_ptr_or_ref<T>;
 
-   template <class T>
+   export template <class T>
    concept nullable_t = !meta_value_t<T> && !str_t<T> && !is_function_ptr_or_ref<T> && requires(T t) {
       bool(t);
       { *t };
    };
 
-   template <class T>
+   export template <class T>
    concept nullable_like = nullable_t<T> && !is_expected<T> && !std::is_array_v<T>;
 
    // For optional like types that cannot overload `operator bool()`
@@ -440,7 +440,7 @@ namespace glz
                                            is_specialization_v<meta_wrapper_t<T>, glz::merge>);
 
    // Detects types whose glz::meta value is a glz::merge of member pointers
-   template <class T>
+   export template <class T>
    concept glaze_merge_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, glz::merge>;
 
    export template <class T>

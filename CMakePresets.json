@@ -91,7 +91,7 @@
         "rhs": "Windows"
       },
       "toolset": {
-        "value": "v145,host=x64,version=14.51"
+        "value": "v145,host=x64,version=14.52"
       }
     },
     {

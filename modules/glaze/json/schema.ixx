@@ -45,6 +45,7 @@ import glaze.util.expected;
 import glaze.util.for_each;
 import glaze.util.variant;
 import glaze.util.string_literal;
+import glaze.util.tuple;
 
 import glaze.concepts.container_concepts;
 

@@ -12,6 +12,7 @@ export import glaze.exceptions.core_exceptions;
 export import glaze.exceptions.csv_exceptions;
 export import glaze.exceptions.json_exceptions;
 export import glaze.exceptions.json_schema_exceptions;
+export import glaze.exceptions.jsonb_exceptions;
 export import glaze.exceptions.msgpack_exceptions;
 
 import std;

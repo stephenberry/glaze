@@ -1,24 +1,25 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/jsonb.hpp"
+import std;
 
-#include <array>
-#include <cmath>
-#include <cstdint>
-#include <cstdio>
-#include <expected>
-#include <filesystem>
-#include <limits>
-#include <map>
-#include <optional>
-#include <string>
-#include <unordered_map>
-#include <variant>
-#include <vector>
+import glaze.jsonb;
+import glaze.core.meta_fwd;
+import glaze.core.opts;
 
-#include "glaze/exceptions/jsonb_exceptions.hpp"
-#include "ut/ut.hpp"
+import glaze.json;
+
+import glaze.exceptions.jsonb_exceptions;
+
+import ut;
+
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::int8_t;
+using std::int32_t;
+using std::int64_t;
+using std::size_t;
 
 using namespace ut;
 
