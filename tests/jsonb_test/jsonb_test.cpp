@@ -1045,7 +1045,7 @@ suite converter_tests = [] {
       expect(j.value() == "255");
    };
 
-   "jsonb_to_json maps NaN/Inf to null"_test = [] {
+   "jsonb_to_json maps NaN to null and infinities to 9e999"_test = [] {
       std::string buf;
       expect(not glz::write_jsonb(std::numeric_limits<double>::quiet_NaN(), buf));
       auto j = glz::jsonb_to_json(buf);
@@ -1055,7 +1055,12 @@ suite converter_tests = [] {
       buf.clear();
       expect(not glz::write_jsonb(std::numeric_limits<double>::infinity(), buf));
       j = glz::jsonb_to_json(buf);
-      expect(j.value() == "null");
+      expect(j.value() == "9e999");
+
+      buf.clear();
+      expect(not glz::write_jsonb(-std::numeric_limits<double>::infinity(), buf));
+      j = glz::jsonb_to_json(buf);
+      expect(j.value() == "-9e999");
    };
 
    "jsonb_to_json TEXTJ passthrough"_test = [] {

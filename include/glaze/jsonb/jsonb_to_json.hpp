@@ -165,11 +165,24 @@ namespace glz
          }
          case jsonb::type::float5: {
             sv s{reinterpret_cast<const char*>(payload), static_cast<size_t>(sz)};
-            if (s == "NaN" || s == "Infinity" || s == "+Infinity" || s == "-Infinity") {
-               // Strict JSON has no representation; emit null.
+            if (s == "NaN") {
+               // Strict JSON has no NaN representation; emit null (matches SQLite json()).
                if (!ensure_space(ctx, out, ix + 4 + write_padding_bytes)) return;
                std::memcpy(&out[ix], "null", 4);
                ix += 4;
+               return;
+            }
+            if (s == "Infinity" || s == "+Infinity") {
+               // Match SQLite json(): emit 9e999, which parses as +infinity in IEEE-754 binary64.
+               if (!ensure_space(ctx, out, ix + 5 + write_padding_bytes)) return;
+               std::memcpy(&out[ix], "9e999", 5);
+               ix += 5;
+               return;
+            }
+            if (s == "-Infinity") {
+               if (!ensure_space(ctx, out, ix + 6 + write_padding_bytes)) return;
+               std::memcpy(&out[ix], "-9e999", 6);
+               ix += 6;
                return;
             }
             // Otherwise, best effort: strip leading '+'.
