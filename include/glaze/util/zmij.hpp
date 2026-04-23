@@ -811,7 +811,10 @@ namespace glz::zmij
          uint16x8_t str =
             vaddq_u16(vreinterpretq_u16_u8(digits), vreinterpretq_u16_s8(vdupq_n_s8('0')));
 
-         uint16x8_t is_not_zero = vreinterpretq_u16_u8(vcgtzq_s8(vreinterpretq_s8_u8(digits)));
+         // vcgtzq_s8 is AArch64-only; the portable spelling (ARMv7 NEON and
+         // up) is "compare greater-than against a zero vector".
+         uint16x8_t is_not_zero = vreinterpretq_u16_u8(
+            vcgtq_s8(vreinterpretq_s8_u8(digits), vdupq_n_s8(0)));
          uint64_t zeroes = vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(is_not_zero, 4)), 0);
          return {str, 16 - (clz(zeroes) >> 2)};
 #else
