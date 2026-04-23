@@ -679,8 +679,11 @@ namespace glz::zmij
             vreinterpret_u32_s32(vqdmulh_n_s32(bbccddee_ffgghhii, c.multipliers32[0])), 9));
          int32x2_t ddee_bbcc_hhii_ffgg_32 = vmla_n_s32(bbccddee_ffgghhii, bbcc_ffgg, c.multipliers32[1]);
 
+         // AArch64 accepts `vshll_n_u16(x, 0)` as "widen without shift", but
+         // ARMv7 VSHLL requires a shift in [1, 15]. vmovl_u16 is the portable
+         // name for the same operation and codegens identically on AArch64.
          int32x4_t ddee_bbcc_hhii_ffgg =
-            vreinterpretq_s32_u32(vshll_n_u16(vreinterpret_u16_s32(ddee_bbcc_hhii_ffgg_32), 0));
+            vreinterpretq_s32_u32(vmovl_u16(vreinterpret_u16_s32(ddee_bbcc_hhii_ffgg_32)));
          return to_bcd_4x4(ddee_bbcc_hhii_ffgg, c);
       }
 
