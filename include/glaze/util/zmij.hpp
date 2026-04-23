@@ -151,10 +151,12 @@ static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE);
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wsign-compare"
 #  pragma clang diagnostic ignored "-Wunused-parameter"
+#  pragma clang diagnostic ignored "-Wpedantic"
 #elif defined(__GNUC__)
 #  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Wsign-compare"
 #  pragma GCC diagnostic ignored "-Wunused-parameter"
+#  pragma GCC diagnostic ignored "-Wpedantic"
 #endif
 
 namespace glz::zmij
