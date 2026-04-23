@@ -692,12 +692,27 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         if (!msgpack::detail::write_map_header(ctx, value.size(), b, ix)) [[unlikely]] {
+         using map_t = std::remove_cvref_t<Value>;
+         using val_t = std::remove_cvref_t<detail::iterator_second_type<map_t>>;
+         constexpr bool may_skip = null_t<val_t> && Opts.skip_null_members;
+
+         size_t count = value.size();
+         if constexpr (may_skip) {
+            count = 0;
+            for (auto&& item : value) {
+               if (!skip_member<Opts>(item.second)) ++count;
+            }
+         }
+
+         if (!msgpack::detail::write_map_header(ctx, count, b, ix)) [[unlikely]] {
             return;
          }
          for (auto&& item : value) {
             if (bool(ctx.error)) [[unlikely]] {
                return;
+            }
+            if constexpr (may_skip) {
+               if (skip_member<Opts>(item.second)) continue;
             }
             serialize<MSGPACK>::op<Opts>(item.first, ctx, b, ix);
             serialize<MSGPACK>::op<Opts>(item.second, ctx, b, ix);

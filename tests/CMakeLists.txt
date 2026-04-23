@@ -117,6 +117,7 @@ endif()
 
 add_subdirectory(api_test)
 add_subdirectory(beve_test)
+add_subdirectory(bson_test)
 add_subdirectory(cbor_test)
 add_subdirectory(jsonb_test)
 add_subdirectory(jsonb_sqlite_test)
