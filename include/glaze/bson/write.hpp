@@ -304,8 +304,7 @@ namespace glz
       requires(std::integral<T> && !std::same_as<T, bool>)
    struct to<BSON, T>
    {
-      static constexpr bool fits_int32 =
-         (sizeof(T) <= 2) || (sizeof(T) == 4 && std::is_signed_v<T>);
+      static constexpr bool fits_int32 = (sizeof(T) <= 2) || (sizeof(T) == 4 && std::is_signed_v<T>);
       static constexpr uint8_t type_code = fits_int32 ? bson::type::int32 : bson::type::int64;
 
       template <auto Opts>
@@ -589,8 +588,7 @@ namespace glz
          if (!ensure_space(ctx, b, ix + 8 + write_padding_bytes)) [[unlikely]] {
             return;
          }
-         const auto ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(value.time_since_epoch()).count();
+         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(value.time_since_epoch()).count();
          bson_detail::dump_le<int64_t>(static_cast<int64_t>(ms), b, ix);
       }
    };
@@ -624,8 +622,7 @@ namespace glz
             }
          }
          else if constexpr (is_variant<DT>) {
-            std::visit([&](auto&& alt) { write_member_element<Opts>(key, alt, ctx, b, ix); },
-                       std::forward<T>(value));
+            std::visit([&](auto&& alt) { write_member_element<Opts>(key, alt, ctx, b, ix); }, std::forward<T>(value));
          }
          else {
             if (!write_element_prefix(ctx, to<BSON, DT>::type_code, key, b, ix)) [[unlikely]] {
@@ -703,7 +700,8 @@ namespace glz
          }();
 
          for_each<N>([&]<size_t I>() {
-            if (bool(ctx.error)) [[unlikely]] return;
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             if constexpr (bson_detail::should_skip_reflected_field<T, Opts, I>()) {
                return;
             }
@@ -724,7 +722,8 @@ namespace glz
             }
          });
 
-         if (bool(ctx.error)) [[unlikely]] return;
+         if (bool(ctx.error)) [[unlikely]]
+            return;
          (void)bson_detail::finalize_document(ctx, b, ix, start);
       }
    };
@@ -755,7 +754,8 @@ namespace glz
          constexpr bool may_skip = null_t<val_t> && Opts.skip_null_members;
 
          for (auto&& [k, v] : value) {
-            if (bool(ctx.error)) [[unlikely]] return;
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             if constexpr (may_skip) {
                if (skip_member<Opts>(v)) continue;
             }
@@ -763,7 +763,8 @@ namespace glz
             bson_detail::write_member_element<Opts>(key_sv, v, ctx, b, ix);
          }
 
-         if (bool(ctx.error)) [[unlikely]] return;
+         if (bool(ctx.error)) [[unlikely]]
+            return;
          (void)bson_detail::finalize_document(ctx, b, ix, start);
       }
    };
@@ -788,13 +789,15 @@ namespace glz
          std::array<char, 24> scratch{};
          size_t i = 0;
          for (auto&& item : value) {
-            if (bool(ctx.error)) [[unlikely]] return;
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             const std::string_view key = bson_detail::array_key(i, scratch);
             bson_detail::write_member_element<Opts>(key, item, ctx, b, ix);
             ++i;
          }
 
-         if (bool(ctx.error)) [[unlikely]] return;
+         if (bool(ctx.error)) [[unlikely]]
+            return;
          (void)bson_detail::finalize_document(ctx, b, ix, start);
       }
    };
@@ -817,12 +820,14 @@ namespace glz
 
          std::array<char, 24> scratch{};
          for_each<N>([&]<size_t I>() {
-            if (bool(ctx.error)) [[unlikely]] return;
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             const std::string_view key = bson_detail::array_key(I, scratch);
             bson_detail::write_member_element<Opts>(key, get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
          });
 
-         if (bool(ctx.error)) [[unlikely]] return;
+         if (bool(ctx.error)) [[unlikely]]
+            return;
          (void)bson_detail::finalize_document(ctx, b, ix, start);
       }
    };

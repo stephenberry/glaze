@@ -377,11 +377,11 @@ namespace
       "spec-canonical-hello-world"_test = [] {
          // {"hello": "world"} — the canonical example from bsonspec.org.
          static constexpr std::initializer_list<uint8_t> expected = {
-            0x16, 0x00, 0x00, 0x00,                 //
-            0x02, 'h', 'e', 'l', 'l', 'o', 0x00,    //
-            0x06, 0x00, 0x00, 0x00,                 //
-            'w', 'o', 'r', 'l', 'd', 0x00,          //
-            0x00                                    //
+            0x16, 0x00, 0x00, 0x00, //
+            0x02, 'h',  'e',  'l',  'l', 'o',  0x00, //
+            0x06, 0x00, 0x00, 0x00, //
+            'w',  'o',  'r',  'l',  'd', 0x00, //
+            0x00 //
          };
          hello_t h{"world"};
          auto w = glz::write_bson(h);
@@ -393,16 +393,15 @@ namespace
          i32_s v{42};
          auto w = glz::write_bson(v);
          expect(w.has_value());
-         expect(bytes_equal(w.value(),
-                            {0x0C, 0x00, 0x00, 0x00, 0x10, 'x', 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00}));
+         expect(bytes_equal(w.value(), {0x0C, 0x00, 0x00, 0x00, 0x10, 'x', 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00}));
       };
 
       "int64-bytes"_test = [] {
          i64_s v{1000000000000LL};
          auto w = glz::write_bson(v);
          expect(w.has_value());
-         expect(bytes_equal(w.value(), {0x10, 0x00, 0x00, 0x00, 0x12, 'x', 0x00, 0x00, 0x10, 0xA5, 0xD4, 0xE8,
-                                        0x00, 0x00, 0x00, 0x00}));
+         expect(bytes_equal(w.value(), {0x10, 0x00, 0x00, 0x00, 0x12, 'x', 0x00, 0x00, 0x10, 0xA5, 0xD4, 0xE8, 0x00,
+                                        0x00, 0x00, 0x00}));
       };
 
       "double-bytes"_test = [] {
@@ -410,8 +409,8 @@ namespace
          auto w = glz::write_bson(v);
          expect(w.has_value());
          // 1.5 as IEEE 754 double → 0x3FF8000000000000, little-endian.
-         expect(bytes_equal(w.value(), {0x10, 0x00, 0x00, 0x00, 0x01, 'd', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                        0x00, 0xF8, 0x3F, 0x00}));
+         expect(bytes_equal(w.value(), {0x10, 0x00, 0x00, 0x00, 0x01, 'd', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                        0xF8, 0x3F, 0x00}));
       };
 
       "bool-bytes"_test = [] {
@@ -425,12 +424,12 @@ namespace
          array_s v{{1, 2}};
          auto w = glz::write_bson(v);
          expect(w.has_value());
-         expect(bytes_equal(w.value(), {0x1B, 0x00, 0x00, 0x00,                                   //
-                                        0x04, 'a', 0x00,                                          //
-                                        0x13, 0x00, 0x00, 0x00,                                   //
-                                        0x10, '0', 0x00, 0x01, 0x00, 0x00, 0x00,                  //
-                                        0x10, '1', 0x00, 0x02, 0x00, 0x00, 0x00,                  //
-                                        0x00,                                                     //
+         expect(bytes_equal(w.value(), {0x1B, 0x00, 0x00, 0x00, //
+                                        0x04, 'a',  0x00, //
+                                        0x13, 0x00, 0x00, 0x00, //
+                                        0x10, '0',  0x00, 0x01, 0x00, 0x00, 0x00, //
+                                        0x10, '1',  0x00, 0x02, 0x00, 0x00, 0x00, //
+                                        0x00, //
                                         0x00}));
       };
 
@@ -438,8 +437,7 @@ namespace
          optional_s v{42};
          auto w = glz::write_bson(v);
          expect(w.has_value());
-         expect(bytes_equal(w.value(),
-                            {0x0C, 0x00, 0x00, 0x00, 0x10, 'o', 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00}));
+         expect(bytes_equal(w.value(), {0x0C, 0x00, 0x00, 0x00, 0x10, 'o', 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00}));
       };
 
       "optional-empty-skips-key"_test = [] {
@@ -456,11 +454,11 @@ namespace
          expect(glz::parse_uuid("00112233-4455-6677-8899-aabbccddeeff", v.u));
          auto w = glz::write_bson(v);
          expect(w.has_value());
-         expect(bytes_equal(w.value(), {0x1D, 0x00, 0x00, 0x00,                                      //
-                                        0x05, 'u', 0x00,                                             //
-                                        0x10, 0x00, 0x00, 0x00, 0x04,                                //
-                                        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99,  //
-                                        0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,                          //
+         expect(bytes_equal(w.value(), {0x1D, 0x00, 0x00, 0x00, //
+                                        0x05, 'u',  0x00, //
+                                        0x10, 0x00, 0x00, 0x00, 0x04, //
+                                        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, //
+                                        0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, //
                                         0x00}));
       };
 
@@ -469,10 +467,10 @@ namespace
          // the bytes out differently. Reading without the flavor would silently
          // scramble the UUID, so Glaze rejects it outright.
          static constexpr uint8_t buf[] = {0x1D, 0x00, 0x00, 0x00, //
-                                           0x05, 'u', 0x00,        //
+                                           0x05, 'u',  0x00, //
                                            0x10, 0x00, 0x00, 0x00, 0x03, //
-                                           0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99,
-                                           0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,  //
+                                           0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                                           0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, //
                                            0x00};
          uuid_s r{};
          auto ec = glz::read_bson(r, std::string_view{reinterpret_cast<const char*>(buf), sizeof(buf)});
@@ -485,10 +483,10 @@ namespace
          for (uint8_t i = 0; i < 12; ++i) v.id.bytes[i] = i;
          auto w = glz::write_bson(v);
          expect(w.has_value());
-         expect(bytes_equal(w.value(), {0x15, 0x00, 0x00, 0x00,                                             //
-                                        0x07, 'i', 'd', 0x00,                                              //
-                                        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,  //
-                                        0x0B,                                                              //
+         expect(bytes_equal(w.value(), {0x15, 0x00, 0x00, 0x00, //
+                                        0x07, 'i',  'd',  0x00, //
+                                        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, //
+                                        0x0B, //
                                         0x00}));
       };
 
@@ -499,8 +497,8 @@ namespace
          auto w = glz::write_bson(v);
          expect(w.has_value());
          // pattern cstring then options cstring.
-         expect(bytes_equal(w.value(), {0x0E, 0x00, 0x00, 0x00,        //
-                                        0x0B, 'r', 0x00,               //
+         expect(bytes_equal(w.value(), {0x0E, 0x00, 0x00, 0x00, //
+                                        0x0B, 'r', 0x00, //
                                         'a', 'b', 'c', 0x00, 'i', 0x00, //
                                         0x00}));
       };
@@ -513,9 +511,9 @@ namespace
          v.r.options = "mi";
          auto w = glz::write_bson(v);
          expect(w.has_value());
-         expect(bytes_equal(w.value(), {0x0D, 0x00, 0x00, 0x00,              //
-                                        0x0B, 'r', 0x00,                     //
-                                        'a', 0x00, 'i', 'm', 0x00,           //
+         expect(bytes_equal(w.value(), {0x0D, 0x00, 0x00, 0x00, //
+                                        0x0B, 'r', 0x00, //
+                                        'a', 0x00, 'i', 'm', 0x00, //
                                         0x00}));
       };
 
@@ -525,9 +523,9 @@ namespace
          auto w = glz::write_bson(v);
          expect(w.has_value());
          // int32 length (bytes+1 for null) then code then null.
-         expect(bytes_equal(w.value(), {0x0E, 0x00, 0x00, 0x00,              //
-                                        0x0D, 'j', 0x00,                     //
-                                        0x02, 0x00, 0x00, 0x00, 'x', 0x00,   //
+         expect(bytes_equal(w.value(), {0x0E, 0x00, 0x00, 0x00, //
+                                        0x0D, 'j', 0x00, //
+                                        0x02, 0x00, 0x00, 0x00, 'x', 0x00, //
                                         0x00}));
       };
 
@@ -538,10 +536,10 @@ namespace
          auto w = glz::write_bson(v);
          expect(w.has_value());
          // Doc length = 4 (len) + 3 (tag+"d"+NUL) + 16 (value) + 1 (term) = 24 = 0x18.
-         expect(bytes_equal(w.value(), {0x18, 0x00, 0x00, 0x00,                                           //
-                                        0x13, 'd', 0x00,                                                  //
+         expect(bytes_equal(w.value(), {0x18, 0x00, 0x00, 0x00, //
+                                        0x13, 'd',  0x00, //
                                         0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, //
-                                        0x0C, 0x0D, 0x0E, 0x0F, 0x10,                                     //
+                                        0x0C, 0x0D, 0x0E, 0x0F, 0x10, //
                                         0x00}));
       };
 
@@ -568,9 +566,9 @@ namespace
          auto w = glz::write_bson(v);
          expect(w.has_value());
          // length 3, subtype 0x00, payload "abc".
-         expect(bytes_equal(w.value(), {0x10, 0x00, 0x00, 0x00,                         //
-                                        0x05, 'b', 0x00,                                //
-                                        0x03, 0x00, 0x00, 0x00, 0x00, 'a', 'b', 'c',    //
+         expect(bytes_equal(w.value(), {0x10, 0x00, 0x00, 0x00, //
+                                        0x05, 'b', 0x00, //
+                                        0x03, 0x00, 0x00, 0x00, 0x00, 'a', 'b', 'c', //
                                         0x00}));
       };
 
@@ -585,12 +583,12 @@ namespace
          expect(w.has_value());
          // Doc length = 4 (outer len field) + 3 (tag+"b"+NUL) + 4 (outer len)
          // + 1 (subtype) + 4 (inner len) + 3 (payload) + 1 (term) = 20 = 0x14.
-         expect(bytes_equal(w.value(), {0x14, 0x00, 0x00, 0x00,              //
-                                        0x05, 'b', 0x00,                     //
-                                        0x07, 0x00, 0x00, 0x00,              //
-                                        0x02,                                //
-                                        0x03, 0x00, 0x00, 0x00,              //
-                                        'a', 'b', 'c',                       //
+         expect(bytes_equal(w.value(), {0x14, 0x00, 0x00, 0x00, //
+                                        0x05, 'b',  0x00, //
+                                        0x07, 0x00, 0x00, 0x00, //
+                                        0x02, //
+                                        0x03, 0x00, 0x00, 0x00, //
+                                        'a',  'b',  'c', //
                                         0x00}));
       };
    };
@@ -654,11 +652,10 @@ namespace
          // BSON does not forbid duplicate keys on the wire. Glaze's policy is
          // last-writer-wins (subsequent occurrences overwrite the prior value).
          // Hand-authored doc: {"k": 1, "k": 2}. Reader must yield {k: 2}.
-         static constexpr uint8_t dup[] = {
-            0x13, 0x00, 0x00, 0x00,                  // doc length = 4+7+7+1 = 19
-            0x10, 'k', 0x00, 0x01, 0x00, 0x00, 0x00, //
-            0x10, 'k', 0x00, 0x02, 0x00, 0x00, 0x00, //
-            0x00};
+         static constexpr uint8_t dup[] = {0x13, 0x00, 0x00, 0x00, // doc length = 4+7+7+1 = 19
+                                           0x10, 'k',  0x00, 0x01, 0x00, 0x00, 0x00, //
+                                           0x10, 'k',  0x00, 0x02, 0x00, 0x00, 0x00, //
+                                           0x00};
          std::map<std::string, int32_t> r{};
          auto ec = glz::read_bson(r, std::string_view{reinterpret_cast<const char*>(dup), sizeof(dup)});
          expect(not ec);
@@ -744,14 +741,13 @@ namespace
          // Spec-compliant 0x02 wire bytes hand-authored (what a MongoDB driver
          // would emit): outer_len = 4 + N, subtype 0x02, inner int32(N),
          // then N payload bytes.
-         static constexpr uint8_t compliant[] = {
-            0x14, 0x00, 0x00, 0x00,  // doc length
-            0x05, 'b', 0x00,         // tag + key
-            0x07, 0x00, 0x00, 0x00,  // outer_len = 4 + 3 = 7
-            0x02,                    // subtype 0x02
-            0x03, 0x00, 0x00, 0x00,  // inner_len = 3
-            'x', 'y', 'z',           // payload
-            0x00};
+         static constexpr uint8_t compliant[] = {0x14, 0x00, 0x00, 0x00, // doc length
+                                                 0x05, 'b',  0x00, // tag + key
+                                                 0x07, 0x00, 0x00, 0x00, // outer_len = 4 + 3 = 7
+                                                 0x02, // subtype 0x02
+                                                 0x03, 0x00, 0x00, 0x00, // inner_len = 3
+                                                 'x',  'y',  'z', // payload
+                                                 0x00};
          bin_only_s dst{};
          auto ec = glz::read_bson(dst, std::string_view{reinterpret_cast<const char*>(compliant), sizeof(compliant)});
          expect(not ec);
@@ -765,14 +761,13 @@ namespace
       "read-binary-old-inner-outer-mismatch-rejected"_test = [] {
          // Malformed 0x02: outer_len says 7 but inner_len says 5, so they
          // disagree. Reader must reject with syntax_error.
-         static constexpr uint8_t bad[] = {
-            0x14, 0x00, 0x00, 0x00,  //
-            0x05, 'b', 0x00,         //
-            0x07, 0x00, 0x00, 0x00,  // outer_len = 7 (implies inner = 3)
-            0x02,                    //
-            0x05, 0x00, 0x00, 0x00,  // inner_len = 5 (mismatch)
-            'x', 'y', 'z',           //
-            0x00};
+         static constexpr uint8_t bad[] = {0x14, 0x00, 0x00, 0x00, //
+                                           0x05, 'b',  0x00, //
+                                           0x07, 0x00, 0x00, 0x00, // outer_len = 7 (implies inner = 3)
+                                           0x02, //
+                                           0x05, 0x00, 0x00, 0x00, // inner_len = 5 (mismatch)
+                                           'x',  'y',  'z', //
+                                           0x00};
          bin_only_s dst{};
          auto ec = glz::read_bson(dst, std::string_view{reinterpret_cast<const char*>(bad), sizeof(bad)});
          expect(ec.ec == glz::error_code::syntax_error);
@@ -981,11 +976,11 @@ namespace
    suite bson_spec_parse_tests = [] {
       "parse-canonical-hello-world"_test = [] {
          static constexpr uint8_t hw[] = {
-            0x16, 0x00, 0x00, 0x00,              //
-            0x02, 'h', 'e', 'l', 'l', 'o', 0x00, //
-            0x06, 0x00, 0x00, 0x00,              //
-            'w', 'o', 'r', 'l', 'd', 0x00,       //
-            0x00                                 //
+            0x16, 0x00, 0x00, 0x00, //
+            0x02, 'h',  'e',  'l',  'l', 'o',  0x00, //
+            0x06, 0x00, 0x00, 0x00, //
+            'w',  'o',  'r',  'l',  'd', 0x00, //
+            0x00 //
          };
          std::string_view buf(reinterpret_cast<const char*>(hw), sizeof(hw));
          hello_t h{};
@@ -1028,12 +1023,12 @@ namespace
          // Valid {"hello":"world"} document followed by a stray byte. The header
          // length covers only the first 22 bytes; anything past that is garbage.
          static constexpr uint8_t doc_plus_garbage[] = {
-            0x16, 0x00, 0x00, 0x00,              //
-            0x02, 'h', 'e', 'l', 'l', 'o', 0x00, //
-            0x06, 0x00, 0x00, 0x00,              //
-            'w', 'o', 'r', 'l', 'd', 0x00,       //
-            0x00,                                //
-            0xFF                                 // trailing garbage
+            0x16, 0x00, 0x00, 0x00, //
+            0x02, 'h',  'e',  'l',  'l', 'o',  0x00, //
+            0x06, 0x00, 0x00, 0x00, //
+            'w',  'o',  'r',  'l',  'd', 0x00, //
+            0x00, //
+            0xFF // trailing garbage
          };
          std::string_view buf(reinterpret_cast<const char*>(doc_plus_garbage), sizeof(doc_plus_garbage));
          hello_t h{};
@@ -1044,11 +1039,11 @@ namespace
       "exact-fill-accepted"_test = [] {
          // Same document without trailing bytes must still succeed.
          static constexpr uint8_t doc[] = {
-            0x16, 0x00, 0x00, 0x00,              //
-            0x02, 'h', 'e', 'l', 'l', 'o', 0x00, //
-            0x06, 0x00, 0x00, 0x00,              //
-            'w', 'o', 'r', 'l', 'd', 0x00,       //
-            0x00                                 //
+            0x16, 0x00, 0x00, 0x00, //
+            0x02, 'h',  'e',  'l',  'l', 'o',  0x00, //
+            0x06, 0x00, 0x00, 0x00, //
+            'w',  'o',  'r',  'l',  'd', 0x00, //
+            0x00 //
          };
          std::string_view buf(reinterpret_cast<const char*>(doc), sizeof(doc));
          hello_t h{};
@@ -1079,9 +1074,7 @@ namespace
    };
 
    suite bson_variant_tests = [] {
-      "variant-int-or-string-roundtrip-int"_test = [] {
-         expect_roundtrip_equal(int_or_string_s{42});
-      };
+      "variant-int-or-string-roundtrip-int"_test = [] { expect_roundtrip_equal(int_or_string_s{42}); };
 
       "variant-int-or-string-roundtrip-string"_test = [] {
          expect_roundtrip_equal(int_or_string_s{std::string{"hello"}});
@@ -1103,10 +1096,9 @@ namespace
          maybe_int_s v{};
          auto w = glz::write_bson(v);
          expect(w.has_value());
-         expect(bytes_equal(w.value(),
-                            {0x08, 0x00, 0x00, 0x00,  //
-                             0x0A, 'v', 0x00,         //
-                             0x00}));
+         expect(bytes_equal(w.value(), {0x08, 0x00, 0x00, 0x00, //
+                                        0x0A, 'v', 0x00, //
+                                        0x00}));
       };
 
       "variant-num-int-and-double"_test = [] {
@@ -1141,10 +1133,10 @@ namespace
          // but the variant has no float alternative → no_matching_variant_type.
          // int_or_string_s has int32 + string only. Manual bytes: length | 01 v 00 | double | 00.
          static constexpr uint8_t bad[] = {
-            0x10, 0x00, 0x00, 0x00,                                              //
-            0x01, 'v', 0x00,                                                     //
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF8, 0x3F,                      //
-            0x00                                                                 //
+            0x10, 0x00, 0x00, 0x00, //
+            0x01, 'v',  0x00, //
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF8, 0x3F, //
+            0x00 //
          };
          std::string_view buf(reinterpret_cast<const char*>(bad), sizeof(bad));
          int_or_string_s v{};
@@ -1205,10 +1197,10 @@ namespace
          constexpr auto permissive = glz::opts{.error_on_unknown_keys = false};
          // {"s": symbol("x")} — symbol is length-prefixed UTF-8 like a string.
          static constexpr uint8_t bytes[] = {
-            0x0E, 0x00, 0x00, 0x00,               //
-            0x0E, 's', 0x00,                      //
-            0x02, 0x00, 0x00, 0x00, 'x', 0x00,    //
-            0x00                                  //
+            0x0E, 0x00, 0x00, 0x00, //
+            0x0E, 's',  0x00, //
+            0x02, 0x00, 0x00, 0x00, 'x', 0x00, //
+            0x00 //
          };
          std::string_view buf(reinterpret_cast<const char*>(bytes), sizeof(bytes));
          hello_t h{"pre"};
@@ -1221,11 +1213,11 @@ namespace
          constexpr auto permissive = glz::opts{.error_on_unknown_keys = false};
          // {"p": DBPointer("x", <12 zero bytes>)} — ns string + 12-byte object id.
          static constexpr uint8_t bytes[] = {
-            0x1A, 0x00, 0x00, 0x00,                                                   //
-            0x0C, 'p', 0x00,                                                          //
-            0x02, 0x00, 0x00, 0x00, 'x', 0x00,                                        //
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   //
-            0x00                                                                      //
+            0x1A, 0x00, 0x00, 0x00, //
+            0x0C, 'p',  0x00, //
+            0x02, 0x00, 0x00, 0x00, 'x',  0x00, //
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, //
+            0x00 //
          };
          std::string_view buf(reinterpret_cast<const char*>(bytes), sizeof(bytes));
          hello_t h{"pre"};
@@ -1238,12 +1230,12 @@ namespace
          constexpr auto permissive = glz::opts{.error_on_unknown_keys = false};
          // {"c": CodeWithScope("x", {})} — int32 total-len | string | document.
          static constexpr uint8_t bytes[] = {
-            0x17, 0x00, 0x00, 0x00,                //
-            0x0F, 'c', 0x00,                       //
-            0x0F, 0x00, 0x00, 0x00,                // inner total length = 15
-            0x02, 0x00, 0x00, 0x00, 'x', 0x00,     // string "x"
-            0x05, 0x00, 0x00, 0x00, 0x00,          // empty scope document
-            0x00                                   //
+            0x17, 0x00, 0x00, 0x00, //
+            0x0F, 'c',  0x00, //
+            0x0F, 0x00, 0x00, 0x00, // inner total length = 15
+            0x02, 0x00, 0x00, 0x00, 'x',  0x00, // string "x"
+            0x05, 0x00, 0x00, 0x00, 0x00, // empty scope document
+            0x00 //
          };
          std::string_view buf(reinterpret_cast<const char*>(bytes), sizeof(bytes));
          hello_t h{"pre"};
@@ -1285,9 +1277,9 @@ namespace
          constexpr auto strict = glz::opts{.error_on_missing_keys = true};
          // {"opt": 7} — the required "id" field is absent.
          static constexpr uint8_t bytes[] = {
-            0x0E, 0x00, 0x00, 0x00,                                   //
-            0x10, 'o', 'p', 't', 0x00, 0x07, 0x00, 0x00, 0x00,        //
-            0x00                                                      //
+            0x0E, 0x00, 0x00, 0x00, //
+            0x10, 'o',  'p',  't',  0x00, 0x07, 0x00, 0x00, 0x00, //
+            0x00 //
          };
          std::string_view buf(reinterpret_cast<const char*>(bytes), sizeof(bytes));
          required_s v{};
@@ -1299,9 +1291,9 @@ namespace
          constexpr auto strict = glz::opts{.error_on_missing_keys = true};
          // {"id": 42} — "opt" is optional and absent, strict mode tolerates it.
          static constexpr uint8_t bytes[] = {
-            0x0D, 0x00, 0x00, 0x00,                                   //
-            0x10, 'i', 'd', 0x00, 0x2A, 0x00, 0x00, 0x00,             //
-            0x00                                                      //
+            0x0D, 0x00, 0x00, 0x00, //
+            0x10, 'i',  'd',  0x00, 0x2A, 0x00, 0x00, 0x00, //
+            0x00 //
          };
          std::string_view buf(reinterpret_cast<const char*>(bytes), sizeof(bytes));
          required_s v{};
@@ -1316,9 +1308,7 @@ namespace
    // Nested containers / optionals + struct-field monostate
    // ===========================================================================
    suite bson_nested_and_monostate_tests = [] {
-      "nested-vectors-roundtrip"_test = [] {
-         expect_roundtrip_equal(nested_vec_s{{{1, 2, 3}, {}, {4, 5}}});
-      };
+      "nested-vectors-roundtrip"_test = [] { expect_roundtrip_equal(nested_vec_s{{{1, 2, 3}, {}, {4, 5}}}); };
 
       "nested-optional-present-roundtrip"_test = [] {
          // Outer present, inner present.
@@ -1344,9 +1334,7 @@ namespace
    // specialization rather than aggregate member-name extraction.
    // ===========================================================================
    suite bson_meta_annotated_tests = [] {
-      "meta-renamed-keys-roundtrip"_test = [] {
-         expect_roundtrip_equal(meta_renamed_s{7, "alpha"});
-      };
+      "meta-renamed-keys-roundtrip"_test = [] { expect_roundtrip_equal(meta_renamed_s{7, "alpha"}); };
 
       "meta-renamed-keys-emit-mapped-names"_test = [] {
          // Wire keys must come from the glz::meta declaration, not the
@@ -1392,9 +1380,9 @@ namespace
          // users don't have to guess whether it's a truncation or a framing
          // bug.
          static constexpr uint8_t bad[] = {
-            0x0C, 0x00, 0x00, 0x00,                              //
-            0x10, 'x', 0x00, 0x2A, 0x00, 0x00, 0x00,             //
-            0xFF                                                 //
+            0x0C, 0x00, 0x00, 0x00, //
+            0x10, 'x',  0x00, 0x2A, 0x00, 0x00, 0x00, //
+            0xFF //
          };
          std::string_view buf(reinterpret_cast<const char*>(bad), sizeof(bad));
          i32_s v{};
@@ -1407,10 +1395,10 @@ namespace
          // Doc claims length 13 but the 0x00 terminator appears at byte 11 (one
          // byte early); byte 12 is an unexpected 0x7F.
          static constexpr uint8_t bad[] = {
-            0x0D, 0x00, 0x00, 0x00,                              //
-            0x10, 'x', 0x00, 0x2A, 0x00, 0x00, 0x00,             //
-            0x00,                                                //
-            0x7F                                                 //
+            0x0D, 0x00, 0x00, 0x00, //
+            0x10, 'x',  0x00, 0x2A, 0x00, 0x00, 0x00, //
+            0x00, //
+            0x7F //
          };
          std::string_view buf(reinterpret_cast<const char*>(bad), sizeof(bad));
          i32_s v{};
@@ -1563,13 +1551,12 @@ namespace
       "convert-rejects-trailing-bytes"_test = [] {
          // Well-formed {"hello":"world"} document (22 bytes) + 1 trailing
          // garbage byte. Must be rejected symmetrically with read_bson.
-         static constexpr uint8_t with_trailer[] = {
-            0x16, 0x00, 0x00, 0x00,              //
-            0x02, 'h', 'e', 'l', 'l', 'o', 0x00, //
-            0x06, 0x00, 0x00, 0x00,              //
-            'w', 'o', 'r', 'l', 'd', 0x00,       //
-            0x00,                                //
-            0xFF};
+         static constexpr uint8_t with_trailer[] = {0x16, 0x00, 0x00, 0x00, //
+                                                    0x02, 'h',  'e',  'l',  'l', 'o',  0x00, //
+                                                    0x06, 0x00, 0x00, 0x00, //
+                                                    'w',  'o',  'r',  'l',  'd', 0x00, //
+                                                    0x00, //
+                                                    0xFF};
          std::string_view buf(reinterpret_cast<const char*>(with_trailer), sizeof(with_trailer));
          auto json = glz::bson_to_json(buf);
          expect(not json.has_value());

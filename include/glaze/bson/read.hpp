@@ -807,8 +807,8 @@ namespace glz
       {
          constexpr auto N = std::variant_size_v<T>;
          size_t nulls = 0, bools = 0, ints = 0, floats = 0, strings = 0, documents = 0, arrays = 0, binaries = 0,
-                uuids = 0, object_ids = 0, datetimes = 0, timestamps = 0, regexes = 0, javascripts = 0,
-                decimal128s = 0, min_keys = 0, max_keys = 0;
+                uuids = 0, object_ids = 0, datetimes = 0, timestamps = 0, regexes = 0, javascripts = 0, decimal128s = 0,
+                min_keys = 0, max_keys = 0;
          [&]<size_t... I>(std::index_sequence<I...>) {
             (([&]<size_t Idx>() {
                 using V = std::remove_cvref_t<std::variant_alternative_t<Idx, T>>;
@@ -835,9 +835,9 @@ namespace glz
          // Binary wire tag 0x05 is shared between `binary<...>` and `uuid`;
          // allow both in the same variant — the reader prefers `binary` when
          // both are present because its reader accepts any subtype.
-         return nulls <= 1 && bools <= 1 && ints <= 1 && floats <= 1 && strings <= 1 && documents <= 1 &&
-                arrays <= 1 && binaries <= 1 && uuids <= 1 && object_ids <= 1 && datetimes <= 1 && timestamps <= 1 &&
-                regexes <= 1 && javascripts <= 1 && decimal128s <= 1 && min_keys <= 1 && max_keys <= 1;
+         return nulls <= 1 && bools <= 1 && ints <= 1 && floats <= 1 && strings <= 1 && documents <= 1 && arrays <= 1 &&
+                binaries <= 1 && uuids <= 1 && object_ids <= 1 && datetimes <= 1 && timestamps <= 1 && regexes <= 1 &&
+                javascripts <= 1 && decimal128s <= 1 && min_keys <= 1 && max_keys <= 1;
       }
    } // namespace bson_detail
 
@@ -1034,9 +1034,8 @@ namespace glz
             bool matched = false;
             if constexpr (N > 0) {
                static constexpr auto HashInfo = hash_info<DT>;
-               const auto index =
-                  decode_hash_with_size<BSON, DT, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size(),
-                                                                                key.size());
+               const auto index = decode_hash_with_size<BSON, DT, HashInfo, HashInfo.type>::op(
+                  key.data(), key.data() + key.size(), key.size());
                if (index < N) {
                   visit<N>(
                      [&]<size_t I>() {
@@ -1050,8 +1049,8 @@ namespace glz
                                                                      it, stop);
                            }
                            else {
-                              from<BSON, MemberT>::template op<Opts>(
-                                 get_member(value, get<I>(reflect<DT>::values)), tag, ctx, it, stop);
+                              from<BSON, MemberT>::template op<Opts>(get_member(value, get<I>(reflect<DT>::values)),
+                                                                     tag, ctx, it, stop);
                            }
                            if constexpr (Opts.error_on_missing_keys) {
                               fields[I] = true;
@@ -1216,8 +1215,8 @@ namespace glz
             visit<N>(
                [&]<size_t I>() {
                   using MemberT = std::remove_cvref_t<field_t<T, I>>;
-                  from<BSON, MemberT>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), element_tag, ctx,
-                                                        it, stop);
+                  from<BSON, MemberT>::template op<Opts>(get_member(value, get<I>(reflect<T>::values)), element_tag,
+                                                         ctx, it, stop);
                },
                i);
             ++i;
@@ -1231,8 +1230,7 @@ namespace glz
 
    template <class T>
    concept bson_top_level_read_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
-                                   writable_map_t<std::remove_cvref_t<T>> ||
-                                   writable_array_t<std::remove_cvref_t<T>> ||
+                                   writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
                                    glaze_array_t<std::remove_cvref_t<T>>;
 
    // BSON documents are length-prefixed (int32 header = total bytes). The core

@@ -50,8 +50,8 @@ namespace glz
       // Offsets into a 36-character canonical UUID string for each of the 16
       // bytes. The 4-2-2-2-6 byte groups are separated by hyphens at positions
       // 8, 13, 18, 23.
-      inline constexpr std::array<uint8_t, 16> uuid_byte_offsets{
-         0, 2, 4, 6, 9, 11, 14, 16, 19, 21, 24, 26, 28, 30, 32, 34};
+      inline constexpr std::array<uint8_t, 16> uuid_byte_offsets{0,  2,  4,  6,  9,  11, 14, 16,
+                                                                 19, 21, 24, 26, 28, 30, 32, 34};
    }
 
    // Write the 36-character canonical form of `u` into `out`. The caller must
