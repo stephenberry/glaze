@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <map>
 #include <optional>
 #include <string>
@@ -336,7 +337,37 @@ namespace bson_test
       bool operator==(const deep_s&) const = default;
    };
 
+   // --- Types exercising glz::meta-annotated (non-aggregate) reflection ------
+
+   struct meta_renamed_s
+   {
+      int32_t id{};
+      std::string label{};
+      bool operator==(const meta_renamed_s&) const = default;
+   };
+
+   struct meta_nested_s
+   {
+      meta_renamed_s child{};
+      double value{};
+      bool operator==(const meta_nested_s&) const = default;
+   };
+
 } // namespace bson_test
+
+template <>
+struct glz::meta<bson_test::meta_renamed_s>
+{
+   using T = bson_test::meta_renamed_s;
+   static constexpr auto value = glz::object("identifier", &T::id, "display_name", &T::label);
+};
+
+template <>
+struct glz::meta<bson_test::meta_nested_s>
+{
+   using T = bson_test::meta_nested_s;
+   static constexpr auto value = glz::object("child", &T::child, "v", &T::value);
+};
 
 using namespace bson_test;
 
@@ -902,6 +933,27 @@ namespace
          auto ec = glz::read_bson(dst, std::string_view{w.value()});
          expect(ec.ec == glz::error_code::parse_number_failure);
       };
+
+      "uint64-write-above-int64-max-rejected"_test = [] {
+         // BSON's int64 wire type is signed; uint64_t values above INT64_MAX
+         // cannot be represented and must fail the write path with
+         // invalid_length (see write.hpp uint64_t range check).
+         u64_s src{static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1};
+         auto w = glz::write_bson(src);
+         expect(not w.has_value());
+         expect(w.error().ec == glz::error_code::invalid_length);
+      };
+
+      "uint64-write-at-int64-max-ok"_test = [] {
+         // Boundary: INT64_MAX itself must write successfully.
+         u64_s src{static_cast<uint64_t>(std::numeric_limits<int64_t>::max())};
+         auto w = glz::write_bson(src);
+         expect(w.has_value());
+         u64_s dst{};
+         auto ec = glz::read_bson(dst, std::string_view{w.value()});
+         expect(not ec);
+         expect(dst.x == src.x);
+      };
    };
 
    suite bson_unknown_key_tests = [] {
@@ -1283,6 +1335,33 @@ namespace
          monostate_field_s out{};
          expect(not glz::read_bson(out, buf));
          expect(out.x == 99);
+      };
+   };
+
+   // ===========================================================================
+   // glz::meta-annotated (non-aggregate) struct reflection.
+   // Exercises the reflect<T>::keys path where keys come from the meta
+   // specialization rather than aggregate member-name extraction.
+   // ===========================================================================
+   suite bson_meta_annotated_tests = [] {
+      "meta-renamed-keys-roundtrip"_test = [] {
+         expect_roundtrip_equal(meta_renamed_s{7, "alpha"});
+      };
+
+      "meta-renamed-keys-emit-mapped-names"_test = [] {
+         // Wire keys must come from the glz::meta declaration, not the
+         // C++ member names.
+         meta_renamed_s src{1, "x"};
+         auto w = glz::write_bson(src);
+         expect(w.has_value());
+         const auto& buf = w.value();
+         expect(buf.find("identifier") != std::string::npos);
+         expect(buf.find("display_name") != std::string::npos);
+      };
+
+      "meta-nested-struct-roundtrip"_test = [] {
+         // Nested glz::meta struct — inner and outer both use mapped keys.
+         expect_roundtrip_equal(meta_nested_s{meta_renamed_s{42, "beta"}, 3.14});
       };
    };
 

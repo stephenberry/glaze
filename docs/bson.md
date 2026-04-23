@@ -75,6 +75,21 @@ BSON has two integer element types. Glaze picks between them by the target's ran
 
 On read, both int32 and int64 wire tags are accepted for any integer target and range-checked at runtime; mismatched sizes return `error_code::parse_number_failure`. Integer wire tags are also accepted into `float`/`double` targets as a widening conversion.
 
+## Strings
+
+BSON string values (element type 0x02) deserialize into either an owning or a non-owning target:
+
+- **`std::string`** — the reader copies the wire bytes into the target. The decoded value outlives the input buffer.
+- **`std::string_view`** — the reader sets the target to a view that **aliases into the input buffer**. No allocation, no copy. This is a performance win when the input is long-lived (e.g., a memory-mapped file), but it comes with a lifetime rule: **the input buffer must outlive every `std::string_view` that was decoded from it**. Destroying the buffer dangles the view, and any subsequent access is undefined behavior. Prefer `std::string` unless you specifically need to avoid the copy and can guarantee the buffer's lifetime.
+
+```cpp
+// Copy into owning string — safe regardless of buffer lifetime.
+struct record_owned { std::string name{}; };
+
+// Alias into the input buffer — buffer must outlive the record.
+struct record_view { std::string_view name{}; };
+```
+
 ## `glz::bson::object_id`
 
 Opaque 12-byte ObjectId. Glaze treats it as a fixed-size blob — MongoDB assigns meaning to the bytes (timestamp, random, counter) but the library does not generate them.

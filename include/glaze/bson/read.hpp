@@ -371,6 +371,9 @@ namespace glz
             value.assign(sv.data(), sv.size());
          }
          else {
+            // Non-assignable targets (notably std::string_view) alias into
+            // the input buffer — the caller must keep the buffer alive as
+            // long as the view is used. See docs/bson.md "Strings".
             value = sv;
          }
       }

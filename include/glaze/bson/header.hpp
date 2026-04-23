@@ -114,14 +114,14 @@ namespace glz::bson
       std::string pattern;
       std::string options;
 
-      [[nodiscard]] bool operator==(const regex&) const noexcept = default;
+      [[nodiscard]] constexpr bool operator==(const regex&) const noexcept = default;
    };
 
    struct javascript
    {
       std::string code;
 
-      [[nodiscard]] bool operator==(const javascript&) const noexcept = default;
+      [[nodiscard]] constexpr bool operator==(const javascript&) const noexcept = default;
    };
 
    // Opaque 16-byte IEEE 754-2008 decimal128. This is not the same encoding
@@ -162,6 +162,6 @@ namespace glz::bson
       Bytes data{};
       uint8_t subtype = binary_subtype::generic;
 
-      [[nodiscard]] bool operator==(const binary&) const noexcept = default;
+      [[nodiscard]] constexpr bool operator==(const binary&) const noexcept = default;
    };
 }
