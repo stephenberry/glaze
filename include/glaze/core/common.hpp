@@ -4,9 +4,6 @@
 #pragma once
 
 #include <array>
-#include <atomic>
-#include <bitset>
-#include <complex>
 #include <cstddef>
 #include <functional>
 #include <iterator>
@@ -481,6 +478,14 @@ namespace glz
    // With C++26 P2996 reflection, we can reflect non-aggregate types (classes with custom constructors)
    // Without P2996, we require aggregate types for reflection
 #if GLZ_REFLECTION26
+// These std headers are pulled in only on the P2996 path, where the specializations
+// below are needed to prevent auto-reflection from producing ambiguous or incorrect
+// serialization for these stdlib types. Pre-C++26 users don't need them and save the
+// per-TU parse cost of ~80 ms total.
+#include <atomic>
+#include <bitset>
+#include <complex>
+
    // Register std library types as having specified Glaze serialization
    template <class... Ts>
    struct specified<std::tuple<Ts...>> : std::true_type
