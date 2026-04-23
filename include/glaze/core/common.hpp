@@ -29,6 +29,17 @@
 #include "glaze/util/validate.hpp"
 #include "glaze/util/variant.hpp"
 
+// These std headers are only needed on the P2996 path, where the specializations
+// in the `#if GLZ_REFLECTION26` block below (glz::specified<std::complex<T>>,
+// std::bitset<N>, std::atomic<T>) prevent auto-reflection from producing incorrect
+// serialization for these stdlib types. Pre-C++26 users save the per-TU parse cost.
+// Included at file scope, not inside `namespace glz`, so std names stay in ::std.
+#if GLZ_REFLECTION26
+#include <atomic>
+#include <bitset>
+#include <complex>
+#endif
+
 namespace glz
 {
    // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
@@ -478,14 +489,6 @@ namespace glz
    // With C++26 P2996 reflection, we can reflect non-aggregate types (classes with custom constructors)
    // Without P2996, we require aggregate types for reflection
 #if GLZ_REFLECTION26
-// These std headers are pulled in only on the P2996 path, where the specializations
-// below are needed to prevent auto-reflection from producing ambiguous or incorrect
-// serialization for these stdlib types. Pre-C++26 users don't need them and save the
-// per-TU parse cost of ~80 ms total.
-#include <atomic>
-#include <bitset>
-#include <complex>
-
    // Register std library types as having specified Glaze serialization
    template <class... Ts>
    struct specified<std::tuple<Ts...>> : std::true_type
