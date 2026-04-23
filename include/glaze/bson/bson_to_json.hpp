@@ -423,7 +423,7 @@ namespace glz
       // permitted by a literal read of `stop`, but a well-formed input must
       // consume the whole buffer (matches read_bson's exact-fill behavior).
       if (stop != end) {
-         return {ix, error_code::syntax_error};
+         return {ix, error_code::syntax_error, "trailing bytes after document terminator"};
       }
 
       if constexpr (resizable<JSONBuffer>) {

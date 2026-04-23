@@ -156,7 +156,9 @@ The container type is your choice — `std::vector<std::byte>`, `std::vector<uin
 
 ## `glz::uuid`
 
-`glz::uuid` is a general-purpose 16-byte UUID (RFC 9562) that lives in `glaze/util/uuid.hpp` and works with every Glaze format. In BSON it auto-maps to binary subtype 0x04 (canonical UUID). The reader also accepts subtype 0x03 (`uuid_old`) for interop with older drivers; the writer always emits 0x04.
+`glz::uuid` is a 16-byte UUID (RFC 9562) defined in `glaze/util/uuid.hpp`. Today a custom serializer exists only for BSON: on write it emits binary subtype 0x04 (canonical RFC 9562 byte order); on read it accepts 0x04 and rejects 0x03 (`uuid_old`) with `error_code::syntax_error`. 0x03 is refused deliberately — its byte layout is driver-dependent (Java, C#, and Python historically laid the same UUID out in incompatible orders), so decoding without knowing the origin driver would silently scramble the bytes. To consume legacy 0x03 data, re-encode to 0x04 at the source, or read the field as `glz::bson::binary<...>` and reorder the bytes yourself.
+
+In other Glaze formats (JSON, BEVE, CBOR, JSONB, MsgPack, …) `glz::uuid` has no dedicated specialization — it falls through to aggregate reflection over its 16-byte array and serializes as `{"bytes":[...]}`. Round-trips work, but the wire shape is not the canonical hyphenated string. If you need the textual form in those formats, use `glz::to_string(uuid)` / `glz::parse_uuid` around a `std::string` field.
 
 ```cpp
 #include "glaze/util/uuid.hpp"

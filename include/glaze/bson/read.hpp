@@ -1243,7 +1243,7 @@ namespace glz
       GLZ_ALWAYS_INLINE error_ctx enforce_exact_fill(const Buffer& buffer, error_ctx ec) noexcept
       {
          if (!ec && ec.count != buffer.size()) [[unlikely]] {
-            return {ec.count, error_code::syntax_error};
+            return {ec.count, error_code::syntax_error, "trailing bytes after document terminator"};
          }
          return ec;
       }

@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <cassert>
 #include <charconv>
 #include <chrono>
 #include <cstdint>
@@ -44,10 +43,10 @@
 //   - std::map<std::string, T> keys
 //   - bson::regex::pattern and bson::regex::options
 // Strings passed in these fields must not contain an embedded NUL; otherwise
-// the resulting wire bytes are malformed (the reader will terminate the
-// cstring at the first NUL and misinterpret subsequent bytes). Struct field
-// names are compile-time safe. Debug builds assert on this; release builds
-// trust the caller for zero write-path overhead.
+// the resulting wire bytes are malformed and a downstream read will terminate
+// the cstring at the first NUL and fail with a syntax_error when the trailing
+// bytes no longer parse as a valid element stream. Struct field names are
+// safe by construction — they come from reflected identifiers.
 //
 // Caveat on nested optionals: std::optional<std::optional<T>> loses the
 // outer/inner distinction on the wire. Both `nullopt` and `optional{nullopt}`
@@ -147,8 +146,6 @@ namespace glz
       GLZ_ALWAYS_INLINE bool write_element_prefix(is_context auto& ctx, uint8_t type_byte, std::string_view key, B& b,
                                                   size_t& ix) noexcept
       {
-         assert(std::memchr(key.data(), 0, key.size()) == nullptr &&
-                "BSON cstring key must not contain embedded NUL");
          if (!ensure_space(ctx, b, ix + 2 + key.size() + write_padding_bytes)) [[unlikely]] {
             return false;
          }
@@ -355,9 +352,14 @@ namespace glz
 
    // --- Enums ----------------------------------------------------------------
    //
-   // Serialized as their underlying integer. Glaze-reflected enum names are
-   // only emitted when `reflect_enums` is on — not applicable for BSON v1,
-   // which has no string enum convention on the wire.
+   // Always emitted as the underlying integer. `Opts.reflect_enums` is
+   // intentionally not honored — JSON (which does honor it and emits the
+   // reflected name as a string) and BSON will therefore produce different
+   // wire shapes from the same shared `opts`. This is a deliberate interop
+   // choice, not a spec constraint: BSON strings (type 0x02) can carry any
+   // UTF-8 name, but MongoDB and other driver ecosystems expect integer-
+   // backed enums on the wire, and emitting names here would silently
+   // break cross-driver round-trips.
    template <class T>
       requires(std::is_enum_v<T>)
    struct to<BSON, T>
@@ -452,10 +454,6 @@ namespace glz
       template <auto Opts>
       static void op(const bson::regex& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
-         assert(std::memchr(value.pattern.data(), 0, value.pattern.size()) == nullptr &&
-                "BSON regex pattern is a cstring and must not contain embedded NUL");
-         assert(std::memchr(value.options.data(), 0, value.options.size()) == nullptr &&
-                "BSON regex options is a cstring and must not contain embedded NUL");
          if (!ensure_space(ctx, b, ix + value.pattern.size() + value.options.size() + 2 + write_padding_bytes))
             [[unlikely]] {
             return;
