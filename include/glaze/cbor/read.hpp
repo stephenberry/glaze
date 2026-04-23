@@ -5,6 +5,7 @@
 
 #include "glaze/cbor/header.hpp"
 #include "glaze/cbor/skip.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
