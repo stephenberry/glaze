@@ -19,6 +19,10 @@ namespace glz
       T& value;
    };
 
+   template <class T>
+      requires(range<T> && pair_t<range_value_t<T>>)
+   flatten_map_wrapper(T&) -> flatten_map_wrapper<T>;
+
    template <auto MemPtr>
    constexpr auto flatten_map_impl() noexcept
    {

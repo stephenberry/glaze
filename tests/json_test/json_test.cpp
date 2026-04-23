@@ -1168,6 +1168,31 @@ suite container_types = [] {
       expect(not glz::write_json(glz::flatten_map<&flatten_map_box<decltype(entries)>::map>(vec_box), buffer));
       expect(buffer == R"([1,2,"a",3,4,"b"])") << buffer;
    };
+   "flatten_map_wrapper top-level map"_test = [] {
+      using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+      map_t map{};
+      map[{1, 2}] = "example";
+
+      std::string buffer{};
+      expect(not glz::write_json(glz::flatten_map_wrapper{map}, buffer));
+      expect(buffer == R"([1,2,"example"])") << buffer;
+
+      map_t parsed{};
+      auto wrapped = glz::flatten_map_wrapper{parsed};
+      expect(not glz::read_json(wrapped, buffer));
+      expect(parsed == map);
+   };
+   "flatten_map_wrapper top-level multi entry"_test = [] {
+      using map_t = std::unordered_map<std::pair<int, int>, std::string, pair_hash>;
+
+      map_t parsed{};
+      auto wrapped = glz::flatten_map_wrapper{parsed};
+      expect(not glz::read_json(wrapped, R"([1,2,"a",3,4,"b"])"));
+      expect(parsed.size() == size_t{2});
+      expect(parsed.at({1, 2}) == "a");
+      expect(parsed.at({3, 4}) == "b");
+   };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
       for (auto& item : deq) item = rand();
