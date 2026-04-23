@@ -2,7 +2,11 @@
 
 `record/recorder.hpp` provides an efficient recorder for mixed data types. The template argument takes all the supported types. The recorder stores the data as a variant of deques of those types. `std::deque` is used to avoid the cost of reallocating when a `std::vector` would grow, and typically a recorder is used in cases when the length is unknown.
 
+The recorder is not pulled in by `glaze/glaze.hpp` — include `glaze/record/recorder.hpp` directly to use it.
+
 ```c++
+#include "glaze/record/recorder.hpp"
+
 glz::recorder<double, float> rec;
 
 double x = 0.0;
