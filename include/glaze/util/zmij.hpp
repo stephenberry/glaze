@@ -38,6 +38,12 @@
 #  define ZMIJ_USE_SIMD 1
 #endif
 
+// Non-finite output format for zmij::detail::write. 0 (default) emits "null"
+// to stay JSON-compliant; =1 restores upstream zmij behavior ("inf" / "nan").
+#ifndef GLZ_ZMIJ_EMIT_INF_NAN
+#  define GLZ_ZMIJ_EMIT_INF_NAN 0
+#endif
+
 #ifdef ZMIJ_USE_NEON
 #elif defined(__ARM_NEON) || defined(_M_ARM64)
 #  define ZMIJ_USE_NEON ZMIJ_USE_SIMD
@@ -976,8 +982,16 @@ namespace glz::zmij
          bool is_normal = unsigned(bin_exp - 1) < unsigned(traits::exp_mask - 1);
          if (!is_normal) [[ZMIJ_UNLIKELY]] {
             if (bin_exp != 0) {
+#if GLZ_ZMIJ_EMIT_INF_NAN
                memcpy(buffer, bin_sig == 0 ? "inf" : "nan", 4);
                return buffer + 3;
+#else
+               // Undo the speculative '-' for sign-bit-set NaN/Inf: JSON "null"
+               // never carries a sign.
+               buffer -= traits::is_negative(bits);
+               memcpy(buffer, "null", 4);
+               return buffer + 4;
+#endif
             }
             if (bin_sig == 0) {
                memcpy(buffer, "0", 2);
@@ -1063,7 +1077,8 @@ namespace glz::zmij
 namespace glz
 {
    // JSON-compliant float serializer. Caller must provide a buffer of at least
-   // zmij::double_buffer_size (34) bytes. Non-finite inputs emit "null".
+   // zmij::double_buffer_size (34) bytes. Non-finite inputs emit "null" (gated
+   // by GLZ_ZMIJ_EMIT_INF_NAN).
    //
    // OptSize=false (default): uses the full ~17 KB pow-10 lookup tables for peak throughput.
    // OptSize=true:             drops the tables (recomputed on the fly) for size-constrained
@@ -1080,20 +1095,6 @@ namespace glz
    inline char* to_chars(char* buf, T val) noexcept
    {
       static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>);
-      using Raw = std::conditional_t<std::is_same_v<T, float>, uint32_t, uint64_t>;
-      const Raw bits = std::bit_cast<Raw>(val);
-      constexpr Raw exp_mask = []() constexpr {
-         if constexpr (std::is_same_v<T, float>) {
-            return Raw{0x7F800000u};
-         }
-         else {
-            return Raw{0x7FF0000000000000ull};
-         }
-      }();
-      if ((bits & exp_mask) == exp_mask) [[unlikely]] {
-         std::memcpy(buf, "null", 4);
-         return buf + 4;
-      }
       return zmij::detail::write<T, OptSize>(val, buf);
    }
 }
