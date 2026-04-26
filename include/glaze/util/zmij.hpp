@@ -130,7 +130,7 @@ static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE);
 #endif
 
 // Size-vs-speed is controlled per call via the `OptSize` template parameter
-// on glz::zmij::to_chars / detail::write / to_decimal — no global macro.
+// on glz::zmij::to_chars / detail::write / to_decimal; no global macro.
 
 #if ZMIJ_HAS_ATTRIBUTE(always_inline)
 #  define ZMIJ_INLINE __attribute__((always_inline)) inline
@@ -1077,16 +1077,17 @@ namespace glz::zmij
 namespace glz
 {
    // JSON-compliant float serializer. Caller must provide a buffer of at least
-   // zmij::double_buffer_size (34) bytes. Non-finite inputs emit "null" (gated
-   // by GLZ_ZMIJ_EMIT_INF_NAN).
+   // zmij::float_buffer_size (17) bytes for float, zmij::double_buffer_size
+   // (34) bytes for double. Non-finite inputs emit "null" (gated by
+   // GLZ_ZMIJ_EMIT_INF_NAN).
    //
    // OptSize=false (default): uses the full ~17 KB pow-10 lookup tables for peak throughput.
    // OptSize=true:             drops the tables (recomputed on the fly) for size-constrained
-   //                           builds — wired to Glaze's is_size_optimized(Opts) flag.
+   //                           builds; wired to Glaze's is_size_optimized(Opts) flag.
    // Both instantiations can coexist in a single binary.
    //
    // Returns a pointer past the last written character. Nothing is promised
-   // about *end — zmij's branchless fixed-point shuffle may scribble one byte
+   // about *end. zmij's branchless fixed-point shuffle may scribble one byte
    // past the returned pointer (a '.' that's excluded from the returned
    // length). Callers who need a null-terminated C-string must write '\0' at
    // *end themselves. Glaze's JSON writer doesn't care: buffer_traits::finalize

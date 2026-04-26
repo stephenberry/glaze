@@ -265,7 +265,7 @@ int main()
    }
    std::printf("round-tripped %d random finite floats (glz::to_chars)\n", f_tested);
 
-   // --- JSON-envelope fuzz (smaller sample — covers the full write+read) -
+   // --- JSON-envelope fuzz (smaller sample; covers the full write+read) -
    {
       std::uniform_int_distribution<uint64_t> dist;
       for (int i = 0; i < 10000; ++i) {

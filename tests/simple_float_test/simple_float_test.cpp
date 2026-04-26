@@ -428,7 +428,7 @@ suite random_double_tests = [] {
             continue;
          }
 
-         // Serialize with dragonbox, then parse with both parsers
+         // Serialize with glz::to_chars, then parse with both parsers
          char buf[64]{};
          char* end = glz::to_chars(buf, value);
          *end = '\0';

@@ -7,7 +7,7 @@
 // Uses minimal lookup tables (~1KB) instead of fast_float (~20KB+), trading
 // some throughput for a much smaller binary.
 // Suitable for embedded systems and bare-metal environments.
-// (Serialization is handled by glz::to_chars in glaze/util/zmij.hpp — with
+// (Serialization is handled by glz::to_chars in glaze/util/zmij.hpp; with
 // `OptSize=true` it offers a similarly small footprint at higher throughput.)
 
 #include <charconv>
@@ -1022,7 +1022,7 @@ namespace glz::simple_float
          // Extended range using long double (80-bit or 128-bit on some
          // platforms). On platforms where long double is the same as double
          // (e.g. ARM64 macOS, MSVC) this path offers no extra precision and
-         // can mis-round hard cases by 1 ULP — skip it and let the 128-bit
+         // can mis-round hard cases by 1 ULP; skip it and let the 128-bit
          // correctly-rounded slow path handle exp10 outside [-22, 22].
          if constexpr (std::numeric_limits<long double>::digits > std::numeric_limits<double>::digits) {
             if (exp10 >= -45 && exp10 <= 38 && mantissa != 0) {
