@@ -3,7 +3,8 @@
 //
 // Header-only port of Victor Zverovich's zmij library for float serialization.
 //  https://github.com/vitaut/zmij
-// Distributed under the MIT license (see LICENSE-zmij) or alternatively
+// Distributed under the upstream MIT license
+// (see https://github.com/vitaut/zmij/blob/main/LICENSE) or alternatively
 // the Boost Software License, Version 1.0.
 // Copyright (c) 2025 - present, Victor Zverovich
 //
