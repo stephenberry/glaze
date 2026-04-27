@@ -23,14 +23,11 @@
 
 #pragma once
 
-#include <concepts>
-
-#include <assert.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
 #include <bit>
+#include <cassert>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <type_traits>
@@ -105,40 +102,18 @@ static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE);
 #else
 #  define ZMIJ_HAS_BUILTIN(x) 0
 #endif
-#ifdef __has_attribute
-#  define ZMIJ_HAS_ATTRIBUTE(x) __has_attribute(x)
-#else
-#  define ZMIJ_HAS_ATTRIBUTE(x) 0
-#endif
-#ifdef __has_cpp_attribute
-#  define ZMIJ_HAS_CPP_ATTRIBUTE(x) __has_cpp_attribute(x)
-#else
-#  define ZMIJ_HAS_CPP_ATTRIBUTE(x) 0
-#endif
-
-#if ZMIJ_HAS_CPP_ATTRIBUTE(likely) && ZMIJ_HAS_CPP_ATTRIBUTE(unlikely)
-#  define ZMIJ_LIKELY likely
-#  define ZMIJ_UNLIKELY unlikely
-#else
-#  define ZMIJ_LIKELY
-#  define ZMIJ_UNLIKELY
-#endif
-
-#if ZMIJ_HAS_CPP_ATTRIBUTE(maybe_unused)
-#  define ZMIJ_MAYBE_UNUSED maybe_unused
-#else
-#  define ZMIJ_MAYBE_UNUSED
-#endif
 
 // Size-vs-speed is controlled per call via the `OptSize` template parameter
 // on glz::zmij::to_chars / detail::write / to_decimal; no global macro.
 
-#if ZMIJ_HAS_ATTRIBUTE(always_inline)
-#  define ZMIJ_INLINE __attribute__((always_inline)) inline
-#elif ZMIJ_MSC_VER
+// Forced inlining. MSVC's __forceinline is honored on every MSVC version,
+// whereas Glaze's GLZ_ALWAYS_INLINE relies on [[msvc::forceinline]] which
+// only landed in VS 2022 17.6. Keep zmij on the older spelling to preserve
+// performance on the full MSVC support range.
+#if defined(_MSC_VER) && !defined(__clang__)
 #  define ZMIJ_INLINE __forceinline
 #else
-#  define ZMIJ_INLINE inline
+#  define ZMIJ_INLINE __attribute__((always_inline)) inline
 #endif
 
 #ifdef __GNUC__
@@ -246,9 +221,9 @@ namespace glz::zmij
          uint64_t hi;
          uint64_t lo;
 
-         [[ZMIJ_MAYBE_UNUSED]] explicit constexpr operator uint64_t() const noexcept { return lo; }
+         [[maybe_unused]] explicit constexpr operator uint64_t() const noexcept { return lo; }
 
-         [[ZMIJ_MAYBE_UNUSED]] constexpr auto operator>>(int shift) const noexcept -> uint128
+         [[maybe_unused]] constexpr auto operator>>(int shift) const noexcept -> uint128
          {
             if (shift == 32) return {hi >> 32, (hi << 32) | (lo >> 32)};
             assert(shift >= 64 && shift < 128);
@@ -875,7 +850,7 @@ namespace glz::zmij
          uint64_t even = 1 - (bin_sig & 1);
          constexpr int extra_shift = exp_shift_table<OptSize>::extra_shift;
 
-         if (!regular) [[ZMIJ_UNLIKELY]] {
+         if (!regular) [[unlikely]] {
             int dec_exp = compute_dec_exp(bin_exp, false);
             unsigned char shift = compute_exp_shift(bin_exp, dec_exp + 1) + extra_shift;
             uint128 pow10 = c.pow10_significands[-dec_exp - 1];
@@ -933,7 +908,7 @@ namespace glz::zmij
          integral += round_up;
 
          int digit = int(umul128_add_hi64(fractional, 10, c.biased_half));
-         if (fractional == (1ull << 62)) [[ZMIJ_UNLIKELY]]
+         if (fractional == (1ull << 62)) [[unlikely]]
             digit = 2;
          return {integral, dec_exp, digit, (round_up + round_down) == 0};
       }
@@ -949,7 +924,7 @@ namespace glz::zmij
       auto bin_exp = traits::get_exp(bits);
       auto bin_sig = traits::get_sig(bits);
       auto negative = traits::is_negative(bits);
-      if (bin_exp == 0 || bin_exp == traits::exp_mask) [[ZMIJ_UNLIKELY]] {
+      if (bin_exp == 0 || bin_exp == traits::exp_mask) [[unlikely]] {
          if (bin_exp != 0) return {int64_t(bin_sig), int(~0u >> 1), negative};
          if (bin_sig == 0) return {0, 0, negative};
          bin_exp = 1;
@@ -981,7 +956,7 @@ namespace glz::zmij
 
          to_decimal_result dec;
          bool is_normal = unsigned(bin_exp - 1) < unsigned(traits::exp_mask - 1);
-         if (!is_normal) [[ZMIJ_UNLIKELY]] {
+         if (!is_normal) [[unlikely]] {
             if (bin_exp != 0) {
 #if GLZ_ZMIJ_EMIT_INF_NAN
                memcpy(buffer, bin_sig == 0 ? "inf" : "nan", 4);
@@ -1015,7 +990,7 @@ namespace glz::zmij
          }
          bool extra_digit = dec.sig >= threshold;
          int dec_exp = dec.exp + traits::max_digits10 - 2 + extra_digit;
-         if (traits::num_bits == 32 && dec.sig < uint32_t(1e6)) [[ZMIJ_UNLIKELY]] {
+         if (traits::num_bits == 32 && dec.sig < uint32_t(1e6)) [[unlikely]] {
             dec.sig = 10 * dec.sig + (dec.has_last_digit ? dec.last_digit : 0);
             dec.has_last_digit = false;
             --dec_exp;
