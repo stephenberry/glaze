@@ -33,74 +33,74 @@
 #include <type_traits>
 
 #ifndef ZMIJ_USE_SIMD
-#  define ZMIJ_USE_SIMD 1
+#define ZMIJ_USE_SIMD 1
 #endif
 
 // Non-finite output format for zmij::detail::write. 0 (default) emits "null"
 // to stay JSON-compliant; =1 restores upstream zmij behavior ("inf" / "nan").
 #ifndef GLZ_ZMIJ_EMIT_INF_NAN
-#  define GLZ_ZMIJ_EMIT_INF_NAN 0
+#define GLZ_ZMIJ_EMIT_INF_NAN 0
 #endif
 
 #ifdef ZMIJ_USE_NEON
 #elif defined(__ARM_NEON) || defined(_M_ARM64)
-#  define ZMIJ_USE_NEON ZMIJ_USE_SIMD
+#define ZMIJ_USE_NEON ZMIJ_USE_SIMD
 #else
-#  define ZMIJ_USE_NEON 0
+#define ZMIJ_USE_NEON 0
 #endif
 #if ZMIJ_USE_NEON
-#  include <arm_neon.h>
+#include <arm_neon.h>
 #endif
 
 #ifdef ZMIJ_USE_SSE
 #elif defined(__SSE2__)
-#  define ZMIJ_USE_SSE ZMIJ_USE_SIMD
+#define ZMIJ_USE_SSE ZMIJ_USE_SIMD
 #elif defined(_M_AMD64) || (defined(_M_IX86_FP) && _M_IX86_FP == 2)
-#  define ZMIJ_USE_SSE ZMIJ_USE_SIMD
+#define ZMIJ_USE_SSE ZMIJ_USE_SIMD
 #else
-#  define ZMIJ_USE_SSE 0
+#define ZMIJ_USE_SSE 0
 #endif
 #if ZMIJ_USE_SSE
-#  include <immintrin.h>
+#include <immintrin.h>
 #endif
 
 #ifdef ZMIJ_USE_SSE4_1
 static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE);
 #elif defined(__SSE4_1__) || defined(__AVX__)
-#  define ZMIJ_USE_SSE4_1 ZMIJ_USE_SSE
+#define ZMIJ_USE_SSE4_1 ZMIJ_USE_SSE
 #else
-#  define ZMIJ_USE_SSE4_1 0
+#define ZMIJ_USE_SSE4_1 0
 #endif
 
 #ifdef __aarch64__
-#  define ZMIJ_AARCH64 1
+#define ZMIJ_AARCH64 1
 #else
-#  define ZMIJ_AARCH64 0
+#define ZMIJ_AARCH64 0
 #endif
 
 #ifdef __x86_64__
-#  define ZMIJ_X86_64 1
+#define ZMIJ_X86_64 1
 #else
-#  define ZMIJ_X86_64 0
+#define ZMIJ_X86_64 0
 #endif
 
 #ifdef __clang__
-#  define ZMIJ_CLANG 1
+#define ZMIJ_CLANG 1
 #else
-#  define ZMIJ_CLANG 0
+#define ZMIJ_CLANG 0
 #endif
 
 #ifdef _MSC_VER
-#  define ZMIJ_MSC_VER _MSC_VER
-#  include <intrin.h>
+#define ZMIJ_MSC_VER _MSC_VER
+#include <intrin.h>
 #else
-#  define ZMIJ_MSC_VER 0
+#define ZMIJ_MSC_VER 0
 #endif
 
 #if defined(__has_builtin) && !defined(ZMIJ_NO_BUILTINS)
-#  define ZMIJ_HAS_BUILTIN(x) __has_builtin(x)
+#define ZMIJ_HAS_BUILTIN(x) __has_builtin(x)
 #else
-#  define ZMIJ_HAS_BUILTIN(x) 0
+#define ZMIJ_HAS_BUILTIN(x) 0
 #endif
 
 // Size-vs-speed is controlled per call via the `OptSize` template parameter
@@ -111,34 +111,34 @@ static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE);
 // only landed in VS 2022 17.6. Keep zmij on the older spelling to preserve
 // performance on the full MSVC support range.
 #if defined(_MSC_VER) && !defined(__clang__)
-#  define ZMIJ_INLINE __forceinline
+#define ZMIJ_INLINE __forceinline
 #else
-#  define ZMIJ_INLINE __attribute__((always_inline)) inline
+#define ZMIJ_INLINE __attribute__((always_inline)) inline
 #endif
 
 #ifdef __GNUC__
-#  define ZMIJ_ASM(x) asm x
+#define ZMIJ_ASM(x) asm x
 #else
-#  define ZMIJ_ASM(x)
+#define ZMIJ_ASM(x)
 #endif
 
 #ifdef ZMIJ_CONST_DECL
 #elif ZMIJ_AARCH64
-#  define ZMIJ_CONST_DECL
+#define ZMIJ_CONST_DECL
 #else
-#  define ZMIJ_CONST_DECL static constexpr
+#define ZMIJ_CONST_DECL static constexpr
 #endif
 
 #if defined(__clang__)
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wsign-compare"
-#  pragma clang diagnostic ignored "-Wunused-parameter"
-#  pragma clang diagnostic ignored "-Wpedantic"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-compare"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wpedantic"
 #elif defined(__GNUC__)
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wsign-compare"
-#  pragma GCC diagnostic ignored "-Wunused-parameter"
-#  pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wpedantic"
 #endif
 
 namespace glz::zmij
@@ -165,9 +165,8 @@ namespace glz::zmij
 #elif ZMIJ_MSC_VER
          return _byteswap_uint64(x);
 #else
-         return ((x & 0xff00000000000000) >> 56) | ((x & 0x00ff000000000000) >> 40) |
-                ((x & 0x0000ff0000000000) >> 24) | ((x & 0x000000ff00000000) >> +8) |
-                ((x & 0x00000000ff000000) << +8) | ((x & 0x0000000000ff0000) << 24) |
+         return ((x & 0xff00000000000000) >> 56) | ((x & 0x00ff000000000000) >> 40) | ((x & 0x0000ff0000000000) >> 24) |
+                ((x & 0x000000ff00000000) >> +8) | ((x & 0x00000000ff000000) << +8) | ((x & 0x0000000000ff0000) << 24) |
                 ((x & 0x000000000000ff00) << 40) | ((x & 0x00000000000000ff) << 56);
 #endif
       }
@@ -233,9 +232,9 @@ namespace glz::zmij
 
 #ifdef ZMIJ_USE_INT128
 #elif defined(__SIZEOF_INT128__)
-#  define ZMIJ_USE_INT128 1
+#define ZMIJ_USE_INT128 1
 #else
-#  define ZMIJ_USE_INT128 0
+#define ZMIJ_USE_INT128 0
 #endif
 
 #if ZMIJ_USE_INT128
@@ -255,15 +254,17 @@ namespace glz::zmij
 #if ZMIJ_USE_INT128
          return uint128_t(x) * y;
 #else
-#  if defined(_M_AMD64)
+#if defined(_M_AMD64)
          if !consteval {
             uint64_t hi = 0;
             uint64_t lo = _umul128(x, y, &hi);
             return {hi, lo};
          }
-#  elif defined(_M_ARM64)
-         if !consteval { return {__umulh(x, y), x * y}; }
-#  endif
+#elif defined(_M_ARM64)
+         if !consteval {
+            return {__umulh(x, y), x * y};
+         }
+#endif
          uint64_t a = x >> 32;
          uint64_t b = uint32_t(x);
          uint64_t c = y >> 32;
@@ -376,9 +377,9 @@ namespace glz::zmij
          {0xd94ad8b1c7380874, 0x18375281ae7822bc},
       };
       inline constexpr uint32_t pow10_fixups[] = {0x0a4e363f, 0x00001840, 0x00006400, 0x24200040, 0x00000000,
-                                           0x0c000000, 0x82c81380, 0x5e4ce01f, 0xd730f60f, 0x0000001b,
-                                           0x00000000, 0xcdf7fffc, 0x6e8201d8, 0x40cd3fd1, 0xdb642501,
-                                           0x00000d0d, 0x14042400, 0x53713840, 0x11781db4, 0x00000000};
+                                                  0x0c000000, 0x82c81380, 0x5e4ce01f, 0xd730f60f, 0x0000001b,
+                                                  0x00000000, 0xcdf7fffc, 0x6e8201d8, 0x40cd3fd1, 0xdb642501,
+                                                  0x00000d0d, 0x14042400, 0x53713840, 0x11781db4, 0x00000000};
 
       template <bool OptSize>
       struct pow10_significand_table
@@ -400,8 +401,7 @@ namespace glz::zmij
             uint64_t c1 = h1 + h.hi * m;
             uint64_t c2 = (c1 < h1) + umul128_hi64(h.hi, m);
 
-            uint128 result =
-               (c2 >> 63) != 0 ? uint128{c2, c1} : uint128{c2 << 1 | c1 >> 63, c1 << 1 | c0 >> 63};
+            uint128 result = (c2 >> 63) != 0 ? uint128{c2, c1} : uint128{c2 << 1 | c1 >> 63, c1 << 1 | c0 >> 63};
             result.lo -= (pow10_fixups[i >> 5] >> (i & 31)) & 1;
             return result;
          }
@@ -431,7 +431,9 @@ namespace glz::zmij
             const uint64_t* hi = data + num_pow10s + dec_exp_min - 1;
             const uint64_t* lo = hi + num_pow10s;
 
-            if !consteval { ZMIJ_ASM(volatile("" : "+r"(hi), "+r"(lo))); }
+            if !consteval {
+               ZMIJ_ASM(volatile("" : "+r"(hi), "+r"(lo)));
+            }
             return {hi[-dec_exp], lo[-dec_exp]};
          }
       };
@@ -614,14 +616,14 @@ namespace glz::zmij
 #elif ZMIJ_USE_SSE
          uint128 div100 = splat32(div100_sig);
          uint128 div10 = splat16((1 << 16) / 10 + 1);
-#  if ZMIJ_USE_SSE4_1
+#if ZMIJ_USE_SSE4_1
          uint128 neg100 = splat32(neg100_v);
          uint128 neg10 = splat16((1 << 8) - 10);
          uint128 bswap = uint128{pack8(15, 14, 13, 12, 11, 10, 9, 8), pack8(7, 6, 5, 4, 3, 2, 1, 0)};
-#  else
+#else
          uint128 hundred = splat32(100);
          uint128 moddiv10 = splat16(10 * (1 << 8) - 1);
-#  endif
+#endif
          uint128 div10k = splat64(div10k_sig);
          uint128 neg10k = splat64(neg10k_v);
          uint128 zeros = splat64(zeros_v);
@@ -655,19 +657,18 @@ namespace glz::zmij
          uint64_t abbccddee = uint64_t(umul128(value, c.mul_const) >> 90);
          uint64_t ffgghhii = value - abbccddee * hundred_million;
 
-         uint64x1_t ffgghhii_bbccddee_64 = {
-            reverse_hi_lo ? (abbccddee << 32) | ffgghhii : (ffgghhii << 32) | abbccddee};
+         uint64x1_t ffgghhii_bbccddee_64 = {reverse_hi_lo ? (abbccddee << 32) | ffgghhii
+                                                          : (ffgghhii << 32) | abbccddee};
          int32x2_t bbccddee_ffgghhii = vreinterpret_s32_u64(ffgghhii_bbccddee_64);
 
-         int32x2_t bbcc_ffgg = vreinterpret_s32_u32(vshr_n_u32(
-            vreinterpret_u32_s32(vqdmulh_n_s32(bbccddee_ffgghhii, c.multipliers32[0])), 9));
+         int32x2_t bbcc_ffgg = vreinterpret_s32_u32(
+            vshr_n_u32(vreinterpret_u32_s32(vqdmulh_n_s32(bbccddee_ffgghhii, c.multipliers32[0])), 9));
          int32x2_t ddee_bbcc_hhii_ffgg_32 = vmla_n_s32(bbccddee_ffgghhii, bbcc_ffgg, c.multipliers32[1]);
 
          // AArch64 accepts `vshll_n_u16(x, 0)` as "widen without shift", but
          // ARMv7 VSHLL requires a shift in [1, 15]. vmovl_u16 is the portable
          // name for the same operation and codegens identically on AArch64.
-         int32x4_t ddee_bbcc_hhii_ffgg =
-            vreinterpretq_s32_u32(vmovl_u16(vreinterpret_u16_s32(ddee_bbcc_hhii_ffgg_32)));
+         int32x4_t ddee_bbcc_hhii_ffgg = vreinterpretq_s32_u32(vmovl_u16(vreinterpret_u16_s32(ddee_bbcc_hhii_ffgg_32)));
          return to_bcd_4x4(ddee_bbcc_hhii_ffgg, c);
       }
 
@@ -680,23 +681,21 @@ namespace glz::zmij
       {
          const __m128i div100 = _mm_load_si128(m128ptr(&c.div100));
          const __m128i div10 = _mm_load_si128(m128ptr(&c.div10));
-#  if ZMIJ_USE_SSE4_1
+#if ZMIJ_USE_SSE4_1
          const __m128i neg100 = _mm_load_si128(m128ptr(&c.neg100));
          const __m128i neg10 = _mm_load_si128(m128ptr(&c.neg10));
 
-         __m128i z = _mm_add_epi64(
-            y, _mm_mullo_epi32(neg100, _mm_srli_epi32(_mm_mulhi_epu16(y, div100), 3)));
+         __m128i z = _mm_add_epi64(y, _mm_mullo_epi32(neg100, _mm_srli_epi32(_mm_mulhi_epu16(y, div100), 3)));
          return _mm_add_epi16(z, _mm_mullo_epi16(neg10, _mm_mulhi_epu16(z, div10)));
-#  else
+#else
          const __m128i hundred = _mm_load_si128(m128ptr(&c.hundred));
          const __m128i moddiv10 = _mm_load_si128(m128ptr(&c.moddiv10));
 
          __m128i y_div_100 = _mm_srli_epi16(_mm_mulhi_epu16(y, div100), 3);
          __m128i y_mod_100 = _mm_sub_epi16(y, _mm_mullo_epi16(y_div_100, hundred));
          __m128i z = _mm_or_si128(_mm_slli_epi32(y_mod_100, 16), y_div_100);
-         return _mm_sub_epi16(_mm_slli_epi16(z, 8),
-                              _mm_mullo_epi16(moddiv10, _mm_mulhi_epu16(z, div10)));
-#  endif
+         return _mm_sub_epi16(_mm_slli_epi16(z, 8), _mm_mullo_epi16(moddiv10, _mm_mulhi_epu16(z, div10)));
+#endif
       }
 
       template <bool OptSize>
@@ -706,8 +705,7 @@ namespace glz::zmij
          const __m128i div10k = _mm_load_si128(m128ptr(&c.div10k));
          const __m128i neg10k = _mm_load_si128(m128ptr(&c.neg10k));
          __m128i x = _mm_set_epi64x(bbccddee, ffgghhii);
-         __m128i y = _mm_add_epi64(
-            x, _mm_mul_epu32(neg10k, _mm_srli_epi64(_mm_mul_epu32(x, div10k), div10k_exp)));
+         __m128i y = _mm_add_epi64(x, _mm_mul_epu32(neg10k, _mm_srli_epi64(_mm_mul_epu32(x, div10k), div10k_exp)));
          return to_bcd_4x4(y, c);
       }
 
@@ -724,8 +722,7 @@ namespace glz::zmij
       {
          if (!ZMIJ_USE_SSE && !ZMIJ_USE_NEON) {
             uint64_t abcd_efgh = abcdefgh + neg10k_v * ((abcdefgh * div10k_sig) >> div10k_exp);
-            uint64_t ab_cd_ef_gh =
-               abcd_efgh + neg100_v * (((abcd_efgh * div100_sig) >> div100_exp) & 0x7f0000007f);
+            uint64_t ab_cd_ef_gh = abcd_efgh + neg100_v * (((abcd_efgh * div100_sig) >> div100_exp) & 0x7f0000007f);
             uint64_t a_b_c_d_e_f_g_h =
                ab_cd_ef_gh + neg10_v * (((ab_cd_ef_gh * div10_sig) >> div10_exp) & 0xf000f000f000f);
             uint64_t bcd = is_big_endian ? a_b_c_d_e_f_g_h : bswap64(a_b_c_d_e_f_g_h);
@@ -737,8 +734,7 @@ namespace glz::zmij
 
 #if ZMIJ_USE_NEON
          uint64_t abcd_efgh_64 = abcdefgh + neg10k_v * ((abcdefgh * div10k_sig) >> div10k_exp);
-         int32x4_t abcd_efgh =
-            vcombine_s32(vreinterpret_s32_u64(vcreate_u64(abcd_efgh_64)), vdup_n_s32(0));
+         int32x4_t abcd_efgh = vcombine_s32(vreinterpret_s32_u64(vcreate_u64(abcd_efgh_64)), vdup_n_s32(0));
          uint8x16_t digits_128 = to_bcd_4x4(abcd_efgh, *c);
          uint8x8_t digits = vget_low_u8(digits_128);
          uint64_t bcd = vget_lane_u64(vreinterpret_u64_u8(vrev64_u8(digits)), 0);
@@ -749,8 +745,8 @@ namespace glz::zmij
          int len = unshuffled_bcd ? 8 - ctz(unshuffled_bcd) / 8 : 0;
          return {bswap64(unshuffled_bcd), len};
 #elif ZMIJ_USE_SSE
-         uint64_t abcd_efgh = (abcdefgh << 32) - uint64_t((10000ull << 32) - 1) *
-                                                    ((abcdefgh * div10k_sig) >> div10k_exp);
+         uint64_t abcd_efgh =
+            (abcdefgh << 32) - uint64_t((10000ull << 32) - 1) * ((abcdefgh * div10k_sig) >> div10k_exp);
          uint64_t bcd = _mm_cvtsi128_si64(to_bcd_4x4(_mm_set_epi64x(0, abcd_efgh), *c));
          return {bcd, count_trailing_nonzeros(bcd)};
 #endif
@@ -786,45 +782,43 @@ namespace glz::zmij
          }
          else {
 #if !ZMIJ_USE_NEON && !ZMIJ_USE_SSE
-         uint32_t bbccddee = uint32_t(value / 100'000'000);
-         uint32_t ffgghhii = uint32_t(value % 100'000'000);
-         auto hi = to_bcd8<OptSize>(bbccddee);
-         if (ffgghhii == 0) return {{hi.bcd + zeros_v, zeros_v}, hi.len};
-         auto lo = to_bcd8<OptSize>(ffgghhii);
-         return {{hi.bcd + zeros_v, lo.bcd + zeros_v}, 8 + lo.len};
+            uint32_t bbccddee = uint32_t(value / 100'000'000);
+            uint32_t ffgghhii = uint32_t(value % 100'000'000);
+            auto hi = to_bcd8<OptSize>(bbccddee);
+            if (ffgghhii == 0) return {{hi.bcd + zeros_v, zeros_v}, hi.len};
+            auto lo = to_bcd8<OptSize>(ffgghhii);
+            return {{hi.bcd + zeros_v, lo.bcd + zeros_v}, 8 + lo.len};
 #elif ZMIJ_USE_NEON
-         auto unshuffled_digits = to_unshuffled_digits(value, c);
-         uint8x16_t digits = vrev64q_u8(unshuffled_digits);
-         uint16x8_t str =
-            vaddq_u16(vreinterpretq_u16_u8(digits), vreinterpretq_u16_s8(vdupq_n_s8('0')));
+            auto unshuffled_digits = to_unshuffled_digits(value, c);
+            uint8x16_t digits = vrev64q_u8(unshuffled_digits);
+            uint16x8_t str = vaddq_u16(vreinterpretq_u16_u8(digits), vreinterpretq_u16_s8(vdupq_n_s8('0')));
 
-         // vcgtzq_s8 is AArch64-only; the portable spelling (ARMv7 NEON and
-         // up) is "compare greater-than against a zero vector".
-         uint16x8_t is_not_zero = vreinterpretq_u16_u8(
-            vcgtq_s8(vreinterpretq_s8_u8(digits), vdupq_n_s8(0)));
-         uint64_t zeroes = vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(is_not_zero, 4)), 0);
-         return {str, 16 - (clz(zeroes) >> 2)};
+            // vcgtzq_s8 is AArch64-only; the portable spelling (ARMv7 NEON and
+            // up) is "compare greater-than against a zero vector".
+            uint16x8_t is_not_zero = vreinterpretq_u16_u8(vcgtq_s8(vreinterpretq_s8_u8(digits), vdupq_n_s8(0)));
+            uint64_t zeroes = vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(is_not_zero, 4)), 0);
+            return {str, 16 - (clz(zeroes) >> 2)};
 #else
-         uint32_t abbccddee = uint32_t(value / 100'000'000);
-         uint32_t ffgghhii = uint32_t(value % 100'000'000);
+            uint32_t abbccddee = uint32_t(value / 100'000'000);
+            uint32_t ffgghhii = uint32_t(value % 100'000'000);
 
-         const __m128i zeros = _mm_load_si128(m128ptr(&c.zeros));
-         auto unshuffled_bcd = to_unshuffled_digits(abbccddee, ffgghhii, c);
-#  if ZMIJ_USE_SSE4_1
-         const __m128i bswap = _mm_load_si128(m128ptr(&c.bswap));
-         auto bcd = _mm_shuffle_epi8(unshuffled_bcd, bswap);
-#  else
-         auto bcd = _mm_shuffle_epi32(unshuffled_bcd, _MM_SHUFFLE(0, 1, 2, 3));
-#  endif
+            const __m128i zeros = _mm_load_si128(m128ptr(&c.zeros));
+            auto unshuffled_bcd = to_unshuffled_digits(abbccddee, ffgghhii, c);
+#if ZMIJ_USE_SSE4_1
+            const __m128i bswap = _mm_load_si128(m128ptr(&c.bswap));
+            auto bcd = _mm_shuffle_epi8(unshuffled_bcd, bswap);
+#else
+            auto bcd = _mm_shuffle_epi32(unshuffled_bcd, _MM_SHUFFLE(0, 1, 2, 3));
+#endif
 
-         __m128i mask128 = _mm_cmpgt_epi8(bcd, _mm_setzero_si128());
-         uint64_t mask = _mm_movemask_epi8(mask128);
-#  if defined(__LZCNT__) && !defined(ZMIJ_NO_BUILTINS)
-         int len = 32 - _lzcnt_u32(mask);
-#  else
-         int len = 63 - clz((mask << 1) | 1);
-#  endif
-         return {_mm_or_si128(bcd, zeros), len};
+            __m128i mask128 = _mm_cmpgt_epi8(bcd, _mm_setzero_si128());
+            uint64_t mask = _mm_movemask_epi8(mask128);
+#if defined(__LZCNT__) && !defined(ZMIJ_NO_BUILTINS)
+            int len = 32 - _lzcnt_u32(mask);
+#else
+            int len = 63 - clz((mask << 1) | 1);
+#endif
+            return {_mm_or_si128(bcd, zeros), len};
 #endif
          }
       }
@@ -847,8 +841,8 @@ namespace glz::zmij
 
          constexpr uint64_t log10_2_sig = 78'913;
          constexpr int log10_2_exp = 18;
-         int dec_exp = use_umul128_hi64 ? umul128_hi64(bin_exp, log10_2_sig << (64 - log10_2_exp))
-                                         : compute_dec_exp(bin_exp);
+         int dec_exp =
+            use_umul128_hi64 ? umul128_hi64(bin_exp, log10_2_sig << (64 - log10_2_exp)) : compute_dec_exp(bin_exp);
          uint64_t even = 1 - (bin_sig & 1);
          constexpr int extra_shift = exp_shift_table<OptSize>::extra_shift;
 
@@ -889,8 +883,7 @@ namespace glz::zmij
             uint64_t prod = fractional * 10;
             int digit = int(prod >> extra_shift);
             uint64_t rem = prod & ((1ull << extra_shift) - 1);
-            digit += rem > (1ull << (extra_shift - 1)) ||
-                     (rem == (1ull << (extra_shift - 1)) && (digit & 1));
+            digit += rem > (1ull << (extra_shift - 1)) || (rem == (1ull << (extra_shift - 1)) && (digit & 1));
             return {integral, dec_exp, digit, (round_up + round_down) == 0};
          }
 
@@ -987,8 +980,8 @@ namespace glz::zmij
             dec = {d, dec_exp, last_digit, last_digit != 0};
          }
          else {
-            dec = detail_impl::to_decimal<Float, typename traits::sig_type, OptSize>(
-               bin_sig | traits::implicit_bit, bin_exp, bin_sig != 0, *c);
+            dec = detail_impl::to_decimal<Float, typename traits::sig_type, OptSize>(bin_sig | traits::implicit_bit,
+                                                                                     bin_exp, bin_sig != 0, *c);
          }
          bool extra_digit = dec.sig >= threshold;
          int dec_exp = dec.exp + traits::max_digits10 - 2 + extra_digit;
@@ -1039,9 +1032,8 @@ namespace glz::zmij
          dec_exp = neg ? -dec_exp : dec_exp;
          unsigned hundreds_written = 0;
          if (traits::max_exponent10 >= 100) {
-            uint32_t digit = use_umul128_hi64
-                                ? umul128_hi64(dec_exp, 0x290000000000000)
-                                : (uint32_t(dec_exp) * div100_sig) >> div100_exp;
+            uint32_t digit = use_umul128_hi64 ? umul128_hi64(dec_exp, 0x290000000000000)
+                                              : (uint32_t(dec_exp) * div100_sig) >> div100_exp;
             *buffer = '0' + digit;
             hundreds_written = unsigned(dec_exp >= 100);
             buffer += hundreds_written;
@@ -1087,7 +1079,7 @@ namespace glz
 }
 
 #if defined(__clang__)
-#  pragma clang diagnostic pop
+#pragma clang diagnostic pop
 #elif defined(__GNUC__)
-#  pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
 #endif

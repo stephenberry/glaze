@@ -23,8 +23,8 @@
 #include <vector>
 
 #include "glaze/glaze.hpp"
-#include "glaze/util/zmij.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
+#include "glaze/util/zmij.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;

@@ -1122,5 +1122,4 @@ namespace glz::simple_float
       return {end_ptr, std::errc{}};
    }
 
-
 } // namespace glz::simple_float

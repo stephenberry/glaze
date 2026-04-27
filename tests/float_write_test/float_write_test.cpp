@@ -123,8 +123,7 @@ static void expect_json_roundtrip(T v, const char* label)
    {
       std::string out;
       if (glz::write<glz::opts_size{}>(v, out)) {
-         if (failures < max_logged_failures)
-            std::printf("FAIL glz::write<opts_size> %s (%.17g)\n", label, double(v));
+         if (failures < max_logged_failures) std::printf("FAIL glz::write<opts_size> %s (%.17g)\n", label, double(v));
          ++failures;
          return;
       }
@@ -181,9 +180,19 @@ int main()
       std::nextafter(1.0, 2.0),
       std::nextafter(1.0, 0.0),
       // Values in the dragonbox-vs-zmij fixed/scientific boundary band
-      1e16, 1e17, 1e18, 1e19, 1e20, 1e21,
-      1e-7, 1e-8, 1e-9,
-      1e100, 1e-100, 1e300, 1e-300,
+      1e16,
+      1e17,
+      1e18,
+      1e19,
+      1e20,
+      1e21,
+      1e-7,
+      1e-8,
+      1e-9,
+      1e100,
+      1e-100,
+      1e300,
+      1e-300,
       3.141592653589793,
       2.718281828459045,
       0.1,
@@ -213,9 +222,15 @@ int main()
       -numeric_limits<float>::denorm_min(),
       std::nextafterf(1.0f, 2.0f),
       std::nextafterf(1.0f, 0.0f),
-      1e-7f, 1e-8f, 1e-9f,
-      1e10f, 1e20f, 1e30f,
-      1e-10f, 1e-20f, 1e-30f,
+      1e-7f,
+      1e-8f,
+      1e-9f,
+      1e10f,
+      1e20f,
+      1e30f,
+      1e-10f,
+      1e-20f,
+      1e-30f,
       3.14159265f,
       0.1f,
       0.2f,
