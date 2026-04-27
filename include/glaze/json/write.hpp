@@ -469,10 +469,11 @@ namespace glz
                   return 64;
                }
                else if constexpr (sizeof(T) > 4) {
-                  return 32;
+                  // zmij scratch + 4 for optional quotes and trailing comma.
+                  return zmij::double_buffer_size + 4;
                }
                else {
-                  return 24;
+                  return zmij::float_buffer_size + 4;
                }
             }
             else if constexpr (sizeof(T) > 4) {

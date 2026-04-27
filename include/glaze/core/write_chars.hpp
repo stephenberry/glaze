@@ -28,11 +28,11 @@
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/opts.hpp"
-#include "glaze/util/dtoa.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/itoa.hpp"
 #include "glaze/util/itoa_40kb.hpp"
 #include "glaze/util/simple_float.hpp"
+#include "glaze/util/zmij.hpp"
 
 namespace glz
 {
@@ -306,11 +306,13 @@ namespace glz
                   static_assert(false_v<V>, "invalid float_max_write_precision");
                }
             }
-            // Size optimization: use simple_float::to_chars to avoid dragonbox lookup tables (~20KB)
-            // This works on all platforms including bare-metal
+            // Size optimization: pass OptSize=true so the ~17KB pow-10 lookup
+            // tables are dropped (recomputed on the fly). Much faster than the
+            // old simple_float::to_chars path at essentially the same footprint.
+            // See discussion #2519.
             else if constexpr (is_size_optimized(Opts) && is_any_of<V, float, double>) {
                const auto start = reinterpret_cast<char*>(&b[ix]);
-               const auto end = simple_float::to_chars(start, V(value));
+               const auto end = glz::to_chars<V, /*OptSize=*/true>(start, V(value));
                ix += size_t(end - start);
             }
             else if constexpr (is_any_of<V, float, double>) {

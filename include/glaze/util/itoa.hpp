@@ -308,6 +308,6 @@ namespace glz
       return to_chars(buf + (val < 0), uint16_t(val ^ (val >> 15)) - (val >> 15));
    }
 
-   // Keep char_table in glz namespace for dtoa.hpp compatibility
+   // Shared two-digit char table; re-exposed at glz scope for callers that need it.
    inline constexpr auto& char_table = itoa_impl::char_table;
 } // namespace glz
