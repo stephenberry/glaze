@@ -478,18 +478,20 @@ namespace glz::zmij
             for (int e = min_dec_exp; e <= traits::max_exponent10 && enable; ++e) {
                uint64_t abs_e = e >= 0 ? e : -e;
                uint64_t bc = abs_e % 100;
-               uint64_t val = ((bc % 10 + '0') << 8) | (bc / 10 + '0');
+               // Pack 1, 2, or 3 digit bytes into `val` based on magnitude.
+               uint64_t val = bc % 10 + '0';
+               if (abs_e >= 10) val = (val << 8) | (bc / 10 + '0');
                if (uint64_t a = abs_e / 100) val = (val << 8) | (a + '0');
-               // Glaze emits uppercase 'E' and omits a '+' on positive exponents
-               // to match the pre-zmij dragonbox output.
+               uint64_t digits = abs_e >= 100 ? 3 : (abs_e >= 10 ? 2 : 1);
+               // Glaze emits uppercase 'E', omits '+' on positive exponents, and
+               // drops the leading zero on single-digit exponents (E7, not E07)
+               // to minimize bytes while staying within JSON's grammar.
                if (e >= 0) {
-                  // "E12" (3 bytes) or "E123" (4 bytes)
-                  uint64_t len = 3 + (abs_e >= 100);
+                  uint64_t len = 1 + digits; // 'E' + digits
                   data[e + offset] = (len << 48) | (val << 8) | 'E';
                }
                else {
-                  // "E-12" (4 bytes) or "E-123" (5 bytes)
-                  uint64_t len = 4 + (abs_e >= 100);
+                  uint64_t len = 2 + digits; // 'E' + '-' + digits
                   data[e + offset] = (len << 48) | (val << 16) | (uint64_t('-') << 8) | 'E';
                }
             }
@@ -1026,24 +1028,32 @@ namespace glz::zmij
             memcpy(buffer, &exp_data, traits::max_exponent10 >= 100 ? 8 : 4);
             return buffer + len;
          }
-         // Glaze emits uppercase 'E' and omits '+' on positive exponents to
-         // match the pre-zmij dragonbox output. Branchless: write "E-" always,
-         // then only advance past the '-' when the exponent is negative.
+         // Glaze emits uppercase 'E', omits '+' on positive exponents, and
+         // drops the leading zero on single-digit exponents (E7, not E07).
+         // Branchless: write "E-" always, then advance past the '-' only when
+         // the exponent is negative.
          bool neg = dec_exp < 0;
          buffer[0] = 'E';
          buffer[1] = '-';
          buffer += 1 + unsigned(neg);
          dec_exp = neg ? -dec_exp : dec_exp;
+         unsigned hundreds_written = 0;
          if (traits::max_exponent10 >= 100) {
             uint32_t digit = use_umul128_hi64
                                 ? umul128_hi64(dec_exp, 0x290000000000000)
                                 : (uint32_t(dec_exp) * div100_sig) >> div100_exp;
             *buffer = '0' + digit;
-            buffer += dec_exp >= 100;
+            hundreds_written = unsigned(dec_exp >= 100);
+            buffer += hundreds_written;
             dec_exp -= digit * 100;
          }
-         memcpy(buffer, digits2(dec_exp), 2);
-         return buffer + 2;
+         // dec_exp now in [0, 99]. Skip the tens digit only when no higher
+         // digit has been written (i.e. true leading zero, not interior).
+         const char* d2 = digits2(dec_exp);
+         *buffer = d2[0];
+         buffer += hundreds_written | unsigned(dec_exp >= 10);
+         *buffer = d2[1];
+         return buffer + 1;
       }
 
    } // namespace detail
