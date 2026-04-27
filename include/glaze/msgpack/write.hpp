@@ -1003,20 +1003,26 @@ namespace glz
    };
 
    template <class T>
-      requires(tuple_t<T> || is_std_tuple<T>)
+      requires(tuple_t<T> || std_tuple_protocol<T>)
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         static constexpr auto N = glz::tuple_size_v<T>;
+         static constexpr bool use_std_protocol = std_tuple_protocol<T> && !tuple_t<T>;
+         static constexpr auto N = []() constexpr {
+            if constexpr (use_std_protocol)
+               return std::tuple_size_v<std::remove_cvref_t<T>>;
+            else
+               return glz::tuple_size_v<T>;
+         }();
          if (!msgpack::detail::write_array_header(ctx, N, b, ix)) [[unlikely]] {
             return;
          }
-         if constexpr (is_std_tuple<T>) {
+         if constexpr (use_std_protocol) {
             [&]<size_t... I>(std::index_sequence<I...>) {
                ((void)(bool(ctx.error) ? void()
-                                       : (serialize<MSGPACK>::op<Opts>(std::get<I>(value), ctx, b, ix), void())),
+                                       : (serialize<MSGPACK>::op<Opts>(get<I>(value), ctx, b, ix), void())),
                 ...);
             }(std::make_index_sequence<N>{});
          }

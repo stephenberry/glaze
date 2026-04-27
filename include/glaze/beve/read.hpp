@@ -2096,7 +2096,7 @@ namespace glz
    };
 
    template <class T>
-      requires(tuple_t<T> || is_std_tuple<T>)
+      requires(tuple_t<T> || std_tuple_protocol<T>)
    struct from<BEVE, T> final
    {
       template <auto Opts>
@@ -2113,17 +2113,23 @@ namespace glz
          ++it;
 
          using V = std::decay_t<T>;
-         constexpr auto N = glz::tuple_size_v<V>;
+         static constexpr bool use_std_protocol = std_tuple_protocol<V> && !tuple_t<V>;
+         constexpr auto N = []() constexpr {
+            if constexpr (use_std_protocol)
+               return std::tuple_size_v<V>;
+            else
+               return glz::tuple_size_v<V>;
+         }();
          if constexpr (Opts.partial_read) {
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
-            if constexpr (is_std_tuple<T>) {
+            if constexpr (use_std_protocol) {
                for_each_short_circuit<N>([&]<auto I>() {
                   if (I < n) {
-                     parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
+                     parse<BEVE>::op<Opts>(get<I>(value), ctx, it, end);
                      return false; // continue
                   }
                   return true; // short circuit
@@ -2149,8 +2155,8 @@ namespace glz
                return;
             }
 
-            if constexpr (is_std_tuple<T>) {
-               for_each<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            if constexpr (use_std_protocol) {
+               for_each<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(get<I>(value), ctx, it, end); });
             }
             else {
                for_each<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });

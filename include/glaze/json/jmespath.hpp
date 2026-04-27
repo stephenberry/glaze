@@ -425,14 +425,14 @@ namespace glz
    {
       template <auto Opts = opts{}, class T>
          requires(Opts.format == JSON && not readable_array_t<T> &&
-                  not(tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>))
+                  not(tuple_t<std::decay_t<T>> || std_tuple_protocol<std::decay_t<T>>))
       inline void handle_slice(const jmespath::ArrayParseResult&, T&&, context& ctx, auto&&, auto&&)
       {
          ctx.error = error_code::syntax_error;
       }
 
       template <auto Opts = opts{}, class T>
-         requires(Opts.format == JSON && (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>))
+         requires(Opts.format == JSON && (tuple_t<std::decay_t<T>> || std_tuple_protocol<std::decay_t<T>>))
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
                                auto end)
       {
@@ -462,7 +462,13 @@ namespace glz
 
          // Iterate tuple elements
          using TupleType = std::decay_t<T>;
-         constexpr size_t N = glz::tuple_size_v<TupleType>;
+         static constexpr bool use_std_protocol = std_tuple_protocol<TupleType> && !tuple_t<TupleType>;
+         constexpr size_t N = []() constexpr {
+            if constexpr (use_std_protocol)
+               return std::tuple_size_v<TupleType>;
+            else
+               return glz::tuple_size_v<TupleType>;
+         }();
 
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) return;
@@ -499,8 +505,8 @@ namespace glz
                return;
             }
 
-            if constexpr (is_std_tuple<TupleType>) {
-               parse<Opts.format>::template op<Opts>(std::get<I>(value), ctx, it, end);
+            if constexpr (use_std_protocol) {
+               parse<Opts.format>::template op<Opts>(get<I>(value), ctx, it, end);
             }
             else {
                parse<Opts.format>::template op<Opts>(glz::get<I>(value), ctx, it, end);

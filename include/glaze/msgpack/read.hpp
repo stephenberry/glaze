@@ -976,7 +976,7 @@ namespace glz
    };
 
    template <class T>
-      requires(tuple_t<T> || is_std_tuple<T>)
+      requires(tuple_t<T> || std_tuple_protocol<T>)
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -986,14 +986,20 @@ namespace glz
          if (!msgpack::read_array_length(ctx, tag, it, end, len)) {
             return;
          }
-         static constexpr auto N = glz::tuple_size_v<T>;
+         static constexpr bool use_std_protocol = std_tuple_protocol<T> && !tuple_t<T>;
+         static constexpr auto N = []() constexpr {
+            if constexpr (use_std_protocol)
+               return std::tuple_size_v<std::remove_cvref_t<T>>;
+            else
+               return glz::tuple_size_v<T>;
+         }();
          if (len != N) {
             ctx.error = error_code::syntax_error;
             return;
          }
-         if constexpr (is_std_tuple<T>) {
+         if constexpr (use_std_protocol) {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               (parse<MSGPACK>::template op<Opts>(std::get<I>(value), ctx, it, end), ...);
+               (parse<MSGPACK>::template op<Opts>(get<I>(value), ctx, it, end), ...);
             }(std::make_index_sequence<N>{});
          }
          else {

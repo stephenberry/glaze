@@ -849,17 +849,21 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>
+         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>> || std_tuple_protocol<std::decay_t<T>>
       struct to_json_schema<T>
       {
          template <auto Opts>
          static void op(auto& s, auto& defs)
          {
             using V = std::decay_t<T>;
+            static constexpr bool use_std_protocol = std_tuple_protocol<V> && !tuple_t<V>;
             s.type = sv{"array"};
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<V>) {
                   return glz::tuple_size_v<meta_t<V>>;
+               }
+               else if constexpr (use_std_protocol) {
+                  return std::tuple_size_v<V>;
                }
                else {
                   return glz::tuple_size_v<V>;

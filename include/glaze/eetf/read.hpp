@@ -230,7 +230,7 @@ namespace glz
    };
 
    template <class T>
-      requires(tuple_t<T> || is_std_tuple<T>)
+      requires(tuple_t<T> || std_tuple_protocol<T>)
    struct from<EETF, T> final
    {
       template <auto Opts>
@@ -257,15 +257,21 @@ namespace glz
          it += index;
 
          using V = std::decay_t<T>;
-         constexpr auto N = glz::tuple_size_v<V>;
+         static constexpr bool use_std_protocol = std_tuple_protocol<V> && !tuple_t<V>;
+         constexpr auto N = []() constexpr {
+            if constexpr (use_std_protocol)
+               return std::tuple_size_v<V>;
+            else
+               return glz::tuple_size_v<V>;
+         }();
 
          if (fields_count != N) {
             ctx.error = error_code::syntax_error;
             return;
          }
 
-         if constexpr (is_std_tuple<T>) {
-            for_each<N>([&]<size_t I>() { parse<EETF>::op<Opts>(std::get<I>(value), ctx, it, end); });
+         if constexpr (use_std_protocol) {
+            for_each<N>([&]<size_t I>() { parse<EETF>::op<Opts>(get<I>(value), ctx, it, end); });
          }
          else {
             for_each<N>([&]<size_t I>() { parse<EETF>::op<Opts>(glz::get<I>(value), ctx, it, end); });
