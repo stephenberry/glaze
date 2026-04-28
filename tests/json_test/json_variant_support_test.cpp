@@ -2021,4 +2021,49 @@ suite custom_type_schema_generation = [] {
    };
 };
 
+// Regression test for https://github.com/stephenberry/glaze/issues/2529
+// vector<pair<...>> is parsed from a JSON object in concatenate mode (default),
+// so the variant deduction must treat it as an object alternative.
+suite vector_pair_object_variant_tests = [] {
+   using map_type = std::vector<std::pair<std::string_view, std::string_view>>;
+
+   "vector<pair> direct read"_test = [] {
+      map_type m;
+      auto ec = glz::read_json(m, R"({"foo":"bar"})");
+      expect(!ec) << glz::format_error(ec, std::string{R"({"foo":"bar"})"});
+      expect(m.size() == 1);
+      expect(m[0].first == "foo");
+      expect(m[0].second == "bar");
+   };
+
+   "variant with vector<pair> alternative"_test = [] {
+      std::variant<std::string_view, std::nullptr_t, map_type> v;
+      auto ec = glz::read_json(v, R"({"foo":"bar"})");
+      expect(!ec) << glz::format_error(ec, std::string{R"({"foo":"bar"})"});
+      expect(v.index() == 2);
+      auto& m = std::get<2>(v);
+      expect(m.size() == 1);
+      expect(m[0].first == "foo");
+      expect(m[0].second == "bar");
+   };
+
+   "variant deduces null/string/object alternatives"_test = [] {
+      std::variant<std::string_view, std::nullptr_t, map_type> v;
+
+      auto ec = glz::read_json(v, R"(null)");
+      expect(!ec);
+      expect(v.index() == 1);
+
+      ec = glz::read_json(v, R"("hello")");
+      expect(!ec);
+      expect(v.index() == 0);
+      expect(std::get<0>(v) == "hello");
+
+      ec = glz::read_json(v, R"({"k":"v"})");
+      expect(!ec);
+      expect(v.index() == 2);
+      expect(std::get<2>(v).size() == 1);
+   };
+};
+
 int main() { return 0; }
