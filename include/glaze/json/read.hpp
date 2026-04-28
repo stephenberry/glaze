@@ -3697,7 +3697,7 @@ namespace glz
             case '\0':
                ctx.error = error_code::unexpected_end;
                return;
-            case '{':
+            case '{': {
                if (ctx.depth >= max_recursive_depth_limit) {
                   ctx.error = error_code::exceeded_max_recursive_depth;
                   return;
@@ -4322,6 +4322,7 @@ namespace glz
                   }
                }
                break;
+            }
             case '[':
                if (ctx.depth >= max_recursive_depth_limit) {
                   ctx.error = error_code::exceeded_max_recursive_depth;
