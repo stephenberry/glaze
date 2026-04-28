@@ -4,8 +4,8 @@
 #pragma once
 
 #include "glaze/core/write.hpp"
-#include "glaze/util/dtoa.hpp"
 #include "glaze/util/itoa.hpp"
+#include "glaze/util/zmij.hpp"
 
 namespace glz
 {

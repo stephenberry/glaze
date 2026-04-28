@@ -26,12 +26,14 @@ namespace glz
       //
       // Current behavior:
       //   - Integer serialization: glz::to_chars (400B lookup tables)
-      //   - Float serialization: std::to_chars (no dragonbox ~238KB tables)
+      //   - Float serialization: glz::to_chars<T, OptSize=true> (zmij w/ recomputed
+      //     pow-10, ~1.4 KB of __const)
+      //   - Float parsing: glz::simple_float::from_chars (no fast_float tables)
       //   - Key matching: linear_search=true by default (no hash tables)
       //
       // Binary size savings (approximate):
       //   - ~39KB from using smaller integer tables (400B vs 40KB)
-      //   - ~238KB from avoiding dragonbox tables
+      //   - ~15.8KB from dropping zmij's pow-10 tables (OptSize=true)
       //   - Variable savings from hash table elimination
       //
       size = 0,
@@ -43,7 +45,8 @@ namespace glz
       //
       // Current behavior:
       //   - Integer serialization: glz::to_chars_40kb (40KB digit_quads table)
-      //   - Float serialization: dragonbox (~238KB tables)
+      //   - Float serialization: glz::to_chars<T, OptSize=false> (zmij w/ full
+      //     ~17KB pow-10 tables for peak throughput)
       //   - Key matching: hash-based lookup
       //
       // This is the default level optimized for speed.

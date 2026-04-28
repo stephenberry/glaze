@@ -3473,6 +3473,10 @@ namespace glz
    template <class T>
    struct is_variant_object : std::bool_constant<variant_object_type<T>>
    {};
+   // Range-of-pairs alternatives parse as a JSON object only when the `concatenate` option is enabled (default).
+   template <class T>
+   struct is_variant_concat_object : std::bool_constant<json_pair_range_object<T>>
+   {};
    template <class T>
    struct is_variant_array : std::bool_constant<variant_array_type<T>>
    {};
@@ -3545,6 +3549,31 @@ namespace glz
       static constexpr auto n_array = variant_count_v<T, is_variant_array>;
       static constexpr auto n_null = variant_count_v<T, is_variant_null>;
    };
+
+   // Number of variant alternatives that should be treated as JSON objects under the active options.
+   // Includes range-of-pair alternatives only when `concatenate` is enabled (default).
+   //
+   // Note: this preserves the existing predicate used by the variant '{' fast path. Because
+   // `variant_type_count::n_object` already includes `n_nullable_object`, adding
+   // `n_nullable_object` again effectively excludes nullable-object alternatives from the
+   // single-candidate fast path (which only knows how to dispatch a non-nullable object index).
+   template <auto Opts, class T>
+   constexpr size_t variant_object_candidate_count_v =
+      variant_type_count<T>::n_object + variant_type_count<T>::n_nullable_object +
+      (check_concatenate(Opts) ? variant_count_v<T, is_variant_concat_object> : 0);
+
+   // First variant index that is an object candidate under the active options. Prefers a true
+   // `is_variant_object` match; falls back to `is_variant_concat_object` when concatenate is enabled.
+   template <auto Opts, class T>
+   constexpr size_t variant_first_object_candidate_v = []() {
+      constexpr auto obj_idx = variant_first_index_v<T, is_variant_object>;
+      if constexpr (obj_idx != std::variant_npos)
+         return obj_idx;
+      else if constexpr (check_concatenate(Opts))
+         return variant_first_index_v<T, is_variant_concat_object>;
+      else
+         return std::variant_npos;
+   }();
 
    // Process variant alternatives by iterating directly over variant indices
    // (replaces tuple_cat + tuple iteration approach)
@@ -3690,7 +3719,7 @@ namespace glz
             case '\0':
                ctx.error = error_code::unexpected_end;
                return;
-            case '{':
+            case '{': {
                if (ctx.depth >= max_recursive_depth_limit) {
                   ctx.error = error_code::exceeded_max_recursive_depth;
                   return;
@@ -3707,13 +3736,13 @@ namespace glz
                   }
                }
                using type_counts = variant_type_count<T>;
-               if constexpr ((type_counts::n_object < 1) //
-                             && (type_counts::n_nullable_object < 1)) {
+               constexpr auto n_object_candidates = variant_object_candidate_count_v<Opts, T>;
+               if constexpr (n_object_candidates < 1) {
                   ctx.error = error_code::no_matching_variant_type;
                   return;
                }
-               else if constexpr ((type_counts::n_object + type_counts::n_nullable_object) == 1 && tag_v<T>.empty()) {
-                  constexpr auto first_idx = variant_first_index_v<T, is_variant_object>;
+               else if constexpr (n_object_candidates == 1 && tag_v<T>.empty()) {
+                  constexpr auto first_idx = variant_first_object_candidate_v<Opts, T>;
                   using V = std::variant_alternative_t<first_idx, T>;
                   if (!std::holds_alternative<V>(value)) value = V{};
                   parse<JSON>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
@@ -4306,6 +4335,7 @@ namespace glz
                   }
                }
                break;
+            }
             case '[':
                if (ctx.depth >= max_recursive_depth_limit) {
                   ctx.error = error_code::exceeded_max_recursive_depth;
