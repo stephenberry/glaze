@@ -2068,7 +2068,10 @@ suite vector_pair_object_variant_tests = [] {
    // With concatenate=false the user opts out of object-shaped pair-ranges,
    // so the variant must NOT match vector<pair> against `{...}` JSON.
    "variant with concatenate=false does not match object to vector<pair>"_test = [] {
-      struct opts_concat : glz::opts { bool concatenate = true; };
+      struct opts_concat : glz::opts
+      {
+         bool concatenate = true;
+      };
       static constexpr opts_concat cat_off{{glz::opts{}}, false};
 
       std::variant<std::string_view, std::nullptr_t, map_type> v;
