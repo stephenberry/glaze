@@ -2064,6 +2064,18 @@ suite vector_pair_object_variant_tests = [] {
       expect(v.index() == 2);
       expect(std::get<2>(v).size() == 1);
    };
+
+   // With concatenate=false the user opts out of object-shaped pair-ranges,
+   // so the variant must NOT match vector<pair> against `{...}` JSON.
+   "variant with concatenate=false does not match object to vector<pair>"_test = [] {
+      struct opts_concat : glz::opts { bool concatenate = true; };
+      static constexpr opts_concat cat_off{{glz::opts{}}, false};
+
+      std::variant<std::string_view, std::nullptr_t, map_type> v;
+      auto ec = glz::read<cat_off>(v, R"({"k":"v"})");
+      expect(bool(ec));
+      expect(ec == glz::error_code::no_matching_variant_type);
+   };
 };
 
 int main() { return 0; }

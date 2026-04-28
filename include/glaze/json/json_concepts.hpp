@@ -8,8 +8,13 @@
 namespace glz
 {
    template <class T>
-   concept json_object = glaze_object_t<T> || reflectable<T> || writable_map_t<T> || readable_map_t<T> ||
-                         (range<T> && pair_t<range_value_t<T>>);
+   concept json_object = glaze_object_t<T> || reflectable<T> || writable_map_t<T> || readable_map_t<T>;
+
+   // Range-of-pairs types are parsed as JSON objects only when the `concatenate` option is true (default).
+   // The variant parser uses this separately so deduction can be made option-aware without polluting
+   // the type-level `json_object` concept.
+   template <class T>
+   concept json_pair_range_object = !json_object<T> && range<T> && pair_t<range_value_t<T>>;
 
    template <class T>
    concept json_array = array_t<T>;

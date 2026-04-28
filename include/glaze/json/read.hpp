@@ -3451,6 +3451,10 @@ namespace glz
    template <class T>
    concept variant_object_type = json_object<T>;
 
+   // Treated as a JSON object only when the `concatenate` option is enabled.
+   template <class T>
+   concept variant_concat_object_type = json_pair_range_object<T>;
+
    template <class T>
    concept variant_array_type = array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>;
 
@@ -3472,6 +3476,9 @@ namespace glz
    {};
    template <class T>
    struct is_variant_object : std::bool_constant<variant_object_type<T>>
+   {};
+   template <class T>
+   struct is_variant_concat_object : std::bool_constant<variant_concat_object_type<T>>
    {};
    template <class T>
    struct is_variant_array : std::bool_constant<variant_array_type<T>>
@@ -3707,13 +3714,22 @@ namespace glz
                   }
                }
                using type_counts = variant_type_count<T>;
+               // When `concatenate` is enabled (default), range-of-pair alternatives also parse as `{...}`.
+               static constexpr bool concat_objects_active = check_concatenate(Opts);
+               static constexpr auto n_concat_object =
+                  concat_objects_active ? variant_count_v<T, is_variant_concat_object> : 0;
                if constexpr ((type_counts::n_object < 1) //
-                             && (type_counts::n_nullable_object < 1)) {
+                             && (type_counts::n_nullable_object < 1) //
+                             && (n_concat_object < 1)) {
                   ctx.error = error_code::no_matching_variant_type;
                   return;
                }
-               else if constexpr ((type_counts::n_object + type_counts::n_nullable_object) == 1 && tag_v<T>.empty()) {
-                  constexpr auto first_idx = variant_first_index_v<T, is_variant_object>;
+               else if constexpr ((type_counts::n_object + type_counts::n_nullable_object + n_concat_object) == 1 &&
+                                  tag_v<T>.empty()) {
+                  constexpr auto obj_idx = variant_first_index_v<T, is_variant_object>;
+                  constexpr auto first_idx = (obj_idx != std::variant_npos)
+                                                ? obj_idx
+                                                : variant_first_index_v<T, is_variant_concat_object>;
                   using V = std::variant_alternative_t<first_idx, T>;
                   if (!std::holds_alternative<V>(value)) value = V{};
                   parse<JSON>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
