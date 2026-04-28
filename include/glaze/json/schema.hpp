@@ -386,6 +386,175 @@ namespace glz
          merge(dst.ExtAdvanced, src.ExtAdvanced);
       }
 
+      // Automatic default value extraction for JSON Schema.
+      // In C++20+, std::string/vector support transient constexpr allocation,
+      // so we can construct T{} in consteval, extract primitive member defaults, and destroy it.
+      //
+      // Optimization: we construct T{} exactly once per type and extract all primitive
+      // defaults in a single pass, rather than once per member.
+
+      // Convert a member value to schema_any at compile time (primitives only)
+      template <class T>
+      constexpr auto to_schema_default(const T& value) -> std::optional<schema::schema_any>
+      {
+         using V = std::decay_t<T>;
+         if constexpr (std::same_as<V, bool>) {
+            return schema::schema_any{value};
+         }
+         else if constexpr (std::same_as<V, std::monostate>) {
+            return schema::schema_any{std::monostate{}};
+         }
+         else if constexpr (std::signed_integral<V> && !std::same_as<V, char>) {
+            return schema::schema_any{static_cast<int64_t>(value)};
+         }
+         else if constexpr (std::unsigned_integral<V> && !std::same_as<V, char>) {
+            return schema::schema_any{static_cast<uint64_t>(value)};
+         }
+         else if constexpr (std::floating_point<V>) {
+            return schema::schema_any{static_cast<double>(value)};
+         }
+         else {
+            return std::nullopt;
+         }
+      }
+
+      template <class T>
+      constexpr bool is_schema_default_convertible_raw =
+         std::same_as<T, bool> || std::same_as<T, std::monostate> ||
+         (std::integral<T> && !std::same_as<T, bool> && !std::same_as<T, char>) ||
+         std::floating_point<T>;
+
+      template <class T>
+      constexpr bool is_schema_default_convertible = is_schema_default_convertible_raw<std::decay_t<T>>;
+
+      // Per-member extraction helpers.
+      // Avoids nested lambdas in fold expressions (ICEs GCC 13). Declared constexpr rather
+      // than consteval so GCC accepts non-constexpr local references from the consteval
+      // caller — consteval helpers would require constant-expression arguments.
+      //
+      // Skips emitting when the member value equals its value-initialized form. C++
+      // default-init uses a sentinel (0, 0.0, false, {}) that rarely matches JSON Schema's
+      // "default" semantics of "recommended value when the field is omitted". Filtering
+      // keeps the feature useful for deliberate non-sentinel values (flag{true},
+      // count{42}) while dropping the noisy all-zero cases. Users who genuinely want
+      // "default":0 can set it explicitly via glz::json_schema<T>.
+      template <size_t I, class Tied>
+      constexpr auto extract_default_from_tie(Tied& tied) -> std::optional<schema::schema_any>
+      {
+         using val_t = std::decay_t<decltype(get<I>(tied))>;
+         if constexpr (is_schema_default_convertible<val_t>) {
+            if (get<I>(tied) == val_t{}) {
+               return std::nullopt;
+            }
+            return to_schema_default(get<I>(tied));
+         }
+         else {
+            return std::nullopt;
+         }
+      }
+
+      template <class T, size_t I>
+      constexpr auto extract_default_from_member(T& instance) -> std::optional<schema::schema_any>
+      {
+         using member_type = std::decay_t<decltype(get<I>(reflect<T>::values))>;
+         if constexpr (std::is_member_object_pointer_v<member_type>) {
+            constexpr auto member_ptr = get<I>(reflect<T>::values);
+            using val_t = std::decay_t<decltype(instance.*member_ptr)>;
+            if constexpr (is_schema_default_convertible<val_t>) {
+               if (instance.*member_ptr == val_t{}) {
+                  return std::nullopt;
+               }
+               return to_schema_default(instance.*member_ptr);
+            }
+            else {
+               return std::nullopt;
+            }
+         }
+         else {
+            return std::nullopt;
+         }
+      }
+
+      // Extract all primitive defaults from T in one T{} construction. Branches on the
+      // access pattern: glaze_object_t goes through reflect<T>::values member pointers,
+      // reflectable types go through to_tie(instance). glaze_object_t wins if a type
+      // happens to satisfy both.
+      template <class T>
+         requires((reflectable<T> || glaze_object_t<T>) && std::default_initializable<T>)
+      consteval auto extract_all_defaults_impl()
+      {
+         constexpr auto N = reflect<T>::size;
+         std::array<std::optional<schema::schema_any>, N> result{};
+         T instance{};
+         [&]<size_t... Is>(std::index_sequence<Is...>) {
+            if constexpr (glaze_object_t<T>) {
+               ((result[Is] = extract_default_from_member<T, Is>(instance)), ...);
+            }
+            else {
+               auto tied = to_tie(instance);
+               ((result[Is] = extract_default_from_tie<Is>(tied)), ...);
+            }
+         }(std::make_index_sequence<N>{});
+         return result;
+      }
+
+      // SFINAE-friendly probe: consteval-call failure propagates as "not a constant
+      // expression" at the integral_constant<int, ...> substitution, which is
+      // SFINAE-detectable. A variable-template initializer failure is not — so
+      // the probe has to call extract_all_defaults_impl directly.
+      template <class T>
+      consteval int check_extractable()
+      {
+         (void)extract_all_defaults_impl<T>();
+         return 0;
+      }
+
+      template <class T>
+      concept can_extract_defaults =
+         (reflectable<T> || glaze_object_t<T>) && std::default_initializable<T> &&
+         requires { typename std::integral_constant<int, check_extractable<T>()>; };
+
+      // Variable-template cache, guarded by can_extract_defaults so it's only
+      // ever instantiated for types the probe has already cleared. The cache
+      // value is computed once per T; repeated accesses at call sites are free.
+      template <class T>
+         requires can_extract_defaults<T>
+      inline constexpr auto cached_defaults = extract_all_defaults_impl<T>();
+
+      // Returns the pre-extracted defaults array for T, or an all-nullopt array
+      // when disabled or when T is not extractable (e.g. missing default ctor).
+      // Kept as a named helper rather than an in-place lambda because MSVC cannot
+      // deduce the common return type of an immediately-invoked lambda whose
+      // branches mix a consteval call with a braced std::array initialization.
+      template <class T, bool Enable>
+      consteval auto defaults_array_for()
+      {
+         if constexpr (Enable && can_extract_defaults<T>) {
+            return cached_defaults<T>;
+         }
+         else {
+            constexpr auto N = reflect<T>::size;
+            std::array<std::optional<schema::schema_any>, N> empty{};
+            return empty;
+         }
+      }
+
+      // Opt-in: populate JSON Schema "default" from each primitive member's
+      // default-constructed value. Off by default — C++ default-initialization
+      // often differs in meaning from JSON Schema's "default" keyword (which
+      // recommends a value to consumers when the field is omitted). Enable
+      // via a custom opts struct:
+      //   struct my_opts : glz::opts { bool schema_auto_defaults = true; };
+      consteval bool check_schema_auto_defaults(auto&& Opts)
+      {
+         if constexpr (requires { Opts.schema_auto_defaults; }) {
+            return Opts.schema_auto_defaults;
+         }
+         else {
+            return false;
+         }
+      }
+
       template <class T = void>
       struct to_json_schema
       {
@@ -969,6 +1138,12 @@ namespace glz
             auto req = s.required.value_or(std::vector<std::string_view>{});
 
             s.properties = std::map<sv, schema, std::less<>>();
+
+            // Extract all primitive defaults in a single T{} construction (once per type),
+            // but only when the caller opts in via Opts.schema_auto_defaults = true.
+            // Empty array otherwise, or when V is not extractable (no default ctor, etc.).
+            static constexpr auto defaults = defaults_array_for<V, check_schema_auto_defaults(Opts)>();
+
             for_each<N>([&]<auto I>() {
                using val_t = std::decay_t<refl_t<T, I>>;
 
@@ -1013,6 +1188,13 @@ namespace glz
                      static const auto schema_v = json_schema_type<T>{};
                      auto user_metadata = get<schema_index>(to_tie(schema_v));
                      merge_schema_attrs(prop, user_metadata);
+                  }
+               }
+
+               // Apply pre-extracted default if not already set by explicit json_schema<T>
+               if constexpr (defaults[I].has_value()) {
+                  if (!prop.defaultValue) {
+                     prop.defaultValue = *defaults[I];
                   }
                }
 
