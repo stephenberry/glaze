@@ -21,30 +21,28 @@
 
 namespace glz
 {
-   using uint32_t = std::uint32_t;
-
    // Format identifiers.
    // Built-in formats are < 65536; user-defined formats may use 65536..2^32-1.
-   inline constexpr uint32_t INVALID = 0;
-   inline constexpr uint32_t BEVE = 1;
-   inline constexpr uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
-   inline constexpr uint32_t JSONB = 3; // SQLite JSONB binary JSON format - https://sqlite.org/jsonb.html
-   inline constexpr uint32_t BSON = 4; // MongoDB BSON 1.1 - https://bsonspec.org/spec.html
-   inline constexpr uint32_t JSON = 10;
-   inline constexpr uint32_t JSON_PTR = 20;
-   inline constexpr uint32_t MSGPACK = 30;
-   inline constexpr uint32_t NDJSON = 100; // new line delimited JSON
-   inline constexpr uint32_t TOML = 400;
-   inline constexpr uint32_t YAML = 450;
-   inline constexpr uint32_t STENCIL = 500;
-   inline constexpr uint32_t MUSTACHE = 501;
-   inline constexpr uint32_t CSV = 10000;
-   inline constexpr uint32_t EETF = 20000;
+   inline constexpr std::uint32_t INVALID = 0;
+   inline constexpr std::uint32_t BEVE = 1;
+   inline constexpr std::uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
+   inline constexpr std::uint32_t JSONB = 3; // SQLite JSONB binary JSON format - https://sqlite.org/jsonb.html
+   inline constexpr std::uint32_t BSON = 4; // MongoDB BSON 1.1 - https://bsonspec.org/spec.html
+   inline constexpr std::uint32_t JSON = 10;
+   inline constexpr std::uint32_t JSON_PTR = 20;
+   inline constexpr std::uint32_t MSGPACK = 30;
+   inline constexpr std::uint32_t NDJSON = 100; // new line delimited JSON
+   inline constexpr std::uint32_t TOML = 400;
+   inline constexpr std::uint32_t YAML = 450;
+   inline constexpr std::uint32_t STENCIL = 500;
+   inline constexpr std::uint32_t MUSTACHE = 501;
+   inline constexpr std::uint32_t CSV = 10000;
+   inline constexpr std::uint32_t EETF = 20000;
 
    // Protocol formats
-   inline constexpr uint32_t REPE = 30000;
-   inline constexpr uint32_t REST = 30100;
-   inline constexpr uint32_t JSONRPC = 30200;
+   inline constexpr std::uint32_t REPE = 30000;
+   inline constexpr std::uint32_t REST = 30100;
+   inline constexpr std::uint32_t JSONRPC = 30200;
 
    // Reflection metadata customization point.
    template <class T>
@@ -53,28 +51,28 @@ namespace glz
    // Per-(format, type) serializer/deserializer specializations.
    // Primary templates are left incomplete so that the write_supported /
    // read_supported concepts can detect whether a specialization exists.
-   template <uint32_t Format = INVALID, class T = void>
+   template <std::uint32_t Format = INVALID, class T = void>
    struct to;
 
-   template <uint32_t Format = INVALID, class T = void>
+   template <std::uint32_t Format = INVALID, class T = void>
    struct from;
 
-   template <uint32_t Format = INVALID, class T = void>
+   template <std::uint32_t Format = INVALID, class T = void>
    struct to_partial;
 
-   template <uint32_t Format = INVALID>
+   template <std::uint32_t Format = INVALID>
    struct skip_value;
 
    // Per-format dispatch layer. Specialized in json/write.hpp, cbor/read.hpp, etc.
-   template <uint32_t Format>
+   template <std::uint32_t Format>
    struct parse
    {};
 
-   template <uint32_t Format>
+   template <std::uint32_t Format>
    struct serialize
    {};
 
-   template <uint32_t Format>
+   template <std::uint32_t Format>
    struct serialize_partial
    {};
 

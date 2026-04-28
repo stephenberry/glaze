@@ -174,7 +174,7 @@ namespace glz
    // Format string for floating-point output using std::format (C++23)
    // Must be a static constexpr member to be usable as a template parameter
    // Example: "{:.2f}" for 2 decimal places, "{:.6g}" for 6 significant digits, "{:.0f}" for integers
-   // When specified, uses std::uint32_to instead of Dragonbox for float/double serialization
+   // When specified, uses std::format_to instead of Dragonbox for float/double serialization
 
    // ---
    // bool skip_read_constraint = false;
