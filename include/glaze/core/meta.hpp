@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "glaze/core/opts.hpp"
+#include "glaze/forward.hpp"
 #include "glaze/reflection/get_name.hpp"
 #include "glaze/reflection/requires_key.hpp"
 #include "glaze/reflection/to_tuple.hpp"
@@ -31,8 +32,7 @@ namespace glz
       operation op = operation::serialize;
    };
 
-   template <class T>
-   struct meta;
+   // Primary template for glz::meta lives in glaze/forward.hpp.
 
    template <>
    struct meta<std::string_view>

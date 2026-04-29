@@ -1535,45 +1535,49 @@ namespace glz
          return {};
       }
 
-      // This could be a std::array, but each length N for std::array causes unique template instaniations
-      // This propagates to std::ranges::sort, so using std::vector means less template instaniations
-      std::vector<std::string_view> strings{};
-      strings.reserve(N);
-      for (size_t i = 0; i < N; ++i) {
-         strings.emplace_back(input_strings[i]);
+      // Copy into a local array and insertion-sort by size. We use the caller's array
+      // type directly (e.g. std::array<sv, N>) and a hand-rolled sort rather than
+      // std::ranges::sort so the sort body is not template-instantiated per N — a
+      // previous version went via std::vector specifically to avoid per-N ranges::sort
+      // instantiations, at the cost of constexpr heap evaluation. For typical N
+      // (struct key counts, usually ≤ max_pure_reflection_count) insertion sort is fine.
+      auto strings = input_strings;
+      for (size_t i = 1; i < N; ++i) {
+         auto key = strings[i];
+         size_t j = i;
+         while (j > 0 && strings[j - 1].size() > key.size()) {
+            strings[j] = strings[j - 1];
+            --j;
+         }
+         strings[j] = key;
       }
 
-      std::ranges::sort(strings, [](const auto& a, const auto& b) { return a.size() < b.size(); });
-
-      if (strings.front().empty() || strings.back().size() >= 255) {
+      if (strings[0].empty() || strings[N - 1].size() >= 255) {
          return {};
       }
 
       unique_per_length_t info{.valid = true};
       info.unique_index.fill(255);
 
-      // Process each unique length
-      for (size_t len = strings.front().size(); len <= strings.back().size(); ++len) {
-         auto range_begin = std::lower_bound(strings.begin(), strings.end(), len,
-                                             [](const auto& s, size_t l) { return s.length() < l; });
+      for (size_t len = strings[0].size(); len <= strings[N - 1].size(); ++len) {
+         // Locate the subrange of keys with this length. Input is sorted by size, so
+         // entries of a given length form a contiguous run; a linear scan is enough
+         // and sidesteps the std::lower_bound / std::upper_bound instantiations.
+         size_t rb = N, re = N;
+         for (size_t i = 0; i < N; ++i) {
+            if (strings[i].size() == len) {
+               if (rb == N) rb = i;
+               re = i + 1;
+            }
+         }
+         if (rb == re) continue;
 
-         auto range_end =
-            std::upper_bound(range_begin, strings.end(), len, [](size_t l, const auto& s) { return l < s.length(); });
-
-         auto range = std::ranges::subrange(range_begin, range_end);
-
-         if (range.begin() == range.end()) continue;
-
-         // Find the first unique character for this length
          bool found = false;
          for (size_t pos = 0; pos < len; ++pos) {
             std::array<int, 256> char_count = {};
-
-            // Count occurrences of each character at this position
-            for (auto it = range.begin(); it != range.end(); ++it) {
-               ++char_count[uint8_t((*it)[pos])];
+            for (size_t i = rb; i < re; ++i) {
+               ++char_count[uint8_t(strings[i][pos])];
             }
-
             bool collision = false;
             for (const auto count : char_count) {
                if (count > 1) {

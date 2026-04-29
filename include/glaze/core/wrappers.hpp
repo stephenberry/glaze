@@ -57,21 +57,8 @@ namespace glz
       };
    }
 
-   // custom_t allows a user to register member functions, std::function members, and member variables
-   // to implement custom reading and writing
-   template <class T, class From, class To>
-   struct custom_t final
-   {
-      static constexpr auto glaze_reflect = false;
-      using from_t = From;
-      using to_t = To;
-      T& val;
-      From from;
-      To to;
-   };
-
-   template <class T, class From, class To>
-   custom_t(T&, From, To) -> custom_t<T, From, To>;
+   // custom_t (user-customization wrapper for serialization members/functions)
+   // is defined in glaze/forward.hpp — it's pulled in transitively via opts.hpp.
 
    template <auto From, auto To>
    constexpr auto custom_impl() noexcept

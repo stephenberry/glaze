@@ -12,6 +12,7 @@ CMakeUserPresets.json
 **/Testing/
 
 # IDE files
+.claude/
 .idea/
 .vs/
 .vscode/
