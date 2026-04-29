@@ -788,15 +788,33 @@ namespace glz
             }
          }
 
+         // Allocate shared WebSocket receive buffers if configured
+         if (ws_recv_buffer_size_ > 0 && actual_threads > 0) {
+            ws_recv_buffers_ = std::make_shared<std::vector<std::vector<uint8_t>>>(actual_threads);
+            for (auto& buf : *ws_recv_buffers_) {
+               buf.resize(ws_recv_buffer_size_);
+            }
+         }
+
          // Start the acceptor
          do_accept();
          // Start worker threads (unless explicitly set to 0)
          if (io_context && actual_threads > 0) {
+            // Thread index map: each thread registers its ID → buffer index at startup.
+            // A mutex serializes the emplace calls (flat_map is not thread-safe for concurrent writes).
+            // After all threads have registered, the map is read-only — no synchronization needed.
+            ws_thread_indices_ = std::make_shared<ws_thread_map>();
+            ws_thread_indices_->reserve(actual_threads);
+            auto thread_map_mutex = std::make_shared<std::mutex>();
+
             threads.reserve(actual_threads);
             for (size_t i = 0; i < actual_threads; ++i) {
-               threads.emplace_back([this] {
+               threads.emplace_back([this, i, thread_map_mutex] {
+                  {
+                     std::lock_guard<std::mutex> lock(*thread_map_mutex);
+                     ws_thread_indices_->emplace(std::this_thread::get_id(), i);
+                  }
                   io_context->run();
-                  // Don't report errors during shutdown
                });
             }
          }
@@ -1205,6 +1223,23 @@ namespace glz
          return *this;
       }
 
+      /// @brief Set the shared WebSocket receive buffer size per thread.
+      ///
+      /// All WebSocket connections on a given thread share a single receive buffer,
+      /// eliminating per-connection allocation. Set to 0 to disable (uses per-connection
+      /// buffers instead). Non-zero values below 16KB are clamped to 16KB.
+      /// Recommended: power-of-2 sizes (e.g., 256KB, 512KB).
+      ///
+      /// @return Reference to this server for method chaining
+      inline http_server& ws_recv_buffer_size(size_t size)
+      {
+         if (size > 0 && size < 16384) {
+            size = 16384;
+         }
+         ws_recv_buffer_size_ = size;
+         return *this;
+      }
+
       /**
        * @brief Register a hook to be called when a request is received
        *
@@ -1415,6 +1450,12 @@ namespace glz
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
+
+      // WebSocket shared receive buffers (one per thread).
+      // Set to 0 to disable (falls back to per-connection buffers).
+      size_t ws_recv_buffer_size_{512 * 1024};
+      std::shared_ptr<std::vector<std::vector<uint8_t>>> ws_recv_buffers_;
+      std::shared_ptr<ws_thread_map> ws_thread_indices_;
 
       // Wrapping middleware (executes around handlers)
       std::vector<wrapping_middleware> wrapping_middlewares_;
@@ -2230,7 +2271,8 @@ namespace glz
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
          auto socket_ptr = std::make_shared<socket_type>(std::move(conn->socket));
-         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(socket_ptr, ws_it->second);
+         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(
+            socket_ptr, ws_it->second, ws_recv_buffers_, ws_thread_indices_);
          ws_conn->start(req);
       }
 
