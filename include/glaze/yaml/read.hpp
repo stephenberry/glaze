@@ -3709,7 +3709,7 @@ namespace glz
 
    // Tuples (std::tuple, glaze_array_t, tuple_t)
    template <class T>
-      requires(glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>)
+      requires(glaze_array_t<T> || tuple_t<T> || std_tuple_protocol<T>)
    struct from<YAML, T>
    {
       template <auto Opts, class It>
@@ -3718,9 +3718,13 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
+         static constexpr bool use_std_protocol = std_tuple_protocol<T> && !tuple_t<T>;
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<T>) {
                return reflect<T>::size;
+            }
+            else if constexpr (use_std_protocol) {
+               return std::tuple_size_v<T>;
             }
             else {
                return glz::tuple_size_v<T>;
@@ -3778,9 +3782,9 @@ namespace glz
                   yaml::skip_ws_and_newlines(it, end);
                }
 
-               if constexpr (is_std_tuple<T>) {
+               if constexpr (use_std_protocol) {
                   using element_t = std::tuple_element_t<I, std::remove_cvref_t<T>>;
-                  from<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(std::get<I>(value), ctx, it, end);
+                  from<YAML, element_t>::template op<yaml::flow_context_on<Opts>()>(get<I>(value), ctx, it, end);
                }
                else if constexpr (glaze_array_t<T>) {
                   using element_t = std::decay_t<decltype(get_member(value, glz::get<I>(meta_v<T>)))>;
@@ -3841,9 +3845,9 @@ namespace glz
                   (
                      [&]<size_t I>() {
                         if (I == index) {
-                           if constexpr (is_std_tuple<T>) {
+                           if constexpr (use_std_protocol) {
                               using element_t = std::tuple_element_t<I, std::remove_cvref_t<T>>;
-                              from<YAML, element_t>::template op<Opts>(std::get<I>(value), ctx, it, end);
+                              from<YAML, element_t>::template op<Opts>(get<I>(value), ctx, it, end);
                            }
                            else if constexpr (glaze_array_t<T>) {
                               using element_t = std::decay_t<decltype(get_member(value, glz::get<I>(meta_v<T>)))>;
@@ -4665,7 +4669,7 @@ namespace glz
 
    template <class T>
    concept yaml_variant_array_type =
-      array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>;
+      array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || std_tuple_protocol<T>;
 
    template <class T>
    concept yaml_variant_null_type = null_t<T>;

@@ -175,3 +175,11 @@ add_executable(non_aggregate_reflection_test non_aggregate_reflection_test.cpp)
 target_link_libraries(non_aggregate_reflection_test PRIVATE glz_test_common)
 
 add_test(NAME non_aggregate_reflection_test COMMAND non_aggregate_reflection_test)
+
+## Standard tuple protocol test - discussion #2530
+
+add_executable(std_tuple_protocol_test std_tuple_protocol_test.cpp)
+
+target_link_libraries(std_tuple_protocol_test PRIVATE glz_test_common)
+
+add_test(NAME std_tuple_protocol_test COMMAND std_tuple_protocol_test)

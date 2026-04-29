@@ -788,20 +788,26 @@ namespace glz
    };
 
    template <class T>
-      requires(tuple_t<T> || is_std_tuple<T>)
+      requires(tuple_t<T> || std_tuple_protocol<T>)
    struct calculate_size<BEVE, T>
    {
       template <auto Opts>
       [[nodiscard]] static size_t op(auto&& value, size_t offset = 0)
       {
-         static constexpr auto N = glz::tuple_size_v<T>;
+         static constexpr bool use_std_protocol = std_tuple_protocol<T> && !tuple_t<T>;
+         static constexpr auto N = []() constexpr {
+            if constexpr (use_std_protocol)
+               return std::tuple_size_v<std::remove_cvref_t<T>>;
+            else
+               return glz::tuple_size_v<T>;
+         }();
 
          size_t result = 1; // generic_array tag
          result += compressed_int_size<N>(); // element count
 
-         if constexpr (is_std_tuple<T>) {
+         if constexpr (use_std_protocol) {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               ((result += calculate_size<BEVE, void>::template op<Opts>(std::get<I>(value), offset + result)), ...);
+               ((result += calculate_size<BEVE, void>::template op<Opts>(get<I>(value), offset + result)), ...);
             }(std::make_index_sequence<N>{});
          }
          else {
