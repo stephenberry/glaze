@@ -347,7 +347,7 @@ namespace glz
             entries[i] = {h, i};
             bloom_set(h);
          }
-         std::sort(entries, entries + size_, [](const auto& a, const auto& b) { return a.hash < b.hash; });
+         std::sort(entries, entries + size_, [](const auto& a, const auto& b) { return (a.hash) < (b.hash); });
          index_->size = size_;
       }
 
@@ -438,11 +438,11 @@ namespace glz
       {
          while (len > 1) {
             size_t half = len / 2;
-            p += (p[half - 1].hash < target) * half;
+            p += ((p[half - 1].hash) < target) * half;
             len -= half;
          }
          // Final element check: advance past it if it's less than target
-         p += (len == 1 && p->hash < target);
+         p += (len == 1 && (p->hash) < target);
          return p;
       }
 
