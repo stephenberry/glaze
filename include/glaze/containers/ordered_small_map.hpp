@@ -60,7 +60,7 @@ namespace glz
       // Compact index entry: maps a hash to a position in the data array
       struct hash_index_entry
       {
-         uint32_t hash;
+         uint32_t key_hash;
          uint32_t index;
       };
 
@@ -347,7 +347,7 @@ namespace glz
             entries[i] = {h, i};
             bloom_set(h);
          }
-         std::sort(entries, entries + size_, [](const auto& a, const auto& b) { return (a.hash) < (b.hash); });
+         std::sort(entries, entries + size_, [](const auto& a, const auto& b) { return a.key_hash < b.key_hash; });
          index_->size = size_;
       }
 
@@ -369,7 +369,7 @@ namespace glz
          for (uint32_t i = current; i < size_; ++i) {
             const hash_index_entry entry{hash_key(data_[i].first), i};
             const auto* base = index_entries();
-            const auto* p = branchless_lower_bound(base, index_->size, entry.hash);
+            const auto* p = branchless_lower_bound(base, index_->size, entry.key_hash);
             auto pos = static_cast<size_t>(p - base);
 
             const uint32_t m = index_->size;
@@ -388,7 +388,7 @@ namespace glz
       {
          iterator it; // found iterator, or end() if not found
          size_t insert_pos; // index position for insertion (valid only when it == end())
-         uint32_t hash; // precomputed hash of the key
+         uint32_t key_hash; // precomputed hash of the key
       };
 
       // Single binary search that returns both the lookup result and
@@ -404,7 +404,7 @@ namespace glz
          const size_t pos = static_cast<size_t>(p - base);
 
          // Scan adjacent entries with matching hash
-         for (auto* scan = p; scan != idx_end && scan->hash == h; ++scan) {
+         for (auto* scan = p; scan != idx_end && scan->key_hash == h; ++scan) {
             if (data_[scan->index].first == key) {
                return {data_ + scan->index, pos, h};
             }
@@ -438,11 +438,11 @@ namespace glz
       {
          while (len > 1) {
             size_t half = len / 2;
-            p += ((p[half - 1].hash) < target) * half;
+            p += (p[half - 1].key_hash < target) * half;
             len -= half;
          }
          // Final element check: advance past it if it's less than target
-         p += (len == 1 && (p->hash) < target);
+         p += (len == 1 && p->key_hash < target);
          return p;
       }
 
@@ -458,7 +458,7 @@ namespace glz
          const auto* idx_end = base + index_->size;
          const auto* p = branchless_lower_bound(base, index_->size, h);
 
-         for (; p != idx_end && p->hash == h; ++p) {
+         for (; p != idx_end && p->key_hash == h; ++p) {
             if (data_[p->index].first == key) {
                return data_ + p->index;
             }
@@ -476,7 +476,7 @@ namespace glz
          const auto* idx_end = base + index_->size;
          const auto* p = branchless_lower_bound(base, index_->size, h);
 
-         for (; p != idx_end && p->hash == h; ++p) {
+         for (; p != idx_end && p->key_hash == h; ++p) {
             if (data_[p->index].first == key) {
                return data_ + p->index;
             }
