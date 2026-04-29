@@ -1015,6 +1015,21 @@ namespace glz
                thread.join();
             }
          }
+
+         // Drain any pending completion handlers so they are destroyed now,
+         // while the io_context and connection_pool are still alive.
+         // Without this, pending handlers (holding shared_ptrs to sockets)
+         // are destroyed inside the io_context destructor. If a handler holds
+         // the last reference to an SSL socket, its destructor runs mid
+         // io_context teardown — undefined behavior that causes heap corruption
+         // on MinGW/GCC with Windows (0xc0000374).
+         async_io_context->restart();
+         async_io_context->poll();
+
+         // Release pooled connections (and their sockets) while the io_context
+         // is still valid. Socket destructors may need to deregister from the
+         // io_context's reactor/IOCP.
+         connection_pool.reset();
       }
 
       std::shared_ptr<http_stream_connection> perform_stream_request(

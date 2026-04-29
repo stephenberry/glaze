@@ -1,0 +1,70 @@
+name: msys2-mingw-ssl
+
+# Tracks MinGW + OpenSSL heap corruption (see docs/networking/mingw-ssl-heap-corruption.md).
+# Known issue: OpenSSL linked with MinGW/GCC causes intermittent heap corruption
+# during ASIO worker thread shutdown. This is NOT a Glaze bug.
+# This workflow exists to detect if the issue is resolved upstream.
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+      - debug/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  mingw-ssl:
+    name: MinGW64 + SSL
+    runs-on: windows-latest
+    # Known intermittent failure — don't block PRs
+    continue-on-error: true
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-openssl
+
+    - name: Configure CMake
+      run: |
+        cmake -S . -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23 \
+          -Dglaze_ENABLE_SSL=ON
+
+    - name: Build
+      run: |
+        cmake --build build -j $(nproc) --target \
+          websocket_client_test \
+          websocket_close_test \
+          wss_test \
+          shared_context_bug_test \
+          utf8_test \
+          https_test
+
+    - name: Test
+      working-directory: build
+      run: |
+        ctest -C Release --output-on-failure -R \
+          "^(websocket_client_test|websocket_close_test|wss_test|shared_context_bug_test|utf8_test|https_test)$"
