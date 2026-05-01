@@ -1389,7 +1389,7 @@ void bench()
    using namespace ut;
    "bench"_test = [] {
       trace.begin("bench");
-      std::cout << "\nPerformance regresion test: \n";
+      std::cout << "\nPerformance regression test: \n";
 #ifdef NDEBUG
       size_t repeat = 100000;
 #else

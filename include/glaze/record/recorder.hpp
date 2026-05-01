@@ -134,7 +134,7 @@ namespace glz
             return;
          }
 
-         // we read into available containers, we do not intialize here
+         // we read into available containers, we do not initialize here
          const size_t n = value.data.size();
          for (size_t i = 0; i < n; ++i) {
             if (*it == '}') [[unlikely]] {
