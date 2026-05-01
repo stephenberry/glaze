@@ -209,7 +209,7 @@ struct stream_request_params_v2 {
 -   `url`: The URL to request.
 -   `timeout`: Set connection timeout. (default is 30s)
 -   `strategy`: Can be `bulk_transfer` (default, larger chunks, better throughput) or `immediate_delivery` (smaller chunks, lower latency)
--   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughtput at cost of memory usage. (default is 1 MiB)
+-   `max_buffer_size`: Larger buffer can decrease dropouts and increase throughput at cost of memory usage. (default is 1 MiB)
 -   `body`: The HTTP Body to send.
 -   `headers`: The HTTP headers to send.
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.

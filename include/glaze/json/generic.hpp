@@ -155,7 +155,7 @@ namespace glz
       template <class T>
       [[nodiscard]] T as() const
       {
-         // Prefer get becuase it returns a reference
+         // Prefer get because it returns a reference
          return get<T>();
       }
 

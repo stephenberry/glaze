@@ -757,7 +757,7 @@ struct glz::meta<constrained_object>
 };
 ```
 
-For invalid input such as `{"age": -1, "name": "Victor"}`, Glaze will outut the following formatted error message:
+For invalid input such as `{"age": -1, "name": "Victor"}`, Glaze will output the following formatted error message:
 
 ```
 1:11: constraint_violated

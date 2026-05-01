@@ -359,7 +359,7 @@ namespace glz
       [[nodiscard]] error_code init()
       {
          *is_connected = false;
-         // create a new socket_pool if we are initilaizing, this is needed because the sockets hold references to the
+         // create a new socket_pool if we are initializing, this is needed because the sockets hold references to the
          // io_context which is being recreated with init()
          socket_pool = std::make_shared<glz::socket_pool>();
 

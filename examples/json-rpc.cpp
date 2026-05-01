@@ -76,7 +76,7 @@ int main()
    timeout();
 #endif
    // Call the server callback for method `foo`
-   // Returns response json string since the request_str can withold batch of requests.
+   // Returns response json string since the request_str can withhold batch of requests.
    // If the request is a notification (no `id` in request) a response will not be generated.
    // For convenience, you can serialize the response yourself and get the responses as following:
    // auto response_vector = server.call<decltype(server)::raw_call_return_t>("...");

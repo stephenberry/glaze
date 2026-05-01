@@ -256,7 +256,7 @@ namespace glz
    concept is_static_string =
       requires { meta<std::decay_t<T>>::glaze_static_string == true; } || std::decay_t<T>::glaze_static_string == true;
 
-   // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
+   // this concept requires that T is a writable string. It can be resized, appended to, or assigned to
    template <class T>
    concept string_t = str_t<T> && !string_view_t<T> &&
                       (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>) && !is_static_string<T>;
@@ -681,7 +681,7 @@ namespace glz
 namespace glz
 {
    // This wraps glz::expected error (unexpected) values in an object with an "error" key
-   // This makes them discernable from the expected value
+   // This makes them discernible from the expected value
    template <class T>
    struct unexpected_wrapper final
    {
