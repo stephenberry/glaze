@@ -7,15 +7,18 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <random>
 #include <string>
 #include <string_view>
-#include <unordered_map>
+#include <thread>
+#include "glaze/containers/flat_map.hpp"
 #include <vector>
 
 // Optional OpenSSL support - detected at compile time
@@ -256,6 +259,11 @@ namespace glz
       }
    }
 
+   // Thread ID → buffer index map for per-server shared receive buffers.
+   // Defined here (not in http_server.hpp) because websocket_connection references it.
+   // flat_map for cache-friendly O(log n) lookup — the map is built once at startup and read-only after.
+   using ws_thread_map = glz::flat_map<std::thread::id, size_t>;
+
    // Forward declarations
    template <typename SocketType = asio::ip::tcp::socket>
    struct websocket_connection;
@@ -448,9 +456,16 @@ namespace glz
    {
      public:
       inline websocket_connection(std::shared_ptr<SocketType> socket,
-                                  std::weak_ptr<websocket_server> server = std::weak_ptr<websocket_server>{})
-         : socket_(socket), server_(std::move(server))
+                                  std::weak_ptr<websocket_server> server = {},
+                                  std::shared_ptr<std::vector<std::vector<uint8_t>>> recv_buffers = {},
+                                  std::shared_ptr<ws_thread_map> thread_indices = {})
+         : socket_(socket), server_(std::move(server)),
+           recv_buffers_(std::move(recv_buffers)), thread_indices_(std::move(thread_indices))
       {
+         // read_buf_ starts empty — lazily allocated on first use.
+         // For shared-buffer connections, read_buf_ is only used for spill (rarely).
+         // For fallback connections, ensure_read_buf_capacity() allocates on first do_start_read.
+
          // Try to get remote endpoint, but don't fail if it's not available yet
          try {
             remote_endpoint_ = socket_->lowest_layer().remote_endpoint();
@@ -560,15 +575,54 @@ namespace glz
       // Inject initial data read during handshake
       inline void set_initial_data(std::string_view data)
       {
-         frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
-         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
-         if (consumed > 0) {
-            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+         if (buf_len_ + data.size() > read_buf_.size()) {
+            read_buf_.resize(buf_len_ + data.size());
          }
+         std::memcpy(read_buf_.data() + buf_len_, data.data(), data.size());
+         buf_len_ += data.size();
+
+         compact_read_buf(process_frames(read_buf_.data(), buf_len_));
       }
 
      private:
+      static constexpr size_t initial_read_buf_size = 16384;
+
+      // Headroom for the fallback path's buffer growth cap.
+      static constexpr size_t fallback_buf_headroom = 16384;
+
+      // Spill thrashing fallback threshold (3/4 of shared buffer).
+      static constexpr size_t spill_fallback_numerator = 3;
+      static constexpr size_t spill_fallback_denominator = 4;
+
+      // Consecutive zero-spill read cycles before reclaiming oversized spill memory.
+      static constexpr size_t spill_reclaim_cycles = 16;
+
       size_t max_message_size_{1024 * 1024 * 16}; // 16 MB limit
+
+      // Shift unconsumed data to the front of read_buf_ after processing frames.
+      inline void compact_read_buf(size_t consumed)
+      {
+         if (consumed > 0) {
+            size_t remaining = buf_len_ - consumed;
+            if (remaining > 0) {
+               std::memmove(read_buf_.data(), read_buf_.data() + consumed, remaining);
+            }
+            buf_len_ = remaining;
+         }
+      }
+
+      // Lazy allocation and growth for per-connection read_buf_.
+      // Used by both the fallback branch of do_start_read and do_shared_read's fallback.
+      inline void ensure_read_buf_capacity()
+      {
+         if (read_buf_.empty()) {
+            read_buf_.resize(initial_read_buf_size);
+         }
+         if (buf_len_ == read_buf_.size()) {
+            // (std::min) parenthesized to prevent expansion of Windows min/max macros.
+            read_buf_.resize((std::min)(read_buf_.size() * 2, max_message_size_ + fallback_buf_headroom));
+         }
+      }
 
       inline void perform_handshake(const request& req)
       {
@@ -659,40 +713,84 @@ namespace glz
                            });
       }
 
+      // Fallback read path: called by async_read_some completion handler (per-connection buffer).
       inline void on_read(std::error_code ec, std::size_t bytes_transferred)
       {
          if (ec) {
-            is_closing_ = true;
-            // Only call error handlers if not already closed (prevents calling handlers
-            // after force_close() when user's captured references may be invalid)
-            if (!closed_.load()) {
-               dispatch_error(ec);
+            on_read_error(ec);
+            return;
+         }
+
+         buf_len_ += bytes_transferred;
+
+         // Per-message size protection is inside process_frames (payload_length > max_message_size_).
+         size_t consumed = 0;
+         try {
+            consumed = process_frames(read_buf_.data(), buf_len_);
+         }
+         catch (...) {
+            buf_len_ = 0;
+            close(ws_close_code::internal_error, "Exception in frame processing");
+            return;
+         }
+
+         compact_read_buf(consumed);
+
+         if (!closed_.load() && handshake_complete_) {
+            start_read();
+         }
+      }
+
+      // Extracted error handler for both read paths.
+      inline void on_read_error(std::error_code ec)
+      {
+         read_pending_ = false;
+         is_closing_ = true;
+         if (!closed_.load()) dispatch_error(ec);
+         do_close();
+      }
+
+      // Shared buffer read path: processes data from the shared buffer, saves spill to read_buf_.
+      inline void on_read_shared(uint8_t* data, size_t total_len)
+      {
+         // If process_frames or a user callback throws, the connection is in an indeterminate
+         // state. Kill the connection to prevent reprocessing already-handled frames.
+         size_t consumed = 0;
+         try {
+            consumed = process_frames(data, total_len);
+         }
+         catch (...) {
+            buf_len_ = 0;
+            close(ws_close_code::internal_error, "Exception in frame processing");
+            return;
+         }
+
+         // Save unconsumed bytes to read_buf_ (spill)
+         size_t remaining = total_len - consumed;
+         if (remaining > 0) {
+            if (read_buf_.size() < remaining) {
+               read_buf_.resize(remaining);
             }
-            // Close the connection after a read error (connection is likely broken)
-            do_close();
-            return;
+            std::memcpy(read_buf_.data(), data + consumed, remaining);
+         }
+         buf_len_ = remaining;
+
+         // Deferred spill reclamation: only free oversized spill memory after
+         // spill_reclaim_cycles consecutive zero-spill cycles.
+         // swap() is the guaranteed-release idiom (= {} relies on implementation).
+         if (buf_len_ == 0) {
+            if (read_buf_.capacity() > initial_read_buf_size) {
+               ++zero_spill_count_;
+               if (zero_spill_count_ >= spill_reclaim_cycles) {
+                  std::vector<uint8_t>().swap(read_buf_);
+                  zero_spill_count_ = 0;
+               }
+            }
+         }
+         else {
+            zero_spill_count_ = 0;
          }
 
-         // Add received data to frame buffer
-         frame_buffer_.insert(frame_buffer_.end(), read_buffer_.begin(), read_buffer_.begin() + bytes_transferred);
-
-         // Check buffer size limit (simple DoS protection)
-         if (frame_buffer_.size() > max_message_size_ + 1024) { // Allow some header overhead
-            close(ws_close_code::message_too_big, "Buffer limit exceeded");
-            return;
-         }
-
-         // Process complete frames
-         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
-         if (consumed > 0) {
-            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
-         }
-
-         // Continue reading if connection is still open
-         // RFC 6455 Section 7.1.1: The initiator must continue reading to receive the peer's
-         // Close frame response before closing the TCP connection.
-         // Use closed_ (not is_closing_) to allow receiving close response during handshake.
-         // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
          if (!closed_.load() && handshake_complete_) {
             start_read();
          }
@@ -758,21 +856,40 @@ namespace glz
             uint8_t* payload_ptr = data + offset + header_size;
             const auto payload_size = static_cast<size_t>(payload_length);
 
+            // Fused unmask + ASCII detection: unmask payload and simultaneously check
+            // whether all bytes are ASCII (high bit clear). If all ASCII, we can skip
+            // the separate UTF-8 validation pass for text frames.
+            bool all_ascii = false;
             if (header.mask() && payload_size > 0) {
-               for (std::size_t i = 0; i < payload_size; ++i) {
-                  payload_ptr[i] ^= mask_key[i % 4];
+               uint32_t mask32;
+               std::memcpy(&mask32, mask_key.data(), 4);
+               uint64_t mask64 = (static_cast<uint64_t>(mask32) << 32) | mask32;
+               uint64_t high_bits_acc = 0;
+               size_t i = 0;
+               for (; i + 8 <= payload_size; i += 8) {
+                  uint64_t chunk;
+                  std::memcpy(&chunk, payload_ptr + i, 8);
+                  chunk ^= mask64;
+                  std::memcpy(payload_ptr + i, &chunk, 8);
+                  high_bits_acc |= chunk;
                }
+               for (; i < payload_size; ++i) {
+                  payload_ptr[i] ^= mask_key[i % 4];
+                  high_bits_acc |= static_cast<uint64_t>(payload_ptr[i]);
+               }
+               all_ascii = !(high_bits_acc & 0x8080808080808080ULL);
             }
 
             // Handle the frame
-            handle_frame(header.opcode(), payload_ptr, payload_size, header.fin());
+            handle_frame(header.opcode(), payload_ptr, payload_size, header.fin(), all_ascii);
 
             offset += header_size + static_cast<size_t>(payload_length);
          }
          return offset;
       }
 
-      inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin)
+      inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin,
+                              bool all_ascii)
       {
          switch (opcode) {
          case ws_opcode::text:
@@ -790,7 +907,8 @@ namespace glz
             if (fin) {
                // Complete single-frame message - deliver directly (zero-copy)
                if (opcode == ws_opcode::text) {
-                  if (!glz::validate_utf8(payload, length)) {
+                  // Skip full UTF-8 validation if all bytes are ASCII (detected during unmask)
+                  if (!all_ascii && !glz::validate_utf8(payload, length)) {
                      close(ws_close_code::invalid_payload, "Invalid UTF-8");
                      return;
                   }
@@ -913,66 +1031,71 @@ namespace glz
          }
 
          std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
-         auto frame_buffer = std::make_unique<std::vector<uint8_t>>(header_size + payload.size());
+         bool fast_path = false;
 
-         write_frame_header(opcode, payload.size(), fin, frame_buffer->data(), client_mode_);
-         std::copy(payload.begin(), payload.end(), frame_buffer->begin() + header_size);
-
-         // Apply masking if in client mode
-         if (client_mode_ && payload.size() > 0) {
-            // Get the masking key from the header
-            std::size_t mask_key_offset = header_size - 4;
-            const uint8_t* mask_key = frame_buffer->data() + mask_key_offset;
-            // Mask the payload
-            for (std::size_t i = 0; i < payload.size(); ++i) {
-               (*frame_buffer)[header_size + i] ^= mask_key[i % 4];
-            }
-         }
-
-         // Queue the frame and start writing if not already in progress
          {
             std::lock_guard<std::mutex> lock(write_mutex_);
-            write_queue_.push_back(std::move(frame_buffer));
             if (close_after) {
                close_after_write_ = true; // Set atomically with queuing
             }
-            if (write_in_progress_) {
-               return; // Another write is in progress, frame will be sent when it completes
-            }
-            write_in_progress_ = true;
-         }
-
-         // Start writing the queued frame
-         do_write();
-      }
-
-      // Process the write queue - called when a write completes or when starting a new write
-      inline void do_write()
-      {
-         std::unique_ptr<std::vector<uint8_t>> frame_buffer;
-         bool should_close_after = false;
-
-         {
-            std::lock_guard<std::mutex> lock(write_mutex_);
-            if (write_queue_.empty()) {
-               write_in_progress_ = false;
-               should_close_after = close_after_write_;
-               close_after_write_ = false;
+            if (!write_in_progress_) {
+               // Fast path: build frame directly in persistent write_buf_ (no allocation)
+               write_in_progress_ = true;
+               fast_path = true;
             }
             else {
-               frame_buffer = std::move(write_queue_.front());
-               write_queue_.pop_front();
+               // Slow path: allocate and queue (another write is in progress)
+               std::vector<uint8_t> frame_data(header_size + payload.size());
+               write_frame_header(opcode, payload.size(), fin, frame_data.data(), client_mode_);
+               std::memcpy(frame_data.data() + header_size, payload.data(), payload.size());
+               if (client_mode_ && payload.size() > 0) {
+                  apply_masking(frame_data.data(), header_size, payload.size());
+               }
+               pending_writes_.push_back(std::move(frame_data));
+               return;
             }
          }
 
-         // Handle close-after-write when queue is empty
-         if (!frame_buffer) {
-            if (should_close_after) {
-               schedule_close();
-            }
-            return;
+         // Fast path: build frame in persistent buffer (capacity reused, no allocation).
+         // write_buf_ is exclusively owned by the writer when write_in_progress_ == true,
+         // so no lock is needed here. Other threads will queue to pending_writes_ instead.
+         write_buf_.resize(header_size + payload.size());
+         write_frame_header(opcode, payload.size(), fin, write_buf_.data(), client_mode_);
+         std::memcpy(write_buf_.data() + header_size, payload.data(), payload.size());
+         if (client_mode_ && payload.size() > 0) {
+            apply_masking(write_buf_.data(), header_size, payload.size());
          }
 
+         start_async_write();
+      }
+
+      // Apply XOR masking to payload in a frame buffer (client mode only)
+      inline void apply_masking(uint8_t* frame_data, size_t header_size, size_t payload_size)
+      {
+         size_t mask_key_offset = header_size - 4;
+         const uint8_t* mask_key = frame_data + mask_key_offset;
+         uint8_t* payload = frame_data + header_size;
+         uint32_t mask32;
+         std::memcpy(&mask32, mask_key, 4);
+         uint64_t mask64 = (static_cast<uint64_t>(mask32) << 32) | mask32;
+         size_t i = 0;
+         for (; i + 8 <= payload_size; i += 8) {
+            uint64_t chunk;
+            std::memcpy(&chunk, payload + i, 8);
+            chunk ^= mask64;
+            std::memcpy(payload + i, &chunk, 8);
+         }
+         for (; i < payload_size; ++i) {
+            payload[i] ^= mask_key[i % 4];
+         }
+      }
+
+      // Start an async write from write_buf_.
+      // IMPORTANT: write_buf_ must not be modified between this call and the completion handler.
+      // The async_write references write_buf_.data() directly. Only drain_write_queue (called from
+      // the completion handler) may touch write_buf_ after the write finishes.
+      inline void start_async_write()
+      {
          // Hold socket_op_mutex_ while setting up the async write operation.
          // This prevents close() from being called while async_write() is setting up.
          // ASIO socket operations are NOT thread-safe for concurrent calls.
@@ -989,7 +1112,7 @@ namespace glz
                std::lock_guard<std::mutex> lock(write_mutex_);
                write_in_progress_ = false;
                had_close_pending = close_after_write_;
-               write_queue_.clear();
+               pending_writes_.clear();
                close_after_write_ = false;
             }
             if (had_close_pending) {
@@ -999,18 +1122,15 @@ namespace glz
          }
 
          auto self = this->shared_from_this();
-         // Create buffer view before moving frame_buffer into lambda (C++14 evaluation order safety)
-         auto buffer_view = asio::buffer(*frame_buffer);
-         asio::async_write(*socket, buffer_view,
-                           [self, socket, frame_buffer = std::move(frame_buffer)](std::error_code ec, std::size_t) {
+         asio::async_write(*socket, asio::buffer(write_buf_.data(), write_buf_.size()),
+                           [self, socket](std::error_code ec, size_t) {
                               if (ec) {
-                                 // Mark connection as closing before notifying handlers to avoid re-entrant close
-                                 // attempts
+                                 // Mark as closing before notifying handlers to avoid re-entrant close attempts
                                  self->is_closing_ = true;
                                  {
                                     std::lock_guard<std::mutex> lock(self->write_mutex_);
                                     self->write_in_progress_ = false;
-                                    self->write_queue_.clear();
+                                    self->pending_writes_.clear();
                                     self->close_after_write_ = false;
                                  }
                                  // Only call error handlers if not already closed (prevents calling handlers
@@ -1023,9 +1143,40 @@ namespace glz
                                  return;
                               }
 
-                              // Process next frame in queue
-                              self->do_write();
+                              // Drain pending writes
+                              self->drain_write_queue();
                            });
+      }
+
+      // Process queued writes after a write completes
+      inline void drain_write_queue()
+      {
+         bool queue_empty = false;
+         bool should_close_after = false;
+
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (pending_writes_.empty()) {
+               write_in_progress_ = false;
+               should_close_after = close_after_write_;
+               close_after_write_ = false;
+               queue_empty = true;
+            }
+            else {
+               // write_buf_ is exclusively owned by the writer when write_in_progress_ == true
+               write_buf_ = std::move(pending_writes_.front());
+               pending_writes_.pop_front();
+            }
+         }
+
+         if (queue_empty) {
+            if (should_close_after) {
+               schedule_close();
+            }
+            return;
+         }
+
+         start_async_write();
       }
 
       // Close the socket after the close frame has been sent (responder side)
@@ -1200,8 +1351,26 @@ namespace glz
 
       std::shared_ptr<SocketType> socket_;
       std::weak_ptr<websocket_server> server_;
-      std::array<uint8_t, 16384> read_buffer_;
-      std::vector<uint8_t> frame_buffer_;
+
+      // Shared receive buffer support (server-owned per-thread buffers).
+      // When recv_buffers_ is non-null, the shared buffer path is used (async_wait +
+      // synchronous read_some). When null, the fallback path is used (async_read_some
+      // into per-connection read_buf_). Connections hold a shared_ptr copy, guaranteeing
+      // the buffers outlive all connections even if the server is destroyed first.
+      std::shared_ptr<std::vector<std::vector<uint8_t>>> recv_buffers_;
+      std::shared_ptr<ws_thread_map> thread_indices_;
+      bool ssl_has_pending_{false}; // SSL drain loop didn't finish — force re-entry via asio::post
+      bool read_pending_{false}; // Reentrancy guard for do_start_read (intentionally non-atomic)
+      size_t zero_spill_count_{0}; // Consecutive zero-spill cycles for deferred reclamation
+
+      // Dual-purpose buffer:
+      // - Shared path: spill buffer (unconsumed partial-frame bytes). Starts empty.
+      // - Fallback path: per-connection read buffer. Lazily allocated via ensure_read_buf_capacity().
+      std::vector<uint8_t> read_buf_;
+      // Dual-purpose length:
+      // - Shared path: number of spill bytes in read_buf_
+      // - Fallback path: total valid buffered data in read_buf_[0..buf_len_)
+      size_t buf_len_{0};
       std::vector<uint8_t> message_buffer_;
       ws_opcode current_opcode_{ws_opcode::continuation};
       bool is_reading_frame_{false};
@@ -1212,9 +1381,10 @@ namespace glz
       asio::ip::tcp::endpoint remote_endpoint_;
       bool client_mode_{false}; // For client-side connections (requires masking)
 
-      // Write queue for serializing outgoing frames (prevents interleaved writes)
+      // Write state for serializing outgoing frames (prevents interleaved writes)
       std::mutex write_mutex_;
-      std::deque<std::unique_ptr<std::vector<uint8_t>>> write_queue_;
+      std::vector<uint8_t> write_buf_; // Persistent write buffer (capacity reused across messages)
+      std::deque<std::vector<uint8_t>> pending_writes_; // Queue for concurrent writes
       bool write_in_progress_{false};
       bool close_after_write_{false}; // Close socket after write queue drains
 
@@ -1257,32 +1427,208 @@ namespace glz
       inline void on_error(std::function<void(std::error_code)> handler) { client_error_handler_ = std::move(handler); }
 
      private:
+      // Returns the buffer index for the current thread, or nullopt if not found.
+      // O(1) lookup — the map is built once at startup and read-only after.
+      inline std::optional<size_t> find_thread_index() const
+      {
+         if (!thread_indices_) return std::nullopt;
+         auto it = thread_indices_->find(std::this_thread::get_id());
+         if (it != thread_indices_->end()) return it->second;
+         return std::nullopt;
+      }
+
       inline void do_start_read()
       {
-         // Check if already fully closed to avoid operations on closed sockets
-         // RFC 6455 Section 7.1.1: Use closed_ (not is_closing_) to allow receiving
-         // close response during handshake. The initiator must continue reading.
-         // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
-         if (closed_.load()) {
+         if (closed_.load()) return;
+
+         // Reentrancy guard: prevents double async_wait/async_read_some if a user
+         // callback (e.g. on_message handler) triggers start_read() on the same connection.
+         if (read_pending_) {
+#ifndef NDEBUG
+            std::fprintf(stderr, "[glaze] warning: re-entrant start_read() detected — ignored\n");
+#endif
             return;
          }
+         read_pending_ = true;
 
-         // Hold socket_op_mutex_ while setting up the async read operation.
-         // This prevents close() from being called while async_read_some() is setting up.
-         // ASIO socket operations are NOT thread-safe for concurrent calls.
+         auto thread_idx = find_thread_index();
+         bool use_shared = recv_buffers_ && thread_idx.has_value()
+                           && *thread_idx < recv_buffers_->size();
+
+         // Spill thrashing mitigation: if spill exceeds 3/4 of the shared buffer,
+         // fall back to direct reads into read_buf_ to avoid O(n) copy-per-cycle.
+         if (use_shared) {
+            auto& shared_buf = (*recv_buffers_)[*thread_idx];
+            if (buf_len_ > shared_buf.size() / spill_fallback_denominator * spill_fallback_numerator) {
+               use_shared = false;
+            }
+         }
+
+         // Hold socket_op_mutex_ unconditionally while setting up the async operation.
+         // Both paths need it: async_wait needs a valid socket for registration,
+         // async_read_some needs it for the same reason.
          std::lock_guard<std::mutex> lock(socket_op_mutex_);
-
-         // Re-check under lock since socket may have been closed while waiting for mutex
          auto socket = socket_;
          if (!socket || !socket->lowest_layer().is_open()) {
+            read_pending_ = false;
             return;
          }
 
          auto self = this->shared_from_this();
-         socket->async_read_some(asio::buffer(read_buffer_),
-                                 [self, socket](std::error_code ec, std::size_t bytes_transferred) {
-                                    self->on_read(ec, bytes_transferred);
-                                 });
+
+         if (use_shared) {
+            if (ssl_has_pending_) {
+               // SSL layer has residual buffered data — async_wait won't fire.
+               // Post directly to re-enter do_shared_read immediately.
+               // ssl_has_pending_ is cleared at the top of do_shared_read (not here).
+               asio::post(socket->get_executor(), [self, socket]() {
+                  self->do_shared_read(socket);
+               });
+            }
+            else {
+               // Shared buffer path: async_wait + synchronous read_some.
+               // async_wait doesn't touch the buffer — it just waits for readability.
+               socket->lowest_layer().async_wait(asio::ip::tcp::socket::wait_read,
+                  [self, socket](std::error_code ec) {
+                     if (ec) {
+                        self->on_read_error(ec);
+                        return;
+                     }
+                     self->do_shared_read(socket);
+                  });
+            }
+         }
+         else {
+            // Fallback path: async_read_some into per-connection read_buf_.
+            ensure_read_buf_capacity();
+
+            socket->async_read_some(
+               asio::buffer(read_buf_.data() + buf_len_, read_buf_.size() - buf_len_),
+               [self, socket](std::error_code ec, size_t bytes_transferred) {
+                  if (ec) {
+                     self->on_read_error(ec);
+                  }
+                  else {
+                     self->read_pending_ = false;
+                     self->on_read(ec, bytes_transferred);
+                  }
+               });
+         }
+      }
+
+      // Shared buffer read: synchronous read_some into the per-thread shared buffer.
+      // Called from both async_wait callback and asio::post (SSL pending).
+      inline void do_shared_read(std::shared_ptr<SocketType> socket)
+      {
+         // Clear ssl_has_pending_ at the point of action, not in the caller.
+         ssl_has_pending_ = false;
+
+         // Re-check thread index — ASIO may dispatch this callback on any thread
+         // calling io_context::run(). Fall back to per-connection buffer if unindexed.
+         auto idx = find_thread_index();
+         if (!idx.has_value() || !recv_buffers_ || *idx >= recv_buffers_->size()) {
+            // async_wait already fired — the socket is readable. Do a synchronous
+            // read into read_buf_ (per-connection) and process directly.
+            ensure_read_buf_capacity();
+            asio::error_code fallback_ec;
+            size_t n = 0;
+            {
+               std::lock_guard<std::mutex> lock(socket_op_mutex_);
+               if (!socket_ || !socket_->lowest_layer().is_open()) {
+                  read_pending_ = false;
+                  return;
+               }
+               n = socket->read_some(
+                  asio::buffer(read_buf_.data() + buf_len_, read_buf_.size() - buf_len_),
+                  fallback_ec);
+               if (!fallback_ec && n == 0) {
+                  fallback_ec = asio::error::eof;
+               }
+            }
+            if (fallback_ec) {
+               on_read_error(fallback_ec);
+            }
+            else {
+               read_pending_ = false;
+               on_read(fallback_ec, n);
+            }
+            return;
+         }
+
+         auto& buf = (*recv_buffers_)[*idx];
+
+         // Copy spill data to shared buffer front (usually 0 bytes).
+         // Safe outside the lock: the shared buffer is server-owned (refcounted via
+         // shared_ptr). The ASIO single-threaded callback guarantee means no other
+         // callback on this thread touches the shared buffer concurrently.
+         asio::error_code read_ec;
+         size_t offset = buf_len_;
+         if (offset > 0) {
+            if (offset > buf.size()) {
+               read_pending_ = false;
+               close(ws_close_code::internal_error, "Spill overflow");
+               return;
+            }
+            std::memcpy(buf.data(), read_buf_.data(), offset);
+         }
+
+         // Lock only for socket operations — close()/force_close() from another
+         // thread must not race with read_some().
+         {
+            std::lock_guard<std::mutex> lock(socket_op_mutex_);
+            if (!socket_ || !socket_->lowest_layer().is_open()) {
+               read_pending_ = false;
+               return;
+            }
+
+            auto n = socket->read_some(
+               asio::buffer(buf.data() + offset, buf.size() - offset), read_ec);
+            if (!read_ec && n == 0) {
+               // TCP graceful close (EOF). Synchronous read_some returns 0 with no
+               // error — unlike async_read_some which surfaces error::eof. Without
+               // this check, the connection would busy-loop.
+               read_ec = asio::error::eof;
+            }
+            if (!read_ec) {
+               offset += n;
+
+               // SSL: drain any buffered decrypted data (compile-time elided for plain TCP).
+               // Capped to minimize mutex hold time. If the cap is hit or the buffer fills,
+               // ssl_has_pending_ forces immediate re-entry on the next cycle via asio::post().
+               if constexpr (!std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+                  static constexpr size_t max_ssl_drain_iterations = 4;
+                  size_t drain_count = 0;
+                  while (offset < buf.size() && drain_count < max_ssl_drain_iterations) {
+                     asio::error_code drain_ec;
+                     auto m = socket->read_some(
+                        asio::buffer(buf.data() + offset, buf.size() - offset),
+                        drain_ec);
+                     if (drain_ec || m == 0) break;
+                     offset += m;
+                     ++drain_count;
+                  }
+                  if (offset >= buf.size() || drain_count >= max_ssl_drain_iterations) {
+                     ssl_has_pending_ = true;
+                  }
+               }
+            }
+         }
+         // Lock released — safe for user callbacks to call close()/send()
+
+         if (read_ec) {
+            on_read_error(read_ec);
+            return;
+         }
+
+         read_pending_ = false;
+         on_read_shared(buf.data(), offset);
+
+#ifndef NDEBUG
+         // Poison the shared buffer to detect use-after-callback bugs.
+         // Any retained string_view into the shared buffer will show 0xDE garbage.
+         // This is valid memory (server-owned, refcounted) — not a use-after-free.
+         std::memset(buf.data(), 0xDE, offset);
+#endif
       }
    };
 }
