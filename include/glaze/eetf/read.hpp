@@ -410,9 +410,9 @@ namespace glz
    };
 
    // is_variant
-   // Can't effectively parse into std::variant. Only if trying to parse all of underlying variant' types one by one. But
-   // this approach can (and would) add a place for errors - because underlying data can hold "similar" types in EETF
-   // terms
+   // Can't effectively parse into std::variant. Only if trying to parse all of underlying variant' types one by one.
+   // But this approach can (and would) add a place for errors - because underlying data can hold "similar" types in
+   // EETF terms
 
    template <uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, class Buffer>
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept
