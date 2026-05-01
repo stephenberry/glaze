@@ -1461,7 +1461,7 @@ namespace glz
 
    // Tuples
    template <class T>
-      requires(tuple_t<T> || is_std_tuple<T>)
+      requires(tuple_t<T> || std_tuple_protocol<T>)
    struct from<CBOR, T> final
    {
       template <auto Opts>
@@ -1487,7 +1487,13 @@ namespace glz
          }
 
          using V = std::decay_t<T>;
-         static constexpr auto N = glz::tuple_size_v<V>;
+         static constexpr bool use_std_protocol = std_tuple_protocol<V> && !tuple_t<V>;
+         static constexpr auto N = []() constexpr {
+            if constexpr (use_std_protocol)
+               return std::tuple_size_v<V>;
+            else
+               return glz::tuple_size_v<V>;
+         }();
 
          uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
          if (bool(ctx.error)) [[unlikely]]
@@ -1498,8 +1504,8 @@ namespace glz
             return;
          }
 
-         if constexpr (is_std_tuple<T>) {
-            for_each<N>([&]<size_t I>() { parse<CBOR>::op<Opts>(std::get<I>(value), ctx, it, end); });
+         if constexpr (use_std_protocol) {
+            for_each<N>([&]<size_t I>() { parse<CBOR>::op<Opts>(get<I>(value), ctx, it, end); });
          }
          else {
             for_each<N>([&]<size_t I>() { parse<CBOR>::op<Opts>(glz::get<I>(value), ctx, it, end); });

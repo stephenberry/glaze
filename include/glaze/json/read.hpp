@@ -2642,15 +2642,19 @@ namespace glz
    };
 
    template <class T>
-      requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
+      requires glaze_array_t<T> || tuple_t<T> || std_tuple_protocol<T>
    struct from<JSON, T>
    {
       template <auto Opts>
       static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
+         static constexpr bool use_std_protocol = std_tuple_protocol<T> && !tuple_t<T>;
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<T>) {
                return reflect<T>::size;
+            }
+            else if constexpr (use_std_protocol) {
+               return std::tuple_size_v<T>;
             }
             else {
                return glz::tuple_size_v<T>;
@@ -2691,8 +2695,8 @@ namespace glz
                   return true;
                }
             }
-            if constexpr (is_std_tuple<T>) {
-               parse<JSON>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
+            if constexpr (use_std_protocol) {
+               parse<JSON>::op<ws_handled<Opts>()>(get<I>(value), ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return true;
             }
@@ -3452,7 +3456,8 @@ namespace glz
    concept variant_object_type = json_object<T>;
 
    template <class T>
-   concept variant_array_type = array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>;
+   concept variant_array_type =
+      array_t<remove_meta_wrapper_t<T>> || glaze_array_t<T> || tuple_t<T> || std_tuple_protocol<T>;
 
    template <class T>
    concept variant_null_type = null_t<T>;
@@ -3653,8 +3658,8 @@ namespace glz
                         found_match = true;
                      }
                      else if constexpr (not Options.null_terminated) {
-                        constexpr bool is_complete_type =
-                           num_t<V> || bool_t<V> || string_t<V> || std::is_enum_v<V> || tuple_t<V> || is_std_tuple<V>;
+                        constexpr bool is_complete_type = num_t<V> || bool_t<V> || string_t<V> || std::is_enum_v<V> ||
+                                                          tuple_t<V> || std_tuple_protocol<V>;
 
                         if constexpr (is_complete_type) {
                            if (ctx.error == error_code::end_reached && it > copy_it) {
