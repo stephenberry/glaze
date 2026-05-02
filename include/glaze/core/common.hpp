@@ -4,9 +4,6 @@
 #pragma once
 
 #include <array>
-#include <atomic>
-#include <bitset>
-#include <complex>
 #include <cstddef>
 #include <functional>
 #include <iterator>
@@ -18,7 +15,6 @@
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/array_apply.hpp"
 #include "glaze/core/cast.hpp"
-#include "glaze/core/chrono.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/error_category.hpp"
 #include "glaze/core/feature_test.hpp"
@@ -32,6 +28,17 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/validate.hpp"
 #include "glaze/util/variant.hpp"
+
+// These std headers are only needed on the P2996 path, where the specializations
+// in the `#if GLZ_REFLECTION26` block below (glz::specified<std::complex<T>>,
+// std::bitset<N>, std::atomic<T>) prevent auto-reflection from producing incorrect
+// serialization for these stdlib types. Pre-C++26 users save the per-TU parse cost.
+// Included at file scope, not inside `namespace glz`, so std names stay in ::std.
+#if GLZ_REFLECTION26
+#include <atomic>
+#include <bitset>
+#include <complex>
+#endif
 
 namespace glz
 {

@@ -23,34 +23,53 @@
 
 namespace glz
 {
-   // Heap-allocated nullable wrapper. Same API as std::optional<T> but stores the value
-   // behind a unique_ptr (8 bytes inline) instead of inline (sizeof(T) + padding).
-   // Used by schema to reduce its per-instance size for sparsely populated fields.
+   // Heap-allocated nullable wrapper. Same API as std::optional<T>, but stores the value
+   // out-of-line (8 bytes inline instead of sizeof(T) + padding) — used by schema to keep
+   // sparsely populated fields cheap.
+   //
+   // Manages the pointer directly rather than holding a std::unique_ptr<T> so that every
+   // TU including schema.hpp avoids the unique_ptr / default_delete template instantiations
+   // for each unique boxed T, even when glz::schema itself is never used.
+   //
+   // Intentionally does not support polymorphic upcast (`boxed<Derived>` → `boxed<Base>`)
+   // the way std::unique_ptr does — schema types are concrete and never polymorphic.
    template <class T>
    struct boxed final
    {
       using value_type = T;
 
-      std::unique_ptr<T> ptr{};
+      T* ptr{};
 
       boxed() noexcept = default;
 
-      boxed(const boxed& other) : ptr(other.ptr ? std::make_unique<T>(*other.ptr) : nullptr) {}
+      boxed(const boxed& other) : ptr(other.ptr ? new T(*other.ptr) : nullptr) {}
       boxed& operator=(const boxed& other)
       {
          if (this != &other) {
-            ptr = other.ptr ? std::make_unique<T>(*other.ptr) : nullptr;
+            T* new_ptr = other.ptr ? new T(*other.ptr) : nullptr;
+            delete ptr;
+            ptr = new_ptr;
          }
          return *this;
       }
 
-      boxed(boxed&&) noexcept = default;
-      boxed& operator=(boxed&&) noexcept = default;
+      boxed(boxed&& other) noexcept : ptr(other.ptr) { other.ptr = nullptr; }
+      boxed& operator=(boxed&& other) noexcept
+      {
+         if (this != &other) {
+            delete ptr;
+            ptr = other.ptr;
+            other.ptr = nullptr;
+         }
+         return *this;
+      }
+
+      ~boxed() { delete ptr; }
 
       // Converting constructor: accepts any type constructible to T
       template <class U>
          requires(!std::same_as<std::decay_t<U>, boxed> && std::is_constructible_v<T, U &&>)
-      boxed(U&& val) : ptr(std::make_unique<T>(std::forward<U>(val)))
+      boxed(U&& val) : ptr(new T(std::forward<U>(val)))
       {}
 
       // Converting assignment
@@ -58,7 +77,9 @@ namespace glz
          requires(!std::same_as<std::decay_t<U>, boxed> && std::is_constructible_v<T, U &&>)
       boxed& operator=(U&& val)
       {
-         ptr = std::make_unique<T>(std::forward<U>(val));
+         T* new_ptr = new T(std::forward<U>(val));
+         delete ptr;
+         ptr = new_ptr;
          return *this;
       }
 
@@ -67,18 +88,24 @@ namespace glz
 
       T& operator*() noexcept { return *ptr; }
       const T& operator*() const noexcept { return *ptr; }
-      T* operator->() noexcept { return ptr.get(); }
-      const T* operator->() const noexcept { return ptr.get(); }
+      T* operator->() noexcept { return ptr; }
+      const T* operator->() const noexcept { return ptr; }
 
       T& value() { return *ptr; }
       const T& value() const { return *ptr; }
 
-      void reset() noexcept { ptr.reset(); }
+      void reset() noexcept
+      {
+         delete ptr;
+         ptr = nullptr;
+      }
 
       template <class... Args>
       T& emplace(Args&&... args)
       {
-         ptr = std::make_unique<T>(std::forward<Args>(args)...);
+         T* new_ptr = new T(std::forward<Args>(args)...);
+         delete ptr;
+         ptr = new_ptr;
          return *ptr;
       }
 
