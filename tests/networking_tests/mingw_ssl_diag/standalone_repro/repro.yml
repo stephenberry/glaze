@@ -1,0 +1,52 @@
+# Standalone reproducer for MinGW + OpenSSL heap corruption.
+# No Glaze dependency — just ASIO + OpenSSL + MinGW.
+#
+# Copy this file to .github/workflows/ in any repo to reproduce.
+# Or run locally on MSYS2 MINGW64:
+#   pacman -S mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-gcc mingw-w64-x86_64-openssl
+#   cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build
+#   cmake --build build
+#   ./build/repro
+
+name: mingw-openssl-heap-repro
+
+on: workflow_dispatch
+
+jobs:
+  repro:
+    name: MinGW + OpenSSL heap corruption
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-openssl
+
+    - name: Build
+      working-directory: tests/networking_tests/mingw_ssl_diag/standalone_repro
+      run: |
+        cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build
+        cmake --build build
+
+    - name: Run (attempt 1)
+      working-directory: tests/networking_tests/mingw_ssl_diag/standalone_repro/build
+      run: ./repro || echo "CRASHED with exit code $?"
+
+    - name: Run (attempt 2)
+      working-directory: tests/networking_tests/mingw_ssl_diag/standalone_repro/build
+      run: ./repro || echo "CRASHED with exit code $?"
+
+    - name: Run (attempt 3)
+      working-directory: tests/networking_tests/mingw_ssl_diag/standalone_repro/build
+      run: ./repro || echo "CRASHED with exit code $?"
