@@ -11,6 +11,9 @@ CMakeUserPresets.json
 **/CMakeCache.txt
 **/Testing/
 
+# Claude Code
+.claude/
+
 # IDE files
 .idea/
 .vs/

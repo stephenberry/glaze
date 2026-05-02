@@ -223,7 +223,35 @@ namespace glz
                resolver_.reset();
             }
 
-            // Reset socket pointers (sockets already closed via force_close above)
+            // Cancel pending operations on raw sockets before destroying them.
+            // During the connection/handshake phase, the websocket_connection doesn't
+            // exist yet, so force_close() above is a no-op. We must cancel any pending
+            // operations on the raw sockets directly.
+            {
+               asio::error_code ec;
+               if (tcp_socket_) {
+                  tcp_socket_->cancel(ec);
+                  tcp_socket_->close(ec);
+               }
+#ifdef GLZ_ENABLE_SSL
+               if (ssl_socket_) {
+                  ssl_socket_->lowest_layer().cancel(ec);
+                  ssl_socket_->lowest_layer().close(ec);
+               }
+#endif
+            }
+
+            // Drain any pending completion handlers (e.g. IOCP cancellation completions)
+            // so they are processed before the io_context or sockets are destroyed.
+            // Safety: handler shared_ptrs (on_error, on_message, etc.) are already cleared
+            // above, so any completion handlers that fire during poll() will find null
+            // handler pointers and skip user callbacks.
+            if (ctx) {
+               ctx->restart();
+               ctx->poll();
+            }
+
+            // Now safe to reset socket pointers - all pending operations have completed
             tcp_socket_.reset();
 #ifdef GLZ_ENABLE_SSL
             ssl_socket_.reset();
@@ -452,16 +480,18 @@ namespace glz
                                       ws_conn->set_client_mode(true);
                                       ws_conn->set_max_message_size(self->max_message_size);
 
+                                      // Set handlers before processing initial data, so that any
+                                      // frames in the initial data are properly dispatched.
+                                      if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
+                                      if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
+                                      if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
+
                                       if (response_buf->size() > 0) {
                                          std::string_view initial_data{
                                             static_cast<const char*>(response_buf->data().data()),
                                             response_buf->size()};
                                          ws_conn->set_initial_data(initial_data);
                                       }
-
-                                      if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
-                                      if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
-                                      if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
 
                                       ws_conn->start_read();
 
