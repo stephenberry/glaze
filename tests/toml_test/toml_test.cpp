@@ -4744,4 +4744,132 @@ suite map_as_value_tests = [] {
    };
 };
 
+// Once a value is being written inside an inline context (the value of a key in
+// an inline table, or an element of an inline array) every nested value must be
+// inline TOML as well. The standard struct/map writers emit multi-line content
+// and `[table]` / `[[array]]` headers that the inline context cannot accept, so
+// the inline writers route every recursion through write_inline_value to keep
+// the output legal at arbitrary nesting depth.
+namespace inline_cascade
+{
+   struct leaf
+   {
+      int x{};
+      std::string s{};
+   };
+   struct branch_with_array
+   {
+      std::vector<leaf> arr;
+   };
+   struct trunk_with_map
+   {
+      std::map<std::string, branch_with_array> m;
+   };
+   struct holder_with_vec_of_maps
+   {
+      std::vector<std::map<std::string, int>> data;
+   };
+}
+
+template <>
+struct glz::meta<inline_cascade::leaf>
+{
+   using T = inline_cascade::leaf;
+   static constexpr auto value = object("x", &T::x, "s", &T::s);
+};
+template <>
+struct glz::meta<inline_cascade::branch_with_array>
+{
+   using T = inline_cascade::branch_with_array;
+   static constexpr auto value = object("arr", &T::arr);
+};
+template <>
+struct glz::meta<inline_cascade::trunk_with_map>
+{
+   using T = inline_cascade::trunk_with_map;
+   static constexpr auto value = object("m", &T::m);
+};
+template <>
+struct glz::meta<inline_cascade::holder_with_vec_of_maps>
+{
+   using T = inline_cascade::holder_with_vec_of_maps;
+   static constexpr auto value = object("data", &T::data);
+};
+
+suite inline_cascade_tests = [] {
+   "map_value_holding_array_of_structs_stays_inline"_test = [] {
+      // Without cascading, write_inline_object would dispatch arr through the
+      // multi-line struct writer, leaking newline-separated key = value pairs
+      // (and potentially [[arr]] headers in deeper trees) inside the outer
+      // inline table.
+      inline_cascade::trunk_with_map t{};
+      t.m["k1"] = {.arr = {{1, "a"}, {2, "b"}}};
+      t.m["k2"] = {.arr = {{3, "c"}}};
+      std::string buffer{};
+      expect(not glz::write_toml(t, buffer));
+      expect(buffer == R"(m = {k1 = {arr = [{x = 1, s = "a"}, {x = 2, s = "b"}]}, k2 = {arr = [{x = 3, s = "c"}]}})")
+         << buffer;
+
+      inline_cascade::trunk_with_map parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.m.size() == 2u);
+      expect(parsed.m.at("k1").arr.size() == 2u);
+      expect(parsed.m.at("k1").arr.at(0).x == 1);
+      expect(parsed.m.at("k1").arr.at(0).s == "a");
+      expect(parsed.m.at("k1").arr.at(1).x == 2);
+      expect(parsed.m.at("k2").arr.size() == 1u);
+      expect(parsed.m.at("k2").arr.at(0).x == 3);
+   };
+
+   "vector_of_map_field_writes_each_element_inline"_test = [] {
+      // vector<map<...>> is not classified as an array-of-objects (since map is
+      // neither glaze_object_t nor reflectable), so it flows through the array
+      // writer. Each element must be emitted as an inline table.
+      inline_cascade::holder_with_vec_of_maps h{.data = {{{"a", 1}, {"b", 2}}, {{"c", 3}}}};
+      std::string buffer{};
+      expect(not glz::write_toml(h, buffer));
+      expect(buffer == "data = [{a = 1, b = 2}, {c = 3}]") << buffer;
+
+      inline_cascade::holder_with_vec_of_maps parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.data.size() == 2u);
+      expect(parsed.data.at(0).at("a") == 1);
+      expect(parsed.data.at(0).at("b") == 2);
+      expect(parsed.data.at(1).at("c") == 3);
+   };
+
+   "top_level_vector_of_struct_emits_inline_elements"_test = [] {
+      // Previously this dispatched each element through the multi-pass struct
+      // writer, producing multi-line content inside the array's `[ ... ]`
+      // brackets. Each element must be an inline table.
+      std::vector<inline_cascade::leaf> v{{1, "a"}, {2, "b"}};
+      std::string buffer{};
+      expect(not glz::write_toml(v, buffer));
+      expect(buffer == R"([{x = 1, s = "a"}, {x = 2, s = "b"}])") << buffer;
+
+      std::vector<inline_cascade::leaf> parsed;
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.size() == 2u);
+      expect(parsed.at(0).x == 1);
+      expect(parsed.at(0).s == "a");
+      expect(parsed.at(1).x == 2);
+      expect(parsed.at(1).s == "b");
+   };
+
+   "top_level_vector_of_map_emits_inline_elements"_test = [] {
+      // Same reasoning for map elements: the array writer's `[ ... ]` cannot
+      // contain multi-line `key = value` lines from the standard map writer.
+      std::vector<std::map<std::string, int>> v{{{"a", 1}}, {{"b", 2}}};
+      std::string buffer{};
+      expect(not glz::write_toml(v, buffer));
+      expect(buffer == "[{a = 1}, {b = 2}]") << buffer;
+
+      std::vector<std::map<std::string, int>> parsed;
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.size() == 2u);
+      expect(parsed.at(0).at("a") == 1);
+      expect(parsed.at(1).at("b") == 2);
+   };
+};
+
 int main() { return 0; }
