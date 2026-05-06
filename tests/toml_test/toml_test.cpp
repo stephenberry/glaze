@@ -4872,4 +4872,156 @@ suite inline_cascade_tests = [] {
    };
 };
 
+// Wrapper-typed struct fields (optional<X>, variant<...>) that ultimately hold
+// a struct or map need to dispatch through the inline writers, otherwise the
+// wrapper's writer falls through to the multi-line struct/map writers and
+// emits content invalid in value position.
+//
+// Note: the TOML reader has no nullable/optional specialization, so these are
+// write-only tests. Round-trip is not supported for std::optional<T> in TOML.
+namespace inline_wrappers
+{
+   struct toggle
+   {
+      bool enabled{};
+   };
+   struct optional_map_field
+   {
+      std::optional<std::map<std::string, bool>> items;
+   };
+   struct optional_struct_field
+   {
+      std::optional<toggle> it;
+   };
+   struct variant_field
+   {
+      std::variant<int, toggle, std::map<std::string, int>> v;
+   };
+}
+
+template <>
+struct glz::meta<inline_wrappers::toggle>
+{
+   using T = inline_wrappers::toggle;
+   static constexpr auto value = object("enabled", &T::enabled);
+};
+template <>
+struct glz::meta<inline_wrappers::optional_map_field>
+{
+   using T = inline_wrappers::optional_map_field;
+   static constexpr auto value = object("items", &T::items);
+};
+template <>
+struct glz::meta<inline_wrappers::optional_struct_field>
+{
+   using T = inline_wrappers::optional_struct_field;
+   static constexpr auto value = object("it", &T::it);
+};
+template <>
+struct glz::meta<inline_wrappers::variant_field>
+{
+   using T = inline_wrappers::variant_field;
+   static constexpr auto value = object("v", &T::v);
+};
+
+suite inline_wrapper_tests = [] {
+   "optional_map_field_emits_inline_table"_test = [] {
+      inline_wrappers::optional_map_field w{.items = std::map<std::string, bool>{{"a", true}, {"b", false}}};
+      std::string buffer{};
+      expect(not glz::write_toml(w, buffer));
+      expect(buffer == "items = {a = true, b = false}") << buffer;
+   };
+
+   "optional_struct_field_emits_inline_table"_test = [] {
+      inline_wrappers::optional_struct_field w{.it = inline_wrappers::toggle{true}};
+      std::string buffer{};
+      expect(not glz::write_toml(w, buffer));
+      expect(buffer == "it = {enabled = true}") << buffer;
+   };
+
+   "variant_field_struct_alternative_emits_inline"_test = [] {
+      inline_wrappers::variant_field w{.v = inline_wrappers::toggle{true}};
+      std::string buffer{};
+      expect(not glz::write_toml(w, buffer));
+      expect(buffer == "v = {enabled = true}") << buffer;
+   };
+
+   "variant_field_map_alternative_emits_inline"_test = [] {
+      inline_wrappers::variant_field w{.v = std::map<std::string, int>{{"a", 1}, {"b", 2}}};
+      std::string buffer{};
+      expect(not glz::write_toml(w, buffer));
+      expect(buffer == "v = {a = 1, b = 2}") << buffer;
+   };
+
+   "tuple_with_struct_element_emits_inline_array"_test = [] {
+      // Tuple/glaze_array elements live inside `[ ... ]` and must be inline,
+      // matching the behavior of std::vector elements.
+      std::tuple<inline_wrappers::toggle, int> t{inline_wrappers::toggle{true}, 42};
+      std::string buffer{};
+      expect(not glz::write_toml(t, buffer));
+      expect(buffer == "[{enabled = true}, 42]") << buffer;
+   };
+
+   "tuple_with_map_element_emits_inline_array"_test = [] {
+      std::tuple<std::map<std::string, int>, int> t{{{"a", 1}}, 7};
+      std::string buffer{};
+      expect(not glz::write_toml(t, buffer));
+      expect(buffer == "[{a = 1}, 7]") << buffer;
+   };
+};
+
+// A focused regression test for the struct reader's early-return after
+// consuming an inline table. The targeted shape is an inline outer table whose
+// first value is itself an inline table, followed by a sibling key:
+// `outer = {field = {a = 1}, b = 2}`. Without the early return, the inner
+// struct reader loops after consuming the inner `}` and tries to parse the
+// outer `,` as the start of a new key, surfacing a syntax error. With the
+// early return the inner reader stops at the right boundary and the outer
+// parser resumes correctly.
+namespace inline_return_regression
+{
+   struct inner
+   {
+      int a{};
+   };
+   struct outer
+   {
+      inner field;
+      int b{};
+   };
+   struct doc
+   {
+      outer outer{};
+   };
+}
+
+template <>
+struct glz::meta<inline_return_regression::inner>
+{
+   using T = inline_return_regression::inner;
+   static constexpr auto value = object("a", &T::a);
+};
+template <>
+struct glz::meta<inline_return_regression::outer>
+{
+   using T = inline_return_regression::outer;
+   static constexpr auto value = object("field", &T::field, "b", &T::b);
+};
+template <>
+struct glz::meta<inline_return_regression::doc>
+{
+   using T = inline_return_regression::doc;
+   static constexpr auto value = object("outer", &T::outer);
+};
+
+suite inline_return_regression_tests = [] {
+   "inline_struct_value_with_trailing_sibling_parses"_test = [] {
+      inline_return_regression::doc parsed{};
+      const auto ec = glz::read_toml(parsed, "outer = {field = {a = 1}, b = 2}");
+      expect(not ec);
+      expect(parsed.outer.field.a == 1);
+      expect(parsed.outer.b == 2);
+   };
+};
+
 int main() { return 0; }

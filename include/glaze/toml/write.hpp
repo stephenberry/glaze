@@ -881,12 +881,21 @@ namespace glz
    void write_inline_value(V&& val, is_context auto&& ctx, B&& b, auto& ix)
    {
       using val_t = std::remove_cvref_t<V>;
-      if constexpr (nullable_like<val_t>) {
-         // The standard nullable writer skips null values without emitting anything,
-         // matching the behavior here; for a non-null value we recurse so the
-         // inner value still goes through inline dispatch.
+      if constexpr (always_null_t<val_t>) {
+         // No inner value to recurse into; emit nothing.
+      }
+      else if constexpr (nullable_like<val_t>) {
+         // bool / dereferencing access (raw pointers, smart pointers, std::optional, ...).
          if (val) {
             write_inline_value<Options>(*val, ctx, b, ix);
+         }
+      }
+      else if constexpr (nullable_value_t<val_t>) {
+         // .has_value() / .value() access for optional-like types that don't
+         // expose operator bool / operator*. Aligns with the broader null_t
+         // coverage used at the struct field level.
+         if (val.has_value()) {
+            write_inline_value<Options>(val.value(), ctx, b, ix);
          }
       }
       else if constexpr (is_variant<val_t>) {
@@ -989,10 +998,12 @@ namespace glz
          }
       };
 
-      // Helper lambda to write a scalar key-value pair
+      // Helper lambda to write a key-value pair where the value sits at the right
+      // of `=` and therefore must be inline TOML. Routing through write_inline_value
+      // covers the cases where the field type is itself a wrapper (optional, variant)
+      // around a struct or map; without this, those wrappers would dispatch through
+      // their multi-line writers and emit content invalid in value position.
       auto write_scalar_field = [&]<size_t I>() {
-         using val_t = field_t<T, I>;
-
          if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
             return;
          }
@@ -1012,10 +1023,10 @@ namespace glz
          ix += 3;
 
          if constexpr (reflectable<T>) {
-            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+            write_inline_value<Options>(get_member(value, get<I>(t)), ctx, b, ix);
          }
          else {
-            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+            write_inline_value<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
          }
       };
 
@@ -1422,20 +1433,21 @@ namespace glz
          }
          dump('[', b, ix);
          using V = std::decay_t<T>;
+         // Tuple/glaze_array elements live inside `[ ... ]` and so must be inline
+         // TOML, exactly like the array-of-elements case above. Routing through
+         // write_inline_value keeps struct/map/optional/variant elements legal.
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
             if constexpr (glaze_array_t<V>) {
-               serialize<TOML>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
+               write_inline_value<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
             }
             else if constexpr (is_std_tuple<T>) {
-               using Value = core_t<decltype(std::get<I>(value))>;
-               to<TOML, Value>::template op<Opts>(std::get<I>(value), ctx, b, ix);
+               write_inline_value<Opts>(std::get<I>(value), ctx, b, ix);
             }
             else {
-               using Value = core_t<decltype(glz::get<I>(value))>;
-               to<TOML, Value>::template op<Opts>(glz::get<I>(value), ctx, b, ix);
+               write_inline_value<Opts>(glz::get<I>(value), ctx, b, ix);
             }
             constexpr bool needs_comma = I < N - 1;
             if constexpr (needs_comma) {
