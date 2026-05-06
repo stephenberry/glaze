@@ -4607,4 +4607,141 @@ apple.taste.sweet = true
    };
 };
 
+// A map appearing as the value of a key (whether it is a struct field or the
+// mapped_type of an enclosing map) must be serialized as an inline table so
+// the resulting document remains valid TOML in any nesting position.
+namespace map_as_value
+{
+   struct toggle
+   {
+      bool enabled{};
+   };
+   struct config_with_struct_map
+   {
+      std::map<std::string, toggle> items;
+   };
+   struct config_with_scalar_map
+   {
+      std::map<std::string, bool> items;
+   };
+}
+
+template <>
+struct glz::meta<map_as_value::toggle>
+{
+   using T = map_as_value::toggle;
+   static constexpr auto value = object("enabled", &T::enabled);
+};
+template <>
+struct glz::meta<map_as_value::config_with_struct_map>
+{
+   using T = map_as_value::config_with_struct_map;
+   static constexpr auto value = object("items", &T::items);
+};
+template <>
+struct glz::meta<map_as_value::config_with_scalar_map>
+{
+   using T = map_as_value::config_with_scalar_map;
+   static constexpr auto value = object("items", &T::items);
+};
+
+suite map_as_value_tests = [] {
+   "map_of_struct_field_writes_as_inline_table"_test = [] {
+      map_as_value::config_with_struct_map c{};
+      c.items = {{"foo", {true}}, {"bar", {false}}};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+      // std::map iterates in lexicographic key order, so bar precedes foo.
+      expect(buffer == R"(items = {bar = {enabled = false}, foo = {enabled = true}})") << buffer;
+   };
+
+   "map_of_struct_field_roundtrips"_test = [] {
+      map_as_value::config_with_struct_map c{};
+      c.items = {{"foo", {true}}, {"bar", {false}}};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      map_as_value::config_with_struct_map parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.items.size() == 2u);
+      expect(parsed.items.at("foo").enabled == true);
+      expect(parsed.items.at("bar").enabled == false);
+   };
+
+   "map_of_scalar_field_writes_as_inline_table"_test = [] {
+      map_as_value::config_with_scalar_map c{};
+      c.items = {{"foo", true}, {"bar", false}};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+      expect(buffer == R"(items = {bar = false, foo = true})") << buffer;
+   };
+
+   "map_of_scalar_field_roundtrips"_test = [] {
+      map_as_value::config_with_scalar_map c{};
+      c.items = {{"foo", true}, {"bar", false}};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      map_as_value::config_with_scalar_map parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.items.size() == 2u);
+      expect(parsed.items.at("foo") == true);
+      expect(parsed.items.at("bar") == false);
+   };
+
+   "top_level_map_of_struct_writes_each_value_inline"_test = [] {
+      // A struct value at the top level of a document-level map must still be
+      // emitted inline, so the document remains a flat sequence of key = value
+      // lines rather than spilling the struct's keys into the enclosing scope.
+      std::map<std::string, map_as_value::toggle> m{{"foo", {true}}, {"bar", {false}}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == "bar = {enabled = false}\nfoo = {enabled = true}") << buffer;
+
+      std::map<std::string, map_as_value::toggle> parsed;
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.size() == 2u);
+      expect(parsed.at("foo").enabled == true);
+      expect(parsed.at("bar").enabled == false);
+   };
+
+   "empty_map_field_writes_empty_inline_table"_test = [] {
+      map_as_value::config_with_scalar_map c{};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+      expect(buffer == "items = {}") << buffer;
+
+      map_as_value::config_with_scalar_map parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.items.empty());
+   };
+
+   "nested_map_of_map_recurses_inline"_test = [] {
+      // Exercises the recursive write_inline_map<Options>(val, ...) branch when
+      // the mapped_type is itself a map.
+      std::map<std::string, std::map<std::string, int>> m{{"a", {{"x", 1}, {"y", 2}}}, {"b", {{"z", 3}}}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == "a = {x = 1, y = 2}\nb = {z = 3}") << buffer;
+
+      std::map<std::string, std::map<std::string, int>> parsed;
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.size() == 2u);
+      expect(parsed.at("a").at("x") == 1);
+      expect(parsed.at("a").at("y") == 2);
+      expect(parsed.at("b").at("z") == 3);
+   };
+
+   "malformed_inline_struct_value_surfaces_error"_test = [] {
+      // The struct reader now returns immediately after consuming an inline
+      // table; this confirms the early return doesn't swallow a real parse
+      // error inside the inline value.
+      map_as_value::config_with_struct_map parsed{};
+      // Missing the outer closing '}' that terminates the items map.
+      const std::string buffer = "items = {bar = {enabled = false}";
+      const auto ec = glz::read_toml(parsed, buffer);
+      expect(bool(ec)) << "expected a parse error";
+   };
+};
+
 int main() { return 0; }
