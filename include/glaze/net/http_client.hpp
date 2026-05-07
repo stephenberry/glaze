@@ -192,6 +192,101 @@ namespace glz
             v);
       }
 
+      // Active liveness check for a pooled TCP socket: peek 1 byte. Returns false if the
+      // peer has already closed (FIN seen, RST surfaces as a recv error) or anything else
+      // would make the socket unusable. Returns true only when the socket is healthy and
+      // idle (no data pending), which is the only state where a kept-alive connection
+      // should be reused.
+      //
+      // Caller contracts:
+      //   1. Plain TCP sockets only. SSL sockets are NOT a fit here: a TCP-layer peek
+      //      only sees ciphertext, OpenSSL may have already pulled the server's
+      //      close_notify into its internal read buffer (so peek returns would_block
+      //      even though the connection is dead), and any byte we'd see at the TCP
+      //      layer is an encrypted record we can't decode. acquire() bypasses this
+      //      function for SSL sockets and relies on timestamp eviction plus the
+      //      transparent-retry path instead.
+      //   2. A return value of false means "do not reuse this socket"; the caller is
+      //      expected to discard (close) it. We make a best-effort attempt to restore
+      //      the original blocking-mode flag before any false return, but if either
+      //      toggle or restore fails the socket may be left in an unspecified blocking
+      //      state, so retaining it for a sync read/write would be a footgun.
+      inline bool tcp_socket_is_pooled_alive(asio::ip::tcp::socket& tcp_sock)
+      {
+         if (!tcp_sock.is_open()) return false;
+
+         asio::error_code ec;
+         const bool was_non_blocking = tcp_sock.non_blocking();
+         tcp_sock.non_blocking(true, ec);
+         if (ec) {
+            // Toggle failed. The state may or may not have changed; attempt to restore
+            // it so the caller's invariants are preserved if they decide not to close
+            // the socket. The "discard on false" contract still applies.
+            asio::error_code restore_ec;
+            tcp_sock.non_blocking(was_non_blocking, restore_ec);
+            return false;
+         }
+
+         char buf;
+         const std::size_t n = tcp_sock.receive(asio::buffer(&buf, 1), asio::ip::tcp::socket::message_peek, ec);
+
+         asio::error_code restore_ec;
+         tcp_sock.non_blocking(was_non_blocking, restore_ec);
+         if (restore_ec) {
+            // Failed to restore blocking mode; the socket is now unusable for the sync
+            // code paths. Caller must discard.
+            return false;
+         }
+
+         if (ec == asio::error::would_block || ec == asio::error::try_again) {
+            return true; // healthy idle: nothing pending
+         }
+         if (ec) {
+            return false; // any other error means the socket is unusable
+         }
+         if (n == 0) {
+            return false; // peer sent FIN
+         }
+         // Unexpected bytes on an idle pooled connection (most often a TLS close_notify
+         // alert at the TCP layer, occasionally an unsolicited 408 Request Timeout from
+         // servers that emit one before closing per RFC 7230 §6.5). Don't reuse.
+         return false;
+      }
+
+      // Assemble the HTTP/1.1 request line + headers + body into a single contiguous
+      // buffer once, so the async chain (and retry) can share it without re-copying the
+      // body or re-iterating the headers map. For large idempotent PUT bodies this is
+      // the difference between O(1) and O(N) body copies per request through the chain.
+      inline std::string build_http_request_bytes(const std::string& method, const url_parts& url,
+                                                  const std::string& body,
+                                                  const std::unordered_map<std::string, std::string>& headers)
+      {
+         std::string s;
+         s.reserve(512 + body.size());
+         s.append(method);
+         s.append(" ");
+         s.append(url.path);
+         s.append(" HTTP/1.1\r\n");
+         s.append("Host: ");
+         s.append(url.host);
+         s.append("\r\n");
+         s.append("Connection: keep-alive\r\n");
+         if (!body.empty()) {
+            s.append("Content-Length: ");
+            s.append(std::to_string(body.size()));
+            s.append("\r\n");
+         }
+         for (const auto& [name, value] : headers) {
+            s.append(name);
+            s.append(": ");
+            s.append(value);
+            s.append("\r\n");
+         }
+         s.append("\r\n");
+         s.append(body);
+         return s;
+      }
+
 #ifdef GLZ_ENABLE_SSL
       // Configure SNI and hostname verification for client TLS connections.
       inline bool configure_ssl_client_hostname(ssl_socket& sock, const std::string& host)
@@ -399,6 +494,62 @@ namespace glz
       return url_parts{std::move(protocol), std::move(host), port, std::move(path)};
    }
 
+   // Idempotent HTTP methods are safe to retry transparently when a pooled connection
+   // turns out to be stale. POST/PATCH are intentionally excluded by default because
+   // a write that succeeded locally may have already been processed by the server.
+   inline bool is_idempotent_method(std::string_view method) noexcept
+   {
+      return method == "GET" || method == "HEAD" || method == "OPTIONS" || method == "PUT" || method == "DELETE" ||
+             method == "TRACE";
+   }
+
+   // Errors that almost always indicate "the connection failed before the server could
+   // process the request" rather than a genuine application failure. When the request is
+   // idempotent and no response bytes have been received yet, these warrant exactly one
+   // transparent retry on a fresh connection. connection_aborted covers ECONNABORTED on
+   // macOS writes to a half-closed peer.
+   //
+   // Implementation note: the make_error_code() calls force conversion to std::error_code
+   // before comparison. Without this, the asio::error::* enums resolve to
+   // boost::asio::error::misc_errors when glaze is built against boost.asio, and there is
+   // no operator== between std::error_code and a boost-side enum. By materializing both
+   // sides as std::error_code, the comparison works under standalone asio (where
+   // std::error_code == asio::error_code) and boost.asio (via boost.system's implicit
+   // conversion to std::error_code) without #ifdef branches.
+   inline bool is_retriable_pool_error(std::error_code ec) noexcept
+   {
+      static const std::error_code eof_ec = make_error_code(asio::error::eof);
+      static const std::error_code reset_ec = make_error_code(asio::error::connection_reset);
+      static const std::error_code pipe_ec = make_error_code(asio::error::broken_pipe);
+      static const std::error_code not_connected_ec = make_error_code(asio::error::not_connected);
+      static const std::error_code shutdown_ec = make_error_code(asio::error::shut_down);
+      static const std::error_code aborted_ec = make_error_code(asio::error::connection_aborted);
+      return ec == eof_ec || ec == reset_ec || ec == pipe_ec || ec == not_connected_ec || ec == shutdown_ec ||
+             ec == aborted_ec;
+   }
+
+   // Per-attempt state for the async request chain. response_started is set to true the
+   // moment we read the first bytes of the response (the header read completes); after
+   // that point, a subsequent failure means the server already processed the request and
+   // we MUST NOT retry, even on an idempotent method, even if the error code looks
+   // retriable. This is the precise gate for safe transparent retry.
+   //
+   // shared_ptr because the chain can fan out across async callbacks across worker
+   // threads; atomic because the read-side (set in read_response's success callback) and
+   // the retry handler's check (in the user-handler dispatch) are in distinct callbacks.
+   struct async_attempt_state
+   {
+      std::atomic<bool> response_started{false};
+   };
+
+   // Synchronous variant of async_attempt_state's signal. Returned alongside the
+   // request outcome so perform_sync_request can decide whether retry is safe.
+   struct sync_attempt_outcome
+   {
+      std::expected<response, std::error_code> outcome;
+      bool response_started = false;
+   };
+
    // HTTP connection pool for reusing sockets
    struct http_connection_pool
    {
@@ -423,10 +574,52 @@ namespace glz
          }
       };
 
+      // A pooled connection plus the time it was returned to the pool. The timestamp is
+      // used to evict entries older than idle_timeout_ before they're handed back out.
+      // This is the primary defense against stale-on-arrival connections (e.g. uvicorn
+      // closing kept-alive connections after its 5s timeout).
+      struct pool_entry
+      {
+         socket_variant socket;
+         std::chrono::steady_clock::time_point returned_at;
+      };
+
+      // Result of acquiring a connection. from_pool=true means the socket was reused
+      // from the pool, false means it was just created. This is no longer the gate for
+      // retry decisions (the chain now uses the precise "no response bytes received
+      // yet" signal via async_attempt_state / sync_attempt_outcome), but is retained as
+      // an informational signal callers may use for diagnostics or stats.
+      struct [[nodiscard]] acquire_result
+      {
+         socket_variant socket;
+         bool from_pool;
+      };
+
       mutable std::mutex pool_mtx; // Protects available_connections
-      std::unordered_map<connection_key, std::vector<socket_variant>, connection_key_hash> available_connections;
+      std::unordered_map<connection_key, std::vector<pool_entry>, connection_key_hash> available_connections;
       asio::any_io_executor io_executor;
       std::atomic<bool> graceful_ssl_shutdown_{true}; // Whether to perform SSL shutdown when closing connections
+      // Default to 4 seconds: just under uvicorn's 5s default keep-alive timeout. Any
+      // entry idle longer than this is evicted on next acquire().
+      //
+      // Portability note on the atomic: steady_clock::duration is typically a 64-bit
+      // integer, and std::atomic<duration> is lock-free on 64-bit platforms and on
+      // most modern 32-bit ones (ARMv7+ via ldrexd/strexd, x86 32-bit via cmpxchg8b).
+      // On older 32-bit ARM or restricted embedded targets it may fall back to a
+      // library-provided lock; behavior stays correct, latency on this load gets
+      // worse. The same acquire() path takes pool_mtx for each candidate pop, so this
+      // load is dominated by the mutex on any contention level worth worrying about.
+      // Users on a lock-fallback platform can verify via
+      // std::atomic<std::chrono::steady_clock::duration>::is_always_lock_free.
+      std::atomic<std::chrono::steady_clock::duration> idle_timeout_{std::chrono::seconds(4)};
+      std::atomic<size_t> max_per_host_{10};
+      // Whether to actively peek a pooled TCP socket on acquire. When true (default), a
+      // dead-on-arrival socket is detected before any request bytes go on the wire.
+      // Disabling this is mainly useful for tests that want to deterministically exercise
+      // the transparent-retry path, but can also trade a syscall per acquire for slightly
+      // higher latency to handle stale connections (which then surface as a request-time
+      // error and trigger the retry path on idempotent methods).
+      std::atomic<bool> active_liveness_check_{true};
 #ifdef GLZ_ENABLE_SSL
       mutable std::shared_mutex ssl_mtx; // Protects ssl_context - shared for reads, exclusive for writes
       std::shared_ptr<asio::ssl::context> ssl_context;
@@ -446,25 +639,8 @@ namespace glz
 #endif
       }
 
-      socket_variant get_connection(const std::string& host, uint16_t port, bool is_https)
+      socket_variant create_fresh_connection(bool is_https)
       {
-         connection_key key{host, port, is_https};
-
-         {
-            std::lock_guard<std::mutex> lock(pool_mtx);
-            auto it = available_connections.find(key);
-            if (it != available_connections.end() && !it->second.empty()) {
-               auto socket = it->second.back();
-               it->second.pop_back();
-
-               // Check if socket is still connected
-               if (detail::socket_is_open(socket)) {
-                  return socket;
-               }
-            }
-         }
-
-         // Create new connection if none are available or they are closed
          if (is_https) {
 #ifdef GLZ_ENABLE_SSL
             // Hold shared lock while creating SSL socket to prevent concurrent context modification
@@ -475,9 +651,83 @@ namespace glz
             return socket_variant{std::make_shared<tcp_socket>(io_executor)};
 #endif
          }
-         else {
-            return socket_variant{std::make_shared<tcp_socket>(io_executor)};
+         return socket_variant{std::make_shared<tcp_socket>(io_executor)};
+      }
+
+      // Acquire a connection. Tries to reuse a non-expired, alive pooled entry first
+      // (LIFO: most recently returned is tried first); falls back to creating a fresh
+      // socket. The from_pool flag tells the caller whether a failed request can be
+      // safely retried on a fresh connection.
+      //
+      // Lock discipline: pool_mtx is held only long enough to pop one candidate, then
+      // released before any potentially blocking work (peek, close_socket -> SSL
+      // shutdown). This is essential under concurrency: otherwise every acquire/return
+      // would serialize behind the slowest socket teardown.
+      acquire_result acquire(const std::string& host, uint16_t port, bool is_https)
+      {
+         connection_key key{host, port, is_https};
+         const auto now = std::chrono::steady_clock::now();
+         const auto idle_timeout = idle_timeout_.load();
+         const bool active_check = active_liveness_check_.load();
+         const bool graceful = graceful_ssl_shutdown_.load();
+
+         while (true) {
+            std::optional<pool_entry> entry;
+            {
+               std::lock_guard<std::mutex> lock(pool_mtx);
+               auto it = available_connections.find(key);
+               if (it != available_connections.end() && !it->second.empty()) {
+                  entry.emplace(std::move(it->second.back()));
+                  it->second.pop_back();
+               }
+            }
+            if (!entry) break;
+
+            // Timestamp eviction: anything older than the idle timeout is presumed dead;
+            // skip the peek (which can race with FIN arriving) and just close it.
+            if (idle_timeout.count() > 0 && now - entry->returned_at > idle_timeout) {
+               detail::close_socket(entry->socket, graceful);
+               continue;
+            }
+
+            if (!detail::socket_is_open(entry->socket)) {
+               detail::close_socket(entry->socket, graceful);
+               continue;
+            }
+
+            // Active peek check applies only to plain TCP sockets. For SSL, peeking the
+            // TCP layer would only see ciphertext (see tcp_socket_is_pooled_alive
+            // contract); SSL pooled sockets rely on timestamp eviction and the
+            // transparent-retry path to handle stale connections.
+            if (active_check) {
+               const bool alive = std::visit(
+                  [](auto& sock) -> bool {
+                     if constexpr (requires { sock->next_layer(); }) {
+                        return sock->next_layer().is_open();
+                     }
+                     else {
+                        return detail::tcp_socket_is_pooled_alive(*sock);
+                     }
+                  },
+                  entry->socket);
+               if (!alive) {
+                  detail::close_socket(entry->socket, graceful);
+                  continue;
+               }
+            }
+
+            return acquire_result{std::move(entry->socket), true};
          }
+
+         return acquire_result{create_fresh_connection(is_https), false};
+      }
+
+      // Backwards-compatible wrapper: returns just the socket and discards the from_pool
+      // flag. New internal code should call acquire() and use the from_pool flag to drive
+      // retry behavior.
+      socket_variant get_connection(const std::string& host, uint16_t port, bool is_https)
+      {
+         return acquire(host, port, is_https).socket;
       }
 
       void return_connection(const std::string& host, uint16_t port, bool is_https, socket_variant socket)
@@ -490,10 +740,46 @@ namespace glz
          std::lock_guard<std::mutex> lock(pool_mtx);
 
          auto& connections = available_connections[key];
-         if (connections.size() < 10) { // Limit pool size per host
-            connections.push_back(std::move(socket));
+         if (connections.size() < max_per_host_.load()) {
+            connections.push_back(pool_entry{std::move(socket), std::chrono::steady_clock::now()});
          }
          // else: Pool is full - socket destructor will close it when it goes out of scope
+      }
+
+      // Configure how long a pooled connection may sit idle before it is evicted on next
+      // acquire. Default is 4s, just under uvicorn's 5s keep-alive timeout. Set to zero
+      // to disable timestamp-based eviction (peek-based liveness check still applies).
+      void set_idle_timeout(std::chrono::steady_clock::duration timeout) { idle_timeout_.store(timeout); }
+      std::chrono::steady_clock::duration idle_timeout() const { return idle_timeout_.load(); }
+
+      // Maximum number of idle connections kept per host. Excess connections are closed
+      // when returned. Default is 10.
+      void set_max_connections_per_host(size_t n) { max_per_host_.store(n); }
+      size_t max_connections_per_host() const { return max_per_host_.load(); }
+
+      // Whether to actively peek pooled TCP sockets on acquire to detect server-side
+      // close before sending a request. Default is true. Disabling forces stale
+      // connections to surface as request-time errors and (for idempotent methods)
+      // exercises the transparent-retry path. SSL sockets are unaffected: the active
+      // check is never applied to them.
+      void set_active_liveness_check(bool enabled) { active_liveness_check_.store(enabled); }
+      bool active_liveness_check() const { return active_liveness_check_.load(); }
+
+      // Drop and close every pooled connection. Useful in tests and when a host has
+      // signalled (e.g. via 503) that all current sessions should be abandoned.
+      void clear()
+      {
+         std::unordered_map<connection_key, std::vector<pool_entry>, connection_key_hash> drained;
+         {
+            std::lock_guard<std::mutex> lock(pool_mtx);
+            drained.swap(available_connections);
+         }
+         const bool graceful = graceful_ssl_shutdown_.load();
+         for (auto& [_, bucket] : drained) {
+            for (auto& entry : bucket) {
+               detail::close_socket(entry.socket, graceful);
+            }
+         }
       }
 
       // Set whether to perform graceful SSL shutdown when closing connections
@@ -760,6 +1046,40 @@ namespace glz
 
       // Check if graceful SSL shutdown is enabled
       bool graceful_ssl_shutdown() const { return connection_pool->graceful_ssl_shutdown(); }
+
+      // How long an idle pooled connection may sit before it is evicted on the next request.
+      // Default is 4 seconds, chosen to be just under uvicorn's 5s default keep-alive timeout.
+      // Tune this to slightly less than the server's keep-alive idle timeout. Set to zero
+      // to disable timestamp-based eviction (the active peek check still discards dead
+      // connections, but is a smaller window).
+      void set_pool_idle_timeout(std::chrono::steady_clock::duration timeout)
+      {
+         connection_pool->set_idle_timeout(timeout);
+      }
+      std::chrono::steady_clock::duration pool_idle_timeout() const { return connection_pool->idle_timeout(); }
+
+      // Maximum number of idle connections kept per host. Default is 10, in line with
+      // urllib3/requests and similar to OkHttp's 5 and Java HttpClient's 6 (per the
+      // HTTP/1.1 RFC recommendation of 6 per origin).
+      //
+      // Performance note: returns above the cap are closed rather than pooled. For a
+      // workload whose peak per-host concurrency is K, every request beyond the K-th
+      // active connection pays the full connect + TLS handshake cost on each request.
+      // For sustained concurrency above the default, raise this to at least your
+      // observed steady-state per-host concurrency.
+      void set_pool_max_connections_per_host(size_t n) { connection_pool->set_max_connections_per_host(n); }
+      size_t pool_max_connections_per_host() const { return connection_pool->max_connections_per_host(); }
+
+      // Whether to actively peek pooled TCP sockets on acquire (default true). Disabling
+      // skips the syscall and forces stale connections to surface as request errors;
+      // idempotent methods will then exercise the transparent retry path. SSL sockets
+      // are unaffected (peek is never applied to ciphertext).
+      void set_pool_active_liveness_check(bool enabled) { connection_pool->set_active_liveness_check(enabled); }
+      bool pool_active_liveness_check() const { return connection_pool->active_liveness_check(); }
+
+      // Drop and close every pooled connection. Useful in tests and when a host has
+      // signalled (e.g. via 503) that all current sessions should be abandoned.
+      void clear_connection_pool() { connection_pool->clear(); }
 
       // Synchronous GET request - truly synchronous, no promises/futures
       std::expected<response, std::error_code> get(std::string_view url,
@@ -1558,7 +1878,34 @@ namespace glz
          }
 #endif
 
-         auto socket_var = connection_pool->get_connection(url.host, url.port, use_https);
+         auto acquired = connection_pool->acquire(url.host, url.port, use_https);
+         const bool idempotent = is_idempotent_method(method);
+
+         // Build the wire bytes once. If retry fires, the same bytes are written on
+         // the fresh socket: no rebuild, no extra body copy.
+         const std::string request_str = detail::build_http_request_bytes(method, url, body, headers);
+
+         auto attempt = perform_sync_request_attempt(url, request_str, use_https, std::move(acquired.socket));
+
+         // Retry once if and only if: idempotent method, server has not yet started
+         // sending a response (so the request bytes were not processed), and the error
+         // is the kind that indicates a connection problem rather than an application
+         // failure. This catches both stale pooled connections and fresh connections
+         // that fail before the server can read (listener overload, server-side close
+         // immediately after accept, mid-write RST, etc.).
+         if (idempotent && !attempt.outcome && !attempt.response_started &&
+             is_retriable_pool_error(attempt.outcome.error())) {
+            auto fresh = connection_pool->create_fresh_connection(use_https);
+            attempt = perform_sync_request_attempt(url, request_str, use_https, std::move(fresh));
+         }
+
+         return std::move(attempt.outcome);
+      }
+
+      sync_attempt_outcome perform_sync_request_attempt(const url_parts& url, const std::string& request_str,
+                                                        bool use_https, socket_variant socket_var)
+      {
+         sync_attempt_outcome r{};
 
          try {
             // If socket is not connected, connect it synchronously
@@ -1586,7 +1933,8 @@ namespace glz
                   // Set SNI hostname for virtual hosting support
                   if (!detail::configure_ssl_client_hostname(*ssl_sock, url.host)) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-                     return std::unexpected(make_error_code(ssl_error::sni_hostname_failed));
+                     r.outcome = std::unexpected(make_error_code(ssl_error::sni_hostname_failed));
+                     return r;
                   }
 
                   // Perform the SSL handshake
@@ -1594,40 +1942,14 @@ namespace glz
                   ssl_sock->handshake(asio::ssl::stream_base::client, handshake_ec);
                   if (handshake_ec) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-                     return std::unexpected(handshake_ec);
+                     r.outcome = std::unexpected(handshake_ec);
+                     return r;
                   }
                }
 #endif
             }
 
-            // Build HTTP request
-            std::string request_str;
-            request_str.append(method);
-            request_str.append(" ");
-            request_str.append(url.path);
-            request_str.append(" HTTP/1.1\r\n");
-            request_str.append("Host: ");
-            request_str.append(url.host);
-            request_str.append("\r\n");
-            request_str.append("Connection: keep-alive\r\n"); // Keep connection alive for reuse
-
-            if (!body.empty()) {
-               request_str.append("Content-Length: ");
-               request_str.append(std::to_string(body.size()));
-               request_str.append("\r\n");
-            }
-
-            for (const auto& [name, value] : headers) {
-               request_str.append(name);
-               request_str.append(": ");
-               request_str.append(value);
-               request_str.append("\r\n");
-            }
-
-            request_str.append("\r\n");
-            request_str.append(body);
-
-            // Send request synchronously
+            // Send pre-built request bytes synchronously
             std::visit([&](auto& sock) { asio::write(*sock, asio::buffer(request_str)); }, socket_var);
 
             // Read response headers synchronously
@@ -1637,8 +1959,15 @@ namespace glz
                [&](auto& sock) { return asio::read_until(*sock, response_buffer, "\r\n\r\n", ec); }, socket_var);
             if (ec) {
                detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-               return std::unexpected(ec);
+               r.outcome = std::unexpected(ec);
+               return r;
             }
+
+            // Headers received: from this point on, the server has begun responding and
+            // a retry of this exact request would re-execute server-side work that has
+            // already happened. Mark response_started so perform_sync_request will not
+            // retry on subsequent failures.
+            r.response_started = true;
 
             // Create a zero-copy view of the header data
             std::string_view header_data{static_cast<const char*>(response_buffer.data().data()), header_bytes};
@@ -1646,14 +1975,16 @@ namespace glz
             // Parse status line from the view
             auto line_end = header_data.find("\r\n");
             if (line_end == std::string_view::npos) {
-               return std::unexpected(std::make_error_code(std::errc::protocol_error));
+               r.outcome = std::unexpected(std::make_error_code(std::errc::protocol_error));
+               return r;
             }
             std::string_view status_line = header_data.substr(0, line_end);
             header_data.remove_prefix(line_end + 2); // Advance past status line
 
             auto parsed_status = parse_http_status_line(status_line);
             if (!parsed_status) {
-               return std::unexpected(parsed_status.error());
+               r.outcome = std::unexpected(parsed_status.error());
+               return r;
             }
 
             // Parse headers from the view
@@ -1666,7 +1997,8 @@ namespace glz
             while (!header_data.starts_with("\r\n")) {
                line_end = header_data.find("\r\n");
                if (line_end == std::string_view::npos) {
-                  return std::unexpected(std::make_error_code(std::errc::protocol_error));
+                  r.outcome = std::unexpected(std::make_error_code(std::errc::protocol_error));
+                  return r;
                }
                std::string_view header_line = header_data.substr(0, line_end);
                header_data.remove_prefix(line_end + 2);
@@ -1703,7 +2035,8 @@ namespace glz
             // Reject responses that exceed the configured body size limit
             if (max_response_body_size_ > 0 && !is_chunked && content_length > max_response_body_size_) {
                detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-               return std::unexpected(make_error_code(http_client_error::response_too_large));
+               r.outcome = std::unexpected(make_error_code(http_client_error::response_too_large));
+               return r;
             }
 
             std::string response_body;
@@ -1717,7 +2050,8 @@ namespace glz
                              socket_var);
                   if (read_ec) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-                     return std::unexpected(read_ec);
+                     r.outcome = std::unexpected(read_ec);
+                     return r;
                   }
 
                   // Parse chunk size from the buffer
@@ -1725,7 +2059,8 @@ namespace glz
                                              response_buffer.size()};
                   auto crlf_pos = size_line.find("\r\n");
                   if (crlf_pos == std::string_view::npos) {
-                     return std::unexpected(std::make_error_code(std::errc::protocol_error));
+                     r.outcome = std::unexpected(std::make_error_code(std::errc::protocol_error));
+                     return r;
                   }
                   std::string_view chunk_size_str = size_line.substr(0, crlf_pos);
 
@@ -1739,7 +2074,8 @@ namespace glz
                   auto [ptr, parse_ec] = std::from_chars(chunk_size_str.data(),
                                                          chunk_size_str.data() + chunk_size_str.size(), chunk_size, 16);
                   if (parse_ec != std::errc{}) {
-                     return std::unexpected(std::make_error_code(std::errc::protocol_error));
+                     r.outcome = std::unexpected(std::make_error_code(std::errc::protocol_error));
+                     return r;
                   }
 
                   // Consume the chunk size line + CRLF
@@ -1767,7 +2103,8 @@ namespace glz
                   // Check accumulated body size against limit before reading chunk data
                   if (max_response_body_size_ > 0 && response_body.size() + chunk_size > max_response_body_size_) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-                     return std::unexpected(make_error_code(http_client_error::response_too_large));
+                     r.outcome = std::unexpected(make_error_code(http_client_error::response_too_large));
+                     return r;
                   }
 
                   // Read chunk data + trailing CRLF
@@ -1781,7 +2118,8 @@ namespace glz
                         socket_var);
                      if (read_ec) {
                         detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-                        return std::unexpected(read_ec);
+                        r.outcome = std::unexpected(read_ec);
+                        return r;
                      }
                   }
 
@@ -1804,13 +2142,15 @@ namespace glz
                   if (read_ec) break;
                   if (max_response_body_size_ > 0 && response_buffer.size() > max_response_body_size_) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-                     return std::unexpected(make_error_code(http_client_error::response_too_large));
+                     r.outcome = std::unexpected(make_error_code(http_client_error::response_too_large));
+                     return r;
                   }
                }
 
                if (read_ec != asio::error::eof) {
                   detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-                  return std::unexpected(read_ec);
+                  r.outcome = std::unexpected(read_ec);
+                  return r;
                }
 
                response_body.assign(static_cast<const char*>(response_buffer.data().data()), response_buffer.size());
@@ -1829,7 +2169,8 @@ namespace glz
                      socket_var);
                   if (read_ec) {
                      detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-                     return std::unexpected(read_ec);
+                     r.outcome = std::unexpected(read_ec);
+                     return r;
                   }
                }
 
@@ -1847,15 +2188,18 @@ namespace glz
             }
             // else, the server will close the connection, so we don't return it to the pool.
 
-            return resp;
+            r.outcome = std::move(resp);
+            return r;
          }
          catch (const asio::system_error& e) {
             detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-            return std::unexpected(e.code());
+            r.outcome = std::unexpected(e.code());
+            return r;
          }
          catch (...) {
             detail::close_socket(socket_var, connection_pool->graceful_ssl_shutdown());
-            return std::unexpected(std::make_error_code(std::errc::connection_refused));
+            r.outcome = std::unexpected(std::make_error_code(std::errc::connection_refused));
+            return r;
          }
       }
 
@@ -1875,16 +2219,66 @@ namespace glz
          }
 #endif
 
-         auto socket_var =
-            std::make_shared<socket_variant>(connection_pool->get_connection(url.host, url.port, use_https));
+         auto acquired = connection_pool->acquire(url.host, url.port, use_https);
+         auto socket_var = std::make_shared<socket_variant>(std::move(acquired.socket));
 
+         // Build the wire bytes once. This is shared by the original attempt and any
+         // retry, and by every async lambda capture in the chain - those just bump the
+         // shared_ptr refcount instead of copying the request body and header map.
+         auto request_bytes =
+            std::make_shared<std::string>(detail::build_http_request_bytes(method, url, body, headers));
+
+         // Non-idempotent methods (POST, PATCH) are never retried because the client
+         // cannot tell whether a write+read failure means the server already processed
+         // the request. Forward directly without wrapping; no per-attempt state needed.
+         if (!is_idempotent_method(method)) {
+            auto state = std::make_shared<async_attempt_state>();
+            do_perform_request_async_attempt(socket_var, request_bytes, url, use_https, state,
+                                             std::forward<CompletionHandler>(handler));
+            return;
+         }
+
+         // Idempotent: wrap the user handler so a retriable failure with no response
+         // bytes received yet triggers exactly one retry on a fresh connection. This
+         // catches both stale pooled connections AND fresh connections that fail before
+         // the server can read (listener overload, immediate close after accept,
+         // mid-write RST, etc.).
+         auto state = std::make_shared<async_attempt_state>();
+
+         using handler_t = std::decay_t<CompletionHandler>;
+         auto user_handler_ptr = std::make_shared<handler_t>(std::forward<CompletionHandler>(handler));
+
+         auto retry_handler = [this, request_bytes, url, use_https, user_handler_ptr,
+                               state](std::expected<response, std::error_code> result) mutable {
+            if (!result && !state->response_started.load() && is_retriable_pool_error(result.error())) {
+               auto fresh = std::make_shared<socket_variant>(connection_pool->create_fresh_connection(use_https));
+               // Fresh attempt gets its own state so the retry's response_started signal
+               // is tracked independently of the failed first attempt.
+               auto new_state = std::make_shared<async_attempt_state>();
+               do_perform_request_async_attempt(
+                  fresh, request_bytes, url, use_https, new_state,
+                  [user_handler_ptr](std::expected<response, std::error_code> r) { (*user_handler_ptr)(std::move(r)); });
+               return;
+            }
+            (*user_handler_ptr)(std::move(result));
+         };
+
+         do_perform_request_async_attempt(socket_var, request_bytes, url, use_https, state, std::move(retry_handler));
+      }
+
+      template <typename CompletionHandler>
+      void do_perform_request_async_attempt(std::shared_ptr<socket_variant> socket_var,
+                                            std::shared_ptr<std::string> request_bytes, const url_parts& url,
+                                            bool use_https, std::shared_ptr<async_attempt_state> state,
+                                            CompletionHandler&& handler)
+      {
          if (detail::socket_is_open(*socket_var)) {
-            send_request(socket_var, method, url, body, headers, use_https, std::forward<CompletionHandler>(handler));
+            send_request(socket_var, request_bytes, url, use_https, state, std::forward<CompletionHandler>(handler));
          }
          else {
             auto resolver = std::make_shared<asio::ip::tcp::resolver>(io_executor);
             resolver->async_resolve(url.host, std::to_string(url.port),
-                                    [this, socket_var, resolver, method, url, body, headers, use_https,
+                                    [this, socket_var, resolver, request_bytes, url, use_https, state,
                                      handler = std::forward<CompletionHandler>(handler)](
                                        asio::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
                                        if (ec) {
@@ -1892,7 +2286,7 @@ namespace glz
                                           return;
                                        }
 
-                                       connect_and_send(socket_var, results, method, url, body, headers, use_https,
+                                       connect_and_send(socket_var, results, request_bytes, url, use_https, state,
                                                         std::move(handler));
                                     });
          }
@@ -1900,9 +2294,8 @@ namespace glz
 
       template <typename CompletionHandler>
       void connect_and_send(std::shared_ptr<socket_variant> socket_var, asio::ip::tcp::resolver::results_type results,
-                            const std::string& method, const url_parts& url, const std::string& body,
-                            const std::unordered_map<std::string, std::string>& headers, bool use_https,
-                            CompletionHandler&& handler)
+                            std::shared_ptr<std::string> request_bytes, const url_parts& url, bool use_https,
+                            std::shared_ptr<async_attempt_state> state, CompletionHandler&& handler)
       {
          // Get the underlying TCP socket for connection
          std::visit(
@@ -1917,7 +2310,7 @@ namespace glz
 
                asio::async_connect(
                   *tcp_sock, results,
-                  [this, socket_var, method, url, body, headers, use_https,
+                  [this, socket_var, request_bytes, url, use_https, state,
                    handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
                                                                        const asio::ip::tcp::endpoint&) mutable {
                      if (ec) {
@@ -1927,12 +2320,12 @@ namespace glz
 
 #ifdef GLZ_ENABLE_SSL
                      if (use_https) {
-                        perform_ssl_handshake(socket_var, method, url, body, headers, std::move(handler));
+                        perform_ssl_handshake(socket_var, request_bytes, url, state, std::move(handler));
                      }
                      else
 #endif
                      {
-                        send_request(socket_var, method, url, body, headers, use_https, std::move(handler));
+                        send_request(socket_var, request_bytes, url, use_https, state, std::move(handler));
                      }
                   });
             },
@@ -1941,10 +2334,9 @@ namespace glz
 
 #ifdef GLZ_ENABLE_SSL
       template <typename CompletionHandler>
-      void perform_ssl_handshake(std::shared_ptr<socket_variant> socket_var, const std::string& method,
-                                 const url_parts& url, const std::string& body,
-                                 const std::unordered_map<std::string, std::string>& headers,
-                                 CompletionHandler&& handler)
+      void perform_ssl_handshake(std::shared_ptr<socket_variant> socket_var,
+                                 std::shared_ptr<std::string> request_bytes, const url_parts& url,
+                                 std::shared_ptr<async_attempt_state> state, CompletionHandler&& handler)
       {
          auto& ssl_sock = std::get<std::shared_ptr<ssl_socket>>(*socket_var);
 
@@ -1957,65 +2349,35 @@ namespace glz
          }
 
          ssl_sock->async_handshake(asio::ssl::stream_base::client,
-                                   [this, socket_var, method, url, body, headers,
+                                   [this, socket_var, request_bytes, url, state,
                                     handler = std::forward<CompletionHandler>(handler)](asio::error_code ec) mutable {
                                       if (ec) {
                                          handler(std::unexpected(ec));
                                          return;
                                       }
 
-                                      send_request(socket_var, method, url, body, headers, true, std::move(handler));
+                                      send_request(socket_var, request_bytes, url, true, state, std::move(handler));
                                    });
       }
 #endif
 
       template <typename CompletionHandler>
-      void send_request(std::shared_ptr<socket_variant> socket_var, const std::string& method, const url_parts& url,
-                        const std::string& body, const std::unordered_map<std::string, std::string>& headers,
-                        bool use_https, CompletionHandler&& handler)
+      void send_request(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<std::string> request_bytes,
+                        const url_parts& url, bool use_https, std::shared_ptr<async_attempt_state> state,
+                        CompletionHandler&& handler)
       {
-         // Build HTTP request
-         std::string request_str;
-         request_str.append(method);
-         request_str.append(" ");
-         request_str.append(url.path);
-         request_str.append(" HTTP/1.1\r\n");
-         request_str.append("Host: ");
-         request_str.append(url.host);
-         request_str.append("\r\n");
-         request_str.append("Connection: keep-alive\r\n");
-
-         if (!body.empty()) {
-            request_str.append("Content-Length: ");
-            request_str.append(std::to_string(body.size()));
-            request_str.append("\r\n");
-         }
-
-         for (const auto& [name, value] : headers) {
-            request_str.append(name);
-            request_str.append(": ");
-            request_str.append(value);
-            request_str.append("\r\n");
-         }
-
-         request_str.append("\r\n");
-         request_str.append(body);
-
-         // Use shared_ptr to keep request string alive during async operation
-         auto request_str_ptr = std::make_shared<std::string>(std::move(request_str));
-
          std::visit(
             [&, this](auto& sock) {
                asio::async_write(
-                  *sock, asio::buffer(*request_str_ptr),
-                  [this, socket_var, request_str_ptr, url, use_https,
+                  *sock, asio::buffer(*request_bytes),
+                  [this, socket_var, request_bytes, url, use_https, state,
                    handler = std::forward<CompletionHandler>(handler)](asio::error_code ec, std::size_t) mutable {
                      if (ec) {
                         handler(std::unexpected(ec));
                         return;
                      }
 
-                     read_response(socket_var, url, use_https, std::move(handler));
+                     read_response(socket_var, url, use_https, state, std::move(handler));
                   });
             },
             *socket_var);
@@ -2023,7 +2385,7 @@ namespace glz
 
       template <typename CompletionHandler>
       void read_response(std::shared_ptr<socket_variant> socket_var, const url_parts& url, bool use_https,
-                         CompletionHandler&& handler)
+                         std::shared_ptr<async_attempt_state> state, CompletionHandler&& handler)
       {
          auto buffer = std::make_shared<asio::streambuf>();
 
@@ -2031,12 +2393,18 @@ namespace glz
             [&, this](auto& sock) {
                asio::async_read_until(
                   *sock, *buffer, "\r\n\r\n",
-                  [this, socket_var, buffer, url, use_https, handler = std::forward<CompletionHandler>(handler)](
-                     asio::error_code ec, std::size_t bytes_transferred) mutable {
+                  [this, socket_var, buffer, url, use_https, state,
+                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
+                                                                       std::size_t bytes_transferred) mutable {
                      if (ec) {
                         handler(std::unexpected(ec));
                         return;
                      }
+                     // Headers received: signal that the server has started responding.
+                     // Subsequent failures (mid-body, trailers) must NOT trigger a retry,
+                     // as the server has already processed the request. The retry handler
+                     // checks state->response_started before deciding to retry.
+                     state->response_started.store(true);
                      // Pass the known header size to the parsing function
                      parse_and_read_body(socket_var, buffer, bytes_transferred, url, use_https, std::move(handler));
                   });
