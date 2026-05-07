@@ -9,8 +9,6 @@
 // the tests can exercise specific keep-alive behaviors on demand: closing
 // immediately after each response, closing on server-side idle, etc.
 
-#include "glaze/net/http_client.hpp"
-
 #include <atomic>
 #include <chrono>
 #include <future>
@@ -20,6 +18,7 @@
 #include <vector>
 
 #include "glaze/ext/glaze_asio.hpp"
+#include "glaze/net/http_client.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -234,19 +233,18 @@ namespace
                resp->append("\r\n");
                resp->append(*body);
 
-               asio::async_write(socket, asio::buffer(*resp),
-                                 [self, this, resp, body](asio::error_code ec, std::size_t) {
-                                    if (ec) return;
-                                    if (server->cfg_.close_after_each_response ||
-                                        server->cfg_.silently_close_after_response) {
-                                       asio::error_code close_ec;
-                                       socket.shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
-                                       socket.close(close_ec);
-                                    }
-                                    else {
-                                       read_request_headers();
-                                    }
-                                 });
+               asio::async_write(
+                  socket, asio::buffer(*resp), [self, this, resp, body](asio::error_code ec, std::size_t) {
+                     if (ec) return;
+                     if (server->cfg_.close_after_each_response || server->cfg_.silently_close_after_response) {
+                        asio::error_code close_ec;
+                        socket.shutdown(asio::ip::tcp::socket::shutdown_send, close_ec);
+                        socket.close(close_ec);
+                     }
+                     else {
+                        read_request_headers();
+                     }
+                  });
             };
 
             if (server->cfg_.response_delay.count() > 0) {
@@ -296,7 +294,7 @@ suite pool_tests = [] {
 
       expect(server.request_count() == 5);
       expect(server.accept_count() == 1) << "all five requests should reuse one connection, got "
-                                          << server.accept_count() << " accepts\n";
+                                         << server.accept_count() << " accepts\n";
    };
 
    "server_closes_each_response"_test = [] {
@@ -427,9 +425,8 @@ suite pool_tests = [] {
          if (r && r->status_code == 200) ++success2;
       }
       expect(success2 == N);
-      expect(server.accept_count() == accepts_after_burst)
-         << "concurrent follow-up round should add zero accepts, got "
-         << (server.accept_count() - accepts_after_burst) << "\n";
+      expect(server.accept_count() == accepts_after_burst) << "concurrent follow-up round should add zero accepts, got "
+                                                           << (server.accept_count() - accepts_after_burst) << "\n";
    };
 
    "pool_cap_drops_excess_on_return"_test = [] {
@@ -465,9 +462,9 @@ suite pool_tests = [] {
       const int new_accepts = after_second - after_first;
       // First burst returned N sockets but pool retained only `cap`. Second burst
       // therefore opens at least N - cap new connections.
-      expect(new_accepts >= N - cap)
-         << "expected at least " << (N - cap) << " new accepts in the second burst (cap=" << cap
-         << ", N=" << N << "); got " << new_accepts << "\n";
+      expect(new_accepts >= N - cap) << "expected at least " << (N - cap)
+                                     << " new accepts in the second burst (cap=" << cap << ", N=" << N << "); got "
+                                     << new_accepts << "\n";
    };
 
    "async_retry_path_forced"_test = [] {
@@ -503,8 +500,8 @@ suite pool_tests = [] {
       // Two accepts: the fresh socket from request 1, and the retry from request 2.
       // The first attempt of request 2 used the dead pooled socket and failed before
       // reaching the server.
-      expect(server.accept_count() == 2)
-         << "expected 2 accepts (initial + retry), got " << server.accept_count() << "\n";
+      expect(server.accept_count() == 2) << "expected 2 accepts (initial + retry), got " << server.accept_count()
+                                         << "\n";
    };
 
    "post_not_retried_after_silent_close"_test = [] {
@@ -530,8 +527,8 @@ suite pool_tests = [] {
       expect(!r2.has_value()) << "second POST must surface error, not auto-retry\n";
 
       // Exactly one POST landed at the server; the client did not silently re-send.
-      expect(server.request_count() == 1) << "POST must not be retried; got "
-                                           << server.request_count() << " server-side requests\n";
+      expect(server.request_count() == 1)
+         << "POST must not be retried; got " << server.request_count() << " server-side requests\n";
    };
 
    "async_stale_get_retries_transparently"_test = [] {
@@ -571,8 +568,8 @@ suite pool_tests = [] {
       expect(r.has_value()) << "GET should succeed via transparent retry on listener-drop\n";
       if (r) expect(r->status_code == 200);
 
-      expect(server.accept_count() == 2)
-         << "expected exactly 2 accepts (first dropped, second served), got " << server.accept_count() << "\n";
+      expect(server.accept_count() == 2) << "expected exactly 2 accepts (first dropped, second served), got "
+                                         << server.accept_count() << "\n";
       expect(server.request_count() == 1) << "exactly one request should reach the server\n";
    };
 

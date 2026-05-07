@@ -2255,9 +2255,10 @@ namespace glz
                // Fresh attempt gets its own state so the retry's response_started signal
                // is tracked independently of the failed first attempt.
                auto new_state = std::make_shared<async_attempt_state>();
-               do_perform_request_async_attempt(
-                  fresh, request_bytes, url, use_https, new_state,
-                  [user_handler_ptr](std::expected<response, std::error_code> r) { (*user_handler_ptr)(std::move(r)); });
+               do_perform_request_async_attempt(fresh, request_bytes, url, use_https, new_state,
+                                                [user_handler_ptr](std::expected<response, std::error_code> r) {
+                                                   (*user_handler_ptr)(std::move(r));
+                                                });
                return;
             }
             (*user_handler_ptr)(std::move(result));
@@ -2334,9 +2335,9 @@ namespace glz
 
 #ifdef GLZ_ENABLE_SSL
       template <typename CompletionHandler>
-      void perform_ssl_handshake(std::shared_ptr<socket_variant> socket_var,
-                                 std::shared_ptr<std::string> request_bytes, const url_parts& url,
-                                 std::shared_ptr<async_attempt_state> state, CompletionHandler&& handler)
+      void perform_ssl_handshake(std::shared_ptr<socket_variant> socket_var, std::shared_ptr<std::string> request_bytes,
+                                 const url_parts& url, std::shared_ptr<async_attempt_state> state,
+                                 CompletionHandler&& handler)
       {
          auto& ssl_sock = std::get<std::shared_ptr<ssl_socket>>(*socket_var);
 
@@ -2393,9 +2394,8 @@ namespace glz
             [&, this](auto& sock) {
                asio::async_read_until(
                   *sock, *buffer, "\r\n\r\n",
-                  [this, socket_var, buffer, url, use_https, state,
-                   handler = std::forward<CompletionHandler>(handler)](asio::error_code ec,
-                                                                       std::size_t bytes_transferred) mutable {
+                  [this, socket_var, buffer, url, use_https, state, handler = std::forward<CompletionHandler>(handler)](
+                     asio::error_code ec, std::size_t bytes_transferred) mutable {
                      if (ec) {
                         handler(std::unexpected(ec));
                         return;
