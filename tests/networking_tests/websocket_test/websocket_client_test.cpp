@@ -93,6 +93,56 @@ void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_
    }
 }
 
+// Capture state for the upgrade-request inspection helper below.
+struct ws_upgrade_capture
+{
+   std::mutex mu;
+   std::string path;
+   std::unordered_map<std::string, std::string> query;
+   std::string target;
+   std::atomic<bool> opened{false};
+};
+
+// Helper to run a server that records the request seen by on_open.
+// Used to verify that query parameters on the WebSocket upgrade URL are parsed
+// and that the upgrade matches the path-only handler (regression for issue #2549).
+void run_capture_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port,
+                        std::shared_ptr<ws_upgrade_capture> capture)
+{
+   http_server server;
+   auto ws_server = std::make_shared<websocket_server>();
+
+   ws_server->on_open([capture](auto /*conn*/, const request& req) {
+      {
+         std::lock_guard lock(capture->mu);
+         capture->path = req.path;
+         capture->query = req.query;
+         capture->target = req.target;
+      }
+      capture->opened = true;
+   });
+
+   ws_server->on_message([](auto conn, std::string_view, ws_opcode) { conn->send_text("ack"); });
+   ws_server->on_close([](auto, ws_close_code, std::string_view) {});
+   ws_server->on_error([](auto, std::error_code) {});
+
+   server.websocket("/ws", ws_server);
+
+   try {
+      server.bind(port);
+      server.start();
+      server_ready = true;
+      while (!should_stop) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+      server.stop();
+   }
+   catch (const std::exception& e) {
+      std::cerr << "Capture server exception: " << e.what() << "\n";
+      server_ready = true;
+   }
+}
+
 // Helper to run a server that closes connections after first message
 void run_close_after_message_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port)
 {
@@ -1460,6 +1510,61 @@ suite websocket_client_tests = [] {
 
       expect(!error_called.load()) << "No error expected when reconnecting with persistent headers";
       expect(open_count.load() == 2) << "Authorization header should persist across sequential connect() calls";
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // Regression for issue #2549: WebSocket upgrade lookup must strip the query string
+   // and the on_open handler must see the parsed path/query like a regular handler.
+   "websocket_upgrade_with_query_parameters_test"_test = [] {
+      uint16_t port = 8131;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      auto capture = std::make_shared<ws_upgrade_capture>();
+
+      std::thread server_thread(run_capture_server, std::ref(server_ready), std::ref(stop_server), port, capture);
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> ack_received{false};
+      std::atomic<bool> connect_error{false};
+
+      client.on_open([&client]() { client.send("ping"); });
+      client.on_message([&](std::string_view message, ws_opcode) {
+         if (message == "ack") {
+            ack_received = true;
+            client.close();
+         }
+      });
+      client.on_error([&](std::error_code) { connect_error = true; });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+
+      // Connect with a query string. Without the fix this 404s before the upgrade.
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws?token=abc&user=alice";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return capture->opened.load(); }))
+         << "WebSocket upgrade with query string did not reach on_open (regression: route lookup uses target instead of path)";
+      expect(wait_for_condition([&] { return ack_received.load(); })) << "ack message was not received";
+      expect(!connect_error.load()) << "Upgrade should not error";
+
+      {
+         std::lock_guard lock(capture->mu);
+         expect(capture->path == "/ws") << "request.path should be the path only, got: " << capture->path;
+         expect(capture->target == "/ws?token=abc&user=alice")
+            << "request.target should preserve the original target, got: " << capture->target;
+         expect(capture->query.size() == 2u) << "Two query parameters should be parsed";
+         auto t = capture->query.find("token");
+         auto u = capture->query.find("user");
+         expect(t != capture->query.end() && t->second == "abc") << "token=abc should be present";
+         expect(u != capture->query.end() && u->second == "alice") << "user=alice should be present";
+      }
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
 
       stop_server = true;
       server_thread.join();

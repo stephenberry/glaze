@@ -1843,17 +1843,6 @@ namespace glz
       // Process a full request using connection state (new keep-alive aware version)
       inline void process_full_request_with_conn(std::shared_ptr<connection_state> conn)
       {
-         // Check for a streaming handler first
-         auto handler_it = streaming_handlers_.find(conn->request_.target);
-         if (handler_it != streaming_handlers_.end()) {
-            auto method_it = handler_it->second.find(conn->request_.method);
-            if (method_it != handler_it->second.end()) {
-               // Streaming handlers take over the connection (no keep-alive loop)
-               handle_streaming_request_with_conn(std::move(conn), method_it->second);
-               return;
-            }
-         }
-
          // Create the request object
          request& request = conn->request_;
 
@@ -1867,6 +1856,17 @@ namespace glz
          const auto [path_view, query_string] = split_target(conn->request_.target);
          request.path = std::string(path_view);
          request.query = parse_urlencoded(query_string);
+
+         // Check for a streaming handler first (lookup by path, not target, so query strings don't break matching)
+         auto handler_it = streaming_handlers_.find(request.path);
+         if (handler_it != streaming_handlers_.end()) {
+            auto method_it = handler_it->second.find(conn->request_.method);
+            if (method_it != handler_it->second.end()) {
+               // Streaming handlers take over the connection (no keep-alive loop)
+               handle_streaming_request_with_conn(std::move(conn), method_it->second);
+               return;
+            }
+         }
 
          // Find a matching route
          auto [handle, params] = root_router.match(conn->request_.method, request.path);
@@ -2217,15 +2217,23 @@ namespace glz
 
       inline void handle_websocket_upgrade_with_conn(std::shared_ptr<connection_state> conn)
       {
-         // Find matching WebSocket handler
-         auto ws_it = websocket_handlers_.find(conn->request_.target);
+         request& request = conn->request_;
+
+         // Parse path and query string from target so query parameters don't break the lookup
+         // and so the WebSocket handler receives them like a regular handler would.
+         const auto [path_view, query_string] = split_target(request.target);
+         request.path = std::string(path_view);
+         request.query = parse_urlencoded(query_string);
+
+         // Find matching WebSocket handler (lookup by path, not target)
+         auto ws_it = websocket_handlers_.find(request.path);
          if (ws_it == websocket_handlers_.end()) {
             send_error_response_with_close(conn, 404, "Not Found");
             return;
          }
 
          // Copy request for WebSocket handler (request body is typically empty for upgrades)
-         request req{conn->request_};
+         glz::request req{request};
 
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
