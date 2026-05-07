@@ -508,11 +508,24 @@ namespace glz
    // idempotent and no response bytes have been received yet, these warrant exactly one
    // transparent retry on a fresh connection. connection_aborted covers ECONNABORTED on
    // macOS writes to a half-closed peer.
+   //
+   // Implementation note: the make_error_code() calls force conversion to std::error_code
+   // before comparison. Without this, the asio::error::* enums resolve to
+   // boost::asio::error::misc_errors when glaze is built against boost.asio, and there is
+   // no operator== between std::error_code and a boost-side enum. By materializing both
+   // sides as std::error_code, the comparison works under standalone asio (where
+   // std::error_code == asio::error_code) and boost.asio (via boost.system's implicit
+   // conversion to std::error_code) without #ifdef branches.
    inline bool is_retriable_pool_error(std::error_code ec) noexcept
    {
-      return ec == asio::error::eof || ec == asio::error::connection_reset || ec == asio::error::broken_pipe ||
-             ec == asio::error::not_connected || ec == asio::error::shut_down ||
-             ec == asio::error::connection_aborted;
+      static const std::error_code eof_ec = make_error_code(asio::error::eof);
+      static const std::error_code reset_ec = make_error_code(asio::error::connection_reset);
+      static const std::error_code pipe_ec = make_error_code(asio::error::broken_pipe);
+      static const std::error_code not_connected_ec = make_error_code(asio::error::not_connected);
+      static const std::error_code shutdown_ec = make_error_code(asio::error::shut_down);
+      static const std::error_code aborted_ec = make_error_code(asio::error::connection_aborted);
+      return ec == eof_ec || ec == reset_ec || ec == pipe_ec || ec == not_connected_ec || ec == shutdown_ec ||
+             ec == aborted_ec;
    }
 
    // Per-attempt state for the async request chain. response_started is set to true the
