@@ -61,7 +61,7 @@ namespace glz
          }
       }
 
-      size_t concurrency() const noexcept
+      static size_t concurrency()
       {
          const size_t n = std::thread::hardware_concurrency();
          return (n == 0) ? size_t{1} : n;
