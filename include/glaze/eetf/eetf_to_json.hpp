@@ -15,16 +15,16 @@ namespace glz
    namespace detail
    {
       template <class It0, class It1>
-      GLZ_ALWAYS_INLINE size_t get8s(auto&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE size_t get8s(auto&& ctx, It0&& it, It1&& end) noexcept
       {
-         if (check_offset(ctx, it, end, 1)) return 0;
+         if (check_invalid_offset(ctx, it, end, 1)) return 0;
          return std::size_t(*it++);
       }
 
       template <class It0, class It1>
-      GLZ_ALWAYS_INLINE size_t get16be(auto&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE size_t get16be(auto&& ctx, It0&& it, It1&& end) noexcept
       {
-         if (check_offset(ctx, it, end, 2)) return 0;
+         if (check_invalid_offset(ctx, it, end, 2)) return 0;
          const std::size_t b1 = (*it++) << 8;
          return b1 | *it++;
       }
@@ -121,7 +121,7 @@ namespace glz
             ++it; // skip type
             const size_t len = get16be(ctx, it, end);
             if (bool(ctx.error)) return;
-            if (check_offset(ctx, it, end, len)) return;
+            if (check_invalid_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
             to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
             std::advance(it, len);
@@ -133,7 +133,7 @@ namespace glz
             ++it; // skip type
             const size_t len = get8s(ctx, it, end);
             if (bool(ctx.error)) return;
-            if (check_offset(ctx, it, end, len)) return;
+            if (check_invalid_offset(ctx, it, end, len)) return;
             const sv value{reinterpret_cast<const char*>(it), len};
             if (len == 4 && std::memcmp(it, "true", 4) == 0) {
                dump("true", out, ix);
@@ -239,7 +239,8 @@ namespace glz
       }
    } // namespace detail
 
-   template <auto Opts = opts{}, class EETFBuffer, class JSONBuffer>
+   template <auto Opts = eetf::eetf_opts{}, contiguous EETFBuffer, class JSONBuffer>
+   requires has_value_type<EETFBuffer> && (sizeof(typename EETFBuffer::value_type) == sizeof(char))
    [[nodiscard]] inline error_ctx eetf_to_json(const EETFBuffer& term, JSONBuffer& out)
    {
       size_t ix{}; // write index
@@ -250,9 +251,11 @@ namespace glz
       context ctx{};
 
       // Check format version
-      const auto version = decode_version(ctx, it);
-      if (eetf_magic_version != version) {
-         return {1, error_code::version_mismatch};
+      if constexpr (not check_no_header(Opts)) {
+         const auto version = decode_version(ctx, it);
+         if (eetf_magic_version != version) {
+            return {0, error_code::version_mismatch};
+         }
       }
 
       while (it < end) {

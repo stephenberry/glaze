@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <format>
 #include <map>
 #include <string>
 #include <variant>
@@ -41,6 +42,11 @@ std::array<std::uint8_t, 92> term_proplist_001{
    108, 111, 32,  69,  114, 108, 97,  110, 103, 32,  84, 101, 114, 109, 104, 2,   100, 0,   1,   105, 97,  1,   106};
 
 std::array<std::uint8_t, 16> term_atom{131, 116, 0, 0, 0, 1, 100, 0, 1, 97, 100, 0, 3, 113, 119, 101};
+
+struct simple
+{
+   int a;
+};
 
 struct my_struct
 {
@@ -419,6 +425,40 @@ suite eetf_to_json_tests = [] {
       std::string json{};
       expect(!glz::eetf_to_json(buffer, json));
       expect(json == R"([99,"spiders"])") << json;
+   };
+
+   "eetf_to_json no header"_test = [] {
+      constexpr int items = 3;
+      std::vector<simple> v;
+      for (int idx = 0; idx < items; idx++) {
+         v.push_back({idx});
+      }
+
+      std::string buffer{};
+      expect(not glz::write_term(v, buffer));
+
+      // parse list header manually and iterate through items
+      int index{0};
+      int version;
+      int res = ei_decode_version(buffer.data(), &index, &version);
+      expect(res == 0);
+      expect(version == glz::eetf_magic_version);
+
+      int arity;
+      res = ei_decode_list_header(buffer.data(), &index, &arity);
+      expect(res == 0);
+      expect(arity == items);
+
+      for (int idx = 0; idx < arity; idx++) {
+         std::string json;
+         int curr = index;
+         res = ei_skip_term(buffer.data(), &index);
+         expect(res == 0);
+
+         expect(!glz::eetf_to_json<glz::no_header_on<glz::eetf::eetf_opts{}>()>(
+            std::string_view{buffer.data() + curr, static_cast<size_t>(index - curr)}, json));
+         expect(json == std::format(R"({{"a":{}}})", idx));
+      }
    };
 };
 
