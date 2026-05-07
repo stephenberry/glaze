@@ -399,10 +399,10 @@ suite capacity_tests = [] {
       expect(throws([&v] { v.insert(v.begin(), 0); })) << "insert should throw if capacity would be exceeded\n";
 #endif
 
-      expect(v.try_emplace_back(4) == nullptr);
+      expect(not v.try_emplace_back(4));
       expect(v.size() == 3) << "try_emplace_back should not modify size if capacity exceeded\n";
 
-      expect(v.try_push_back(4) == nullptr);
+      expect(not v.try_push_back(4));
       expect(v.size() == 3) << "try_push_back should not modify size if capacity exceeded\n";
    };
 };
@@ -700,49 +700,49 @@ suite fallible_apis_tests = [] {
    "try_push_back"_test = [] {
       inplace_vector<int, 3> v;
 
-      auto ptr1 = v.try_push_back(1);
-      expect(ptr1 != nullptr) << "try_push_back should return non-null if successful\n";
-      expect(*ptr1 == 1) << "try_push_back should return pointer to the inserted element\n";
+      auto r1 = v.try_push_back(1);
+      expect(bool(r1)) << "try_push_back should return engaged result if successful\n";
+      expect(*r1 == 1) << "try_push_back result should refer to the inserted element\n";
       expect(v.size() == 1) << "try_push_back should increment size if successful\n";
 
-      auto ptr2 = v.try_push_back(2);
-      expect(ptr2 != nullptr) << "try_push_back should return non-null if successful\n";
-      expect(*ptr2 == 2) << "try_push_back should return pointer to the inserted element\n";
+      auto r2 = v.try_push_back(2);
+      expect(bool(r2)) << "try_push_back should return engaged result if successful\n";
+      expect(*r2 == 2) << "try_push_back result should refer to the inserted element\n";
       expect(v.size() == 2) << "try_push_back should increment size if successful\n";
 
-      auto ptr3 = v.try_push_back(3);
-      expect(ptr3 != nullptr) << "try_push_back should return non-null if successful\n";
-      expect(*ptr3 == 3) << "try_push_back should return pointer to the inserted element\n";
+      auto r3 = v.try_push_back(3);
+      expect(bool(r3)) << "try_push_back should return engaged result if successful\n";
+      expect(*r3 == 3) << "try_push_back result should refer to the inserted element\n";
       expect(v.size() == 3) << "try_push_back should increment size if successful\n";
 
-      auto ptr4 = v.try_push_back(4);
-      expect(ptr4 == nullptr) << "try_push_back should return null if capacity would be exceeded\n";
+      auto r4 = v.try_push_back(4);
+      expect(not r4) << "try_push_back should return disengaged result if capacity would be exceeded\n";
       expect(v.size() == 3) << "try_push_back should not change size if unsuccessful\n";
    };
 
    "try_emplace_back"_test = [] {
       inplace_vector<std::pair<int, int>, 3> v;
 
-      auto ptr1 = v.try_emplace_back(1, 10);
-      expect(ptr1 != nullptr) << "try_emplace_back should return non-null if successful\n";
-      expect(ptr1->first == 1) << "try_emplace_back should return pointer to the inserted element\n";
-      expect(ptr1->second == 10) << "try_emplace_back should return pointer to the inserted element\n";
+      auto r1 = v.try_emplace_back(1, 10);
+      expect(bool(r1)) << "try_emplace_back should return engaged result if successful\n";
+      expect(r1->first == 1) << "try_emplace_back result should refer to the inserted element\n";
+      expect(r1->second == 10) << "try_emplace_back result should refer to the inserted element\n";
       expect(v.size() == 1) << "try_emplace_back should increment size if successful\n";
 
-      auto ptr2 = v.try_emplace_back(2, 20);
-      expect(ptr2 != nullptr) << "try_emplace_back should return non-null if successful\n";
-      expect(ptr2->first == 2) << "try_emplace_back should return pointer to the inserted element\n";
-      expect(ptr2->second == 20) << "try_emplace_back should return pointer to the inserted element\n";
+      auto r2 = v.try_emplace_back(2, 20);
+      expect(bool(r2)) << "try_emplace_back should return engaged result if successful\n";
+      expect(r2->first == 2) << "try_emplace_back result should refer to the inserted element\n";
+      expect(r2->second == 20) << "try_emplace_back result should refer to the inserted element\n";
       expect(v.size() == 2) << "try_emplace_back should increment size if successful\n";
 
-      auto ptr3 = v.try_emplace_back(3, 30);
-      expect(ptr3 != nullptr) << "try_emplace_back should return non-null if successful\n";
-      expect(ptr3->first == 3) << "try_emplace_back should return pointer to the inserted element\n";
-      expect(ptr3->second == 30) << "try_emplace_back should return pointer to the inserted element\n";
+      auto r3 = v.try_emplace_back(3, 30);
+      expect(bool(r3)) << "try_emplace_back should return engaged result if successful\n";
+      expect(r3->first == 3) << "try_emplace_back result should refer to the inserted element\n";
+      expect(r3->second == 30) << "try_emplace_back result should refer to the inserted element\n";
       expect(v.size() == 3) << "try_emplace_back should increment size if successful\n";
 
-      auto ptr4 = v.try_emplace_back(4, 40);
-      expect(ptr4 == nullptr) << "try_emplace_back should return null if capacity would be exceeded\n";
+      auto r4 = v.try_emplace_back(4, 40);
+      expect(not r4) << "try_emplace_back should return disengaged result if capacity would be exceeded\n";
       expect(v.size() == 3) << "try_emplace_back should not change size if unsuccessful\n";
    };
 
@@ -931,8 +931,8 @@ suite edge_cases_tests = [] {
       expect(throws([&v] { v.push_back(1); })) << "push_back on vector with zero capacity should throw\n";
 #endif
 
-      auto ptr = v.try_push_back(1);
-      expect(ptr == nullptr) << "try_push_back on vector with zero capacity should return nullptr\n";
+      auto r = v.try_push_back(1);
+      expect(not r) << "try_push_back on vector with zero capacity should return disengaged result\n";
 
       // Test that the is_empty type trait works
       expect(std::is_empty_v<inplace_vector<int, 0>>) << "inplace_vector<T, 0> should be an empty type\n";
