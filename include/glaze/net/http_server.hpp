@@ -2217,21 +2217,23 @@ namespace glz
 
       inline void handle_websocket_upgrade_with_conn(std::shared_ptr<connection_state> conn)
       {
+         request& request = conn->request_;
+
          // Parse path and query string from target so query parameters don't break the lookup
          // and so the WebSocket handler receives them like a regular handler would.
-         const auto [path_view, query_string] = split_target(conn->request_.target);
-         conn->request_.path = std::string(path_view);
-         conn->request_.query = parse_urlencoded(query_string);
+         const auto [path_view, query_string] = split_target(request.target);
+         request.path = std::string(path_view);
+         request.query = parse_urlencoded(query_string);
 
          // Find matching WebSocket handler (lookup by path, not target)
-         auto ws_it = websocket_handlers_.find(conn->request_.path);
+         auto ws_it = websocket_handlers_.find(request.path);
          if (ws_it == websocket_handlers_.end()) {
             send_error_response_with_close(conn, 404, "Not Found");
             return;
          }
 
          // Copy request for WebSocket handler (request body is typically empty for upgrades)
-         request req{conn->request_};
+         glz::request req{request};
 
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
