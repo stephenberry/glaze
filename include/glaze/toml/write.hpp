@@ -675,6 +675,20 @@ namespace glz
    template <auto Opts, class T, class V, class B>
    void write_inline_object(V&& value, is_context auto&& ctx, B&& b, auto& ix);
 
+   // Forward declaration for inline map writer
+   template <auto Opts, class V, class B>
+   void write_inline_map(V&& value, is_context auto&& ctx, B&& b, auto& ix);
+
+   // Dispatches a value to the appropriate writer for use inside an inline context
+   // (the value of a key in an inline table, or an element of an inline array).
+   // Inside such a context the value must be inline TOML: no multi-line `key = value`
+   // pairs, no `[table]` / `[[array]]` headers. This routes structs, maps, variants,
+   // and nullables to their inline writers; arrays go through the existing array
+   // writer, which now invokes write_inline_value for each element so the inline
+   // requirement cascades down arbitrary nesting.
+   template <auto Opts, class V, class B>
+   void write_inline_value(V&& val, is_context auto&& ctx, B&& b, auto& ix);
+
    // Specialization for inline_table_t wrapper - writes array of objects as inline tables
    // Example output: [{name = "foo", id = 1}, {name = "bar", id = 2}]
    template <class T>
@@ -805,12 +819,14 @@ namespace glz
          ix += key.size();
          dump(" = ", b, ix);
 
-         // Write the value
+         // Write the value through the inline dispatcher so nested structs, maps,
+         // and arrays of either remain inline; otherwise multi-line content or
+         // table headers from the standard writers would leak inside this `{...}`.
          if constexpr (reflectable<Type>) {
-            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+            write_inline_value<Options>(get_member(value, get<I>(t)), ctx, b, ix);
          }
          else {
-            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<Type>::values)), ctx, b, ix);
+            write_inline_value<Options>(get_member(value, get<I>(reflect<Type>::values)), ctx, b, ix);
          }
       });
 
@@ -818,6 +834,84 @@ namespace glz
          return;
       }
       dump('}', b, ix);
+   }
+
+   // Write a map in inline table format: {key1 = value1, key2 = value2}
+   // Used when a map field appears as a value (inside a struct or another map),
+   // since multi-line key = value pairs would be invalid TOML in that position.
+   template <auto Options, class V, class B>
+   void write_inline_map(V&& value, is_context auto&& ctx, B&& b, auto& ix)
+   {
+      if (!ensure_space(ctx, b, ix + 2 + write_padding_bytes)) [[unlikely]] {
+         return;
+      }
+      dump('{', b, ix);
+
+      bool first = true;
+      for (auto&& [key, val] : value) {
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         if (!ensure_space(ctx, b, ix + key.size() + 5 + write_padding_bytes)) [[unlikely]] {
+            return;
+         }
+
+         if (!first) {
+            dump(", ", b, ix);
+         }
+         else {
+            first = false;
+         }
+
+         std::memcpy(&b[ix], key.data(), key.size());
+         ix += key.size();
+         dump(" = ", b, ix);
+
+         write_inline_value<Options>(val, ctx, b, ix);
+      }
+
+      if (!ensure_space(ctx, b, ix + 1)) [[unlikely]] {
+         return;
+      }
+      dump('}', b, ix);
+   }
+
+   template <auto Options, class V, class B>
+   void write_inline_value(V&& val, is_context auto&& ctx, B&& b, auto& ix)
+   {
+      using val_t = std::remove_cvref_t<V>;
+      if constexpr (always_null_t<val_t>) {
+         // No inner value to recurse into; emit nothing.
+      }
+      else if constexpr (nullable_like<val_t>) {
+         // bool / dereferencing access (raw pointers, smart pointers, std::optional, ...).
+         if (val) {
+            write_inline_value<Options>(*val, ctx, b, ix);
+         }
+      }
+      else if constexpr (nullable_value_t<val_t>) {
+         // .has_value() / .value() access for optional-like types that don't
+         // expose operator bool / operator*. Aligns with the broader null_t
+         // coverage used at the struct field level.
+         if (val.has_value()) {
+            write_inline_value<Options>(val.value(), ctx, b, ix);
+         }
+      }
+      else if constexpr (is_variant<val_t>) {
+         std::visit([&](auto&& alt) { write_inline_value<Options>(alt, ctx, b, ix); }, val);
+      }
+      else if constexpr (writable_map_t<val_t>) {
+         write_inline_map<Options>(std::forward<V>(val), ctx, b, ix);
+      }
+      else if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
+         write_inline_object<Options, val_t>(std::forward<V>(val), ctx, b, ix);
+      }
+      else {
+         // Arrays land here and dispatch into the array writer, which wraps `[...]`
+         // and routes each element back through write_inline_value via write_element.
+         to<TOML, val_t>::template op<Options>(std::forward<V>(val), ctx, b, ix);
+      }
    }
 
    // Type trait to detect if a type is an array of objects (for array-of-tables)
@@ -904,10 +998,12 @@ namespace glz
          }
       };
 
-      // Helper lambda to write a scalar key-value pair
+      // Helper lambda to write a key-value pair where the value sits at the right
+      // of `=` and therefore must be inline TOML. Routing through write_inline_value
+      // covers the cases where the field type is itself a wrapper (optional, variant)
+      // around a struct or map; without this, those wrappers would dispatch through
+      // their multi-line writers and emit content invalid in value position.
       auto write_scalar_field = [&]<size_t I>() {
-         using val_t = field_t<T, I>;
-
          if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
             return;
          }
@@ -927,10 +1023,39 @@ namespace glz
          ix += 3;
 
          if constexpr (reflectable<T>) {
-            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+            write_inline_value<Options>(get_member(value, get<I>(t)), ctx, b, ix);
          }
          else {
-            to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+            write_inline_value<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+         }
+      };
+
+      // Helper lambda to write a map field as an inline table: key = {subkey = value, ...}
+      // TOML spec does not allow multi-line key = value pairs as a value, so a map field
+      // appearing inside a struct must be serialized in inline form here.
+      auto write_inline_map_field = [&]<size_t I>() {
+         if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
+            return;
+         }
+
+         if (!first) {
+            std::memcpy(&b[ix], "\n", 1);
+            ++ix;
+         }
+         else {
+            first = false;
+         }
+         static constexpr auto key = glz::get<I>(reflect<T>::keys);
+         std::memcpy(&b[ix], key.data(), key.size());
+         ix += key.size();
+         std::memcpy(&b[ix], " = ", 3);
+         ix += 3;
+
+         if constexpr (reflectable<T>) {
+            write_inline_map<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+         }
+         else {
+            write_inline_map<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
          }
       };
 
@@ -1107,10 +1232,16 @@ namespace glz
          }
 
          // Only process scalar fields in this pass (not objects or arrays of objects)
-         // Exception: in inline_mode, arrays of objects are written as inline arrays
-         constexpr bool is_scalar =
-            !(glaze_object_t<val_t> || reflectable<val_t>) && (!is_array_of_objects_v<val_t> || inline_mode);
-         if constexpr (is_scalar) {
+         // Exception: in inline_mode, arrays of objects are written as inline arrays.
+         // Map fields are written as inline tables here so multi-line key = value
+         // pairs do not leak out as the value of a struct field.
+         constexpr bool is_object = glaze_object_t<val_t> || reflectable<val_t>;
+         constexpr bool is_map = writable_map_t<val_t>;
+         constexpr bool is_scalar = !is_object && !is_map && (!is_array_of_objects_v<val_t> || inline_mode);
+         if constexpr (is_map) {
+            write_inline_map_field.template operator()<I>();
+         }
+         else if constexpr (is_scalar) {
             write_scalar_field.template operator()<I>();
          }
       });
@@ -1148,21 +1279,15 @@ namespace glz
    {
       static constexpr bool map_like_array = writable_array_t<T> && pair_t<range_value_t<T>>;
 
-      // Helper to write an array element - uses inline table format for objects when in inline mode
+      // Array elements always sit inside `[ ... ]`, which only admits inline TOML.
+      // Routing through write_inline_value forces nested structs, maps, arrays, and
+      // variants to stay inline, regardless of the document-level inline_arrays
+      // setting; without this, an object or map element would dispatch to its
+      // multi-line writer and emit content the array bracket cannot contain.
       template <auto Opts, class V, class B>
       static void write_element(V&& element, is_context auto&& ctx, B&& b, auto& ix)
       {
-         using val_t = std::remove_cvref_t<V>;
-         constexpr bool is_object_type = glaze_object_t<val_t> || reflectable<val_t>;
-         constexpr bool inline_mode = use_inline_arrays<Opts>();
-
-         if constexpr (is_object_type && inline_mode) {
-            // Write object as inline table {key = value, ...}
-            write_inline_object<Opts, val_t>(std::forward<V>(element), ctx, b, ix);
-         }
-         else {
-            to<TOML, val_t>::template op<Opts>(std::forward<V>(element), ctx, b, ix);
-         }
+         write_inline_value<Opts>(std::forward<V>(element), ctx, b, ix);
       }
 
       // --- Array-like container writer ---
@@ -1265,7 +1390,12 @@ namespace glz
             ix += key.size();
             std::memcpy(&b[ix], " = ", 3);
             ix += 3;
-            to<TOML, decltype(val)>::template op<Opts>(val, ctx, b, ix);
+
+            // The map writer emits each entry as a top-level `key = value` line,
+            // so the value occupies the same position as a struct field's value:
+            // it must be inline TOML. write_inline_value enforces that for maps,
+            // structs, arrays, variants, and nullables.
+            write_inline_value<Opts>(val, ctx, b, ix);
          }
       }
    };
@@ -1303,20 +1433,21 @@ namespace glz
          }
          dump('[', b, ix);
          using V = std::decay_t<T>;
+         // Tuple/glaze_array elements live inside `[ ... ]` and so must be inline
+         // TOML, exactly like the array-of-elements case above. Routing through
+         // write_inline_value keeps struct/map/optional/variant elements legal.
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
             if constexpr (glaze_array_t<V>) {
-               serialize<TOML>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
+               write_inline_value<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, b, ix);
             }
             else if constexpr (is_std_tuple<T>) {
-               using Value = core_t<decltype(std::get<I>(value))>;
-               to<TOML, Value>::template op<Opts>(std::get<I>(value), ctx, b, ix);
+               write_inline_value<Opts>(std::get<I>(value), ctx, b, ix);
             }
             else {
-               using Value = core_t<decltype(glz::get<I>(value))>;
-               to<TOML, Value>::template op<Opts>(glz::get<I>(value), ctx, b, ix);
+               write_inline_value<Opts>(glz::get<I>(value), ctx, b, ix);
             }
             constexpr bool needs_comma = I < N - 1;
             if constexpr (needs_comma) {
