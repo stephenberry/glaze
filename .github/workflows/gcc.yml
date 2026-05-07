@@ -131,3 +131,61 @@ jobs:
 
     - name: Test
       run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
+
+  build-gcc16-reflection:
+    # C++26 P2996 reflection coverage on GCC 16.1.
+    # Replaces the standalone gcc-p2996-reflection.yml workflow which used
+    # ubuntu:26.04 + apt-installed gcc-16; gcc:16.1 is the official image.
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:16.1
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release]
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v6
+
+    - name: Verify reflection support
+      run: |
+        g++ --version
+        echo 'int main() { return 0; }' | g++ -std=c++26 -freflection -x c++ -c - -o /dev/null
+
+    - name: Prepare build directory
+      run: cmake -E make_directory "$GITHUB_WORKSPACE/build"
+
+    - name: Configure CMake
+      run: |
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_FLAGS='-std=c++26 -freflection' \
+          -Dglaze_DEVELOPER_MODE=ON \
+          -Dglaze_ENABLE_REFLECTION26=ON \
+          -Dglaze_BUILD_NETWORKING_TESTS=OFF \
+          -Dglaze_ENABLE_SANITIZERS=OFF \
+          -Dglaze_ENABLE_FUZZING=OFF
+
+    - name: Build
+      run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
+
+    - name: Test
+      run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build" -j $(nproc)
