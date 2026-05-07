@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <map>
 #include <mutex>
 #include <numeric>
 #include <string>
@@ -181,6 +182,28 @@ struct chunked_test_server
          }
          res.close();
       });
+
+      // --- Streaming endpoint that echoes parsed query parameters ---
+      // Regression for issue #2549: stream_* lookup must strip the query string
+      // and the streaming handler must receive parsed path/query like a regular handler.
+      auto echo_query_handler = [](glz::request& req, glz::streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         res.send("path=");
+         res.send(req.path);
+         res.send(";count=");
+         res.send(std::to_string(req.query.size()));
+         // Stable ordering for assertion regardless of unordered_map bucket order
+         std::map<std::string, std::string> ordered(req.query.begin(), req.query.end());
+         for (const auto& [k, v] : ordered) {
+            res.send(";");
+            res.send(k);
+            res.send("=");
+            res.send(v);
+         }
+         res.close();
+      };
+      server_.stream_get("/echo-query", echo_query_handler);
+      server_.stream_post("/echo-query-post", echo_query_handler);
 
       // --- Varying chunk sizes ---
       server_.stream_get("/varying-sizes", [](glz::request&, glz::streaming_response& res) {
@@ -481,6 +504,134 @@ suite chunked_sync_tests = [] {
       for (auto& t : threads) t.join();
 
       expect(success_count == num_threads) << "All concurrent chunked requests should succeed";
+
+      server.stop();
+   };
+
+   // Regression for issue #2549: stream_* handlers must match when the request
+   // includes a query string, and the handler must see the parsed query map.
+   "sync_stream_get_with_query_parameters"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query?a=b&c=d");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200 (404 means streaming route lookup failed)";
+         expect(result->response_body == "path=/echo-query;count=2;a=b;c=d")
+            << "Body should reflect the parsed path and query parameters, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // No query string should still match the streaming route (no regression).
+   "sync_stream_get_without_query_string"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query;count=0")
+            << "Body should reflect empty query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // Trailing '?' with no params: path lookup must still succeed and query must be empty.
+   "sync_stream_get_with_empty_query_string"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query?");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query;count=0")
+            << "Body should reflect empty query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // Single query parameter (the form named in issue #2549).
+   "sync_stream_get_with_single_query_parameter"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query?a=b");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query;count=1;a=b")
+            << "Body should reflect the parsed query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // URL-encoded values must be decoded into the parsed query map.
+   "sync_stream_get_with_urlencoded_query_value"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query?msg=hello%20world&n=1");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query;count=2;msg=hello world;n=1")
+            << "Body should reflect URL-decoded query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // POST variant: same fix path, exercised through stream_post.
+   "sync_stream_post_with_query_parameters"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.post(server.base_url() + "/echo-query-post?a=b&c=d", std::string{});
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query-post;count=2;a=b;c=d")
+            << "Body should reflect the parsed query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // Wrong method on a streaming-only path with a query string should still fall through
+   // to the regular router and produce 404 (not match a different streaming method by accident).
+   "sync_stream_wrong_method_with_query_returns_404"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      // /echo-query is registered for GET only; POST with a query string should 404.
+      auto result = client.post(server.base_url() + "/echo-query?a=b", std::string{});
+
+      expect(result.has_value()) << "Request should complete";
+      if (result) {
+         expect(result->status_code == 404)
+            << "POST to a GET-only streaming route should be 404, got: " << result->status_code;
+      }
 
       server.stop();
    };
