@@ -404,6 +404,9 @@ namespace glz
    //        template <> struct glz::meta<T> { static constexpr auto value = glz::skip{}; };
    // Useful for marker classes used purely for compile-time metadata that
    // should never appear in serialized output.
+   //
+   // The same_as<T, skip> clause is not redundant with the meta_wrapper check:
+   // glz::skip itself has no meta, so meta_wrapper_t<skip> is empty, not skip.
    template <class T>
    concept always_skipped = is_includer<T> || std::same_as<T, hidden> || std::same_as<T, skip> ||
                             std::same_as<meta_wrapper_t<std::decay_t<T>>, skip>;

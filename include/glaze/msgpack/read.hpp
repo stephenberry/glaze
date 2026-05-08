@@ -158,12 +158,10 @@ namespace glz::msgpack::detail
    template <class T>
    GLZ_ALWAYS_INLINE constexpr bool should_skip_field()
    {
-      if constexpr (std::same_as<T, hidden> || std::same_as<T, skip>) {
-         return true;
-      }
-      else {
-         return false;
-      }
+      // Mirrors the writer's count_members predicate so structs_as_arrays reads
+      // stay aligned with the wire layout, including is_includer and types
+      // opted out via meta::value = skip{}.
+      return always_skipped<T>;
    }
 
 }

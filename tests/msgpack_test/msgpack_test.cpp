@@ -296,6 +296,72 @@ struct glz::meta<msgpack_error_on_missing_keys_tests::MigrationV2>
    static constexpr auto value = object("id", &T::id, "name", &T::name, "version", &T::version);
 };
 
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in MsgPack, including the structs_as_arrays mode
+// where writer and reader must agree on the wire count of non-skipped fields.
+namespace msgpack_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m{};
+      bool active{true};
+      int count{42};
+      std::string name{"hello"};
+   };
+}
+
+template <>
+struct glz::meta<msgpack_skip_marker_tests::settings>
+{
+   using T = msgpack_skip_marker_tests::settings;
+   static constexpr auto value = object("m", &T::m, "active", &T::active, "count", &T::count, "name", &T::name);
+};
+
+namespace msgpack_skip_marker_tests
+{
+   inline void run()
+   {
+      using namespace ut;
+      "msgpack skip-marker keyed roundtrip"_test = [] {
+         settings original{.active = false, .count = 7, .name = "world"};
+         auto encoded = glz::write_msgpack(original);
+         expect(encoded.has_value());
+
+         settings decoded{};
+         auto ec = glz::read_msgpack(decoded, *encoded);
+         expect(!ec) << glz::format_error(ec, *encoded);
+         expect(decoded.active == false);
+         expect(decoded.count == 7);
+         expect(decoded.name == "world");
+      };
+
+      "msgpack skip-marker structs_as_arrays roundtrip"_test = [] {
+         constexpr auto opts =
+            glz::opt_true<glz::opts{.format = glz::MSGPACK}, glz::structs_as_arrays_opt_tag{}>;
+         settings original{.active = false, .count = 7, .name = "world"};
+         std::string buffer;
+         auto write_ec = glz::write<opts>(original, buffer);
+         expect(!write_ec);
+
+         settings decoded{};
+         glz::context ctx{};
+         auto ec = glz::read<opts>(decoded, std::string_view{buffer}, ctx);
+         expect(!ec) << glz::format_error(ec, buffer);
+         expect(decoded.active == false);
+         expect(decoded.count == 7);
+         expect(decoded.name == "world");
+      };
+   }
+}
+
 int main()
 {
    "msgpack primitive roundtrip"_test = [] {
@@ -1032,6 +1098,8 @@ int main()
          expect(decoded.active == batch.active) << "active should match";
       };
    }
+
+   msgpack_skip_marker_tests::run();
 
    return 0;
 }

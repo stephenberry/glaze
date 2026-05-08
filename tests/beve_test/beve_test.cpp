@@ -6704,6 +6704,66 @@ suite beve_skip_complex_suite = [] {
    };
 };
 
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in BEVE, both keyed and structs_as_arrays.
+namespace beve_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m1{};
+      bool active{true};
+      int count{42};
+      marker m2{};
+      std::string name{"hello"};
+   };
+}
+
+template <>
+struct glz::meta<beve_skip_marker_tests::settings>
+{
+   using T = beve_skip_marker_tests::settings;
+   static constexpr auto value =
+      object("m1", &T::m1, "active", &T::active, "count", &T::count, "m2", &T::m2, "name", &T::name);
+};
+
+suite beve_skip_marker_suite = [] {
+   using namespace beve_skip_marker_tests;
+
+   "beve skip-marker keyed roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      auto encoded = glz::write_beve(original);
+      expect(encoded.has_value());
+
+      settings decoded{};
+      auto ec = glz::read_beve(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
+   };
+
+   "beve skip-marker untagged (structs_as_arrays) roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      auto encoded = glz::write_beve_untagged(original);
+      expect(encoded.has_value());
+
+      settings decoded{};
+      auto ec = glz::read_beve_untagged(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");

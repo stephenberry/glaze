@@ -1594,4 +1594,41 @@ namespace
    };
 }
 
+namespace bson_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m{};
+      bool active{true};
+      int count{42};
+      std::string name{"hello"};
+   };
+}
+
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in BSON.
+suite bson_skip_marker_suite = [] {
+   using namespace bson_skip_marker_tests;
+   "bson skip-marker roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      auto encoded = glz::write_bson(original);
+      expect(encoded.has_value());
+
+      settings decoded{};
+      auto ec = glz::read_bson(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
+   };
+};
+
 int main() { return 0; }

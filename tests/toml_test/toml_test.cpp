@@ -4727,6 +4727,28 @@ count = 11)";
       expect(s.enable == false);
       expect(s.count == 11);
    };
+
+   // Regression: marker fields must not be flagged as missing when
+   // error_on_missing_keys is set. They are never written, so requiring them
+   // would make every read of error_on_missing_keys fail.
+   "skip_marker_with_error_on_missing_keys"_test = [] {
+      settings_with_local_markers s{};
+      std::string input = R"({"enable_things":false,"number_of_things":7,"stuff_multiplier":2.5})";
+      auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable_things == false);
+      expect(s.number_of_things == 7);
+      expect(std::abs(s.stuff_multiplier - 2.5f) < 1e-6f);
+   };
+
+   "skip_marker_via_meta_with_error_on_missing_keys"_test = [] {
+      settings_with_meta_markers s{};
+      std::string input = R"({"enable":false,"count":11})";
+      auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable == false);
+      expect(s.count == 11);
+   };
 };
 
 int main() { return 0; }
