@@ -2855,7 +2855,7 @@ suite merge_tests = [] {
 
       std::string json{};
       expect(!glz::beve_to_json(bin, json));
-      expect(json == R"({"a":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"include":""},"c":"d"})") << json;
+      expect(json == R"({"a":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]},"c":"d"})") << json;
    };
 };
 
@@ -5932,8 +5932,9 @@ suite beve_peek_header_tests = [] {
       auto result = glz::beve_peek_header(buffer);
       expect(result.has_value());
       expect(result->type == glz::tag::object);
-      // my_struct has 5 members in its glz::meta: i, d, hello, arr, include
-      expect(result->count == 5u);
+      // my_struct has 5 members in its glz::meta (i, d, hello, arr, include); the
+      // include field is filtered by always_skipped, so the wire count is 4.
+      expect(result->count == 4u);
    };
 
    "beve_peek_header map"_test = [] {

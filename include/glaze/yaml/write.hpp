@@ -927,6 +927,11 @@ namespace glz
                return;
 
             using val_t = field_t<V, I>;
+
+            if constexpr (always_skipped<val_t>) {
+               return;
+            }
+            else {
             static constexpr sv key = get<I>(reflect<V>::keys);
 
             // Get member value (supports both glaze_object_t and reflectable)
@@ -1099,6 +1104,7 @@ namespace glz
                serialize<YAML>::op<Opts>(member, ctx, b, ix);
                dump('\n', b, ix);
             }
+            }
          });
       }
 
@@ -1248,43 +1254,46 @@ namespace glz
                return;
 
             using val_t = field_t<V, I>;
-            static constexpr sv key = get<I>(reflect<V>::keys);
 
-            // Get member value (supports both glaze_object_t and reflectable)
-            auto&& member = [&]() -> decltype(auto) {
-               if constexpr (glaze_object_t<V>) {
-                  return get_member(value, get<I>(reflect<V>::values));
-               }
-               else {
-                  return get<I>(to_tie(value));
-               }
-            }();
+            if constexpr (!always_skipped<val_t>) {
+               static constexpr sv key = get<I>(reflect<V>::keys);
 
-            // Skip null members if configured
-            if constexpr (nullable_like<val_t>) {
-               if constexpr (Opts.skip_null_members) {
-                  if (!member) {
-                     return;
+               // Get member value (supports both glaze_object_t and reflectable)
+               auto&& member = [&]() -> decltype(auto) {
+                  if constexpr (glaze_object_t<V>) {
+                     return get_member(value, get<I>(reflect<V>::values));
+                  }
+                  else {
+                     return get<I>(to_tie(value));
+                  }
+               }();
+
+               // Skip null members if configured
+               if constexpr (nullable_like<val_t>) {
+                  if constexpr (Opts.skip_null_members) {
+                     if (!member) {
+                        return;
+                     }
                   }
                }
-            }
 
-            if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
-               if (is_default_value(member)) return;
-            }
+               if constexpr (check_skip_default_members(Opts) && has_skippable_default<val_t>) {
+                  if (is_default_value(member)) return;
+               }
 
-            if (!first) {
-               dump(", ", b, ix);
-            }
-            first = false;
+               if (!first) {
+                  dump(", ", b, ix);
+               }
+               first = false;
 
-            if (!ensure_space(ctx, b, ix + key.size() + 8)) [[unlikely]] {
-               return;
-            }
-            dump(key, b, ix);
-            dump(": ", b, ix);
+               if (!ensure_space(ctx, b, ix + key.size() + 8)) [[unlikely]] {
+                  return;
+               }
+               dump(key, b, ix);
+               dump(": ", b, ix);
 
-            serialize<YAML>::op<flow_context_on<Opts>()>(member, ctx, b, ix);
+               serialize<YAML>::op<flow_context_on<Opts>()>(member, ctx, b, ix);
+            }
          });
 
          dump('}', b, ix);

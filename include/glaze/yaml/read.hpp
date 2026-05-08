@@ -197,6 +197,18 @@ namespace glz
       }
    };
 
+   // Silently consume any value bound to a glz::skip sentinel. Reached when a
+   // type opts out of serialization via meta::value = glz::skip{}.
+   template <>
+   struct from<YAML, skip>
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
+      {
+         skip_value<YAML>::template op<Opts>(ctx, args...);
+      }
+   };
+
    namespace yaml
    {
       // Handle YAML alias (*name) by replaying the stored anchor span.

@@ -625,8 +625,7 @@ namespace glz
       static consteval size_t count_members()
       {
          return []<size_t... I>(std::index_sequence<I...>) consteval {
-            return (size_t{} + ... +
-                    (std::same_as<field_t<T, I>, hidden> || std::same_as<field_t<T, I>, skip> ? size_t{} : size_t{1}));
+            return (size_t{} + ... + (always_skipped<field_t<T, I>> ? size_t{} : size_t{1}));
          }(std::make_index_sequence<N>{});
       }
 
@@ -641,7 +640,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if constexpr (!std::same_as<field_t<T, I>, hidden> && !std::same_as<field_t<T, I>, skip>) {
+               if constexpr (!always_skipped<field_t<T, I>>) {
                   serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
                   if constexpr (is_output_streaming<decltype(b)>) {
                      flush_buffer(b, ix);
@@ -657,7 +656,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if constexpr (!std::same_as<field_t<T, I>, hidden> && !std::same_as<field_t<T, I>, skip>) {
+               if constexpr (!always_skipped<field_t<T, I>>) {
                   static constexpr sv key = reflect<T>::keys[I];
                   if (!msgpack::detail::write_str_header(ctx, key.size(), b, ix)) [[unlikely]] {
                      return;

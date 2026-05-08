@@ -231,6 +231,18 @@ namespace glz
       }
    };
 
+   // Silently consume any value bound to a glz::skip sentinel. Reached when a
+   // type opts out of serialization via meta::value = glz::skip{}.
+   template <>
+   struct from<MSGPACK, skip>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&&, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         skip_value<MSGPACK>::template op<Opts>(tag, ctx, it, end);
+      }
+   };
+
    template <always_null_t T>
    struct from<MSGPACK, T>
    {
