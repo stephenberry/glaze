@@ -323,12 +323,12 @@ namespace glz::zmij
          return ZMIJ_USE_INT128 ? umul128_hi64(x, div10_sig64) : x / 10;
       }
 
-      constexpr auto compute_dec_exp(int32_t bin_exp, bool regular = true) noexcept -> int32_t
+      constexpr auto compute_dec_exp(int64_t bin_exp, bool regular = true) noexcept -> int32_t
       {
          assert(bin_exp >= -1334 && bin_exp <= 2620);
          constexpr int log10_3_over_4_sig = 131'072;
          constexpr int log10_2_sig = 315'653, log10_2_exp = 20;
-         return (bin_exp * log10_2_sig - !regular * log10_3_over_4_sig) >> log10_2_exp;
+         return static_cast<int32_t>((bin_exp * log10_2_sig - !regular * log10_3_over_4_sig) >> log10_2_exp);
       }
 
       template <typename Float>
@@ -444,12 +444,12 @@ namespace glz::zmij
          }
       };
 
-      constexpr ZMIJ_INLINE auto compute_exp_shift(int32_t bin_exp, int32_t dec_exp) noexcept -> int32_t
+      constexpr ZMIJ_INLINE auto compute_exp_shift(int64_t bin_exp, int32_t dec_exp) noexcept -> int32_t
       {
          assert(dec_exp >= -350 && dec_exp <= 350);
          constexpr int log2_pow10_sig = 217'707, log2_pow10_exp = 16;
          int pow10_bin_exp = -dec_exp * log2_pow10_sig >> log2_pow10_exp;
-         return bin_exp + pow10_bin_exp + 1;
+         return static_cast<int32_t>(bin_exp + pow10_bin_exp + 1);
       }
 
       template <bool OptSize>
@@ -838,10 +838,10 @@ namespace glz::zmij
       };
 
       template <typename Float, typename UInt, bool OptSize>
-      ZMIJ_INLINE auto to_decimal(UInt bin_sig, int32_t raw_exp, bool regular, const constants<OptSize>& c) noexcept -> to_decimal_result
+      ZMIJ_INLINE auto to_decimal(UInt bin_sig, int64_t raw_exp, bool regular, const constants<OptSize>& c) noexcept -> to_decimal_result
       {
          using traits = float_traits<Float>;
-         int32_t bin_exp = raw_exp - traits::exp_offset;
+         int64_t bin_exp = raw_exp - traits::exp_offset;
          constexpr int num_bits = std::numeric_limits<UInt>::digits;
 
          constexpr uint64_t log10_2_sig = 78'913;
