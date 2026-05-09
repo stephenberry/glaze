@@ -141,8 +141,10 @@ static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE);
 #pragma GCC diagnostic ignored "-Wpedantic"
 #elif ZMIJ_MSC_VER
 #pragma warning(push)
+// C4702: false-positive unreachable-code in MSVC 14.50 (compiler regression)
+// C4324: SIMD types are intentionally padded by alignas
 #pragma warning(disable : 4702)
-#pragma warning(disable:4324)
+#pragma warning(disable : 4324)
 #endif
 
 namespace glz::zmij
@@ -953,7 +955,7 @@ namespace glz::zmij
 
          const auto* c = &consts_v<OptSize>;
          ZMIJ_ASM(("" : "+r"(c)));
-         long long threshold = traits::num_bits == 64 ? static_cast<long long>(c->threshold) : 10'000'000ll;
+         int64_t threshold = traits::num_bits == 64 ? static_cast<int64_t>(c->threshold) : 10'000'000;
 
          to_decimal_result dec;
          bool is_normal = unsigned(bin_exp - 1) < unsigned(traits::exp_mask - 1);
@@ -975,14 +977,14 @@ namespace glz::zmij
                return buffer + 1;
             }
             dec = detail_impl::to_decimal<Float, typename traits::sig_type, OptSize>(bin_sig, 1, true, *c);
-            long long dec_sig = dec.sig * 10 + (dec.has_last_digit ? dec.last_digit : 0);
-            int dec_exp = dec.exp;
+            int64_t dec_sig = dec.sig * 10 + (dec.has_last_digit ? dec.last_digit : 0);
+            int32_t dec_exp = dec.exp;
             while (dec_sig < threshold) {
                dec_sig *= 10;
                --dec_exp;
             }
-            long long d = static_cast<long long>(detail_impl::div10(static_cast<uint64_t>(dec_sig)));
-            int last_digit = static_cast<int>(dec_sig - d * 10);
+            int64_t d = static_cast<int64_t>(detail_impl::div10(static_cast<uint64_t>(dec_sig)));
+            int32_t last_digit = static_cast<int32_t>(dec_sig - d * 10);
             dec = {d, dec_exp, last_digit, last_digit != 0};
          }
          else {
@@ -1038,17 +1040,17 @@ namespace glz::zmij
          dec_exp = neg ? -dec_exp : dec_exp;
          unsigned hundreds_written = 0;
          if constexpr (traits::max_exponent10 >= 100) {
-            uint32_t digit = 0;
+            int32_t digit = 0;
             if constexpr (use_umul128_hi64) {
-               digit = static_cast<uint32_t>(umul128_hi64(static_cast<uint64_t>(dec_exp), 0x290000000000000ull));
+               digit = static_cast<int32_t>(umul128_hi64(static_cast<uint64_t>(dec_exp), 0x290000000000000ull));
             }
             else {
-               digit = static_cast<uint32_t>((uint32_t(dec_exp) * div100_sig) >> div100_exp);
+               digit = static_cast<int32_t>((uint32_t(dec_exp) * div100_sig) >> div100_exp);
             }
             *buffer = static_cast<char>('0' + digit);
             hundreds_written = unsigned(dec_exp >= 100);
             buffer += hundreds_written;
-            dec_exp -= static_cast<int>(digit) * 100;
+            dec_exp -= digit * 100;
          }
          // dec_exp now in [0, 99]. Skip the tens digit only when no higher
          // digit has been written (i.e. true leading zero, not interior).
