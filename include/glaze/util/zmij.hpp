@@ -1078,11 +1078,12 @@ namespace glz
    // Both instantiations can coexist in a single binary.
    //
    // Returns a pointer past the last written character. Nothing is promised
-   // about *end. zmij's branchless fixed-point shuffle may scribble one byte
-   // past the returned pointer (a '.' that's excluded from the returned
-   // length). Callers who need a null-terminated C-string must write '\0' at
-   // *end themselves. Glaze's JSON writer doesn't care: buffer_traits::finalize
-   // resizes the output down to the tracked length, discarding anything past it.
+   // about *end or bytes after it. zmij's branchless fixed-point shuffle may
+   // use the documented buffer capacity as scratch and leave extra bytes past
+   // the returned range. Callers who need a null-terminated C-string must write
+   // '\0' at *end themselves. Glaze's JSON writer doesn't care:
+   // buffer_traits::finalize resizes the output down to the tracked length,
+   // discarding anything past it.
    template <std::floating_point T, bool OptSize = false>
    inline char* to_chars(char* buf, T val) noexcept
    {
