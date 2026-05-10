@@ -91,8 +91,8 @@ namespace glz
       T* operator->() noexcept { return ptr; }
       const T* operator->() const noexcept { return ptr; }
 
-      T& value() { return *ptr; }
-      const T& value() const { return *ptr; }
+      T& value() noexcept { return *ptr; }
+      const T& value() const noexcept { return *ptr; }
 
       void reset() noexcept
       {

@@ -11,9 +11,10 @@
 // glaze/json.hpp, glaze/core/common.hpp) to the translation units that
 // actually call read/write.
 //
-// Full definitions of these types — and builders like glz::object(...),
-// glz::array(...), glz::enumerate(...) — still live in glaze/core/meta.hpp
-// and glaze/core/common.hpp.
+// Builders like glz::object(...), glz::array(...), and glz::enumerate(...),
+// along with the full definitions of glz::meta and the per-format glz::to /
+// glz::from specializations, live in glaze/core/meta.hpp, glaze/core/common.hpp,
+// and the respective format headers. glz::custom_t is fully defined below.
 
 #pragma once
 
