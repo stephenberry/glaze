@@ -260,7 +260,9 @@ namespace glz
       /**
        * @brief Split a path into segments
        *
-       * Splits a path like "/users/:id/profile" into ["users", ":id", "profile"]
+       * Splits a path like "/users/:id/profile" into ["users", ":id", "profile"].
+       * This is the canonical implementation; basic_http_router::split_path is a
+       * thin backward-compatible wrapper that delegates here.
        *
        * @param path The path to split
        * @return Vector of path segments
@@ -350,12 +352,11 @@ namespace glz
 
       /**
        * @brief Print the entire tree structure for debugging.
+       *
+       * Prints only the tree contents. The caller is responsible for any header
+       * (basic_http_router::print_tree groups three of these under labelled sections).
        */
-      void print_tree() const
-      {
-         std::cout << "Radix Tree Structure:\n";
-         print_node(&root, 0);
-      }
+      void print_tree() const { print_node(&root, 0); }
 
      private:
       mutable radix_node root;
