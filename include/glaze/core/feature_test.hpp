@@ -54,6 +54,27 @@ namespace glz
 
 // Glaze Feature Test Macros for breaking changes
 
+// v7.7.0 drops glaze/msgpack.hpp from the glaze/glaze.hpp aggregate header.
+//
+// MessagePack support is opt-in. Users who relied on the umbrella include
+// must now include the format header explicitly:
+//   #include <glaze/msgpack.hpp>
+//
+// Rationale: MessagePack pulls in its own parser/writer chain. Excluding it
+// from the aggregate header reduces compile time for translation units that
+// only need JSON / BEVE / etc.
+#define glaze_v7_7_0_msgpack_header
+
+// v7.7.0 drops glaze/record/recorder.hpp from the glaze/glaze.hpp aggregate header.
+//
+// The recorder is a niche utility; users who need it must now include the
+// header directly:
+//   #include <glaze/record/recorder.hpp>
+//
+// Rationale: avoid paying the recorder's template / <variant> / <deque>
+// instantiation cost in every TU that includes glaze.hpp.
+#define glaze_v7_7_0_recorder_header
+
 // v7.0.1 moves std::error_code integration to separate optional header
 //
 // The glaze_error_category struct, error_category global, and make_error_code() function
