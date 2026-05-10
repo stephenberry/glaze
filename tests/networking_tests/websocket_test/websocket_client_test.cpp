@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "glaze/glaze.hpp"
+#include "glaze/net/http_client.hpp"
 #include "glaze/net/http_server.hpp"
 #include "glaze/net/websocket_connection.hpp"
 #include "ut/ut.hpp"
@@ -1562,6 +1563,373 @@ suite websocket_client_tests = [] {
          auto u = capture->query.find("user");
          expect(t != capture->query.end() && t->second == "abc") << "token=abc should be present";
          expect(u != capture->query.end() && u->second == "alice") << "user=alice should be present";
+      }
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // WebSocket routes registered with ":param" path segments must populate
+   // request.params with the captured value, just like normal and streaming routes.
+   "websocket_upgrade_with_path_parameter_test"_test = [] {
+      uint16_t port = 8132;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      auto capture = std::make_shared<ws_upgrade_capture>();
+      std::string captured_room;
+      std::mutex captured_mu;
+
+      std::thread server_thread([&]() {
+         http_server server;
+         auto ws_server = std::make_shared<websocket_server>();
+
+         ws_server->on_open([&, capture](auto /*conn*/, const request& req) {
+            {
+               std::lock_guard lock(capture->mu);
+               capture->path = req.path;
+               capture->query = req.query;
+               capture->target = req.target;
+            }
+            {
+               std::lock_guard lock(captured_mu);
+               auto it = req.params.find("room");
+               captured_room = (it != req.params.end()) ? it->second : std::string{"<missing>"};
+            }
+            capture->opened = true;
+         });
+         ws_server->on_message([](auto conn, std::string_view, ws_opcode) { conn->send_text("ack"); });
+         ws_server->on_close([](auto, ws_close_code, std::string_view) {});
+         ws_server->on_error([](auto, std::error_code) {});
+
+         server.websocket("/rooms/:room/ws", ws_server);
+
+         try {
+            server.bind(port);
+            server.start();
+            server_ready = true;
+            while (!stop_server) {
+               std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            server.stop();
+         }
+         catch (const std::exception&) {
+            server_ready = true;
+         }
+      });
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> ack_received{false};
+      std::atomic<bool> connect_error{false};
+
+      client.on_open([&client]() { client.send("ping"); });
+      client.on_message([&](std::string_view message, ws_opcode) {
+         if (message == "ack") {
+            ack_received = true;
+            client.close();
+         }
+      });
+      client.on_error([&](std::error_code) { connect_error = true; });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/rooms/lobby/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return capture->opened.load(); }))
+         << "WebSocket upgrade with :param path did not reach on_open";
+      expect(wait_for_condition([&] { return ack_received.load(); })) << "ack message was not received";
+      expect(!connect_error.load()) << "Upgrade should not error";
+
+      {
+         std::lock_guard lock(captured_mu);
+         expect(captured_room == "lobby")
+            << "Path parameter ':room' should be captured into request.params, got: " << captured_room;
+      }
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // WebSocket routes registered through http_router and mounted via server.mount()
+   // must also support ":param" segments and propagate captured params to on_open.
+   "websocket_router_mount_with_path_parameter_test"_test = [] {
+      uint16_t port = 8133;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      auto capture = std::make_shared<ws_upgrade_capture>();
+      std::string captured_id;
+      std::mutex captured_mu;
+
+      std::thread server_thread([&]() {
+         http_router router;
+         auto ws_server = std::make_shared<websocket_server>();
+
+         ws_server->on_open([&, capture](auto /*conn*/, const request& req) {
+            {
+               std::lock_guard lock(capture->mu);
+               capture->path = req.path;
+               capture->query = req.query;
+               capture->target = req.target;
+            }
+            {
+               std::lock_guard lock(captured_mu);
+               auto it = req.params.find("id");
+               captured_id = (it != req.params.end()) ? it->second : std::string{"<missing>"};
+            }
+            capture->opened = true;
+         });
+         ws_server->on_message([](auto conn, std::string_view, ws_opcode) { conn->send_text("ack"); });
+         ws_server->on_close([](auto, ws_close_code, std::string_view) {});
+         ws_server->on_error([](auto, std::error_code) {});
+
+         router.websocket("/users/:id/ws", ws_server);
+
+         http_server server;
+         server.mount("/api", router);
+
+         try {
+            server.bind(port);
+            server.start();
+            server_ready = true;
+            while (!stop_server) {
+               std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            server.stop();
+         }
+         catch (const std::exception&) {
+            server_ready = true;
+         }
+      });
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> ack_received{false};
+      std::atomic<bool> connect_error{false};
+
+      client.on_open([&client]() { client.send("ping"); });
+      client.on_message([&](std::string_view message, ws_opcode) {
+         if (message == "ack") {
+            ack_received = true;
+            client.close();
+         }
+      });
+      client.on_error([&](std::error_code) { connect_error = true; });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/api/users/42/ws";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return capture->opened.load(); }))
+         << "Mounted WebSocket with :param did not reach on_open";
+      expect(wait_for_condition([&] { return ack_received.load(); })) << "ack message was not received";
+      expect(!connect_error.load()) << "Upgrade should not error";
+
+      {
+         std::lock_guard lock(captured_mu);
+         expect(captured_id == "42") << "Mounted WebSocket should capture :id path parameter, got: " << captured_id;
+      }
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // WebSocket routes with a wildcard segment ("*name") should capture the entire
+   // remaining path (including embedded slashes), like normal and streaming routes.
+   "websocket_with_wildcard_path_test"_test = [] {
+      uint16_t port = 8134;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      auto capture = std::make_shared<ws_upgrade_capture>();
+      std::string captured_path_param;
+      std::mutex captured_mu;
+
+      std::thread server_thread([&]() {
+         http_server server;
+         auto ws_server = std::make_shared<websocket_server>();
+
+         ws_server->on_open([&, capture](auto /*conn*/, const request& req) {
+            {
+               std::lock_guard lock(capture->mu);
+               capture->path = req.path;
+               capture->target = req.target;
+            }
+            {
+               std::lock_guard lock(captured_mu);
+               auto it = req.params.find("rest");
+               captured_path_param = (it != req.params.end()) ? it->second : std::string{"<missing>"};
+            }
+            capture->opened = true;
+         });
+         ws_server->on_message([](auto conn, std::string_view, ws_opcode) { conn->send_text("ack"); });
+         ws_server->on_close([](auto, ws_close_code, std::string_view) {});
+         ws_server->on_error([](auto, std::error_code) {});
+
+         server.websocket("/files/*rest", ws_server);
+
+         try {
+            server.bind(port);
+            server.start();
+            server_ready = true;
+            while (!stop_server) {
+               std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            server.stop();
+         }
+         catch (const std::exception&) {
+            server_ready = true;
+         }
+      });
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> ack_received{false};
+      std::atomic<bool> connect_error{false};
+
+      client.on_open([&client]() { client.send("ping"); });
+      client.on_message([&](std::string_view message, ws_opcode) {
+         if (message == "ack") {
+            ack_received = true;
+            client.close();
+         }
+      });
+      client.on_error([&](std::error_code) { connect_error = true; });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/files/a/b/c.txt";
+      client.connect(client_url);
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return capture->opened.load(); }))
+         << "WebSocket upgrade with wildcard path did not reach on_open";
+      expect(wait_for_condition([&] { return ack_received.load(); })) << "ack message was not received";
+      expect(!connect_error.load()) << "Upgrade should not error";
+
+      {
+         std::lock_guard lock(captured_mu);
+         expect(captured_path_param == "a/b/c.txt")
+            << "Wildcard segment should capture the full remainder, got: " << captured_path_param;
+      }
+
+      if (!client.context()->stopped()) client.context()->stop();
+      if (client_thread.joinable()) client_thread.join();
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // Single router carries normal, streaming, and WebSocket routes that share a
+   // common ":id" path parameter. After mount, each kind must dispatch to its own
+   // handler with its own captured params, confirming the three radix tables in
+   // basic_http_router are independent.
+   "router_normal_streaming_websocket_coexist_test"_test = [] {
+      uint16_t port = 8135;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+
+      std::atomic<bool> ws_opened{false};
+      std::string ws_captured_id;
+      std::mutex ws_mu;
+
+      std::thread server_thread([&]() {
+         http_router router;
+
+         router.get("/normal/:id", [](const request& req, response& res) {
+            auto it = req.params.find("id");
+            res.body("normal-id=" + (it != req.params.end() ? it->second : std::string{"?"}));
+         });
+
+         router.stream_get("/stream/:id", [](request& req, glz::streaming_response& res) {
+            res.start_stream(200, {{"Content-Type", "text/plain"}});
+            auto it = req.params.find("id");
+            res.send("stream-id=");
+            res.send(it != req.params.end() ? it->second : std::string{"?"});
+            res.close();
+         });
+
+         auto ws_server = std::make_shared<websocket_server>();
+         ws_server->on_open([&](auto /*conn*/, const request& req) {
+            {
+               std::lock_guard lock(ws_mu);
+               auto it = req.params.find("id");
+               ws_captured_id = (it != req.params.end()) ? it->second : std::string{"<missing>"};
+            }
+            ws_opened = true;
+         });
+         ws_server->on_message([](auto conn, std::string_view, ws_opcode) { conn->send_text("ack"); });
+         ws_server->on_close([](auto, ws_close_code, std::string_view) {});
+         ws_server->on_error([](auto, std::error_code) {});
+
+         router.websocket("/ws/:id", ws_server);
+
+         http_server server;
+         server.mount("/api", router);
+
+         try {
+            server.bind(port);
+            server.start();
+            server_ready = true;
+            while (!stop_server) {
+               std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            server.stop();
+         }
+         catch (const std::exception&) {
+            server_ready = true;
+         }
+      });
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      // Hit the normal route via http_client.
+      glz::http_client http;
+      auto normal = http.get("http://127.0.0.1:" + std::to_string(port) + "/api/normal/1");
+      expect(normal.has_value() && normal->status_code == 200);
+      if (normal) expect(normal->response_body == "normal-id=1") << normal->response_body;
+
+      // Hit the streaming route via http_client.
+      auto stream = http.get("http://127.0.0.1:" + std::to_string(port) + "/api/stream/2");
+      expect(stream.has_value() && stream->status_code == 200);
+      if (stream) expect(stream->response_body == "stream-id=2") << stream->response_body;
+
+      // Hit the WebSocket route via websocket_client.
+      websocket_client client;
+      std::atomic<bool> ack_received{false};
+      std::atomic<bool> connect_error{false};
+
+      client.on_open([&client]() { client.send("ping"); });
+      client.on_message([&](std::string_view message, ws_opcode) {
+         if (message == "ack") {
+            ack_received = true;
+            client.close();
+         }
+      });
+      client.on_error([&](std::error_code) { connect_error = true; });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
+
+      client.connect("ws://localhost:" + std::to_string(port) + "/api/ws/3");
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return ws_opened.load(); })) << "WebSocket sibling route did not open";
+      expect(wait_for_condition([&] { return ack_received.load(); })) << "ack not received";
+      expect(!connect_error.load()) << "WebSocket upgrade should not error";
+
+      {
+         std::lock_guard lock(ws_mu);
+         expect(ws_captured_id == "3") << "WebSocket sibling should capture its own :id, got: " << ws_captured_id;
       }
 
       if (!client.context()->stopped()) client.context()->stop();

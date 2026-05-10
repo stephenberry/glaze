@@ -135,6 +135,8 @@ server.start();
 server.wait_for_signal();
 ```
 
+WebSocket routes also support `:param` segments and can be registered on an `http_router` and mounted, e.g. `router.websocket("/rooms/:room/ws", ws_server)`. The captured value is available in `request.params` inside `on_open`. See [HTTP Router](http-router.md#websocket-routes) for details.
+
 ### Chat Room Example
 
 ```cpp
