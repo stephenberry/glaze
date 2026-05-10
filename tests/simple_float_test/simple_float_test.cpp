@@ -146,7 +146,7 @@ bool test_roundtrip(T value)
    T parsed{};
    auto [ptr, ec] = glz::simple_float::from_chars<true>(buf, end, parsed);
 
-   if (ec != std::errc{}) {
+   if (ec != std::errc{} || ptr != end) {
       return false;
    }
 

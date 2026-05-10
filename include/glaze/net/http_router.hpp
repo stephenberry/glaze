@@ -130,6 +130,22 @@ namespace glz
    using async_handler = std::function<std::future<void>(const request&, response&)>;
    using error_handler = std::function<void(std::error_code, std::source_location)>;
 
+   // Forward declarations for streaming and WebSocket support.
+   // Full definitions live in glaze/net/http_server.hpp and glaze/net/websocket_connection.hpp.
+   // Forward declarations are sufficient here because streaming_handler holds streaming_response
+   // by reference and websocket_handler holds websocket_server through std::shared_ptr.
+   struct streaming_response;
+   struct websocket_server;
+
+   // Streaming handler signature. Streaming routes take over the connection lifecycle
+   // (no keep-alive) and write chunked responses through streaming_response.
+   using streaming_handler = std::function<void(request&, streaming_response&)>;
+
+   // WebSocket handler value: a websocket_server instance is bound to a path. The HTTP
+   // server detects the upgrade handshake (Upgrade: websocket) and dispatches to the
+   // matching server entry.
+   using websocket_handler = std::shared_ptr<websocket_server>;
+
    /**
     * @brief Parameter constraint for route validation
     *
@@ -170,66 +186,25 @@ namespace glz
    };
 
    /**
-    * @brief HTTP router based on a radix tree for efficient path matching
+    * @brief Generic radix-tree route table parameterized over the stored handler type.
     *
-    * @tparam Handler The type of the handler that gets invoked upon a route match.
-    *                 Must be invocable with (const request&, response&).
-    *                 Note: Middleware registered via use() must also be this type.
+    * route_table provides path matching with support for static, parameterized (":param"),
+    * and wildcard ("*name") segments. It is used as a building block by basic_http_router
+    * to store normal routes (typed by Handler), streaming routes (streaming_handler), and
+    * WebSocket routes (websocket_handler).
     *
-    * The basic_http_router class provides fast route matching for HTTP requests using a radix tree
-    * data structure. It supports static routes, parameterized routes (e.g., "/users/:id"),
-    * wildcard routes, and parameter validation via constraints.
-    *
-    * Note: http_server::mount() only accepts the default http_router (basic_http_router<>).
-    * Custom handler routers are intended for standalone use or with custom server implementations.
+    * @tparam H The stored handler type. Must be default-constructible (the empty value
+    *           returned by match() when no route matches is H{}).
     */
-   template <class Handler = std::function<void(const request&, response&)>>
-      requires std::invocable<Handler, const request&, response&>
-   struct basic_http_router
+   template <class H>
+   struct route_table
    {
       /**
-       * @brief Function type for request handlers
-       *
-       * Handlers are called when a route matches the incoming request.
-       */
-      using handler = Handler;
-
-      /**
-       * @brief A compile-time boolean indicating whether asynchronous request handlers are enabled.
-       *
-       * Async methods wrap the async handler in a capturing lambda and store it as a regular handler.
-       * This requires Handler to be constructible from such a wrapper. std::function and similar
-       * type-erasing wrappers support this; function pointers and fixed-signature handlers do not.
-       *
-       * Note: This heuristic checks constructibility from std::function as a proxy for "can accept
-       * a type-erased callable." A Handler constructible from lambdas but not std::function would
-       * incorrectly get is_async_enabled = false, but this is an unusual corner case.
-       */
-      static constexpr bool is_async_enabled =
-         std::is_constructible_v<Handler, std::function<void(const request&, response&)>>;
-
-      /**
-       * @brief Function type for asynchronous request handlers
-       *
-       * Async handlers return a std::future that completes when the request is processed.
-       * The async methods (get_async, post_async, etc.) wrap these by calling .get() on
-       * the returned future, converting them to synchronous handlers.
-       *
-       * Note: This type is fixed to std::function<std::future<void>...>. Users who need
-       * custom async patterns (coroutines, different future types, callbacks) should use
-       * their async-capable type directly as the Handler template parameter instead of
-       * using the built-in async methods.
-       *
-       * Async methods are only available when is_async_enabled is true.
-       */
-      using async_handler = std::function<std::future<void>(const request&, response&)>;
-
-      /**
-       * @brief An entry for a registered route.
+       * @brief Stored route entry: handler plus optional spec for schema/constraints.
        */
       struct route_entry
       {
-         handler handle{};
+         H handle{};
          route_spec spec{};
       };
 
@@ -239,70 +214,20 @@ namespace glz
        * Each node represents a segment of a path, which can be a static string,
        * a parameter (prefixed with ":"), or a wildcard (prefixed with "*").
        */
-      struct RadixNode
+      struct radix_node
       {
-         /**
-          * @brief The path segment this node represents
-          */
          std::string segment;
-
-         /**
-          * @brief Whether this node represents a parameter (e.g., ":id")
-          */
          bool is_parameter = false;
-
-         /**
-          * @brief Whether this node represents a wildcard (e.g., "*action")
-          */
          bool is_wildcard = false;
-
-         /**
-          * @brief Name of the parameter (if is_parameter or is_wildcard is true)
-          */
          std::string parameter_name;
-
-         /**
-          * @brief Map of static child nodes indexed by segment
-          */
-         std::unordered_map<std::string, std::unique_ptr<RadixNode>> static_children;
-
-         /**
-          * @brief Parameter child node (only one parameter child per node is allowed)
-          */
-         std::unique_ptr<RadixNode> parameter_child;
-
-         /**
-          * @brief Wildcard child node (only one wildcard child per node is allowed)
-          */
-         std::unique_ptr<RadixNode> wildcard_child;
-
-         /**
-          * @brief Map of handlers for different HTTP methods
-          *
-          * Only present if this node represents an endpoint.
-          */
-         std::unordered_map<http_method, handler> handlers;
-
-         /**
-          * @brief Map of parameter constraints for different HTTP methods
-          */
+         std::unordered_map<std::string, std::unique_ptr<radix_node>> static_children;
+         std::unique_ptr<radix_node> parameter_child;
+         std::unique_ptr<radix_node> wildcard_child;
+         std::unordered_map<http_method, H> handlers;
          std::unordered_map<http_method, std::unordered_map<std::string, param_constraint>> constraints;
-
-         /**
-          * @brief Whether this node represents an endpoint (route handler)
-          */
          bool is_endpoint = false;
-
-         /**
-          * @brief Full path to this node (for debugging and conflict detection)
-          */
          std::string full_path;
 
-         /**
-          * @brief Return a human-readable representation of this node
-          *
-          * @return String representation of the node
-          */
          std::string to_string() const
          {
             std::string result;
@@ -325,195 +250,19 @@ namespace glz
       };
 
       /**
-       * @brief Default constructor
-       */
-      basic_http_router() = default;
-
-      /**
-       * @brief Match a value against a pattern with advanced pattern matching features
+       * @brief Map of registered routes, keyed by full path then HTTP method.
        *
-       * Supports:
-       * - Wildcards (*) for matching any number of characters
-       * - Question marks (?) for matching a single character
-       * - Character classes ([a-z], [^0-9])
-       * - Anchors (^ for start of string, $ for end of string)
-       * - Escape sequences with backslash
-       *
-       * @param value The string to match
-       * @param pattern The pattern to match against
-       * @return true if the value matches the pattern, false otherwise
+       * Public for backward compatibility and to support introspection (e.g., the
+       * OpenAPI generator iterates this map).
        */
-      static bool match_pattern(std::string_view value, std::string_view pattern)
-      {
-         enum struct State { Literal, Escape, CharClass };
-
-         if (pattern.empty()) return true; // Empty pattern matches anything
-
-         size_t v_pos = 0;
-         size_t p_pos = 0;
-
-         // For backtracking when we encounter *
-         std::optional<size_t> backtrack_pattern;
-         std::optional<size_t> backtrack_value;
-
-         // For character classes
-         State state = State::Literal;
-         bool negate_class = false;
-         bool char_class_match = false;
-
-         while (v_pos < value.size() || p_pos < pattern.size()) {
-            // Pattern exhausted but value remains
-            if (p_pos >= pattern.size()) {
-               // Can we backtrack for wildcard?
-               if (backtrack_pattern) {
-                  p_pos = *backtrack_pattern;
-                  v_pos = ++(*backtrack_value);
-                  continue;
-               }
-               return false;
-            }
-
-            // Value exhausted but pattern remains
-            if (v_pos >= value.size()) {
-               // If remaining pattern is just * wildcard, it's a match
-               if (p_pos < pattern.size() && pattern[p_pos] == '*' && p_pos == pattern.size() - 1) return true;
-
-               // Can we backtrack?
-               if (backtrack_pattern) {
-                  p_pos = *backtrack_pattern;
-                  v_pos = ++(*backtrack_value);
-                  continue;
-               }
-               return false;
-            }
-
-            switch (state) {
-            case State::Literal:
-               if (pattern[p_pos] == '\\') {
-                  // Escape sequence
-                  state = State::Escape;
-                  p_pos++;
-                  continue;
-               }
-               else if (pattern[p_pos] == '[') {
-                  // Begin character class
-                  state = State::CharClass;
-                  char_class_match = false;
-                  p_pos++;
-
-                  // Check for negation
-                  if (p_pos < pattern.size() && pattern[p_pos] == '^') {
-                     negate_class = true;
-                     p_pos++;
-                  }
-                  else {
-                     negate_class = false;
-                  }
-                  continue;
-               }
-               else if (pattern[p_pos] == '*') {
-                  // Wildcard - match zero or more chars
-                  backtrack_pattern = p_pos;
-                  backtrack_value = v_pos;
-                  p_pos++;
-                  continue;
-               }
-               else if (pattern[p_pos] == '?') {
-                  // Match any single character
-                  p_pos++;
-                  v_pos++;
-                  continue;
-               }
-               else if (pattern[p_pos] == '^' && p_pos == 0) {
-                  // Beginning of string anchor
-                  p_pos++;
-                  continue;
-               }
-               else if (pattern[p_pos] == '$' && p_pos == pattern.size() - 1) {
-                  // End of string anchor - only matches if we're at the end
-                  return v_pos == value.size();
-               }
-               else {
-                  // Literal character
-                  if (pattern[p_pos] != value[v_pos]) {
-                     // Can we backtrack?
-                     if (backtrack_pattern) {
-                        p_pos = *backtrack_pattern;
-                        v_pos = ++(*backtrack_value);
-                        continue;
-                     }
-                     return false;
-                  }
-                  p_pos++;
-                  v_pos++;
-               }
-               break;
-
-            case State::Escape:
-               // Escaped character - match literally
-               if (p_pos >= pattern.size() || pattern[p_pos] != value[v_pos]) {
-                  // Can we backtrack?
-                  if (backtrack_pattern) {
-                     p_pos = *backtrack_pattern;
-                     v_pos = ++(*backtrack_value);
-                     state = State::Literal;
-                     continue;
-                  }
-                  return false;
-               }
-               p_pos++;
-               v_pos++;
-               state = State::Literal;
-               break;
-
-            case State::CharClass:
-               if (pattern[p_pos] == ']') {
-                  // End of character class
-                  p_pos++;
-                  if (negate_class) {
-                     if (char_class_match) {
-                        // Negated and found a match = fail
-                        return false;
-                     }
-                     v_pos++; // Character not in class
-                  }
-                  else {
-                     if (!char_class_match) {
-                        // Not negated and no match = fail
-                        return false;
-                     }
-                     v_pos++; // Character in class
-                  }
-                  state = State::Literal;
-                  continue;
-               }
-               else if (p_pos + 2 < pattern.size() && pattern[p_pos + 1] == '-') {
-                  // Character range
-                  char start = pattern[p_pos];
-                  char end = pattern[p_pos + 2];
-                  if (value[v_pos] >= start && value[v_pos] <= end) {
-                     char_class_match = true;
-                  }
-                  p_pos += 3; // Skip the range
-               }
-               else {
-                  // Single character in class
-                  if (pattern[p_pos] == value[v_pos]) {
-                     char_class_match = true;
-                  }
-                  p_pos++;
-               }
-               break;
-            }
-         }
-
-         return v_pos == value.size() && p_pos == pattern.size();
-      }
+      std::unordered_map<std::string, std::unordered_map<http_method, route_entry>> routes;
 
       /**
        * @brief Split a path into segments
        *
-       * Splits a path like "/users/:id/profile" into ["users", ":id", "profile"]
+       * Splits a path like "/users/:id/profile" into ["users", ":id", "profile"].
+       * This is the canonical implementation; basic_http_router::split_path is a
+       * thin backward-compatible wrapper that delegates here.
        *
        * @param path The path to split
        * @return Vector of path segments
@@ -541,165 +290,47 @@ namespace glz
       }
 
       /**
-       * @brief Register a route with the router
+       * @brief Register a route in the table.
        *
        * @param method The HTTP method (GET, POST, etc.)
-       * @param path The route path, can include parameters (":param") and wildcards ("*param")
-       * @param handle The handler function to call when this route matches
+       * @param path The route path, may contain ":param" or trailing "*name" wildcards.
+       * @param handle The handler to associate with the route.
        * @param spec Optional spec for the route.
-       * @return Reference to this router for method chaining
-       * @throws std::runtime_error if there's a route conflict
        */
-      inline basic_http_router& route(http_method method, std::string_view path, handler handle,
-                                      const route_spec& spec = {})
+      void add(http_method method, std::string_view path, H handle, const route_spec& spec = {})
       {
-         std::string path_str(path);
          try {
-            // Store in the routes map
-            auto& entry = routes[path_str][method];
+            // Install in the radix tree first. add_route can throw on conflict
+            // (duplicate :param or *wildcard names at the same position); if it
+            // throws we want the routes map to stay in sync with the tree, not
+            // to silently retain an entry that iteration sees but match() never
+            // reaches. Pass handle by value so we still own a copy to move into
+            // the routes entry below.
+            add_route(method, path, handle, spec.constraints);
+
+            auto& entry = routes[std::string(path)][method];
             entry.handle = std::move(handle);
             entry.spec = spec;
-
-            // Also add to the radix tree
-            add_route(method, path, entry.handle, spec.constraints);
          }
          catch (const std::exception& e) {
-            // Log the error instead of propagating it
             std::fprintf(stderr, "Error adding route '%.*s': %s\n", static_cast<int>(path.length()), path.data(),
                          e.what());
          }
-         return *this;
       }
 
       /**
-       * @brief Register a GET route
-       */
-      inline basic_http_router& get(std::string_view path, handler handle, const route_spec& spec = {})
-      {
-         return route(http_method::GET, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register a POST route
-       */
-      inline basic_http_router& post(std::string_view path, handler handle, const route_spec& spec = {})
-      {
-         return route(http_method::POST, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register a PUT route
-       */
-      inline basic_http_router& put(std::string_view path, handler handle, const route_spec& spec = {})
-      {
-         return route(http_method::PUT, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register a DELETE route
-       */
-      inline basic_http_router& del(std::string_view path, handler handle, const route_spec& spec = {})
-      {
-         return route(http_method::DELETE, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register a PATCH route
-       */
-      inline basic_http_router& patch(std::string_view path, handler handle, const route_spec& spec = {})
-      {
-         return route(http_method::PATCH, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register an asynchronous route
-       */
-      inline basic_http_router& route_async(http_method method, std::string_view path, async_handler handle,
-                                            const route_spec& spec = {})
-         requires is_async_enabled
-      {
-         // Convert async handle to sync handle (capture by move for efficiency)
-         return route(
-            method, path,
-            [handle = std::move(handle)](const request& req, response& res) {
-               // Create a future and get the result, which will propagate any exceptions
-               auto future = handle(req, res);
-               future.get(); // This will throw if the async operation threw
-            },
-            spec);
-      }
-
-      /**
-       * @brief Register an asynchronous GET route
-       */
-      inline basic_http_router& get_async(std::string_view path, async_handler handle, const route_spec& spec = {})
-         requires is_async_enabled
-      {
-         return route_async(http_method::GET, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register an asynchronous POST route
-       */
-      inline basic_http_router& post_async(std::string_view path, async_handler handle, const route_spec& spec = {})
-         requires is_async_enabled
-      {
-         return route_async(http_method::POST, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register an asynchronous PUT route
-       */
-      inline basic_http_router& put_async(std::string_view path, async_handler handle, const route_spec& spec = {})
-         requires is_async_enabled
-      {
-         return route_async(http_method::PUT, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register an asynchronous DELETE route
-       */
-      inline basic_http_router& del_async(std::string_view path, async_handler handle, const route_spec& spec = {})
-         requires is_async_enabled
-      {
-         return route_async(http_method::DELETE, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register an asynchronous PATCH route
-       */
-      inline basic_http_router& patch_async(std::string_view path, async_handler handle, const route_spec& spec = {})
-         requires is_async_enabled
-      {
-         return route_async(http_method::PATCH, path, std::move(handle), spec);
-      }
-
-      /**
-       * @brief Register middleware to be executed before route handlers
+       * @brief Match a target against the registered routes.
        *
-       * Middleware functions are executed in the order they are registered.
-       *
-       * @param middleware The middleware function
-       * @return Reference to this router for method chaining
+       * @param method The HTTP method of the request.
+       * @param target The request target (may include a query string).
+       * @return Pair of (matched handler, extracted path parameters). The handler is
+       *         a default-constructed H if no route matched.
        */
-      inline basic_http_router& use(handler middleware)
-      {
-         middlewares.push_back(std::move(middleware));
-         return *this;
-      }
-
-      /**
-       * @brief Match a request against registered routes
-       *
-       * @param method The HTTP method of the request
-       * @param target The target path of the request (may include query string)
-       * @return A pair containing the matched handler and extracted parameters
-       */
-      inline std::pair<handler, std::unordered_map<std::string, std::string>> match(http_method method,
-                                                                                    const std::string& target) const
+      std::pair<H, std::unordered_map<std::string, std::string>> match(http_method method,
+                                                                       std::string_view target) const
       {
          std::unordered_map<std::string, std::string> params;
-         handler result = nullptr;
+         H result{};
 
          // Strip query string from target for matching
          const auto [path, query_string] = split_target(target);
@@ -709,98 +340,58 @@ namespace glz
          if (direct_it != direct_routes.end()) {
             auto method_it = direct_it->second.find(method);
             if (method_it != direct_it->second.end()) {
-               return {method_it->second, params}; // No params for direct match
+               return {method_it->second, params};
             }
          }
 
-         // Split the target path into segments
          std::vector<std::string> segments = split_path(path);
-
-         // Use recursive matching function
          match_node(&root, segments, 0, method, params, result);
 
          return {result, params};
       }
 
       /**
-       * @brief Print the entire router tree structure for debugging
-       */
-      void print_tree() const
-      {
-         std::cout << "Radix Tree Structure:\n";
-         print_node(&root, 0);
-      }
-
-      /**
-       * @brief Map of routes registered with this router
+       * @brief Print the entire tree structure for debugging.
        *
-       * Used for compatibility with mount functionality.
+       * Prints only the tree contents. The caller is responsible for any header
+       * (basic_http_router::print_tree groups three of these under labelled sections).
        */
-      std::unordered_map<std::string, std::unordered_map<http_method, route_entry>> routes;
-
-      /**
-       * @brief Vector of middleware handlers
-       */
-      std::vector<handler> middlewares;
+      void print_tree() const { print_node(&root, 0); }
 
      private:
-      /**
-       * @brief Root node of the radix tree
-       */
-      mutable RadixNode root;
+      mutable radix_node root;
+      std::unordered_map<std::string, std::unordered_map<http_method, H>> direct_routes;
 
-      /**
-       * @brief Direct lookup table for non-parameterized routes (optimization)
-       */
-      std::unordered_map<std::string, std::unordered_map<http_method, handler>> direct_routes;
-
-      /**
-       * @brief Add a route to the radix tree
-       *
-       * @param method HTTP method for the route
-       * @param path Path pattern for the route
-       * @param handle Handler function for the route
-       * @param constraints Optional parameter constraints
-       * @throws std::runtime_error if there's a route conflict
-       */
-      void add_route(http_method method, std::string_view path, handler handle,
+      void add_route(http_method method, std::string_view path, H handle,
                      const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          std::string path_str(path);
 
-         // Optimization: for non-parameterized routes, store them directly
          if (path_str.find(':') == std::string::npos && path_str.find('*') == std::string::npos) {
             direct_routes[path_str][method] = handle;
             return;
          }
 
-         // For parameterized routes, use the radix tree
          std::vector<std::string> segments = split_path(path);
 
-         // Start at the root node
-         RadixNode* current = &root;
+         radix_node* current = &root;
 
-         // Build the path through the tree
          for (size_t i = 0; i < segments.size(); ++i) {
             const std::string& segment = segments[i];
 
             if (segment.empty()) continue;
 
             if (segment[0] == ':') {
-               // Parameter segment
                std::string param_name = segment.substr(1);
 
                if (!current->parameter_child) {
-                  current->parameter_child = std::make_unique<RadixNode>();
+                  current->parameter_child = std::make_unique<radix_node>();
                   current->parameter_child->is_parameter = true;
                   current->parameter_child->parameter_name = param_name;
                   current->parameter_child->segment = segment;
-
-                  // Build the full path for debugging/conflict detection
                   current->parameter_child->full_path = current->full_path + "/" + segment;
                }
                else if (current->parameter_child->parameter_name != param_name) {
-                  // Parameter name conflict
                   throw std::runtime_error("Route conflict: different parameter names at same position: :" +
                                            current->parameter_child->parameter_name + " vs :" + param_name);
                }
@@ -808,39 +399,31 @@ namespace glz
                current = current->parameter_child.get();
             }
             else if (segment[0] == '*') {
-               // Wildcard segment
                std::string wildcard_name = segment.substr(1);
 
-               // Wildcards must be at the end of the route
                if (i != segments.size() - 1) {
                   throw std::runtime_error("Wildcard must be the last segment in route: " + path_str);
                }
 
                if (!current->wildcard_child) {
-                  current->wildcard_child = std::make_unique<RadixNode>();
+                  current->wildcard_child = std::make_unique<radix_node>();
                   current->wildcard_child->is_wildcard = true;
                   current->wildcard_child->parameter_name = wildcard_name;
                   current->wildcard_child->segment = segment;
-
-                  // Build the full path for debugging/conflict detection
                   current->wildcard_child->full_path = current->full_path + "/" + segment;
                }
                else if (current->wildcard_child->parameter_name != wildcard_name) {
-                  // Wildcard name conflict
                   throw std::runtime_error("Route conflict: different wildcard names at same position: *" +
                                            current->wildcard_child->parameter_name + " vs *" + wildcard_name);
                }
 
                current = current->wildcard_child.get();
-               break; // Wildcard is always the last segment
+               break;
             }
             else {
-               // Static segment
                if (current->static_children.find(segment) == current->static_children.end()) {
-                  current->static_children[segment] = std::make_unique<RadixNode>();
+                  current->static_children[segment] = std::make_unique<radix_node>();
                   current->static_children[segment]->segment = segment;
-
-                  // Build the full path for debugging/conflict detection
                   current->static_children[segment]->full_path = current->full_path + "/" + segment;
                }
 
@@ -848,38 +431,21 @@ namespace glz
             }
          }
 
-         // Mark as endpoint and set handler
          current->is_endpoint = true;
          current->handlers[method] = handle;
 
-         // Store constraints (if any)
          if (!constraints.empty()) {
             current->constraints[method] = constraints;
          }
       }
 
-      /**
-       * @brief Match a path against the radix tree
-       *
-       * Recursive function to match a path against the tree and extract parameters.
-       *
-       * @param node Current node in the tree
-       * @param segments Path segments to match
-       * @param index Current segment index
-       * @param method HTTP method to match
-       * @param params Map to store extracted parameters
-       * @param result Handler if a match is found
-       * @return true if a match was found, false otherwise
-       */
-      bool match_node(RadixNode* node, const std::vector<std::string>& segments, size_t index, http_method method,
-                      std::unordered_map<std::string, std::string>& params, handler& result) const
+      bool match_node(radix_node* node, const std::vector<std::string>& segments, size_t index, http_method method,
+                      std::unordered_map<std::string, std::string>& params, H& result) const
       {
-         // End of path
          if (index == segments.size()) {
             if (node->is_endpoint) {
                auto it = node->handlers.find(method);
                if (it != node->handlers.end()) {
-                  // Validate constraints if any before setting the handler
                   bool constraints_passed = true;
                   auto constraints_it = node->constraints.find(method);
                   if (constraints_it != node->constraints.end()) {
@@ -887,18 +453,15 @@ namespace glz
                         auto param_it = params.find(param_name);
                         if (param_it != params.end()) {
                            const std::string& value = param_it->second;
-
-                           // Use the validation function
                            if (!constraint.validation(value)) {
                               constraints_passed = false;
-                              break; // Validation failed
+                              break;
                            }
                         }
                      }
                   }
 
                   if (constraints_passed) {
-                     // Only set the handler if constraints pass
                      result = it->second;
                      return true;
                   }
@@ -910,7 +473,6 @@ namespace glz
 
          const std::string& segment = segments[index];
 
-         // Try static match first (most specific)
          auto static_it = node->static_children.find(segment);
          if (static_it != node->static_children.end()) {
             if (match_node(static_it->second.get(), segments, index + 1, method, params, result)) {
@@ -918,9 +480,7 @@ namespace glz
             }
          }
 
-         // Try parameter match (less specific than static)
          if (node->parameter_child) {
-            // Save parameter value (URL-decoded)
             std::string param_name = node->parameter_child->parameter_name;
             params[param_name] = url_decode(segment);
 
@@ -928,26 +488,22 @@ namespace glz
                return true;
             }
 
-            // If this parameter didn't lead to a match, remove it
             params.erase(param_name);
          }
 
-         // Try wildcard match (least specific)
          if (node->wildcard_child) {
-            // For wildcards, capture all remaining segments (URL-decoded)
             std::string full_capture;
             for (size_t i = index; i < segments.size(); i++) {
                if (i > index) full_capture += "/";
                full_capture += url_decode(segments[i]);
             }
 
-            params[node->wildcard_child->parameter_name] = full_capture;
+            const auto& wildcard_name = node->wildcard_child->parameter_name;
+            params[wildcard_name] = full_capture;
 
-            // Wildcards always go to the endpoint of their node
             if (node->wildcard_child->is_endpoint) {
                auto it = node->wildcard_child->handlers.find(method);
                if (it != node->wildcard_child->handlers.end()) {
-                  // Validate constraints for the wildcard before setting the handler
                   bool constraints_passed = true;
                   auto constraints_it = node->wildcard_child->constraints.find(method);
                   if (constraints_it != node->wildcard_child->constraints.end()) {
@@ -955,43 +511,38 @@ namespace glz
                         auto param_it = params.find(param_name);
                         if (param_it != params.end()) {
                            const std::string& value = param_it->second;
-
-                           // Use the validation function
                            if (!constraint.validation(value)) {
                               constraints_passed = false;
-                              break; // Validation failed
+                              break;
                            }
                         }
                      }
                   }
 
                   if (constraints_passed) {
-                     // Only set the handler if constraints pass
                      result = it->second;
                      return true;
                   }
-                  return false;
                }
             }
+
+            // Wildcard match failed (not an endpoint, wrong method, or
+            // constraint failure). Mirror the parameter-branch behavior and
+            // erase the capture so the caller's params map reflects only the
+            // matched route's parameters.
+            params.erase(wildcard_name);
          }
 
          return false;
       }
 
-      /**
-       * @brief Print a node in the radix tree (for debugging)
-       *
-       * @param node The node to print
-       * @param depth Current depth in the tree (for indentation)
-       */
-      void print_node(const RadixNode* node, int depth) const
+      void print_node(const radix_node* node, int depth) const
       {
          if (!node) return;
 
          std::string indent(depth * 2, ' ');
          std::cout << indent << node->to_string() << "\n";
 
-         // Print all handlers for this node
          if (node->is_endpoint) {
             std::cout << indent << "  Handlers: ";
             for (const auto& [method, _] : node->handlers) {
@@ -999,7 +550,6 @@ namespace glz
             }
             std::cout << "\n";
 
-            // Print constraints if any
             for (const auto& [method, method_constraints] : node->constraints) {
                std::cout << indent << "  Constraints for " << to_string(method) << ":\n";
                for (const auto& [param, constraint] : method_constraints) {
@@ -1008,7 +558,6 @@ namespace glz
             }
          }
 
-         // Print children
          for (const auto& [segment, child] : node->static_children) {
             print_node(child.get(), depth + 1);
          }
@@ -1021,6 +570,484 @@ namespace glz
             print_node(node->wildcard_child.get(), depth + 1);
          }
       }
+   };
+
+   /**
+    * @brief Match a value against a pattern with advanced pattern matching features
+    *
+    * Supports:
+    * - Wildcards (*) for matching any number of characters
+    * - Question marks (?) for matching a single character
+    * - Character classes ([a-z], [^0-9])
+    * - Anchors (^ for start of string, $ for end of string)
+    * - Escape sequences with backslash
+    *
+    * @param value The string to match
+    * @param pattern The pattern to match against
+    * @return true if the value matches the pattern, false otherwise
+    */
+   inline bool match_pattern(std::string_view value, std::string_view pattern)
+   {
+      enum struct State { Literal, Escape, CharClass };
+
+      if (pattern.empty()) return true; // Empty pattern matches anything
+
+      size_t v_pos = 0;
+      size_t p_pos = 0;
+
+      // For backtracking when we encounter *
+      std::optional<size_t> backtrack_pattern;
+      std::optional<size_t> backtrack_value;
+
+      // For character classes
+      State state = State::Literal;
+      bool negate_class = false;
+      bool char_class_match = false;
+
+      while (v_pos < value.size() || p_pos < pattern.size()) {
+         // Pattern exhausted but value remains
+         if (p_pos >= pattern.size()) {
+            if (backtrack_pattern) {
+               p_pos = *backtrack_pattern;
+               v_pos = ++(*backtrack_value);
+               continue;
+            }
+            return false;
+         }
+
+         // Value exhausted but pattern remains
+         if (v_pos >= value.size()) {
+            if (p_pos < pattern.size() && pattern[p_pos] == '*' && p_pos == pattern.size() - 1) return true;
+
+            if (backtrack_pattern) {
+               p_pos = *backtrack_pattern;
+               v_pos = ++(*backtrack_value);
+               continue;
+            }
+            return false;
+         }
+
+         switch (state) {
+         case State::Literal:
+            if (pattern[p_pos] == '\\') {
+               state = State::Escape;
+               p_pos++;
+               continue;
+            }
+            else if (pattern[p_pos] == '[') {
+               state = State::CharClass;
+               char_class_match = false;
+               p_pos++;
+
+               if (p_pos < pattern.size() && pattern[p_pos] == '^') {
+                  negate_class = true;
+                  p_pos++;
+               }
+               else {
+                  negate_class = false;
+               }
+               continue;
+            }
+            else if (pattern[p_pos] == '*') {
+               backtrack_pattern = p_pos;
+               backtrack_value = v_pos;
+               p_pos++;
+               continue;
+            }
+            else if (pattern[p_pos] == '?') {
+               p_pos++;
+               v_pos++;
+               continue;
+            }
+            else if (pattern[p_pos] == '^' && p_pos == 0) {
+               p_pos++;
+               continue;
+            }
+            else if (pattern[p_pos] == '$' && p_pos == pattern.size() - 1) {
+               return v_pos == value.size();
+            }
+            else {
+               if (pattern[p_pos] != value[v_pos]) {
+                  if (backtrack_pattern) {
+                     p_pos = *backtrack_pattern;
+                     v_pos = ++(*backtrack_value);
+                     continue;
+                  }
+                  return false;
+               }
+               p_pos++;
+               v_pos++;
+            }
+            break;
+
+         case State::Escape:
+            if (p_pos >= pattern.size() || pattern[p_pos] != value[v_pos]) {
+               if (backtrack_pattern) {
+                  p_pos = *backtrack_pattern;
+                  v_pos = ++(*backtrack_value);
+                  state = State::Literal;
+                  continue;
+               }
+               return false;
+            }
+            p_pos++;
+            v_pos++;
+            state = State::Literal;
+            break;
+
+         case State::CharClass:
+            if (pattern[p_pos] == ']') {
+               p_pos++;
+               if (negate_class) {
+                  if (char_class_match) {
+                     return false;
+                  }
+                  v_pos++;
+               }
+               else {
+                  if (!char_class_match) {
+                     return false;
+                  }
+                  v_pos++;
+               }
+               state = State::Literal;
+               continue;
+            }
+            else if (p_pos + 2 < pattern.size() && pattern[p_pos + 1] == '-') {
+               char start = pattern[p_pos];
+               char end = pattern[p_pos + 2];
+               if (value[v_pos] >= start && value[v_pos] <= end) {
+                  char_class_match = true;
+               }
+               p_pos += 3;
+            }
+            else {
+               if (pattern[p_pos] == value[v_pos]) {
+                  char_class_match = true;
+               }
+               p_pos++;
+            }
+            break;
+         }
+      }
+
+      return v_pos == value.size() && p_pos == pattern.size();
+   }
+
+   /**
+    * @brief HTTP router based on a radix tree for efficient path matching
+    *
+    * @tparam Handler The type of the handler that gets invoked upon a route match.
+    *                 Must be invocable with (const request&, response&).
+    *                 Note: Middleware registered via use() must also be this type.
+    *
+    * The basic_http_router class provides fast route matching for HTTP requests using a radix tree
+    * data structure. It supports static routes, parameterized routes (e.g., "/users/:id"),
+    * wildcard routes, and parameter validation via constraints.
+    *
+    * In addition to normal request/response handlers, basic_http_router also stores
+    * streaming routes (registered via stream_get/stream_post/stream) and WebSocket
+    * routes (registered via websocket()). All three kinds share the same radix-tree
+    * matching logic, so streaming and WebSocket routes also support ":param" path
+    * parameters.
+    *
+    * Note: http_server::mount() only accepts the default http_router (basic_http_router<>).
+    * Custom handler routers are intended for standalone use or with custom server implementations.
+    */
+   template <class Handler = std::function<void(const request&, response&)>>
+      requires std::invocable<Handler, const request&, response&>
+   struct basic_http_router
+   {
+      /**
+       * @brief Function type for request handlers
+       */
+      using handler = Handler;
+
+      /**
+       * @brief A compile-time boolean indicating whether asynchronous request handlers are enabled.
+       */
+      static constexpr bool is_async_enabled =
+         std::is_constructible_v<Handler, std::function<void(const request&, response&)>>;
+
+      /**
+       * @brief Function type for asynchronous request handlers
+       */
+      using async_handler = std::function<std::future<void>(const request&, response&)>;
+
+      /**
+       * @brief Underlying route table type for normal routes.
+       */
+      using normal_route_table = route_table<Handler>;
+
+      /**
+       * @brief Backward-compatible alias for the normal route entry type.
+       */
+      using route_entry = typename normal_route_table::route_entry;
+
+      basic_http_router() = default;
+
+      /**
+       * @brief Backward-compatible static helper. Equivalent to route_table<Handler>::split_path.
+       */
+      static std::vector<std::string> split_path(std::string_view path) { return normal_route_table::split_path(path); }
+
+      /**
+       * @brief Register a route with the router
+       *
+       * @param method The HTTP method (GET, POST, etc.)
+       * @param path The route path, can include parameters (":param") and wildcards ("*param")
+       * @param handle The handler function to call when this route matches
+       * @param spec Optional spec for the route.
+       * @return Reference to this router for method chaining
+       * @throws std::runtime_error if there's a route conflict
+       */
+      basic_http_router& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         normal_routes.add(method, path, std::move(handle), spec);
+         return *this;
+      }
+
+      /**
+       * @brief Register a GET route
+       */
+      basic_http_router& get(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return route(http_method::GET, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register a POST route
+       */
+      basic_http_router& post(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return route(http_method::POST, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register a PUT route
+       */
+      basic_http_router& put(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return route(http_method::PUT, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register a DELETE route
+       */
+      basic_http_router& del(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return route(http_method::DELETE, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register a PATCH route
+       */
+      basic_http_router& patch(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return route(http_method::PATCH, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register an asynchronous route
+       */
+      basic_http_router& route_async(http_method method, std::string_view path, async_handler handle,
+                                     const route_spec& spec = {})
+         requires is_async_enabled
+      {
+         return route(
+            method, path,
+            [handle = std::move(handle)](const request& req, response& res) {
+               auto future = handle(req, res);
+               future.get();
+            },
+            spec);
+      }
+
+      /**
+       * @brief Register an asynchronous GET route
+       */
+      basic_http_router& get_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
+      {
+         return route_async(http_method::GET, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register an asynchronous POST route
+       */
+      basic_http_router& post_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
+      {
+         return route_async(http_method::POST, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register an asynchronous PUT route
+       */
+      basic_http_router& put_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
+      {
+         return route_async(http_method::PUT, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register an asynchronous DELETE route
+       */
+      basic_http_router& del_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
+      {
+         return route_async(http_method::DELETE, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register an asynchronous PATCH route
+       */
+      basic_http_router& patch_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
+      {
+         return route_async(http_method::PATCH, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register a streaming route. Streaming handlers take over the connection
+       * lifecycle and write chunked responses through streaming_response.
+       *
+       * Supports the same path-parameter syntax as normal routes (":param" and "*name").
+       */
+      basic_http_router& stream(http_method method, std::string_view path, streaming_handler handle,
+                                const route_spec& spec = {})
+      {
+         streaming_routes.add(method, path, std::move(handle), spec);
+         return *this;
+      }
+
+      /**
+       * @brief Register a streaming GET route.
+       */
+      basic_http_router& stream_get(std::string_view path, streaming_handler handle, const route_spec& spec = {})
+      {
+         return stream(http_method::GET, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register a streaming POST route.
+       */
+      basic_http_router& stream_post(std::string_view path, streaming_handler handle, const route_spec& spec = {})
+      {
+         return stream(http_method::POST, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register a WebSocket handler for a path.
+       *
+       * Supports the same path-parameter syntax as normal routes. The HTTP server
+       * detects the upgrade handshake (Upgrade: websocket) and dispatches to the
+       * matching server, populating request.params from the path.
+       */
+      basic_http_router& websocket(std::string_view path, websocket_handler server, const route_spec& spec = {})
+      {
+         websocket_routes.add(http_method::GET, path, std::move(server), spec);
+         return *this;
+      }
+
+      /**
+       * @brief Register middleware to be executed before route handlers
+       *
+       * Middleware functions are executed in the order they are registered.
+       *
+       * @param middleware The middleware function
+       * @return Reference to this router for method chaining
+       */
+      basic_http_router& use(handler middleware)
+      {
+         middlewares.push_back(std::move(middleware));
+         return *this;
+      }
+
+      /**
+       * @brief Match a normal request against registered routes
+       *
+       * @param method The HTTP method of the request
+       * @param target The target path of the request (may include query string)
+       * @return A pair containing the matched handler and extracted parameters
+       */
+      std::pair<handler, std::unordered_map<std::string, std::string>> match(http_method method,
+                                                                             std::string_view target) const
+      {
+         return normal_routes.match(method, target);
+      }
+
+      /**
+       * @brief Match a streaming request against registered streaming routes.
+       */
+      std::pair<streaming_handler, std::unordered_map<std::string, std::string>> match_streaming(
+         http_method method, std::string_view target) const
+      {
+         return streaming_routes.match(method, target);
+      }
+
+      /**
+       * @brief Match a WebSocket upgrade request against registered WebSocket routes.
+       *
+       * WebSocket upgrades are HTTP GET requests by definition, so the lookup uses
+       * http_method::GET internally.
+       */
+      std::pair<websocket_handler, std::unordered_map<std::string, std::string>> match_websocket(
+         std::string_view target) const
+      {
+         return websocket_routes.match(http_method::GET, target);
+      }
+
+      /**
+       * @brief Print the router structure for debugging.
+       */
+      void print_tree() const
+      {
+         std::cout << "[normal routes]\n";
+         normal_routes.print_tree();
+         std::cout << "[streaming routes]\n";
+         streaming_routes.print_tree();
+         std::cout << "[websocket routes]\n";
+         websocket_routes.print_tree();
+      }
+
+      /**
+       * @brief Storage for normal request/response routes.
+       *
+       * Iterate `router.normal_routes.routes` for path -> method -> entry inspection
+       * (used by the OpenAPI generator and mount()).
+       *
+       * Migration note: prior to the streaming/WebSocket unification, this field was
+       * exposed as `router.routes`. Code that iterated `router.routes` should now
+       * iterate `router.normal_routes.routes` (or use the `routes()` accessor below).
+       */
+      normal_route_table normal_routes;
+
+      /**
+       * @brief Backward-compatible accessor for the registered normal routes map.
+       *
+       * Equivalent to `normal_routes.routes`. Provided as a function (not a
+       * reference data member) because a reference member would be copied verbatim
+       * by the implicitly-defined move constructor and dangle into the moved-from
+       * source.
+       */
+      auto& routes() noexcept { return normal_routes.routes; }
+      const auto& routes() const noexcept { return normal_routes.routes; }
+
+      /**
+       * @brief Storage for streaming routes.
+       */
+      route_table<streaming_handler> streaming_routes;
+
+      /**
+       * @brief Storage for WebSocket routes.
+       */
+      route_table<websocket_handler> websocket_routes;
+
+      /**
+       * @brief Vector of middleware handlers
+       */
+      std::vector<handler> middlewares;
    };
 
    /**

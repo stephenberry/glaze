@@ -11,7 +11,7 @@
 // Collision calculations done with the formula: e^((-k * (k - 1)/(2 * N)))
 // The approximation error tends to zero as N increases, and we are dealing with a large N
 // https://preshing.com/20110504/hash-collision-probabilities/
-// With 10,000 registered types the probabilities of a collsion are:
+// With 10,000 registered types the probabilities of a collision are:
 // 64 bit hash: 2.71027645e-12 === 1 - 1/e^(6249375/2305843009213693952)
 // 128 bit hash: 1.469221e-31 === 1 - 1/e^(6249375/42535295865117307932921825928971026432)
 // 256 bit hash: 4.317652e-70 === 1 -

@@ -437,8 +437,8 @@ namespace glz
       }
    };
 
-   // Handler types for streaming
-   using streaming_handler = std::function<void(request&, streaming_response&)>;
+   // streaming_handler is declared in glaze/net/http_router.hpp so the router can
+   // store streaming routes uniformly with normal routes.
 
    // Wrapping middleware types
    // Non-copyable, non-movable wrapper to enforce synchronous execution
@@ -682,9 +682,15 @@ namespace glz
          }
          threads.clear();
 
-         // websocket_handlers_ destruction will call close_all_connections() on each
-         // websocket_server, which force-closes all sockets. This ensures sockets are
-         // deregistered from the reactor BEFORE io_context is destroyed.
+         // Destruction sequence (reverse declaration order of http_server members):
+         //   1. threads are joined above (worker threads stop running io_context).
+         //   2. root_router is destroyed below, which releases the websocket_server
+         //      shared_ptrs it owns; ~websocket_server calls close_all_connections()
+         //      and force-closes the sockets.
+         //   3. io_context is destroyed last.
+         // The invariant that matters: sockets must be deregistered from the reactor
+         // before io_context dies. Because root_router (declared after io_context)
+         // is destroyed first, that holds.
       }
 
       inline http_server& bind(std::string_view address, uint16_t port)
@@ -860,16 +866,36 @@ namespace glz
 
       inline http_server& mount(std::string_view base_path, const http_router& router)
       {
-         // Mount all routes from the router at the specified base path
-         for (const auto& [path, method_handlers] : router.routes) {
+         auto join = [&](const std::string& path) {
             std::string full_path = std::string(base_path);
             if (!full_path.empty() && full_path.back() == '/') {
                full_path.pop_back();
             }
             full_path += path;
+            return full_path;
+         };
 
-            for (const auto& [method, route_entry] : method_handlers) {
-               root_router.route(method, full_path, route_entry.handle, route_entry.spec);
+         // Mount normal routes
+         for (const auto& [path, method_handlers] : router.normal_routes.routes) {
+            const auto full_path = join(path);
+            for (const auto& [method, entry] : method_handlers) {
+               root_router.route(method, full_path, entry.handle, entry.spec);
+            }
+         }
+
+         // Mount streaming routes
+         for (const auto& [path, method_handlers] : router.streaming_routes.routes) {
+            const auto full_path = join(path);
+            for (const auto& [method, entry] : method_handlers) {
+               root_router.stream(method, full_path, entry.handle, entry.spec);
+            }
+         }
+
+         // Mount WebSocket routes. Entries are keyed by http_method::GET (the
+         // upgrade method), so look that slot up directly rather than iterating.
+         for (const auto& [path, method_handlers] : router.websocket_routes.routes) {
+            if (auto it = method_handlers.find(http_method::GET); it != method_handlers.end()) {
+               root_router.websocket(join(path), it->second.handle, it->second.spec);
             }
          }
 
@@ -1006,22 +1032,24 @@ namespace glz
          return root_router.patch(path, handle, spec);
       }
 
-      // Register streaming route
-      inline http_server& stream(http_method method, std::string_view path, streaming_handler handle)
+      // Register a streaming route. Delegates to root_router so streaming routes
+      // share the radix-tree matcher with normal routes (and support ":param" paths).
+      inline http_server& stream(http_method method, std::string_view path, streaming_handler handle,
+                                 const route_spec& spec = {})
       {
-         streaming_handlers_[std::string(path)][method] = std::move(handle);
+         root_router.stream(method, path, std::move(handle), spec);
          return *this;
       }
 
       // Convenience methods for streaming
-      inline http_server& stream_get(std::string_view path, streaming_handler handle)
+      inline http_server& stream_get(std::string_view path, streaming_handler handle, const route_spec& spec = {})
       {
-         return stream(http_method::GET, path, std::move(handle));
+         return stream(http_method::GET, path, std::move(handle), spec);
       }
 
-      inline http_server& stream_post(std::string_view path, streaming_handler handle)
+      inline http_server& stream_post(std::string_view path, streaming_handler handle, const route_spec& spec = {})
       {
-         return stream(http_method::POST, path, std::move(handle));
+         return stream(http_method::POST, path, std::move(handle), spec);
       }
 
       inline http_server& on_error(error_handler handle)
@@ -1048,7 +1076,7 @@ namespace glz
             spec.info.title = title;
             spec.info.version = version;
 
-            for (const auto& [route_path, method_handlers] : root_router.routes) {
+            for (const auto& [route_path, method_handlers] : root_router.normal_routes.routes) {
                // Convert router path /:param to OpenAPI path /{param}
                std::string openapi_path = route_path;
                size_t pos = 0;
@@ -1199,9 +1227,10 @@ namespace glz
        * @param server The WebSocket server instance to handle connections
        * @return Reference to this http_server for method chaining
        */
-      inline http_server& websocket(std::string_view path, std::shared_ptr<websocket_server> server)
+      inline http_server& websocket(std::string_view path, std::shared_ptr<websocket_server> server,
+                                    const route_spec& spec = {})
       {
-         websocket_handlers_[std::string(path)] = server;
+         root_router.websocket(path, std::move(server), spec);
          return *this;
       }
 
@@ -1413,8 +1442,6 @@ namespace glz
       http_router root_router;
       std::atomic<bool> running{false};
       glz::error_handler error_handler;
-      std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
-      std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
 
       // Wrapping middleware (executes around handlers)
       std::vector<wrapping_middleware> wrapping_middlewares_;
@@ -1843,17 +1870,6 @@ namespace glz
       // Process a full request using connection state (new keep-alive aware version)
       inline void process_full_request_with_conn(std::shared_ptr<connection_state> conn)
       {
-         // Check for a streaming handler first
-         auto handler_it = streaming_handlers_.find(conn->request_.target);
-         if (handler_it != streaming_handlers_.end()) {
-            auto method_it = handler_it->second.find(conn->request_.method);
-            if (method_it != handler_it->second.end()) {
-               // Streaming handlers take over the connection (no keep-alive loop)
-               handle_streaming_request_with_conn(std::move(conn), method_it->second);
-               return;
-            }
-         }
-
          // Create the request object
          request& request = conn->request_;
 
@@ -1867,6 +1883,23 @@ namespace glz
          const auto [path_view, query_string] = split_target(conn->request_.target);
          request.path = std::string(path_view);
          request.query = parse_urlencoded(query_string);
+
+         // Check for a streaming handler first. Streaming routes share the same
+         // radix-tree matcher as normal routes, so they support ":param" paths.
+         //
+         // Fast path: if no streaming routes are registered (the common case),
+         // skip the match entirely. match_streaming() would otherwise allocate
+         // a params map, split the path into a vector of segment strings, and
+         // run an empty-tree walk on every request. The empty-check is O(1).
+         if (!root_router.streaming_routes.routes.empty()) {
+            auto [stream_handle, stream_params] = root_router.match_streaming(conn->request_.method, request.path);
+            if (stream_handle) {
+               request.params = std::move(stream_params);
+               // Streaming handlers take over the connection (no keep-alive loop)
+               handle_streaming_request_with_conn(std::move(conn), stream_handle);
+               return;
+            }
+         }
 
          // Find a matching route
          auto [handle, params] = root_router.match(conn->request_.method, request.path);
@@ -2217,20 +2250,30 @@ namespace glz
 
       inline void handle_websocket_upgrade_with_conn(std::shared_ptr<connection_state> conn)
       {
-         // Find matching WebSocket handler
-         auto ws_it = websocket_handlers_.find(conn->request_.target);
-         if (ws_it == websocket_handlers_.end()) {
+         request& request = conn->request_;
+
+         // Parse path and query string from target so query parameters don't break the lookup
+         // and so the WebSocket handler receives them like a regular handler would.
+         const auto [path_view, query_string] = split_target(request.target);
+         request.path = std::string(path_view);
+         request.query = parse_urlencoded(query_string);
+
+         // WebSocket routes share the same radix-tree matcher, so ":param" path
+         // parameters are extracted into request.params just like normal routes.
+         auto [ws_server, ws_params] = root_router.match_websocket(request.path);
+         if (!ws_server) {
             send_error_response_with_close(conn, 404, "Not Found");
             return;
          }
+         request.params = std::move(ws_params);
 
          // Copy request for WebSocket handler (request body is typically empty for upgrades)
-         request req{conn->request_};
+         glz::request req{request};
 
          // Create WebSocket connection and start it
          // Uses socket_type which is either tcp::socket (ws://) or ssl::stream (wss://)
          auto socket_ptr = std::make_shared<socket_type>(std::move(conn->socket));
-         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(socket_ptr, ws_it->second);
+         auto ws_conn = std::make_shared<websocket_connection<socket_type>>(socket_ptr, ws_server);
          ws_conn->start(req);
       }
 

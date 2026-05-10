@@ -287,7 +287,7 @@ glz::registry<pretty_opts, glz::REST> registry;
 server.get("/api", [&registry](const glz::request&, glz::response& res) {
     std::vector<std::string> endpoints;
     
-    for (const auto& [path, methods] : registry.endpoints.routes) {
+    for (const auto& [path, methods] : registry.endpoints.normal_routes.routes) {
         for (const auto& [method, handler] : methods) {
             endpoints.push_back(glz::to_string(method) + " " + path);
         }

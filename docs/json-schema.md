@@ -1,6 +1,6 @@
 # JSON Schema
 
-JSON Schema can automaticly be generated for serializable named types exposed via the meta system.
+JSON Schema can automatically be generated for serializable named types exposed via the meta system.
 
 ```c++
 auto schema = glz::write_json_schema<my_struct>().value();

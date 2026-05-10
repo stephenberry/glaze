@@ -774,6 +774,14 @@ namespace glz
          for_each<N>([&]<auto I>() constexpr {
             using V = std::decay_t<refl_t<T, I>>;
 
+            // Fields whose type is always_skipped (hidden, skip, includer, or a
+            // type that opted out via meta::value = skip{}) are never written,
+            // so they must not be marked required.
+            if constexpr (always_skipped<V>) {
+               fields[I] = false;
+               return;
+            }
+
             // Check if field is skipped during parse - if so, don't require it
             if constexpr (meta_has_skip<T>) {
                constexpr auto key = reflect<T>::keys[I];

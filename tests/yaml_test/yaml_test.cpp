@@ -8923,4 +8923,42 @@ suite merge_meta_yaml_tests = [] {
    };
 };
 
+namespace yaml_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m{};
+      bool active{true};
+      int count{42};
+      std::string name{"hello"};
+   };
+}
+
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in YAML.
+suite yaml_skip_marker_suite = [] {
+   using namespace yaml_skip_marker_tests;
+   "yaml skip-marker roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      std::string yaml{};
+      expect(not glz::write_yaml(original, yaml));
+      // Marker key must not appear in the output.
+      expect(yaml.find("m:") == std::string::npos) << yaml;
+
+      settings decoded{};
+      expect(not glz::read_yaml(decoded, yaml));
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
+   };
+};
+
 int main() { return 0; }

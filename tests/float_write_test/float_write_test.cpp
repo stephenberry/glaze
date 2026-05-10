@@ -77,7 +77,7 @@ static void expect_roundtrip(T v, const char* label)
 
    T parsed{};
    auto [ptr, ec] = glz::from_chars<false>(s_fast.data(), s_fast.data() + s_fast.size(), parsed);
-   if (ec != std::errc{}) {
+   if (ec != std::errc{} || ptr != s_fast.data() + s_fast.size()) {
       if (failures < max_logged_failures) {
          std::printf("FAIL parse %s (%.17g): '%s'\n", label, double(v), s_fast.c_str());
       }

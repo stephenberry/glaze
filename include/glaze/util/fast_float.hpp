@@ -1396,7 +1396,7 @@ constexpr chars_format adjust_for_feature_macros(chars_format fmt) {
 namespace glz::fast_float {
 /**
  * This function parses the character sequence [first,last) for a number. It
- * parses floating-point numbers expecting a locale-indepent format equivalent
+ * parses floating-point numbers expecting a locale-independent format equivalent
  * to what is used by std::strtod in the default ("C") locale. The resulting
  * floating-point value is the closest floating-point values (using either float
  * or double), using the "round to even" convention for values that would

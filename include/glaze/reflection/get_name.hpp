@@ -196,7 +196,7 @@ namespace glz::detail
    template <class T>
    extern const T external;
 
-   // using const char* simplifies the complier's output and should improve compile times
+   // using const char* simplifies the compiler's output and should improve compile times
    template <auto Ptr>
    [[nodiscard]] consteval auto mangled_name()
    {

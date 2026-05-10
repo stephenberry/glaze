@@ -17,7 +17,7 @@
 // - We don't allow negative exponents
 // Thse cases can produce fractions which slow performance and add confusion
 // as to how the integer ought to be parsed (truncation, rounding, etc.)
-// This integer parsing is designed to be straightfoward and fast
+// This integer parsing is designed to be straightforward and fast
 // Values like 1e6 are allowed because it enables less typing from the user
 // and has a clear integer value
 
