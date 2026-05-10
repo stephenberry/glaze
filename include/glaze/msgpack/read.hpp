@@ -158,12 +158,10 @@ namespace glz::msgpack::detail
    template <class T>
    GLZ_ALWAYS_INLINE constexpr bool should_skip_field()
    {
-      if constexpr (std::same_as<T, hidden> || std::same_as<T, skip>) {
-         return true;
-      }
-      else {
-         return false;
-      }
+      // Mirrors the writer's count_members predicate so structs_as_arrays reads
+      // stay aligned with the wire layout, including is_includer and types
+      // opted out via meta::value = skip{}.
+      return always_skipped<T>;
    }
 
 }
@@ -228,6 +226,18 @@ namespace glz
          using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<MSGPACK, V>::template op<no_header_on<Opts>()>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                                              tag, ctx, it, end);
+      }
+   };
+
+   // Silently consume any value bound to a glz::skip sentinel. Reached when a
+   // type opts out of serialization via meta::value = glz::skip{}.
+   template <>
+   struct from<MSGPACK, skip>
+   {
+      template <auto Opts, class Value, is_context Ctx, class It, class End>
+      GLZ_ALWAYS_INLINE static void op(Value&&, uint8_t tag, Ctx&& ctx, It& it, const End& end) noexcept
+      {
+         skip_value<MSGPACK>::template op<Opts>(tag, ctx, it, end);
       }
    };
 

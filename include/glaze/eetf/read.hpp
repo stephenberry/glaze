@@ -16,21 +16,21 @@ namespace glz
       {
         public:
          template <typename F>
-         field_iterator(F&& header_parser, Ctx&& ctx, It0&& it, It1 end)
+         field_iterator(F&& header_parser, Ctx&& ctx, It0&& it, It1&& end)
          {
             term_header = header_parser(ctx, it);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
-            if (check_offset(ctx, it, end, term_header.second)) return;
+            if (check_invalid_offset(ctx, it, end, term_header.second)) return;
             std::advance(it, term_header.second);
          }
 
          field_iterator(error_code ec, Ctx&& ctx) : term_header{-1ull, -1ull} { ctx.error = ec; }
 
          template <auto Opts>
-         bool next(Ctx&& ctx, It0&& it, It1 end)
+         bool next(Ctx&& ctx, It0&& it, It1&& end)
          {
             if (term_header.first == 0) {
                return false;
@@ -66,7 +66,7 @@ namespace glz
       };
 
       template <auto Opts, is_context Ctx, class It0, class It1>
-      static auto make_term_iterator(Ctx&& ctx, It0&& it, It1 end)
+      static auto make_term_iterator(Ctx&& ctx, It0&& it, It1&& end)
       {
          using fi = field_iterator<Ctx, It0, It1>;
          const auto tag = get_type(ctx, it);
@@ -89,7 +89,7 @@ namespace glz
    struct skip_value<EETF>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto end) noexcept
+      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
          skip_term(ctx, it, end);
       }
@@ -100,7 +100,7 @@ namespace glz
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          const auto version = decode_version(ctx, it);
          // This version number is not in public headers - use as magic number
@@ -120,7 +120,7 @@ namespace glz
 
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) {
             return;
@@ -146,7 +146,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          decode_sequence<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
                                std::forward<It1>(end));
@@ -157,7 +157,7 @@ namespace glz
    struct from<EETF, T>
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -175,7 +175,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -193,7 +193,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -213,7 +213,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -234,7 +234,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -278,7 +278,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+      static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -375,7 +375,7 @@ namespace glz
    struct from<EETF, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          using Key = typename T::key_type;
 

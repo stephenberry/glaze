@@ -23,6 +23,14 @@ namespace glz
          skip_with_tag<Opts>(ctx, tag, it, end);
       }
 
+      // Overload for callers that have already consumed the tag byte (e.g.
+      // dispatchers in parse<MSGPACK>::op that route by tag).
+      template <auto Opts, class It, class End>
+      static void op(uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
+      {
+         skip_with_tag<Opts>(ctx, tag, it, end);
+      }
+
      private:
       template <auto Opts, class It, class End>
       static void skip_with_tag(is_context auto& ctx, const uint8_t tag, It& it, const End& end) noexcept

@@ -11,10 +11,13 @@
 #include <iterator>
 #include <memory>
 #include <new>
+#include <optional>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
+
+#include "glaze/core/feature_test.hpp"
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -230,20 +233,49 @@ namespace glz
          }
 
          // Fallible APIs
+         //
+         // C++26 P3981 changed the return type of try_emplace_back / try_push_back
+         // from T* (C++23) to std::optional<T&>. We emit the matching shape when the
+         // stdlib provides std::optional<T&> (gated by GLZ_HAS_OPTIONAL_REF), and fall
+         // back to T* otherwise. Both spellings are contextually convertible to bool
+         // and support operator* / operator->, so the unchecked_* wrappers below work
+         // unchanged.
+#if GLZ_HAS_OPTIONAL_REF
+         using try_emplace_back_result = std::optional<T&>;
+#else
+         using try_emplace_back_result = T*;
+#endif
+
          template <class... Args>
-         constexpr T* try_emplace_back(Args&&... args)
+         constexpr try_emplace_back_result try_emplace_back(Args&&... args)
             requires(std::constructible_from<T, Args...>)
          {
-            if (storage_size() >= N) return nullptr;
+            if (storage_size() >= N) {
+#if GLZ_HAS_OPTIONAL_REF
+               return std::nullopt;
+#else
+               return nullptr;
+#endif
+            }
 
             std::construct_at(this->data_ptr() + storage_size(), std::forward<Args>(args)...);
             set_storage_size(storage_size() + 1);
+#if GLZ_HAS_OPTIONAL_REF
+            return std::optional<T&>{back()};
+#else
             return &back();
+#endif
          }
 
-         constexpr T* try_push_back(const T& x)
+         constexpr try_emplace_back_result try_push_back(const T& x)
          {
-            if (storage_size() >= N) return nullptr;
+            if (storage_size() >= N) {
+#if GLZ_HAS_OPTIONAL_REF
+               return std::nullopt;
+#else
+               return nullptr;
+#endif
+            }
 
             if constexpr (std::is_trivially_copyable_v<T>) {
                std::memcpy(this->data_ptr() + storage_size(), &x, sizeof(T));
@@ -252,16 +284,30 @@ namespace glz
                std::construct_at(this->data_ptr() + storage_size(), x);
             }
             set_storage_size(storage_size() + 1);
+#if GLZ_HAS_OPTIONAL_REF
+            return std::optional<T&>{back()};
+#else
             return &back();
+#endif
          }
 
-         constexpr T* try_push_back(T&& x)
+         constexpr try_emplace_back_result try_push_back(T&& x)
          {
-            if (storage_size() >= N) return nullptr;
+            if (storage_size() >= N) {
+#if GLZ_HAS_OPTIONAL_REF
+               return std::nullopt;
+#else
+               return nullptr;
+#endif
+            }
 
             std::construct_at(this->data_ptr() + storage_size(), std::move(x));
             set_storage_size(storage_size() + 1);
+#if GLZ_HAS_OPTIONAL_REF
+            return std::optional<T&>{back()};
+#else
             return &back();
+#endif
          }
 
          template <std::ranges::input_range R>

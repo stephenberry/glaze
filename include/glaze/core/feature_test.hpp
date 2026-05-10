@@ -25,6 +25,18 @@
 #endif
 #endif
 
+// C++26 P2988 std::optional<T&> support.
+// Pre-P2988 stdlibs report __cpp_lib_optional == 202110L (the C++23 monadic-ops value);
+// any post-C++23 bump indicates optional<T&> is available. Used by glz::inplace_vector to
+// match the C++26 P3981 try_emplace_back / try_push_back return type.
+#ifndef GLZ_HAS_OPTIONAL_REF
+#if defined(__cpp_lib_optional) && __cpp_lib_optional > 202110L
+#define GLZ_HAS_OPTIONAL_REF 1
+#else
+#define GLZ_HAS_OPTIONAL_REF 0
+#endif
+#endif
+
 namespace glz
 {
    // Constexpr bool for use in if constexpr or other compile-time contexts
@@ -34,6 +46,10 @@ namespace glz
    // C++26 P2996 reflection support
    // Use GLZ_REFLECTION26 macro for #if preprocessor guards
    inline constexpr bool has_reflection26 = GLZ_REFLECTION26;
+
+   // C++26 P2988 std::optional<T&> support
+   // Use GLZ_HAS_OPTIONAL_REF macro for #if preprocessor guards
+   inline constexpr bool has_optional_ref = GLZ_HAS_OPTIONAL_REF;
 }
 
 // Glaze Feature Test Macros for breaking changes

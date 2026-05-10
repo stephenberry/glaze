@@ -393,8 +393,23 @@ namespace glz
    concept always_null_t =
       std::same_as<T, std::nullptr_t> || std::convertible_to<T, std::monostate> || std::same_as<T, std::nullopt_t>;
 
+   // Allows any type to opt out of serialization entirely by setting its meta
+   // value to glz::skip{}. Fields of such a type are never written, and any
+   // matching key in an input stream is silently consumed on read. Two opt-in
+   // forms are supported, matching the local/external metadata convention used
+   // elsewhere in Glaze:
+   //   1. Local metadata inside the type (preferred when you control the type):
+   //        struct glaze { static constexpr auto value = glz::skip{}; };
+   //   2. External metadata via glz::meta specialization (for third-party types):
+   //        template <> struct glz::meta<T> { static constexpr auto value = glz::skip{}; };
+   // Useful for marker classes used purely for compile-time metadata that
+   // should never appear in serialized output.
+   //
+   // The same_as<T, skip> clause is not redundant with the meta_wrapper check:
+   // glz::skip itself has no meta, so meta_wrapper_t<skip> is empty, not skip.
    template <class T>
-   concept always_skipped = is_includer<T> || std::same_as<T, hidden> || std::same_as<T, skip>;
+   concept always_skipped =
+      is_includer<T> || std::same_as<T, hidden> || std::same_as<T, skip> || std::same_as<meta_wrapper_t<T>, skip>;
 
    // Detect function pointers and function references (which should not be treated as nullable)
    template <class T>
@@ -480,6 +495,17 @@ namespace glz
       glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || meta_keys<T> || glaze_flags_t<T>);
 
    // With C++26 P2996 reflection, we can reflect non-aggregate types (classes with custom constructors)
+   // skip / hidden are empty marker structs with dedicated to<>/from<>
+   // specializations, so they must not be treated as reflectable aggregates.
+   // Registered in both P2996 and pre-P2996 modes.
+   template <>
+   struct specified<skip> : std::true_type
+   {};
+
+   template <>
+   struct specified<hidden> : std::true_type
+   {};
+
    // Without P2996, we require aggregate types for reflection
 #if GLZ_REFLECTION26
    // Register std library types as having specified Glaze serialization

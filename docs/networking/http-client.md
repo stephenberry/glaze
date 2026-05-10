@@ -32,7 +32,8 @@ int main() {
 
 ## Features
 
-- **Connection Pooling**: Automatically reuses connections for better performance
+- **Connection Pooling**: Automatically reuses connections for better performance, with stale-connection detection (timestamp eviction + active TCP peek)
+- **Transparent Retry**: Idempotent requests (GET, HEAD, OPTIONS, PUT, DELETE, TRACE) are retried once on connection-level failures when the server has not yet started responding. POST and PATCH are never auto-retried.
 - **Chunked Transfer-Encoding**: Transparent decoding of chunked responses across synchronous, asynchronous, and streaming paths
 - **Asynchronous Operations**: Non-blocking requests with futures or completion handlers
 - **JSON Support**: Built-in JSON serialization for POST requests
@@ -456,9 +457,64 @@ Responses using `Transfer-Encoding: chunked` are automatically decoded. This is 
 
 For streaming requests (`stream_request_v2`), chunked data is delivered incrementally via the `on_data` callback as each chunk arrives.
 
-## Performance Notes
+## Connection Pool
 
-- The client automatically pools connections for better performance when making multiple requests to the same host
-- Multiple worker threads are used internally to handle concurrent requests
-- The connection pool has a configurable limit (default: 10 connections per host), which can be adjusted using the `http_client::options::max_connections` option.
-- Connections are automatically returned to the pool when requests complete successfully
+`http_client` keeps idle connections for reuse, keyed on `(host, port, scheme)`. A pooled connection is reused only if it passes two checks at acquire time:
+
+1. **Idle timeout.** Entries returned to the pool more than `pool_idle_timeout` ago are evicted before reuse. The default is 4 seconds, chosen to be just under uvicorn's default 5s `--timeout-keep-alive`. Tune to slightly less than your server's keep-alive idle timeout if it differs.
+2. **Active liveness check.** For plain TCP sockets, a non-blocking `MSG_PEEK` checks whether the peer has already sent FIN or RST. SSL sockets skip the active peek (it would only see ciphertext) and rely on timestamp eviction plus the transparent-retry path.
+
+```cpp
+glz::http_client client;
+
+// Sized for a server with a 10-second keep-alive idle timeout
+client.set_pool_idle_timeout(std::chrono::seconds(8));
+
+// Allow more idle connections to a single host (default 10, in line with urllib3)
+client.set_pool_max_connections_per_host(64);
+
+// Disable the active peek check (relies on timestamp + retry instead). Mainly
+// useful for testing or for trading a syscall per acquire for slightly higher
+// recovery latency on stale connections.
+client.set_pool_active_liveness_check(false);
+
+// Drop and close every pooled connection. Useful in tests, or when a host has
+// signalled (e.g. via 503) that all current sessions should be abandoned.
+client.clear_connection_pool();
+```
+
+### Performance considerations
+
+- **Pool capacity.** The default cap of 10 connections per host matches urllib3 / requests; OkHttp uses 5, Java HttpClient uses 6 per the HTTP/1.1 RFC's recommended 6 per origin. If your peak per-host concurrency exceeds the cap, returns above the cap are closed rather than pooled, and every request beyond the K-th active connection pays the full connect + TLS handshake cost. For sustained concurrency above the default, raise the cap to at least your observed steady-state per-host concurrency.
+- **Worker threads.** When constructed without an external executor, `http_client` runs worker threads internally to drive its own `io_context`. When constructed with an external executor, the caller is responsible for running it (e.g. `io_ctx.run()`).
+
+## Transparent Retry
+
+Connection-level failures (`EOF`, `ECONNRESET`, `EPIPE`, `ECONNABORTED`, `ENOTCONN`, `ESHUTDOWN`) are retried exactly once on a fresh connection when **all** of the following hold:
+
+- The method is idempotent: `GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`, `TRACE`.
+- The server has not yet started sending a response on this attempt (the header read has not completed).
+
+This behavior covers the two real failure modes you'll hit in production:
+
+- **Stale pooled connection.** A kept-alive connection idles past the server's keep-alive timeout (uvicorn defaults to 5s). The local TCP stack still reports the socket as open, the request write goes into the OS send buffer, and the read fails with EOF or RST. Retry on a fresh connection succeeds.
+- **Fresh-socket failure during write.** The server accepts the connection but cannot process the request (listener overload, server crash between `accept` and `read`, immediate close after accept for rate limiting). The write succeeds locally; the read fails. Retry on a fresh connection succeeds.
+
+Once any response bytes have been received on the wire, retry is suppressed even on idempotent methods, so a mid-body RST does not cause the client to silently re-issue a request the server already processed.
+
+### POST and PATCH
+
+`POST` and `PATCH` are never auto-retried. The client cannot distinguish between "request not delivered" and "request delivered, response lost," so retrying could silently double-execute a non-idempotent operation. If you need retry semantics for POST/PATCH, build them at the application layer with idempotency keys or explicit retry tokens.
+
+```cpp
+auto resp = client.post("https://api.example.com/payments", body);
+if (!resp) {
+    // Handle the error explicitly. The request may or may not have been
+    // processed by the server; consult application-level idempotency state
+    // before deciding to retry.
+}
+```
+
+### Disabling automatic retry
+
+There is no global "disable retry" switch by design: the retry conditions are conservative enough that disabling them would only change behavior in cases where retrying is correct. If the test scenario requires it, you can raise the bar by lowering `pool_idle_timeout` so stale entries are evicted (rather than reused and retried) and the failure modes that drive retry don't arise in the first place.

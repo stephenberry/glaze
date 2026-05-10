@@ -324,9 +324,21 @@ namespace glz
       template <auto Opts, is_context Ctx, class It0, class It1>
       static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end)
       {
-         using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
+         using V = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
          from<TOML, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                           std::forward<It0>(it), std::forward<It1>(end));
+      }
+   };
+
+   // Silently consume any value bound to a glz::skip sentinel. Reached when a
+   // type opts out of serialization via meta::value = glz::skip{}.
+   template <>
+   struct from<TOML, skip>
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
+      {
+         skip_value<TOML>::template op<Opts>(ctx, args...);
       }
    };
 

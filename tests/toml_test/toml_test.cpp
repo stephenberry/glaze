@@ -4607,4 +4607,148 @@ apple.taste.sweet = true
    };
 };
 
+// Issue #2539: marking an entire class as always-skipped from serialization
+// by setting its meta value to glz::skip{}. Two opt-in styles are supported,
+// matching Glaze's local/external metadata convention:
+//   1. Local:    struct glaze { static constexpr auto value = glz::skip{}; };
+//   2. External: glz::meta<T> { static constexpr auto value = glz::skip{}; };
+template <int N>
+struct skip_marker_local
+{
+   static constexpr int secret = N;
+   struct glaze
+   {
+      static constexpr auto value = glz::skip{};
+   };
+};
+
+template <int N>
+struct skip_marker_via_meta
+{
+   static constexpr int secret = N;
+};
+
+template <int N>
+struct glz::meta<skip_marker_via_meta<N>>
+{
+   static constexpr auto value = glz::skip{};
+};
+
+struct settings_with_local_markers
+{
+   skip_marker_local<99> things_marker{};
+   bool enable_things{true};
+   int number_of_things{42};
+
+   skip_marker_local<200> stuff_marker{};
+   float stuff_multiplier{13.37f};
+};
+
+struct settings_with_meta_markers
+{
+   skip_marker_via_meta<1> alpha{};
+   bool enable{true};
+   skip_marker_via_meta<2> beta{};
+   int count{42};
+};
+
+suite skip_meta_value_tests = [] {
+   "skip_local_meta_toml_write"_test = [] {
+      settings_with_local_markers s{};
+      const auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(*result == "enable_things = true\nnumber_of_things = 42\nstuff_multiplier = 13.37");
+   };
+
+   "skip_external_meta_toml_write"_test = [] {
+      settings_with_meta_markers s{};
+      const auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(*result == "enable = true\ncount = 42");
+   };
+
+   "skip_local_meta_json_write"_test = [] {
+      settings_with_local_markers s{};
+      std::string buffer{};
+      expect(not glz::write_json(s, buffer));
+      expect(buffer == R"({"enable_things":true,"number_of_things":42,"stuff_multiplier":13.37})");
+   };
+
+   "skip_external_meta_json_write"_test = [] {
+      settings_with_meta_markers s{};
+      std::string buffer{};
+      expect(not glz::write_json(s, buffer));
+      expect(buffer == R"({"enable":true,"count":42})");
+   };
+
+   // Read-side: input containing the skipped key must be silently consumed.
+   "skip_local_meta_json_read_silently_skips"_test = [] {
+      settings_with_local_markers s{};
+      std::string input =
+         R"({"things_marker":{"junk":1,"more":[1,2,3]},"enable_things":false,"number_of_things":7,"stuff_marker":"anything goes","stuff_multiplier":2.5})";
+      auto err = glz::read_json(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable_things == false);
+      expect(s.number_of_things == 7);
+      expect(std::abs(s.stuff_multiplier - 2.5f) < 1e-6f);
+   };
+
+   "skip_external_meta_json_read_silently_skips"_test = [] {
+      settings_with_meta_markers s{};
+      std::string input = R"({"alpha":{"x":1},"enable":false,"beta":[1,2,3],"count":11})";
+      auto err = glz::read_json(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable == false);
+      expect(s.count == 11);
+   };
+
+   "skip_local_meta_toml_read_silently_skips"_test = [] {
+      settings_with_local_markers s{};
+      std::string input = R"(things_marker = "garbage"
+enable_things = false
+number_of_things = 7
+stuff_marker = 12345
+stuff_multiplier = 2.5)";
+      auto err = glz::read_toml(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable_things == false);
+      expect(s.number_of_things == 7);
+      expect(std::abs(s.stuff_multiplier - 2.5f) < 1e-6f);
+   };
+
+   "skip_external_meta_toml_read_silently_skips"_test = [] {
+      settings_with_meta_markers s{};
+      std::string input = R"(alpha = [1, 2, 3]
+enable = false
+beta = "throwaway"
+count = 11)";
+      auto err = glz::read_toml(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable == false);
+      expect(s.count == 11);
+   };
+
+   // Regression: marker fields must not be flagged as missing when
+   // error_on_missing_keys is set. They are never written, so requiring them
+   // would make every read of error_on_missing_keys fail.
+   "skip_marker_with_error_on_missing_keys"_test = [] {
+      settings_with_local_markers s{};
+      std::string input = R"({"enable_things":false,"number_of_things":7,"stuff_multiplier":2.5})";
+      auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable_things == false);
+      expect(s.number_of_things == 7);
+      expect(std::abs(s.stuff_multiplier - 2.5f) < 1e-6f);
+   };
+
+   "skip_marker_via_meta_with_error_on_missing_keys"_test = [] {
+      settings_with_meta_markers s{};
+      std::string input = R"({"enable":false,"count":11})";
+      auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable == false);
+      expect(s.count == 11);
+   };
+};
+
 int main() { return 0; }

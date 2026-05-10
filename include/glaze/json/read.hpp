@@ -2350,7 +2350,7 @@ namespace glz
                   }
 
                   if constexpr (has_try_emplace_back<T>) {
-                     if (value.try_emplace_back() != nullptr)
+                     if (value.try_emplace_back())
                         parse<JSON>::op<ws_handled<Opts>()>(value.back(), ctx, it, end);
                      else
                         ctx.error = error_code::exceeded_static_array_size;
@@ -2466,7 +2466,7 @@ namespace glz
             }
 
             if constexpr (has_try_emplace_back<T>) {
-               if (value.try_emplace_back() == nullptr) [[unlikely]] {
+               if (not value.try_emplace_back()) [[unlikely]] {
                   ctx.error = error_code::exceeded_static_array_size;
                   return;
                }

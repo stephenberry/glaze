@@ -2855,7 +2855,7 @@ suite merge_tests = [] {
 
       std::string json{};
       expect(!glz::beve_to_json(bin, json));
-      expect(json == R"({"a":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"include":""},"c":"d"})") << json;
+      expect(json == R"({"a":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]},"c":"d"})") << json;
    };
 };
 
@@ -5932,8 +5932,9 @@ suite beve_peek_header_tests = [] {
       auto result = glz::beve_peek_header(buffer);
       expect(result.has_value());
       expect(result->type == glz::tag::object);
-      // my_struct has 5 members in its glz::meta: i, d, hello, arr, include
-      expect(result->count == 5u);
+      // my_struct has 5 members in its glz::meta (i, d, hello, arr, include); the
+      // include field is filtered by always_skipped, so the wire count is 4.
+      expect(result->count == 4u);
    };
 
    "beve_peek_header map"_test = [] {
@@ -6700,6 +6701,66 @@ suite beve_skip_complex_suite = [] {
       expect(!ec) << glz::format_error(ec, buffer);
       expect(dst.id == 5);
       expect(dst.name == "empty");
+   };
+};
+
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in BEVE, both keyed and structs_as_arrays.
+namespace beve_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m1{};
+      bool active{true};
+      int count{42};
+      marker m2{};
+      std::string name{"hello"};
+   };
+}
+
+template <>
+struct glz::meta<beve_skip_marker_tests::settings>
+{
+   using T = beve_skip_marker_tests::settings;
+   static constexpr auto value =
+      object("m1", &T::m1, "active", &T::active, "count", &T::count, "m2", &T::m2, "name", &T::name);
+};
+
+suite beve_skip_marker_suite = [] {
+   using namespace beve_skip_marker_tests;
+
+   "beve skip-marker keyed roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      auto encoded = glz::write_beve(original);
+      expect(encoded.has_value());
+
+      settings decoded{};
+      auto ec = glz::read_beve(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
+   };
+
+   "beve skip-marker untagged (structs_as_arrays) roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      auto encoded = glz::write_beve_untagged(original);
+      expect(encoded.has_value());
+
+      settings decoded{};
+      auto ec = glz::read_beve_untagged(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
    };
 };
 
