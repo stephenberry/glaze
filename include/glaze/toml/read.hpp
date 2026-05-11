@@ -2323,6 +2323,7 @@ namespace glz
                // TODO: Rewrite logic here, for now it works just fine so we leave it.
                detail::parse_toml_object_members<Opts>(value, it, end, ctx, true); // true for is_inline_table
                // The parse_toml_object_members should consume the final '}' if successful
+               return;
             }
             else if (*it == '[') { // Normal table or array of tables
                std::vector<std::string> path;
@@ -2855,6 +2856,38 @@ namespace glz
                ctx.error = error_code::syntax_error;
             }
          }
+      }
+   };
+
+   // Nullable types (std::optional, pointers)
+   template <nullable_like T>
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) {
+            value = {};
+            return;
+         }
+
+         if (!value) {
+            if constexpr (requires { value.emplace(); }) {
+               value.emplace();
+            }
+            else {
+               ctx.error = error_code::invalid_nullable_read;
+               return;
+            }
+         }
+
+         using V = std::remove_cvref_t<decltype(*value)>;
+         from<TOML, V>::template op<Opts>(*value, ctx, it, end);
       }
    };
 
