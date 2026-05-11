@@ -303,6 +303,12 @@ auto names_array = glz::get<std::array<std::string, 3>>(json, "/names");
 
 This works because `glz::generic` stores arrays as `std::vector<glz::generic>` and objects as `glz::ordered_small_map<glz::generic>`. When you request a specific container type, Glaze deserializes the generic representation into your desired type.
 
+## Compilation time optimization
+
+`glaze/json/generic.hpp` header is a quite heavyweight as it also pulls the entire JSON library.
+
+If you want to use `glz::generic` as part of some public interface, it's advisable to include `glaze/json/generic_def.hpp` instead.
+
 ## See Also
 
 - [Lazy JSON](./lazy-json.md) - On-demand parsing for selective field access (faster for extracting few fields)
