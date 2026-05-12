@@ -1087,8 +1087,109 @@ namespace glz
       // Check if inline_arrays mode is enabled
       constexpr bool inline_mode = use_inline_arrays<Options>();
 
+      // Helper lambda to write a map-typed struct field as a TOML table.
+      //
+      // Before this helper existed, ``writable_map_t`` fields fell through PASS 1
+      // as scalars: the struct writer emitted ``key = `` and then handed off to the
+      // map writer which produced bare ``inner_key = value\n`` lines, composing
+      // into invalid TOML such as ``items = bar = false\nfoo = true`` (issue
+      // #2540).  Render maps as inline TOML tables on the right-hand side of
+      // the field assignment so the document round-trips through
+      // ``glz::read_toml``.
+      auto write_map_field = [&]<size_t I>() {
+         using val_t = field_t<T, I>;
+         using map_value_t = typename std::remove_cvref_t<val_t>::mapped_type;
+         constexpr bool value_is_object = glaze_object_t<map_value_t> || reflectable<map_value_t>;
+
+         decltype(auto) m = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return get_member(value, get<I>(t));
+            }
+            else {
+               return get_member(value, get<I>(reflect<T>::values));
+            }
+         }();
+
+         static constexpr auto key = glz::get<I>(reflect<T>::keys);
+
+         if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
+            return;
+         }
+         if (!first) {
+            std::memcpy(&b[ix], "\n", 1);
+            ++ix;
+         }
+         else {
+            first = false;
+         }
+
+         std::memcpy(&b[ix], key.data(), key.size());
+         ix += key.size();
+         std::memcpy(&b[ix], " = ", 3);
+         ix += 3;
+
+         if (empty_range(m)) {
+            if (!ensure_space(ctx, b, ix + 2)) [[unlikely]] {
+               return;
+            }
+            std::memcpy(&b[ix], "{}", 2);
+            ix += 2;
+            return;
+         }
+
+         if (!ensure_space(ctx, b, ix + 2)) [[unlikely]] {
+            return;
+         }
+         std::memcpy(&b[ix], "{ ", 2);
+         ix += 2;
+
+         bool inner_first = true;
+         for (auto&& [mk, mv] : m) {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            const auto mk_view = std::string_view{mk};
+            if (!ensure_space(ctx, b, ix + mk_view.size() + 6)) [[unlikely]] {
+               return;
+            }
+            if (!inner_first) {
+               std::memcpy(&b[ix], ", ", 2);
+               ix += 2;
+            }
+            else {
+               inner_first = false;
+            }
+            std::memcpy(&b[ix], mk_view.data(), mk_view.size());
+            ix += mk_view.size();
+            std::memcpy(&b[ix], " = ", 3);
+            ix += 3;
+
+            if constexpr (value_is_object) {
+               // Render nested struct values as inline tables so the entire
+               // map field remains inline-valid.
+               write_inline_object<Options, map_value_t>(mv, ctx, b, ix);
+            }
+            else {
+               to<TOML, map_value_t>::template op<Options>(mv, ctx, b, ix);
+            }
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+         }
+         if (!ensure_space(ctx, b, ix + 2)) [[unlikely]] {
+            return;
+         }
+         std::memcpy(&b[ix], " }", 2);
+         ix += 2;
+      };
+
       // PASS 1: Write all scalar fields first (TOML spec conformance)
-      // In inline_mode, arrays of objects are treated as scalars (written inline)
+      // In inline_mode, arrays of objects are treated as scalars (written inline).
+      // Map-typed fields are rendered as inline tables on the right-hand side
+      // of the assignment, which is syntactically a scalar in TOML and so MUST
+      // be emitted before any nested ``[table]`` header opens a sub-scope
+      // (otherwise the inline-table assignment would be parsed as a key of
+      // that nested table instead of the enclosing struct).
       for_each<N>([&]<size_t I>() {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -1101,12 +1202,18 @@ namespace glz
                return;
             }
 
-            // Only process scalar fields in this pass (not objects or arrays of objects)
-            // Exception: in inline_mode, arrays of objects are written as inline arrays
-            constexpr bool is_scalar =
-               !(glaze_object_t<val_t> || reflectable<val_t>) && (!is_array_of_objects_v<val_t> || inline_mode);
-            if constexpr (is_scalar) {
-               write_scalar_field.template operator()<I>();
+            if constexpr (writable_map_t<val_t>) {
+               write_map_field.template operator()<I>();
+            }
+            else {
+               // Only process scalar fields in this pass (not objects or
+               // arrays of objects).  In inline_mode, arrays of objects are
+               // written as inline arrays here.
+               constexpr bool is_scalar =
+                  !(glaze_object_t<val_t> || reflectable<val_t>) && (!is_array_of_objects_v<val_t> || inline_mode);
+               if constexpr (is_scalar) {
+                  write_scalar_field.template operator()<I>();
+               }
             }
          }
       });
@@ -1125,7 +1232,8 @@ namespace glz
                return;
             }
 
-            // Process nested objects and arrays of objects
+            // Process nested objects and arrays of objects (maps already
+            // emitted inline in PASS 1).
             if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
                write_table_field.template operator()<I>();
             }
