@@ -143,6 +143,28 @@ namespace glz
       }
    };
 
+   // Distinguish JSON Schemas generated for serialization output vs parsing input.
+   //
+   // output: schema describes what glaze will produce. All non-skipped object members
+   //         are guaranteed to be written, and tuples always serialize at their full
+   //         length, so the schema emits `required` and `minItems = maxItems`.
+   //
+   // input:  schema describes what glaze will accept. Partial parsing is supported,
+   //         so `required` is omitted on objects (except for variant discriminator
+   //         tags, which must be present to select an alternative) and `minItems`
+   //         is omitted on tuples.
+   enum struct schema_purpose : uint8_t { input, output };
+
+   consteval schema_purpose check_schema_purpose(auto&& Opts)
+   {
+      if constexpr (requires { Opts.schema_purpose_v; }) {
+         return Opts.schema_purpose_v;
+      }
+      else {
+         return schema_purpose::output;
+      }
+   }
+
    namespace detail
    {
       enum struct defined_formats : uint32_t;
@@ -907,6 +929,11 @@ namespace glz
             });
             s.items = false;
             s.maxItems = N;
+            if constexpr (check_schema_purpose(Opts) == schema_purpose::output) {
+               // Output schemas describe serialized data: tuples always emit every element,
+               // so the array length is fixed (minItems == maxItems == N).
+               s.minItems = N;
+            }
          }
       };
 
@@ -973,6 +1000,8 @@ namespace glz
 
             using V = std::decay_t<T>;
 
+            constexpr auto purpose = check_schema_purpose(Opts);
+
             if constexpr (requires { meta<V>::required; }) {
                if (!s.required) {
                   s.required = std::vector<sv>{};
@@ -1000,8 +1029,12 @@ namespace glz
                using val_t = std::decay_t<refl_t<T, I>>;
 
                static constexpr sv key = reflect<T>::keys[I];
-               if constexpr (requires_key<T, val_t, Opts>(key)) {
-                  req.emplace_back(key);
+               // Output schemas describe guaranteed-present keys after serialization.
+               // Input schemas omit `required` so partial parsing is permitted.
+               if constexpr (purpose == schema_purpose::output) {
+                  if constexpr (requires_key<T, val_t, Opts>(key)) {
+                     req.emplace_back(key);
+                  }
                }
 
                schema prop{};
@@ -1290,12 +1323,22 @@ namespace glz
       bool write_type_info = false;
    };
 
-   template <class T, auto Opts = opts{}, class Buffer>
+   // Carries the schema_purpose tag through to_json_schema specializations via the existing
+   // `auto Opts` template parameter. Kept at namespace scope to avoid MSVC issues with
+   // function-local non-type template arguments.
+   template <class Opts>
+   struct opts_with_schema_purpose : std::decay_t<Opts>
+   {
+      schema_purpose schema_purpose_v = schema_purpose::output;
+   };
+
+   template <class T, auto Opts = opts{}, schema_purpose Purpose = schema_purpose::output, class Buffer>
    [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer)
    {
+      static constexpr auto schema_opts = opts_with_schema_purpose<decltype(Opts)>{{Opts}, Purpose};
       schema s{};
       s.defs.emplace();
-      detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
+      detail::to_json_schema<std::decay_t<T>>::template op<schema_opts>(s, *s.defs);
       s.title = name_v<T>;
 
       // Inline single-use $defs entries at their reference sites
@@ -1314,15 +1357,42 @@ namespace glz
       return write<options>(std::move(s), std::forward<Buffer>(buffer));
    }
 
-   template <class T, auto Opts = opts{}>
+   template <class T, auto Opts = opts{}, schema_purpose Purpose = schema_purpose::output>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_json_schema()
    {
       std::string buffer{};
-      const error_ctx ec = write_json_schema<T, Opts>(buffer);
+      const error_ctx ec = write_json_schema<T, Opts, Purpose>(buffer);
       if (bool(ec)) [[unlikely]] {
          return glz::unexpected(ec);
       }
       return {buffer};
+   }
+
+   // Convenience entry points for the two schema purposes. Output schemas describe what
+   // glaze guarantees on serialization (required keys, fixed tuple lengths). Input schemas
+   // describe what glaze accepts on parsing (partial objects allowed, partial tuples allowed).
+   template <class T, auto Opts = opts{}, class Buffer>
+   [[nodiscard]] error_ctx write_json_input_schema(Buffer&& buffer)
+   {
+      return write_json_schema<T, Opts, schema_purpose::input>(std::forward<Buffer>(buffer));
+   }
+
+   template <class T, auto Opts = opts{}>
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_json_input_schema()
+   {
+      return write_json_schema<T, Opts, schema_purpose::input>();
+   }
+
+   template <class T, auto Opts = opts{}, class Buffer>
+   [[nodiscard]] error_ctx write_json_output_schema(Buffer&& buffer)
+   {
+      return write_json_schema<T, Opts, schema_purpose::output>(std::forward<Buffer>(buffer));
+   }
+
+   template <class T, auto Opts = opts{}>
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_json_output_schema()
+   {
+      return write_json_schema<T, Opts, schema_purpose::output>();
    }
 
    // Custom reader for sv_opt: delegates to string_view reader, then assigns to sv_opt.
