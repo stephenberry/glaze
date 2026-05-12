@@ -2859,7 +2859,7 @@ namespace glz
       }
    };
 
-   // Nullable types (std::optional, pointers)
+   // Nullable types: std::optional, std::unique_ptr, std::shared_ptr, raw pointers
    template <nullable_like T>
    struct from<TOML, T>
    {
@@ -2877,8 +2877,25 @@ namespace glz
          }
 
          if (!value) {
-            if constexpr (requires { value.emplace(); }) {
+            if constexpr (optional_like<T>) {
                value.emplace();
+            }
+            else if constexpr (is_specialization_v<T, std::unique_ptr>) {
+               value = std::make_unique<typename T::element_type>();
+            }
+            else if constexpr (is_specialization_v<T, std::shared_ptr>) {
+               value = std::make_shared<typename T::element_type>();
+            }
+            else if constexpr (requires { value.emplace(); }) {
+               value.emplace();
+            }
+            else if constexpr (constructible<T>) {
+               value = meta_construct_v<T>();
+            }
+            else if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
+               if (!try_allocate_raw_pointer<Opts>(value, ctx)) {
+                  return;
+               }
             }
             else {
                ctx.error = error_code::invalid_nullable_read;

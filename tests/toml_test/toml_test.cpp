@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <memory>
 #include <set>
 #include <span>
 #include <string_view>
@@ -163,6 +164,48 @@ struct struct_with_optional_inline_table
    int a;
    std::optional<inline_table_member> inline_data{};
    int b;
+};
+
+struct struct_with_unique_ptr
+{
+   int a{};
+   std::unique_ptr<int> p{};
+   int b{};
+};
+
+struct struct_with_shared_ptr
+{
+   int a{};
+   std::shared_ptr<int> p{};
+   int b{};
+};
+
+struct struct_with_unique_ptr_inline_table
+{
+   int a{};
+   std::unique_ptr<inline_table_member> data{};
+   int b{};
+};
+
+struct struct_with_shared_ptr_inline_table
+{
+   int a{};
+   std::shared_ptr<inline_table_member> data{};
+   int b{};
+};
+
+struct struct_with_nested_optional
+{
+   int a{};
+   std::optional<std::optional<int>> v{};
+   int b{};
+};
+
+struct struct_with_optional_vector
+{
+   int a{};
+   std::optional<std::vector<int>> arr{};
+   int b{};
 };
 
 template <>
@@ -2373,6 +2416,139 @@ b = 2)";
       expect(s.a == 1);
       expect(s.b == 2);
       expect(!s.inline_data.has_value());
+   };
+   "read_unique_ptr_with_value"_test = [] {
+      std::string input = R"(a = 1
+p = 42
+b = 2)";
+      struct_with_unique_ptr s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.p != nullptr);
+      expect(*s.p == 42);
+   };
+   "read_unique_ptr_missing"_test = [] {
+      std::string input = R"(a = 1
+b = 2)";
+      struct_with_unique_ptr s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.p == nullptr);
+   };
+   "read_unique_ptr_overwrites_existing"_test = [] {
+      std::string input = R"(a = 1
+p = 7
+b = 2)";
+      struct_with_unique_ptr s{};
+      s.p = std::make_unique<int>(99);
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.p != nullptr);
+      expect(*s.p == 7);
+   };
+   "read_shared_ptr_with_value"_test = [] {
+      std::string input = R"(a = 1
+p = 5
+b = 2)";
+      struct_with_shared_ptr s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.p != nullptr);
+      expect(*s.p == 5);
+   };
+   "read_shared_ptr_missing"_test = [] {
+      std::string input = R"(a = 1
+b = 2)";
+      struct_with_shared_ptr s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.p == nullptr);
+   };
+   "read_unique_ptr_inline_table"_test = [] {
+      std::string input = R"(a = 1
+data = { key1 = "hello", key2 = 11 }
+b = 2)";
+      struct_with_unique_ptr_inline_table s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.data != nullptr);
+      expect(s.data->key1 == "hello");
+      expect(s.data->key2 == 11);
+   };
+   "read_shared_ptr_inline_table"_test = [] {
+      std::string input = R"(a = 1
+data = { key1 = "world", key2 = 22 }
+b = 2)";
+      struct_with_shared_ptr_inline_table s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.data != nullptr);
+      expect(s.data->key1 == "world");
+      expect(s.data->key2 == 22);
+   };
+   "read_nested_optional"_test = [] {
+      std::string input = R"(a = 1
+v = 33
+b = 2)";
+      struct_with_nested_optional s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.v.has_value());
+      expect(s.v->has_value());
+      expect(s.v->value() == 33);
+   };
+   "read_optional_vector"_test = [] {
+      std::string input = R"(a = 1
+arr = [10, 20, 30]
+b = 2)";
+      struct_with_optional_vector s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.arr.has_value());
+      expect(s.arr->size() == 3);
+      expect((*s.arr)[0] == 10);
+      expect((*s.arr)[1] == 20);
+      expect((*s.arr)[2] == 30);
+   };
+   "read_optional_vector_missing"_test = [] {
+      std::string input = R"(a = 1
+b = 2)";
+      struct_with_optional_vector s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(!s.arr.has_value());
+   };
+   "read_top_level_optional_int"_test = [] {
+      std::optional<int> value{};
+      auto ec = glz::read_toml(value, std::string{"42"});
+      expect(!ec) << glz::format_error(ec, std::string{"42"});
+      expect(value.has_value());
+      expect(value.value() == 42);
+   };
+   "read_top_level_unique_ptr"_test = [] {
+      std::unique_ptr<int> value{};
+      auto ec = glz::read_toml(value, std::string{"99"});
+      expect(!ec) << glz::format_error(ec, std::string{"99"});
+      expect(value != nullptr);
+      expect(*value == 99);
    };
 };
 
