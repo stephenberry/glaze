@@ -246,7 +246,7 @@ namespace glz
 
    // Tuples
    template <class T>
-      requires(tuple_t<T> || is_std_tuple<T>)
+      requires(tuple_t<T> || std_tuple_protocol<T>)
    struct to<JSONB, T> final
    {
       template <auto Opts>
@@ -258,10 +258,16 @@ namespace glz
          }
          const size_t payload_start = ix;
 
-         static constexpr auto N = glz::tuple_size_v<T>;
-         if constexpr (is_std_tuple<T>) {
+         static constexpr bool use_std_protocol = std_tuple_protocol<T> && !tuple_t<T>;
+         static constexpr auto N = []() constexpr {
+            if constexpr (use_std_protocol)
+               return std::tuple_size_v<std::remove_cvref_t<T>>;
+            else
+               return glz::tuple_size_v<T>;
+         }();
+         if constexpr (use_std_protocol) {
             [&]<size_t... I>(std::index_sequence<I...>) {
-               (serialize<JSONB>::op<Opts>(std::get<I>(value), ctx, b, ix), ...);
+               (serialize<JSONB>::op<Opts>(get<I>(value), ctx, b, ix), ...);
             }(std::make_index_sequence<N>{});
          }
          else {

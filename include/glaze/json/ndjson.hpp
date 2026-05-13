@@ -106,7 +106,7 @@ namespace glz
    };
 
    template <class T>
-      requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
+      requires glaze_array_t<T> || tuple_t<T> || std_tuple_protocol<T>
    struct from<NDJSON, T>
    {
       template <auto Opts>
@@ -116,9 +116,13 @@ namespace glz
             return;
          }
 
+         static constexpr bool use_std_protocol = std_tuple_protocol<T> && !tuple_t<T>;
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<T>) {
                return reflect<T>::size;
+            }
+            else if constexpr (use_std_protocol) {
+               return std::tuple_size_v<T>;
             }
             else {
                return glz::tuple_size_v<T>;
@@ -148,8 +152,8 @@ namespace glz
             if constexpr (I != 0) {
                read_new_lines();
             }
-            if constexpr (is_std_tuple<T>) {
-               parse<JSON>::op<Opts>(std::get<I>(value), ctx, it, end);
+            if constexpr (use_std_protocol) {
+               parse<JSON>::op<Opts>(get<I>(value), ctx, it, end);
             }
             else if constexpr (glaze_array_t<T>) {
                parse<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
@@ -223,29 +227,17 @@ namespace glz
    };
 
    template <class T>
-      requires is_std_tuple<std::decay_t<T>>
+      requires(std_tuple_protocol<std::decay_t<T>> && !tuple_t<std::decay_t<T>> && !glaze_array_t<std::decay_t<T>>)
    struct to<NDJSON, T>
    {
       template <auto Opts, class... Args>
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
-         static constexpr auto N = []() constexpr {
-            if constexpr (glaze_array_t<std::decay_t<T>>) {
-               return glz::tuple_size_v<meta_t<std::decay_t<T>>>;
-            }
-            else {
-               return glz::tuple_size_v<std::decay_t<T>>;
-            }
-         }();
-
          using V = std::decay_t<T>;
+         static constexpr auto N = std::tuple_size_v<V>;
+
          for_each<N>([&]<auto I>() {
-            if constexpr (glaze_array_t<V>) {
-               serialize<JSON>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
-            }
-            else {
-               serialize<JSON>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
-            }
+            serialize<JSON>::op<Opts>(get<I>(value), ctx, std::forward<Args>(args)...);
             constexpr bool needs_new_line = I < N - 1;
             if constexpr (needs_new_line) {
                dump('\n', std::forward<Args>(args)...);

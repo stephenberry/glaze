@@ -1854,18 +1854,23 @@ namespace glz
    };
 
    template <class T>
-      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || is_std_tuple<T>
+      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || std_tuple_protocol<std::decay_t<T>>
    struct to<JSON, T>
    {
       template <auto Opts, class... Args>
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
+         using V = std::decay_t<T>;
+         static constexpr bool use_std_protocol = std_tuple_protocol<V> && !tuple_t<V>;
          static constexpr auto N = []() constexpr {
-            if constexpr (glaze_array_t<std::decay_t<T>>) {
-               return glz::tuple_size_v<meta_t<std::decay_t<T>>>;
+            if constexpr (glaze_array_t<V>) {
+               return glz::tuple_size_v<meta_t<V>>;
+            }
+            else if constexpr (use_std_protocol) {
+               return std::tuple_size_v<V>;
             }
             else {
-               return glz::tuple_size_v<std::decay_t<T>>;
+               return glz::tuple_size_v<V>;
             }
          }();
 
@@ -1876,14 +1881,13 @@ namespace glz
                dump_newline_indent(check_indentation_char(Opts), ctx.depth, args...);
             }
          }
-         using V = std::decay_t<T>;
          for_each<N>([&]<size_t I>() {
             if constexpr (glaze_array_t<V>) {
                serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
             }
-            else if constexpr (is_std_tuple<T>) {
-               using Value = core_t<decltype(std::get<I>(value))>;
-               to<JSON, Value>::template op<Opts>(std::get<I>(value), ctx, args...);
+            else if constexpr (use_std_protocol) {
+               using Value = core_t<decltype(get<I>(value))>;
+               to<JSON, Value>::template op<Opts>(get<I>(value), ctx, args...);
             }
             else {
                using Value = core_t<decltype(glz::get<I>(value))>;

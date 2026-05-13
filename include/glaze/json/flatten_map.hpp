@@ -65,13 +65,13 @@ namespace glz
             write_flatten_map_elements<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, b, ix, first);
          });
       }
-      else if constexpr (is_std_tuple<V>) {
-         static constexpr auto N = glz::tuple_size_v<V>;
+      else if constexpr (std_tuple_protocol<V> && !tuple_t<V>) {
+         static constexpr auto N = std::tuple_size_v<V>;
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            write_flatten_map_elements<Opts>(std::get<I>(value), ctx, b, ix, first);
+            write_flatten_map_elements<Opts>(get<I>(value), ctx, b, ix, first);
          });
       }
       else if constexpr (tuple_t<V>) {
@@ -177,13 +177,13 @@ namespace glz
             read_flatten_map_elements<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end, first);
          });
       }
-      else if constexpr (is_std_tuple<V>) {
-         static constexpr auto N = glz::tuple_size_v<V>;
+      else if constexpr (std_tuple_protocol<V> && !tuple_t<V>) {
+         static constexpr auto N = std::tuple_size_v<V>;
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            read_flatten_map_elements<Opts>(std::get<I>(value), ctx, it, end, first);
+            read_flatten_map_elements<Opts>(get<I>(value), ctx, it, end, first);
          });
       }
       else if constexpr (tuple_t<V>) {

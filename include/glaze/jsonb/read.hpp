@@ -738,7 +738,7 @@ namespace glz
 
    // Tuples
    template <class T>
-      requires(tuple_t<T> || is_std_tuple<T>)
+      requires(tuple_t<T> || std_tuple_protocol<T>)
    struct from<JSONB, T> final
    {
       template <auto Opts>
@@ -759,11 +759,18 @@ namespace glz
          }
          const auto stop = it + sz;
 
-         static constexpr auto N = glz::tuple_size_v<std::decay_t<T>>;
-         if constexpr (is_std_tuple<T>) {
+         using V = std::decay_t<T>;
+         static constexpr bool use_std_protocol = std_tuple_protocol<V> && !tuple_t<V>;
+         static constexpr auto N = []() constexpr {
+            if constexpr (use_std_protocol)
+               return std::tuple_size_v<V>;
+            else
+               return glz::tuple_size_v<V>;
+         }();
+         if constexpr (use_std_protocol) {
             for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) return;
-               parse<JSONB>::op<Opts>(std::get<I>(value), ctx, it, end);
+               parse<JSONB>::op<Opts>(get<I>(value), ctx, it, end);
             });
          }
          else {
@@ -1019,7 +1026,7 @@ namespace glz
       {};
       template <class T>
       struct is_jsonb_variant_array : std::bool_constant<writable_array_t<T> || readable_array_t<T> || tuple_t<T> ||
-                                                         is_std_tuple<T> || glaze_array_t<T>>
+                                                         std_tuple_protocol<T> || glaze_array_t<T>>
       {};
       template <class T>
       struct is_jsonb_variant_object : std::bool_constant<writable_map_t<T> || readable_map_t<T> || pair_t<T> ||
