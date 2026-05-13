@@ -3,6 +3,12 @@
 
 #pragma once
 
+// <version> (C++20) pulls in the standard library's feature-test macros and vendor
+// identification (__GLIBCXX__, _LIBCPP_VERSION, etc.) without dragging in any types.
+// Needed here so the __GLIBCXX__ check below sees a value when the including TU
+// has not yet touched the stdlib.
+#include <version>
+
 // Detect constexpr std::string support
 // The old GCC ABI (_GLIBCXX_USE_CXX11_ABI=0) does not have constexpr std::string::size()
 // This affects features like rename_key returning std::string
