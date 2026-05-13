@@ -96,8 +96,31 @@ namespace glz
          }
          auto ec = glz::write<Opts>(std::forward<T>(value), response_body);
          if (ec) {
-            // TODO serialize a struct into proper format for errors
-            response_body = R"({"error":"glz::write_json error"})"; // rare that this would ever happen
+            // The body may have been partially written before the error
+            // fired; clear it so the response is never a mix of a partial
+            // success payload and the error report.
+            response_body.clear();
+
+            // Serialize a structured glz_write_error object instead of the
+            // legacy hardcoded placeholder. The original error_code and
+            // any custom_error_message are surfaced so callers can debug
+            // failed writes without having to reproduce them locally.
+            struct glz_write_error
+            {
+               std::string_view error{"glaze write failure"};
+               uint32_t code{};
+               std::string_view message{};
+            };
+            glz_write_error info{
+               .code = uint32_t(ec.ec),
+               .message = ec.custom_error_message,
+            };
+            if (auto write_ec = glz::write_json(info, response_body); write_ec) {
+               // Re-erroring on a tiny struct is essentially impossible,
+               // but keep a safe static fallback so the response body is
+               // never left empty after a failed write attempt.
+               response_body = R"({"error":"glaze write failure"})";
+            }
          }
          return *this;
       }
