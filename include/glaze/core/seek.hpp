@@ -260,7 +260,7 @@ namespace glz
    using get_reference_type = std::reference_wrapper<copy_cv_t<std::remove_reference_t<T>, V>>;
 
    // Get a reference to a value at the location of a json_ptr. Will error if
-   // value doesnt exist or is wrong type
+   // value doesn't exist or is wrong type
    template <class V, class T>
    expected<get_reference_type<V, T>, error_ctx> get(T&& root_value, sv json_ptr)
    {
@@ -289,7 +289,7 @@ namespace glz
    }
 
    // Get a pointer to a value at the location of a json_ptr. Will return
-   // nullptr if value doesnt exist or is wrong type
+   // nullptr if value doesn't exist or is wrong type
    template <class V, class T>
    get_pointer_type<V, T> get_if(T&& root_value, sv json_ptr) noexcept
    {
@@ -305,7 +305,7 @@ namespace glz
    }
 
    // Get a value at the location of a json_ptr. Will error if
-   // value doesnt exist or is not assignable or is a narrowing conversion.
+   // value doesn't exist or is not assignable or is a narrowing conversion.
    template <class V, class T>
    expected<V, error_code> get_value(T&& root_value, sv json_ptr) noexcept
    {

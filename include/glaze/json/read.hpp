@@ -2417,7 +2417,7 @@ namespace glz
       }
 
       // for types like std::vector<std::pair...> that can't look up with operator[]
-      // Intead of hashing or linear searching, we just clear the input and overwrite the entire contents
+      // Instead of hashing or linear searching, we just clear the input and overwrite the entire contents
       template <auto Options>
          requires(pair_t<range_value_t<T>> && check_concatenate(Options) == true)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
@@ -3122,7 +3122,7 @@ namespace glz
                         }
                      }
                   }
-                  ++it; // Increment after checking for mising keys so errors are within buffer bounds
+                  ++it; // Increment after checking for missing keys so errors are within buffer bounds
                   if constexpr (not Opts.null_terminated) {
                      if (it == end) {
                         ctx.error = error_code::end_reached;

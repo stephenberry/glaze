@@ -962,7 +962,7 @@ namespace glz
        *
        * @note When using an external executor, no worker threads are created by start_workers().
        *       The caller is responsible for running the executor (e.g., calling io_context::run()
-       *       from their own threads) and to maintence its lifecycle.
+       *       from their own threads) and to maintain its lifecycle.
        *
        *
        * Example with internal io_context (handler is called from a different thread created by http_client):
@@ -978,7 +978,7 @@ namespace glz
        *				   });
        * @endcode
        *
-       * Example with external provied io_executor (handler runs in same thread which is calling io_ctx.run()).
+       * Example with external provided io_executor (handler runs in same thread which is calling io_ctx.run()).
        * io_context can be shared for other async operations:
        * @code
        *   // Create a shared io_context
