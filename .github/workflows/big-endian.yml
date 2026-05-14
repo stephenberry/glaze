@@ -81,6 +81,7 @@ jobs:
           -DCMAKE_CXX_STANDARD=23 \
           -Dglaze_BUILD_NETWORKING_TESTS=OFF \
           -Dglaze_BUILD_PERFORMANCE_TESTS=OFF \
+          -Dglaze_BUILD_ZMEM_TESTS=OFF \
           -Dglaze_ENABLE_FUZZING=OFF
 
     - name: Build
