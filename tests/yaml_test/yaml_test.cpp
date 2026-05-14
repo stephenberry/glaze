@@ -2083,6 +2083,79 @@ suite yaml_nullable_tests = [] {
       expect(yaml.find("x:") != std::string::npos);
       expect(yaml.find("5") != std::string::npos);
    };
+
+   "shared_ptr_read_scalar"_test = [] {
+      std::shared_ptr<int> value;
+      const std::string yaml = "42";
+      auto rec = glz::read_yaml(value, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(value != nullptr);
+      expect(*value == 42);
+   };
+
+   "shared_ptr_read_null"_test = [] {
+      std::shared_ptr<int> value = std::make_shared<int>(7);
+      const std::string yaml = "null";
+      auto rec = glz::read_yaml(value, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(value == nullptr);
+   };
+
+   "unique_ptr_read_scalar"_test = [] {
+      std::unique_ptr<double> value;
+      const std::string yaml = "3.14";
+      auto rec = glz::read_yaml(value, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(value != nullptr);
+      expect(std::abs(*value - 3.14) < 0.0001);
+   };
+
+   "unique_ptr_read_null"_test = [] {
+      std::unique_ptr<std::string> value = std::make_unique<std::string>("seed");
+      const std::string yaml = "null";
+      auto rec = glz::read_yaml(value, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(value == nullptr);
+   };
+
+   "shared_ptr_struct_roundtrip"_test = [] {
+      auto original = std::make_shared<simple_struct>(simple_struct{5, 1.5, "ptr"});
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::shared_ptr<simple_struct> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed != nullptr);
+      expect(parsed->x == 5);
+      expect(std::abs(parsed->y - 1.5) < 0.001);
+      expect(parsed->name == "ptr");
+   };
+
+   "unique_ptr_struct_roundtrip"_test = [] {
+      auto original = std::make_unique<simple_struct>(simple_struct{9, 4.5, "uniq"});
+      std::string yaml;
+      auto wec = glz::write_yaml(original, yaml);
+      expect(!wec);
+
+      std::unique_ptr<simple_struct> parsed;
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(parsed != nullptr);
+      expect(parsed->x == 9);
+      expect(std::abs(parsed->y - 4.5) < 0.001);
+      expect(parsed->name == "uniq");
+   };
+
+   "unique_ptr_read_overwrites_existing"_test = [] {
+      std::unique_ptr<int> value = std::make_unique<int>(99);
+      const std::string yaml = "7";
+      auto rec = glz::read_yaml(value, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(value != nullptr);
+      expect(*value == 7);
+   };
 };
 
 // ============================================================
@@ -8920,6 +8993,44 @@ suite merge_meta_yaml_tests = [] {
       expect(restored.species.legs == original.species.legs);
       expect(restored.appearance.weight == original.appearance.weight);
       expect(restored.appearance.color == original.appearance.color);
+   };
+};
+
+namespace yaml_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m{};
+      bool active{true};
+      int count{42};
+      std::string name{"hello"};
+   };
+}
+
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in YAML.
+suite yaml_skip_marker_suite = [] {
+   using namespace yaml_skip_marker_tests;
+   "yaml skip-marker roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      std::string yaml{};
+      expect(not glz::write_yaml(original, yaml));
+      // Marker key must not appear in the output.
+      expect(yaml.find("m:") == std::string::npos) << yaml;
+
+      settings decoded{};
+      expect(not glz::read_yaml(decoded, yaml));
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
    };
 };
 

@@ -139,7 +139,7 @@ int main()
       );
 
       // Test that the registry has registered the endpoints
-      expect(registry.endpoints.routes.size() > 0);
+      expect(registry.endpoints.normal_routes.routes.size() > 0);
 
       // Basic validation that endpoints were registered
       // The registry should have registered endpoints for:
@@ -149,10 +149,11 @@ int main()
       // - POST /deleteUser
 
       std::cout << "OpenAPI test completed successfully!" << std::endl;
-      std::cout << "Registry has " << registry.endpoints.routes.size() << " endpoints registered" << std::endl;
+      std::cout << "Registry has " << registry.endpoints.normal_routes.routes.size() << " endpoints registered"
+                << std::endl;
 
       // Print registered endpoints for inspection
-      for (const auto& [path, methods] : registry.endpoints.routes) {
+      for (const auto& [path, methods] : registry.endpoints.normal_routes.routes) {
          for (const auto& [method, entry] : methods) {
             std::cout << "  - " << glz::to_string(method) << " " << path << std::endl;
          }

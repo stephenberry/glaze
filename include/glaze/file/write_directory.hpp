@@ -7,6 +7,7 @@
 
 #include "glaze/core/write.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/json/write.hpp"
 
 namespace glz
 {

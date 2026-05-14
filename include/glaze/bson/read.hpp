@@ -1039,12 +1039,18 @@ namespace glz
                if (index < N) {
                   visit<N>(
                      [&]<size_t I>() {
+                        using MemberT = std::remove_cvref_t<field_t<DT, I>>;
                         static constexpr auto TargetKey = get<I>(reflect<DT>::keys);
                         static constexpr auto Length = TargetKey.size();
                         if ((Length == key.size()) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
                            matched = true;
-                           using MemberT = std::remove_cvref_t<field_t<DT, I>>;
-                           if constexpr (reflectable<DT>) {
+                           if constexpr (always_skipped<MemberT>) {
+                              // Marker / hidden / skip / includer fields are never
+                              // written, so any matching key here came from
+                              // foreign input. Silently consume the value.
+                              skip_value<BSON>::template op<Opts>(tag, ctx, it, stop);
+                           }
+                           else if constexpr (reflectable<DT>) {
                               from<BSON, MemberT>::template op<Opts>(get_member(value, get<I>(to_tie(value))), tag, ctx,
                                                                      it, stop);
                            }

@@ -139,6 +139,12 @@ static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE);
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wpedantic"
+#elif ZMIJ_MSC_VER
+#pragma warning(push)
+// C4702: false-positive unreachable-code in MSVC 14.50 (compiler regression)
+// C4324: SIMD types are intentionally padded by alignas
+#pragma warning(disable : 4702)
+#pragma warning(disable : 4324)
 #endif
 
 namespace glz::zmij
@@ -317,12 +323,12 @@ namespace glz::zmij
          return ZMIJ_USE_INT128 ? umul128_hi64(x, div10_sig64) : x / 10;
       }
 
-      constexpr auto compute_dec_exp(int bin_exp, bool regular = true) noexcept -> int
+      constexpr auto compute_dec_exp(int64_t bin_exp, bool regular = true) noexcept -> int32_t
       {
          assert(bin_exp >= -1334 && bin_exp <= 2620);
          constexpr int log10_3_over_4_sig = 131'072;
          constexpr int log10_2_sig = 315'653, log10_2_exp = 20;
-         return (bin_exp * log10_2_sig - !regular * log10_3_over_4_sig) >> log10_2_exp;
+         return static_cast<int32_t>((bin_exp * log10_2_sig - !regular * log10_3_over_4_sig) >> log10_2_exp);
       }
 
       template <typename Float>
@@ -351,7 +357,10 @@ namespace glz::zmij
 
          static auto is_negative(sig_type bits) noexcept -> bool { return bits >> (num_bits - 1); }
          static auto get_sig(sig_type bits) noexcept -> sig_type { return bits & (implicit_bit - 1); }
-         static auto get_exp(sig_type bits) noexcept -> int64_t { return int64_t((bits << 1) >> (num_sig_bits + 1)); }
+         static auto get_exp(sig_type bits) noexcept -> int32_t
+         {
+            return static_cast<int32_t>((bits << 1) >> (num_sig_bits + 1));
+         }
       };
 
       inline constexpr uint64_t pow10_minor[] = {
@@ -438,12 +447,12 @@ namespace glz::zmij
          }
       };
 
-      constexpr ZMIJ_INLINE auto compute_exp_shift(int bin_exp, int dec_exp) noexcept -> unsigned char
+      constexpr ZMIJ_INLINE auto compute_exp_shift(int64_t bin_exp, int32_t dec_exp) noexcept -> int32_t
       {
          assert(dec_exp >= -350 && dec_exp <= 350);
          constexpr int log2_pow10_sig = 217'707, log2_pow10_exp = 16;
          int pow10_bin_exp = -dec_exp * log2_pow10_sig >> log2_pow10_exp;
-         return bin_exp + pow10_bin_exp + 1;
+         return static_cast<int32_t>(bin_exp + pow10_bin_exp + 1);
       }
 
       template <bool OptSize>
@@ -451,15 +460,15 @@ namespace glz::zmij
       {
          static constexpr bool enable = !OptSize;
          static constexpr int extra_shift = 6;
-         unsigned char data[enable ? float_traits<double>::exp_mask + 1 : 1] = {};
+         uint8_t data[enable ? float_traits<double>::exp_mask + 1 : 1] = {};
 
          constexpr exp_shift_table()
          {
-            for (int raw_exp = 0; raw_exp < sizeof(data) && enable; ++raw_exp) {
+            for (int raw_exp = 0; raw_exp < int(sizeof(data)) && enable; ++raw_exp) {
                int bin_exp = raw_exp - float_traits<double>::exp_offset;
                if (raw_exp == 0) ++bin_exp;
                int dec_exp = compute_dec_exp(bin_exp);
-               data[raw_exp] = compute_exp_shift(bin_exp, dec_exp + 1) + extra_shift;
+               data[raw_exp] = static_cast<uint8_t>(compute_exp_shift(bin_exp, dec_exp + 1) + extra_shift);
             }
          }
       };
@@ -509,10 +518,10 @@ namespace glz::zmij
 
          struct entry
          {
-            unsigned char start_pos;
-            unsigned char point_pos;
-            unsigned char shift_pos;
-            unsigned char exp_pos[traits::max_digits10];
+            uint8_t start_pos;
+            uint8_t point_pos;
+            uint8_t shift_pos;
+            uint8_t exp_pos[traits::max_digits10];
          };
 
          entry data[num_entries] = {};
@@ -524,17 +533,17 @@ namespace glz::zmij
                bool neg_fixed = dec_exp >= traits::min_fixed_dec_exp && dec_exp <= -1;
                bool pos_fixed = dec_exp >= 0 && dec_exp <= traits::max_fixed_dec_exp;
 
-               e.start_pos = neg_fixed ? 1 - dec_exp : 0;
-               e.point_pos = pos_fixed ? 1 + dec_exp : 1;
-               e.shift_pos = e.point_pos + (dec_exp >= 0 || dec_exp < traits::min_fixed_dec_exp);
+               e.start_pos = static_cast<uint8_t>(neg_fixed ? 1 - dec_exp : 0);
+               e.point_pos = static_cast<uint8_t>(pos_fixed ? 1 + dec_exp : 1);
+               e.shift_pos = static_cast<uint8_t>(e.point_pos + (dec_exp >= 0 || dec_exp < traits::min_fixed_dec_exp));
 
                for (int s = 1; s <= traits::max_digits10; ++s) {
                   if (neg_fixed)
-                     e.exp_pos[s - 1] = s;
+                     e.exp_pos[s - 1] = static_cast<uint8_t>(s);
                   else if (pos_fixed)
-                     e.exp_pos[s - 1] = s > dec_exp + 1 ? s + 1 : dec_exp + 1;
+                     e.exp_pos[s - 1] = static_cast<uint8_t>(s > dec_exp + 1 ? s + 1 : dec_exp + 1);
                   else
-                     e.exp_pos[s - 1] = s + 1 - (s == 1);
+                     e.exp_pos[s - 1] = static_cast<uint8_t>(s + 1 - (s == 1));
                }
             }
          }
@@ -600,7 +609,7 @@ namespace glz::zmij
                    u64(b) << +8 | u64(a);
          }
 
-         ZMIJ_CONST_DECL uint64_t threshold = 1e15;
+         ZMIJ_CONST_DECL uint64_t threshold = 1'000'000'000'000'000ull;
          ZMIJ_CONST_DECL uint64_t biased_half = (uint64_t(1) << 63) + 6;
 
 #if ZMIJ_USE_NEON
@@ -825,9 +834,9 @@ namespace glz::zmij
 
       struct to_decimal_result
       {
-         long long sig;
-         int exp;
-         int last_digit = 0;
+         int64_t sig;
+         int32_t exp;
+         int32_t last_digit = 0;
          bool has_last_digit = false;
       };
 
@@ -840,19 +849,25 @@ namespace glz::zmij
          constexpr int num_bits = std::numeric_limits<UInt>::digits;
 
          constexpr uint64_t log10_2_sig = 78'913;
-         constexpr int log10_2_exp = 18;
-         int dec_exp =
-            use_umul128_hi64 ? umul128_hi64(bin_exp, log10_2_sig << (64 - log10_2_exp)) : compute_dec_exp(bin_exp);
+         constexpr int32_t log10_2_exp = 18;
+         int32_t dec_exp = 0;
+         if constexpr (use_umul128_hi64) {
+            dec_exp =
+               static_cast<int32_t>(umul128_hi64(static_cast<uint64_t>(bin_exp), log10_2_sig << (64 - log10_2_exp)));
+         }
+         else {
+            dec_exp = compute_dec_exp(bin_exp);
+         }
          uint64_t even = 1 - (bin_sig & 1);
-         constexpr int extra_shift = exp_shift_table<OptSize>::extra_shift;
+         constexpr int32_t extra_shift = exp_shift_table<OptSize>::extra_shift;
 
          if (!regular) [[unlikely]] {
-            int dec_exp = compute_dec_exp(bin_exp, false);
-            unsigned char shift = compute_exp_shift(bin_exp, dec_exp + 1) + extra_shift;
-            uint128 pow10 = c.pow10_significands[-dec_exp - 1];
+            int32_t irregular_dec_exp = compute_dec_exp(bin_exp, false);
+            int32_t shift = compute_exp_shift(bin_exp, irregular_dec_exp + 1) + extra_shift;
+            uint128 pow10 = c.pow10_significands[-irregular_dec_exp - 1];
             uint128 p = umul192_hi128(pow10.hi, pow10.lo, bin_sig << shift);
 
-            long long integral = p.hi >> extra_shift;
+            int64_t integral = p.hi >> extra_shift;
             uint64_t fractional = p.hi << (64 - extra_shift) | p.lo >> extra_shift;
 
             uint64_t half_ulp = pow10.hi >> (extra_shift + 1 - shift);
@@ -860,52 +875,52 @@ namespace glz::zmij
             bool round_down = (half_ulp >> 1) > fractional;
             integral += round_up;
 
-            int digit = int(umul128_add_hi64(fractional, 10, (uint64_t(1) << 63) - 1));
-            int lo = int(umul128_add_hi64(fractional - (half_ulp >> 1), 10, ~uint64_t(0)));
+            int32_t digit = static_cast<int32_t>(umul128_add_hi64(fractional, 10, (uint64_t(1) << 63) - 1));
+            int32_t lo = static_cast<int32_t>(umul128_add_hi64(fractional - (half_ulp >> 1), 10, ~uint64_t(0)));
             if (digit < lo) digit = lo;
-            return {integral, dec_exp, digit, (round_up + round_down) == 0};
+            return {integral, irregular_dec_exp, digit, (round_up + round_down) == 0};
          }
 
-         if (num_bits == 32) {
-            constexpr int extra_shift = 34;
-            unsigned char shift = compute_exp_shift(bin_exp, dec_exp + 1) + extra_shift;
+         if constexpr (num_bits == 32) {
+            constexpr int32_t float_extra_shift = 34;
+            int32_t shift = compute_exp_shift(bin_exp, dec_exp + 1) + float_extra_shift;
             uint64_t pow10_hi = c.pow10_significands[-dec_exp - 1].hi;
             uint64_t p = umul128_hi64(pow10_hi + 1, uint64_t(bin_sig) << shift);
 
-            long long integral = p >> extra_shift;
-            uint64_t fractional = p & ((1ull << extra_shift) - 1);
+            int64_t integral = p >> float_extra_shift;
+            uint64_t fractional = p & ((1ull << float_extra_shift) - 1);
 
             uint64_t half_ulp = (pow10_hi >> (65 - shift)) + even;
-            bool round_up = (fractional + half_ulp) >> extra_shift;
+            bool round_up = (fractional + half_ulp) >> float_extra_shift;
             bool round_down = half_ulp > fractional;
             integral += round_up;
 
             uint64_t prod = fractional * 10;
-            int digit = int(prod >> extra_shift);
-            uint64_t rem = prod & ((1ull << extra_shift) - 1);
-            digit += rem > (1ull << (extra_shift - 1)) || (rem == (1ull << (extra_shift - 1)) && (digit & 1));
+            int32_t digit = static_cast<int32_t>(prod >> float_extra_shift);
+            uint64_t rem = prod & ((1ull << float_extra_shift) - 1);
+            digit +=
+               rem > (1ull << (float_extra_shift - 1)) || (rem == (1ull << (float_extra_shift - 1)) && (digit & 1));
             return {integral, dec_exp, digit, (round_up + round_down) == 0};
          }
+         else {
+            int32_t shift = exp_shift_table<OptSize>::enable ? exp_shifts_v<OptSize>.data[bin_exp + traits::exp_offset]
+                                                             : compute_exp_shift(bin_exp, dec_exp + 1) + extra_shift;
+            ZMIJ_ASM(("" : "+r"(dec_exp)));
+            uint128 pow10 = c.pow10_significands[-dec_exp - 1];
+            uint128 p = umul192_hi128(pow10.hi, pow10.lo, bin_sig << shift);
+            int64_t integral = p.hi >> extra_shift;
+            uint64_t fractional = p.hi << (64 - extra_shift) | p.lo >> extra_shift;
+            uint64_t half_ulp = (pow10.hi >> (extra_shift + 1 - shift)) + even;
+            bool round_up = fractional + half_ulp < fractional;
+            bool round_down = half_ulp > fractional;
+            integral += round_up;
 
-         unsigned char shift = exp_shift_table<OptSize>::enable
-                                  ? exp_shifts_v<OptSize>.data[bin_exp + traits::exp_offset]
-                                  : compute_exp_shift(bin_exp, dec_exp + 1) + extra_shift;
-         ZMIJ_ASM(("" : "+r"(dec_exp)));
-         uint128 pow10 = c.pow10_significands[-dec_exp - 1];
-         uint128 p = umul192_hi128(pow10.hi, pow10.lo, bin_sig << shift);
-
-         long long integral = p.hi >> extra_shift;
-         uint64_t fractional = p.hi << (64 - extra_shift) | p.lo >> extra_shift;
-
-         uint64_t half_ulp = (pow10.hi >> (extra_shift + 1 - shift)) + even;
-         bool round_up = fractional + half_ulp < fractional;
-         bool round_down = half_ulp > fractional;
-         integral += round_up;
-
-         int digit = int(umul128_add_hi64(fractional, 10, c.biased_half));
-         if (fractional == (1ull << 62)) [[unlikely]]
-            digit = 2;
-         return {integral, dec_exp, digit, (round_up + round_down) == 0};
+            int32_t digit = static_cast<int32_t>(umul128_add_hi64(fractional, 10, c.biased_half));
+            if (fractional == (1ull << 62)) [[unlikely]] {
+               digit = 2;
+            }
+            return {integral, dec_exp, digit, (round_up + round_down) == 0};
+         }
       }
 
    } // namespace detail_impl
@@ -947,7 +962,7 @@ namespace glz::zmij
 
          const auto* c = &consts_v<OptSize>;
          ZMIJ_ASM(("" : "+r"(c)));
-         uint64_t threshold = traits::num_bits == 64 ? c->threshold : uint64_t(1e7);
+         int64_t threshold = traits::num_bits == 64 ? static_cast<int64_t>(c->threshold) : 10'000'000;
 
          to_decimal_result dec;
          bool is_normal = unsigned(bin_exp - 1) < unsigned(traits::exp_mask - 1);
@@ -969,14 +984,14 @@ namespace glz::zmij
                return buffer + 1;
             }
             dec = detail_impl::to_decimal<Float, typename traits::sig_type, OptSize>(bin_sig, 1, true, *c);
-            long long dec_sig = dec.sig * 10 + (dec.has_last_digit ? dec.last_digit : 0);
-            int dec_exp = dec.exp;
+            int64_t dec_sig = dec.sig * 10 + (dec.has_last_digit ? dec.last_digit : 0);
+            int32_t dec_exp = dec.exp;
             while (dec_sig < threshold) {
                dec_sig *= 10;
                --dec_exp;
             }
-            long long d = detail_impl::div10(dec_sig);
-            int last_digit = dec_sig - d * 10;
+            int64_t d = static_cast<int64_t>(detail_impl::div10(static_cast<uint64_t>(dec_sig)));
+            int32_t last_digit = static_cast<int32_t>(dec_sig - d * 10);
             dec = {d, dec_exp, last_digit, last_digit != 0};
          }
          else {
@@ -985,14 +1000,14 @@ namespace glz::zmij
          }
          bool extra_digit = dec.sig >= threshold;
          int dec_exp = dec.exp + traits::max_digits10 - 2 + extra_digit;
-         if (traits::num_bits == 32 && dec.sig < uint32_t(1e6)) [[unlikely]] {
+         if (traits::num_bits == 32 && dec.sig < 1'000'000) [[unlikely]] {
             dec.sig = 10 * dec.sig + (dec.has_last_digit ? dec.last_digit : 0);
             dec.has_last_digit = false;
             --dec_exp;
          }
 
          char* start = buffer;
-         auto dig = to_digits<traits::num_bits, OptSize>(dec.sig, extra_digit, *c);
+         auto dig = to_digits<traits::num_bits, OptSize>(static_cast<uint64_t>(dec.sig), extra_digit, *c);
          constexpr int bcd_size = traits::num_bits == 64 ? 16 : 8;
          if (dec_exp >= traits::min_fixed_dec_exp && dec_exp <= traits::max_fixed_dec_exp) {
             memcpy(start, &zeros_v, 8);
@@ -1000,7 +1015,7 @@ namespace glz::zmij
             buffer += fmt.start_pos;
             memcpy(buffer, &dig.digits, bcd_size);
             memmove(buffer, buffer + !extra_digit, bcd_size);
-            buffer[bcd_size + extra_digit - 1] = '0' + (dec.has_last_digit ? dec.last_digit : 0);
+            buffer[bcd_size + extra_digit - 1] = static_cast<char>('0' + (dec.has_last_digit ? dec.last_digit : 0));
             memmove(start + fmt.shift_pos, start + fmt.point_pos, bcd_size);
             start[fmt.point_pos] = '.';
             int num_digits = dec.has_last_digit ? bcd_size : dig.num_digits - 1;
@@ -1008,13 +1023,13 @@ namespace glz::zmij
          }
          buffer += extra_digit;
          memcpy(buffer, &dig.digits, bcd_size);
-         buffer[bcd_size] = '0' + dec.last_digit;
+         buffer[bcd_size] = static_cast<char>('0' + dec.last_digit);
          buffer += dec.has_last_digit ? bcd_size + 1 : dig.num_digits;
          start[0] = start[1];
          start[1] = '.';
          buffer -= (buffer - 1 == start + 1);
 
-         if (exp_string_table<OptSize>::enable) {
+         if constexpr (exp_string_table<OptSize>::enable) {
             uint64_t exp_data = exp_strings_v<OptSize>.data[dec_exp + exp_string_table<OptSize>::offset];
             int len = int(exp_data >> 48);
             if (is_big_endian) exp_data = bswap64(exp_data);
@@ -1031,10 +1046,15 @@ namespace glz::zmij
          buffer += 1 + unsigned(neg);
          dec_exp = neg ? -dec_exp : dec_exp;
          unsigned hundreds_written = 0;
-         if (traits::max_exponent10 >= 100) {
-            uint32_t digit = use_umul128_hi64 ? umul128_hi64(dec_exp, 0x290000000000000)
-                                              : (uint32_t(dec_exp) * div100_sig) >> div100_exp;
-            *buffer = '0' + digit;
+         if constexpr (traits::max_exponent10 >= 100) {
+            int32_t digit = 0;
+            if constexpr (use_umul128_hi64) {
+               digit = static_cast<int32_t>(umul128_hi64(static_cast<uint64_t>(dec_exp), 0x290000000000000ull));
+            }
+            else {
+               digit = static_cast<int32_t>((uint32_t(dec_exp) * div100_sig) >> div100_exp);
+            }
+            *buffer = static_cast<char>('0' + digit);
             hundreds_written = unsigned(dec_exp >= 100);
             buffer += hundreds_written;
             dec_exp -= digit * 100;
@@ -1065,11 +1085,12 @@ namespace glz
    // Both instantiations can coexist in a single binary.
    //
    // Returns a pointer past the last written character. Nothing is promised
-   // about *end. zmij's branchless fixed-point shuffle may scribble one byte
-   // past the returned pointer (a '.' that's excluded from the returned
-   // length). Callers who need a null-terminated C-string must write '\0' at
-   // *end themselves. Glaze's JSON writer doesn't care: buffer_traits::finalize
-   // resizes the output down to the tracked length, discarding anything past it.
+   // about *end or bytes after it. zmij's branchless fixed-point shuffle may
+   // use the documented buffer capacity as scratch and leave extra bytes past
+   // the returned range. Callers who need a null-terminated C-string must write
+   // '\0' at *end themselves. Glaze's JSON writer doesn't care:
+   // buffer_traits::finalize resizes the output down to the tracked length,
+   // discarding anything past it.
    template <std::floating_point T, bool OptSize = false>
    inline char* to_chars(char* buf, T val) noexcept
    {
@@ -1082,4 +1103,6 @@ namespace glz
 #pragma clang diagnostic pop
 #elif defined(__GNUC__)
 #pragma GCC diagnostic pop
+#elif ZMIJ_MSC_VER
+#pragma warning(pop)
 #endif

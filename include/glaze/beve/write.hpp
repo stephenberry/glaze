@@ -1176,7 +1176,7 @@ namespace glz
       {
          using V = field_t<Value, I>;
 
-         if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+         if constexpr (always_skipped<V>) {
             return true;
          }
          else if constexpr (is_any_function_ptr<V>) {
@@ -1249,7 +1249,7 @@ namespace glz
       {
          using V = field_t<T, I>;
 
-         if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+         if constexpr (always_skipped<V>) {
             return true;
          }
          else if constexpr (is_any_function_ptr<V>) {

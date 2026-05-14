@@ -4,7 +4,6 @@
 #pragma once
 
 #include <algorithm>
-#include <any>
 #include <charconv>
 
 #include "glaze/core/seek.hpp"

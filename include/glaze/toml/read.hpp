@@ -324,9 +324,21 @@ namespace glz
       template <auto Opts, is_context Ctx, class It0, class It1>
       static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end)
       {
-         using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
+         using V = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
          from<TOML, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                           std::forward<It0>(it), std::forward<It1>(end));
+      }
+   };
+
+   // Silently consume any value bound to a glz::skip sentinel. Reached when a
+   // type opts out of serialization via meta::value = glz::skip{}.
+   template <>
+   struct from<TOML, skip>
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
+      {
+         skip_value<TOML>::template op<Opts>(ctx, args...);
       }
    };
 
@@ -2846,6 +2858,55 @@ namespace glz
                ctx.error = error_code::syntax_error;
             }
          }
+      }
+   };
+
+   // Nullable types: std::optional, std::unique_ptr, std::shared_ptr, raw pointers
+   template <nullable_like T>
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) {
+            value = {};
+            return;
+         }
+
+         if (!value) {
+            if constexpr (optional_like<T>) {
+               value.emplace();
+            }
+            else if constexpr (is_specialization_v<T, std::unique_ptr>) {
+               value = std::make_unique<typename T::element_type>();
+            }
+            else if constexpr (is_specialization_v<T, std::shared_ptr>) {
+               value = std::make_shared<typename T::element_type>();
+            }
+            else if constexpr (requires { value.emplace(); }) {
+               value.emplace();
+            }
+            else if constexpr (constructible<T>) {
+               value = meta_construct_v<T>();
+            }
+            else if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
+               if (!try_allocate_raw_pointer<Opts>(value, ctx)) {
+                  return;
+               }
+            }
+            else {
+               ctx.error = error_code::invalid_nullable_read;
+               return;
+            }
+         }
+
+         using V = std::remove_cvref_t<decltype(*value)>;
+         from<TOML, V>::template op<Opts>(*value, ctx, it, end);
       }
    };
 

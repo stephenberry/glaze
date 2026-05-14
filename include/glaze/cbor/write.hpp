@@ -5,6 +5,7 @@
 
 #include "glaze/cbor/header.hpp"
 #include "glaze/core/buffer_traits.hpp"
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
@@ -625,7 +626,7 @@ namespace glz
       {
          using V = field_t<T, I>;
 
-         if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+         if constexpr (always_skipped<V>) {
             return true;
          }
          else if constexpr (is_any_function_ptr<V>) {

@@ -3286,6 +3286,44 @@ void merge_meta_tests()
    };
 }
 
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in CBOR.
+namespace cbor_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m{};
+      bool active{true};
+      int count{42};
+      std::string name{"hello"};
+   };
+}
+
+void cbor_skip_marker_tests_run()
+{
+   using namespace cbor_skip_marker_tests;
+   "cbor skip-marker roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      auto encoded = glz::write_cbor(original);
+      expect(encoded.has_value());
+
+      settings decoded{};
+      auto ec = glz::read_cbor(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
+   };
+}
+
 int main()
 {
    basic_types_tests();
@@ -3325,6 +3363,7 @@ int main()
    chrono_tests();
    chrono_struct_tests();
    merge_meta_tests();
+   cbor_skip_marker_tests_run();
 #if __cpp_exceptions
    exceptions_tests();
 #endif

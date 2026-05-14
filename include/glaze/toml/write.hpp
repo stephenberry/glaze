@@ -769,64 +769,62 @@ namespace glz
 
          using val_t = field_t<Type, I>;
 
-         if constexpr (skip_toml_field<val_t, Options>) {
-            return;
-         }
-
-         // Check if nullable and null
-         if constexpr (null_t<val_t>) {
-            if constexpr (always_null_t<val_t>) {
-               return;
-            }
-            else {
-               decltype(auto) element = [&]() -> decltype(auto) {
-                  if constexpr (reflectable<Type>) {
-                     return get<I>(t);
-                  }
-                  else {
-                     return get<I>(reflect<Type>::values);
-                  }
-               };
-
-               bool is_null = false;
-               if constexpr (nullable_wrapper<val_t>)
-                  is_null = !bool(element()(value).val);
-               else if constexpr (nullable_value_t<val_t>)
-                  is_null = !get_member(value, element()).has_value();
-               else
-                  is_null = !bool(get_member(value, element()));
-
-               if (is_null) {
+         if constexpr (!skip_toml_field<val_t, Options>) {
+            // Check if nullable and null
+            if constexpr (null_t<val_t>) {
+               if constexpr (always_null_t<val_t>) {
                   return;
                }
+               else {
+                  decltype(auto) element = [&]() -> decltype(auto) {
+                     if constexpr (reflectable<Type>) {
+                        return get<I>(t);
+                     }
+                     else {
+                        return get<I>(reflect<Type>::values);
+                     }
+                  };
+
+                  bool is_null = false;
+                  if constexpr (nullable_wrapper<val_t>)
+                     is_null = !bool(element()(value).val);
+                  else if constexpr (nullable_value_t<val_t>)
+                     is_null = !get_member(value, element()).has_value();
+                  else
+                     is_null = !bool(get_member(value, element()));
+
+                  if (is_null) {
+                     return;
+                  }
+               }
             }
-         }
 
-         static constexpr auto key = glz::get<I>(reflect<Type>::keys);
-         static constexpr auto padding = key.size() + 16;
-         if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
-            return;
-         }
+            static constexpr auto key = glz::get<I>(reflect<Type>::keys);
+            static constexpr auto padding = key.size() + 16;
+            if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
+               return;
+            }
 
-         if (!first) {
-            dump(", ", b, ix);
-         }
-         else {
-            first = false;
-         }
+            if (!first) {
+               dump(", ", b, ix);
+            }
+            else {
+               first = false;
+            }
 
-         std::memcpy(&b[ix], key.data(), key.size());
-         ix += key.size();
-         dump(" = ", b, ix);
+            std::memcpy(&b[ix], key.data(), key.size());
+            ix += key.size();
+            dump(" = ", b, ix);
 
-         // Write the value through the inline dispatcher so nested structs, maps,
-         // and arrays of either remain inline; otherwise multi-line content or
-         // table headers from the standard writers would leak inside this `{...}`.
-         if constexpr (reflectable<Type>) {
-            write_inline_value<Options>(get_member(value, get<I>(t)), ctx, b, ix);
-         }
-         else {
-            write_inline_value<Options>(get_member(value, get<I>(reflect<Type>::values)), ctx, b, ix);
+            // Write the value through the inline dispatcher so nested structs, maps,
+            // and arrays of either remain inline; otherwise multi-line content or
+            // table headers from the standard writers would leak inside this `{...}`.
+            if constexpr (reflectable<Type>) {
+               write_inline_value<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+            }
+            else {
+               write_inline_value<Options>(get_member(value, get<I>(reflect<Type>::values)), ctx, b, ix);
+            }
          }
       });
 
@@ -1222,27 +1220,25 @@ namespace glz
          }
          using val_t = field_t<T, I>;
 
-         if constexpr (skip_toml_field<val_t, Options>) {
-            return;
-         }
+         if constexpr (!skip_toml_field<val_t, Options>) {
+            // Skip null fields
+            if (is_null_field.template operator()<I>()) {
+               return;
+            }
 
-         // Skip null fields
-         if (is_null_field.template operator()<I>()) {
-            return;
-         }
-
-         // Only process scalar fields in this pass (not objects or arrays of objects)
-         // Exception: in inline_mode, arrays of objects are written as inline arrays.
-         // Map fields are written as inline tables here so multi-line key = value
-         // pairs do not leak out as the value of a struct field.
-         constexpr bool is_object = glaze_object_t<val_t> || reflectable<val_t>;
-         constexpr bool is_map = writable_map_t<val_t>;
-         constexpr bool is_scalar = !is_object && !is_map && (!is_array_of_objects_v<val_t> || inline_mode);
-         if constexpr (is_map) {
-            write_inline_map_field.template operator()<I>();
-         }
-         else if constexpr (is_scalar) {
-            write_scalar_field.template operator()<I>();
+            // Only process scalar fields in this pass (not objects or arrays of objects)
+            // Exception: in inline_mode, arrays of objects are written as inline arrays.
+            // Map fields are written as inline tables here so multi-line key = value
+            // pairs do not leak out as the value of a struct field.
+            constexpr bool is_object = glaze_object_t<val_t> || reflectable<val_t>;
+            constexpr bool is_map = writable_map_t<val_t>;
+            constexpr bool is_scalar = !is_object && !is_map && (!is_array_of_objects_v<val_t> || inline_mode);
+            if constexpr (is_map) {
+               write_inline_map_field.template operator()<I>();
+            }
+            else if constexpr (is_scalar) {
+               write_scalar_field.template operator()<I>();
+            }
          }
       });
 
@@ -1254,21 +1250,19 @@ namespace glz
          }
          using val_t = field_t<T, I>;
 
-         if constexpr (skip_toml_field<val_t, Options>) {
-            return;
-         }
+         if constexpr (!skip_toml_field<val_t, Options>) {
+            // Skip null fields
+            if (is_null_field.template operator()<I>()) {
+               return;
+            }
 
-         // Skip null fields
-         if (is_null_field.template operator()<I>()) {
-            return;
-         }
-
-         // Process nested objects and arrays of objects
-         if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
-            write_table_field.template operator()<I>();
-         }
-         else if constexpr (is_array_of_objects_v<val_t> && !inline_mode) {
-            write_array_of_tables_field.template operator()<I>();
+            // Process nested objects and arrays of objects
+            if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
+               write_table_field.template operator()<I>();
+            }
+            else if constexpr (is_array_of_objects_v<val_t> && !inline_mode) {
+               write_array_of_tables_field.template operator()<I>();
+            }
          }
       });
    }

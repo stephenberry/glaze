@@ -10,6 +10,7 @@
 
 #include "glaze/cbor.hpp" // CBOR not included in glaze.hpp by default
 #include "glaze/glaze.hpp"
+#include "glaze/msgpack.hpp" // MSGPACK not included in glaze.hpp by default
 #include "ut/ut.hpp"
 
 using namespace ut;
