@@ -5263,14 +5263,14 @@ namespace inline_return_regression
    {
       int a{};
    };
-   struct outer
+   struct outer_table
    {
       inner field;
       int b{};
    };
    struct doc
    {
-      outer outer{};
+      outer_table outer{};
    };
 }
 
@@ -5281,9 +5281,9 @@ struct glz::meta<inline_return_regression::inner>
    static constexpr auto value = object("a", &T::a);
 };
 template <>
-struct glz::meta<inline_return_regression::outer>
+struct glz::meta<inline_return_regression::outer_table>
 {
-   using T = inline_return_regression::outer;
+   using T = inline_return_regression::outer_table;
    static constexpr auto value = object("field", &T::field, "b", &T::b);
 };
 template <>
