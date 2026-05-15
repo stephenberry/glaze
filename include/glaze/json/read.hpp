@@ -1275,7 +1275,14 @@ namespace glz
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
-                        value.assign(buffer.data(), size_t(p - buffer.data()));
+                        const size_t n = size_t(p - buffer.data());
+                        if (n <= buffer.size()) [[likely]] {
+                           value.assign(buffer.data(), n);
+                        }
+                        else {
+                           ctx.error = error_code::invalid_length;
+                           return;
+                        }
                         ++it;
                         if constexpr (not Opts.null_terminated) {
                            if (it == end) {
