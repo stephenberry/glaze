@@ -4730,7 +4730,12 @@ namespace glz
       }
    };
 
-   // system_clock::time_point: parse from ISO 8601 string
+   // system_clock::time_point: parse from ISO 8601 string.
+   // Time points whose Duration period is exactly `days` (e.g. std::chrono::sys_days)
+   // also accept the bare "YYYY-MM-DD" date form; full ISO 8601 datetimes are still
+   // accepted in that case and floored to days precision. Coarser periods (weeks,
+   // months, years) intentionally fall through to the full ISO 8601 parser so that
+   // user-supplied dates are not silently snapped to a multi-day boundary.
    template <is_system_time_point T>
       requires(not custom_read<T>)
    struct from<JSON, T>
@@ -4742,7 +4747,36 @@ namespace glz
          from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
+
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Period = typename Duration::period;
+         if constexpr (std::ratio_equal_v<Period, std::ratio<86400>>) {
+            if (str.size() == 10) {
+               std::chrono::year_month_day ymd{};
+               chrono_detail::parse_ymd(str, ymd, ctx.error);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value = std::chrono::time_point_cast<Duration>(std::chrono::sys_days{ymd});
+               return;
+            }
+         }
          chrono_detail::parse_iso8601(str, value, ctx.error);
+      }
+   };
+
+   // year_month_day: parse from "YYYY-MM-DD" JSON string
+   template <is_year_month_day T>
+      requires(not custom_read<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts, class It0, class It1>
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         std::string_view str;
+         from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         chrono_detail::parse_ymd(str, value, ctx.error);
       }
    };
 

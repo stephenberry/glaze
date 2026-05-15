@@ -937,4 +937,207 @@ suite chrono_roundtrip_1000_tests = [] {
    };
 };
 
+struct DateRecord
+{
+   std::string name;
+   std::chrono::sys_days start;
+   std::chrono::year_month_day end;
+};
+
+suite chrono_date_only_tests = [] {
+   using namespace std::chrono;
+
+   "sys_days_write_date_only"_test = [] {
+      sys_days d = year{2024} / month{6} / day{15};
+      auto json = glz::write_json(d);
+      expect(json.value() == "\"2024-06-15\"") << json.value();
+   };
+
+   "sys_days_roundtrip"_test = [] {
+      sys_days original = year{2024} / month{6} / day{15};
+      auto json = glz::write_json(original);
+
+      sys_days parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == original);
+   };
+
+   "sys_days_read_full_iso8601_is_floored"_test = [] {
+      // Accept full ISO 8601 datetime; the time-of-day is discarded since
+      // sys_days has day precision.
+      sys_days parsed{};
+      expect(!glz::read_json(parsed, "\"2024-06-15T15:30:45Z\""));
+      expect(parsed == sys_days{year{2024} / month{6} / day{15}});
+
+      parsed = sys_days{};
+      expect(!glz::read_json(parsed, "\"2024-06-15T23:59:59.999Z\""));
+      expect(parsed == sys_days{year{2024} / month{6} / day{15}});
+   };
+
+   "sys_days_read_with_timezone_offset"_test = [] {
+      // Late-night UTC-08:00 = next day in UTC; floor to that day.
+      sys_days parsed{};
+      expect(!glz::read_json(parsed, "\"2024-06-14T20:00:00-08:00\""));
+      expect(parsed == sys_days{year{2024} / month{6} / day{15}});
+   };
+
+   "sys_days_invalid_date"_test = [] {
+      sys_days parsed{};
+      // February 30 doesn't exist
+      expect(bool(glz::read_json(parsed, "\"2024-02-30\"")));
+      // Wrong separators
+      expect(bool(glz::read_json(parsed, "\"2024/06/15\"")));
+      // Truncated
+      expect(bool(glz::read_json(parsed, "\"2024-06\"")));
+      // Non-digit
+      expect(bool(glz::read_json(parsed, "\"abcd-06-15\"")));
+   };
+
+   "sys_days_epoch"_test = [] {
+      sys_days d{}; // 1970-01-01
+      auto json = glz::write_json(d);
+      expect(json.value() == "\"1970-01-01\"") << json.value();
+   };
+
+   "sys_days_pre_epoch"_test = [] {
+      sys_days d = year{1969} / month{12} / day{31};
+      auto json = glz::write_json(d);
+      expect(json.value() == "\"1969-12-31\"") << json.value();
+
+      sys_days parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == d);
+   };
+
+   "year_month_day_write"_test = [] {
+      year_month_day ymd{year{2024}, month{6}, day{15}};
+      auto json = glz::write_json(ymd);
+      expect(json.value() == "\"2024-06-15\"") << json.value();
+   };
+
+   "year_month_day_roundtrip"_test = [] {
+      year_month_day original{year{2030}, month{1}, day{1}};
+      auto json = glz::write_json(original);
+
+      year_month_day parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == original);
+   };
+
+   "year_month_day_invalid"_test = [] {
+      year_month_day parsed{};
+      // year_month_day must be exactly 10 chars; no datetime form allowed.
+      expect(bool(glz::read_json(parsed, "\"2024-06-15T00:00:00Z\"")));
+      expect(bool(glz::read_json(parsed, "\"2024-02-30\"")));
+      expect(bool(glz::read_json(parsed, "\"2024-13-01\"")));
+      expect(bool(glz::read_json(parsed, "\"not-a-date\"")));
+   };
+
+   "year_month_day_zero_padding"_test = [] {
+      year_month_day ymd{year{5}, month{1}, day{2}};
+      auto json = glz::write_json(ymd);
+      expect(json.value() == "\"0005-01-02\"") << json.value();
+
+      year_month_day parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == ymd);
+   };
+
+   "struct_with_date_types"_test = [] {
+      DateRecord r{"vacation", year{2024} / month{6} / day{15},
+                   year_month_day{year{2024}, month{6}, day{22}}};
+      auto json = glz::write_json(r);
+      expect(json.value() == R"({"name":"vacation","start":"2024-06-15","end":"2024-06-22"})") << json.value();
+
+      DateRecord parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed.name == r.name);
+      expect(parsed.start == r.start);
+      expect(parsed.end == r.end);
+   };
+
+   "sys_time_days_alias"_test = [] {
+      // sys_time<days> is the same type as sys_days.
+      sys_time<days> tp = sys_days{year{2024} / month{6} / day{15}};
+      auto json = glz::write_json(tp);
+      expect(json.value() == "\"2024-06-15\"") << json.value();
+   };
+
+   "year_month_day_max_year_9999"_test = [] {
+      // Upper boundary of RFC 3339's four-digit year.
+      year_month_day ymd{year{9999}, month{12}, day{31}};
+      auto json = glz::write_json(ymd);
+      expect(json.value() == "\"9999-12-31\"") << json.value();
+
+      year_month_day parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == ymd);
+   };
+
+   "year_month_day_min_year_0000"_test = [] {
+      // Lower boundary of RFC 3339's four-digit year.
+      year_month_day ymd{year{0}, month{1}, day{1}};
+      auto json = glz::write_json(ymd);
+      expect(json.value() == "\"0000-01-01\"") << json.value();
+
+      year_month_day parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == ymd);
+   };
+
+   "year_month_day_year_out_of_range_rejected"_test = [] {
+      // Years outside [0000, 9999] cannot be expressed in RFC 3339's 4-digit form;
+      // the writer must surface an error rather than emit wrap-around digits.
+      year_month_day neg{year{-1}, month{1}, day{1}};
+      auto json_neg = glz::write_json(neg);
+      expect(!json_neg.has_value());
+
+      year_month_day big{year{10000}, month{1}, day{1}};
+      auto json_big = glz::write_json(big);
+      expect(!json_big.has_value());
+   };
+
+   "sys_days_year_out_of_range_rejected"_test = [] {
+      // Same guard applies to the date-only sys_days writer path.
+      sys_days big = sys_days{year{10000} / month{1} / day{1}};
+      auto json = glz::write_json(big);
+      expect(!json.has_value());
+   };
+
+   "sys_time_seconds_year_out_of_range_rejected"_test = [] {
+      // And to the full-ISO branch (the year{-1} cast was previously truncated to
+      // bottom-four digits silently).
+      sys_time<seconds> tp = sys_days{year{-1} / month{1} / day{1}};
+      auto json = glz::write_json(tp);
+      expect(!json.has_value());
+   };
+
+   "year_zero_leap_feb_29"_test = [] {
+      // Year 0 (= 1 BCE proleptic Gregorian) is a leap year (divisible by 400).
+      // Pins down that year_month_day::ok() accepts it and the writer emits "0000-02-29".
+      year_month_day ymd{year{0}, month{2}, day{29}};
+      auto json = glz::write_json(ymd);
+      expect(json.value() == "\"0000-02-29\"") << json.value();
+
+      year_month_day parsed{};
+      expect(!glz::read_json(parsed, json.value()));
+      expect(parsed == ymd);
+   };
+
+   "year_month_day_rejects_negative_year_string"_test = [] {
+      // parse_digits treats '-' as non-digit and returns -1, so leading minus
+      // is rejected. Symmetric with the writer's [0000, 9999] guard.
+      year_month_day parsed{};
+      expect(bool(glz::read_json(parsed, "\"-0001-01-01\"")));
+   };
+
+   "sys_days_full_datetime_nanos_floor"_test = [] {
+      // Last instant of 2024-06-15 in UTC, with nanosecond fraction. Flooring
+      // toward epoch must yield 2024-06-15, not round up to 2024-06-16.
+      sys_days parsed{};
+      expect(!glz::read_json(parsed, "\"2024-06-15T23:59:59.999999999+00:00\""));
+      expect(parsed == sys_days{year{2024} / month{6} / day{15}});
+   };
+};
+
 int main() { return 0; }
