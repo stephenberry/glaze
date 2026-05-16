@@ -116,11 +116,6 @@ namespace glz
    }
 }
 
-#if defined(_MSC_VER) && !defined(__clang__)
-// restore disabled warning
-#pragma warning(pop)
-#endif
-
 #include "glaze/core/seek.hpp"
 
 namespace glz

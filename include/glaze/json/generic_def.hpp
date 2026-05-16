@@ -608,3 +608,8 @@ struct glz::meta<glz::generic_json<Mode, MapType>>
    using T = glz::generic_json<Mode, MapType>;
    static constexpr auto value = &T::data;
 };
+
+#if defined(_MSC_VER) && !defined(__clang__)
+// restore disabled warning
+#pragma warning(pop)
+#endif
