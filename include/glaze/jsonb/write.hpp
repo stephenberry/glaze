@@ -670,7 +670,7 @@ namespace glz
    struct to<JSONB, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&, auto&&) noexcept
+      static void op(auto&&, is_context auto&&, auto&&, auto&&) noexcept
       {}
    };
 
