@@ -521,8 +521,7 @@ namespace glz
    struct from<BSON, bson::decimal128>
    {
       template <auto Opts, class It, class End>
-      static void op(bson::decimal128& value, uint8_t tag, is_context auto& ctx, It& it,
-                                       const End& end) noexcept
+      static void op(bson::decimal128& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::decimal128) [[unlikely]] {
             ctx.error = error_code::syntax_error;

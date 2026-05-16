@@ -476,8 +476,7 @@ namespace glz
       static constexpr uint8_t type_code = bson::type::javascript;
 
       template <auto Opts>
-      static void op(const bson::javascript& value, is_context auto&& ctx, auto&& b,
-                                       auto& ix) noexcept
+      static void op(const bson::javascript& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
          (void)bson_detail::dump_string_value(ctx, value.code, b, ix);
       }
@@ -489,8 +488,7 @@ namespace glz
       static constexpr uint8_t type_code = bson::type::decimal128;
 
       template <auto Opts>
-      static void op(const bson::decimal128& value, is_context auto&& ctx, auto&& b,
-                                       auto& ix) noexcept
+      static void op(const bson::decimal128& value, is_context auto&& ctx, auto&& b, auto& ix) noexcept
       {
          if (!ensure_space(ctx, b, ix + 16 + write_padding_bytes)) [[unlikely]] {
             return;
