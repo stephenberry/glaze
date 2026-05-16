@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <glaze/glaze.hpp>
+#include <glaze/json/jmespath.hpp>
 #include <string>
 #include <string_view>
 
