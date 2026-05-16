@@ -4,7 +4,7 @@
 #pragma once
 
 #include "glaze/core/common.hpp"
-#include "glaze/json/generic_def.hpp"
+#include "glaze/json/generic_fwd.hpp"
 #include "glaze/json/write.hpp"
 
 namespace glz

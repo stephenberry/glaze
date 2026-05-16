@@ -305,9 +305,48 @@ This works because `glz::generic` stores arrays as `std::vector<glz::generic>` a
 
 ## Compilation time optimization
 
-`glaze/json/generic.hpp` header is a quite heavyweight as it also pulls the entire JSON library.
+`glaze/json/generic.hpp` is a heavyweight header: it pulls in the full JSON read/write machinery so that `glz::generic` values can be serialized, deserialized, navigated by JSON Pointer, and converted into arbitrary C++ types.
 
-If you want to use `glz::generic` as part of some public interface, it's advisable to include `glaze/json/generic_def.hpp` instead.
+If `glz::generic` only appears in the *signatures* of a widely-included header (function parameters, return types, struct members) and the actual reading/writing happens in `.cpp` files, you can include the lightweight companion header instead:
+
+```cpp
+#include "glaze/json/generic_fwd.hpp"
+```
+
+This header provides the complete `glz::generic` / `glz::generic_json` type along with its inline accessors (`get`, `get_if`, `holds`, `operator[]`, `at`, `contains`, `is_*`, `size`, `empty`, `reset`, the in-place `operator=` overloads for scalars / strings / arrays / objects, etc.), the `glz::meta` specialization, and the type aliases (`glz::generic`, `glz::generic_i64`, `glz::generic_u64`, `glz::generic_sorted*`). That's enough to declare APIs and manipulate values in memory.
+
+What requires the full `glaze/json/generic.hpp` (and produces a linker error if called without it):
+
+- `generic.dump()` and any of the free `read_json` / `read` overloads that take a `generic_json`
+- The templated `operator=(T&&)` for arbitrary user types (the one that round-trips through JSON)
+- `glz::get<T>(generic, json_ptr)` for container types, `glz::navigate_to`, `glz::seek`, and `glz::convert_from_generic`
+
+Typical pattern:
+
+```cpp
+// my_api.hpp - included widely; stays cheap to compile
+#include "glaze/json/generic_fwd.hpp"
+
+struct request {
+   std::string method;
+   glz::generic params;
+};
+
+void handle(const request& r);
+```
+
+```cpp
+// my_api.cpp - the only place that needs read/write
+#include "glaze/json/generic.hpp"
+#include "my_api.hpp"
+
+void handle(const request& r) {
+   auto serialized = r.params.dump();
+   // ...
+}
+```
+
+This is the same split as [`glaze/forward.hpp`](../include/glaze/forward.hpp), which provides lightweight forward declarations for `glz::meta`, `glz::to`, `glz::from`, and `glz::custom_t`.
 
 ## See Also
 
