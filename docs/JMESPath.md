@@ -6,6 +6,12 @@ Glaze currently has limited support for partial reading with JMESPath. Broader s
 
 - Compile time evaluated JMESPath expressions offer excellent performance.
 
+JMESPath is opt-in. Include it explicitly in addition to your JSON include:
+
+```c++
+#include "glaze/json/jmespath.hpp"
+```
+
 Example:
 
 ```c++
