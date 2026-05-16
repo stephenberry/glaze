@@ -1063,6 +1063,22 @@ arr = [4, 5, 6])";
       expect(value[2] == 3);
       expect(value[3] == 4);
    };
+   "read_array_with_newlines"_test = [] {
+      std::string toml_input = R"([
+  1,
+  2,
+  3,
+  4
+])";
+      std::vector<int> value{};
+      const auto error = glz::read_toml(value, toml_input);
+      expect(not error) << glz::format_error(error, toml_input);
+      expect(value.size() == 4);
+      expect(value[0] == 1);
+      expect(value[1] == 2);
+      expect(value[2] == 3);
+      expect(value[3] == 4);
+   };
 
    "scalar_int"_test = [] {
       int i = 42;
