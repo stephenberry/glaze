@@ -15,6 +15,9 @@
 // along with the full definitions of glz::meta and the per-format glz::to /
 // glz::from specializations, live in glaze/core/meta.hpp, glaze/core/common.hpp,
 // and the respective format headers. glz::custom_t is fully defined below.
+//
+// For the same lightweight-header pattern applied to glz::generic, see
+// glaze/json/generic_fwd.hpp.
 
 #pragma once
 
