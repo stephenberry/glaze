@@ -476,7 +476,7 @@ namespace glz
       static constexpr uint8_t type_code = bson::type::javascript;
 
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(const bson::javascript& value, is_context auto&& ctx, auto&& b,
+      static void op(const bson::javascript& value, is_context auto&& ctx, auto&& b,
                                        auto& ix) noexcept
       {
          (void)bson_detail::dump_string_value(ctx, value.code, b, ix);
@@ -489,7 +489,7 @@ namespace glz
       static constexpr uint8_t type_code = bson::type::decimal128;
 
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(const bson::decimal128& value, is_context auto&& ctx, auto&& b,
+      static void op(const bson::decimal128& value, is_context auto&& ctx, auto&& b,
                                        auto& ix) noexcept
       {
          if (!ensure_space(ctx, b, ix + 16 + write_padding_bytes)) [[unlikely]] {
@@ -505,7 +505,7 @@ namespace glz
       static constexpr uint8_t type_code = bson::type::min_key;
 
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(const bson::min_key&, is_context auto&&, auto&&, auto&) noexcept
+      static void op(const bson::min_key&, is_context auto&&, auto&&, auto&) noexcept
       {
          // min_key carries no value bytes.
       }
@@ -517,7 +517,7 @@ namespace glz
       static constexpr uint8_t type_code = bson::type::max_key;
 
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(const bson::max_key&, is_context auto&&, auto&&, auto&) noexcept
+      static void op(const bson::max_key&, is_context auto&&, auto&&, auto&) noexcept
       {
          // max_key carries no value bytes.
       }
