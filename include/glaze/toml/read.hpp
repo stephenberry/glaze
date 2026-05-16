@@ -1431,7 +1431,7 @@ namespace glz
          }
 
          ++it; // Skip '['
-         skip_ws_and_comments(it, end);
+         skip_ws_newlines_and_comments(it, end);
 
          value.clear();
 
@@ -1449,7 +1449,7 @@ namespace glz
                return;
             value.emplace(std::move(v));
 
-            skip_ws_and_comments(it, end);
+            skip_ws_newlines_and_comments(it, end);
 
             if (it == end) {
                ctx.error = error_code::unexpected_end;
@@ -1462,7 +1462,7 @@ namespace glz
             }
             else if (*it == ',') {
                ++it;
-               skip_ws_and_comments(it, end);
+               skip_ws_newlines_and_comments(it, end);
                if (it != end && *it == ']') {
                   ++it;
                   return;
@@ -1498,7 +1498,7 @@ namespace glz
          }
 
          ++it; // Skip '['
-         skip_ws_and_comments(it, end);
+         skip_ws_newlines_and_comments(it, end);
 
          // Handle empty array
          if (it != end && *it == ']') {
@@ -1528,7 +1528,7 @@ namespace glz
                return;
             }
 
-            skip_ws_and_comments(it, end);
+            skip_ws_newlines_and_comments(it, end);
 
             if (it == end) {
                ctx.error = error_code::unexpected_end;
@@ -1541,7 +1541,7 @@ namespace glz
             }
             else if (*it == ',') {
                ++it;
-               skip_ws_and_comments(it, end);
+               skip_ws_newlines_and_comments(it, end);
                if (it != end && *it == ']') {
                   ++it;
                   return;
