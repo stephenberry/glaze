@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <ostream>
