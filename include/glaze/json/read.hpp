@@ -1276,13 +1276,9 @@ namespace glz
                      *p = *it;
                      if (*it == '"') {
                         const size_t n = size_t(p - buffer.data());
-                        if (n <= buffer.size()) [[likely]] {
-                           value.assign(buffer.data(), n);
-                        }
-                        else {
-                           ctx.error = error_code::invalid_length;
-                           return;
-                        }
+                        // (end - it) < 8 on entry and each iteration consumes >= 1 byte, so n <= sizeof(buffer)
+                        [[assume(n <= sizeof(buffer))]];
+                        value.assign(buffer.data(), n);
                         ++it;
                         if constexpr (not Opts.null_terminated) {
                            if (it == end) {
