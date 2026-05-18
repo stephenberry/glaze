@@ -48,7 +48,8 @@ target_include_directories(
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
 )
 
-if(NOT CMAKE_SKIP_INSTALL_RULES)
+option(glaze_SKIP_INSTALL_RULES "Skip generating installation rules for glaze" OFF)
+if(NOT CMAKE_SKIP_INSTALL_RULES AND NOT glaze_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
 endif()
 
