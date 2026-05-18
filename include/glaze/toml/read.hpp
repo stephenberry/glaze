@@ -5,6 +5,7 @@
 
 #include <cctype>
 #include <charconv>
+#include <cstdio>
 #include <limits>
 
 #include "glaze/core/chrono.hpp"
@@ -16,6 +17,7 @@
 #include "glaze/toml/opts.hpp"
 #include "glaze/toml/skip.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
+#include "glaze/util/nullable_traits.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
@@ -1763,6 +1765,26 @@ namespace glz
       }
    }
 
+   template <auto Opts, nullable_like T>
+   inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   {
+      if (!root) {
+         if (!nullable_emplace(root)) {
+            if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
+               if (!try_allocate_raw_pointer<Opts>(root, ctx)) {
+                  // set error?
+                  return false;
+               }
+            }
+            else {
+               ctx.error = error_code::invalid_nullable_read;
+               return false;
+            }
+         }
+      }
+      return resolve_nested<Opts, unwrapped_nullable_t<T>>(*root, path, ctx, it, end);
+   }
+
    // Helper to resolve an array-of-tables path and emplace a new element
    // Returns true if successful, false if error
    template <auto Opts, class T>
@@ -1786,7 +1808,7 @@ namespace glz
             visit<N>(
                [&]<size_t I>() {
                   if (I == index) {
-                     decltype(auto) member_obj = [&]() -> decltype(auto) {
+                     decltype(auto) raw_member_obj = [&]() -> decltype(auto) {
                         if constexpr (reflectable<U>) {
                            return get<I>(to_tie(root));
                         }
@@ -1794,7 +1816,23 @@ namespace glz
                            return get_member(root, get<I>(reflect<U>::values));
                         }
                      }();
+                     using raw_member_type = std::decay_t<decltype(raw_member_obj)>;
 
+                     decltype(auto) member_obj = [&]() -> decltype(auto) {
+                        if constexpr (nullable_like<raw_member_type>) {
+                           if (!raw_member_obj) {
+                              if (!nullable_emplace(raw_member_obj)) {
+                                 // TODO: raw pointers
+                                 ctx.error = error_code::invalid_nullable_read;
+                                 success = false;
+                              }
+                           }
+                           return *raw_member_obj;
+                        }
+                        else {
+                           return raw_member_obj;
+                        }
+                     }();
                      using member_type = std::decay_t<decltype(member_obj)>;
 
                      if (path.size() == 1) {
@@ -1823,7 +1861,8 @@ namespace glz
                            }
                            success = resolve_array_of_tables<Opts>(member_obj.back(), path.subspan(1), ctx, it, end);
                         }
-                        else if constexpr (glz::reflectable<member_type> || glz::glaze_object_t<member_type>) {
+                        else if constexpr (glz::reflectable<member_type> || glz::glaze_object_t<member_type> ||
+                                           nullable_like<member_type>) {
                            success = resolve_array_of_tables<Opts>(member_obj, path.subspan(1), ctx, it, end);
                         }
                         else {
@@ -1848,6 +1887,26 @@ namespace glz
             }
          }
       }
+   }
+
+   template <auto Opts, nullable_like T>
+   inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   {
+      if (!root) {
+         if (!nullable_emplace(root)) {
+            if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
+               if (!try_allocate_raw_pointer<Opts>(root, ctx)) {
+                  // set error?
+                  return false;
+               }
+            }
+            else {
+               ctx.error = error_code::invalid_nullable_read;
+               return false;
+            }
+         }
+      }
+      return resolve_array_of_tables<Opts, unwrapped_nullable_t<T>>(*root, path, ctx, it, end);
    }
 
    // ============================================
@@ -2879,29 +2938,16 @@ namespace glz
          }
 
          if (!value) {
-            if constexpr (optional_like<T>) {
-               value.emplace();
-            }
-            else if constexpr (is_specialization_v<T, std::unique_ptr>) {
-               value = std::make_unique<typename T::element_type>();
-            }
-            else if constexpr (is_specialization_v<T, std::shared_ptr>) {
-               value = std::make_shared<typename T::element_type>();
-            }
-            else if constexpr (requires { value.emplace(); }) {
-               value.emplace();
-            }
-            else if constexpr (constructible<T>) {
-               value = meta_construct_v<T>();
-            }
-            else if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
-               if (!try_allocate_raw_pointer<Opts>(value, ctx)) {
+            if (!nullable_emplace(value)) {
+               if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
+                  if (!try_allocate_raw_pointer<Opts>(value, ctx)) {
+                     return;
+                  }
+               }
+               else {
+                  ctx.error = error_code::invalid_nullable_read;
                   return;
                }
-            }
-            else {
-               ctx.error = error_code::invalid_nullable_read;
-               return;
             }
          }
 

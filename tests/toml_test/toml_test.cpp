@@ -6,6 +6,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <span>
 #include <string_view>
@@ -42,6 +43,17 @@ struct advanced_container
    nested inner{};
    nested inner_two{};
    double value = 5.5;
+};
+
+struct deep_container
+{
+   simple_container nested;
+};
+struct deep_container_optional
+{
+   std::optional<simple_container> nested1;
+   std::optional<simple_container> nested2;
+   std::optional<simple_container> nested3;
 };
 
 struct level_one
@@ -1177,6 +1189,29 @@ y = "test2"
       expect(ac.inner_two.x == 12);
       expect(ac.inner_two.y == "test2");
       expect(ac.value == 5.6);
+   };
+
+   "read_deep_nested_struct_with_dot_notation"_test = [] {
+      deep_container dc{};
+      std::string_view toml_input{R"([nested.inner]
+x = 42
+)"};
+      auto error = glz::read_toml(dc, toml_input);
+      expect(!error) << glz::format_error(error, toml_input);
+      expect(dc.nested.inner.x == 42);
+   };
+
+   "read_deep_nested_struct_with_dot_notation_optional"_test = [] {
+      deep_container_optional dc{};
+      std::string_view toml_input{R"([nested2.inner]
+x = 42
+)"};
+      auto error = glz::read_toml(dc, toml_input);
+      expect(!error) << glz::format_error(error, toml_input);
+      expect(!dc.nested1.has_value());
+      expect(!dc.nested1.has_value());
+      expect(dc.nested2.has_value());
+      expect(dc.nested2->inner.x == 42);
    };
 
    "read_advanced_nested_struct"_test = [] {
@@ -2701,6 +2736,15 @@ struct catalog
    bool operator==(const catalog&) const = default;
 };
 
+struct catalog_wrapper
+{
+   catalog cat;
+};
+struct optional_catalog_wrapper
+{
+   std::optional<catalog> cat;
+};
+
 template <>
 struct glz::meta<catalog>
 {
@@ -2774,6 +2818,10 @@ struct simple_catalog
    std::vector<product> products{};
 
    bool operator==(const simple_catalog&) const = default;
+};
+struct opt_simple_catalog
+{
+   std::optional<std::vector<product>> products{};
 };
 
 template <>
@@ -2946,6 +2994,73 @@ sku = 284758393
       expect(c.products[1].sku == 0);
       expect(c.products[2].name == "Nail");
       expect(c.products[2].sku == 284758393);
+   };
+
+   "read_array_of_tables_nested"_test = [] {
+      std::string input = R"(
+[[cat.products]]
+name = "Hammer"
+sku = 738594937
+
+[[cat.products]]
+name = "Nail"
+sku = 284758393
+)";
+
+      catalog_wrapper c{};
+      auto ec = glz::read_toml(c, input);
+      expect(not ec) << glz::format_error(ec, input);
+
+      expect(c.cat.products.size() == 2);
+      expect(c.cat.products[0].name == "Hammer");
+      expect(c.cat.products[0].sku == 738594937);
+      expect(c.cat.products[1].name == "Nail");
+      expect(c.cat.products[1].sku == 284758393);
+   };
+
+   "read_array_of_tables_nested_optional"_test = [] {
+      std::string input = R"(
+[[cat.products]]
+name = "Hammer"
+sku = 738594937
+
+[[cat.products]]
+name = "Nail"
+sku = 284758393
+)";
+
+      optional_catalog_wrapper c{};
+      auto ec = glz::read_toml(c, input);
+      expect(not ec) << glz::format_error(ec, input);
+
+      expect(c.cat.has_value());
+      expect(c.cat->products.size() == 2);
+      expect(c.cat->products[0].name == "Hammer");
+      expect(c.cat->products[0].sku == 738594937);
+      expect(c.cat->products[1].name == "Nail");
+      expect(c.cat->products[1].sku == 284758393);
+   };
+
+   "read_array_of_optional_vector_array_table"_test = [] {
+      std::string input = R"([[products]]
+name = "Hammer"
+sku = 738594937
+
+[[products]]
+name = "Nail"
+sku = 284758393
+)";
+
+      opt_simple_catalog c{};
+      auto ec = glz::read_toml(c, input);
+      expect(not ec) << glz::format_error(ec, input);
+
+      expect(c.products.has_value());
+      expect(c.products->size() == 2);
+      expect((*c.products)[0].name == "Hammer");
+      expect((*c.products)[0].sku == 738594937);
+      expect((*c.products)[1].name == "Nail");
+      expect((*c.products)[1].sku == 284758393);
    };
 
    "write_nested_array_of_tables"_test = [] {
