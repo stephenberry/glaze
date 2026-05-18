@@ -36,6 +36,16 @@ namespace glz
       uint16_t remote_port{};
    };
 
+   // Serialized to the response body when response::body<Opts>(value) fails
+   // to write `value`. Declared at namespace scope so glaze's reflection can
+   // name the type; function-local types are not reflectable on GCC.
+   struct glz_write_error
+   {
+      std::string_view error{"glaze write failure"};
+      uint32_t code{};
+      std::string_view message{};
+   };
+
    // Response builder
    struct response
    {
@@ -105,12 +115,6 @@ namespace glz
             // legacy hardcoded placeholder. The original error_code and
             // any custom_error_message are surfaced so callers can debug
             // failed writes without having to reproduce them locally.
-            struct glz_write_error
-            {
-               std::string_view error{"glaze write failure"};
-               uint32_t code{};
-               std::string_view message{};
-            };
             glz_write_error info{
                .code = uint32_t(ec.ec),
                .message = ec.custom_error_message,

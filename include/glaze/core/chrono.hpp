@@ -128,6 +128,76 @@ namespace glz
 
    namespace chrono_detail
    {
+      // Parse `count` decimal digits starting at s[start]. Returns -1 if any character
+      // is not a digit. Precondition: `count > 0` and `count` digits are readable at
+      // s[start..start+count). `count == 0` returns 0 rather than an error.
+      inline int parse_digits(const char* s, size_t start, size_t count) noexcept
+      {
+         int val = 0;
+         for (size_t i = 0; i < count; ++i) {
+            const char c = s[start + i];
+            if (c < '0' || c > '9') return -1;
+            val = val * 10 + (c - '0');
+         }
+         return val;
+      }
+
+      // Write `val` as exactly N zero-padded decimal digits to b starting at ix, advancing ix.
+      // Caller must ensure b has at least N bytes of capacity at ix.
+      template <size_t N, class B>
+      inline void write_digits(B& b, auto& ix, uint64_t val) noexcept
+      {
+         for (size_t i = N; i > 0; --i) {
+            b[ix + i - 1] = static_cast<char>('0' + val % 10);
+            val /= 10;
+         }
+         ix += N;
+      }
+
+      // Parse exactly "YYYY-MM-DD" (10 chars) into a year_month_day.
+      // On failure, sets ec to parse_error and leaves ymd unchanged.
+      // The 10-char length check implicitly caps the year at 9999, which keeps the
+      // writer's [0000, 9999] range symmetric on read; loosening the size check would
+      // break that symmetry, so it's worth holding fixed.
+      inline void parse_ymd(std::string_view str, std::chrono::year_month_day& ymd, error_code& ec) noexcept
+      {
+         if (str.size() != 10) {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         const char* s = str.data();
+
+         const int yr = parse_digits(s, 0, 4);
+         const int mo = parse_digits(s, 5, 2);
+         const int dy = parse_digits(s, 8, 2);
+
+         if (yr < 0 || mo < 0 || dy < 0 || s[4] != '-' || s[7] != '-') {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         // Fast-fail on obviously out-of-range components before constructing year_month_day.
+         // year_month_day::ok() below catches the remaining cases (e.g. Feb 30, leap years).
+         if (mo < 1 || mo > 12 || dy < 1 || dy > 31) {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         using namespace std::chrono;
+         // yr is in [0, 9999] (4-digit parse, validated non-negative above), which fits
+         // inside std::chrono::year's [-32767, 32767] range, so the int -> year conversion
+         // is in range.
+         const auto candidate =
+            year_month_day{year{yr}, month{static_cast<unsigned>(mo)}, day{static_cast<unsigned>(dy)}};
+         if (!candidate.ok()) {
+            ec = error_code::parse_error;
+            return;
+         }
+
+         ymd = candidate;
+      }
+
       // Parse an RFC 3339 / ISO 8601 date-time string into a system_clock time_point.
       // On failure, sets ec to parse_error and leaves value unchanged.
       template <is_system_time_point TP>
@@ -142,22 +212,12 @@ namespace glz
          const char* s = str.data();
          const auto n = str.size();
 
-         auto parse_digits = [&s](size_t start, size_t count) -> int {
-            int val = 0;
-            for (size_t i = 0; i < count; ++i) {
-               const char c = s[start + i];
-               if (c < '0' || c > '9') return -1;
-               val = val * 10 + (c - '0');
-            }
-            return val;
-         };
-
-         const int yr = parse_digits(0, 4);
-         const int mo = parse_digits(5, 2);
-         const int dy = parse_digits(8, 2);
-         const int hr = parse_digits(11, 2);
-         const int mi = parse_digits(14, 2);
-         const int sc = parse_digits(17, 2);
+         const int yr = parse_digits(s, 0, 4);
+         const int mo = parse_digits(s, 5, 2);
+         const int dy = parse_digits(s, 8, 2);
+         const int hr = parse_digits(s, 11, 2);
+         const int mi = parse_digits(s, 14, 2);
+         const int sc = parse_digits(s, 17, 2);
 
          if (yr < 0 || mo < 0 || dy < 0 || hr < 0 || mi < 0 || sc < 0 || s[4] != '-' || s[7] != '-' || s[10] != 'T' ||
              s[13] != ':' || s[16] != ':') {
@@ -207,7 +267,7 @@ namespace glz
                   ec = error_code::parse_error;
                   return;
                }
-               const int tz_hour = parse_digits(pos, 2);
+               const int tz_hour = parse_digits(s, pos, 2);
                if (tz_hour < 0 || tz_hour > 23) {
                   ec = error_code::parse_error;
                   return;
@@ -220,7 +280,7 @@ namespace glz
                   has_tz_colon = true;
                }
                if (pos + 2 <= n) {
-                  const int m = parse_digits(pos, 2);
+                  const int m = parse_digits(s, pos, 2);
                   if (m < 0 || m > 59) {
                      ec = error_code::parse_error;
                      return;

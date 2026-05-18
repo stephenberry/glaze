@@ -421,7 +421,7 @@ namespace glz
    struct from<BSON, T>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(auto&&, uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
+      static void op(auto&&, uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
       {
          if (tag != bson::type::null) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -521,8 +521,7 @@ namespace glz
    struct from<BSON, bson::decimal128>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(bson::decimal128& value, uint8_t tag, is_context auto& ctx, It& it,
-                                       const End& end) noexcept
+      static void op(bson::decimal128& value, uint8_t tag, is_context auto& ctx, It& it, const End& end) noexcept
       {
          if (tag != bson::type::decimal128) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -541,7 +540,7 @@ namespace glz
    struct from<BSON, bson::min_key>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(bson::min_key&, uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
+      static void op(bson::min_key&, uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
       {
          if (tag != bson::type::min_key) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -553,7 +552,7 @@ namespace glz
    struct from<BSON, bson::max_key>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(bson::max_key&, uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
+      static void op(bson::max_key&, uint8_t tag, is_context auto& ctx, It&, const End&) noexcept
       {
          if (tag != bson::type::max_key) [[unlikely]] {
             ctx.error = error_code::syntax_error;
@@ -1247,7 +1246,7 @@ namespace glz
    namespace bson_detail
    {
       template <class Buffer>
-      GLZ_ALWAYS_INLINE error_ctx enforce_exact_fill(const Buffer& buffer, error_ctx ec) noexcept
+      error_ctx enforce_exact_fill(const Buffer& buffer, error_ctx ec) noexcept
       {
          if (!ec && ec.count != buffer.size()) [[unlikely]] {
             return {ec.count, error_code::syntax_error, "trailing bytes after document terminator"};

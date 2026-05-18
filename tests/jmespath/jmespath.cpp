@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/json/jmespath.hpp"
+
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
