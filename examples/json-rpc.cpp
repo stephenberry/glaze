@@ -72,7 +72,7 @@ int main()
       if (map.contains(uuid)) map.erase(uuid);
    };
 #if 0
-   // caling timeout would cause to not process response
+   // calling timeout would cause to not process response
    timeout();
 #endif
    // Call the server callback for method `foo`

@@ -1716,7 +1716,7 @@ namespace glz
          }
       }
 
-      // sort colums so that we can determine
+      // sort columns so that we can determine
       // if the column is unique
       size_t best_index{};
       size_t best_count{};
@@ -1775,7 +1775,7 @@ namespace glz
          }
       }
 
-      // sort colums so that we can determine
+      // sort columns so that we can determine
       // if the column is unique
       size_t best_index{};
       size_t best_count{};
