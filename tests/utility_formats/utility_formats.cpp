@@ -48,6 +48,16 @@ suite progress_bar_tests = [] {
       glz::progress_bar bar{.width = 12, .completed = 10, .total = 10, .time_taken = 30.0};
       expect(bar.string() == "[==========] 100% | ETA: 0m 0s | 10/10") << bar.string();
    };
+
+   "progress bar width 0 (no bar drawn)"_test = [] {
+      glz::progress_bar bar{.width = 0, .completed = 3, .total = 10, .time_taken = 30.0};
+      expect(bar.string() == " 30% | ETA: 1m 10s | 3/10") << bar.string();
+   };
+
+   "progress bar total 0 (clamp-to-1)"_test = [] {
+      glz::progress_bar bar{.width = 12, .completed = 0, .total = 0, .time_taken = 30.0};
+      expect(bar.string() == "[----------] 0% | ETA: 0m 30s | 0/1") << bar.string();
+   };
 };
 
 int main() { return 0; }
