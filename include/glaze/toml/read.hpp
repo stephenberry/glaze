@@ -1768,20 +1768,11 @@ namespace glz
    inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
    {
       if (!root) {
-         if (!nullable_emplace(root)) {
-            if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
-               if (!try_allocate_raw_pointer<Opts>(root, ctx)) {
-                  // set error?
-                  return false;
-               }
-            }
-            else {
-               ctx.error = error_code::invalid_nullable_read;
-               return false;
-            }
+         if (!nullable_emplace<Opts>(root, ctx)) {
+            return false;
          }
       }
-      return resolve_nested<Opts, unwrapped_nullable_t<T>>(*root, path, ctx, it, end);
+      return resolve_nested<Opts>(*root, path, ctx, it, end);
    }
 
    // Helper to resolve an array-of-tables path and emplace a new element
@@ -1820,9 +1811,7 @@ namespace glz
                      decltype(auto) member_obj = [&]() -> decltype(auto) {
                         if constexpr (nullable_like<raw_member_type>) {
                            if (!raw_member_obj) {
-                              if (!nullable_emplace(raw_member_obj)) {
-                                 // TODO: raw pointers
-                                 ctx.error = error_code::invalid_nullable_read;
+                              if (!nullable_emplace<Opts>(raw_member_obj, ctx)) {
                                  success = false;
                               }
                            }
@@ -1892,20 +1881,11 @@ namespace glz
    inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
    {
       if (!root) {
-         if (!nullable_emplace(root)) {
-            if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
-               if (!try_allocate_raw_pointer<Opts>(root, ctx)) {
-                  // set error?
-                  return false;
-               }
-            }
-            else {
-               ctx.error = error_code::invalid_nullable_read;
-               return false;
-            }
+         if (!nullable_emplace<Opts>(root, ctx)) {
+            return false;
          }
       }
-      return resolve_array_of_tables<Opts, unwrapped_nullable_t<T>>(*root, path, ctx, it, end);
+      return resolve_array_of_tables<Opts>(*root, path, ctx, it, end);
    }
 
    // ============================================
@@ -2937,16 +2917,8 @@ namespace glz
          }
 
          if (!value) {
-            if (!nullable_emplace(value)) {
-               if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
-                  if (!try_allocate_raw_pointer<Opts>(value, ctx)) {
-                     return;
-                  }
-               }
-               else {
-                  ctx.error = error_code::invalid_nullable_read;
-                  return;
-               }
+            if (!nullable_emplace<Opts>(value, ctx)) {
+               return;
             }
          }
 

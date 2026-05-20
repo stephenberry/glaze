@@ -2114,16 +2114,8 @@ namespace glz
          }
 
          if (!value) {
-            if (!nullable_emplace(value)) {
-               if constexpr (std::is_pointer_v<T> && can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
-                  if (!try_allocate_raw_pointer<Opts>(value, ctx)) {
-                     return;
-                  }
-               }
-               else {
-                  ctx.error = error_code::invalid_nullable_read;
-                  return;
-               }
+            if (!nullable_emplace<Opts>(value, ctx)) {
+               return;
             }
          }
 
