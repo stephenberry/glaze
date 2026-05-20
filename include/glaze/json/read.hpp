@@ -22,6 +22,7 @@
 #include "glaze/json/skip.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
+#include "glaze/util/nullable_traits.hpp"
 #include "glaze/util/simple_float.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
@@ -4655,30 +4656,7 @@ namespace glz
             }
             else {
                if (!value) {
-                  if constexpr (optional_like<T>) {
-                     if constexpr (requires { value.emplace(); }) {
-                        value.emplace();
-                     }
-                     else {
-                        value = typename T::value_type{};
-                     }
-                  }
-                  else if constexpr (is_specialization_v<T, std::unique_ptr>)
-                     value = std::make_unique<typename T::element_type>();
-                  else if constexpr (is_specialization_v<T, std::shared_ptr>)
-                     value = std::make_shared<typename T::element_type>();
-                  else if constexpr (constructible<T>) {
-                     value = meta_construct_v<T>();
-                  }
-                  else if constexpr (std::is_pointer_v<T> &&
-                                     can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
-                     if (!try_allocate_raw_pointer<Opts>(value, ctx)) {
-                        return;
-                     }
-                  }
-                  else {
-                     // Cannot read into a null raw pointer
-                     ctx.error = error_code::invalid_nullable_read;
+                  if (!nullable_emplace<Opts>(value, ctx)) {
                      return;
                   }
                }
