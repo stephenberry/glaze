@@ -5,7 +5,6 @@
 
 #include <cctype>
 #include <charconv>
-#include <cstdio>
 #include <limits>
 
 #include "glaze/core/chrono.hpp"
