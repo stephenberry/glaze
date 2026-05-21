@@ -328,6 +328,7 @@ namespace glz
                resp.reset(req_view);
                repe::state_view state{req_view, resp};
 
+#if __cpp_exceptions
                try {
                   it->second(state);
                }
@@ -335,6 +336,13 @@ namespace glz
                   resp.reset(req_view);
                   resp.set_error(error_code::parse_error, detail::build_registry_error(in.query, e.what()));
                }
+#else
+               // Builds with -fno-exceptions cannot catch handler-thrown
+               // exceptions; user code in `it->second` is expected to be
+               // exception-free, matching the rest of glaze's no-exceptions
+               // contract (see #2265).
+               it->second(state);
+#endif
             }
          }
          else {
@@ -412,6 +420,7 @@ namespace glz
          // Zero-copy call: state_view references the parsed request and response builder directly
          repe::state_view state{req, resp};
 
+#if __cpp_exceptions
          try {
             it->second(state);
          }
@@ -425,6 +434,10 @@ namespace glz
             resp.set_error(error_code::parse_error, "Unknown error");
             return;
          }
+#else
+         // -fno-exceptions: user handlers are expected to be exception-free (see #2265).
+         it->second(state);
+#endif
 
          // For notifications, response buffer stays empty (no response sent)
       }
@@ -529,6 +542,7 @@ namespace glz
          bool has_params = !req.params.str.empty() && req.params.str != "null";
          jsonrpc::state state{req.id, response, is_notification, has_params, req.params.str};
 
+#if __cpp_exceptions
          try {
             it->second(std::move(state));
          }
@@ -540,6 +554,10 @@ namespace glz
             return R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":)" +
                    write_json(std::string_view{e.what()}).value_or("null") + R"(},"id":)" + id_json + "}";
          }
+#else
+         // -fno-exceptions: user handlers are expected to be exception-free (see #2265).
+         it->second(std::move(state));
+#endif
 
          if (is_notification) {
             return std::nullopt;
