@@ -132,6 +132,55 @@ jobs:
     - name: Test
       run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
 
+  warray-bounds-canary-gcc16:
+    # Canary that the [[assume(n <= sizeof(buffer))]] hint added in
+    # include/glaze/json/read.hpp (short-string parse branch) keeps GCC 16's
+    # -Warray-bounds quiet under the strict-warning + -Werror config reported
+    # in PR #2571. If a future GCC revision ever drops the assume on the
+    # floor or changes its VRP behavior, this job fails fast and the project
+    # can fall back to a local `#pragma GCC diagnostic` suppression.
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:16.1
+
+    strategy:
+      fail-fast: false
+      matrix:
+        opt: [-O2, -O3]
+        std: [23, 26]
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Compile short-string parse path with strict warnings
+      run: |
+        g++ --version
+        cat > /tmp/canary.cpp <<'EOF'
+        // Minimal driver that instantiates glz::from<JSON, std::string>::op,
+        // which contains the short-string branch with the [[assume]] hint.
+        // Strict warnings + -Werror reproduce the contributor's failing build.
+        #include <glaze/json.hpp>
+        #include <string>
+
+        struct S { std::string s; };
+
+        int main()
+        {
+           S s;
+           auto ec = glz::read_json(s, R"({"s":"hi"})");
+           return ec ? 1 : 0;
+        }
+        EOF
+        g++ -std=c++${{matrix.std}} ${{matrix.opt}} \
+            -Wall -Wextra -Wpedantic \
+            -Warray-bounds=2 \
+            -Wstringop-overread \
+            -Wstringop-overflow=4 \
+            -Werror \
+            -I "$GITHUB_WORKSPACE/include" \
+            /tmp/canary.cpp -o /tmp/canary
+        /tmp/canary
+
   build-gcc16-reflection:
     # C++26 P2996 reflection coverage on GCC 16.1.
     # Replaces the standalone gcc-p2996-reflection.yml workflow which used
