@@ -33,7 +33,13 @@
 #include <type_traits>
 
 #ifndef ZMIJ_USE_SIMD
+// SIMD (SSE/NEON) is enabled by default; defining GLZ_DISABLE_SIMD selects the
+// scalar code paths, matching the rest of Glaze.
+#if defined(GLZ_DISABLE_SIMD)
+#define ZMIJ_USE_SIMD 0
+#else
 #define ZMIJ_USE_SIMD 1
+#endif
 #endif
 
 // Non-finite output format for zmij::detail::write. 0 (default) emits "null"
@@ -685,6 +691,22 @@ namespace glz::zmij
 
       using m128ptr = const __m128i*;
 
+      // Extract the low 64 bits of an SSE register. _mm_cvtsi128_si64 targets a
+      // 64-bit GPR and is x86-64 only (MSVC does not define it for 32-bit x86),
+      // so on 32-bit targets fall back to a MOVQ store, which is plain SSE2 and
+      // produces the same value. The cvt path is kept on x64 to avoid the extra
+      // store/load round-trip there.
+      ZMIJ_INLINE auto lo_u64(__m128i x) noexcept -> uint64_t
+      {
+#if defined(__x86_64__) || defined(_M_X64)
+         return uint64_t(_mm_cvtsi128_si64(x));
+#else
+         uint64_t result;
+         _mm_storel_epi64(reinterpret_cast<__m128i*>(&result), x);
+         return result;
+#endif
+      }
+
       template <bool OptSize>
       ZMIJ_INLINE auto to_bcd_4x4(__m128i y, const constants<OptSize>& c) noexcept -> __m128i
       {
@@ -750,13 +772,13 @@ namespace glz::zmij
          return {bcd, count_trailing_nonzeros(bcd)};
 #elif ZMIJ_USE_SSE4_1
          uint64_t abcd_efgh = abcdefgh + neg10k_v * ((abcdefgh * div10k_sig) >> div10k_exp);
-         uint64_t unshuffled_bcd = _mm_cvtsi128_si64(to_bcd_4x4(_mm_set_epi64x(0, abcd_efgh), *c));
+         uint64_t unshuffled_bcd = lo_u64(to_bcd_4x4(_mm_set_epi64x(0, abcd_efgh), *c));
          int len = unshuffled_bcd ? 8 - ctz(unshuffled_bcd) / 8 : 0;
          return {bswap64(unshuffled_bcd), len};
 #elif ZMIJ_USE_SSE
          uint64_t abcd_efgh =
             (abcdefgh << 32) - uint64_t((10000ull << 32) - 1) * ((abcdefgh * div10k_sig) >> div10k_exp);
-         uint64_t bcd = _mm_cvtsi128_si64(to_bcd_4x4(_mm_set_epi64x(0, abcd_efgh), *c));
+         uint64_t bcd = lo_u64(to_bcd_4x4(_mm_set_epi64x(0, abcd_efgh), *c));
          return {bcd, count_trailing_nonzeros(bcd)};
 #endif
       }
