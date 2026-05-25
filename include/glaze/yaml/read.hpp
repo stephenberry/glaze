@@ -5013,8 +5013,135 @@ namespace glz
       }
       process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
    }
+   // Tagged variants (glz::meta declares `tag`/`ids`). Mirrors the JSON
+   // reader's tag-driven dispatch: read the tag key, look up the matching
+   // variant alternative by id, emplace it, then re-dispatch the same
+   // mapping into the alternative struct. The inner parse runs with
+   // unknown-key tolerance so the tag key itself is silently skipped on
+   // the second pass (the alternative struct does not declare it).
+   //
+   // Restriction: the tag must be the *first* key of the mapping (flow
+   // or block). The JSON path supports out-of-order tags via field-set
+   // deduction, which is reasonable to extend here in a follow-up.
+   template <is_variant T>
+      requires(!tag_v<T>.empty())
+   struct from<YAML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Honor the standard preamble (anchors / tags / aliases) so the
+         // tagged variant behaves like a regular mapping for these
+         // properties.
+         yaml::node_preamble_state preamble{};
+         if (yaml::parse_node_preamble<Opts, yaml::node_property_policy{true, true, true, false}, true>(
+                value, ctx, it, end, preamble, [](yaml::yaml_tag tag) { return yaml::tag_valid_for_map(tag); }))
+            return;
+
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         const bool flow_mapping = (*it == '{');
+
+         // Remember the mapping start so we can re-dispatch the whole
+         // mapping into the chosen alternative after the tag lookup.
+         const auto mapping_start = it;
+
+         // Advance past the flow-mapping opener so the first key probe
+         // sees the same shape as the block-mapping path.
+         auto probe = it;
+         if (flow_mapping) {
+            ++probe;
+            yaml::skip_ws_and_newlines(probe, end);
+         }
+         else {
+            yaml::skip_inline_ws(probe, end);
+         }
+
+         if (probe == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         std::string tag_key;
+         if (!yaml::parse_yaml_key(tag_key, ctx, probe, end, flow_mapping)) {
+            return;
+         }
+
+         if (std::string_view{tag_key} != tag_v<T>) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            return;
+         }
+
+         yaml::skip_inline_ws(probe, end);
+         if (probe == end || *probe != ':') [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         ++probe;
+         yaml::skip_inline_ws(probe, end);
+
+         using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+         std::conditional_t<std::integral<id_type>, id_type, std::string> type_id{};
+         from<YAML, decltype(type_id)>::template op<Opts>(type_id, ctx, probe, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         size_t type_index;
+         if constexpr (std::integral<id_type>) {
+            type_index = variant_id_to_index<T>::op(type_id);
+         }
+         else {
+            type_index = variant_id_to_index<T>::op(type_id.data(), type_id.data() + type_id.size(), type_id.size());
+         }
+
+         if (type_index >= ids_v<T>.size()) [[unlikely]] {
+            ctx.error = error_code::no_matching_variant_type;
+            return;
+         }
+
+         if (value.index() != type_index) emplace_runtime_variant(value, type_index);
+
+         // Rewind to the start of the mapping so the alternative struct
+         // sees the full shape. Unknown-key tolerance lets the tag key
+         // pass through silently on the second pass.
+         it = mapping_start;
+         constexpr auto inner_opts = [] {
+            auto inner = Opts;
+            inner.error_on_unknown_keys = false;
+            return inner;
+         }();
+
+         std::visit(
+            [&](auto&& v) {
+               using V = std::decay_t<decltype(v)>;
+               if constexpr (glaze_object_t<V> || reflectable<V>) {
+                  from<YAML, V>::template op<inner_opts>(v, ctx, it, end);
+               }
+               else {
+                  // Non-struct alternatives under a tagged variant are
+                  // unusual; surface the mismatch instead of silently
+                  // dispatching to a scalar/seq reader.
+                  ctx.error = error_code::no_matching_variant_type;
+               }
+            },
+            value);
+
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         yaml::finalize_node_anchor(preamble.node_props, ctx, it);
+      }
+   };
+
    // Variant support
    template <is_variant T>
+      requires(tag_v<T>.empty())
    struct from<YAML, T>
    {
       template <auto Opts, class It>

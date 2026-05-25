@@ -2873,6 +2873,89 @@ suite yaml_variant_tests = [] {
    };
 };
 
+// Issue #2583: tagged variants must round-trip through YAML the same way
+// they do through JSON. The variant declares a `tag` key and a list of
+// `ids`; the reader uses the tag value at parse time to pick the
+// matching alternative.
+
+struct tagged_alt_a
+{
+   int value{};
+};
+
+struct tagged_alt_b
+{
+   std::string text{};
+};
+
+template <>
+struct glz::meta<tagged_alt_a>
+{
+   using T = tagged_alt_a;
+   static constexpr auto value = object("value", &T::value);
+};
+
+template <>
+struct glz::meta<tagged_alt_b>
+{
+   using T = tagged_alt_b;
+   static constexpr auto value = object("text", &T::text);
+};
+
+using tagged_variant_t = std::variant<tagged_alt_a, tagged_alt_b>;
+
+template <>
+struct glz::meta<tagged_variant_t>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"alt_a", "alt_b"};
+};
+
+suite yaml_tagged_variant_tests = [] {
+   "tagged_variant_flow_first_alternative"_test = [] {
+      tagged_variant_t parsed;
+      std::string yaml = "{type: alt_a, value: 42}";
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<tagged_alt_a>(parsed));
+      expect(std::get<tagged_alt_a>(parsed).value == 42);
+   };
+
+   "tagged_variant_flow_second_alternative"_test = [] {
+      tagged_variant_t parsed;
+      std::string yaml = "{type: alt_b, text: hello}";
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<tagged_alt_b>(parsed));
+      expect(std::get<tagged_alt_b>(parsed).text == "hello");
+   };
+
+   "tagged_variant_block_first_alternative"_test = [] {
+      tagged_variant_t parsed;
+      std::string yaml = "type: alt_a\nvalue: 7";
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<tagged_alt_a>(parsed));
+      expect(std::get<tagged_alt_a>(parsed).value == 7);
+   };
+
+   "tagged_variant_block_second_alternative"_test = [] {
+      tagged_variant_t parsed;
+      std::string yaml = "type: alt_b\ntext: world";
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(!rec) << glz::format_error(rec, yaml);
+      expect(std::holds_alternative<tagged_alt_b>(parsed));
+      expect(std::get<tagged_alt_b>(parsed).text == "world");
+   };
+
+   "tagged_variant_unknown_id_errors"_test = [] {
+      tagged_variant_t parsed;
+      std::string yaml = "{type: alt_c, value: 1}";
+      auto rec = glz::read_yaml(parsed, yaml);
+      expect(rec == glz::error_code::no_matching_variant_type);
+   };
+};
+
 // ============================================================
 // Complex Nested Structure Tests
 // ============================================================
