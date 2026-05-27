@@ -9034,4 +9034,312 @@ suite yaml_skip_marker_suite = [] {
    };
 };
 
+// Tagged variants: a meta::tag discriminator key selects the alternative (meta::ids names each
+// type). Mirrors the JSON behavior so the same definitions round-trip across both formats.
+namespace yaml_tagged_variant_tests
+{
+   struct put_action
+   {
+      std::map<std::string, int> data{};
+      bool operator==(const put_action&) const = default;
+   };
+   struct delete_action
+   {
+      std::string data{};
+      bool operator==(const delete_action&) const = default;
+   };
+
+   using tagged_variant = std::variant<put_action, delete_action>;
+
+   // Automatic ids (default to glz::name_v) plus a monostate "none" alternative.
+   using tagged_variant_auto = std::variant<put_action, delete_action, std::monostate>;
+
+   // The discriminator name is also a member of each alternative.
+   struct option_a
+   {
+      std::string tag{};
+      int a{};
+      bool operator==(const option_a&) const = default;
+   };
+   struct option_b
+   {
+      std::string tag{};
+      int a{};
+      bool operator==(const option_b&) const = default;
+   };
+   using tagged_object = std::variant<option_a, option_b>;
+
+   // Integral discriminator ids.
+   struct event_open
+   {
+      int fd{};
+      bool operator==(const event_open&) const = default;
+   };
+   struct event_close
+   {
+      std::string reason{};
+      bool operator==(const event_close&) const = default;
+   };
+   using int_tagged = std::variant<event_open, event_close>;
+
+   struct holder
+   {
+      tagged_variant v{};
+      bool operator==(const holder&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<yaml_tagged_variant_tests::put_action>
+{
+   using T = yaml_tagged_variant_tests::put_action;
+   static constexpr auto value = object("data", &T::data);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::delete_action>
+{
+   using T = yaml_tagged_variant_tests::delete_action;
+   static constexpr auto value = object("data", &T::data);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::tagged_variant>
+{
+   static constexpr std::string_view tag = "action";
+   static constexpr auto ids = std::array{"PUT", "DELETE"};
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::tagged_variant_auto>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"PUT", "DELETE", "NONE"};
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::option_a>
+{
+   using T = yaml_tagged_variant_tests::option_a;
+   static constexpr auto value = object("tag", &T::tag, "a", &T::a);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::option_b>
+{
+   using T = yaml_tagged_variant_tests::option_b;
+   static constexpr auto value = object("tag", &T::tag, "a", &T::a);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::tagged_object>
+{
+   static constexpr std::string_view tag = "tag";
+   static constexpr auto ids = std::array{"A", "B"};
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::event_open>
+{
+   using T = yaml_tagged_variant_tests::event_open;
+   static constexpr auto value = object("fd", &T::fd);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::event_close>
+{
+   using T = yaml_tagged_variant_tests::event_close;
+   static constexpr auto value = object("reason", &T::reason);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::int_tagged>
+{
+   static constexpr std::string_view tag = "code";
+   static constexpr auto ids = std::array{10, 20};
+};
+template <>
+struct glz::meta<yaml_tagged_variant_tests::holder>
+{
+   using T = yaml_tagged_variant_tests::holder;
+   static constexpr auto value = object("v", &T::v);
+};
+
+suite yaml_tagged_variant_suite = [] {
+   using namespace yaml_tagged_variant_tests;
+
+   "tagged read: tag first"_test = [] {
+      tagged_variant v{};
+      const std::string yaml = "action: DELETE\ndata: the_internet\n";
+      expect(!glz::read_yaml(v, yaml));
+      expect(std::holds_alternative<delete_action>(v));
+      expect(std::get<delete_action>(v).data == "the_internet");
+   };
+
+   "tagged read: tag at end"_test = [] {
+      tagged_variant v{};
+      const std::string yaml = "data: the_internet\naction: DELETE\n";
+      expect(!glz::read_yaml(v, yaml));
+      expect(std::holds_alternative<delete_action>(v));
+      expect(std::get<delete_action>(v).data == "the_internet");
+   };
+
+   "tagged read: nested mapping value"_test = [] {
+      tagged_variant v{};
+      const std::string yaml = "action: PUT\ndata:\n  x: 100\n  y: 200\n";
+      expect(!glz::read_yaml(v, yaml));
+      expect(std::holds_alternative<put_action>(v));
+      expect(std::get<put_action>(v).data.at("x") == 100);
+      expect(std::get<put_action>(v).data.at("y") == 200);
+   };
+
+   "tagged read: flow style"_test = [] {
+      tagged_variant v{};
+      expect(!glz::read_yaml(v, std::string("{action: DELETE, data: the_internet}")));
+      expect(std::holds_alternative<delete_action>(v));
+      expect(std::get<delete_action>(v).data == "the_internet");
+
+      tagged_variant v2{};
+      expect(!glz::read_yaml(v2, std::string("{data: the_internet, action: DELETE}")));
+      expect(std::holds_alternative<delete_action>(v2));
+   };
+
+   "tagged read: automatic ids with monostate"_test = [] {
+      tagged_variant_auto v = put_action{};
+      expect(!glz::read_yaml(v, std::string("type: NONE\n")));
+      expect(std::holds_alternative<std::monostate>(v));
+
+      tagged_variant_auto v2{};
+      expect(!glz::read_yaml(v2, std::string("type: PUT\ndata:\n  x: 1\n")));
+      expect(std::holds_alternative<put_action>(v2));
+      expect(std::get<put_action>(v2).data.at("x") == 1);
+   };
+
+   "tagged read: tag is also a member"_test = [] {
+      tagged_object v{};
+      expect(!glz::read_yaml(v, std::string("tag: A\na: 2\n")));
+      expect(std::holds_alternative<option_a>(v));
+      expect(std::get<option_a>(v).a == 2);
+      // The discriminator value is also stored in the matching member.
+      expect(std::get<option_a>(v).tag == "A");
+   };
+
+   "tagged read: integral ids"_test = [] {
+      int_tagged v{};
+      expect(!glz::read_yaml(v, std::string("code: 20\nreason: bye\n")));
+      expect(std::holds_alternative<event_close>(v));
+      expect(std::get<event_close>(v).reason == "bye");
+
+      int_tagged v2{};
+      expect(!glz::read_yaml(v2, std::string("code: 10\nfd: 7\n")));
+      expect(std::holds_alternative<event_open>(v2));
+      expect(std::get<event_open>(v2).fd == 7);
+   };
+
+   "tagged read: unknown id errors"_test = [] {
+      tagged_variant v{};
+      const auto ec = glz::read_yaml(v, std::string("action: NOPE\ndata: x\n"));
+      expect(ec == glz::error_code::no_matching_variant_type);
+   };
+
+   "tagged write: block emits discriminator"_test = [] {
+      tagged_variant v = delete_action{{"the_internet"}};
+      std::string yaml;
+      expect(!glz::write_yaml(v, yaml));
+      expect(yaml == "action: DELETE\ndata: the_internet\n") << yaml;
+   };
+
+   "tagged write: flow emits discriminator"_test = [] {
+      tagged_variant v = delete_action{{"the_internet"}};
+      std::string yaml;
+      expect(!glz::write<glz::yaml::yaml_opts{.flow_style = true}>(v, yaml));
+      expect(yaml == "{action: DELETE, data: the_internet}") << yaml;
+   };
+
+   "tagged write: integral id"_test = [] {
+      int_tagged v = event_close{{"bye"}};
+      std::string yaml;
+      expect(!glz::write_yaml(v, yaml));
+      expect(yaml == "code: 20\nreason: bye\n") << yaml;
+   };
+
+   "tagged roundtrip: block and flow"_test = [] {
+      const std::vector<tagged_variant> values{put_action{{{"x", 1}, {"y", 2}}}, delete_action{{"net"}}};
+      for (const auto& original : values) {
+         std::string block;
+         expect(!glz::write_yaml(original, block));
+         tagged_variant from_block{};
+         expect(!glz::read_yaml(from_block, block)) << block;
+         expect(from_block == original);
+
+         std::string flow;
+         expect(!glz::write<glz::yaml::yaml_opts{.flow_style = true}>(original, flow));
+         tagged_variant from_flow{};
+         expect(!glz::read_yaml(from_flow, flow)) << flow;
+         expect(from_flow == original);
+      }
+   };
+
+   "tagged roundtrip: nested as struct member"_test = [] {
+      const holder original{delete_action{{"member"}}};
+      std::string yaml;
+      expect(!glz::write_yaml(original, yaml));
+      holder decoded{};
+      expect(!glz::read_yaml(decoded, yaml)) << yaml;
+      expect(decoded == original);
+   };
+
+   "tagged roundtrip: sequence of variants"_test = [] {
+      const std::vector<tagged_variant> original{put_action{{{"a", 1}}}, delete_action{{"x"}}};
+      std::string yaml;
+      expect(!glz::write_yaml(original, yaml));
+      std::vector<tagged_variant> decoded;
+      expect(!glz::read_yaml(decoded, yaml)) << yaml;
+      expect(decoded == original);
+   };
+
+   "tagged read: discriminator after other members"_test = [] {
+      // The discriminator may appear after other members, including within sequence items.
+      const std::string yaml = "- data: alpha\n  action: DELETE\n- data: beta\n  action: DELETE\n";
+      std::vector<tagged_variant> decoded;
+      const auto ec = glz::read_yaml(decoded, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(decoded.size() == 2);
+      expect(std::holds_alternative<delete_action>(decoded.at(0)));
+      expect(std::holds_alternative<delete_action>(decoded.at(1)));
+      expect(std::get<delete_action>(decoded.at(0)).data == "alpha");
+      expect(std::get<delete_action>(decoded.at(1)).data == "beta");
+   };
+
+   "tagged read: tag first with extra dash spacing"_test = [] {
+      // Extra spaces after the dash put the first key (the discriminator) at a column that is not
+      // dash_indent + 1. The variant op recovers that column from the buffer and parses the
+      // alternative at it, so the tag's inline value does not fold the following sibling entry, and
+      // the next sequence item is still recognized as a dedent.
+      const std::string yaml =
+         "-   action: PUT\n"
+         "    data:\n"
+         "      x: 7\n"
+         "-   action: DELETE\n"
+         "    data: gone\n";
+      std::vector<tagged_variant> decoded;
+      const auto ec = glz::read_yaml(decoded, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(decoded.size() == 2);
+      expect(std::holds_alternative<put_action>(decoded.at(0)));
+      // A regression here over-folds `data` into the tag's value, leaving the map empty; check the
+      // key is present first so the failure reports cleanly instead of throwing from at().
+      const auto& put_data = std::get<put_action>(decoded.at(0)).data;
+      expect(put_data.contains("x")) << "data folded into the discriminator value";
+      if (put_data.contains("x")) {
+         expect(put_data.at("x") == 7);
+      }
+      expect(std::holds_alternative<delete_action>(decoded.at(1)));
+      expect(std::get<delete_action>(decoded.at(1)).data == "gone");
+   };
+
+   "tagged read: tag skipped but other unknown keys still error"_test = [] {
+      // error_on_unknown_keys is true by default. The discriminator key is skipped (not a field of
+      // delete_action), but a genuinely unknown key must still be rejected.
+      tagged_variant ok{};
+      expect(!glz::read_yaml(ok, std::string("action: DELETE\ndata: kept\n")));
+      expect(std::holds_alternative<delete_action>(ok));
+
+      tagged_variant bad{};
+      const auto ec = glz::read_yaml(bad, std::string("action: DELETE\ndata: kept\nbogus: 1\n"));
+      expect(ec == glz::error_code::unknown_key);
+   };
+};
+
 int main() { return 0; }

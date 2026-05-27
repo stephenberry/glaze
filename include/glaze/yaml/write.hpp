@@ -64,12 +64,12 @@ namespace glz
       }
    };
 
-   // std::nullptr_t
-   template <>
-   struct to<YAML, std::nullptr_t>
+   // Always-null literal types (std::nullptr_t, std::monostate, std::nullopt_t)
+   template <always_null_t T>
+   struct to<YAML, T>
    {
       template <auto Opts, class B>
-      static void op(std::nullptr_t, is_context auto&& ctx, B&& b, auto& ix)
+      static void op(auto&&, is_context auto&& ctx, B&& b, auto& ix)
       {
          if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
             return;
@@ -416,6 +416,11 @@ namespace glz
       inline void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
                                       bool skip_first_indent = false);
 
+      // Forward declaration for tagged-variant block output (definition needs write_block_mapping).
+      template <auto Opts, class Variant, class T, class B>
+      inline void write_tagged_block_object(T&& inner, size_t index, is_context auto&& ctx, B&& b, auto& ix,
+                                            int32_t indent_level, bool skip_first_indent);
+
       // Helper to check if a type is "simple" (writes on same line)
       template <class T>
       consteval bool is_simple_type()
@@ -611,13 +616,20 @@ namespace glz
                else {
                   // Complex variant content (maps/arrays/objects) - write in block style
                   if constexpr (is_variant<element_t>) {
+                     const size_t index = element.index();
                      std::visit(
                         [&](auto&& inner) {
                            using inner_t = std::remove_cvref_t<decltype(inner)>;
                            if constexpr (glaze_object_t<inner_t> || reflectable<inner_t>) {
-                              // Compact form: first key inline after dash
+                              // Compact form: first key (or the discriminator tag) inline after dash
                               dump(' ', b, ix);
-                              write_block_mapping<Opts>(inner, ctx, b, ix, indent_level + 1, true);
+                              if constexpr (check_write_type_info(Opts) && not tag_v<element_t>.empty()) {
+                                 write_tagged_block_object<Opts, element_t>(inner, index, ctx, b, ix, indent_level + 1,
+                                                                            true);
+                              }
+                              else {
+                                 write_block_mapping<Opts>(inner, ctx, b, ix, indent_level + 1, true);
+                              }
                            }
                            else {
                               if constexpr (writable_map_t<inner_t>) {
@@ -1119,8 +1131,21 @@ namespace glz
             write_block_mapping_nested<Opts>(get_member(value, meta_wrapper_v<V>), ctx, b, ix, indent_level);
          }
          else if constexpr (is_variant<V>) {
-            // Handle variants by visiting and recursing with the same indent level
-            std::visit([&](auto&& inner) { write_block_mapping_nested<Opts>(inner, ctx, b, ix, indent_level); }, value);
+            // Handle variants by visiting and recursing with the same indent level. A tagged
+            // variant holding an object also emits its discriminator (meta::tag) entry.
+            const size_t index = value.index();
+            std::visit(
+               [&](auto&& inner) {
+                  using inner_t = std::remove_cvref_t<decltype(inner)>;
+                  if constexpr ((glaze_object_t<inner_t> || reflectable<inner_t>) &&
+                                check_write_type_info(Opts) && not tag_v<V>.empty()) {
+                     write_tagged_block_object<Opts, V>(inner, index, ctx, b, ix, indent_level, false);
+                  }
+                  else {
+                     write_block_mapping_nested<Opts>(inner, ctx, b, ix, indent_level);
+                  }
+               },
+               value);
          }
          else if constexpr (writable_array_t<V>) {
             write_block_sequence<Opts>(value, ctx, b, ix, indent_level);
@@ -1233,19 +1258,15 @@ namespace glz
          }
       }
 
-      // Write flow-style mapping
+      // Write the comma-separated "key: value" entries of a flow mapping (no surrounding braces).
+      // `first` tracks whether a leading ", " separator is needed, letting callers prepend
+      // entries (e.g. a tagged variant's discriminator) before the object's own members.
       template <auto Opts, class T, class B>
-      inline void write_flow_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix)
+      inline void write_flow_mapping_members(T&& value, is_context auto&& ctx, B&& b, auto& ix, bool& first)
       {
          using V = std::remove_cvref_t<T>;
          constexpr auto N = reflect<V>::size;
 
-         if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
-            return;
-         }
-         dump('{', b, ix);
-
-         bool first = true;
          for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -1292,7 +1313,76 @@ namespace glz
                serialize<YAML>::op<flow_context_on<Opts>()>(member, ctx, b, ix);
             }
          });
+      }
 
+      // Write flow-style mapping
+      template <auto Opts, class T, class B>
+      inline void write_flow_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         if (!ensure_space(ctx, b, ix + 8)) [[unlikely]] {
+            return;
+         }
+         dump('{', b, ix);
+         bool first = true;
+         write_flow_mapping_members<Opts>(value, ctx, b, ix, first);
+         dump('}', b, ix);
+      }
+
+      // Write a tagged variant's discriminator value (the meta::ids entry for `index`).
+      template <auto Opts, class Variant, class B>
+      inline void write_variant_tag_id(size_t index, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level)
+      {
+         using id_type = std::decay_t<decltype(ids_v<Variant>[0])>;
+         if constexpr (std::integral<id_type>) {
+            serialize<YAML>::op<Opts>(ids_v<Variant>[index], ctx, b, ix);
+         }
+         else {
+            write_yaml_string<Opts>(sv{ids_v<Variant>[index]}, ctx, b, ix, indent_level);
+         }
+      }
+
+      // Write a tagged variant alternative that holds an object as a block mapping, emitting the
+      // discriminator entry (meta::tag: id) ahead of the object's own members so it round-trips.
+      template <auto Opts, class Variant, class T, class B>
+      inline void write_tagged_block_object(T&& inner, size_t index, is_context auto&& ctx, B&& b, auto& ix,
+                                            int32_t indent_level, bool skip_first_indent)
+      {
+         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+         static constexpr sv tag = tag_v<Variant>;
+
+         if (!skip_first_indent) {
+            const int32_t spaces = indent_level * indent_width;
+            if (!ensure_space(ctx, b, ix + spaces + tag.size() + 8)) [[unlikely]] {
+               return;
+            }
+            for (int32_t i = 0; i < spaces; ++i) {
+               b[ix++] = ' ';
+            }
+         }
+         dump(tag, b, ix);
+         dump(": ", b, ix);
+         write_variant_tag_id<Opts, Variant>(index, ctx, b, ix, indent_level);
+         dump('\n', b, ix);
+
+         // Remaining members are emitted at the mapping's indent (the tag occupied the first line).
+         write_block_mapping<Opts>(inner, ctx, b, ix, indent_level, false);
+      }
+
+      // Write a tagged variant alternative that holds an object as a flow mapping
+      // ({tag: id, key: value, ...}).
+      template <auto Opts, class Variant, class T, class B>
+      inline void write_tagged_flow_object(T&& inner, size_t index, is_context auto&& ctx, B&& b, auto& ix)
+      {
+         static constexpr sv tag = tag_v<Variant>;
+         if (!ensure_space(ctx, b, ix + tag.size() + 8)) [[unlikely]] {
+            return;
+         }
+         dump('{', b, ix);
+         dump(tag, b, ix);
+         dump(": ", b, ix);
+         write_variant_tag_id<Opts, Variant>(index, ctx, b, ix, 0);
+         bool first = false; // tag already written, so members need a leading ", "
+         write_flow_mapping_members<Opts>(inner, ctx, b, ix, first);
          dump('}', b, ix);
       }
    } // namespace yaml
@@ -1373,7 +1463,36 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
-         std::visit([&](auto&& v) { serialize<YAML>::op<Opts>(v, ctx, b, ix); }, value);
+         using V = std::remove_cvref_t<T>;
+         // Tagged variants emit a discriminator entry (meta::tag) when holding an object, so the
+         // output names which alternative it is and round-trips through the reader.
+         if constexpr (check_write_type_info(Opts) && not tag_v<V>.empty()) {
+            const size_t index = value.index();
+            std::visit(
+               [&](auto&& v) {
+                  using Vt = std::remove_cvref_t<decltype(v)>;
+                  if constexpr (glaze_object_t<Vt> || reflectable<Vt>) {
+                     if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
+                        yaml::write_tagged_flow_object<Opts, V>(v, index, ctx, b, ix);
+                     }
+                     else {
+                        int32_t indent_level = 0;
+                        if constexpr (requires { ctx.indent_level; }) {
+                           indent_level = ctx.indent_level;
+                        }
+                        yaml::write_tagged_block_object<Opts, V>(v, index, ctx, b, ix, indent_level, false);
+                     }
+                  }
+                  else {
+                     // Non-object alternatives (scalars, null) carry no tag, matching JSON.
+                     serialize<YAML>::op<Opts>(v, ctx, b, ix);
+                  }
+               },
+               value);
+         }
+         else {
+            std::visit([&](auto&& v) { serialize<YAML>::op<Opts>(v, ctx, b, ix); }, value);
+         }
       }
    };
 
