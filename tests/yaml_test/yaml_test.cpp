@@ -9342,4 +9342,316 @@ suite yaml_tagged_variant_suite = [] {
    };
 };
 
+// Stress tests for tagged variants: nesting, containers, irregular indentation, comments, quoting,
+// block scalars, sparse/auto ids, and round-trips through less common parent contexts.
+namespace yaml_tagged_variant_stress_tests
+{
+   using namespace yaml_tagged_variant_tests;
+
+   // Structurally identical multi-field alternatives: only the discriminator can distinguish them
+   // (not field-based deduction), and the multiple fields let the tag sit before/between/after them.
+   struct rec_a
+   {
+      int x{};
+      int y{};
+      bool operator==(const rec_a&) const = default;
+   };
+   struct rec_b
+   {
+      int x{};
+      int y{};
+      bool operator==(const rec_b&) const = default;
+   };
+   using multi_tagged = std::variant<rec_a, rec_b>;
+
+   // An alternative that itself holds a tagged variant - exercises the indent-column recovery and
+   // push recursively (outer variant -> envelope object -> inner variant).
+   struct envelope
+   {
+      tagged_variant payload{};
+      int seq{};
+      bool operator==(const envelope&) const = default;
+   };
+   using nested_tagged = std::variant<envelope, delete_action>;
+
+   // Sparse, negative integral discriminator ids.
+   struct sa
+   {
+      int v{};
+      bool operator==(const sa&) const = default;
+   };
+   struct sb
+   {
+      int w{};
+      bool operator==(const sb&) const = default;
+   };
+   using sparse_tagged = std::variant<sa, sb>;
+
+   // A tag with no explicit ids: ids default to glz::name_v of each alternative. The alternatives are
+   // structurally identical, so only the name-derived discriminator can select the right one.
+   struct auto_x
+   {
+      int a{};
+      bool operator==(const auto_x&) const = default;
+   };
+   struct auto_y
+   {
+      int a{};
+      bool operator==(const auto_y&) const = default;
+   };
+   using auto_tagged = std::variant<auto_x, auto_y>;
+}
+
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::rec_a>
+{
+   using T = yaml_tagged_variant_stress_tests::rec_a;
+   static constexpr auto value = object("x", &T::x, "y", &T::y);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::rec_b>
+{
+   using T = yaml_tagged_variant_stress_tests::rec_b;
+   static constexpr auto value = object("x", &T::x, "y", &T::y);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::multi_tagged>
+{
+   static constexpr std::string_view tag = "kind";
+   static constexpr auto ids = std::array{"A", "B"};
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::envelope>
+{
+   using T = yaml_tagged_variant_stress_tests::envelope;
+   static constexpr auto value = object("payload", &T::payload, "seq", &T::seq);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::nested_tagged>
+{
+   static constexpr std::string_view tag = "otype";
+   static constexpr auto ids = std::array{"ENV", "DEL"};
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::sa>
+{
+   using T = yaml_tagged_variant_stress_tests::sa;
+   static constexpr auto value = object("v", &T::v);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::sb>
+{
+   using T = yaml_tagged_variant_stress_tests::sb;
+   static constexpr auto value = object("w", &T::w);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::sparse_tagged>
+{
+   static constexpr std::string_view tag = "id";
+   static constexpr auto ids = std::array{-5, 1000};
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::auto_x>
+{
+   using T = yaml_tagged_variant_stress_tests::auto_x;
+   static constexpr auto value = object("a", &T::a);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::auto_y>
+{
+   using T = yaml_tagged_variant_stress_tests::auto_y;
+   static constexpr auto value = object("a", &T::a);
+};
+template <>
+struct glz::meta<yaml_tagged_variant_stress_tests::auto_tagged>
+{
+   static constexpr std::string_view tag = "t";
+};
+
+suite yaml_tagged_variant_stress_suite = [] {
+   using namespace yaml_tagged_variant_stress_tests;
+
+   "stress: variant as map value"_test = [] {
+      const std::string yaml =
+         "first:\n"
+         "  action: PUT\n"
+         "  data:\n"
+         "    x: 1\n"
+         "second:\n"
+         "  action: DELETE\n"
+         "  data: bye\n";
+      std::map<std::string, tagged_variant> m;
+      const auto ec = glz::read_yaml(m, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      const std::map<std::string, tagged_variant> expected{{"first", put_action{{{"x", 1}}}},
+                                                            {"second", delete_action{{"bye"}}}};
+      expect(m == expected);
+   };
+
+   "stress: optional<variant> read and round-trip"_test = [] {
+      std::optional<tagged_variant> o;
+      const auto ec = glz::read_yaml(o, std::string("action: DELETE\ndata: x\n"));
+      expect(!ec);
+      expect(o == std::optional<tagged_variant>{delete_action{{"x"}}});
+
+      std::string s;
+      expect(!glz::write_yaml(o, s));
+      std::optional<tagged_variant> back;
+      expect(!glz::read_yaml(back, s)) << s;
+      expect(back == o);
+   };
+
+   "stress: variant alternative holding a tagged variant"_test = [] {
+      const std::string yaml =
+         "otype: ENV\n"
+         "seq: 5\n"
+         "payload:\n"
+         "  action: DELETE\n"
+         "  data: inner\n";
+      nested_tagged v;
+      const auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == nested_tagged{envelope{tagged_variant{delete_action{{"inner"}}}, 5}});
+
+      std::string s;
+      expect(!glz::write_yaml(v, s));
+      nested_tagged back;
+      expect(!glz::read_yaml(back, s)) << s;
+      expect(back == v);
+   };
+
+   "stress: discriminator before, between, and after members"_test = [] {
+      // rec_a and rec_b are identical, so resolution is purely by the tag, at any position.
+      const multi_tagged expected{rec_a{1, 2}};
+      for (const std::string yaml :
+           {"kind: A\nx: 1\ny: 2\n", "x: 1\nkind: A\ny: 2\n", "x: 1\ny: 2\nkind: A\n"}) {
+         multi_tagged v;
+         const auto ec = glz::read_yaml(v, yaml);
+         expect(!ec) << glz::format_error(ec, yaml);
+         expect(v == expected) << yaml;
+      }
+      // The other id selects the other (identical-shaped) alternative.
+      multi_tagged b;
+      expect(!glz::read_yaml(b, std::string("x: 3\nkind: B\ny: 4\n")));
+      expect(b == multi_tagged{rec_b{3, 4}});
+   };
+
+   "stress: sparse and negative integral ids"_test = [] {
+      sparse_tagged v;
+      expect(!glz::read_yaml(v, std::string("id: -5\nv: 7\n")));
+      expect(v == sparse_tagged{sa{7}});
+
+      sparse_tagged v2;
+      expect(!glz::read_yaml(v2, std::string("id: 1000\nw: 9\n")));
+      expect(v2 == sparse_tagged{sb{9}});
+
+      // Round-trip both.
+      for (const sparse_tagged original : {sparse_tagged{sa{3}}, sparse_tagged{sb{4}}}) {
+         std::string s;
+         expect(!glz::write_yaml(original, s));
+         sparse_tagged back;
+         expect(!glz::read_yaml(back, s)) << s;
+         expect(back == original);
+      }
+   };
+
+   "stress: auto ids (no explicit ids array) round-trip"_test = [] {
+      // Identical shapes and identical field values: the type survives the round-trip only because
+      // the name-derived discriminator is written and read back.
+      for (const auto_tagged original : {auto_tagged{auto_x{42}}, auto_tagged{auto_y{42}}}) {
+         std::string s;
+         expect(!glz::write_yaml(original, s));
+         auto_tagged back;
+         expect(!glz::read_yaml(back, s)) << s;
+         expect(back.index() == original.index()) << s;
+         expect(back == original);
+      }
+   };
+
+   "stress: comments and blank lines within the mapping"_test = [] {
+      const std::string yaml =
+         "action: DELETE  # the discriminator\n"
+         "\n"
+         "data: kept  # value\n";
+      tagged_variant v;
+      const auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == tagged_variant{delete_action{{"kept"}}});
+   };
+
+   "stress: quoted discriminator value"_test = [] {
+      tagged_variant v;
+      expect(!glz::read_yaml(v, std::string("action: \"DELETE\"\ndata: x\n")));
+      expect(v == tagged_variant{delete_action{{"x"}}});
+
+      tagged_variant v2;
+      expect(!glz::read_yaml(v2, std::string("action: 'DELETE'\ndata: y\n")));
+      expect(v2 == tagged_variant{delete_action{{"y"}}});
+   };
+
+   "stress: flow with nested flow value"_test = [] {
+      tagged_variant v;
+      const auto ec = glz::read_yaml(v, std::string("{action: PUT, data: {x: 1, y: 2}}"));
+      expect(!ec);
+      expect(v == tagged_variant{put_action{{{"x", 1}, {"y", 2}}}});
+   };
+
+   "stress: block scalar member value"_test = [] {
+      const std::string yaml =
+         "action: DELETE\n"
+         "data: |\n"
+         "  line one\n"
+         "  line two\n";
+      tagged_variant v;
+      const auto ec = glz::read_yaml(v, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      expect(v == tagged_variant{delete_action{{"line one\nline two\n"}}});
+   };
+
+   "stress: sequence of structs each holding a variant"_test = [] {
+      const std::string yaml =
+         "- v:\n"
+         "    action: DELETE\n"
+         "    data: a\n"
+         "- v:\n"
+         "    action: PUT\n"
+         "    data:\n"
+         "      x: 1\n";
+      std::vector<holder> vec;
+      const auto ec = glz::read_yaml(vec, yaml);
+      expect(!ec) << glz::format_error(ec, yaml);
+      const std::vector<holder> expected{holder{delete_action{{"a"}}}, holder{put_action{{{"x", 1}}}}};
+      expect(vec == expected);
+   };
+
+   "stress: monostate round-trips through null"_test = [] {
+      tagged_variant_auto original = std::monostate{};
+      std::string s;
+      expect(!glz::write_yaml(original, s));
+      tagged_variant_auto back = put_action{};
+      const auto ec = glz::read_yaml(back, s);
+      expect(!ec) << s;
+      expect(std::holds_alternative<std::monostate>(back)) << "wrote: " << s;
+   };
+
+   "stress: monostate via tag in flow"_test = [] {
+      tagged_variant_auto v = put_action{};
+      const auto ec = glz::read_yaml(v, std::string("{type: NONE}"));
+      expect(!ec);
+      expect(std::holds_alternative<std::monostate>(v));
+   };
+
+   "stress: unknown integral id is rejected"_test = [] {
+      sparse_tagged v;
+      const auto ec = glz::read_yaml(v, std::string("id: 7\n"));
+      expect(ec == glz::error_code::no_matching_variant_type) << glz::format_error(ec, std::string("id: 7\n"));
+   };
+
+   "stress: unterminated flow mapping errors"_test = [] {
+      tagged_variant v;
+      const auto ec = glz::read_yaml(v, std::string("{action: PUT, data: {x: 1"));
+      expect(bool(ec));
+   };
+};
+
 int main() { return 0; }
