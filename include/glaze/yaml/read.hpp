@@ -2124,12 +2124,12 @@ namespace glz
       }
    };
 
-   // std::nullptr_t - null literal type
-   template <>
-   struct from<YAML, std::nullptr_t>
+   // Always-null literal types (std::nullptr_t, std::monostate, std::nullopt_t)
+   template <always_null_t T>
+   struct from<YAML, T>
    {
       template <auto Opts, class It>
-      static void op(std::nullptr_t&, is_context auto&& ctx, It&& it, auto end) noexcept
+      static void op(auto&&, is_context auto&& ctx, It&& it, auto end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]]
             return;
@@ -2524,12 +2524,13 @@ namespace glz
       }
 
       // Parse flow mapping {key: value, ...}
-      template <auto Opts, class T, class Ctx, class It, class End>
+      template <auto Opts, string_literal Tag = "", class T, class Ctx, class It, class End>
       inline void parse_flow_mapping(T&& value, Ctx& ctx, It& it, End end)
       {
          using U = std::remove_cvref_t<T>;
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
+         static constexpr sv variant_tag = Tag.sv();
 
          decltype(auto) fields = [&]() -> decltype(auto) {
             if constexpr (Opts.error_on_missing_keys) {
@@ -2617,14 +2618,24 @@ namespace glz
                      },
                      index);
                }
-               else {
+               else if constexpr (not variant_tag.empty()) {
+                  // A tagged variant's discriminator key is "unknown" to the resolved struct (unless
+                  // the struct declares it as a field). The variant resolver already consumed it to
+                  // choose this alternative, so it is skipped rather than rejected.
                   if constexpr (Opts.error_on_unknown_keys) {
-                     ctx.error = error_code::unknown_key;
-                     return;
+                     if (std::string_view{ctx.scratch} != variant_tag) {
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
                   }
-                  else { // else used to fix MSVC unreachable code warning
-                     skip_yaml_value<Opts>(ctx, it, end, 0, true);
-                  }
+                  skip_yaml_value<Opts>(ctx, it, end, 0, true);
+               }
+               else if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+               else { // else used to fix MSVC unreachable code warning
+                  skip_yaml_value<Opts>(ctx, it, end, 0, true);
                }
 
                if (bool(ctx.error)) [[unlikely]]
@@ -3217,6 +3228,24 @@ namespace glz
          }
       }
 
+      // Skip the value of an unknown block-mapping entry, whether it is inline (on the key's line)
+      // or begins on a following, more-indented line (a nested block sequence or mapping).
+      // `key_indent` is the column of the entry's key; deeper lines belong to the value.
+      template <auto Opts, class Ctx, class It, class End>
+      inline void skip_unknown_block_value(Ctx& ctx, It& it, End end, int32_t key_indent) noexcept
+      {
+         if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
+            skip_yaml_value<Opts>(ctx, it, end, key_indent, false);
+         }
+         else {
+            const int32_t nested_indent = detect_nested_value_indent(ctx, it, end, key_indent);
+            if (nested_indent >= 0) {
+               skip_to_content(it, end);
+               skip_yaml_value<Opts>(ctx, it, end, key_indent, false);
+            }
+         }
+      }
+
       // Shared loop for block mapping parsing.
       // Handles blank/comment skipping, indent detection, dedent, and trailing whitespace.
       // process_entry(ctx, it, end, line_indent) should parse key+colon+value and return
@@ -3477,7 +3506,7 @@ namespace glz
       // Parse block mapping for struct/object types
       // key1: value1
       // key2: value2
-      template <auto Opts, class T, class Ctx, class It, class End>
+      template <auto Opts, string_literal Tag = "", class T, class Ctx, class It, class End>
       inline void parse_block_mapping(T&& value, Ctx& ctx, It& it, End end, int32_t mapping_indent)
       {
          using U = std::remove_cvref_t<T>;
@@ -3584,25 +3613,27 @@ namespace glz
                      },
                      index);
                }
-               else {
+               else if constexpr (not Tag.sv().empty()) {
+                  // A tagged variant's discriminator key is "unknown" to the resolved struct (unless
+                  // the struct declares it as a field). The variant resolver already consumed it to
+                  // choose this alternative, so it is skipped rather than rejected - even under
+                  // error_on_unknown_keys. The mapping's true column is on the indent stack
+                  // (established by the variant op), so this generic skip does not fold a following
+                  // sibling entry into the discriminator's inline value.
                   if constexpr (Opts.error_on_unknown_keys) {
-                     ctx.error = error_code::unknown_key;
-                     return false;
-                  }
-                  else { // else used to fix MSVC unreachable code warning
-                     // Skip unknown value
-                     if (it != end && !yaml::line_end_or_comment_table[static_cast<uint8_t>(*it)]) {
-                        skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
-                     }
-                     else {
-                        // Value may be on the next line (block sequence, mapping, etc.)
-                        int32_t nested_indent = detect_nested_value_indent(ctx, it, end, line_indent);
-                        if (nested_indent >= 0) {
-                           skip_to_content(it, end);
-                           skip_yaml_value<Opts>(ctx, it, end, line_indent, false);
-                        }
+                     if (std::string_view{ctx.scratch} != Tag.sv()) {
+                        ctx.error = error_code::unknown_key;
+                        return false;
                      }
                   }
+                  skip_unknown_block_value<Opts>(ctx, it, end, line_indent);
+               }
+               else if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return false;
+               }
+               else {
+                  skip_unknown_block_value<Opts>(ctx, it, end, line_indent);
                }
 
                return !bool(ctx.error);
@@ -4030,7 +4061,10 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && !custom_read<T>)
    struct from<YAML, T>
    {
-      template <auto Opts, class It>
+      // Tag is the discriminator key of an enclosing tagged variant (empty when not tagged).
+      // When set, the mapping parsers skip an entry whose key equals the tag, since the
+      // variant resolver has already consumed it to select this alternative.
+      template <auto Opts, string_literal Tag = "", class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          if (bool(ctx.error)) [[unlikely]]
@@ -4043,11 +4077,11 @@ namespace glz
 
          if (*it == '{') {
             // Flow mapping
-            yaml::parse_flow_mapping<Opts>(value, ctx, it, end);
+            yaml::parse_flow_mapping<Opts, Tag>(value, ctx, it, end);
          }
          else {
             // Block mapping - use indent from context (set by parent parser)
-            yaml::parse_block_mapping<Opts>(value, ctx, it, end, ctx.current_indent());
+            yaml::parse_block_mapping<Opts, Tag>(value, ctx, it, end, ctx.current_indent());
          }
 
          yaml::finalize_node_anchor(preamble.node_props, ctx, it);
@@ -5013,6 +5047,143 @@ namespace glz
       }
       process_yaml_variant_alternatives<Variant, is_yaml_variant_str>::template op<Opts>(value, ctx, it, end);
    }
+
+   // Column (visual indent) of `it` within its current line, for contiguous buffers. The variant
+   // op is entered after the parent has consumed the leading indentation, so the indent stack no
+   // longer reflects the mapping's true column; recovering it from the buffer gives a single
+   // context-independent value (root, struct member, sequence item all differ) that drives both the
+   // tag scan and the indent under which the chosen alternative is parsed.
+   template <class It>
+   inline int32_t tagged_mapping_visual_indent(It it, const char* stream_begin, int32_t fallback) noexcept
+   {
+      if constexpr (std::is_pointer_v<std::decay_t<It>>) {
+         if (stream_begin && it >= stream_begin) {
+            auto line_begin = it;
+            while (line_begin > stream_begin && *(line_begin - 1) != '\n' && *(line_begin - 1) != '\r') {
+               --line_begin;
+            }
+            return static_cast<int32_t>(it - line_begin);
+         }
+      }
+      return fallback;
+   }
+
+   // Walk a tagged variant's mapping (block or flow), invoking on_tag(ctx, it, end, line_indent,
+   // in_flow) for the entry whose key equals `tag` and skipping every other entry's value. The
+   // whole mapping is consumed, so on completion the iterator sits just past it. on_tag is
+   // responsible for consuming the tag entry's value. Used both to resolve the alternative
+   // (running on copies of the iterator/context) and to consume the mapping when the resolved
+   // alternative is not an object (running on the caller's iterator/context).
+   template <auto Opts, class Ctx, class It, class End, class OnTag>
+   inline void walk_tagged_mapping(Ctx& ctx, It& it, End end, sv tag, int32_t mapping_indent, OnTag&& on_tag)
+   {
+      auto skip_entry_value = [&](Ctx& ctx, It& it, End end, int32_t line_indent, bool in_flow) {
+         if (in_flow) {
+            yaml::skip_yaml_value<Opts>(ctx, it, end, 0, true);
+         }
+         else {
+            yaml::skip_unknown_block_value<Opts>(ctx, it, end, line_indent);
+         }
+      };
+
+      if constexpr (yaml::check_flow_context(Opts)) {
+         // Flow mapping {tag: id, ...}
+         if (it == end || *it != '{') return;
+         ++it;
+         yaml::skip_flow_ws_and_newlines(ctx, it, end);
+         while (it != end && *it != '}') {
+            ctx.scratch.clear();
+            if (!yaml::parse_yaml_key(ctx.scratch, ctx, it, end, true)) return;
+            yaml::skip_flow_ws_and_newlines(ctx, it, end);
+            if (it == end || *it != ':') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            yaml::skip_flow_ws_and_newlines(ctx, it, end);
+            if (std::string_view{ctx.scratch} == tag) {
+               on_tag(ctx, it, end, 0, true);
+            }
+            else {
+               skip_entry_value(ctx, it, end, 0, true);
+            }
+            if (bool(ctx.error)) return;
+            yaml::skip_flow_ws_and_newlines(ctx, it, end);
+            if (it != end && *it == ',') {
+               ++it;
+               yaml::skip_flow_ws_and_newlines(ctx, it, end);
+            }
+         }
+         if (it != end && *it == '}') ++it;
+      }
+      else {
+         // A '{' in block context still introduces a flow mapping value.
+         if (it != end && *it == '{') {
+            walk_tagged_mapping<yaml::flow_context_on<Opts>()>(ctx, it, end, tag, mapping_indent, on_tag);
+            return;
+         }
+         if (mapping_indent < 0) mapping_indent = 0;
+         yaml::parse_block_mapping_loop<Opts>(
+            ctx, it, end, mapping_indent, [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
+               ctx.scratch.clear();
+               if (!yaml::parse_yaml_key(ctx.scratch, ctx, it, end, false)) return false;
+               yaml::skip_inline_ws(it, end);
+               if (it == end || *it != ':') {
+                  ctx.error = error_code::syntax_error;
+                  return false;
+               }
+               ++it;
+               yaml::skip_inline_ws(it, end);
+               if (std::string_view{ctx.scratch} == tag) {
+                  on_tag(ctx, it, end, line_indent, false);
+               }
+               else {
+                  skip_entry_value(ctx, it, end, line_indent, false);
+               }
+               return !bool(ctx.error);
+            });
+      }
+   }
+
+   // Resolve a tagged variant's alternative index by scanning the mapping for the discriminator
+   // key (tag_v<V>). Operates on copies of the context and iterator so the caller's parse
+   // position is left untouched. Returns ids_v<V>.size() (the not-found sentinel) when the tag
+   // key is absent or its value matches no known id.
+   template <class V, auto Opts, class Ctx, class It, class End>
+   inline size_t scan_variant_tag_index(Ctx ctx, It it, End end, int32_t mapping_indent)
+   {
+      using id_type = std::decay_t<decltype(ids_v<V>[0])>;
+      size_t resolved = ids_v<V>.size();
+      // The id is read with the flow-ness of the entry it appears in: a plain scalar in a flow
+      // mapping ends at ',' or '}', whereas in a block mapping it runs to end of line.
+      auto read_id = [&]<auto O>(Ctx& ctx, It& it, End end) {
+         if constexpr (std::integral<id_type>) {
+            id_type id{};
+            from<YAML, id_type>::template op<O>(id, ctx, it, end);
+            if (!bool(ctx.error)) {
+               resolved = variant_id_to_index<V>::op(id);
+            }
+         }
+         else {
+            std::string id{};
+            from<YAML, std::string>::template op<O>(id, ctx, it, end);
+            if (!bool(ctx.error)) {
+               resolved = variant_id_to_index<V>::op(id.data(), id.data() + id.size(), id.size());
+            }
+         }
+      };
+      walk_tagged_mapping<Opts>(ctx, it, end, tag_v<V>, mapping_indent,
+                                [&](Ctx& ctx, It& it, End end, int32_t, bool in_flow) {
+                                   if (in_flow) {
+                                      read_id.template operator()<yaml::flow_context_on<Opts>()>(ctx, it, end);
+                                   }
+                                   else {
+                                      read_id.template operator()<Opts>(ctx, it, end);
+                                   }
+                                });
+      return resolved;
+   }
+
    // Variant support
    template <is_variant T>
    struct from<YAML, T>
@@ -5035,6 +5206,60 @@ namespace glz
          if (it == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
+         }
+
+         // Tagged variants: a discriminator key (meta::tag) selects the alternative, with the
+         // matching meta::ids entry naming each type. This mirrors the JSON behavior so the
+         // same variant definitions round-trip across both formats.
+         if constexpr (not tag_v<std::remove_cvref_t<T>>.empty()) {
+            using V = std::remove_cvref_t<T>;
+            const bool value_is_mapping =
+               (*it == '{') ||
+               (!yaml::check_flow_context(Opts) && yaml::line_could_be_block_mapping(it, end));
+            if (value_is_mapping) {
+               // The mapping's keys sit at the column of `it`. Recover that column from the buffer:
+               // the indent stack carries the parent context's indent (a struct member, a sequence
+               // item, etc. each push a different offset), not this mapping's true column (see helper).
+               const int32_t mapping_column =
+                  tagged_mapping_visual_indent(it, ctx.stream_begin, ctx.current_indent() + 1);
+               const size_t index =
+                  scan_variant_tag_index<V, Opts>(ctx.make_speculative(), it, end, mapping_column);
+               if (index < ids_v<V>.size()) {
+                  static constexpr auto tag_literal = string_literal_from_view<tag_v<V>.size()>(tag_v<V>);
+                  emplace_runtime_variant(value, index);
+                  // Establish the mapping's true column on the indent stack for the alternative parse.
+                  // The chosen object is then parsed - and the discriminator's inline value skipped -
+                  // at a consistent indent in every context, so a tag on the first key does not fold
+                  // the following sibling entries into its value (no special-casing needed downstream).
+                  if (!ctx.push_indent(mapping_column)) [[unlikely]] {
+                     ctx.error = error_code::exceeded_max_recursive_depth;
+                     return;
+                  }
+                  std::visit(
+                     [&](auto&& alt) {
+                        using Alt = std::remove_cvref_t<decltype(alt)>;
+                        if constexpr (glaze_object_t<Alt> || reflectable<Alt>) {
+                           // Parse the mapping into the resolved struct; the tag key is skipped.
+                           from<YAML, Alt>::template op<Opts, tag_literal>(alt, ctx, it, end);
+                        }
+                        else {
+                           // Non-object alternative (e.g. std::monostate): the emplaced default is
+                           // the value, but the mapping must still be consumed.
+                           walk_tagged_mapping<Opts>(
+                              ctx, it, end, tag_v<V>, mapping_column,
+                              [&](auto&& c, auto&& i, auto&& e, int32_t line_indent, bool in_flow) {
+                                 yaml::skip_yaml_value<Opts>(c, i, e, in_flow ? 0 : line_indent, in_flow);
+                              });
+                        }
+                     },
+                     value);
+                  ctx.pop_indent();
+                  return;
+               }
+               // No resolvable tag key was found. Fall through to structural deduction:
+               // if the alternatives are distinguishable by their fields this still succeeds,
+               // otherwise the deduction path reports no_matching_variant_type.
+            }
          }
 
          if constexpr (yaml_variant_is_auto_deducible<std::remove_cvref_t<T>>()) {
