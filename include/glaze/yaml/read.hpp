@@ -5123,25 +5123,26 @@ namespace glz
             return;
          }
          if (mapping_indent < 0) mapping_indent = 0;
-         yaml::parse_block_mapping_loop<Opts>(
-            ctx, it, end, mapping_indent, [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
-               ctx.scratch.clear();
-               if (!yaml::parse_yaml_key(ctx.scratch, ctx, it, end, false)) return false;
-               yaml::skip_inline_ws(it, end);
-               if (it == end || *it != ':') {
-                  ctx.error = error_code::syntax_error;
-                  return false;
-               }
-               ++it;
-               yaml::skip_inline_ws(it, end);
-               if (std::string_view{ctx.scratch} == tag) {
-                  on_tag(ctx, it, end, line_indent, false);
-               }
-               else {
-                  skip_entry_value(ctx, it, end, line_indent, false);
-               }
-               return !bool(ctx.error);
-            });
+         yaml::parse_block_mapping_loop<Opts>(ctx, it, end, mapping_indent,
+                                              [&](Ctx& ctx, It& it, End end, int32_t line_indent) -> bool {
+                                                 ctx.scratch.clear();
+                                                 if (!yaml::parse_yaml_key(ctx.scratch, ctx, it, end, false))
+                                                    return false;
+                                                 yaml::skip_inline_ws(it, end);
+                                                 if (it == end || *it != ':') {
+                                                    ctx.error = error_code::syntax_error;
+                                                    return false;
+                                                 }
+                                                 ++it;
+                                                 yaml::skip_inline_ws(it, end);
+                                                 if (std::string_view{ctx.scratch} == tag) {
+                                                    on_tag(ctx, it, end, line_indent, false);
+                                                 }
+                                                 else {
+                                                    skip_entry_value(ctx, it, end, line_indent, false);
+                                                 }
+                                                 return !bool(ctx.error);
+                                              });
       }
    }
 
@@ -5214,16 +5215,14 @@ namespace glz
          if constexpr (not tag_v<std::remove_cvref_t<T>>.empty()) {
             using V = std::remove_cvref_t<T>;
             const bool value_is_mapping =
-               (*it == '{') ||
-               (!yaml::check_flow_context(Opts) && yaml::line_could_be_block_mapping(it, end));
+               (*it == '{') || (!yaml::check_flow_context(Opts) && yaml::line_could_be_block_mapping(it, end));
             if (value_is_mapping) {
                // The mapping's keys sit at the column of `it`. Recover that column from the buffer:
                // the indent stack carries the parent context's indent (a struct member, a sequence
                // item, etc. each push a different offset), not this mapping's true column (see helper).
                const int32_t mapping_column =
                   tagged_mapping_visual_indent(it, ctx.stream_begin, ctx.current_indent() + 1);
-               const size_t index =
-                  scan_variant_tag_index<V, Opts>(ctx.make_speculative(), it, end, mapping_column);
+               const size_t index = scan_variant_tag_index<V, Opts>(ctx.make_speculative(), it, end, mapping_column);
                if (index < ids_v<V>.size()) {
                   static constexpr auto tag_literal = string_literal_from_view<tag_v<V>.size()>(tag_v<V>);
                   emplace_runtime_variant(value, index);

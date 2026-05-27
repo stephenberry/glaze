@@ -1137,8 +1137,8 @@ namespace glz
             std::visit(
                [&](auto&& inner) {
                   using inner_t = std::remove_cvref_t<decltype(inner)>;
-                  if constexpr ((glaze_object_t<inner_t> || reflectable<inner_t>) &&
-                                check_write_type_info(Opts) && not tag_v<V>.empty()) {
+                  if constexpr ((glaze_object_t<inner_t> || reflectable<inner_t>) && check_write_type_info(Opts) &&
+                                not tag_v<V>.empty()) {
                      write_tagged_block_object<Opts, V>(inner, index, ctx, b, ix, indent_level, false);
                   }
                   else {

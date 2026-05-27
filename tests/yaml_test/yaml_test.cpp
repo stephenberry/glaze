@@ -9484,7 +9484,7 @@ suite yaml_tagged_variant_stress_suite = [] {
       const auto ec = glz::read_yaml(m, yaml);
       expect(!ec) << glz::format_error(ec, yaml);
       const std::map<std::string, tagged_variant> expected{{"first", put_action{{{"x", 1}}}},
-                                                            {"second", delete_action{{"bye"}}}};
+                                                           {"second", delete_action{{"bye"}}}};
       expect(m == expected);
    };
 
@@ -9523,8 +9523,7 @@ suite yaml_tagged_variant_stress_suite = [] {
    "stress: discriminator before, between, and after members"_test = [] {
       // rec_a and rec_b are identical, so resolution is purely by the tag, at any position.
       const multi_tagged expected{rec_a{1, 2}};
-      for (const std::string yaml :
-           {"kind: A\nx: 1\ny: 2\n", "x: 1\nkind: A\ny: 2\n", "x: 1\ny: 2\nkind: A\n"}) {
+      for (const std::string yaml : {"kind: A\nx: 1\ny: 2\n", "x: 1\nkind: A\ny: 2\n", "x: 1\ny: 2\nkind: A\n"}) {
          multi_tagged v;
          const auto ec = glz::read_yaml(v, yaml);
          expect(!ec) << glz::format_error(ec, yaml);
