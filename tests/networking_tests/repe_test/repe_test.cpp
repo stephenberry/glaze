@@ -712,11 +712,16 @@ suite validation_tests = [] {
    };
 };
 
-// Define throwing_functions_t at namespace scope for proper linkage
+// Define throwing_functions_t at namespace scope for proper linkage.
+// Exceptions-only: this exercises the safety net that catches a throwing handler. Under
+// -fno-exceptions a handler reports failure by returning glz::expected instead (see
+// registry_no_exceptions_test).
+#if __cpp_exceptions
 struct throwing_functions_t
 {
    std::function<int()> throw_func = []() -> int { throw std::runtime_error("Test exception"); };
 };
+#endif
 
 suite id_preservation_tests = [] {
    using namespace test_helpers;
@@ -739,6 +744,7 @@ suite id_preservation_tests = [] {
       expect(response.body.find("invalid_query") != std::string::npos);
    };
 
+#if __cpp_exceptions
    "exception_error_preserves_id"_test = [] {
       glz::registry server{};
 
@@ -756,6 +762,7 @@ suite id_preservation_tests = [] {
       expect(response.header.id == 67890) << "ID should be preserved in exception error";
       expect(response.body.find("Test exception") != std::string::npos);
    };
+#endif
 
    "header_validation_errors_preserve_id"_test = [] {
       glz::registry server{};

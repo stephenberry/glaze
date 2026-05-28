@@ -6,6 +6,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/ext/jsonrpc.hpp"
 #include "glaze/glaze.hpp"
+#include "glaze/util/expected.hpp"
 
 namespace glz
 {
@@ -31,30 +32,56 @@ namespace glz
       template <class T>
       concept is_state = std::same_as<std::decay_t<T>, state>;
 
+      // forward declaration: translate a glz::expected handler error into a JSON-RPC error
+      template <class E>
+      void set_handler_error(is_state auto&& state, E&& error);
+
       // Write a successful JSON RPC response
+      //
+      // When Value is a glz::expected, its success value is serialized and its error is
+      // translated into a JSON-RPC error response (see set_handler_error). This lets a
+      // registered handler signal failure by returning glz::unexpected(...) rather than
+      // throwing, which is required under -fno-exceptions and convenient otherwise.
       template <auto Opts, class Value>
       void write_response(Value&& value, is_state auto&& state)
       {
-         if (state.notify()) {
-            return; // No response for notifications
-         }
-
-         std::string result_json;
-         auto ec = write<Opts>(std::forward<Value>(value), result_json);
-         if (ec) {
-            // Write error response
-            state.response =
-               R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":"Failed to serialize result"},"id":)";
-            state.response += write_json(state.id).value_or("null");
-            state.response += "}";
+         using V = std::remove_cvref_t<Value>;
+         if constexpr (glz::is_expected<V>) {
+            if (value.has_value()) {
+               if constexpr (std::is_void_v<typename V::value_type>) {
+                  write_response<Opts>(state);
+               }
+               else {
+                  write_response<Opts>(*std::forward<Value>(value), state);
+               }
+            }
+            else {
+               set_handler_error(state, std::forward<Value>(value).error());
+            }
             return;
          }
+         else {
+            if (state.notify()) {
+               return; // No response for notifications
+            }
 
-         state.response = R"({"jsonrpc":"2.0","result":)";
-         state.response += result_json;
-         state.response += R"(,"id":)";
-         state.response += write_json(state.id).value_or("null");
-         state.response += "}";
+            std::string result_json;
+            auto ec = write<Opts>(std::forward<Value>(value), result_json);
+            if (ec) {
+               // Write error response
+               state.response =
+                  R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":"Failed to serialize result"},"id":)";
+               state.response += write_json(state.id).value_or("null");
+               state.response += "}";
+               return;
+            }
+
+            state.response = R"({"jsonrpc":"2.0","result":)";
+            state.response += result_json;
+            state.response += R"(,"id":)";
+            state.response += write_json(state.id).value_or("null");
+            state.response += "}";
+         }
       }
 
       // Write a successful JSON RPC response with null result
@@ -89,6 +116,34 @@ namespace glz
          state.response += R"(},"id":)";
          state.response += write_json(state.id).value_or("null");
          state.response += "}";
+      }
+
+      // Translate the error of a glz::expected handler result into a JSON-RPC error
+      // response. Supported error types:
+      //   - glz::rpc::error   -> its code, message, and optional data (full fidelity)
+      //   - glz::rpc::error_e -> that code with its standard message
+      //   - glz::error_ctx    -> error_e::internal with the context's message
+      //   - string-like       -> error_e::internal with the message
+      // error_e::internal (-32603) is the JSON-RPC code reserved for server-side errors.
+      template <class E>
+      void set_handler_error(is_state auto&& state, E&& error)
+      {
+         using DE = std::remove_cvref_t<E>;
+         if constexpr (std::same_as<DE, rpc::error>) {
+            write_error(state, error.code, error.message, error.data);
+         }
+         else if constexpr (std::same_as<DE, rpc::error_e>) {
+            write_error(state, error, std::string(rpc::code_as_sv(error)));
+         }
+         else if constexpr (std::same_as<DE, error_ctx>) {
+            write_error(state, rpc::error_e::internal, std::string(error.custom_error_message));
+         }
+         else {
+            static_assert(std::convertible_to<DE, std::string_view>,
+                          "A JSON-RPC handler's glz::expected error type must be glz::rpc::error, glz::rpc::error_e, "
+                          "glz::error_ctx, or convertible to std::string_view.");
+            write_error(state, rpc::error_e::internal, std::string(std::string_view(error)));
+         }
       }
 
       // Read params from JSON RPC request

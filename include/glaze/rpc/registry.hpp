@@ -6,6 +6,7 @@
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe/buffer.hpp"
 #include "glaze/rpc/repe/repe.hpp"
+#include "glaze/util/expected.hpp"
 
 namespace glz
 {
@@ -252,6 +253,40 @@ namespace glz
          register_members<root, T, parent>(value);
       }
 
+      // Non-throwing registration: same as on(), but reports a route-registration
+      // conflict (REST protocol) by return value instead of throwing. Behaves
+      // identically with and without exceptions, so it is the recommended entry point
+      // for exception-free builds. For REPE/JSON-RPC, registration cannot fail and this
+      // always succeeds. See #2265.
+      template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
+         requires(glaze_object_t<T> || reflectable<T>)
+      [[nodiscard]] expected<void, std::string> try_on(T& value)
+      {
+         if constexpr (Proto == REST) {
+            endpoints.clear_route_error();
+#if __cpp_exceptions
+            try {
+               on<root, T, parent>(value);
+            }
+            catch (const std::exception& e) {
+               return glz::unexpected(std::string(e.what()));
+            }
+            catch (...) {
+               return glz::unexpected(std::string("Unknown route registration error"));
+            }
+#else
+            on<root, T, parent>(value);
+#endif
+            if (endpoints.has_route_error()) {
+               return glz::unexpected(std::string(endpoints.route_error()));
+            }
+         }
+         else {
+            on<root, T, parent>(value);
+         }
+         return {};
+      }
+
       // Register multiple C++ types merged together, allowing the root endpoint to return a combined view
       template <const std::string_view& root = detail::empty_path, class... Ts>
          requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
@@ -268,6 +303,36 @@ namespace glz
             using T = std::decay_t<decltype(obj)>;
             register_members<root, T, root>(obj);
          });
+      }
+
+      // Non-throwing registration for merged objects (see try_on(T&) above).
+      template <const std::string_view& root = detail::empty_path, class... Ts>
+         requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
+      [[nodiscard]] expected<void, std::string> try_on(glz::merge<Ts...>& merged)
+      {
+         if constexpr (Proto == REST) {
+            endpoints.clear_route_error();
+#if __cpp_exceptions
+            try {
+               on<root>(merged);
+            }
+            catch (const std::exception& e) {
+               return glz::unexpected(std::string(e.what()));
+            }
+            catch (...) {
+               return glz::unexpected(std::string("Unknown route registration error"));
+            }
+#else
+            on<root>(merged);
+#endif
+            if (endpoints.has_route_error()) {
+               return glz::unexpected(std::string(endpoints.route_error()));
+            }
+         }
+         else {
+            on<root>(merged);
+         }
+         return {};
       }
 
       /// Message-based call for REPE protocol (deprecated)
@@ -328,6 +393,12 @@ namespace glz
                resp.reset(req_view);
                repe::state_view state{req_view, resp};
 
+               // Glaze's own (de)serialization reports failures through error codes, not
+               // exceptions, so this catch only guards exceptions escaping user handler
+               // code. Under -fno-exceptions there is nothing to catch: handlers instead
+               // signal failure by returning glz::expected, which write_response()
+               // translates into a REPE error. See #2265.
+#if __cpp_exceptions
                try {
                   it->second(state);
                }
@@ -335,6 +406,9 @@ namespace glz
                   resp.reset(req_view);
                   resp.set_error(error_code::parse_error, detail::build_registry_error(in.query, e.what()));
                }
+#else
+               it->second(state);
+#endif
             }
          }
          else {
@@ -412,6 +486,10 @@ namespace glz
          // Zero-copy call: state_view references the parsed request and response builder directly
          repe::state_view state{req, resp};
 
+         // The catch only guards exceptions from user handler code; glaze's own
+         // (de)serialization uses error codes. Under -fno-exceptions handlers report
+         // failure by returning glz::expected (translated by write_response). See #2265.
+#if __cpp_exceptions
          try {
             it->second(state);
          }
@@ -425,6 +503,9 @@ namespace glz
             resp.set_error(error_code::parse_error, "Unknown error");
             return;
          }
+#else
+         it->second(state);
+#endif
 
          // For notifications, response buffer stays empty (no response sent)
       }
@@ -529,6 +610,10 @@ namespace glz
          bool has_params = !req.params.str.empty() && req.params.str != "null";
          jsonrpc::state state{req.id, response, is_notification, has_params, req.params.str};
 
+         // The catch only guards exceptions from user handler code; glaze's own
+         // (de)serialization uses error codes. Under -fno-exceptions handlers report
+         // failure by returning glz::expected (translated by write_response). See #2265.
+#if __cpp_exceptions
          try {
             it->second(std::move(state));
          }
@@ -540,6 +625,9 @@ namespace glz
             return R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":)" +
                    write_json(std::string_view{e.what()}).value_or("null") + R"(},"id":)" + id_json + "}";
          }
+#else
+         it->second(std::move(state));
+#endif
 
          if (is_notification) {
             return std::nullopt;
