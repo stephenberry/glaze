@@ -1275,7 +1275,11 @@ namespace glz
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
-                        value.assign(buffer.data(), size_t(p - buffer.data()));
+                        const size_t n = size_t(p - buffer.data());
+#if __has_cpp_attribute(assume) >= 202207L
+                        [[assume(n <= sizeof(buffer))]];
+#endif
+                        value.assign(buffer.data(), n);
                         ++it;
                         if constexpr (not Opts.null_terminated) {
                            if (it == end) {
