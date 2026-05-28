@@ -696,10 +696,10 @@ suite working_http_tests = [] {
       simple_test_client client;
 
       // Step 1: preflight for the subsequent POST.
-      auto preflight = client.options(server.base_url() + "/echo",
-                                      {{"Origin", "http://app.local"},
-                                       {"Access-Control-Request-Method", "POST"},
-                                       {"Access-Control-Request-Headers", "Content-Type"}});
+      auto preflight =
+         client.options(server.base_url() + "/echo", {{"Origin", "http://app.local"},
+                                                      {"Access-Control-Request-Method", "POST"},
+                                                      {"Access-Control-Request-Headers", "Content-Type"}});
 
       expect(preflight.has_value()) << "Preflight should succeed\n";
       if (preflight.has_value()) {
@@ -727,9 +727,8 @@ suite working_http_tests = [] {
       simple_test_client client;
 
       // PUT is registered on /update.
-      auto put_result =
-         client.options(server.base_url() + "/update",
-                        {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "PUT"}});
+      auto put_result = client.options(server.base_url() + "/update",
+                                       {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "PUT"}});
       expect(put_result.has_value()) << "PUT preflight should succeed\n";
       if (put_result.has_value()) {
          expect(put_result->status_code == 204) << "PUT preflight should return 204\n";
@@ -741,9 +740,8 @@ suite working_http_tests = [] {
       }
 
       // /update has no DELETE handler, so a DELETE preflight should return 405.
-      auto delete_result =
-         client.options(server.base_url() + "/update",
-                        {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "DELETE"}});
+      auto delete_result = client.options(
+         server.base_url() + "/update", {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "DELETE"}});
       expect(delete_result.has_value()) << "DELETE preflight should yield a response\n";
       if (delete_result.has_value()) {
          expect(delete_result->status_code == 405)
@@ -751,9 +749,8 @@ suite working_http_tests = [] {
       }
 
       // PATCH on /update is also not implemented; same expectation.
-      auto patch_result =
-         client.options(server.base_url() + "/update",
-                        {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "PATCH"}});
+      auto patch_result = client.options(server.base_url() + "/update",
+                                         {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "PATCH"}});
       expect(patch_result.has_value()) << "PATCH preflight should yield a response\n";
       if (patch_result.has_value()) {
          expect(patch_result->status_code == 405)
@@ -842,9 +839,9 @@ suite working_http_tests = [] {
       for (int i = 0; i < num_threads; ++i) {
          threads.emplace_back([&server, &success_count, i]() {
             simple_test_client client;
-            auto result = client.options(server.base_url() + "/hello",
-                                         {{"Origin", "http://client" + std::to_string(i) + ".local"},
-                                          {"Access-Control-Request-Method", "GET"}});
+            auto result = client.options(
+               server.base_url() + "/hello",
+               {{"Origin", "http://client" + std::to_string(i) + ".local"}, {"Access-Control-Request-Method", "GET"}});
             if (result.has_value() && result->status_code == 204) {
                ++success_count;
             }
