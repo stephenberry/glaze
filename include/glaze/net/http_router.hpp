@@ -47,6 +47,18 @@ namespace glz
       std::string_view message{};
    };
 
+   // Returned (as the error of a glz::expected) by a reflected REST handler to fail
+   // the request with a chosen HTTP status. The registry sets the response status to
+   // `status` and serializes this object as the body, so a client can deserialize the
+   // response straight back into a glz::http_error. Handlers that don't need a specific
+   // status can return glz::expected with a glz::error_code or string error instead; the
+   // registry maps those to a status automatically (see rest_registry_impl.hpp).
+   struct http_error
+   {
+      int status{500};
+      std::string message{};
+   };
+
    // Response builder
    struct response
    {

@@ -39,7 +39,7 @@ A registered handler can fail a request by returning `glz::expected<T, E>`. The 
 
 ```c++
 struct calculator {
-   // string error  -> REPE error_code::parse_error / JSON-RPC internal error (-32603)
+   // string error -> REPE error_code::parse_error / JSON-RPC internal error (-32603) / REST 500
    std::function<glz::expected<int, std::string>(div_params)> divide = [](div_params p)
       -> glz::expected<int, std::string> {
       if (p.denominator == 0) return glz::unexpected(std::string("division by zero"));
@@ -49,4 +49,22 @@ struct calculator {
 ```
 
 For full JSON-RPC fidelity (custom code, message, and `data`), return `glz::expected<T, glz::rpc::error>`. REPE handlers may return `glz::expected<T, glz::error_code>` to choose the response error code. When exceptions are enabled, a handler that throws is still caught and reported as before.
+
+#### REST
+
+For REST the error is translated into an HTTP response rather than an RPC error envelope: the success value is serialized as the response body, while an error sets a non-2xx status and serializes a `glz::http_error` body (`{"status":N,"message":...}`, which a client can read straight back into a `glz::http_error`). The status is derived from the error type:
+
+- `glz::error_code` maps to a sensible HTTP status (`invalid_body`/`parse_error`/`invalid_query`/`syntax_error`/`constraint_violated` → 400, `method_not_found`/`key_not_found`/`nonexistent_json_ptr` → 404, `timeout` → 504, otherwise 500).
+- A `std::string` or `glz::error_ctx` error maps to 500 (treated as a server-side failure).
+- Return `glz::expected<T, glz::http_error>` to choose the status and message explicitly:
+
+```c++
+std::function<glz::expected<user, glz::http_error>(int)> find_user = [](int id)
+   -> glz::expected<user, glz::http_error> {
+   if (auto* u = lookup(id)) return *u;
+   return glz::unexpected(glz::http_error{404, "user not found"});
+};
+```
+
+`glz::rpc::error` is JSON-RPC-specific and is **not** a REST error type, since `glaze/net` does not depend on the JSON-RPC extension; use `glz::http_error` for explicit status control. Raw `glz::http_router` handlers that take a `glz::response&` can of course call `res.status(...)` directly instead of returning `glz::expected`.
 

@@ -234,4 +234,126 @@ suite rest_registration = [] {
    };
 };
 
+// ----------------------------------------------------------------------------
+// REST: a reflected handler may fail a request by returning glz::expected. The
+// registry maps the error to an HTTP status + glz::http_error body rather than
+// serializing the expected as a 200 success payload. See issue #2265.
+// ----------------------------------------------------------------------------
+
+struct rest_expected_t
+{
+   // POST /halve : string error -> 500 (server-side) by default.
+   std::function<glz::expected<int, std::string>(int)> halve = [](int x) -> glz::expected<int, std::string> {
+      if (x % 2 != 0) return glz::unexpected(std::string("odd input"));
+      return x / 2;
+   };
+
+   // POST /non_negative : glz::error_code -> mapped HTTP status (invalid_body -> 400).
+   std::function<glz::expected<int, glz::error_code>(int)> non_negative =
+      [](int x) -> glz::expected<int, glz::error_code> {
+      if (x < 0) return glz::unexpected(glz::error_code::invalid_body);
+      return x;
+   };
+
+   // POST /find : glz::http_error -> explicit status + message (full control).
+   std::function<glz::expected<int, glz::http_error>(int)> find = [](int id) -> glz::expected<int, glz::http_error> {
+      if (id != 42) return glz::unexpected(glz::http_error{404, "not found"});
+      return id;
+   };
+
+   // GET /ping : no-arg function endpoint that fails with an explicit status.
+   std::function<glz::expected<std::string, glz::http_error>()> ping =
+      []() -> glz::expected<std::string, glz::http_error> {
+      return glz::unexpected(glz::http_error{503, "warming up"});
+   };
+
+   // POST /reset : expected<void, E> -> 204 on success, mapped status on failure.
+   std::function<glz::expected<void, std::string>(int)> reset = [](int code) -> glz::expected<void, std::string> {
+      if (code != 0) return glz::unexpected(std::string("bad code"));
+      return {};
+   };
+};
+
+namespace
+{
+   // Invoke a registered REST route directly (no live server) and return the response.
+   glz::response run_rest(glz::registry<glz::opts{}, glz::REST>& reg, glz::http_method method, std::string_view path,
+                          std::string body)
+   {
+      auto [handler, params] = reg.endpoints.match(method, path);
+      expect(bool(handler)) << "route should be reachable: " << path;
+      glz::request req{
+         .method = method, .target = std::string(path), .params = std::move(params), .body = std::move(body)};
+      glz::response res{};
+      if (handler) {
+         handler(req, res);
+      }
+      return res;
+   }
+}
+
+suite rest_expected_handlers = [] {
+   "rest_expected_success_serializes_value"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> reg{};
+      rest_expected_t obj{};
+      reg.on(obj);
+      auto res = run_rest(reg, glz::http_method::POST, "/halve", "4");
+      expect(res.status_code == 200) << res.status_code;
+      expect(res.response_body == "2") << res.response_body; // unwrapped value, not {"unexpected":..}
+   };
+
+   "rest_expected_string_error_defaults_to_500"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> reg{};
+      rest_expected_t obj{};
+      reg.on(obj);
+      auto res = run_rest(reg, glz::http_method::POST, "/halve", "3");
+      expect(res.status_code == 500) << res.status_code;
+      glz::http_error err{};
+      expect(!glz::read_json(err, res.response_body)) << res.response_body;
+      expect(err.status == 500);
+      expect(err.message == "odd input") << res.response_body;
+   };
+
+   "rest_expected_error_code_maps_to_status"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> reg{};
+      rest_expected_t obj{};
+      reg.on(obj);
+      auto res = run_rest(reg, glz::http_method::POST, "/non_negative", "-1");
+      expect(res.status_code == 400) << res.status_code; // invalid_body -> 400
+      glz::http_error err{};
+      expect(!glz::read_json(err, res.response_body)) << res.response_body;
+      expect(err.status == 400);
+   };
+
+   "rest_expected_http_error_full_control"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> reg{};
+      rest_expected_t obj{};
+      reg.on(obj);
+      auto res = run_rest(reg, glz::http_method::POST, "/find", "7");
+      expect(res.status_code == 404) << res.status_code;
+      glz::http_error err{};
+      expect(!glz::read_json(err, res.response_body)) << res.response_body;
+      expect(err.status == 404);
+      expect(err.message == "not found") << res.response_body;
+   };
+
+   "rest_expected_get_no_arg_failure"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> reg{};
+      rest_expected_t obj{};
+      reg.on(obj);
+      auto res = run_rest(reg, glz::http_method::GET, "/ping", "");
+      expect(res.status_code == 503) << res.status_code;
+   };
+
+   "rest_expected_void_success_is_204"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> reg{};
+      rest_expected_t obj{};
+      reg.on(obj);
+      auto ok = run_rest(reg, glz::http_method::POST, "/reset", "0");
+      expect(ok.status_code == 204) << ok.status_code;
+      auto bad = run_rest(reg, glz::http_method::POST, "/reset", "1");
+      expect(bad.status_code == 500) << bad.status_code;
+   };
+};
+
 int main() { return 0; }

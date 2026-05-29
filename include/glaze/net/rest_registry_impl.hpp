@@ -21,11 +21,113 @@ namespace glz
       using type = http_router;
    };
 
+   namespace detail
+   {
+      // Maps a reflected handler's return type to the type that actually appears in a
+      // successful REST response body: glz::expected<T, E> unwraps to T so the generated
+      // response schema describes the value rather than the expected wrapper.
+      template <class R>
+      struct rest_success_type
+      {
+         using type = R;
+      };
+      template <class T, class E>
+      struct rest_success_type<expected<T, E>>
+      {
+         using type = T;
+      };
+      template <class R>
+      using rest_success_type_t = typename rest_success_type<std::remove_cvref_t<R>>::type;
+   }
+
    // Implementation for REST protocol
    template <auto Opts>
    struct registry_impl<Opts, REST>
    {
       using enum http_method;
+
+      // --- glz::expected -> HTTP translation for reflected handlers --------------------
+      // A reflected handler may signal failure by returning glz::expected<T, E> instead of
+      // throwing (required under -fno-exceptions, convenient otherwise). These helpers are
+      // the REST peer of repe::set_handler_error / jsonrpc::set_handler_error: the success
+      // value is serialized as the body, while the error is mapped to an HTTP status and a
+      // glz::http_error body. Note: rpc::error/error_e (full JSON-RPC fidelity) are not
+      // accepted here, since glaze/net must not depend on the glaze/ext JSON-RPC types;
+      // use glz::http_error for explicit status control.
+
+      // Map a Glaze error_code to the most appropriate HTTP status.
+      static int http_status_for(error_code ec)
+      {
+         switch (ec) {
+         case error_code::invalid_body:
+         case error_code::parse_error:
+         case error_code::invalid_query:
+         case error_code::syntax_error:
+         case error_code::constraint_violated:
+            return 400;
+         case error_code::method_not_found:
+         case error_code::key_not_found:
+         case error_code::nonexistent_json_ptr:
+            return 404;
+         case error_code::timeout:
+            return 504;
+         default:
+            return 500;
+         }
+      }
+
+      // Translate a handler's glz::expected error into an HTTP status + body. Supported
+      // error types:
+      //   - glz::http_error -> its explicit status and message
+      //   - glz::error_code -> http_status_for(ec) with the code's name
+      //   - glz::error_ctx  -> 500 with the formatted context
+      //   - string-like     -> 500 with the message
+      template <class E>
+      static void set_handler_error(response& res, E&& error)
+      {
+         using DE = std::remove_cvref_t<E>;
+         if constexpr (std::same_as<DE, http_error>) {
+            res.status(error.status).template body<Opts>(std::forward<E>(error));
+         }
+         else if constexpr (std::same_as<DE, error_code>) {
+            const int s = http_status_for(error);
+            res.status(s).template body<Opts>(http_error{s, format_error(error)});
+         }
+         else if constexpr (std::same_as<DE, error_ctx>) {
+            res.status(500).template body<Opts>(http_error{500, format_error(error)});
+         }
+         else {
+            static_assert(std::convertible_to<DE, std::string_view>,
+                          "A REST handler's glz::expected error type must be glz::http_error, glz::error_code, "
+                          "glz::error_ctx, or convertible to std::string_view.");
+            res.status(500).template body<Opts>(http_error{500, std::string(std::string_view(error))});
+         }
+      }
+
+      // Serialize a (possibly glz::expected) handler result into the response. On a
+      // glz::expected, the success value is serialized (204 for an expected<void, E>);
+      // the error is translated by set_handler_error. Plain results serialize as before.
+      template <class R>
+      static void write_result(response& res, R&& result)
+      {
+         using V = std::remove_cvref_t<R>;
+         if constexpr (is_expected<V>) {
+            if (result.has_value()) {
+               if constexpr (std::is_void_v<typename V::value_type>) {
+                  res.status(204); // No Content
+               }
+               else {
+                  res.template body<Opts>(*std::forward<R>(result));
+               }
+            }
+            else {
+               set_handler_error(res, std::forward<R>(result).error());
+            }
+         }
+         else {
+            res.template body<Opts>(std::forward<R>(result));
+         }
+      }
 
       // Helper method to convert a JSON pointer path to a REST path
       static std::string convert_to_rest_path(sv json_pointer_path)
@@ -131,7 +233,9 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
-         auto get_spec = create_route_spec_with_types<void, Result>("Get " + get_type_name<Result>(), {"data"});
+         using ResponseType = detail::rest_success_type_t<Result>;
+         auto get_spec =
+            create_route_spec_with_types<void, ResponseType>("Get " + get_type_name<ResponseType>(), {"data"});
          // GET handler for functions
          reg.endpoints.route(
             GET, rest_path,
@@ -141,8 +245,7 @@ namespace glz
                   res.status(204); // No Content
                }
                else {
-                  auto result = func();
-                  res.body<Opts>(result);
+                  write_result(res, func());
                }
             },
             get_spec);
@@ -154,7 +257,9 @@ namespace glz
          std::string rest_path = convert_to_rest_path(path);
 
          using Result = std::invoke_result_t<decltype(func), Params>;
-         auto post_spec = create_route_spec_with_types<Params, Result>("Create " + get_type_name<Result>(), {"data"});
+         using ResponseType = detail::rest_success_type_t<Result>;
+         auto post_spec =
+            create_route_spec_with_types<Params, ResponseType>("Create " + get_type_name<ResponseType>(), {"data"});
          // POST handler for functions with parameters
          reg.endpoints.route(
             POST, rest_path,
@@ -172,8 +277,7 @@ namespace glz
                   res.status(204); // No Content
                }
                else {
-                  auto result = func(std::move(params_result));
-                  res.body<Opts>(result);
+                  write_result(res, func(std::move(params_result)));
                }
             },
             post_spec);
@@ -265,7 +369,9 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
-         auto get_spec = create_route_spec_with_types<void, Ret>("Get " + get_type_name<Ret>(), {"data"});
+         using ResponseType = detail::rest_success_type_t<Ret>;
+         auto get_spec =
+            create_route_spec_with_types<void, ResponseType>("Get " + get_type_name<ResponseType>(), {"data"});
          // GET handler for member functions with no args
          reg.endpoints.route(
             GET, rest_path,
@@ -275,8 +381,7 @@ namespace glz
                   res.status(204); // No Content
                }
                else {
-                  auto result = (value.*func)();
-                  res.body<Opts>(result);
+                  write_result(res, (value.*func)());
                }
             },
             get_spec);
@@ -287,7 +392,9 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
-         auto post_spec = create_route_spec_with_types<Input, Ret>("Create " + get_type_name<Ret>(), {"data"});
+         using ResponseType = detail::rest_success_type_t<Ret>;
+         auto post_spec =
+            create_route_spec_with_types<Input, ResponseType>("Create " + get_type_name<ResponseType>(), {"data"});
          // POST handler for member functions with args
          reg.endpoints.route(
             POST, rest_path,
@@ -305,8 +412,7 @@ namespace glz
                   res.status(204); // No Content
                }
                else {
-                  auto result = (value.*func)(std::move(params_result));
-                  res.body<Opts>(result);
+                  write_result(res, (value.*func)(std::move(params_result)));
                }
             },
             post_spec);
