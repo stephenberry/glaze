@@ -94,13 +94,24 @@ struct UserService
       }
       return glz::unexpected(glz::http_error{404, "user not found"});
    }
+
+   // Reset a user's profile. A void return replies 204 No Content, which the
+   // generated OpenAPI should document under the 204 status rather than 200.
+   void resetUser(const UserIdRequest& request)
+   {
+      if (auto it = users.find(request.id); it != users.end()) {
+         it->second.name.clear();
+         it->second.email.clear();
+      }
+   }
 };
 
 template <>
 struct glz::meta<UserService>
 {
    using T = UserService;
-   static constexpr auto value = object(&T::getAllUsers, &T::getUserById, &T::createUser, &T::deleteUser, &T::findUser);
+   static constexpr auto value =
+      object(&T::getAllUsers, &T::getUserById, &T::createUser, &T::deleteUser, &T::findUser, &T::resetUser);
 };
 
 int main()
@@ -208,6 +219,14 @@ int main()
                << "http_error schema should be registered in components";
             expect(response.response_body.find("\"default\"") != std::string::npos)
                << "error response should be documented under the default status";
+
+            // A void handler replies 204 No Content, which the spec should document under
+            // the 204 status rather than 200. resetUser returns void.
+            expect(response.response_body.find("resetUser") != std::string::npos) << "resetUser endpoint should appear";
+            expect(response.response_body.find("\"204\"") != std::string::npos)
+               << "void handler should be documented with a 204 response";
+            expect(response.response_body.find("No Content") != std::string::npos)
+               << "204 response should be described as No Content";
          }
          else {
             std::cout << "HTTP request failed with error code: " << response_result.error().value() << std::endl;

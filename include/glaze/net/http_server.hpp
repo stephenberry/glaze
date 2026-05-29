@@ -1100,7 +1100,11 @@ namespace glz
                      op.tags = route_entry.spec.tags;
                   }
                   op.operationId = std::string(to_string(method)) + route_path;
-                  op.responses["200"].description = "OK";
+
+                  // Success response keyed by the handler's actual status (204 for void /
+                  // update endpoints, 200 when a body is returned).
+                  const std::string success_key = std::to_string(route_entry.spec.success_status);
+                  op.responses[success_key].description = route_entry.spec.success_status == 204 ? "No Content" : "OK";
 
                   // Add request body schema
                   if (route_entry.spec.request_body_schema) {
@@ -1127,7 +1131,7 @@ namespace glz
                      if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.response_schema)) {
                         res_obj.content.value()["application/json"].schema = *schema_val;
                      }
-                     op.responses["200"] = res_obj;
+                     op.responses[success_key] = res_obj;
 
                      // Add schema to components
                      if (!spec.components) spec.components.emplace();

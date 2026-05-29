@@ -218,6 +218,10 @@ namespace glz
       std::vector<std::string> tags{};
       std::unordered_map<std::string, param_constraint> constraints{};
 
+      // HTTP status of a successful response. 200 when the handler returns a body, 204
+      // (No Content) for void/expected<void, E> handlers and update (PUT) endpoints.
+      int success_status{200};
+
       // Type information for schema generation
       std::optional<std::string> request_body_schema{};
       std::optional<std::string> response_schema{};

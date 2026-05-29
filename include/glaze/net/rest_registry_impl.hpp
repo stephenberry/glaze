@@ -187,6 +187,11 @@ namespace glz
          spec.description = description;
          spec.tags = tags;
 
+         // A void response means the handler replies 204 No Content (update endpoints,
+         // void functions, and expected<void, E> handlers, which all pass ResponseType =
+         // void here); a non-void response is serialized with a 200 body.
+         spec.success_status = std::same_as<ResponseType, void> ? 204 : 200;
+
          if constexpr (!std::same_as<RequestType, void>) {
             spec.request_body_schema = generate_schema_for_type<RequestType>();
             spec.request_body_type_name = get_type_name<RequestType>();
