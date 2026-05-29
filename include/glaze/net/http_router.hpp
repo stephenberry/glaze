@@ -1012,12 +1012,31 @@ namespace glz
        * lifecycle and write chunked responses through streaming_response.
        *
        * Supports the same path-parameter syntax as normal routes (":param" and "*name").
+       * Like route(), a structural conflict throws when exceptions are enabled and is
+       * recorded (see route_error()) otherwise; use try_stream() to handle conflicts by
+       * return value in either configuration.
        */
       basic_http_router& stream(http_method method, std::string_view path, streaming_handler handle,
                                 const route_spec& spec = {})
       {
          surface_route_result(streaming_routes.add(method, path, std::move(handle), spec));
          return *this;
+      }
+
+      /**
+       * @brief Register a streaming route without throwing, reporting conflicts by
+       * return value. The streaming counterpart of try_route().
+       *
+       * @return Empty on success, or the conflict message on failure.
+       */
+      [[nodiscard]] expected<void, std::string> try_stream(http_method method, std::string_view path,
+                                                           streaming_handler handle, const route_spec& spec = {})
+      {
+         auto result = streaming_routes.add(method, path, std::move(handle), spec);
+         if (!result && route_error_.empty()) {
+            route_error_ = result.error();
+         }
+         return result;
       }
 
       /**
@@ -1042,11 +1061,31 @@ namespace glz
        * Supports the same path-parameter syntax as normal routes. The HTTP server
        * detects the upgrade handshake (Upgrade: websocket) and dispatches to the
        * matching server, populating request.params from the path.
+       *
+       * Like route(), a structural conflict throws when exceptions are enabled and is
+       * recorded (see route_error()) otherwise; use try_websocket() to handle conflicts
+       * by return value in either configuration.
        */
       basic_http_router& websocket(std::string_view path, websocket_handler server, const route_spec& spec = {})
       {
          surface_route_result(websocket_routes.add(http_method::GET, path, std::move(server), spec));
          return *this;
+      }
+
+      /**
+       * @brief Register a WebSocket handler without throwing, reporting conflicts by
+       * return value. The WebSocket counterpart of try_route().
+       *
+       * @return Empty on success, or the conflict message on failure.
+       */
+      [[nodiscard]] expected<void, std::string> try_websocket(std::string_view path, websocket_handler server,
+                                                              const route_spec& spec = {})
+      {
+         auto result = websocket_routes.add(http_method::GET, path, std::move(server), spec);
+         if (!result && route_error_.empty()) {
+            route_error_ = result.error();
+         }
+         return result;
       }
 
       /**

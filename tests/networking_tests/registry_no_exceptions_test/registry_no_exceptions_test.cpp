@@ -81,6 +81,33 @@ suite http_router_registration = [] {
       expect(second.has_value()); // overwriting an identical route is intentional, not a conflict
    };
 
+   // try_stream()/try_websocket() give streaming and WebSocket routes the same
+   // return-value conflict channel that try_route() gives normal routes, so an
+   // exception-free build is not forced onto the route_error() side-channel.
+   "try_stream_reports_conflict_by_return_value"_test = [] {
+      glz::http_router router{};
+      auto ok = router.try_stream(glz::http_method::GET, "/events/:id", glz::streaming_handler{});
+      expect(ok.has_value());
+      expect(!router.has_route_error());
+      // A different parameter name at the same position cannot be represented.
+      auto conflict = router.try_stream(glz::http_method::GET, "/events/:name/tail", glz::streaming_handler{});
+      expect(!conflict.has_value());
+      expect(conflict.error().find("different parameter names") != std::string::npos) << conflict.error();
+      expect(router.has_route_error()); // still recorded on the shared side-channel too
+      expect(router.route_error() == conflict.error());
+   };
+
+   "try_websocket_reports_conflict_by_return_value"_test = [] {
+      glz::http_router router{};
+      auto ok = router.try_websocket("/ws/:id", glz::websocket_handler{});
+      expect(ok.has_value());
+      expect(!router.has_route_error());
+      auto conflict = router.try_websocket("/ws/:name/tail", glz::websocket_handler{});
+      expect(!conflict.has_value());
+      expect(conflict.error().find("different parameter names") != std::string::npos) << conflict.error();
+      expect(router.has_route_error());
+   };
+
 #if __cpp_exceptions
    "route_throws_on_conflict_when_exceptions_enabled"_test = [] {
       glz::http_router router{};

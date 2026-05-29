@@ -31,7 +31,7 @@ if (auto ec = registry.try_on(api); !ec) {
 }
 ```
 
-`try_route`/`try_on` return `glz::expected<void, std::string>` and never throw. The router also records the first conflict, queryable via `router.has_route_error()` / `router.route_error()`.
+`try_route`/`try_on` return `glz::expected<void, std::string>` and never throw; `try_stream` and `try_websocket` give streaming and WebSocket routes the same return-value channel. The router also records the first conflict, queryable via `router.has_route_error()` / `router.route_error()`.
 
 ### Failing a request without throwing
 
