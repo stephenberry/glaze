@@ -200,6 +200,28 @@ namespace glz
          return spec;
       }
 
+      // Record the error response for a reflected handler whose return type is the
+      // (possibly glz::expected) Result. set_handler_error always serializes a
+      // glz::http_error body, so that is the documented error schema; the response key
+      // is fixed at "500" for string/error_ctx errors and "default" otherwise, since an
+      // error_code maps to several statuses and a glz::http_error carries any status.
+      template <class Result>
+      static void describe_error_response(route_spec& spec)
+      {
+         using R = std::remove_cvref_t<Result>;
+         if constexpr (is_expected<R>) {
+            using E = typename R::error_type;
+            spec.error_response_schema = generate_schema_for_type<http_error>();
+            spec.error_response_type_name = "http_error";
+            if constexpr (std::same_as<E, error_ctx> || std::convertible_to<E, std::string_view>) {
+               spec.error_status_key = "500";
+            }
+            else {
+               spec.error_status_key = "default";
+            }
+         }
+      }
+
       template <class T, class RegistryType>
       static void register_endpoint(const sv path, T& value, RegistryType& reg)
       {
@@ -236,6 +258,7 @@ namespace glz
          using ResponseType = detail::rest_success_type_t<Result>;
          auto get_spec =
             create_route_spec_with_types<void, ResponseType>("Get " + get_type_name<ResponseType>(), {"data"});
+         describe_error_response<Result>(get_spec);
          // GET handler for functions
          reg.endpoints.route(
             GET, rest_path,
@@ -260,6 +283,7 @@ namespace glz
          using ResponseType = detail::rest_success_type_t<Result>;
          auto post_spec =
             create_route_spec_with_types<Params, ResponseType>("Create " + get_type_name<ResponseType>(), {"data"});
+         describe_error_response<Result>(post_spec);
          // POST handler for functions with parameters
          reg.endpoints.route(
             POST, rest_path,
@@ -372,6 +396,7 @@ namespace glz
          using ResponseType = detail::rest_success_type_t<Ret>;
          auto get_spec =
             create_route_spec_with_types<void, ResponseType>("Get " + get_type_name<ResponseType>(), {"data"});
+         describe_error_response<Ret>(get_spec);
          // GET handler for member functions with no args
          reg.endpoints.route(
             GET, rest_path,
@@ -395,6 +420,7 @@ namespace glz
          using ResponseType = detail::rest_success_type_t<Ret>;
          auto post_spec =
             create_route_spec_with_types<Input, ResponseType>("Create " + get_type_name<ResponseType>(), {"data"});
+         describe_error_response<Ret>(post_spec);
          // POST handler for member functions with args
          reg.endpoints.route(
             POST, rest_path,

@@ -1137,6 +1137,27 @@ namespace glz
                      }
                   }
 
+                  // Add error response (handlers that fail by returning glz::expected)
+                  if (route_entry.spec.error_response_schema) {
+                     openapi_response err_obj;
+                     err_obj.description = "Error response";
+                     err_obj.content.emplace();
+                     if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.error_response_schema)) {
+                        err_obj.content.value()["application/json"].schema = *schema_val;
+                     }
+                     op.responses[route_entry.spec.error_status_key] = err_obj;
+
+                     // Add error schema to components
+                     if (route_entry.spec.error_response_type_name) {
+                        if (!spec.components) spec.components.emplace();
+                        if (!spec.components->schemas) spec.components->schemas.emplace();
+                        if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.error_response_schema)) {
+                           spec.components->schemas->operator[](*route_entry.spec.error_response_type_name) =
+                              *schema_val;
+                        }
+                     }
+                  }
+
                   // Extract path parameters
                   auto segments = http_router::split_path(route_path);
                   for (const auto& segment : segments) {

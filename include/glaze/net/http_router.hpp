@@ -223,6 +223,14 @@ namespace glz
       std::optional<std::string> response_schema{};
       std::optional<std::string> request_body_type_name{};
       std::optional<std::string> response_type_name{};
+
+      // Error response, populated when a reflected handler returns glz::expected. The
+      // error body is a glz::http_error; error_status_key is the OpenAPI response key:
+      // "500" when the status is fixed (string/error_ctx errors), otherwise "default"
+      // because the status depends on the error value (error_code or glz::http_error).
+      std::optional<std::string> error_response_schema{};
+      std::optional<std::string> error_response_type_name{};
+      std::string error_status_key{"default"};
    };
 
    /**

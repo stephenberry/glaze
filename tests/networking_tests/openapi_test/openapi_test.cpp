@@ -83,13 +83,24 @@ struct UserService
       }
       return false;
    }
+
+   // Find a user by ID, failing the request with a 404 when absent. Returning
+   // glz::expected makes the generated OpenAPI document an error response.
+   glz::expected<User, glz::http_error> findUser(const UserIdRequest& request)
+   {
+      auto it = users.find(request.id);
+      if (it != users.end()) {
+         return it->second;
+      }
+      return glz::unexpected(glz::http_error{404, "user not found"});
+   }
 };
 
 template <>
 struct glz::meta<UserService>
 {
    using T = UserService;
-   static constexpr auto value = object(&T::getAllUsers, &T::getUserById, &T::createUser, &T::deleteUser);
+   static constexpr auto value = object(&T::getAllUsers, &T::getUserById, &T::createUser, &T::deleteUser, &T::findUser);
 };
 
 int main()
@@ -187,6 +198,16 @@ int main()
             expect(response.response_body.find("openapi") != std::string::npos);
             expect(response.response_body.find("User Management API") != std::string::npos);
             expect(response.response_body.find("paths") != std::string::npos);
+
+            // A reflected handler returning glz::expected documents its error response
+            // (a glz::http_error body) in the generated spec. findUser returns
+            // glz::expected<User, glz::http_error>, so the status is data-dependent and
+            // the error is documented under the "default" response key.
+            expect(response.response_body.find("findUser") != std::string::npos) << "findUser endpoint should appear";
+            expect(response.response_body.find("http_error") != std::string::npos)
+               << "http_error schema should be registered in components";
+            expect(response.response_body.find("\"default\"") != std::string::npos)
+               << "error response should be documented under the default status";
          }
          else {
             std::cout << "HTTP request failed with error code: " << response_result.error().value() << std::endl;
