@@ -17,6 +17,7 @@ import glaze.core.opts;
 import glaze.core.context;
 
 import glaze.csv.read;
+import glaze.csv.skip;
 import glaze.csv.write;
 
 import glaze.json;

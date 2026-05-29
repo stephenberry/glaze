@@ -19,51 +19,13 @@ Formats Supported:
 >
 > Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
 
+> [!TIP]
+> Glaze now supports [P2996 "Reflection for C++26"](https://wg21.link/P2996). When enabled, P2996 unlocks capabilities that aren't possible with traditional compile-time reflection. For more details, see [Reflection for C++26 section](#c++26-p2996-reflection-support).
+
 ## With C++23 compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
 - See [example on Compiler Explorer](https://gcc.godbolt.org/z/T4To5fKfz)
-
-## C++26 P2996 Reflection Support
-
-Glaze now supports [P2996 "Reflection for C++26"](https://wg21.link/P2996). When enabled, P2996 unlocks capabilities that aren't possible with traditional compile-time reflection.
-
-<details><summary>P2996 reflection capabilities and examples:</summary>
-
-- **Non-aggregate types** — classes with constructors, virtual functions, and inheritance just work
-- **Automatic enum serialization** — no `glz::meta` needed, enums serialize to strings automatically
-- **Unlimited struct members** — no 128-member cap
-- **Private member access** — reflect on all members regardless of access specifiers
-- **Standardized** — no compiler-specific hacks, built on `std::meta`
-
-```cpp
-// Classes with constructors — just works with P2996
-class User {
-public:
-   std::string name;
-   int age;
-   User() = default;
-   User(std::string n, int a) : name(std::move(n)), age(a) {}
-};
-
-User u{"Alice", 30};
-auto json = glz::write_json(u).value_or("error");
-// {"name":"Alice","age":30}
-
-// Enums serialize as strings — no glz::meta required
-enum class Color { Red, Green, Blue };
-Color c = Color::Green;
-
-struct reflect_enums_opts : glz::opts {
-   bool reflect_enums = true;
-};
-auto color_json = glz::write<reflect_enums_opts{}>(c).value_or("error");
-// "Green"
-```
-
-Supported compilers: [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) (`-std=c++26 -freflection`) and [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996). See the [P2996 documentation](https://stephenberry.github.io/glaze/p2996-reflection/) for setup and details.
-
-</details>
 
 ## [📖 Documentation](https://stephenberry.github.io/glaze/)
 
@@ -85,6 +47,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 - No exceptions (compiles with `-fno-exceptions`)
   - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](https://stephenberry.github.io/glaze/exceptions/)
 - No runtime type information necessary (compiles with `-fno-rtti`)
+- Modules native
 - [JSON Schema generation](https://stephenberry.github.io/glaze/json-schema/)
 - [Partial Read](https://stephenberry.github.io/glaze/partial-read/) and [Partial Write](https://stephenberry.github.io/glaze/partial-write/) support
 - [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for reading/writing large files with bounded memory
@@ -131,6 +94,190 @@ JSON size: 670 bytes
 BEVE size: 611 bytes
 
 *BEVE packs more efficiently than JSON, so transporting the same data is even faster.
+
+## Compiler/System Support
+
+- Requires C++23
+- Tested for both 64bit and 32bit
+- Supports both little-endian and big-endian systems
+
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (Visual Studio 2026 MSVC Build Tools 14.50), and [GCC](https://gcc.gnu.org) (13+) on Apple, Windows, and Linux. Big-endian is tested via QEMU emulation on s390x.
+
+![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
+
+> Glaze seeks to maintain compatibility with the latest three versions of GCC and Clang, as well as the latest version of MSVC and Apple Clang (Xcode). And, we aim to only drop old versions with major releases.
+
+## How To Use Glaze
+
+For more details and a walkthrough on the installation, see [docs/installation.md](https://github.com/stephenberry/glaze/blob/main/docs/installation.md).
+
+### [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html)
+```cmake
+include(FetchContent)
+
+FetchContent_Declare(
+  glaze
+  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+  GIT_TAG main
+  GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(glaze)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
+```
+
+### [vcpkg](https://vcpkg.io/en/package/glaze) 
+
+```
+vcpkg add port glaze
+```
+
+```cmake
+find_package(glaze CONFIG REQUIRED)
+
+target_link_libraries(TPP PRIVATE glaze::glaze)
+```
+
+### [Conan](https://conan.io)
+
+- Included in [Conan Center](https://conan.io/center/) ![Conan Center](https://img.shields.io/conan/v/glaze)
+
+```
+find_package(glaze REQUIRED)
+
+target_link_libraries(main PRIVATE glaze::glaze)
+```
+
+### [build2](https://build2.org)
+
+- Available on [cppget](https://cppget.org/libglaze)
+
+```
+import libs = libglaze%lib{glaze}
+```
+
+### Arch Linux
+
+- [Official Arch repository](https://archlinux.org/packages/extra/any/glaze/)
+- AUR git package: [glaze-git](https://aur.archlinux.org/packages/glaze-git)
+
+### See this [Example Repository](https://github.com/stephenberry/glaze_example) for how to use Glaze in a new project
+
+### MSVC Compiler Flags
+
+Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:preprocessor` flag when building with MSVC.
+
+### SIMD Architecture Detection
+
+Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations using compiler-predefined macros:
+
+| Flag | Detected When | Architecture |
+|------|--------------|--------------|
+| `GLZ_USE_SSE2` | `__x86_64__` or `_M_X64` | x86-64 (always has SSE2) |
+| `GLZ_USE_AVX2` | `__AVX2__` (in addition to x86-64) | x86-64 with AVX2 |
+| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM64 / AArch64 |
+
+Since these are target-architecture macros set by the compiler, cross-compilation works automatically (e.g., an x86 host cross-compiling for ARM will not enable x86 SIMD paths).
+
+To disable SIMD optimizations:
+
+```cmake
+set(glaze_DISABLE_SIMD_WHEN_SUPPORTED ON)
+```
+
+This sets `GLZ_DISABLE_SIMD` as an INTERFACE compile definition, propagated to all targets linking against `glaze::glaze`. Without CMake, define `GLZ_DISABLE_SIMD` before including Glaze headers.
+
+### Disable Forced Inlining
+
+For faster compilation and reduced binary size at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
+
+```cmake
+set(glaze_DISABLE_ALWAYS_INLINE ON)
+```
+
+> **Note:** This reduces compilation time and binary size, which can be useful for embedded systems where size is critical. For additional binary size reduction, see Optimization Levels below.
+
+### C++26 P2996 Reflection
+
+Glaze supports [C++26 P2996 reflection](https://wg21.link/P2996) as an alternative backend for struct reflection. This replaces traditional `__PRETTY_FUNCTION__` parsing with standardized reflection primitives.
+
+```cmake
+set(glaze_ENABLE_REFLECTION26 ON)
+```
+
+Requires [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) or [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996) with flags:
+
+**GCC 16+:**
+```bash
+-std=c++26 -freflection
+```
+
+**Bloomberg clang-p2996:**
+```bash
+-std=c++26 -freflection -fexpansion-statements -stdlib=libc++
+```
+
+Benefits include unlimited struct members (vs 128 with traditional reflection), cleaner type names, and future C++ standards compliance. See [P2996 Reflection](https://stephenberry.github.io/glaze/p2996-reflection/) for details.
+
+### Optimization Levels (Embedded/Size Optimization)
+
+Glaze provides optimization levels to control the trade-off between binary size and runtime performance. This is useful for embedded systems:
+
+```cpp
+auto json = glz::write<glz::opts_size{}>(obj);
+auto ec = glz::read<glz::opts_size{}>(obj, buffer);
+```
+
+| Level | Preset | Description |
+|-------|--------|-------------|
+| `normal` | (default) | Maximum performance (~278KB lookup tables for integers and floats) |
+| `size` | `opts_size` | Minimal binary (~400B integer tables, `std::to_chars` for floats, linear search) |
+
+See [Optimization Levels](https://stephenberry.github.io/glaze/optimization-levels/) for full details.
+
+## See [FAQ](https://stephenberry.github.io/glaze/FAQ/) for Frequently Asked Questions
+---
+
+## C++26 P2996 Reflection Support
+
+<details><summary>P2996 reflection capabilities and examples:</summary>
+
+- **Non-aggregate types** — classes with constructors, virtual functions, and inheritance just work
+- **Automatic enum serialization** — no `glz::meta` needed, enums serialize to strings automatically
+- **Unlimited struct members** — no 128-member cap
+- **Private member access** — reflect on all members regardless of access specifiers
+- **Standardized** — no compiler-specific hacks, built on `std::meta`
+
+```cpp
+// Classes with constructors — just works with P2996
+class User {
+public:
+   std::string name;
+   int age;
+   User() = default;
+   User(std::string n, int a) : name(std::move(n)), age(a) {}
+};
+
+User u{"Alice", 30};
+auto json = glz::write_json(u).value_or("error");
+// {"name":"Alice","age":30}
+
+// Enums serialize as strings — no glz::meta required
+enum class Color { Red, Green, Blue };
+Color c = Color::Green;
+
+struct reflect_enums_opts : glz::opts {
+   bool reflect_enums = true;
+};
+auto color_json = glz::write<reflect_enums_opts{}>(c).value_or("error");
+// "Green"
+```
+
+Supported compilers: [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) (`-std=c++26 -freflection`) and [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996). See the [P2996 documentation](https://stephenberry.github.io/glaze/p2996-reflection/) for setup and details.
+
+</details>
+
 
 ## Examples
 
@@ -249,137 +396,6 @@ auto ec = glz::read_json(obj, buffer);
 ```
 
 The buffer refills automatically during parsing, enabling reading of arbitrarily large inputs with fixed memory. See [Streaming I/O](https://stephenberry.github.io/glaze/streaming/) for NDJSON processing and other streaming patterns.
-
-## Compiler/System Support
-
-- Requires C++23
-- Tested for both 64bit and 32bit
-- Supports both little-endian and big-endian systems
-
-[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (Visual Studio 2026 MSVC Build Tools 14.50), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux. Big-endian is tested via QEMU emulation on s390x.
-
-![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
-
-> Glaze seeks to maintain compatibility with the latest three versions of GCC and Clang, as well as the latest version of MSVC and Apple Clang (Xcode). And, we aim to only drop old versions with major releases.
-
-### MSVC Compiler Flags
-
-Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:preprocessor` flag when building with MSVC.
-
-### SIMD Architecture Detection
-
-Glaze automatically detects the target architecture and enables platform-specific SIMD optimizations using compiler-predefined macros:
-
-| Flag | Detected When | Architecture |
-|------|--------------|--------------|
-| `GLZ_USE_SSE2` | `__x86_64__` or `_M_X64` | x86-64 (always has SSE2) |
-| `GLZ_USE_AVX2` | `__AVX2__` (in addition to x86-64) | x86-64 with AVX2 |
-| `GLZ_USE_NEON` | `__aarch64__`, `_M_ARM64`, or `__ARM_NEON` | ARM64 / AArch64 |
-
-Since these are target-architecture macros set by the compiler, cross-compilation works automatically (e.g., an x86 host cross-compiling for ARM will not enable x86 SIMD paths).
-
-To disable SIMD optimizations:
-
-```cmake
-set(glaze_DISABLE_SIMD_WHEN_SUPPORTED ON)
-```
-
-This sets `GLZ_DISABLE_SIMD` as an INTERFACE compile definition, propagated to all targets linking against `glaze::glaze`. Without CMake, define `GLZ_DISABLE_SIMD` before including Glaze headers.
-
-### Disable Forced Inlining
-
-For faster compilation and reduced binary size at the cost of peak performance, use `glaze_DISABLE_ALWAYS_INLINE`:
-
-```cmake
-set(glaze_DISABLE_ALWAYS_INLINE ON)
-```
-
-> **Note:** This reduces compilation time and binary size, which can be useful for embedded systems where size is critical. For additional binary size reduction, see Optimization Levels below.
-
-### C++26 P2996 Reflection
-
-Glaze supports [C++26 P2996 reflection](https://wg21.link/P2996) as an alternative backend for struct reflection. This replaces traditional `__PRETTY_FUNCTION__` parsing with standardized reflection primitives.
-
-```cmake
-set(glaze_ENABLE_REFLECTION26 ON)
-```
-
-Requires [GCC 16+](https://gcc.gnu.org/gcc-16/changes.html) or [Bloomberg clang-p2996](https://github.com/bloomberg/clang-p2996) with flags:
-
-**GCC 16+:**
-```bash
--std=c++26 -freflection
-```
-
-**Bloomberg clang-p2996:**
-```bash
--std=c++26 -freflection -fexpansion-statements -stdlib=libc++
-```
-
-Benefits include unlimited struct members (vs 128 with traditional reflection), cleaner type names, and future C++ standards compliance. See [P2996 Reflection](https://stephenberry.github.io/glaze/p2996-reflection/) for details.
-
-### Optimization Levels (Embedded/Size Optimization)
-
-Glaze provides optimization levels to control the trade-off between binary size and runtime performance. This is useful for embedded systems:
-
-```cpp
-auto json = glz::write<glz::opts_size{}>(obj);
-auto ec = glz::read<glz::opts_size{}>(obj, buffer);
-```
-
-| Level | Preset | Description |
-|-------|--------|-------------|
-| `normal` | (default) | Maximum performance (~278KB lookup tables for integers and floats) |
-| `size` | `opts_size` | Minimal binary (~400B integer tables, `std::to_chars` for floats, linear search) |
-
-See [Optimization Levels](https://stephenberry.github.io/glaze/optimization-levels/) for full details.
-
-## How To Use Glaze
-
-### [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html)
-```cmake
-include(FetchContent)
-
-FetchContent_Declare(
-  glaze
-  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
-  GIT_TAG main
-  GIT_SHALLOW TRUE
-)
-
-FetchContent_MakeAvailable(glaze)
-
-target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
-```
-
-### [Conan](https://conan.io)
-
-- Included in [Conan Center](https://conan.io/center/) ![Conan Center](https://img.shields.io/conan/v/glaze)
-
-```
-find_package(glaze REQUIRED)
-
-target_link_libraries(main PRIVATE glaze::glaze)
-```
-
-### [build2](https://build2.org)
-
-- Available on [cppget](https://cppget.org/libglaze)
-
-```
-import libs = libglaze%lib{glaze}
-```
-
-### Arch Linux
-
-- [Official Arch repository](https://archlinux.org/packages/extra/any/glaze/)
-- AUR git package: [glaze-git](https://aur.archlinux.org/packages/glaze-git)
-
-### See this [Example Repository](https://github.com/stephenberry/glaze_example) for how to use Glaze in a new project
-
----
-
-## See [FAQ](https://stephenberry.github.io/glaze/FAQ/) for Frequently Asked Questions
 
 # Explicit Metadata
 

@@ -7,6 +7,7 @@ import glaze;
 
 import glaze.core.array_apply;
 import glaze.core.constraint;
+import glaze.core.custom;
 import glaze.core.std_error_code;
 import glaze.core.to;
 

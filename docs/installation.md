@@ -1,14 +1,14 @@
 # Glaze Installation Guide
 
-This guide covers some of the ways to install and integrate the Glaze JSON library into your C++ project. There are lots of packaged versions of Glaze, from [homebrew](https://formulae.brew.sh/formula/glaze) to [Conan](https://conan.io/center/recipes/glaze).
+This guide covers some of the ways to install and integrate the Glaze JSON library into your C++ project. There are lots of packaged versions of Glaze, from [homebrew](https://formulae.brew.sh/formula/glaze) to [Conan](https://conan.io/center/recipes/glaze) and [vcpkg](https://vcpkg.io/en/package/glaze).
 
 ## System Requirements
 
 ### Compiler Support
 - **C++23** standard required
-- **Clang 17+**
+- **Clang 18+**
 - **GCC 13+** 
-- **MSVC 2022+**
+- **Visual Studio 2026 MSVC Build Tools 14.51 and above**
 - **Apple Clang (latest Xcode)**
 
 ### Platform Support
@@ -52,13 +52,28 @@ For production use, it's recommended to pin to a specific version:
 FetchContent_Declare(
   glaze
   GIT_REPOSITORY https://github.com/stephenberry/glaze.git
-  GIT_TAG v5.0.0  # Replace with desired version
+  GIT_TAG v7.4.0  # Replace with desired version
   GIT_SHALLOW TRUE
 )
 ```
 
 ### Vcpkg Package Manager
-todo
+
+Glaze is available in [vcpkg](https://vcpkg.io/en/package/glaze). To learn more about vcpkg see https://learn.microsoft.com/en-us/vcpkg/get_started/get-started-vs?pivots=shell-powershell.
+
+To add Glaze to vcpkg project's dependencies, use:
+```
+vcpkg add port glaze
+```
+and add the following to your CMake file:
+```cmake
+find_package(glaze CONFIG REQUIRED)
+# or find_package(glaze 7.4.0 CONFIG REQUIRED) if you wish to set minimum version number
+
+target_link_libraries(TPP PRIVATE glaze::glaze)
+```
+
+This makes the latest version of Glaze available for use. To update to the latest available version, go to the [vcpkg repository](https://github.com/microsoft/vcpkg), copy hash of the most recent commit and change the value in `vcpkg-configuration.json`.
 
 ### Conan Package Manager
 

@@ -4,6 +4,7 @@
 import std;
 
 import glaze.toml;
+import glaze.toml.skip;
 import glaze;
 
 import ut;

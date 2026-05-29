@@ -40,16 +40,7 @@ if (MSVC)
   if (matched_cl)
     # for a C++ standards compliant preprocessor, not needed for clang-cl
     target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
-    
-    if(PROJECT_IS_TOP_LEVEL)
-      target_compile_options(glaze_glaze INTERFACE 
-        $<$<CONFIG:Release>:/GL>
-        $<$<CONFIG:MinSizeRel>:/GL>)
-      target_link_options(glaze_glaze INTERFACE 
-        $<$<CONFIG:Release>:/LTCG /INCREMENTAL:NO>
-        $<$<CONFIG:MinSizeRel>:/LTCG /INCREMENTAL:NO>)
-    endif()
-   endif()
+  endif()
 else()
   # Only apply -Wno-missing-braces for C and C++ compilation to avoid breaking ISPC and other language builds
   target_compile_options(${PROJECT_NAME}_${PROJECT_NAME} INTERFACE

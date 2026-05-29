@@ -10,6 +10,7 @@ import glaze.thread.async_string;
 import glaze.thread.shared_async_map;
 import glaze.thread.shared_async_vector;
 import glaze.thread.threadpool;
+import glaze.thread.value_proxy;
 
 import glaze.containers.ordered_small_map;
 

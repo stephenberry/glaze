@@ -724,6 +724,17 @@ export namespace glz
    namespace detail
    {
       template <is_variant T>
+      inline constexpr bool variant_ids_are_string_views = [] {
+         constexpr auto& ids = ids_v<T>;
+         if constexpr (ids.size() == 0) {
+            return false;
+         }
+         else {
+            return std::is_same_v<std::decay_t<decltype(ids[0])>, std::string_view>;
+         }
+      }();
+
+      template <is_variant T>
       inline constexpr size_t variant_ids_string_len = [] {
          constexpr auto& ids = ids_v<T>;
          constexpr auto N = ids.size();
@@ -753,25 +764,25 @@ export namespace glz
          arr[Len] = '\0';
          return arr;
       }();
+
+      template <is_variant T, bool StringIds>
+      struct variant_ids_string
+      {
+         static constexpr std::string_view value{};
+      };
+
+      template <is_variant T>
+      struct variant_ids_string<T, true>
+      {
+         static constexpr auto len = variant_ids_string_len<T>;
+         static constexpr auto& arr = variant_ids_joined<T, len>;
+         static constexpr std::string_view value{arr.data(), len};
+      };
    }
 
    template <is_variant T>
-   inline constexpr std::string_view variant_ids_string_v = [] {
-      constexpr auto& ids = ids_v<T>;
-      constexpr auto N = ids.size();
-
-      if constexpr (N == 0) {
-         return std::string_view{};
-      }
-      else if constexpr (std::is_same_v<std::decay_t<decltype(ids[0])>, std::string_view>) {
-         constexpr auto Len = detail::variant_ids_string_len<T>;
-         constexpr auto& arr = detail::variant_ids_joined<T, Len>;
-         return std::string_view{arr.data(), Len};
-      }
-      else {
-         return std::string_view{};
-      }
-   }();
+   inline constexpr std::string_view variant_ids_string_v =
+      detail::variant_ids_string<T, detail::variant_ids_are_string_views<T>>::value;
 
    template <class T>
    concept versioned = requires { meta<std::decay_t<T>>::version; };

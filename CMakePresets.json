@@ -80,7 +80,7 @@
     },
     {
       "name": "windows-base",
-      "description": "Base preset for MSVC v14.51",
+      "description": "Base preset for MSVC v14.52",
       "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
@@ -96,7 +96,7 @@
     },
     {
       "name": "x64",
-      "displayName": "x64 Debug (MSVC v14.51 Preview)",
+      "displayName": "x64 Debug (MSVC v14.52 Preview)",
       "inherits": "windows-base",
       "architecture": {
         "value": "x64",
