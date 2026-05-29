@@ -398,6 +398,15 @@ struct rest_expected_t
    };
 };
 
+// As with REPE and JSON-RPC, a registered glz::expected data member is read as a stored
+// value (serialized JSON shape), not reinterpreted as an HTTP error. REST never had the
+// #2265 bug because it keeps the stored-value path separate from handler-result writing,
+// but nothing asserted that until now.
+struct rest_expected_member_t
+{
+   glz::expected<int, std::string> cached = glz::unexpected(std::string("stale"));
+};
+
 namespace
 {
    // Invoke a registered REST route directly (no live server) and return the response.
@@ -493,6 +502,17 @@ suite rest_expected_handlers = [] {
       expect(!glz::read_json(err, res.response_body)) << res.response_body;
       expect(err.status == 500);
       expect(err.message.find("out of range") != std::string::npos) << res.response_body;
+   };
+
+   "rest_expected_data_member_is_serialized_not_intercepted"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> reg{};
+      rest_expected_member_t obj{};
+      reg.on(obj);
+      // GET the member: reading a stored glz::expected is a success that serializes its
+      // JSON shape with a 2xx status; it is NOT translated into an HTTP error status.
+      auto res = run_rest(reg, glz::http_method::GET, "/cached", "");
+      expect(res.status_code == 200) << res.status_code;
+      expect(res.response_body == R"({"unexpected":"stale"})") << res.response_body;
    };
 };
 
