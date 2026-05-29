@@ -602,14 +602,29 @@ namespace glz::repe
       }
    }
 
-   /// Write response with a value (zero-copy to output buffer)
-   ///
-   /// When Value is a glz::expected, its success value is serialized and its error is
-   /// translated into a REPE error response (see set_handler_error). This lets a
-   /// registered handler signal failure by returning glz::unexpected(...) rather than
-   /// throwing, which is required under -fno-exceptions and convenient otherwise.
+   /// Write a response value to the output buffer (zero-copy). The value is serialized
+   /// as-is; a glz::expected is written through its normal JSON serializer, so an error
+   /// state becomes {"unexpected": ...}. Handler results that should treat a glz::expected
+   /// error as a request failure go through write_handler_result instead.
    template <auto Opts, class Value>
    void write_response(Value&& value, state_view& state)
+   {
+      state.out.reset(state.in);
+      auto ec = state.out.template set_body<Opts>(std::forward<Value>(value));
+      if (bool(ec)) [[unlikely]] {
+         state.out.set_error(ec, "Failed to serialize response");
+      }
+   }
+
+   /// Write a registered handler's result. Unlike write_response, a glz::expected return
+   /// is interpreted as a success/error channel: the success value is serialized and an
+   /// error is translated into a REPE error response (see set_handler_error), so a handler
+   /// can signal failure by returning glz::unexpected(...) rather than throwing (required
+   /// under -fno-exceptions, convenient otherwise). This is applied only at the function/
+   /// member-function call sites; a registered data member of type glz::expected is read
+   /// through write_response and still serializes its JSON shape. See #2265.
+   template <auto Opts, class Value>
+   void write_handler_result(Value&& value, state_view& state)
    {
       using V = std::remove_cvref_t<Value>;
       if constexpr (glz::is_expected<V>) {
@@ -627,11 +642,7 @@ namespace glz::repe
          }
       }
       else {
-         state.out.reset(state.in);
-         auto ec = state.out.template set_body<Opts>(std::forward<Value>(value));
-         if (bool(ec)) [[unlikely]] {
-            state.out.set_error(ec, "Failed to serialize response");
-         }
+         write_response<Opts>(std::forward<Value>(value), state);
       }
    }
 }

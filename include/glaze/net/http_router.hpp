@@ -810,6 +810,11 @@ namespace glz
     *
     * Note: http_server::mount() only accepts the default http_router (basic_http_router<>).
     * Custom handler routers are intended for standalone use or with custom server implementations.
+    *
+    * Thread-safety: route registration (route()/stream()/websocket()/try_* and the
+    * route_error() side-channel) mutates the router without synchronization and is not
+    * thread-safe. Register all routes during startup, before the router begins serving;
+    * once serving, match()/match_websocket() are const and safe for concurrent reads.
     */
    template <class Handler = std::function<void(const request&, response&)>>
       requires std::invocable<Handler, const request&, response&>
@@ -874,25 +879,26 @@ namespace glz
        *
        * Behaves identically with and without exceptions: a structural route conflict
        * is returned as an error message rather than thrown or logged to stderr. This is
-       * the recommended registration entry point for exception-free builds.
+       * the recommended registration entry point for exception-free builds. As the
+       * explicit return-value path, try_route() does not touch the route_error() side-
+       * channel (which exists for the chaining route()/stream()/websocket() variants);
+       * the caller owns the returned error.
        *
        * @return Empty on success, or the conflict message on failure.
        */
       [[nodiscard]] expected<void, std::string> try_route(http_method method, std::string_view path, handler handle,
                                                           const route_spec& spec = {})
       {
-         auto result = normal_routes.add(method, path, std::move(handle), spec);
-         if (!result && route_error_.empty()) {
-            route_error_ = result.error();
-         }
-         return result;
+         return normal_routes.add(method, path, std::move(handle), spec);
       }
 
       /**
        * @brief Whether a route registration error has been recorded.
        *
-       * Populated under -fno-exceptions (where route()/stream()/websocket() cannot
-       * throw) and by try_route(). Use clear_route_error() to reset.
+       * Populated under -fno-exceptions, where route()/stream()/websocket() record the
+       * first conflict instead of throwing (they return *this for chaining and so cannot
+       * report it by value). The try_* variants report conflicts purely by return value
+       * and do not write here. Use clear_route_error() to reset.
        */
       [[nodiscard]] bool has_route_error() const noexcept { return !route_error_.empty(); }
 
@@ -1025,18 +1031,15 @@ namespace glz
 
       /**
        * @brief Register a streaming route without throwing, reporting conflicts by
-       * return value. The streaming counterpart of try_route().
+       * return value. The streaming counterpart of try_route(); like it, the error is
+       * returned, not written to the route_error() side-channel.
        *
        * @return Empty on success, or the conflict message on failure.
        */
       [[nodiscard]] expected<void, std::string> try_stream(http_method method, std::string_view path,
                                                            streaming_handler handle, const route_spec& spec = {})
       {
-         auto result = streaming_routes.add(method, path, std::move(handle), spec);
-         if (!result && route_error_.empty()) {
-            route_error_ = result.error();
-         }
-         return result;
+         return streaming_routes.add(method, path, std::move(handle), spec);
       }
 
       /**
@@ -1074,18 +1077,15 @@ namespace glz
 
       /**
        * @brief Register a WebSocket handler without throwing, reporting conflicts by
-       * return value. The WebSocket counterpart of try_route().
+       * return value. The WebSocket counterpart of try_route(); like it, the error is
+       * returned, not written to the route_error() side-channel.
        *
        * @return Empty on success, or the conflict message on failure.
        */
       [[nodiscard]] expected<void, std::string> try_websocket(std::string_view path, websocket_handler server,
                                                               const route_spec& spec = {})
       {
-         auto result = websocket_routes.add(http_method::GET, path, std::move(server), spec);
-         if (!result && route_error_.empty()) {
-            route_error_ = result.error();
-         }
-         return result;
+         return websocket_routes.add(http_method::GET, path, std::move(server), spec);
       }
 
       /**

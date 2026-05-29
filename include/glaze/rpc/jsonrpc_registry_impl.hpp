@@ -36,14 +36,45 @@ namespace glz
       template <class E>
       void set_handler_error(is_state auto&& state, E&& error);
 
-      // Write a successful JSON RPC response
-      //
-      // When Value is a glz::expected, its success value is serialized and its error is
-      // translated into a JSON-RPC error response (see set_handler_error). This lets a
-      // registered handler signal failure by returning glz::unexpected(...) rather than
-      // throwing, which is required under -fno-exceptions and convenient otherwise.
+      // Write a successful JSON RPC response. The value is serialized as-is; a
+      // glz::expected is written through its normal JSON serializer, so an error state
+      // becomes {"unexpected": ...}. Handler results that should treat a glz::expected
+      // error as a request failure go through write_handler_result instead.
       template <auto Opts, class Value>
       void write_response(Value&& value, is_state auto&& state)
+      {
+         if (state.notify()) {
+            return; // No response for notifications
+         }
+
+         std::string result_json;
+         auto ec = write<Opts>(std::forward<Value>(value), result_json);
+         if (ec) {
+            // Write error response
+            state.response =
+               R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":"Failed to serialize result"},"id":)";
+            state.response += write_json(state.id).value_or("null");
+            state.response += "}";
+            return;
+         }
+
+         state.response = R"({"jsonrpc":"2.0","result":)";
+         state.response += result_json;
+         state.response += R"(,"id":)";
+         state.response += write_json(state.id).value_or("null");
+         state.response += "}";
+      }
+
+      // Write a registered handler's result. Unlike write_response, a glz::expected
+      // return is interpreted as a success/error channel: the success value is serialized
+      // and an error is translated into a JSON-RPC error response (see set_handler_error),
+      // so a handler can signal failure by returning glz::unexpected(...) rather than
+      // throwing (required under -fno-exceptions, convenient otherwise). Applied only at
+      // the function/member-function call sites; a registered data member of type
+      // glz::expected is read through write_response and still serializes its JSON shape.
+      // See #2265.
+      template <auto Opts, class Value>
+      void write_handler_result(Value&& value, is_state auto&& state)
       {
          using V = std::remove_cvref_t<Value>;
          if constexpr (glz::is_expected<V>) {
@@ -58,29 +89,9 @@ namespace glz
             else {
                set_handler_error(state, std::forward<Value>(value).error());
             }
-            return;
          }
          else {
-            if (state.notify()) {
-               return; // No response for notifications
-            }
-
-            std::string result_json;
-            auto ec = write<Opts>(std::forward<Value>(value), result_json);
-            if (ec) {
-               // Write error response
-               state.response =
-                  R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":"Failed to serialize result"},"id":)";
-               state.response += write_json(state.id).value_or("null");
-               state.response += "}";
-               return;
-            }
-
-            state.response = R"({"jsonrpc":"2.0","result":)";
-            state.response += result_json;
-            state.response += R"(,"id":)";
-            state.response += write_json(state.id).value_or("null");
-            state.response += "}";
+            write_response<Opts>(std::forward<Value>(value), state);
          }
       }
 
@@ -225,7 +236,7 @@ namespace glz
                   std::ignore = func();
                   return;
                }
-               jsonrpc::write_response<Opts>(func(), state);
+               jsonrpc::write_handler_result<Opts>(func(), state);
             };
          }
       }
@@ -257,7 +268,7 @@ namespace glz
             }
             else {
                auto ret = func(params);
-               jsonrpc::write_response<Opts>(ret, state);
+               jsonrpc::write_handler_result<Opts>(ret, state);
             }
          };
       }
@@ -316,7 +327,7 @@ namespace glz
                   return;
                }
 
-               jsonrpc::write_response<Opts>((value.*func)(), state);
+               jsonrpc::write_handler_result<Opts>((value.*func)(), state);
             }
          };
       }
@@ -348,7 +359,7 @@ namespace glz
                   return;
                }
 
-               jsonrpc::write_response<Opts>((value.*func)(input), state);
+               jsonrpc::write_handler_result<Opts>((value.*func)(input), state);
             }
          };
       }

@@ -63,7 +63,7 @@ namespace glz
                   std::ignore = func();
                   return;
                }
-               write_response<Opts>(func(), state);
+               write_handler_result<Opts>(func(), state);
             };
          }
       }
@@ -95,7 +95,7 @@ namespace glz
             }
             else {
                auto ret = func(params);
-               write_response<Opts>(ret, state);
+               write_handler_result<Opts>(ret, state);
             }
          };
       }
@@ -188,7 +188,7 @@ namespace glz
                   return;
                }
 
-               write_response<Opts>((value.*func)(), state);
+               write_handler_result<Opts>((value.*func)(), state);
             }
          };
       }
@@ -220,7 +220,7 @@ namespace glz
                   return;
                }
 
-               write_response<Opts>((value.*func)(input), state);
+               write_handler_result<Opts>((value.*func)(input), state);
             }
          };
       }

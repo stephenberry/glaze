@@ -59,9 +59,8 @@ suite http_router_registration = [] {
          router.try_route(glz::http_method::GET, "/users/:name/profile", [](const glz::request&, glz::response&) {});
       expect(!result.has_value());
       expect(result.error().find("different parameter names") != std::string::npos) << result.error();
-      expect(router.has_route_error());
-      expect(router.route_error() == result.error());
-      router.clear_route_error();
+      // try_* is the explicit return-value path: the caller owns the error, and the
+      // route_error() side-channel (for the chaining variants) stays clean.
       expect(!router.has_route_error());
    };
 
@@ -82,8 +81,8 @@ suite http_router_registration = [] {
    };
 
    // try_stream()/try_websocket() give streaming and WebSocket routes the same
-   // return-value conflict channel that try_route() gives normal routes, so an
-   // exception-free build is not forced onto the route_error() side-channel.
+   // return-value conflict channel that try_route() gives normal routes, and like
+   // try_route() they report purely by return value without touching route_error().
    "try_stream_reports_conflict_by_return_value"_test = [] {
       glz::http_router router{};
       auto ok = router.try_stream(glz::http_method::GET, "/events/:id", glz::streaming_handler{});
@@ -93,8 +92,7 @@ suite http_router_registration = [] {
       auto conflict = router.try_stream(glz::http_method::GET, "/events/:name/tail", glz::streaming_handler{});
       expect(!conflict.has_value());
       expect(conflict.error().find("different parameter names") != std::string::npos) << conflict.error();
-      expect(router.has_route_error()); // still recorded on the shared side-channel too
-      expect(router.route_error() == conflict.error());
+      expect(!router.has_route_error()); // returned by value, not written to the side-channel
    };
 
    "try_websocket_reports_conflict_by_return_value"_test = [] {
@@ -105,7 +103,7 @@ suite http_router_registration = [] {
       auto conflict = router.try_websocket("/ws/:name/tail", glz::websocket_handler{});
       expect(!conflict.has_value());
       expect(conflict.error().find("different parameter names") != std::string::npos) << conflict.error();
-      expect(router.has_route_error());
+      expect(!router.has_route_error());
    };
 
 #if __cpp_exceptions
@@ -115,6 +113,16 @@ suite http_router_registration = [] {
       expect(throws([&] {
          router.route(glz::http_method::GET, "/users/:name", [](const glz::request&, glz::response&) {});
       })) << "route() must surface a structural conflict loudly when exceptions are enabled";
+   };
+#else
+   "route_records_conflict_on_side_channel_without_exceptions"_test = [] {
+      glz::http_router router{};
+      router.get("/users/:id", [](const glz::request&, glz::response&) {});
+      // Under -fno-exceptions the chaining route() cannot throw or return, so it records
+      // the conflict on the side-channel. This is the path the try_* variants bypass.
+      router.route(glz::http_method::GET, "/users/:name", [](const glz::request&, glz::response&) {});
+      expect(router.has_route_error());
+      expect(router.route_error().find("different parameter names") != std::string::npos) << router.route_error();
    };
 #endif
 };
@@ -148,6 +156,15 @@ struct repe_expected_t
       }
       return x;
    };
+};
+
+// A registered data member of type glz::expected is read as a stored value, not a
+// handler result. The expected-as-error-channel interception lives in
+// write_handler_result (applied only at function call sites), so reading the member
+// serializes its JSON shape rather than translating an error state to a protocol error.
+struct repe_expected_member_t
+{
+   glz::expected<int, std::string> cached = glz::unexpected(std::string("stale"));
 };
 
 suite repe_expected_handlers = [] {
@@ -201,6 +218,20 @@ suite repe_expected_handlers = [] {
       expect(response.header.ec == glz::error_code::constraint_violated) << response.body;
       expect(response.body == "out of range") << response.body;
    };
+
+   "repe_expected_data_member_is_serialized_not_intercepted"_test = [] {
+      glz::registry<glz::opts{}, glz::REPE> server{};
+      repe_expected_member_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::request_json({"/cached"}, request); // read the member (no body)
+      auto response = run_repe(server, request);
+      // Reading a stored glz::expected is a success that serializes its JSON shape; it is
+      // NOT reinterpreted as a handler error.
+      expect(response.header.ec == glz::error_code::none) << response.body;
+      expect(response.body == R"({"unexpected":"stale"})") << response.body;
+   };
 };
 
 // ----------------------------------------------------------------------------
@@ -231,6 +262,13 @@ struct jsonrpc_expected_t
       }
       return x;
    };
+};
+
+// As with REPE, a registered glz::expected data member is read as a stored value
+// (serialized JSON shape), not reinterpreted as a JSON-RPC error.
+struct jsonrpc_expected_member_t
+{
+   glz::expected<int, std::string> cached = glz::unexpected(std::string("stale"));
 };
 
 suite jsonrpc_expected_handlers = [] {
@@ -274,6 +312,17 @@ suite jsonrpc_expected_handlers = [] {
       expect(response.find(R"("code":-32603)") != std::string::npos) << response; // internal error
       expect(response.find("out of range") != std::string::npos) << response; // custom message preserved
       expect(response.find(R"("id":7)") != std::string::npos) << response;
+   };
+
+   "jsonrpc_expected_data_member_is_serialized_not_intercepted"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      jsonrpc_expected_member_t obj{};
+      server.on(obj);
+
+      auto response = server.call(R"({"jsonrpc":"2.0","method":"cached","id":8})");
+      // Read as a value: the result is the serialized expected, not a JSON-RPC error object.
+      expect(response.find(R"("result":{"unexpected":"stale"})") != std::string::npos) << response;
+      expect(response.find(R"("error")") == std::string::npos) << response;
    };
 };
 
@@ -410,6 +459,10 @@ suite rest_expected_handlers = [] {
       expect(!glz::read_json(err, res.response_body)) << res.response_body;
       expect(err.status == 404);
       expect(err.message == "not found") << res.response_body;
+      // The success branch (id == 42) returns the unwrapped int body with a 200 status.
+      auto ok = run_rest(reg, glz::http_method::POST, "/find", "42");
+      expect(ok.status_code == 200) << ok.status_code;
+      expect(ok.response_body == "42") << ok.response_body;
    };
 
    "rest_expected_get_no_arg_failure"_test = [] {
