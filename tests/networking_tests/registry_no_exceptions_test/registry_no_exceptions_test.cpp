@@ -113,6 +113,14 @@ struct repe_expected_t
       }
       return x;
    };
+   // glz::error_ctx error channel: both the code and the custom message propagate.
+   std::function<glz::expected<int, glz::error_ctx>(int)> bounded = [](int x) -> glz::expected<int, glz::error_ctx> {
+      if (x > 100) {
+         return glz::unexpected(
+            glz::error_ctx{.ec = glz::error_code::constraint_violated, .custom_error_message = "out of range"});
+      }
+      return x;
+   };
 };
 
 suite repe_expected_handlers = [] {
@@ -153,6 +161,19 @@ suite repe_expected_handlers = [] {
       auto response = run_repe(server, request);
       expect(response.header.ec == glz::error_code::invalid_body) << response.body;
    };
+
+   "repe_expected_error_ctx_propagates_code_and_message"_test = [] {
+      glz::registry<glz::opts{}, glz::REPE> server{};
+      repe_expected_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::request_json({"/bounded"}, request, 250);
+      auto response = run_repe(server, request);
+      // error_ctx carries both fields: the code lands in the header, the message in the body.
+      expect(response.header.ec == glz::error_code::constraint_violated) << response.body;
+      expect(response.body == "out of range") << response.body;
+   };
 };
 
 // ----------------------------------------------------------------------------
@@ -172,6 +193,14 @@ struct jsonrpc_expected_t
       if (x < 0) {
          return glz::unexpected(
             glz::rpc::error{glz::rpc::error_e::invalid_params, std::optional<std::string>{"x must be >= 0"}});
+      }
+      return x;
+   };
+   // glz::error_ctx -> JSON-RPC internal error; the custom message is preserved.
+   std::function<glz::expected<int, glz::error_ctx>(int)> bounded = [](int x) -> glz::expected<int, glz::error_ctx> {
+      if (x > 100) {
+         return glz::unexpected(
+            glz::error_ctx{.ec = glz::error_code::constraint_violated, .custom_error_message = "out of range"});
       }
       return x;
    };
@@ -207,6 +236,17 @@ suite jsonrpc_expected_handlers = [] {
       expect(response.find(R"("code":-32602)") != std::string::npos) << response; // invalid_params
       expect(response.find("x must be >= 0") != std::string::npos) << response; // data passthrough
       expect(response.find(R"("id":3)") != std::string::npos) << response;
+   };
+
+   "jsonrpc_expected_error_ctx_maps_to_internal_error"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      jsonrpc_expected_t obj{};
+      server.on(obj);
+
+      auto response = server.call(R"({"jsonrpc":"2.0","method":"bounded","params":250,"id":7})");
+      expect(response.find(R"("code":-32603)") != std::string::npos) << response; // internal error
+      expect(response.find("out of range") != std::string::npos) << response; // custom message preserved
+      expect(response.find(R"("id":7)") != std::string::npos) << response;
    };
 };
 
@@ -271,6 +311,14 @@ struct rest_expected_t
    std::function<glz::expected<void, std::string>(int)> reset = [](int code) -> glz::expected<void, std::string> {
       if (code != 0) return glz::unexpected(std::string("bad code"));
       return {};
+   };
+
+   // POST /bounded : glz::error_ctx -> 500 with the formatted context as the message.
+   std::function<glz::expected<int, glz::error_ctx>(int)> bounded = [](int x) -> glz::expected<int, glz::error_ctx> {
+      if (x > 100)
+         return glz::unexpected(
+            glz::error_ctx{.ec = glz::error_code::constraint_violated, .custom_error_message = "out of range"});
+      return x;
    };
 };
 
@@ -353,6 +401,18 @@ suite rest_expected_handlers = [] {
       expect(ok.status_code == 204) << ok.status_code;
       auto bad = run_rest(reg, glz::http_method::POST, "/reset", "1");
       expect(bad.status_code == 500) << bad.status_code;
+   };
+
+   "rest_expected_error_ctx_maps_to_500_with_formatted_message"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> reg{};
+      rest_expected_t obj{};
+      reg.on(obj);
+      auto res = run_rest(reg, glz::http_method::POST, "/bounded", "250");
+      expect(res.status_code == 500) << res.status_code;
+      glz::http_error err{};
+      expect(!glz::read_json(err, res.response_body)) << res.response_body;
+      expect(err.status == 500);
+      expect(err.message.find("out of range") != std::string::npos) << res.response_body;
    };
 };
 
