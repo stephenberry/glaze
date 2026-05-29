@@ -254,10 +254,15 @@ namespace glz
       }
 
       // Non-throwing registration: same as on(), but reports a route-registration
-      // conflict (REST protocol) by return value instead of throwing. Behaves
-      // identically with and without exceptions, so it is the recommended entry point
-      // for exception-free builds. For REPE/JSON-RPC, registration cannot fail and this
-      // always succeeds. See #2265.
+      // conflict (REST protocol) by return value instead of throwing. The returned
+      // error is identical with and without exceptions (the first conflict), so this is
+      // the recommended entry point for exception-free builds. The resulting route table
+      // can differ on conflict, however: under exceptions the first conflict aborts the
+      // remaining registration, whereas under -fno-exceptions it is recorded and the
+      // later routes still register. This is unreachable through reflected registration,
+      // which emits only literal paths (direct routes never structurally conflict); it
+      // surfaces only if conflicting parameterized routes are added manually. For
+      // REPE/JSON-RPC, registration cannot fail and this always succeeds. See #2265.
       template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
          requires(glaze_object_t<T> || reflectable<T>)
       [[nodiscard]] expected<void, std::string> try_on(T& value)
