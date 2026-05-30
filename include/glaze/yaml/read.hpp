@@ -5187,6 +5187,7 @@ namespace glz
 
    // Variant support
    template <is_variant T>
+      requires(not custom_read<T>)
    struct from<YAML, T>
    {
       template <auto Opts, class It>

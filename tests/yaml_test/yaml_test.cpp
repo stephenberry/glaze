@@ -9653,4 +9653,47 @@ suite yaml_tagged_variant_stress_suite = [] {
    };
 };
 
+// A std::variant whose own meta opts into custom_read/custom_write (with full from/to
+// specializations) must not be ambiguous with the built-in YAML variant handler.
+// Parity with the JSON fix in #2591.
+struct yaml_fc_a
+{};
+struct yaml_fc_b
+{};
+using yaml_fc_variant = std::variant<yaml_fc_a, yaml_fc_b>;
+
+template <>
+struct glz::meta<yaml_fc_variant>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::from<Format, yaml_fc_variant>
+{
+   template <auto Opts>
+   static void op(yaml_fc_variant&, is_context auto&&, auto&&, auto&&)
+   {}
+};
+
+template <uint32_t Format>
+struct glz::to<Format, yaml_fc_variant>
+{
+   template <auto Opts>
+   static void op(auto&&, is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(42, ctx, args...);
+   }
+};
+
+suite yaml_fully_custom_variant_tests = [] {
+   "fully custom variant specialization is unambiguous"_test = [] {
+      yaml_fc_variant v{};
+      std::string s{};
+      expect(not glz::write_yaml(v, s));
+      expect(s == "42") << s;
+   };
+};
+
 int main() { return 0; }

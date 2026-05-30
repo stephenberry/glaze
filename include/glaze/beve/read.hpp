@@ -532,6 +532,7 @@ namespace glz
    };
 
    template <is_variant T>
+      requires(not custom_read<T>)
    struct from<BEVE, T>
    {
       template <auto Opts>
