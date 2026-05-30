@@ -1,12 +1,14 @@
 #include "glaze/net/http_headers.hpp"
 
 #include <concepts>
+#include <expected>
 #include <initializer_list>
 #include <iterator>
 #include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -32,6 +34,18 @@ using field_entry = std::pair<std::string, std::string>;
       actual.emplace_back(value);
    }
    return actual == std::vector<std::string>{expected};
+}
+
+[[nodiscard]] bool serializes_to(const glz::http_headers& headers, std::string_view expected)
+{
+   const auto result = headers.serialize();
+   return result.has_value() && *result == expected;
+}
+
+[[nodiscard]] bool serialize_fails_with_protocol_error(const glz::http_headers& headers)
+{
+   const auto result = headers.serialize();
+   return !result.has_value() && result.error() == std::make_error_code(std::errc::protocol_error);
 }
 
 template <class Headers>
@@ -757,7 +771,7 @@ suite http_headers_serialization_tests = [] {
    "serialize_of_empty_headers_is_single_terminal_crlf"_test = [] {
       const glz::http_headers headers{};
 
-      expect(headers.serialize() == "\r\n");
+      expect(serializes_to(headers, "\r\n"));
    };
 
    "serialize_of_single_header_uses_http_header_format"_test = [] {
@@ -765,7 +779,7 @@ suite http_headers_serialization_tests = [] {
          {"Host", "example.com"},
       };
 
-      expect(headers.serialize() == "Host: example.com\r\n\r\n");
+      expect(serializes_to(headers, "Host: example.com\r\n\r\n"));
    };
 
    "serialize_of_multiple_headers_preserves_order_and_duplicates"_test = [] {
@@ -775,10 +789,20 @@ suite http_headers_serialization_tests = [] {
          {"set-cookie", "b=2"},
       };
 
-      expect(headers.serialize() == "Set-Cookie: a=1\r\nHost: example.com\r\nset-cookie: b=2\r\n\r\n");
+      expect(serializes_to(headers, "Set-Cookie: a=1\r\nHost: example.com\r\nset-cookie: b=2\r\n\r\n"));
    };
 
-   "serialize_skips_fields_with_empty_names"_test = [] {
+   "serialize_accepts_all_http_token_name_characters"_test = [] {
+      const glz::http_headers headers{
+         {"!#$%&'*+-.^_`|~0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", "ok"},
+      };
+
+      expect(serializes_to(headers,
+                           "!#$%&'*+-.^_`|~0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ: ok\r\n"
+                           "\r\n"));
+   };
+
+   "serialize_rejects_fields_with_empty_names"_test = [] {
       const glz::http_headers headers{
          {"", "ignored-1"},
          {"Host", "example.com"},
@@ -786,16 +810,30 @@ suite http_headers_serialization_tests = [] {
          {"Accept", "application/json"},
       };
 
-      expect(headers.serialize() == "Host: example.com\r\nAccept: application/json\r\n\r\n");
+      expect(serialize_fails_with_protocol_error(headers));
    };
 
-   "serialize_of_only_empty_names_is_single_terminal_crlf"_test = [] {
+   "serialize_rejects_only_empty_names"_test = [] {
       const glz::http_headers headers{
          {"", "ignored-1"},
          {"", "ignored-2"},
       };
 
-      expect(headers.serialize() == "\r\n");
+      expect(serialize_fails_with_protocol_error(headers));
+   };
+
+   "serialize_rejects_invalid_field_name_characters"_test = [] {
+      const std::vector<std::string> invalid_names{
+         "Bad Name", "Bad:Name", "Bad/Name", "Bad\tName", "Bad\rName", "Bad\nName",
+      };
+
+      for (const auto& name : invalid_names) {
+         const glz::http_headers headers{
+            {name, "value"},
+         };
+
+         expect(serialize_fails_with_protocol_error(headers));
+      }
    };
 
    "serialize_preserves_empty_values"_test = [] {
@@ -804,7 +842,7 @@ suite http_headers_serialization_tests = [] {
          {"Host", "example.com"},
       };
 
-      expect(headers.serialize() == "X-Empty: \r\nHost: example.com\r\n\r\n");
+      expect(serializes_to(headers, "X-Empty: \r\nHost: example.com\r\n\r\n"));
    };
 
    "serialize_preserves_value_whitespace_and_punctuation"_test = [] {
@@ -813,12 +851,51 @@ suite http_headers_serialization_tests = [] {
          {"X-Whitespace", "  leading and trailing  "},
       };
 
-      expect(headers.serialize() ==
-             "Authorization: Digest realm=\"api\", nonce=\"abc:123\", qop=\"auth\"\r\nX-Whitespace:   leading and "
-             "trailing  \r\n\r\n");
+      expect(serializes_to(headers,
+                           "Authorization: Digest realm=\"api\", nonce=\"abc:123\", qop=\"auth\"\r\nX-Whitespace:   "
+                           "leading and trailing  \r\n\r\n"));
    };
 
-   "serialize_ignores_empty_names_but_other_apis_still_keep_them"_test = [] {
+   "serialize_preserves_horizontal_tabs_in_values"_test = [] {
+      const glz::http_headers headers{
+         {"X-Tab", "left\tright"},
+      };
+
+      expect(serializes_to(headers, "X-Tab: left\tright\r\n\r\n"));
+   };
+
+   "serialize_rejects_values_with_cr_or_lf"_test = [] {
+      const std::vector<std::string> invalid_values{
+         "ok\rbad",
+         "ok\nbad",
+         "ok\r\nInjected: value",
+      };
+
+      for (const auto& value : invalid_values) {
+         const glz::http_headers headers{
+            {"X-Test", value},
+         };
+
+         expect(serialize_fails_with_protocol_error(headers));
+      }
+   };
+
+   "serialize_rejects_values_with_disallowed_control_bytes"_test = [] {
+      std::vector<std::string> invalid_values;
+      invalid_values.emplace_back("ok\0bad", 6);
+      invalid_values.push_back(std::string{"ok"} + static_cast<char>(0x1f) + "bad");
+      invalid_values.push_back(std::string{"ok"} + static_cast<char>(0x7f) + "bad");
+
+      for (const auto& value : invalid_values) {
+         const glz::http_headers headers{
+            {"X-Test", value},
+         };
+
+         expect(serialize_fails_with_protocol_error(headers));
+      }
+   };
+
+   "serialize_rejects_empty_names_but_other_apis_still_keep_them"_test = [] {
       const glz::http_headers headers{
          {"", "first-empty"},
          {"Host", "example.com"},
@@ -830,7 +907,7 @@ suite http_headers_serialization_tests = [] {
                                                   "first-empty",
                                                   "second-empty",
                                                }));
-      expect(headers.serialize() == "Host: example.com\r\n\r\n");
+      expect(serialize_fails_with_protocol_error(headers));
    };
 };
 

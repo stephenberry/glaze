@@ -4,7 +4,9 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
+#include <expected>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -12,6 +14,7 @@
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -20,9 +23,18 @@
 
 namespace glz
 {
+   /// @brief Ordered collection of HTTP header field lines.
+   ///
+   /// Header names are matched ASCII-case-insensitively, while their original
+   /// spelling, insertion order, and duplicate field lines are preserved.
+   ///
+   /// This container does not validate fields on insertion. Parsers are
+   /// expected to reject invalid wire input, and serialize() validates before
+   /// emitting an HTTP header section.
    class http_headers
    {
      public:
+      /// @brief Single HTTP header field line.
       struct field_type
       {
          std::string name;
@@ -123,48 +135,46 @@ namespace glz
       [[nodiscard]] const_iterator cbegin() const& noexcept { return items.cbegin(); }
       [[nodiscard]] const_iterator cend() const& noexcept { return items.cend(); }
 
-      /// @brief Clears all of the fields
+      /// @brief Clears all stored field lines
       void clear() noexcept { items.clear(); }
 
-      /// @brief Checks if fields contain any field with specified name
+      /// @brief Checks if any field line has the specified name
       /// @param name Field name
       /// @return `true` if field with specified name exists, `false` otherwise
       [[nodiscard]] bool contains(std::string_view name) const noexcept { return find(name) != end(); }
 
-      /// @brief Find first iterator whose name matches the specified name
+      /// @brief Finds the first field line whose name matches the specified name
       /// @param name Field name
-      /// @return iterator
+      /// @return Iterator to the first matching field line, or end() if missing
       [[nodiscard]] iterator find(std::string_view name) & noexcept
       {
          return std::ranges::find_if(
             items, [&](const value_type& field) noexcept { return ascii_str_iequal(field.name, name); });
       }
 
-      /// @brief Find first iterator whose name matches the specified name
+      /// @brief Finds the first field line whose name matches the specified name
       /// @param name Field name
-      /// @return const_iterator
+      /// @return Const iterator to the first matching field line, or end() if missing
       [[nodiscard]] const_iterator find(std::string_view name) const& noexcept
       {
          return std::ranges::find_if(
             items, [&](const value_type& field) noexcept { return ascii_str_iequal(field.name, name); });
       }
 
-      /// @brief Get all field lines whose name matches the specified name
+      /// @brief Gets all field lines whose name matches the specified name
       /// @param name Field name
-      /// @return Mutable range of http_headers::field_type
+      /// @return Mutable range of matching field lines
       [[nodiscard]] auto fields(std::string_view name) &
       {
-         // REVIEW: Should we care more about allocations and prefer views,
-         // even if that potentially complicates lifetime handling for caller?
          auto key_copy = std::string{name};
          auto first = range_iterator{this, 0, key_copy};
          auto last = range_iterator{this, items.size(), std::move(key_copy)};
          return std::ranges::subrange{first, last};
       }
 
-      /// @brief Get all field lines whose name matches the specified name
+      /// @brief Gets all field lines whose name matches the specified name
       /// @param name Field name
-      /// @return Immutable range of http_headers::field_type
+      /// @return Immutable range of matching field lines
       [[nodiscard]] auto fields(std::string_view name) const&
       {
          auto key_copy = std::string{name};
@@ -173,32 +183,32 @@ namespace glz
          return std::ranges::subrange{first, last};
       }
 
-      /// @brief Get all field names
-      /// @return Range of string_view
+      /// @brief Gets all stored field names in insertion order
+      /// @return Range of string_view into the stored names
       [[nodiscard]] auto names() const&
       {
          return items |
                 std::views::transform([](const field_type& field) noexcept -> std::string_view { return field.name; });
       }
 
-      /// @brief Get all field values
-      /// @return Range of string_view
+      /// @brief Gets all stored field values in insertion order
+      /// @return Range of string_view into the stored values
       [[nodiscard]] auto values() const&
       {
          return items |
                 std::views::transform([](const field_type& field) noexcept -> std::string_view { return field.value; });
       }
 
-      /// @brief Get all field values whose name matches the specified name
+      /// @brief Gets values of all field lines whose name matches the specified name
       /// @param name Field name
-      /// @return Range of string_view
+      /// @return Range of string_view into the matching stored values
       [[nodiscard]] auto values(std::string_view name) const&
       {
          return fields(name) |
                 std::views::transform([](const field_type& field) noexcept -> std::string_view { return field.value; });
       }
 
-      /// @brief Get the number of entries whose name matches the specified name
+      /// @brief Counts field lines whose name matches the specified name
       /// @param name Field name
       /// @return Number of entries as size_t
       [[nodiscard]] size_t occurrences(std::string_view name) const& noexcept
@@ -207,7 +217,7 @@ namespace glz
             items, [name](const field_type& field) noexcept { return ascii_str_iequal(field.name, name); });
       }
 
-      /// @brief Try to get first stored value of entry whose name matches the specified name
+      /// @brief Gets the first stored value whose field name matches the specified name
       /// @param name Field name
       /// @returns `string_view` if header with such name exists, otherwise returns `nullopt`
       [[nodiscard]] std::optional<std::string_view> first_value(std::string_view name) const& noexcept
@@ -219,30 +229,35 @@ namespace glz
          return std::string_view{iterator->value};
       }
 
-      /// @brief Serialize stored header fields as an HTTP header section
-      /// @returns CRLF if there is no headers to serialize, otherwise returns valid headers string
-      [[nodiscard]] std::string serialize() const
+      /// @brief Serializes stored field lines as an HTTP header section.
+      ///
+      /// Empty containers serialize to the terminal CRLF. Non-empty containers
+      /// must contain only valid HTTP field names and field values; invalid
+      /// stored fields fail serialization instead of being skipped or escaped.
+      ///
+      /// @returns Valid HTTP header section, or protocol_error if a stored field is invalid
+      [[nodiscard]] std::expected<std::string, std::error_code> serialize() const
       {
          if (empty()) {
             return "\r\n";
          }
 
-         // REVIEW: Two loops - one to accumulate the total length and one to append
-         // should be faster than a single append loop with potential reallocations
+         // Two loops to accumulate the total length and to append headers should
+         // be faster than a single append loop with potential reallocations
          size_t expected_length = 0;
          for (const auto& [name, value] : items) {
+            if (!is_field_name_valid(name) || !is_field_value_valid(value)) {
+               return std::unexpected(std::make_error_code(std::errc::protocol_error));
+            }
+
             constexpr size_t separators_length = 4; // ": " + CRLF
             expected_length += name.length() + value.length() + separators_length;
          }
 
          std::string result;
-         result.reserve(expected_length + 2); // + CRLF length
+         result.reserve(expected_length + 2); // + CRLF
 
          for (const auto& [name, value] : items) {
-            // Skip empty field names. Empty field values are still valid under RFC9112
-            if (name.empty()) {
-               continue;
-            }
             result.append(name).append(": ").append(value).append("\r\n");
          }
 
@@ -251,33 +266,28 @@ namespace glz
          return result;
       }
 
-      /// @brief Replace all headers whose name matches the specified name with given value
+      /// @brief Replaces all matching field lines with one new field line
       /// @param name Field name
       /// @param value Field value
-      /// @note Does not preserve the previous field order
+      /// @note Does not validate the new field line or preserve the previous field order
       void replace(std::string name, std::string value)
       {
-         // REVIEW: Maybe we should implement full field-name validation
-         // (in the future at least), since user probably expects class
-         // named 'http_headers' to store RFC-compliant header section.
-
          erase(name);
          add(std::move(name), std::move(value));
       }
 
-      /// @brief Add a new field to the existing fields with the same name
+      /// @brief Appends a new field line
       /// @param name Field name
       /// @param value Field value
-      /// @returns Last iterator before operation
+      /// @returns Iterator to the appended field line
+      /// @note Does not validate the new field line
       iterator add(std::string name, std::string value) &
       {
-         // REVIEW: See replace() function comment
-
          items.emplace_back(std::move(name), std::move(value));
          return std::prev(items.end());
       }
 
-      /// @brief Copies all fields from another set of http_headers
+      /// @brief Appends copies of all field lines from another http_headers object
       /// @param other http_headers to be copied from
       void append(const http_headers& other)
       {
@@ -288,7 +298,7 @@ namespace glz
          std::ranges::copy(other.items, std::back_inserter(items));
       }
 
-      /// @brief Moves all fields from another set of http_headers
+      /// @brief Appends all field lines moved from another http_headers object
       /// @param other http_headers to be moved from
       void append(http_headers&& other)
       {
@@ -300,7 +310,7 @@ namespace glz
          other.clear();
       }
 
-      /// @brief Erases all fields whose name matches the specified name
+      /// @brief Erases all field lines whose name matches the specified name
       /// @param name Field name
       void erase(std::string_view name)
       {
@@ -327,8 +337,6 @@ namespace glz
       iterator add(std::string name, std::string value) && = delete;
 
      private:
-      // REVIEW: According to RFC 9112, header names can consist only of ASCII
-      // characters, so I don't think this will cause any problems
       [[nodiscard]] static bool ascii_str_iequal(std::string_view s1, std::string_view s2) noexcept
       {
          if (s1.size() != s2.size()) {
@@ -342,6 +350,30 @@ namespace glz
          }
 
          return true;
+      }
+
+      [[nodiscard]] static bool is_field_name_valid(std::string_view name) noexcept
+      {
+         if (name.empty()) {
+            return false;
+         }
+
+         static constexpr std::array valid_name_tokens{'!', '#', '$', '%', '^', '&', '\'', '*',
+                                                       '+', '-', '.', '_', '`', '|', '~'};
+
+         return std::ranges::all_of(name, [](char c) noexcept {
+            const auto byte = static_cast<unsigned char>(c);
+            return (byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
+                   std::ranges::contains(valid_name_tokens, byte);
+         });
+      }
+
+      [[nodiscard]] static bool is_field_value_valid(std::string_view value) noexcept
+      {
+         return std::ranges::all_of(value, [](char c) noexcept {
+            const auto byte = static_cast<unsigned char>(c);
+            return byte == '\t' || (byte >= 0x20 && byte <= 0x7e) || byte >= 0x80;
+         });
       }
 
       std::vector<value_type> items;
