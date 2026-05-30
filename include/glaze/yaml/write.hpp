@@ -421,6 +421,11 @@ namespace glz
       inline void write_tagged_block_object(T&& inner, size_t index, is_context auto&& ctx, B&& b, auto& ix,
                                             int32_t indent_level, bool skip_first_indent);
 
+      // Forward declaration for custom-alternative tagged-variant block output (needs serialize<YAML>).
+      template <auto Opts, class Variant, class T, class B>
+      inline void write_tagged_block_custom(T&& inner, size_t index, is_context auto&& ctx, B&& b, auto& ix,
+                                            int32_t indent_level, bool skip_first_indent);
+
       // Helper to check if a type is "simple" (writes on same line)
       template <class T>
       consteval bool is_simple_type()
@@ -630,6 +635,13 @@ namespace glz
                               else {
                                  write_block_mapping<Opts>(inner, ctx, b, ix, indent_level + 1, true);
                               }
+                           }
+                           else if constexpr (custom_write<inner_t> && check_write_type_info(Opts) &&
+                                              not tag_v<element_t>.empty()) {
+                              // Custom alternative: discriminator tag inline after the dash, body merged.
+                              dump(' ', b, ix);
+                              write_tagged_block_custom<Opts, element_t>(inner, index, ctx, b, ix, indent_level + 1,
+                                                                         true);
                            }
                            else {
                               if constexpr (writable_map_t<inner_t>) {
@@ -1141,6 +1153,9 @@ namespace glz
                                 not tag_v<V>.empty()) {
                      write_tagged_block_object<Opts, V>(inner, index, ctx, b, ix, indent_level, false);
                   }
+                  else if constexpr (custom_write<inner_t> && check_write_type_info(Opts) && not tag_v<V>.empty()) {
+                     write_tagged_block_custom<Opts, V>(inner, index, ctx, b, ix, indent_level, false);
+                  }
                   else {
                      write_block_mapping_nested<Opts>(inner, ctx, b, ix, indent_level);
                   }
@@ -1385,6 +1400,66 @@ namespace glz
          write_flow_mapping_members<Opts>(inner, ctx, b, ix, first);
          dump('}', b, ix);
       }
+
+      // Write a tagged variant alternative whose body comes from a custom serializer (custom_write).
+      // Like write_tagged_block_object, but the body is produced by serialize<YAML> rather than by
+      // field reflection. The custom serializer is expected to emit an object body (e.g. a map);
+      // it is driven at the variant's own indent so the tag and the body share one mapping.
+      template <auto Opts, class Variant, class T, class B>
+      inline void write_tagged_block_custom(T&& inner, size_t index, is_context auto&& ctx, B&& b, auto& ix,
+                                            int32_t indent_level, bool skip_first_indent)
+      {
+         constexpr uint8_t indent_width = check_indent_width(yaml_opts{});
+         static constexpr sv tag = tag_v<Variant>;
+
+         if (!skip_first_indent) {
+            const int32_t spaces = indent_level * indent_width;
+            if (!ensure_space(ctx, b, ix + spaces + tag.size() + 8)) [[unlikely]] {
+               return;
+            }
+            for (int32_t i = 0; i < spaces; ++i) {
+               b[ix++] = ' ';
+            }
+         }
+         dump(tag, b, ix);
+         dump(": ", b, ix);
+         write_variant_tag_id<Opts, Variant>(index, ctx, b, ix, indent_level);
+         dump('\n', b, ix);
+
+         // The YAML writer threads indentation through explicit parameters, not the context, so a
+         // custom serializer (which can only call serialize<YAML>) always emits its body relative to
+         // column 0. Render the body, then re-indent every line to the mapping's column so the tag
+         // and the body share one block mapping. Relative indentation within the body is preserved.
+         std::string body;
+         size_t body_ix = 0;
+         serialize<YAML>::op<Opts>(inner, ctx, body, body_ix);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         const int32_t spaces = indent_level * indent_width;
+         const std::string_view body_sv{body.data(), body_ix};
+         size_t line_start = 0;
+         while (line_start < body_sv.size()) {
+            const size_t nl = body_sv.find('\n', line_start);
+            const size_t line_end = (nl == std::string_view::npos) ? body_sv.size() : nl;
+            const std::string_view line = body_sv.substr(line_start, line_end - line_start);
+            if (!line.empty()) {
+               if (!ensure_space(ctx, b, ix + size_t(spaces) + line.size() + 2)) [[unlikely]] {
+                  return;
+               }
+               for (int32_t i = 0; i < spaces; ++i) {
+                  b[ix++] = ' ';
+               }
+               dump(line, b, ix);
+            }
+            if (nl == std::string_view::npos) {
+               break;
+            }
+            dump('\n', b, ix);
+            line_start = nl + 1;
+         }
+      }
    } // namespace yaml
 
    // glaze_object_t and reflectable (structs)
@@ -1481,6 +1556,20 @@ namespace glz
                            indent_level = ctx.indent_level;
                         }
                         yaml::write_tagged_block_object<Opts, V>(v, index, ctx, b, ix, indent_level, false);
+                     }
+                  }
+                  else if constexpr (custom_write<Vt>) {
+                     // Custom alternative: merge the tag into the body the custom serializer emits.
+                     if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
+                        ctx.error = error_code::feature_not_supported;
+                        ctx.custom_error_message = "custom variant alternatives are not supported in YAML flow style";
+                     }
+                     else {
+                        int32_t indent_level = 0;
+                        if constexpr (requires { ctx.indent_level; }) {
+                           indent_level = ctx.indent_level;
+                        }
+                        yaml::write_tagged_block_custom<Opts, V>(v, index, ctx, b, ix, indent_level, false);
                      }
                   }
                   else {
