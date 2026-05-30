@@ -1304,7 +1304,7 @@ namespace glz
          // don't start worker threads when an io_executor was provided
          if (!async_io_context) return;
 
-         size_t num_threads = std::max(2u, std::thread::hardware_concurrency());
+         size_t num_threads = (std::max)(2u, std::thread::hardware_concurrency());
          worker_threads.reserve(num_threads);
 
          for (size_t i = 0; i < num_threads; ++i) {
@@ -2175,7 +2175,7 @@ namespace glz
                }
 
                response_body.assign(static_cast<const char*>(response_buffer.data().data()),
-                                    std::min(content_length, response_buffer.size()));
+                                    (std::min)(content_length, response_buffer.size()));
             }
 
             response resp;
