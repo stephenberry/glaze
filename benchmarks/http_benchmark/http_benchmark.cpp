@@ -529,7 +529,7 @@ int main()
    static constexpr uint16_t beast_port = 18766;
    static constexpr int batch = 1000;
 
-   const unsigned hw_threads = std::max(1u, std::thread::hardware_concurrency());
+   const unsigned hw_threads = (std::max)(1u, std::thread::hardware_concurrency());
    const int client_threads = static_cast<int>(hw_threads);
 
    const auto plaintext_req = make_get_req("/plaintext");
