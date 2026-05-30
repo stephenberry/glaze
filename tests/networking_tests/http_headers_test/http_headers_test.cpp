@@ -49,37 +49,15 @@ using field_entry = std::pair<std::string, std::string>;
 }
 
 template <class Headers>
-concept has_rvalue_begin = requires { std::declval<Headers&&>().begin(); };
-
-template <class Headers>
-concept has_rvalue_end = requires { std::declval<Headers&&>().end(); };
-
-template <class Headers>
-concept has_rvalue_cbegin = requires { std::declval<Headers&&>().cbegin(); };
-
-template <class Headers>
-concept has_rvalue_cend = requires { std::declval<Headers&&>().cend(); };
-
-template <class Headers>
-concept has_rvalue_find = requires { std::declval<Headers&&>().find(std::string_view{"name"}); };
-
-template <class Headers>
-concept has_rvalue_fields = requires { std::declval<Headers&&>().fields(std::string_view{"name"}); };
-
-template <class Headers>
-concept has_rvalue_names = requires { std::declval<Headers&&>().names(); };
-
-template <class Headers>
-concept has_rvalue_values = requires { std::declval<Headers&&>().values(); };
-
-template <class Headers>
-concept has_rvalue_named_values = requires { std::declval<Headers&&>().values(std::string_view{"name"}); };
-
-template <class Headers>
-concept has_rvalue_first_value = requires { std::declval<Headers&&>().first_value(std::string_view{"name"}); };
-
-template <class Headers>
-concept has_rvalue_add = requires { std::declval<Headers&&>().add(std::string{}, std::string{}); };
+concept has_dangling_prone_rvalue_api =
+   requires { std::declval<Headers&&>().begin(); } || requires { std::declval<Headers&&>().end(); } ||
+   requires { std::declval<Headers&&>().cbegin(); } || requires { std::declval<Headers&&>().cend(); } ||
+   requires { std::declval<Headers&&>().find(std::string_view{"name"}); } ||
+   requires { std::declval<Headers&&>().fields(std::string_view{"name"}); } ||
+   requires { std::declval<Headers&&>().names(); } || requires { std::declval<Headers&&>().values(); } ||
+   requires { std::declval<Headers&&>().values(std::string_view{"name"}); } ||
+   requires { std::declval<Headers&&>().first_value(std::string_view{"name"}); } ||
+   requires { std::declval<Headers&&>().add(std::string{}, std::string{}); };
 
 static_assert(std::ranges::viewable_range<glz::http_headers>);
 static_assert(std::forward_iterator<glz::http_headers::range_iterator>);
@@ -106,21 +84,8 @@ static_assert(std::same_as<
               std::ranges::range_value_t<decltype(std::declval<const glz::http_headers&>().values(std::string_view{}))>,
               std::string_view>);
 
-static_assert(!has_rvalue_begin<glz::http_headers>);
-static_assert(!has_rvalue_end<glz::http_headers>);
-static_assert(!has_rvalue_begin<const glz::http_headers>);
-static_assert(!has_rvalue_end<const glz::http_headers>);
-static_assert(!has_rvalue_cbegin<const glz::http_headers>);
-static_assert(!has_rvalue_cend<const glz::http_headers>);
-static_assert(!has_rvalue_find<glz::http_headers>);
-static_assert(!has_rvalue_find<const glz::http_headers>);
-static_assert(!has_rvalue_fields<glz::http_headers>);
-static_assert(!has_rvalue_fields<const glz::http_headers>);
-static_assert(!has_rvalue_names<const glz::http_headers>);
-static_assert(!has_rvalue_values<const glz::http_headers>);
-static_assert(!has_rvalue_named_values<const glz::http_headers>);
-static_assert(!has_rvalue_first_value<const glz::http_headers>);
-static_assert(!has_rvalue_add<glz::http_headers>);
+static_assert(!has_dangling_prone_rvalue_api<glz::http_headers>);
+static_assert(!has_dangling_prone_rvalue_api<const glz::http_headers>);
 
 suite http_headers_ctor_tests = [] {
    "default_ctor_creates_empty_headers"_test = [] {
