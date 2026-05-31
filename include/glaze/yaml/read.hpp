@@ -77,9 +77,12 @@ namespace glz
 
          // A directive line (%YAML/%TAG/...) is only valid in the document prefix.
          // If parsing stopped before the end and we encounter a directive in the
-         // remaining tail, treat it as malformed stream structure.
+         // remaining tail, treat it as malformed stream structure. This is a document-level
+         // concern, so only enforce it at the document root: a nested call (e.g. a tagged
+         // variant handing a custom alternative its body) is mid-document and its tail
+         // belongs to an enclosing node, not this value.
          if constexpr (!check_partial_read(Opts)) {
-            if (!bool(ctx.error)) {
+            if (!bool(ctx.error) && ctx.current_indent() < 0) {
                auto is_document_start = [&](auto pos) {
                   if (end - pos >= 3 && pos[0] == '-' && pos[1] == '-' && pos[2] == '-') {
                      auto after = pos + 3;
@@ -3256,6 +3259,15 @@ namespace glz
       template <auto Opts, class Ctx, class It, class End, class ProcessEntry>
       void parse_block_mapping_loop(Ctx& ctx, It& it, End end, int32_t mapping_indent, ProcessEntry&& process_entry)
       {
+         // A tagged-variant custom alternative hands its body (at the variant's own column) to a
+         // discover-mode reader. Honor the known indent it published so continuation/dedent are
+         // judged against the outer parent, not the body itself. One-shot: reset on observation.
+         if (ctx.forced_block_mapping_indent >= 0) {
+            if (mapping_indent < 0) {
+               mapping_indent = ctx.forced_block_mapping_indent;
+            }
+            ctx.forced_block_mapping_indent = -1;
+         }
          const int32_t parent_indent = ctx.current_indent();
          const bool discover_indent = (mapping_indent < 0);
          bool first_key = !discover_indent;
@@ -5238,9 +5250,59 @@ namespace glz
                   std::visit(
                      [&](auto&& alt) {
                         using Alt = std::remove_cvref_t<decltype(alt)>;
-                        if constexpr (glaze_object_t<Alt> || reflectable<Alt>) {
+                        if constexpr ((glaze_object_t<Alt> || reflectable<Alt>) && not custom_read<Alt>) {
                            // Parse the mapping into the resolved struct; the tag key is skipped.
                            from<YAML, Alt>::template op<Opts, tag_literal>(alt, ctx, it, end);
+                        }
+                        else if constexpr (custom_read<Alt>) {
+                           // Custom alternatives read the mapping body themselves and cannot skip an
+                           // interior tag key the way reflected objects do, so the tag must be the
+                           // first key (glaze always writes it first). Consume that leading "tag: id"
+                           // entry, then hand the remaining mapping to the custom handler.
+                           if constexpr (yaml::check_flow_context(Opts)) {
+                              ctx.error = error_code::feature_not_supported;
+                              ctx.custom_error_message =
+                                 "custom variant alternatives are not supported in YAML flow style";
+                           }
+                           else {
+                              ctx.scratch.clear();
+                              if (yaml::parse_yaml_key(ctx.scratch, ctx, it, end, false)) {
+                                 if (std::string_view{ctx.scratch} != tag_v<V>) {
+                                    ctx.error = error_code::feature_not_supported;
+                                    ctx.custom_error_message =
+                                       "the tag must be the first key for a custom variant alternative";
+                                 }
+                                 else {
+                                    yaml::skip_inline_ws(it, end);
+                                    if (it == end || *it != ':') {
+                                       ctx.error = error_code::syntax_error;
+                                    }
+                                    else {
+                                       ++it;
+                                       yaml::skip_inline_ws(it, end);
+                                       yaml::skip_unknown_block_value<Opts>(ctx, it, end, mapping_column);
+                                       if (!bool(ctx.error)) {
+                                          // If nothing but trailing whitespace/comments remains, the tag
+                                          // was the whole mapping: leave the alternative default.
+                                          auto probe = it;
+                                          yaml::skip_ws_newlines_comments(probe, end);
+                                          if (probe == end) {
+                                             it = probe;
+                                          }
+                                          else {
+                                             // Publish the mapping's column so the custom handler's block
+                                             // mapping (which would otherwise discover its own indent) reads
+                                             // the remaining entries at the variant's indent and dedents
+                                             // correctly in every context (root, sequence, nested).
+                                             ctx.forced_block_mapping_indent = mapping_column;
+                                             from<YAML, Alt>::template op<Opts>(alt, ctx, it, end);
+                                             ctx.forced_block_mapping_indent = -1;
+                                          }
+                                       }
+                                    }
+                                 }
+                              }
+                           }
                         }
                         else {
                            // Non-object alternative (e.g. std::monostate): the emplaced default is
