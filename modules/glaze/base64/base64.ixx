@@ -1,5 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/base64/base64.hpp"
+// glz:header std=<array>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<vector>
 export module glaze.base64;
 
 import std;

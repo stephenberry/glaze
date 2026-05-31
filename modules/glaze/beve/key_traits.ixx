@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/beve/key_traits.hpp"
+// glz:header std=<cstdint>
+// glz:header std=<type_traits>
 export module glaze.beve.key_traits;
 
 import std;

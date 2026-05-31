@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/cbor/skip.hpp"
+// glz:header std=<bit>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
 export module glaze.cbor.skip;
 
 import glaze.cbor.header;

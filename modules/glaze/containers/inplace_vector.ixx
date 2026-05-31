@@ -1,5 +1,20 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/containers/inplace_vector.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<compare>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdlib>
+// glz:header std=<cstring>
+// glz:header std=<initializer_list>
+// glz:header std=<iterator>
+// glz:header std=<memory>
+// glz:header std=<new>
+// glz:header std=<ranges>
+// glz:header std=<stdexcept>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.containers.inplace_vector;
 
 import std;

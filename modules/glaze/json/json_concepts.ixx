@@ -1,5 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/json_concepts.hpp"
 export module glaze.json.json_concepts;
 
 import glaze.core.common;

@@ -1,5 +1,15 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/containers/flat_map.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<concepts>
+// glz:header std=<cstdlib>
+// glz:header std=<functional>
+// glz:header std=<initializer_list>
+// glz:header std=<iterator>
+// glz:header std=<stdexcept>
+// glz:header std=<utility>
+// glz:header std=<vector>
 export module glaze.containers.flat_map;
 
 import std;

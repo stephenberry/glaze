@@ -1,5 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/stencil/stencil.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<iterator>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.stencil;
 
 import glaze.concepts.container_concepts;

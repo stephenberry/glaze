@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/buffer_pool.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<string>
+// glz:header std=<utility>
+// glz:header std=<vector>
 export module glaze.util.buffer_pool;
 
 import std;

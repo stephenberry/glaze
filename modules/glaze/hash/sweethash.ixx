@@ -4,6 +4,10 @@
 // sweethash - High performance string hashing
 // sweet32 and sweet64 hash algorithms using SWAR (8 bytes at a time)
 // Developed by Stephen Berry
+// glz:header path="glaze/hash/sweethash.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
 export module glaze.hash.sweethash;
 
 import std;

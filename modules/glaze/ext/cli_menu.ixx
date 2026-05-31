@@ -1,3 +1,15 @@
+// glz:header path="glaze/ext/cli_menu.hpp"
+// glz:header std=<atomic>
+// glz:header std=<charconv>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstdio>
+// glz:header std=<iostream>
+// glz:header std=<ostream>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
 export module glaze.ext.cli_menu;
 
 import std;

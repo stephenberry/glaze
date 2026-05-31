@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/file/raw_or_file.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<filesystem>
+// glz:header std=<string>
 export module glaze.file.raw_or_file;
 
 import std;

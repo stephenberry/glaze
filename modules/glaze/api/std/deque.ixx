@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/std/deque.hpp"
+// glz:header std=<deque>
+// glz:header std=<string_view>
 export module glaze.api.std.deque;
 
 import std;

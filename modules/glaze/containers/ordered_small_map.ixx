@@ -1,5 +1,23 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/containers/ordered_small_map.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstdlib>
+// glz:header std=<cstring>
+// glz:header std=<initializer_list>
+// glz:header std=<iterator>
+// glz:header std=<limits>
+// glz:header std=<memory>
+// glz:header std=<new>
+// glz:header std=<stdexcept>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.containers.ordered_small_map;
 
 import std;

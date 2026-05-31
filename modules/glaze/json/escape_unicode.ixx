@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/escape_unicode.hpp"
+// glz:header std=<array>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<string>
+// glz:header std=<string_view>
 export module glaze.json.escape_unicode;
 
 import std;

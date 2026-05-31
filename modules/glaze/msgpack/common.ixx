@@ -1,5 +1,15 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/msgpack/common.hpp"
+// glz:header std=<bit>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<initializer_list>
+// glz:header std=<limits>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<vector>
 export module glaze.msgpack.common;
 
 import std;

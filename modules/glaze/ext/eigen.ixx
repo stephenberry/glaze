@@ -1,5 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/ext/eigen.hpp"
+// glz:header std=<array>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<span>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+// glz:header include=<Eigen/Core>
 export module glaze.ext.eigen;
 
 import std;

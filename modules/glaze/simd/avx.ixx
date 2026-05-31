@@ -1,5 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/simd/avx.hpp"
 module;
 
 #include "glaze/simd/simd.hpp"

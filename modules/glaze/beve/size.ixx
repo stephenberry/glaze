@@ -1,5 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/beve/size.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<span>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
 export module glaze.beve.size;
 
 import std;

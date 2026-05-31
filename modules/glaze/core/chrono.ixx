@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/chrono.hpp"
+// glz:header std=<chrono>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
 export module glaze.core.chrono;
 
 import std;

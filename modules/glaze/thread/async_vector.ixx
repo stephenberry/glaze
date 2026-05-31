@@ -1,5 +1,16 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/thread/async_vector.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstdlib>
+// glz:header std=<initializer_list>
+// glz:header std=<mutex>
+// glz:header std=<shared_mutex>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<vector>
 export module glaze.thread.async_vector;
 
 import std;

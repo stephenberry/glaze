@@ -1,5 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/toml/common.hpp"
 export module glaze.toml.common;
 
 import glaze.core.common;

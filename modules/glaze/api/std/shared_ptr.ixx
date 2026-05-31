@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/std/shared_ptr.hpp"
+// glz:header std=<memory>
+// glz:header std=<string_view>
 export module glaze.api.std.shared_ptr;
 
 import std;

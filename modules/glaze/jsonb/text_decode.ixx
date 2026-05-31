@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/jsonb/text_decode.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<string>
 export module glaze.jsonb.text_decode;
 
 import std;

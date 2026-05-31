@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/stencil/stencilcount.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<string>
+// glz:header std=<unordered_map>
+// glz:header std=<utility>
 export module glaze.stencil.stencilcount;
 
 import glaze.core.common;

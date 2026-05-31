@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/jsonb/header.hpp"
+// glz:header std=<bit>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<type_traits>
 export module glaze.jsonb.header;
 
 import std;

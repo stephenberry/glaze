@@ -1,5 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/cbor.hpp"
 export module glaze.cbor;
 
 export import glaze.cbor.cbor_to_json;

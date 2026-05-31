@@ -1,5 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/max_write_precision.hpp"
+// glz:header std=<type_traits>
 export module glaze.json.max_write_precision;
 
 import std;

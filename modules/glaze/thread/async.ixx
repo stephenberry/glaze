@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/thread/async.hpp"
+// glz:header std=<concepts>
+// glz:header std=<mutex>
+// glz:header std=<shared_mutex>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.thread.async;
 
 import std;

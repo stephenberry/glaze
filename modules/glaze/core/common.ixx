@@ -1,5 +1,20 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/common.hpp"
+// glz:header std=<array>
+// glz:header std=<atomic>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<functional>
+// glz:header std=<iterator>
+// glz:header std=<optional>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
 export module glaze.core.common;
 
 import std;

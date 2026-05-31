@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/read.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<span>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.core.read;
 
 import std;

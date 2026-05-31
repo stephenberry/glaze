@@ -1,5 +1,16 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/atoi.hpp"
+// glz:header std=<array>
+// glz:header std=<bit>
+// glz:header std=<cmath>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<iterator>
+// glz:header std=<limits>
+// glz:header std=<type_traits>
 module;
 #ifdef _MSC_VER
 #include <intrin.h>

@@ -1,5 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/std/variant.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<string_view>
+// glz:header std=<utility>
+// glz:header std=<variant>
 export module glaze.api.std.variant;
 
 import std;

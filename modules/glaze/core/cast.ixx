@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/cast.hpp"
+// glz:header std=<cstdint>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.core.cast;
 
 import std;

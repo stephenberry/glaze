@@ -1,5 +1,20 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/toml/write.hpp"
+// glz:header std=<bit>
+// glz:header std=<chrono>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<iterator>
+// glz:header std=<ratio>
+// glz:header std=<span>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
 export module glaze.toml.write;
 
 import std;

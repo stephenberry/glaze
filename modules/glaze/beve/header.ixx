@@ -1,5 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/beve/header.hpp"
+// glz:header std=<array>
+// glz:header std=<bit>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<iterator>
+// glz:header std=<type_traits>
 export module glaze.beve.header;
 
 import std;

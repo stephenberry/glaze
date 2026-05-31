@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/bit.hpp"
+// glz:header std=<bit>
+// glz:header std=<cstdint>
 export module glaze.util.bit;
 
 import std;

@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/for_each.hpp"
+// glz:header std=<array>
+// glz:header std=<cstddef>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.util.for_each;
 
 import std;

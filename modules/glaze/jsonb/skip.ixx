@@ -1,5 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/jsonb/skip.hpp"
+// glz:header std=<cstdint>
 export module glaze.jsonb.skip;
 
 import std;

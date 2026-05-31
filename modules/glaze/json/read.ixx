@@ -1,5 +1,32 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/read.hpp"
+// glz:header std=<array>
+// glz:header std=<bit>
+// glz:header std=<charconv>
+// glz:header std=<chrono>
+// glz:header std=<climits>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<deque>
+// glz:header std=<filesystem>
+// glz:header std=<forward_list>
+// glz:header std=<iterator>
+// glz:header std=<limits>
+// glz:header std=<map>
+// glz:header std=<optional>
+// glz:header std=<ranges>
+// glz:header std=<span>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<unordered_map>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
 export module glaze.json.read;
 
 import std;

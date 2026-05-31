@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/string_literal.hpp"
+// glz:header std=<array>
+// glz:header std=<cstddef>
+// glz:header std=<string_view>
 export module glaze.util.string_literal;
 
 import std;

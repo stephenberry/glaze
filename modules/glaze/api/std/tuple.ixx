@@ -1,5 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/std/tuple.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<utility>
 export module glaze.api.std.tuple;
 
 import std;

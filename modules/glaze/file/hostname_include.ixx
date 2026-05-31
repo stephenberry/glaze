@@ -1,3 +1,8 @@
+// glz:header path="glaze/file/hostname_include.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<filesystem>
+// glz:header std=<string>
+// glz:header std=<string_view>
 module;
 
 #ifdef _WIN32

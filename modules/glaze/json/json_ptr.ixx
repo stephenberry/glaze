@@ -1,5 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/json_ptr.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<any>
+// glz:header std=<charconv>
+// glz:header std=<cstddef>
+// glz:header std=<span>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
 export module glaze.json.json_ptr;
 
 import std;

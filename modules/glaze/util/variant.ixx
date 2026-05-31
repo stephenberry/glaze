@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/variant.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<array>
+// glz:header std=<cstddef>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
 export module glaze.util.variant;
 
 import std;

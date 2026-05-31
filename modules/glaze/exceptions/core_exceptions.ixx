@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/exceptions/core_exceptions.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<deque>
+// glz:header std=<stdexcept>
+// glz:header std=<string>
+// glz:header std=<utility>
+// glz:header std=<vector>
 export module glaze.exceptions.core_exceptions;
 
 #if __cpp_exceptions

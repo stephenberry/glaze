@@ -1,5 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/help.hpp"
+// glz:header std=<string>
 export module glaze.util.help;
 
 import std;

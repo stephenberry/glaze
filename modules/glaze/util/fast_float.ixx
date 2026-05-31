@@ -94,6 +94,22 @@
 //    DEALINGS IN THE SOFTWARE.
 //
 
+// glz:header path="glaze/util/fast_float.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<bit>
+// glz:header std=<cassert>
+// glz:header std=<charconv>
+// glz:header std=<climits>
+// glz:header std=<cmath>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstdlib>
+// glz:header std=<cstring>
+// glz:header std=<iterator>
+// glz:header std=<limits>
+// glz:header std=<system_error>
+// glz:header std=<type_traits>
+// glz:header std=<version>
 module;
 
 #include <cassert>

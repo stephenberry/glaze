@@ -1,5 +1,17 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/dump.hpp"
+// glz:header std=<array>
+// glz:header std=<bit>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<span>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+// glz:header std=<vector>
 export module glaze.util.dump;
 
 import std;

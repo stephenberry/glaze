@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/key_transformers.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<string>
+// glz:header std=<string_view>
 export module glaze.util.key_transformers;
 
 import std;

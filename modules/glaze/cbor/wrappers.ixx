@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/cbor/wrappers.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<type_traits>
 export module glaze.cbor.wrappers;
 
 import glaze.cbor.read;

@@ -1,5 +1,22 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/generic.hpp"
+// glz:header std=<charconv>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstdlib>
+// glz:header std=<functional>
+// glz:header std=<initializer_list>
+// glz:header std=<map>
+// glz:header std=<stdexcept>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
 export module glaze.json.generic;
 
 import std;

@@ -1,5 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/lazy.hpp"
+// glz:header std=<charconv>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+// glz:header std=<vector>
 export module glaze.json.lazy;
 
 import std;

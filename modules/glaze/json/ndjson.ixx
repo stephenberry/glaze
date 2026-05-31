@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/ndjson.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<string>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.json.ndjson;
 
 import std;

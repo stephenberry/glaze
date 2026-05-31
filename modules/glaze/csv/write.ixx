@@ -1,5 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/csv/write.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<string>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<vector>
 export module glaze.csv.write;
 
 import std;

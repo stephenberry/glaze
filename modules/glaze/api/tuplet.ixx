@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/tuplet.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<string_view>
+// glz:header std=<utility>
 export module glaze.api.tuplet;
 
 import std;

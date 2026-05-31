@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/thread/guard.hpp"
+// glz:header std=<atomic>
+// glz:header std=<concepts>
+// glz:header std=<type_traits>
 export module glaze.thread.guard;
 
 /**

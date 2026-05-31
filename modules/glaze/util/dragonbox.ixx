@@ -1,3 +1,11 @@
+// glz:header path="glaze/util/dragonbox.hpp"
+// glz:header std=<bit>
+// glz:header std=<cassert>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<limits>
+// glz:header std=<type_traits>
+// glz:header std=<version>
 module;
 #include <cassert>
 #include <cstdint>

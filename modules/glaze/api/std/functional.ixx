@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/std/functional.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<functional>
+// glz:header std=<string_view>
 export module glaze.api.std.functional;
 
 import std;

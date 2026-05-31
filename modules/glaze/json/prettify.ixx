@@ -1,5 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/prettify.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<string>
+// glz:header std=<vector>
 export module glaze.json.prettify;
 
 import std;

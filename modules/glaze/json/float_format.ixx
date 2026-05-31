@@ -1,5 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/float_format.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdio>
+// glz:header std=<format>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
 export module glaze.json.float_format;
 
 import std;

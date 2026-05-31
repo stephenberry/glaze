@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/std/vector.hpp"
+// glz:header std=<string_view>
+// glz:header std=<vector>
 export module glaze.api.std.vector;
 
 import std;

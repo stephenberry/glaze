@@ -1,5 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/thread/atomic.hpp"
+// glz:header std=<atomic>
+// glz:header std=<concepts>
+// glz:header std=<cstdint>
+// glz:header std=<type_traits>
 export module glaze.thread.atomic;
 
 import std;

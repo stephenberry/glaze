@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/itoa_40kb.hpp"
+// glz:header std=<array>
+// glz:header std=<bit>
+// glz:header std=<concepts>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<type_traits>
 export module glaze.util.itoa_40kb;
 
 import glaze.util.itoa;

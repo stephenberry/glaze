@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/skip.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<span>
+// glz:header std=<type_traits>
 export module glaze.json.skip;
 
 import std;

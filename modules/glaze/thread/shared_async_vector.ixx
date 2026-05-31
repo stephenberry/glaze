@@ -1,5 +1,18 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/thread/shared_async_vector.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<cassert>
+// glz:header std=<cstddef>
+// glz:header std=<cstdlib>
+// glz:header std=<iterator>
+// glz:header std=<memory>
+// glz:header std=<mutex>
+// glz:header std=<shared_mutex>
+// glz:header std=<stdexcept>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<vector>
 module;
 #include <cassert>
 export module glaze.thread.shared_async_vector;

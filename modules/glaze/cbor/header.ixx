@@ -1,5 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/cbor/header.hpp"
+// glz:header std=<bit>
+// glz:header std=<cmath>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<limits>
 export module glaze.cbor.header;
 
 import std;

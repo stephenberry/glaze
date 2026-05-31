@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/istream_buffer.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstring>
+// glz:header std=<istream>
+// glz:header std=<limits>
+// glz:header std=<vector>
 export module glaze.core.istream_buffer;
 
 import std;

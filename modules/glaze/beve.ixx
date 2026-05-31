@@ -1,5 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/beve.hpp"
 export module glaze.beve;
 
 export import glaze.core.as_array_wrapper;

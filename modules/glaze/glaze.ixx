@@ -29,6 +29,11 @@
   source code, you may redistribute such embedded portions in such object form
   without including the above copyright and permission notices.
  */
+// glz:header path="glaze/glaze.hpp"
+// glz:header include="glaze/beve/beve_to_json.hpp"
+// glz:header include="glaze/record/recorder.hpp"
+// glz:header include="glaze/stencil/stencil.hpp"
+// glz:header include="glaze/util/key_transformers.hpp"
 
 export module glaze;
 

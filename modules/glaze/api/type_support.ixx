@@ -1,5 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/type_support.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstdint>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
 export module glaze.api.type_support;
 
 import std;

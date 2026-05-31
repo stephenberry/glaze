@@ -1,0 +1,95 @@
+name: Generate headers
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - ".github/workflows/generate-headers.yml"
+      - "include/**"
+      - "modules/**"
+      - "tools/glz_generate_headers.py"
+      - "tools/glz_header_manifest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: generate-headers-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-headers:
+    name: Generate and commit headers
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Generate headers
+        run: >
+          python3 tools/glz_generate_headers.py
+          --module-root modules
+          --include-root include
+          --manifest tools/glz_header_manifest.yml
+
+      - name: Commit generated headers
+        shell: bash
+        run: |
+          if [ -z "$(git status --porcelain -- include)" ]; then
+            echo "Generated headers are already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add include
+          git commit -m "Generate headers"
+          git push
+
+  check-fork-headers:
+    name: Check generated headers
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Generate headers
+        run: >
+          python3 tools/glz_generate_headers.py
+          --module-root modules
+          --include-root include
+          --manifest tools/glz_header_manifest.yml
+
+      - name: Verify generated headers are committed
+        shell: bash
+        run: |
+          if [ -z "$(git status --porcelain -- include)" ]; then
+            echo "Generated headers are already up to date."
+            exit 0
+          fi
+
+          git diff -- include
+          echo "::error::Generated headers are stale. Run tools/glz_generate_headers.py and commit the include/ changes."
+          exit 1

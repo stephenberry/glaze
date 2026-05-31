@@ -1,5 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/ptr.hpp"
+// glz:header std=<utility>
 export module glaze.core.ptr;
 
 import std;

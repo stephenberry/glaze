@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/primes_64.hpp"
+// glz:header std=<array>
+// glz:header std=<cstdint>
 export module glaze.util.primes_64;
 
 import std;

@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
 
+// glz:header path="glaze/json.hpp"
 export module glaze.json;
 
 export import glaze.core.cast;

@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/exceptions/msgpack_exceptions.hpp"
+// glz:header std=<stdexcept>
+// glz:header std=<string>
+// glz:header std=<utility>
 export module glaze.exceptions.msgpack_exceptions;
 
 #if __cpp_exceptions

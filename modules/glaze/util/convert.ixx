@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/convert.hpp"
+// glz:header std=<bit>
+// glz:header std=<cstdint>
 export module glaze.util.convert;
 
 import std;

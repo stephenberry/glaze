@@ -1,5 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/csv.hpp"
 export module glaze.csv;
 
 export import glaze.core.as_array_wrapper;

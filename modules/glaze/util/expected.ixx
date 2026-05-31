@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/expected.hpp"
+// glz:header std=<concepts>
+// glz:header std=<expected>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<version>
 export module glaze.util.expected;
 
 import std;

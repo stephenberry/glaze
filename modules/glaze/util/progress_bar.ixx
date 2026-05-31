@@ -1,5 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/progress_bar.hpp"
+// glz:header std=<cmath>
+// glz:header std=<cstddef>
+// glz:header std=<ostream>
+// glz:header std=<string>
 export module glaze.util.progress_bar;
 
 import std;

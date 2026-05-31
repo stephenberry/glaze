@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/file/file_ops.hpp"
+// glz:header std=<cstdio>
+// glz:header std=<filesystem>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<system_error>
+// glz:header std=<utility>
 export module glaze.file.file_ops;
 
 import std;

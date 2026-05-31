@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/beve/skip.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
 export module glaze.beve.skip;
 
 import std;

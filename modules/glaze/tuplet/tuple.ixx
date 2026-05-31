@@ -2,6 +2,15 @@
 // For the license information refer to glaze.ixx
 
 // original source (significantly refactored): https://github.com/codeinred/tuplet
+// glz:header path="glaze/tuplet/tuple.hpp"
+// glz:header std=<array>
+// glz:header std=<compare>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
 export module glaze.tuplet;
 
 import std;

@@ -22,6 +22,7 @@ CMakeUserPresets.json
 *.swp
 *~
 _ReSharper*
+__pycache__/
 *.log
 .cache/
 compile_commands.json

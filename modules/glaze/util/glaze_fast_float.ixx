@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/glaze_fast_float.hpp"
+// glz:header std=<charconv>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
 export module glaze.util.glaze_fast_float;
 
 import std;

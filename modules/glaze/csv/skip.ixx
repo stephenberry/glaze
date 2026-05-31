@@ -1,5 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/csv/skip.hpp"
 export module glaze.csv.skip;
 
 export import glaze.core.context;

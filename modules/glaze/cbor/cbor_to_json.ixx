@@ -1,5 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/cbor/cbor_to_json.hpp"
+// glz:header std=<bit>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<vector>
 export module glaze.cbor.cbor_to_json;
 
 import glaze.cbor.header;

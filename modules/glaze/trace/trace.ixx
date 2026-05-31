@@ -1,5 +1,16 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/trace/trace.hpp"
+// glz:header std=<atomic>
+// glz:header std=<chrono>
+// glz:header std=<cstdint>
+// glz:header std=<deque>
+// glz:header std=<functional>
+// glz:header std=<mutex>
+// glz:header std=<optional>
+// glz:header std=<string_view>
+// glz:header std=<thread>
+// glz:header std=<utility>
 export module glaze.trace;
 
 import std;

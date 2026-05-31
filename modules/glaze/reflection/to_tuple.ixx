@@ -1,5 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/reflection/to_tuple.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<optional>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.reflection.to_tuple;
 
 import std;

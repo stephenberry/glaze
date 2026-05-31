@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/std/unordered_set.hpp"
+// glz:header std=<string_view>
+// glz:header std=<unordered_set>
 export module glaze.api.std.unordered_set;
 
 import std;

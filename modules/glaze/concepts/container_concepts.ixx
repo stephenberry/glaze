@@ -1,5 +1,16 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/concepts/container_concepts.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<deque>
+// glz:header std=<iterator>
+// glz:header std=<ranges>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<vector>
+// glz:header std=<version>
 export module glaze.concepts.container_concepts;
 
 import std;

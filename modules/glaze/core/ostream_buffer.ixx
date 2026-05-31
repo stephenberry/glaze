@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/ostream_buffer.hpp"
+// glz:header std=<cassert>
+// glz:header std=<cstddef>
+// glz:header std=<limits>
+// glz:header std=<ostream>
+// glz:header std=<vector>
 module;
 #include <cassert>
 export module glaze.core.ostream_buffer;

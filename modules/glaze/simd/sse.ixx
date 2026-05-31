@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/simd/sse.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
 module;
 #if defined(__SSE2__) || defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__i386)
 #include <emmintrin.h>

@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/json_stream.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<istream>
+// glz:header std=<iterator>
+// glz:header std=<optional>
+// glz:header std=<utility>
+// glz:header std=<vector>
 export module glaze.json.json_stream;
 
 import std;

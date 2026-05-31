@@ -1,5 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/optimization_level.hpp"
+// glz:header std=<charconv>
+// glz:header std=<cstdint>
 export module glaze.core.optimization_level;
 
 import std;

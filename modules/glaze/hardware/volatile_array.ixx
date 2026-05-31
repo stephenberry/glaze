@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/hardware/volatile_array.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<initializer_list>
+// glz:header std=<iterator>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.hardware.volatile_array;
 
 import std;

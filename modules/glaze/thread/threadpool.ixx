@@ -1,5 +1,18 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/thread/threadpool.hpp"
+// glz:header std=<atomic>
+// glz:header std=<condition_variable>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<deque>
+// glz:header std=<functional>
+// glz:header std=<future>
+// glz:header std=<mutex>
+// glz:header std=<thread>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<vector>
 export module glaze.thread.threadpool;
 
 import std;

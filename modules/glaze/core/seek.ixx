@@ -1,5 +1,18 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/seek.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<array>
+// glz:header std=<charconv>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<iterator>
+// glz:header std=<string>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
 export module glaze.core.seek;
 
 import std;

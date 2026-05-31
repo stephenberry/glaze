@@ -1,5 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/validate.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<iterator>
+// glz:header std=<optional>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
 export module glaze.util.validate;
 
 import std;

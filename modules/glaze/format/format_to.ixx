@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/format/format_to.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<string>
+// glz:header std=<utility>
 export module glaze.format.format_to;
 
 import glaze.core.write;

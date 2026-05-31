@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/constraint.hpp"
+// glz:header std=<concepts>
+// glz:header std=<cstdint>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.core.constraint;
 
 import std;

@@ -1,5 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/simple_float.hpp"
+// glz:header std=<charconv>
+// glz:header std=<cmath>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<limits>
+// glz:header std=<type_traits>
 export module glaze.util.simple_float;
 
 import std;

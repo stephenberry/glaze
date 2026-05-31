@@ -1,5 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/wrappers.hpp"
+// glz:header std=<cstring>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
 export module glaze.json.wrappers;
 
 import std;

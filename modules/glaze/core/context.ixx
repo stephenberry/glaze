@@ -1,5 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/core/context.hpp"
+// glz:header std=<array>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<iterator>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<system_error>
 export module glaze.core.context;
 
 import std;

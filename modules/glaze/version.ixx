@@ -1,5 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/version.hpp"
+// glz:header std=<cstdint>
 export module glaze.version;
 
 import std;

@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/lib.hpp"
+// glz:header std=<filesystem>
+// glz:header std=<map>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<vector>
 module;
 
 #if defined(_WIN32) || defined(__CYGWIN__)

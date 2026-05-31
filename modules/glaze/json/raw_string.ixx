@@ -1,5 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/raw_string.hpp"
+// glz:header std=<type_traits>
 export module glaze.json.raw_string;
 
 import std;

@@ -1,5 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/toml/opts.hpp"
+// glz:header std=<cstdint>
 export module glaze.toml.opts;
 
 import glaze.core.opts;

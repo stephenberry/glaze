@@ -1,5 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/util/bit_array.hpp"
+// glz:header std=<array>
+// glz:header std=<bit>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<limits>
 export module glaze.util.bit_array;
 
 import std;

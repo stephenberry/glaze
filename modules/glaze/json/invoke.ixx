@@ -1,5 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/json/invoke.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<string>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
 export module glaze.json.invoke;
 
 import std;

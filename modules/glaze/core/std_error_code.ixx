@@ -8,6 +8,10 @@
 // - The global error_category variable with std::error_category vtable
 // - This forces a DATA segment which incurs page alignment overhead
 // For size-constrained embedded systems, avoid including this header.
+// glz:header path="glaze/core/std_error_code.hpp"
+// glz:header std=<cstdint>
+// glz:header std=<string>
+// glz:header std=<system_error>
 export module glaze.core.std_error_code;
 
 import std;

@@ -1,5 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.ixx
+// glz:header path="glaze/api/std/set.hpp"
+// glz:header std=<string_view>
 export module glaze.api.std.set;
 
 import std;
