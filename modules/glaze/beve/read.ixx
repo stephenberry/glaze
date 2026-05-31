@@ -577,6 +577,7 @@ namespace glz
    };
 
    template <is_variant T>
+      requires(not custom_read<T>)
    struct from<BEVE, T>
    {
       template <auto Opts>
@@ -1936,17 +1937,23 @@ namespace glz
             ++it;
             using V = std::decay_t<T>;
             constexpr auto N = reflect<V>::size;
+            constexpr auto N_written = []<size_t... I>(std::index_sequence<I...>) consteval {
+               return (size_t{} + ... + (always_skipped<field_t<V, I>> ? size_t{} : size_t{1}));
+            }(std::make_index_sequence<N>{});
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            if (n != N) {
+            if (n != N_written) {
                ctx.error = error_code::syntax_error;
                return;
             }
 
-            for_each<N>(
-               [&]<size_t I>() { parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end); });
+            for_each<N>([&]<size_t I>() {
+               if constexpr (!always_skipped<field_t<V, I>>) {
+                  parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end);
+               }
+            });
          }
       }
 

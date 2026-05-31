@@ -40,6 +40,10 @@ namespace glz
       T& value;
    };
 
+   template <class T>
+      requires(range<T> && pair_t<range_value_t<T>>)
+   flatten_map_wrapper(T&) -> flatten_map_wrapper<T>;
+
    template <auto MemPtr>
    constexpr auto flatten_map_impl() noexcept
    {
@@ -292,7 +296,7 @@ namespace glz
 
          if constexpr (readable_array_t<T>) {
             if constexpr (has_try_emplace_back<T>) {
-               if (value.try_emplace_back() == nullptr) [[unlikely]] {
+               if (not value.try_emplace_back()) [[unlikely]] {
                   ctx.error = error_code::exceeded_static_array_size;
                   return;
                }

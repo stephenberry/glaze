@@ -12,7 +12,7 @@ using std::uint8_t;
 using std::int64_t;
 
 namespace rpc = glz::rpc;
-using ut::operator""_test;
+using namespace ut;
 
 ut::suite valid_vector_test_cases_server = [] {
    using vec_t = std::vector<int>;

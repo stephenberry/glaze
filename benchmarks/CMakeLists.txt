@@ -41,6 +41,17 @@ target_compile_options(simple_float_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
 
+# Float serialization throughput: glz::to_chars (zmij) fast + size-opt vs std::to_chars
+add_executable(float_write_benchmark float_write_benchmark.cpp)
+target_link_libraries(float_write_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(float_write_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
 # skip_ws optimization benchmark (PR #2269)
 add_executable(skip_ws_benchmark skip_ws_benchmark.cpp)
 target_link_libraries(skip_ws_benchmark PRIVATE

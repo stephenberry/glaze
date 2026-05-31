@@ -605,11 +605,27 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto& ix)
       {
-         if (!cbor_detail::encode_arg(ctx, cbor::major::map, value.size(), b, ix)) [[unlikely]] {
+         using map_t = std::remove_cvref_t<decltype(value)>;
+         using val_t = std::remove_cvref_t<detail::iterator_second_type<map_t>>;
+         constexpr bool may_skip = null_t<val_t> && Opts.skip_null_members;
+
+         size_t count = value.size();
+         if constexpr (may_skip) {
+            count = 0;
+            for (auto&& [k, v] : value) {
+               (void)k;
+               if (!skip_member<Opts>(v)) ++count;
+            }
+         }
+
+         if (!cbor_detail::encode_arg(ctx, cbor::major::map, count, b, ix)) [[unlikely]] {
             return;
          }
 
          for (auto&& [k, v] : value) {
+            if constexpr (may_skip) {
+               if (skip_member<Opts>(v)) continue;
+            }
             serialize<CBOR>::op<Opts>(k, ctx, b, ix);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -653,7 +669,7 @@ namespace glz
       {
          using V = field_t<T, I>;
 
-         if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+         if constexpr (always_skipped<V>) {
             return true;
          }
          else if constexpr (is_any_function_ptr<V>) {
@@ -1000,6 +1016,7 @@ namespace glz
 
    // Variants
    template <is_variant T>
+      requires(not custom_write<T>)
    struct to<CBOR, T> final
    {
       template <auto Opts>
@@ -1345,10 +1362,10 @@ namespace glz
 
    // ===== High-level write APIs =====
 
-   export template <write_supported<CBOR> T, class Buffer>
+   export template <auto Opts = opts{}, write_supported<CBOR> T, class Buffer>
    [[nodiscard]] error_ctx write_cbor(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = CBOR}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<set_cbor<Opts>()>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    export template <auto Opts = opts{}, write_supported<CBOR> T>

@@ -1344,7 +1344,7 @@ namespace glz
    struct from<JSONB, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&, auto&&) noexcept
+      static void op(auto&&, is_context auto&&, auto&&, auto&&) noexcept
       {}
    };
 
@@ -1353,7 +1353,7 @@ namespace glz
    struct from<JSONB, hidden>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
+      static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
       {
          ctx.error = error_code::attempt_read_hidden;
       }
@@ -1468,7 +1468,7 @@ namespace glz
    namespace jsonb_detail
    {
       template <class Buffer>
-      GLZ_ALWAYS_INLINE error_ctx enforce_exact_fill(const Buffer& buffer, error_ctx ec) noexcept
+      error_ctx enforce_exact_fill(const Buffer& buffer, error_ctx ec) noexcept
       {
          if (!ec && ec.count != buffer.size()) [[unlikely]] {
             return {ec.count, error_code::syntax_error};

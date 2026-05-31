@@ -31,7 +31,7 @@ using std::size_t;
 
 namespace glz
 {
-   // invoker_t is intended to cause a funtion invocation when read
+   // invoker_t is intended to cause a function invocation when read
    export template <class T>
    struct invoke_t;
 

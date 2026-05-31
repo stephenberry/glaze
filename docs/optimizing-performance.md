@@ -66,9 +66,9 @@ auto json = glz::write<glz::opts_size{}>(obj);
 
 The `size` optimization level:
 
-- Uses `std::to_chars` instead of lookup tables for number serialization
+- Uses smaller integer lookup tables and drops the float pow-10 tables (recomputed on the fly)
 - Defaults to linear search for key matching
-- Can reduce binary size by ~280KB or more
+- Can reduce binary size by ~55KB or more
 
 See [Optimization Levels](optimization-levels.md) for full details on available levels and their characteristics.
 

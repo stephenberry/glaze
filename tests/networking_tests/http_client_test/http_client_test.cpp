@@ -199,6 +199,12 @@ class working_test_server
          res.status(200).body("Slow response");
       });
 
+      server_.get("/files/*path", [](const request& req, response& res) {
+         auto path_it = req.params.find("path");
+         std::string captured = path_it != req.params.end() ? path_it->second : "";
+         res.status(200).content_type("text/plain").body(captured);
+      });
+
       // Add a streaming endpoint for testing the client
       server_.stream_get("/stream-test", [](request&, streaming_response& res) {
          res.start_stream(200, {{"Content-Type", "text/plain"}});
@@ -677,6 +683,193 @@ suite working_http_tests = [] {
 
          auto credentials_it = result->response_headers.find("access-control-allow-credentials");
          expect(credentials_it != result->response_headers.end());
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_preflight_then_actual_request"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+
+      // Step 1: preflight for the subsequent POST.
+      auto preflight =
+         client.options(server.base_url() + "/echo", {{"Origin", "http://app.local"},
+                                                      {"Access-Control-Request-Method", "POST"},
+                                                      {"Access-Control-Request-Headers", "Content-Type"}});
+
+      expect(preflight.has_value()) << "Preflight should succeed\n";
+      if (preflight.has_value()) {
+         expect(preflight->status_code == 204) << "Preflight should return 204\n";
+      }
+
+      // Step 2: the actual request should still work after preflight (no shared state corruption).
+      std::string body = "follow-up payload";
+      auto actual = client.post(server.base_url() + "/echo", body);
+
+      expect(actual.has_value()) << "Follow-up POST should succeed\n";
+      if (actual.has_value()) {
+         expect(actual->status_code == 200) << "POST should return 200\n";
+         expect(actual->response_body == body) << "POST should echo body\n";
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_preflight_for_put_delete_patch"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+
+      // PUT is registered on /update.
+      auto put_result = client.options(server.base_url() + "/update",
+                                       {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "PUT"}});
+      expect(put_result.has_value()) << "PUT preflight should succeed\n";
+      if (put_result.has_value()) {
+         expect(put_result->status_code == 204) << "PUT preflight should return 204\n";
+         auto allow_it = put_result->response_headers.find("allow");
+         expect(allow_it != put_result->response_headers.end()) << "Allow header should be present\n";
+         if (allow_it != put_result->response_headers.end()) {
+            expect(allow_it->second.find("PUT") != std::string::npos) << "Allow should advertise PUT\n";
+         }
+      }
+
+      // /update has no DELETE handler, so a DELETE preflight should return 405.
+      auto delete_result = client.options(
+         server.base_url() + "/update", {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "DELETE"}});
+      expect(delete_result.has_value()) << "DELETE preflight should yield a response\n";
+      if (delete_result.has_value()) {
+         expect(delete_result->status_code == 405)
+            << "DELETE preflight should return 405 when DELETE is not implemented\n";
+      }
+
+      // PATCH on /update is also not implemented; same expectation.
+      auto patch_result = client.options(server.base_url() + "/update",
+                                         {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "PATCH"}});
+      expect(patch_result.has_value()) << "PATCH preflight should yield a response\n";
+      if (patch_result.has_value()) {
+         expect(patch_result->status_code == 405)
+            << "PATCH preflight should return 405 when PATCH is not implemented\n";
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_full_config_combination"_test = [] {
+      // Non-wildcard origin list + credentials + custom max_age + restricted methods.
+      // Existing tests cover these settings individually; this one exercises them together
+      // and verifies the non-wildcard branch of the allow_credentials code path.
+      glz::cors_config config;
+      config.allowed_origins = {"https://app.local", "https://admin.local"};
+      config.allowed_methods = {"GET", "POST"};
+      config.allowed_headers = {"Content-Type", "Authorization"};
+      config.allow_credentials = true;
+      config.max_age = 7200;
+
+      working_test_server server;
+      server.set_cors_config(config);
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      // Use /echo which has POST registered. Hitting /hello (GET-only) with
+      // Access-Control-Request-Method: POST would let the server's preflight
+      // intelligence return 405 (method not implemented on this path) and
+      // mask the CORS-layer behavior we want to verify here.
+      auto result = client.options(server.base_url() + "/echo",
+                                   {{"Origin", "https://app.local"},
+                                    {"Access-Control-Request-Method", "POST"},
+                                    {"Access-Control-Request-Headers", "Content-Type, Authorization"}});
+
+      expect(result.has_value()) << "Preflight should succeed\n";
+      if (result.has_value()) {
+         expect(result->status_code == 204) << "Preflight should return 204\n";
+
+         auto origin_it = result->response_headers.find("access-control-allow-origin");
+         expect(origin_it != result->response_headers.end()) << "Allow-Origin header missing\n";
+         if (origin_it != result->response_headers.end()) {
+            expect(origin_it->second == "https://app.local")
+               << "Allow-Origin should echo the specific origin, not '*', when credentials are allowed\n";
+         }
+
+         auto credentials_it = result->response_headers.find("access-control-allow-credentials");
+         expect(credentials_it != result->response_headers.end()) << "Allow-Credentials should be present\n";
+         if (credentials_it != result->response_headers.end()) {
+            expect(credentials_it->second == "true");
+         }
+
+         auto methods_it = result->response_headers.find("access-control-allow-methods");
+         expect(methods_it != result->response_headers.end()) << "Allow-Methods should be present\n";
+         if (methods_it != result->response_headers.end()) {
+            expect(methods_it->second == "GET, POST");
+         }
+
+         auto max_age_it = result->response_headers.find("access-control-max-age");
+         expect(max_age_it != result->response_headers.end()) << "Max-Age should be present\n";
+         if (max_age_it != result->response_headers.end()) {
+            expect(max_age_it->second == "7200");
+         }
+      }
+
+      // A disallowed origin with the same config should be rejected.
+      auto denied = client.options(server.base_url() + "/echo",
+                                   {{"Origin", "https://evil.local"}, {"Access-Control-Request-Method", "POST"}});
+      expect(denied.has_value()) << "Denied preflight should still yield a response\n";
+      if (denied.has_value()) {
+         expect(denied->status_code == 403) << "Disallowed origin should return 403\n";
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_concurrent_preflight_requests"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      constexpr int num_threads = 5;
+      std::vector<std::thread> threads;
+      std::atomic<int> success_count{0};
+
+      for (int i = 0; i < num_threads; ++i) {
+         threads.emplace_back([&server, &success_count, i]() {
+            simple_test_client client;
+            auto result = client.options(
+               server.base_url() + "/hello",
+               {{"Origin", "http://client" + std::to_string(i) + ".local"}, {"Access-Control-Request-Method", "GET"}});
+            if (result.has_value() && result->status_code == 204) {
+               ++success_count;
+            }
+         });
+      }
+
+      for (auto& t : threads) t.join();
+
+      expect(success_count.load() == num_threads) << "All concurrent preflight requests should return 204\n";
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_preflight_on_wildcard_route"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      auto result = client.options(server.base_url() + "/files/documents/report.pdf",
+                                   {{"Origin", "http://app.local"}, {"Access-Control-Request-Method", "GET"}});
+
+      expect(result.has_value()) << "Wildcard-route preflight should succeed\n";
+      if (result.has_value()) {
+         expect(result->status_code == 204) << "Wildcard preflight should return 204\n";
+
+         auto origin_it = result->response_headers.find("access-control-allow-origin");
+         expect(origin_it != result->response_headers.end()) << "Allow-Origin should be set for wildcard paths\n";
       }
 
       server.stop();

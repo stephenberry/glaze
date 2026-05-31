@@ -10,6 +10,10 @@
 // glz:header std=<string>
 // glz:header std=<string_view>
 // glz:header std=<type_traits>
+module;
+
+#include "glaze/util/zmij.hpp"
+
 export module glaze.core.write_chars;
 
 import std;
@@ -21,8 +25,6 @@ import glaze.concepts.container_concepts;
 
 import glaze.util.dump;
 import glaze.util.itoa;
-import glaze.util.simple_float;
-import glaze.util.dtoa;
 import glaze.util.itoa_40kb;
 
 import glaze.util.type_traits;
@@ -326,11 +328,13 @@ export namespace glz
                   static_assert(false_v<V>, "invalid float_max_write_precision");
                }
             }
-            // Size optimization: use simple_float::to_chars to avoid dragonbox lookup tables (~20KB)
-            // This works on all platforms including bare-metal
+            // Size optimization: pass OptSize=true so the ~17KB pow-10 lookup
+            // tables are dropped (recomputed on the fly). Much faster than the
+            // old simple_float::to_chars path at essentially the same footprint.
+            // See discussion #2519.
             else if constexpr (is_size_optimized(Opts) && is_any_of<V, float, double>) {
                const auto start = reinterpret_cast<char*>(&b[ix]);
-               const auto end = simple_float::to_chars(start, V(value));
+               const auto end = glz::to_chars<V, /*OptSize=*/true>(start, V(value));
                ix += size_t(end - start);
             }
             else if constexpr (is_any_of<V, float, double>) {
@@ -395,4 +399,3 @@ export namespace glz
       }
    };
 }
-

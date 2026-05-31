@@ -3,6 +3,8 @@
 Glaze ships with first–class MessagePack support. You can read and write payloads using
 the same reflection metadata that drives JSON, BEVE, and TOML so there is no extra boilerplate.
 
+MessagePack is not pulled in by `glaze/glaze.hpp`. Include `glaze/msgpack.hpp` directly to use it.
+
 ## Specification Compliance
 
 Glaze implements the [MessagePack specification](https://github.com/msgpack/msgpack/blob/master/spec.md) (2.0), providing full support for:

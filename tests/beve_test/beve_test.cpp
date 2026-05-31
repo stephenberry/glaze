@@ -805,6 +805,30 @@ void write_tests()
       }
    };
 
+   "map_skips_empty_optional_by_default"_test = [] {
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}, {"c", 3}};
+      std::string buf;
+      expect(not glz::write_beve(in, buf));
+      std::map<std::string, std::optional<int>> out{};
+      expect(not glz::read_beve(out, buf));
+      expect(out.size() == 2);
+      expect(out.count("b") == 0);
+      expect(out.at("a").value() == 1);
+      expect(out.at("c").value() == 3);
+   };
+
+   "map_preserves_nulls_when_skip_disabled"_test = [] {
+      constexpr auto preserve = glz::opts{.format = glz::BEVE, .skip_null_members = false};
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}};
+      std::string buf;
+      expect(not glz::write<preserve>(in, buf));
+      std::map<std::string, std::optional<int>> out{};
+      expect(not glz::read<preserve>(out, buf));
+      expect(out.size() == 2);
+      expect(out.at("a").value() == 1);
+      expect(!out.at("b").has_value());
+   };
+
    "enum"_test = [] {
       Color color = Color::Green;
       std::string buffer{};
@@ -1386,7 +1410,7 @@ void bench()
    using namespace ut;
    "bench"_test = [] {
       trace.begin("bench");
-      std::cout << "\nPerformance regresion test: \n";
+      std::cout << "\nPerformance regression test: \n";
 #ifdef NDEBUG
       size_t repeat = 100000;
 #else
@@ -2852,7 +2876,7 @@ suite merge_tests = [] {
 
       std::string json{};
       expect(!glz::beve_to_json(bin, json));
-      expect(json == R"({"a":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"include":""},"c":"d"})") << json;
+      expect(json == R"({"a":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]},"c":"d"})") << json;
    };
 };
 
@@ -5929,8 +5953,9 @@ suite beve_peek_header_tests = [] {
       auto result = glz::beve_peek_header(buffer);
       expect(result.has_value());
       expect(result->type == glz::tag::object);
-      // my_struct has 5 members in its glz::meta: i, d, hello, arr, include
-      expect(result->count == 5u);
+      // my_struct has 5 members in its glz::meta (i, d, hello, arr, include); the
+      // include field is filtered by always_skipped, so the wire count is 4.
+      expect(result->count == 4u);
    };
 
    "beve_peek_header map"_test = [] {
@@ -6697,6 +6722,110 @@ suite beve_skip_complex_suite = [] {
       expect(!ec) << glz::format_error(ec, buffer);
       expect(dst.id == 5);
       expect(dst.name == "empty");
+   };
+};
+
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in BEVE, both keyed and structs_as_arrays.
+namespace beve_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m1{};
+      bool active{true};
+      int count{42};
+      marker m2{};
+      std::string name{"hello"};
+   };
+}
+
+template <>
+struct glz::meta<beve_skip_marker_tests::settings>
+{
+   using T = beve_skip_marker_tests::settings;
+   static constexpr auto value =
+      object("m1", &T::m1, "active", &T::active, "count", &T::count, "m2", &T::m2, "name", &T::name);
+};
+
+suite beve_skip_marker_suite = [] {
+   using namespace beve_skip_marker_tests;
+
+   "beve skip-marker keyed roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      auto encoded = glz::write_beve(original);
+      expect(encoded.has_value());
+
+      settings decoded{};
+      auto ec = glz::read_beve(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
+   };
+
+   "beve skip-marker untagged (structs_as_arrays) roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      auto encoded = glz::write_beve_untagged(original);
+      expect(encoded.has_value());
+
+      settings decoded{};
+      auto ec = glz::read_beve_untagged(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
+   };
+};
+
+// A std::variant whose own meta opts into custom_read/custom_write (with full from/to
+// specializations) must not be ambiguous with the built-in BEVE variant handlers.
+// Parity with the JSON fix in #2591.
+struct beve_fc_a
+{};
+struct beve_fc_b
+{};
+using beve_fc_variant = std::variant<beve_fc_a, beve_fc_b>;
+
+template <>
+struct glz::meta<beve_fc_variant>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::from<Format, beve_fc_variant>
+{
+   template <auto Opts>
+   static void op(beve_fc_variant&, glz::is_context auto&&, auto&&, auto&&)
+   {}
+};
+
+template <uint32_t Format>
+struct glz::to<Format, beve_fc_variant>
+{
+   template <auto Opts>
+   static void op(auto&&, glz::is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(42, ctx, args...);
+   }
+};
+
+suite beve_fully_custom_variant_tests = [] {
+   "fully custom variant specialization is unambiguous"_test = [] {
+      beve_fc_variant v{};
+      std::string s{};
+      expect(not glz::write_beve(v, s));
+      beve_fc_variant r{};
+      expect(not glz::read_beve(r, s));
    };
 };
 

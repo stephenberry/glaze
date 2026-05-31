@@ -4,10 +4,13 @@
 // glz:header std=<cstddef>
 // glz:header std=<string>
 // glz:header std=<utility>
+module;
+
+#include "glaze/util/zmij.hpp"
+
 export module glaze.format.format_to;
 
 import glaze.core.write;
-import glaze.util.dtoa;
 import glaze.util.itoa;
 import glaze.concepts.container_concepts;
 

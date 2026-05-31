@@ -97,6 +97,7 @@ target_sources(glaze_glaze
     modules/glaze/util/dump.ixx
     modules/glaze/util/convert.ixx
     modules/glaze/util/parse.ixx
+    modules/glaze/util/nullable_traits.ixx
     modules/glaze/util/atoi.ixx
     modules/glaze/util/for_each.ixx
     modules/glaze/util/type_traits.ixx

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <map>
 #include <mutex>
 #include <numeric>
 #include <string>
@@ -182,6 +183,28 @@ struct chunked_test_server
          res.close();
       });
 
+      // --- Streaming endpoint that echoes parsed query parameters ---
+      // Regression for issue #2549: stream_* lookup must strip the query string
+      // and the streaming handler must receive parsed path/query like a regular handler.
+      auto echo_query_handler = [](glz::request& req, glz::streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         res.send("path=");
+         res.send(req.path);
+         res.send(";count=");
+         res.send(std::to_string(req.query.size()));
+         // Stable ordering for assertion regardless of unordered_map bucket order
+         std::map<std::string, std::string> ordered(req.query.begin(), req.query.end());
+         for (const auto& [k, v] : ordered) {
+            res.send(";");
+            res.send(k);
+            res.send("=");
+            res.send(v);
+         }
+         res.close();
+      };
+      server_.stream_get("/echo-query", echo_query_handler);
+      server_.stream_post("/echo-query-post", echo_query_handler);
+
       // --- Varying chunk sizes ---
       server_.stream_get("/varying-sizes", [](glz::request&, glz::streaming_response& res) {
          res.start_stream(200, {{"Content-Type", "text/plain"}});
@@ -212,6 +235,27 @@ struct chunked_test_server
       return false;
    }
 };
+
+// Probe a 127.0.0.1:port listener with a short retry loop. Used by tests that
+// stand up a glz::http_server inline (without the chunked_test_server helper)
+// so they don't have to fall back to a blind sleep_for.
+inline bool wait_until_listening(uint16_t port, int max_iters = 200,
+                                 std::chrono::milliseconds step = std::chrono::milliseconds(10))
+{
+   asio::io_context io;
+   asio::ip::tcp::endpoint ep(asio::ip::make_address("127.0.0.1"), port);
+   for (int i = 0; i < max_iters; ++i) {
+      asio::ip::tcp::socket socket(io);
+      asio::error_code ec;
+      socket.connect(ep, ec);
+      if (!ec) {
+         socket.close();
+         return true;
+      }
+      std::this_thread::sleep_for(step);
+   }
+   return false;
+}
 
 // ==========================================================================
 // Test suites
@@ -481,6 +525,472 @@ suite chunked_sync_tests = [] {
       for (auto& t : threads) t.join();
 
       expect(success_count == num_threads) << "All concurrent chunked requests should succeed";
+
+      server.stop();
+   };
+
+   // Regression for issue #2549: stream_* handlers must match when the request
+   // includes a query string, and the handler must see the parsed query map.
+   "sync_stream_get_with_query_parameters"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query?a=b&c=d");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200 (404 means streaming route lookup failed)";
+         expect(result->response_body == "path=/echo-query;count=2;a=b;c=d")
+            << "Body should reflect the parsed path and query parameters, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // No query string should still match the streaming route (no regression).
+   "sync_stream_get_without_query_string"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query;count=0")
+            << "Body should reflect empty query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // Trailing '?' with no params: path lookup must still succeed and query must be empty.
+   "sync_stream_get_with_empty_query_string"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query?");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query;count=0")
+            << "Body should reflect empty query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // Single query parameter (the form named in issue #2549).
+   "sync_stream_get_with_single_query_parameter"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query?a=b");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query;count=1;a=b")
+            << "Body should reflect the parsed query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // URL-encoded values must be decoded into the parsed query map.
+   "sync_stream_get_with_urlencoded_query_value"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/echo-query?msg=hello%20world&n=1");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query;count=2;msg=hello world;n=1")
+            << "Body should reflect URL-decoded query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // POST variant: same fix path, exercised through stream_post.
+   "sync_stream_post_with_query_parameters"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      auto result = client.post(server.base_url() + "/echo-query-post?a=b&c=d", std::string{});
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=/echo-query-post;count=2;a=b;c=d")
+            << "Body should reflect the parsed query, got: " << result->response_body;
+      }
+
+      server.stop();
+   };
+
+   // Streaming routes registered with ":param" path segments should match like
+   // normal routes do, populating request.params with the captured value.
+   "sync_stream_get_with_path_parameter"_test = [] {
+      glz::http_server<> server;
+      server.stream_get("/items/:id/stream", [](glz::request& req, glz::streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         res.send("id=");
+         auto it = req.params.find("id");
+         res.send(it != req.params.end() ? it->second : std::string{"<missing>"});
+         res.close();
+      });
+
+      uint16_t port = 0;
+      for (uint16_t p = 19500; p < 19700; ++p) {
+         try {
+            server.bind("127.0.0.1", p);
+            port = p;
+            break;
+         }
+         catch (...) {
+            continue;
+         }
+      }
+      expect(port != 0) << "Server should bind";
+
+      std::thread server_thread([&] { server.start(1); });
+      expect(wait_until_listening(port)) << "Server should accept connections";
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/items/42/stream");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "id=42")
+            << "Path parameter should be captured into request.params, got: " << result->response_body;
+      }
+
+      server.stop();
+      if (server_thread.joinable()) server_thread.join();
+   };
+
+   // The same registration path through http_router + mount() must also propagate
+   // streaming routes with ":param" segments.
+   "sync_router_mount_stream_get_with_path_parameter"_test = [] {
+      glz::http_router router;
+      router.stream_get("/items/:id/stream", [](glz::request& req, glz::streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         auto it = req.params.find("id");
+         res.send("mounted-id=");
+         res.send(it != req.params.end() ? it->second : std::string{"<missing>"});
+         res.close();
+      });
+
+      glz::http_server<> server;
+      server.mount("/api", router);
+
+      uint16_t port = 0;
+      for (uint16_t p = 19700; p < 19900; ++p) {
+         try {
+            server.bind("127.0.0.1", p);
+            port = p;
+            break;
+         }
+         catch (...) {
+            continue;
+         }
+      }
+      expect(port != 0) << "Server should bind";
+
+      std::thread server_thread([&] { server.start(1); });
+      expect(wait_until_listening(port)) << "Server should accept connections";
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/api/items/abc/stream");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "mounted-id=abc")
+            << "Mounted streaming route should capture path parameter, got: " << result->response_body;
+      }
+
+      server.stop();
+      if (server_thread.joinable()) server_thread.join();
+   };
+
+   // Mixing normal and streaming routes that share a path prefix on the same router.
+   // Both must be reachable; each must dispatch to the right handler with its params.
+   "sync_router_mixes_normal_and_streaming_with_params"_test = [] {
+      glz::http_router router;
+      router.get("/users/:id/profile", [](const glz::request& req, glz::response& res) {
+         auto it = req.params.find("id");
+         res.body("normal-id=" + (it != req.params.end() ? it->second : std::string{"?"}));
+      });
+      router.stream_get("/users/:id/events", [](glz::request& req, glz::streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         auto it = req.params.find("id");
+         res.send("stream-id=");
+         res.send(it != req.params.end() ? it->second : std::string{"?"});
+         res.close();
+      });
+
+      glz::http_server<> server;
+      server.mount("/", router);
+
+      uint16_t port = 0;
+      for (uint16_t p = 19900; p < 20100; ++p) {
+         try {
+            server.bind("127.0.0.1", p);
+            port = p;
+            break;
+         }
+         catch (...) {
+            continue;
+         }
+      }
+      expect(port != 0) << "Server should bind";
+
+      std::thread server_thread([&] { server.start(1); });
+      expect(wait_until_listening(port)) << "Server should accept connections";
+
+      glz::http_client client;
+      auto base = std::string{"http://127.0.0.1:"} + std::to_string(port);
+
+      auto normal = client.get(base + "/users/7/profile");
+      expect(normal.has_value() && normal->status_code == 200);
+      if (normal) expect(normal->response_body == "normal-id=7") << normal->response_body;
+
+      auto stream = client.get(base + "/users/9/events");
+      expect(stream.has_value() && stream->status_code == 200);
+      if (stream) expect(stream->response_body == "stream-id=9") << stream->response_body;
+
+      server.stop();
+      if (server_thread.joinable()) server_thread.join();
+   };
+
+   // Wildcard segments ("*name") on streaming routes capture the entire remaining
+   // path (including embedded slashes) the same way they do for normal routes.
+   "sync_router_mount_stream_get_with_wildcard"_test = [] {
+      glz::http_router router;
+      router.stream_get("/files/*path", [](glz::request& req, glz::streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         auto it = req.params.find("path");
+         res.send("path=");
+         res.send(it != req.params.end() ? it->second : std::string{"<missing>"});
+         res.close();
+      });
+
+      glz::http_server<> server;
+      server.mount("/", router);
+
+      uint16_t port = 0;
+      for (uint16_t p = 20100; p < 20300; ++p) {
+         try {
+            server.bind("127.0.0.1", p);
+            port = p;
+            break;
+         }
+         catch (...) {
+            continue;
+         }
+      }
+      expect(port != 0) << "Server should bind";
+
+      std::thread server_thread([&] { server.start(1); });
+      expect(wait_until_listening(port)) << "Server should accept connections";
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/files/a/b/c.txt");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "path=a/b/c.txt")
+            << "Wildcard should capture the full remainder, got: " << result->response_body;
+      }
+
+      server.stop();
+      if (server_thread.joinable()) server_thread.join();
+   };
+
+   // Combined: a streaming route with both a path parameter and a query string.
+   // Path params come from the radix tree match; query string parsing is independent.
+   // Both must populate request.params and request.query correctly.
+   "sync_stream_get_with_path_param_and_query_string"_test = [] {
+      glz::http_server<> server;
+      server.stream_get("/items/:id/stream", [](glz::request& req, glz::streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         auto id = req.params.find("id");
+         auto token = req.query.find("token");
+         res.send("id=");
+         res.send(id != req.params.end() ? id->second : std::string{"?"});
+         res.send(";token=");
+         res.send(token != req.query.end() ? token->second : std::string{"?"});
+         res.close();
+      });
+
+      uint16_t port = 0;
+      for (uint16_t p = 20300; p < 20500; ++p) {
+         try {
+            server.bind("127.0.0.1", p);
+            port = p;
+            break;
+         }
+         catch (...) {
+            continue;
+         }
+      }
+      expect(port != 0) << "Server should bind";
+
+      std::thread server_thread([&] { server.start(1); });
+      expect(wait_until_listening(port)) << "Server should accept connections";
+
+      glz::http_client client;
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/items/42/stream?token=abc");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "id=42;token=abc")
+            << "Path param and query string should both populate the request, got: " << result->response_body;
+      }
+
+      server.stop();
+      if (server_thread.joinable()) server_thread.join();
+   };
+
+   // The radix tree URL-decodes path parameters (calls url_decode on each segment).
+   // A streaming route receiving "/items/hello%20world/stream" must see params["id"] == "hello world".
+   "sync_stream_get_path_param_is_url_decoded"_test = [] {
+      glz::http_server<> server;
+      server.stream_get("/items/:id/stream", [](glz::request& req, glz::streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         auto it = req.params.find("id");
+         res.send("id=[");
+         res.send(it != req.params.end() ? it->second : std::string{"?"});
+         res.send("]");
+         res.close();
+      });
+
+      uint16_t port = 0;
+      for (uint16_t p = 20500; p < 20700; ++p) {
+         try {
+            server.bind("127.0.0.1", p);
+            port = p;
+            break;
+         }
+         catch (...) {
+            continue;
+         }
+      }
+      expect(port != 0) << "Server should bind";
+
+      std::thread server_thread([&] { server.start(1); });
+      expect(wait_until_listening(port)) << "Server should accept connections";
+
+      glz::http_client client;
+      // %20 in the path segment must be decoded into a literal space inside params["id"].
+      auto result = client.get("http://127.0.0.1:" + std::to_string(port) + "/items/hello%20world/stream");
+
+      expect(result.has_value()) << "Request should succeed";
+      if (result) {
+         expect(result->status_code == 200) << "Status should be 200";
+         expect(result->response_body == "id=[hello world]")
+            << "Path parameter should be URL-decoded, got: " << result->response_body;
+      }
+
+      server.stop();
+      if (server_thread.joinable()) server_thread.join();
+   };
+
+   // route_spec::constraints work for streaming routes the same way they do for normal
+   // routes: when a captured parameter fails the validation function, the radix-tree
+   // match returns no handler, the streaming dispatch falls through, and the request
+   // ends up with a 404.
+   "sync_stream_get_with_constraint_rejects_invalid"_test = [] {
+      glz::route_spec spec;
+      spec.constraints["id"] = glz::param_constraint{"numeric id", [](std::string_view s) {
+                                                        if (s.empty()) return false;
+                                                        for (char c : s) {
+                                                           if (c < '0' || c > '9') return false;
+                                                        }
+                                                        return true;
+                                                     }};
+
+      glz::http_server<> server;
+      server.stream_get(
+         "/items/:id/stream",
+         [](glz::request& req, glz::streaming_response& res) {
+            res.start_stream(200, {{"Content-Type", "text/plain"}});
+            res.send("id=");
+            auto it = req.params.find("id");
+            res.send(it != req.params.end() ? it->second : std::string{"?"});
+            res.close();
+         },
+         spec);
+
+      uint16_t port = 0;
+      for (uint16_t p = 20700; p < 20900; ++p) {
+         try {
+            server.bind("127.0.0.1", p);
+            port = p;
+            break;
+         }
+         catch (...) {
+            continue;
+         }
+      }
+      expect(port != 0) << "Server should bind";
+
+      std::thread server_thread([&] { server.start(1); });
+      expect(wait_until_listening(port)) << "Server should accept connections";
+
+      glz::http_client client;
+      auto base = std::string{"http://127.0.0.1:"} + std::to_string(port);
+
+      // Numeric id passes the constraint and reaches the handler.
+      auto ok = client.get(base + "/items/42/stream");
+      expect(ok.has_value()) << "Numeric request should complete";
+      if (ok) {
+         expect(ok->status_code == 200) << "Numeric id should pass constraint, got: " << ok->status_code;
+         expect(ok->response_body == "id=42") << ok->response_body;
+      }
+
+      // Non-numeric id fails the constraint, the streaming match returns nothing,
+      // and the request falls through to a 404.
+      auto bad = client.get(base + "/items/abc/stream");
+      expect(bad.has_value()) << "Bad request should still complete (404)";
+      if (bad) {
+         expect(bad->status_code == 404) << "Constraint failure should produce 404 from the streaming route, got: "
+                                         << bad->status_code;
+      }
+
+      server.stop();
+      if (server_thread.joinable()) server_thread.join();
+   };
+
+   // Wrong method on a streaming-only path with a query string should still fall through
+   // to the regular router and produce 404 (not match a different streaming method by accident).
+   "sync_stream_wrong_method_with_query_returns_404"_test = [] {
+      chunked_test_server server;
+      expect(server.start()) << "Server should start";
+
+      glz::http_client client;
+      // /echo-query is registered for GET only; POST with a query string should 404.
+      auto result = client.post(server.base_url() + "/echo-query?a=b", std::string{});
+
+      expect(result.has_value()) << "Request should complete";
+      if (result) {
+         expect(result->status_code == 404)
+            << "POST to a GET-only streaming route should be 404, got: " << result->status_code;
+      }
 
       server.stop();
    };

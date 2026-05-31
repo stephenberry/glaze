@@ -6,7 +6,7 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 7.4.0
+    VERSION 7.7.1
     LANGUAGES CXX
 )
 
@@ -40,6 +40,15 @@ if (MSVC)
   if (matched_cl)
     # for a C++ standards compliant preprocessor, not needed for clang-cl
     target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
+
+    if(PROJECT_IS_TOP_LEVEL)
+      target_compile_options(glaze_glaze INTERFACE
+        $<$<CONFIG:Release>:/GL>
+        $<$<CONFIG:MinSizeRel>:/GL>)
+      target_link_options(glaze_glaze INTERFACE
+        $<$<CONFIG:Release>:/LTCG /INCREMENTAL:NO>
+        $<$<CONFIG:MinSizeRel>:/LTCG /INCREMENTAL:NO>)
+    endif()
   endif()
 else()
   # Only apply -Wno-missing-braces for C and C++ compilation to avoid breaking ISPC and other language builds
@@ -58,7 +67,8 @@ target_include_directories(
 
 include(cmake/modules-files.cmake)
 
-if(NOT CMAKE_SKIP_INSTALL_RULES)
+option(glaze_INSTALL "Generate installation rules for glaze" "${PROJECT_IS_TOP_LEVEL}")
+if(glaze_INSTALL AND NOT CMAKE_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
 endif()
 

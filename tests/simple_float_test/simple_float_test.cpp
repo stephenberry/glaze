@@ -4,12 +4,13 @@
 // Comprehensive tests for simple_float.hpp
 // Tests roundtrip correctness of simple_float implementations
 
+#include "glaze/util/zmij.hpp"
+
 import glaze.util.simple_float;
 
 import std;
 
 import glaze;
-import glaze.util.dtoa;
 import glaze.util.glaze_fast_float;
 
 import ut;
@@ -128,12 +129,16 @@ bool test_roundtrip(T value)
    }
 
    char buf[64]{};
-   char* end = glz::simple_float::to_chars(buf, value);
+   char* end = glz::to_chars(buf, value);
+   // glz::to_chars doesn't promise anything about *end — zmij may leave a
+   // stale '.' there from its branchless fixed-point shuffle. Null-terminate
+   // so from_chars<null_terminated=true> stops at the intended end.
+   *end = '\0';
 
    T parsed{};
    auto [ptr, ec] = glz::simple_float::from_chars<true>(buf, end, parsed);
 
-   if (ec != std::errc{}) {
+   if (ec != std::errc{} || ptr != end) {
       return false;
    }
 
@@ -249,7 +254,7 @@ suite exhaustive_float_tests = [] {
    "exhaustive_float_roundtrip"_test = [] {
       std::cout << "\n=== Exhaustive float roundtrip test (all 2^32 values) ===" << std::endl;
 
-      const unsigned num_threads = std::max(1u, std::thread::hardware_concurrency());
+      const unsigned num_threads = (std::max)(1u, std::thread::hardware_concurrency());
       std::cout << "Using " << num_threads << " threads" << std::endl;
 
       constexpr uint64_t total_values = 0x100000000ULL; // 2^32
@@ -279,7 +284,7 @@ suite exhaustive_float_tests = [] {
             }
 
             // Serialize
-            char* buf_end = glz::simple_float::to_chars(buf, value);
+            char* buf_end = glz::to_chars(buf, value);
             *buf_end = '\0'; // Null-terminate for from_chars<true>
 
             // Parse back
@@ -336,7 +341,7 @@ suite exhaustive_float_tests = [] {
       if (failures > 0 && first_failure != std::numeric_limits<uint32_t>::max()) {
          float fail_value = bits_to_float(first_failure);
          char buf[64]{};
-         char* end = glz::simple_float::to_chars(buf, fail_value);
+         char* end = glz::to_chars(buf, fail_value);
          std::cerr << "First failure at bits=0x" << std::hex << first_failure << std::dec << " value=" << fail_value
                    << " serialized=" << std::string_view(buf, end - buf) << std::endl;
       }
@@ -376,7 +381,7 @@ suite random_double_tests = [] {
          else if (!first_failure_logged) {
             first_failure_logged = true;
             char buf[64]{};
-            char* end = glz::simple_float::to_chars(buf, value);
+            char* end = glz::to_chars(buf, value);
             std::cerr << "First double roundtrip failure at bits=0x" << std::hex << bits << std::dec
                       << " value=" << value << " serialized=" << std::string_view(buf, end - buf) << std::endl;
          }
@@ -415,7 +420,7 @@ suite random_double_tests = [] {
             continue;
          }
 
-         // Serialize with dragonbox, then parse with both parsers
+         // Serialize with glz::to_chars, then parse with both parsers
          char buf[64]{};
          char* end = glz::to_chars(buf, value);
          *end = '\0';
@@ -474,7 +479,8 @@ suite regression_tests = [] {
          if (result.ec == std::errc{}) {
             // Now test roundtrip
             char buf[64]{};
-            char* buf_end = glz::simple_float::to_chars(buf, parsed);
+            char* buf_end = glz::to_chars(buf, parsed);
+            *buf_end = '\0'; // for from_chars<null_terminated=true> below
 
             double reparsed{};
             auto reparse_result = glz::simple_float::from_chars<true>(buf, buf_end, reparsed);
@@ -528,7 +534,7 @@ suite regression_tests = [] {
          }
          else {
             char buf[64]{};
-            char* end = glz::simple_float::to_chars(buf, value);
+            char* end = glz::to_chars(buf, value);
             std::cerr << "Hard pattern failure: bits=0x" << std::hex << bits << std::dec << " value=" << value
                       << " serialized=" << std::string_view(buf, end - buf) << std::endl;
          }
@@ -643,7 +649,7 @@ suite subnormal_tests = [] {
          }
          else {
             char buf[64]{};
-            char* end = glz::simple_float::to_chars(buf, value);
+            char* end = glz::to_chars(buf, value);
             std::cerr << "Subnormal failure: bits=0x" << std::hex << bits << std::dec << " value=" << value
                       << " serialized=" << std::string_view(buf, end - buf) << std::endl;
          }

@@ -332,6 +332,22 @@ The wrapper flattens each entry as `[key elements..., mapped value]`, so multipl
 
 This is intended for pair-ranges and map-like containers whose keys can be flattened without additional metadata, including `std::pair`, tuples, Glaze arrays, and fixed-size containers like `std::array`.
 
+To serialize a top-level map directly (without defining a `glz::meta`), construct `glz::flatten_map_wrapper` around the map:
+
+```c++
+std::unordered_map<std::pair<int, int>, std::string, pair_hash> map{};
+map[{1, 2}] = "example";
+
+std::string json{};
+expect(!glz::write_json(glz::flatten_map_wrapper{map}, json));
+expect(json == R"([1,2,"example"])");
+
+std::unordered_map<std::pair<int, int>, std::string, pair_hash> parsed{};
+auto wrapped = glz::flatten_map_wrapper{parsed};
+expect(!glz::read_json(wrapped, json));
+expect(parsed.at({1, 2}) == "example");
+```
+
 ## string_as_number
 
 Read JSON numbers into strings and write strings as JSON numbers.

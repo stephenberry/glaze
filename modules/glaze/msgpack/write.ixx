@@ -663,8 +663,7 @@ namespace glz
       static consteval size_t count_members()
       {
          return []<size_t... I>(std::index_sequence<I...>) consteval {
-            return (size_t{} + ... +
-                    (std::same_as<field_t<T, I>, hidden> || std::same_as<field_t<T, I>, skip> ? size_t{} : size_t{1}));
+            return (size_t{} + ... + (always_skipped<field_t<T, I>> ? size_t{} : size_t{1}));
          }(std::make_index_sequence<N>{});
       }
 
@@ -679,7 +678,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if constexpr (!std::same_as<field_t<T, I>, hidden> && !std::same_as<field_t<T, I>, skip>) {
+               if constexpr (!always_skipped<field_t<T, I>>) {
                   serialize<MSGPACK>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
                   if constexpr (is_output_streaming<decltype(b)>) {
                      flush_buffer(b, ix);
@@ -695,7 +694,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               if constexpr (!std::same_as<field_t<T, I>, hidden> && !std::same_as<field_t<T, I>, skip>) {
+               if constexpr (!always_skipped<field_t<T, I>>) {
                   static constexpr sv key = reflect<T>::keys[I];
                   if (!msgpack::detail::write_str_header(ctx, key.size(), b, ix)) [[unlikely]] {
                      return;
@@ -730,12 +729,27 @@ namespace glz
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         if (!msgpack::detail::write_map_header(ctx, value.size(), b, ix)) [[unlikely]] {
+         using map_t = std::remove_cvref_t<Value>;
+         using val_t = std::remove_cvref_t<detail::iterator_second_type<map_t>>;
+         constexpr bool may_skip = null_t<val_t> && Opts.skip_null_members;
+
+         size_t count = value.size();
+         if constexpr (may_skip) {
+            count = 0;
+            for (auto&& item : value) {
+               if (!skip_member<Opts>(item.second)) ++count;
+            }
+         }
+
+         if (!msgpack::detail::write_map_header(ctx, count, b, ix)) [[unlikely]] {
             return;
          }
          for (auto&& item : value) {
             if (bool(ctx.error)) [[unlikely]] {
                return;
+            }
+            if constexpr (may_skip) {
+               if (skip_member<Opts>(item.second)) continue;
             }
             serialize<MSGPACK>::op<Opts>(item.first, ctx, b, ix);
             serialize<MSGPACK>::op<Opts>(item.second, ctx, b, ix);
@@ -1054,6 +1068,7 @@ namespace glz
    };
 
    template <is_variant T>
+      requires(not custom_write<T>)
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>

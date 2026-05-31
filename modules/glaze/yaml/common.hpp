@@ -82,6 +82,12 @@ namespace glz::yaml
       // Used to distinguish indentless-sequence continuation from next sibling items.
       bool sequence_item_value_context = false;
 
+      // One-shot known indent for the next block mapping. Set by the tagged-variant reader
+      // when handing a custom alternative's body (which sits at the variant's own column,
+      // not nested deeper) to a discover-mode reader such as the map reader. -1 == unset.
+      // Consumed (and reset) by the first parse_block_mapping_loop that observes it.
+      int32_t forced_block_mapping_indent = -1;
+
       // Column of the enclosing block-sequence '-' indicator (-1 when not inside
       // a block sequence item).  Used by plain-scalar multiline folding to decide
       // whether a continuation-line '- ' is a sibling entry (terminate) or plain

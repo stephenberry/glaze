@@ -19,8 +19,8 @@ namespace glz
    export struct version_t
    {
       uint8_t major = 7;
-      uint8_t minor = 4;
-      uint8_t patch = 0;
+      uint8_t minor = 7;
+      uint8_t patch = 1;
 
       constexpr auto operator<=>(const version_t& other) const noexcept = default;
 

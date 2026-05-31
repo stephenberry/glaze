@@ -7,6 +7,7 @@ Formats Supported:
 - [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding) | `glaze/beve.hpp`
 - [CBOR](https://stephenberry.github.io/glaze/cbor/) (Concise Binary Object Representation) | `glaze/cbor.hpp`
 - [JSONB](https://stephenberry.github.io/glaze/jsonb/) (SQLite Binary JSON) | `glaze/jsonb.hpp`
+- [BSON](https://stephenberry.github.io/glaze/bson/) (MongoDB Binary JSON) | `glaze/bson.hpp`
 - [CSV](https://stephenberry.github.io/glaze/csv/) (Comma Separated Value) | `glaze/csv.hpp`
 - [MessagePack](https://stephenberry.github.io/glaze/msgpack/) | `glaze/msgpack.hpp`
 - [Stencil/Mustache](https://stephenberry.github.io/glaze/stencil-mustache/) (string interpolation) | `glaze/stencil/stencil.hpp`
@@ -772,7 +773,7 @@ struct glz::meta<constrained_object>
 };
 ```
 
-For invalid input such as `{"age": -1, "name": "Victor"}`, Glaze will outut the following formatted error message:
+For invalid input such as `{"age": -1, "name": "Victor"}`, Glaze will output the following formatted error message:
 
 ```
 1:11: constraint_violated

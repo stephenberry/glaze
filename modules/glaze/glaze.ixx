@@ -31,7 +31,6 @@
  */
 // glz:header path="glaze/glaze.hpp"
 // glz:header include="glaze/beve/beve_to_json.hpp"
-// glz:header include="glaze/record/recorder.hpp"
 // glz:header include="glaze/stencil/stencil.hpp"
 // glz:header include="glaze/util/key_transformers.hpp"
 
@@ -57,7 +56,5 @@ export import glaze.file.read_directory;
 export import glaze.file.write_directory;
 
 export import glaze.json;
-
-export import glaze.msgpack;
 
 export import glaze.util.for_each;

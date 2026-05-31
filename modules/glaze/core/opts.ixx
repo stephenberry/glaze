@@ -33,6 +33,7 @@ export namespace glz
    inline constexpr uint32_t BEVE = 1;
    inline constexpr uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
    inline constexpr uint32_t JSONB = 3; // SQLite JSONB binary JSON format - https://sqlite.org/jsonb.html
+   inline constexpr uint32_t BSON = 4; // MongoDB BSON 1.1 - https://bsonspec.org/spec.html
    inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t MSGPACK = 30;
@@ -1451,6 +1452,14 @@ export namespace glz
    }
 
    template <auto Opts>
+   constexpr auto set_bson()
+   {
+      auto ret = Opts;
+      ret.format = BSON;
+      return ret;
+   }
+
+   template <auto Opts>
    constexpr auto set_json()
    {
       auto ret = Opts;
@@ -1537,4 +1546,3 @@ export namespace glz
       glz::optimization_level optimization_level = glz::optimization_level::size;
    };
 }
-

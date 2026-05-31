@@ -1421,18 +1421,20 @@ suite async_vector_tests = [] {
 
    "thread_safety_mixed"_test = [] {
       glz::async_vector<int> vec;
-      for (int i = 0; i < 100; ++i) {
+      constexpr int initial_size = 100, readers = 5, writers = 5, writes_per_writer = 100;
+
+      for (int i = 0; i < initial_size; ++i) {
          vec.push_back(i);
       }
 
-      std::atomic<bool> stop{false};
+      std::atomic<int> active_writers{writers};
       std::deque<std::thread> threads;
 
       // Reader threads
       std::atomic<size_t> sum = 0;
-      for (int i = 0; i < 5; ++i) {
-         threads.emplace_back([&vec, &stop, &sum]() {
-            while (!stop) {
+      for (int i = 0; i < readers; ++i) {
+         threads.emplace_back([&vec, &active_writers, &sum]() {
+            while (active_writers > 0) {
                for (size_t j = 0; j < vec.size(); ++j) {
                   sum += vec.read()[j];
                }
@@ -1441,25 +1443,23 @@ suite async_vector_tests = [] {
       }
 
       // Writer threads
-      for (int i = 0; i < 5; ++i) {
-         threads.emplace_back([&vec, &stop, i]() {
-            for (int j = 0; j < 100 && !stop; ++j) {
+      for (int i = 0; i < writers; ++i) {
+         threads.emplace_back([&vec, &active_writers, i]() {
+            for (int j = 0; j < writes_per_writer; ++j) {
                vec.push_back(i * 100 + j);
                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
+            active_writers--;
          });
       }
-
-      // Let the threads run for a short time
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      stop = true;
 
       for (auto& t : threads) {
          t.join();
       }
 
-      // We can't check exact values due to the concurrent nature, but we should have more than we started with
-      expect(vec.size() > 100) << "Vector should have grown during concurrent operations";
+      expect(vec.size() == static_cast<size_t>(initial_size + writers * writes_per_writer))
+         << "Vector should contain all values written by writer threads";
+      expect(sum > 0) << "Reader threads should observe vector contents";
    };
 };
 

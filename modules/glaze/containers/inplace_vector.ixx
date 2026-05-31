@@ -11,6 +11,7 @@
 // glz:header std=<iterator>
 // glz:header std=<memory>
 // glz:header std=<new>
+// glz:header std=<optional>
 // glz:header std=<ranges>
 // glz:header std=<stdexcept>
 // glz:header std=<type_traits>
@@ -18,6 +19,8 @@
 export module glaze.containers.inplace_vector;
 
 import std;
+
+#include "glaze/core/feature_test.hpp"
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -235,20 +238,49 @@ namespace glz
          }
 
          // Fallible APIs
+         //
+         // C++26 P3981 changed the return type of try_emplace_back / try_push_back
+         // from T* (C++23) to std::optional<T&>. We emit the matching shape when the
+         // stdlib provides std::optional<T&> (gated by GLZ_HAS_OPTIONAL_REF), and fall
+         // back to T* otherwise. Both spellings are contextually convertible to bool
+         // and support operator* / operator->, so the unchecked_* wrappers below work
+         // unchanged.
+#if GLZ_HAS_OPTIONAL_REF
+         using try_emplace_back_result = std::optional<T&>;
+#else
+         using try_emplace_back_result = T*;
+#endif
+
          template <class... Args>
-         constexpr T* try_emplace_back(Args&&... args)
+         constexpr try_emplace_back_result try_emplace_back(Args&&... args)
             requires(std::constructible_from<T, Args...>)
          {
-            if (storage_size() >= N) return nullptr;
+            if (storage_size() >= N) {
+#if GLZ_HAS_OPTIONAL_REF
+               return std::nullopt;
+#else
+               return nullptr;
+#endif
+            }
 
             std::construct_at(this->data_ptr() + storage_size(), std::forward<Args>(args)...);
             set_storage_size(storage_size() + 1);
+#if GLZ_HAS_OPTIONAL_REF
+            return std::optional<T&>{back()};
+#else
             return &back();
+#endif
          }
 
-         constexpr T* try_push_back(const T& x)
+         constexpr try_emplace_back_result try_push_back(const T& x)
          {
-            if (storage_size() >= N) return nullptr;
+            if (storage_size() >= N) {
+#if GLZ_HAS_OPTIONAL_REF
+               return std::nullopt;
+#else
+               return nullptr;
+#endif
+            }
 
             if constexpr (std::is_trivially_copyable_v<T>) {
                std::memcpy(this->data_ptr() + storage_size(), &x, sizeof(T));
@@ -257,16 +289,30 @@ namespace glz
                std::construct_at(this->data_ptr() + storage_size(), x);
             }
             set_storage_size(storage_size() + 1);
+#if GLZ_HAS_OPTIONAL_REF
+            return std::optional<T&>{back()};
+#else
             return &back();
+#endif
          }
 
-         constexpr T* try_push_back(T&& x)
+         constexpr try_emplace_back_result try_push_back(T&& x)
          {
-            if (storage_size() >= N) return nullptr;
+            if (storage_size() >= N) {
+#if GLZ_HAS_OPTIONAL_REF
+               return std::nullopt;
+#else
+               return nullptr;
+#endif
+            }
 
             std::construct_at(this->data_ptr() + storage_size(), std::move(x));
             set_storage_size(storage_size() + 1);
+#if GLZ_HAS_OPTIONAL_REF
+            return std::optional<T&>{back()};
+#else
             return &back();
+#endif
          }
 
          template <std::ranges::input_range R>
@@ -374,7 +420,7 @@ namespace glz
                x.set_storage_size(temp_size);
             }
             else {
-               const auto min_size = std::min(storage_size(), x.storage_size());
+               const auto min_size = (std::min)(storage_size(), x.storage_size());
 
                // Swap common elements
                for (size_type i = 0; i < min_size; ++i) std::swap(this->data_ptr()[i], x.data_ptr()[i]);
@@ -808,19 +854,19 @@ namespace glz
          else {
             // General case for non-trivial types
             // First, move elements at the end to their new positions
-            for (size_type i = 0; i < std::min(n, this->storage_size() - pos_idx); ++i) {
+            for (size_type i = 0; i < (std::min)(n, this->storage_size() - pos_idx); ++i) {
                std::construct_at(this->data_ptr() + this->storage_size() + n - 1 - i,
                                  std::move(this->data_ptr()[this->storage_size() - 1 - i]));
             }
 
             // Move the remaining elements that need to be shifted but not constructed
-            for (size_type i = this->storage_size() - std::min(n, this->storage_size() - pos_idx) - 1;
+            for (size_type i = this->storage_size() - (std::min)(n, this->storage_size() - pos_idx) - 1;
                  i >= pos_idx && i < this->storage_size(); --i) {
                this->data_ptr()[i + n] = std::move(this->data_ptr()[i]);
             }
 
             // Destroy elements that will be overwritten
-            for (size_type i = pos_idx; i < std::min(pos_idx + n, this->storage_size()); ++i) {
+            for (size_type i = pos_idx; i < (std::min)(pos_idx + n, this->storage_size()); ++i) {
                std::destroy_at(this->data_ptr() + i);
             }
 
@@ -866,19 +912,19 @@ namespace glz
                // Make space first
                if (pos_idx < this->storage_size()) {
                   // Move elements after position count positions to the right
-                  for (size_type i = 0; i < std::min(count, this->storage_size() - pos_idx); ++i) {
+                  for (size_type i = 0; i < (std::min)(count, this->storage_size() - pos_idx); ++i) {
                      std::construct_at(this->data_ptr() + this->storage_size() + count - 1 - i,
                                        std::move(this->data_ptr()[this->storage_size() - 1 - i]));
                   }
 
                   // Move the remaining elements
-                  for (size_type i = this->storage_size() - std::min(count, this->storage_size() - pos_idx) - 1;
+                  for (size_type i = this->storage_size() - (std::min)(count, this->storage_size() - pos_idx) - 1;
                        i >= pos_idx && i < this->storage_size(); --i) {
                      this->data_ptr()[i + count] = std::move(this->data_ptr()[i]);
                   }
 
                   // Destroy elements that will be overwritten
-                  for (size_type i = pos_idx; i < std::min(pos_idx + count, this->storage_size()); ++i) {
+                  for (size_type i = pos_idx; i < (std::min)(pos_idx + count, this->storage_size()); ++i) {
                      std::destroy_at(this->data_ptr() + i);
                   }
                }
@@ -934,19 +980,19 @@ namespace glz
                // Make space first
                if (pos_idx < this->storage_size()) {
                   // Move elements after position count positions to the right
-                  for (size_type i = 0; i < std::min(count, this->storage_size() - pos_idx); ++i) {
+                  for (size_type i = 0; i < (std::min)(count, this->storage_size() - pos_idx); ++i) {
                      std::construct_at(this->data_ptr() + this->storage_size() + count - 1 - i,
                                        std::move(this->data_ptr()[this->storage_size() - 1 - i]));
                   }
 
                   // Move the remaining elements
-                  for (size_type i = this->storage_size() - std::min(count, this->storage_size() - pos_idx) - 1;
+                  for (size_type i = this->storage_size() - (std::min)(count, this->storage_size() - pos_idx) - 1;
                        i >= pos_idx && i < this->storage_size(); --i) {
                      this->data_ptr()[i + count] = std::move(this->data_ptr()[i]);
                   }
 
                   // Destroy elements that will be overwritten
-                  for (size_type i = pos_idx; i < std::min(pos_idx + count, this->storage_size()); ++i) {
+                  for (size_type i = pos_idx; i < (std::min)(pos_idx + count, this->storage_size()); ++i) {
                      std::destroy_at(this->data_ptr() + i);
                   }
                }

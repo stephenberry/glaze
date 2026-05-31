@@ -45,6 +45,7 @@ import glaze.tuplet;
 import glaze.util.expected;
 import glaze.util.for_each;
 import glaze.util.glaze_fast_float;
+import glaze.util.nullable_traits;
 import glaze.util.parse;
 import glaze.util.type_traits;
 import glaze.util.variant;
@@ -360,9 +361,21 @@ namespace glz
       template <auto Opts, is_context Ctx, class It0, class It1>
       static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end)
       {
-         using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
+         using V = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
          from<TOML, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                           std::forward<It0>(it), std::forward<It1>(end));
+      }
+   };
+
+   // Silently consume any value bound to a glz::skip sentinel. Reached when a
+   // type opts out of serialization via meta::value = glz::skip{}.
+   template <>
+   struct from<TOML, skip>
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
+      {
+         skip_value<TOML>::template op<Opts>(ctx, args...);
       }
    };
 
@@ -1473,7 +1486,7 @@ namespace glz
                return;
             value.emplace(std::move(v));
 
-            skip_ws_and_comments(it, end);
+            skip_ws_newlines_and_comments(it, end);
 
             if (it == end) {
                ctx.error = error_code::unexpected_end;
@@ -1486,7 +1499,7 @@ namespace glz
             }
             else if (*it == ',') {
                ++it;
-               skip_ws_and_comments(it, end);
+               skip_ws_newlines_and_comments(it, end);
                if (it != end && *it == ']') {
                   ++it;
                   return;
@@ -1514,7 +1527,7 @@ namespace glz
             return;
          }
 
-         skip_ws_and_comments(it, end);
+         skip_ws_newlines_and_comments(it, end);
 
          if (it == end || *it != '[') {
             ctx.error = error_code::syntax_error;
@@ -1552,7 +1565,7 @@ namespace glz
                return;
             }
 
-            skip_ws_and_comments(it, end);
+            skip_ws_newlines_and_comments(it, end);
 
             if (it == end) {
                ctx.error = error_code::unexpected_end;
@@ -1565,7 +1578,7 @@ namespace glz
             }
             else if (*it == ',') {
                ++it;
-               skip_ws_and_comments(it, end);
+               skip_ws_newlines_and_comments(it, end);
                if (it != end && *it == ']') {
                   ++it;
                   return;
@@ -1787,6 +1800,17 @@ namespace glz
       }
    }
 
+   template <auto Opts, nullable_like T>
+   inline bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   {
+      if (!root) {
+         if (!nullable_emplace<Opts>(root, ctx)) {
+            return false;
+         }
+      }
+      return resolve_nested<Opts>(*root, path, ctx, it, end);
+   }
+
    // Helper to resolve an array-of-tables path and emplace a new element
    // Returns true if successful, false if error
    template <auto Opts, class T>
@@ -1810,12 +1834,27 @@ namespace glz
             glz::visit<N>(
                [&]<size_t I>() {
                   if (I == index) {
-                     decltype(auto) member_obj = [&]() -> decltype(auto) {
+                     decltype(auto) raw_member_obj = [&]() -> decltype(auto) {
                         if constexpr (reflectable<U>) {
                            return get<I>(to_tie(root));
                         }
                         else {
                            return get_member(root, get<I>(reflect<U>::values));
+                        }
+                     }();
+                     using raw_member_type = std::decay_t<decltype(raw_member_obj)>;
+
+                     decltype(auto) member_obj = [&]() -> decltype(auto) {
+                        if constexpr (nullable_like<raw_member_type>) {
+                           if (!raw_member_obj) {
+                              if (!nullable_emplace<Opts>(raw_member_obj, ctx)) {
+                                 success = false;
+                              }
+                           }
+                           return *raw_member_obj;
+                        }
+                        else {
+                           return raw_member_obj;
                         }
                      }();
 
@@ -1847,7 +1886,8 @@ namespace glz
                            }
                            success = resolve_array_of_tables<Opts>(member_obj.back(), path.subspan(1), ctx, it, end);
                         }
-                        else if constexpr (glz::reflectable<member_type> || glz::glaze_object_t<member_type>) {
+                        else if constexpr (glz::reflectable<member_type> || glz::glaze_object_t<member_type> ||
+                                           nullable_like<member_type>) {
                            success = resolve_array_of_tables<Opts>(member_obj, path.subspan(1), ctx, it, end);
                         }
                         else {
@@ -1872,6 +1912,17 @@ namespace glz
             }
          }
       }
+   }
+
+   template <auto Opts, nullable_like T>
+   inline bool resolve_array_of_tables(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   {
+      if (!root) {
+         if (!nullable_emplace<Opts>(root, ctx)) {
+            return false;
+         }
+      }
+      return resolve_array_of_tables<Opts>(*root, path, ctx, it, end);
    }
 
    // ============================================
@@ -2346,7 +2397,10 @@ namespace glz
                }
                // TODO: Rewrite logic here, for now it works just fine so we leave it.
                detail::parse_toml_object_members<Opts>(value, it, end, ctx, true); // true for is_inline_table
-               // The parse_toml_object_members should consume the final '}' if successful
+               // parse_toml_object_members consumes the final '}'. The inline table is the
+               // entire value for this struct, so return rather than looping; otherwise an
+               // enclosing inline table's ',' or '}' would be misparsed as the start of a key.
+               return;
             }
             else if (*it == '[') { // Normal table or array of tables
                std::vector<std::string> path;
@@ -2882,6 +2936,34 @@ namespace glz
       }
    };
 
+   // Nullable types: std::optional, std::unique_ptr, std::shared_ptr, raw pointers
+   template <nullable_like T>
+   struct from<TOML, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end) {
+            value = {};
+            return;
+         }
+
+         if (!value) {
+            if (!nullable_emplace<Opts>(value, ctx)) {
+               return;
+            }
+         }
+
+         using V = std::remove_cvref_t<decltype(*value)>;
+         from<TOML, V>::template op<Opts>(*value, ctx, it, end);
+      }
+   };
+
    export template <read_supported<TOML> T, is_buffer Buffer>
    [[nodiscard]] inline error_ctx read_toml(T& value, Buffer&& buffer)
    {
@@ -2916,4 +2998,3 @@ namespace glz
       return read<opts{.format = TOML}>(value, buffer, ctx);
    }
 }
-

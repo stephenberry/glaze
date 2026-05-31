@@ -16,8 +16,8 @@ auto json = glz::write<glz::opts_size{}>(obj);
 
 | Level | Preset | Integer Serialization | Float Serialization | Key Lookup |
 |-------|--------|----------------------|---------------------|------------|
-| `normal` | (default) | `to_chars_40kb` (40KB tables) | dragonbox (~238KB) | Hash tables |
-| `size` | `opts_size` | `to_chars` (400B tables) | `std::to_chars` (no tables) | Linear search |
+| `normal` | (default) | `to_chars_40kb` (40KB tables) | zmij (~17KB pow-10 tables) | Hash tables |
+| `size` | `opts_size` | `to_chars` (400B tables) | zmij `OptSize=true` (recomputed, ~1.4KB) | Linear search |
 
 ## Optimization Level Details
 
@@ -34,7 +34,7 @@ glz::write<glz::opts{}>(obj, buffer);
 **Characteristics:**
 
 - Uses 40KB digit lookup tables for fast integer-to-string conversion
-- Uses dragonbox algorithm with ~238KB tables for float-to-string
+- Uses zmij with ~17KB pow-10 lookup tables for float-to-string
 - Uses compile-time generated hash tables for O(1) key lookup
 - Best throughput for high-volume JSON processing
 
@@ -50,14 +50,14 @@ glz::read<glz::opts_size{}>(obj, buffer);
 **Characteristics:**
 
 - Uses `glz::to_chars` for integers (400B lookup tables, 1.6x faster than `std::to_chars`)
-- Uses `std::to_chars` for floats (no dragonbox tables)
+- Uses `glz::to_chars<T, OptSize=true>` for floats (zmij with the pow-10 tables dropped; recomputed on the fly)
 - Defaults to linear search for key matching (no hash tables)
 - Significantly smaller binary size
 
 **Approximate Binary Size Savings:**
 
 - ~39KB from using smaller integer lookup tables (400B vs 40KB)
-- ~238KB from avoiding dragonbox float tables
+- ~15.8KB from dropping zmij's pow-10 tables (`OptSize=true`)
 - Variable savings from hash table elimination
 
 ## Custom Options Struct
@@ -90,14 +90,10 @@ struct embedded_opts : glz::opts
 
 ## Platform Considerations
 
-### Floating-Point Support
-
-The size optimization for floats (`std::to_chars`) requires platform support:
-
-- **Supported:** Most modern platforms (GCC/libstdc++, Clang/libc++ on recent systems, MSVC)
-- **Not supported:** Older Apple platforms (iOS < 16.3, macOS < 13.3)
-
-On unsupported platforms, Glaze automatically falls back to dragonbox for floats. Integer serialization uses `glz::to_chars` which works on all platforms.
+Both optimization levels use `glz::to_chars` (zmij) for floats. The only
+difference is whether the pow-10 tables are linked in (`normal`) or
+recomputed on the fly (`size`). Both variants work on all platforms,
+including bare-metal and older Apple targets.
 
 ### When to Use Each Level
 

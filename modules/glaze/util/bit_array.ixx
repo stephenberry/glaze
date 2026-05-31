@@ -15,7 +15,7 @@ using std::size_t;
 
 namespace glz
 {
-   // Basicly std::bitset but exposes things normally not availible like the bitscan functions
+   // Basically std::bitset but exposes things normally not available like the bitscan functions
    export template <size_t N, std::unsigned_integral Chunk = uint64_t>
    struct bit_array
    {

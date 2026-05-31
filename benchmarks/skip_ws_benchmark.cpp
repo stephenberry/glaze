@@ -581,7 +581,7 @@ int main()
 
          // For matching: record first 8 bytes (or fewer) as the pattern
          // In reality the pattern would be the first line's indent
-         std::string pattern(std::min(sz, size_t(8)), ' ');
+         std::string pattern((std::min)(sz, size_t(8)), ' ');
 
          char label[64];
          std::snprintf(label, sizeof(label), "Contiguous spaces (%zu B)", sz);

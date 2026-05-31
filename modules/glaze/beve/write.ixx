@@ -534,6 +534,7 @@ namespace glz
    };
 
    template <is_variant T>
+      requires(not custom_write<T>)
    struct to<BEVE, T> final
    {
       template <auto Opts, class B>
@@ -1048,6 +1049,8 @@ namespace glz
       static auto op(auto&& value, is_context auto&& ctx, B&& b, auto& ix)
       {
          using Key = typename T::key_type;
+         using val_t = std::remove_cvref_t<detail::iterator_second_type<T>>;
+         constexpr bool may_skip = null_t<val_t> && Opts.skip_null_members;
 
          constexpr uint8_t tag = beve_key_traits<Key>::header;
          dump_type(ctx, tag, b, ix);
@@ -1055,11 +1058,23 @@ namespace glz
             return;
          }
 
-         dump_compressed_int(ctx, value.size(), b, ix);
+         size_t count = value.size();
+         if constexpr (may_skip) {
+            count = 0;
+            for (auto&& [k, v] : value) {
+               (void)k;
+               if (!skip_member<Opts>(v)) ++count;
+            }
+         }
+
+         dump_compressed_int(ctx, count, b, ix);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
          for (auto&& [k, v] : value) {
+            if constexpr (may_skip) {
+               if (skip_member<Opts>(v)) continue;
+            }
             serialize<BEVE>::no_header<Opts>(k, ctx, b, ix);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -1196,7 +1211,7 @@ namespace glz
       {
          using V = field_t<Value, I>;
 
-         if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+         if constexpr (always_skipped<V>) {
             return true;
          }
          else if constexpr (is_any_function_ptr<V>) {
@@ -1269,7 +1284,7 @@ namespace glz
       {
          using V = field_t<T, I>;
 
-         if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+         if constexpr (always_skipped<V>) {
             return true;
          }
          else if constexpr (is_any_function_ptr<V>) {

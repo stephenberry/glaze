@@ -2027,4 +2027,233 @@ suite custom_type_schema_generation = [] {
    };
 };
 
+// Regression test for https://github.com/stephenberry/glaze/issues/2529
+// vector<pair<...>> is parsed from a JSON object in concatenate mode (default),
+// so the variant deduction must treat it as an object alternative.
+suite vector_pair_object_variant_tests = [] {
+   using map_type = std::vector<std::pair<std::string_view, std::string_view>>;
+
+   "vector<pair> direct read"_test = [] {
+      map_type m;
+      auto ec = glz::read_json(m, R"({"foo":"bar"})");
+      expect(!ec) << glz::format_error(ec, std::string{R"({"foo":"bar"})"});
+      expect(m.size() == 1);
+      expect(m[0].first == "foo");
+      expect(m[0].second == "bar");
+   };
+
+   "variant with vector<pair> alternative"_test = [] {
+      std::variant<std::string_view, std::nullptr_t, map_type> v;
+      auto ec = glz::read_json(v, R"({"foo":"bar"})");
+      expect(!ec) << glz::format_error(ec, std::string{R"({"foo":"bar"})"});
+      expect(v.index() == 2);
+      auto& m = std::get<2>(v);
+      expect(m.size() == 1);
+      expect(m[0].first == "foo");
+      expect(m[0].second == "bar");
+   };
+
+   "variant deduces null/string/object alternatives"_test = [] {
+      std::variant<std::string_view, std::nullptr_t, map_type> v;
+
+      auto ec = glz::read_json(v, R"(null)");
+      expect(!ec);
+      expect(v.index() == 1);
+
+      ec = glz::read_json(v, R"("hello")");
+      expect(!ec);
+      expect(v.index() == 0);
+      expect(std::get<0>(v) == "hello");
+
+      ec = glz::read_json(v, R"({"k":"v"})");
+      expect(!ec);
+      expect(v.index() == 2);
+      expect(std::get<2>(v).size() == 1);
+   };
+
+   // With concatenate=false the user opts out of object-shaped pair-ranges,
+   // so the variant must NOT match vector<pair> against `{...}` JSON.
+   "variant with concatenate=false does not match object to vector<pair>"_test = [] {
+      struct opts_concat : glz::opts
+      {
+         bool concatenate = true;
+      };
+      static constexpr opts_concat cat_off{{glz::opts{}}, false};
+
+      std::variant<std::string_view, std::nullptr_t, map_type> v;
+      auto ec = glz::read<cat_off>(v, R"({"k":"v"})");
+      expect(bool(ec));
+      expect(ec == glz::error_code::no_matching_variant_type);
+   };
+};
+
+// Regression coverage for https://github.com/stephenberry/glaze/issues/2589
+//
+// A tagged-variant alternative that uses custom_read/custom_write (for example to access
+// the parse context) and serializes an object body should merge the variant tag into that
+// body and round-trip, even alongside an empty (fieldless) alternative.
+
+struct custom_map_action
+{
+   std::map<std::string, int>& data() { return m_data; }
+   const std::map<std::string, int>& data() const { return m_data; }
+   bool operator==(const custom_map_action&) const = default;
+
+  private:
+   std::map<std::string, int> m_data{};
+};
+
+template <>
+struct glz::meta<custom_map_action>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::from<Format, custom_map_action>
+{
+   template <auto Opts>
+   static void op(custom_map_action& value, is_context auto&& ctx, auto&& it, auto&& end)
+   {
+      glz::parse<Format>::template op<Opts>(value.data(), ctx, it, end);
+   }
+};
+
+template <uint32_t Format>
+struct glz::to<Format, custom_map_action>
+{
+   template <auto Opts>
+   static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(value.data(), ctx, args...);
+   }
+};
+
+struct empty_action
+{
+   bool operator==(const empty_action&) const = default;
+};
+
+template <>
+struct glz::meta<empty_action>
+{};
+
+using custom_tagged_variant = std::variant<custom_map_action, empty_action>;
+
+template <>
+struct glz::meta<custom_tagged_variant>
+{
+   static constexpr std::string_view tag = "action";
+   static constexpr auto ids = std::array{"PUT", "DELETE"};
+};
+
+suite custom_alternative_variant_tests = [] {
+   "custom alternative tagged variant write+read"_test = [] {
+      custom_map_action put{};
+      put.data() = {{"a", 1}, {"b", 2}};
+      std::vector<custom_tagged_variant> v{empty_action{}, custom_map_action{}, put};
+
+      std::string s{};
+      expect(not glz::write_json(v, s));
+      expect(s == R"([{"action":"DELETE"},{"action":"PUT"},{"action":"PUT","a":1,"b":2}])") << s;
+
+      std::vector<custom_tagged_variant> parsed{};
+      expect(not glz::read_json(parsed, s));
+      expect(parsed.size() == 3);
+      expect(std::holds_alternative<empty_action>(parsed[0]));
+      expect(std::holds_alternative<custom_map_action>(parsed[1]));
+      expect(std::get<custom_map_action>(parsed[1]).data().empty());
+      expect(std::holds_alternative<custom_map_action>(parsed[2]));
+      expect(std::get<custom_map_action>(parsed[2]).data().at("a") == 1);
+      expect(std::get<custom_map_action>(parsed[2]).data().at("b") == 2);
+   };
+
+   "custom alternative prettify round-trips"_test = [] {
+      custom_map_action put{};
+      put.data() = {{"x", 10}};
+      custom_tagged_variant v{put};
+
+      std::string s{};
+      expect(not glz::write<glz::opts{.prettify = true}>(v, s));
+      custom_tagged_variant parsed{};
+      expect(not glz::read_json(parsed, s));
+      std::string s2{};
+      expect(not glz::write<glz::opts{.prettify = true}>(parsed, s2));
+      expect(s == s2) << s;
+   };
+
+   "empty custom alternative prettify has no trailing comma"_test = [] {
+      custom_tagged_variant v{custom_map_action{}};
+      std::string s{};
+      expect(not glz::write<glz::opts{.prettify = true}>(v, s));
+      expect(s == "{\n   \"action\": \"PUT\"\n}") << s;
+   };
+
+   // A custom alternative receives the object body directly and cannot skip an interior
+   // tag the way reflected objects do, so the tag must be the first key. glaze always
+   // writes it first; reordered (e.g. hand-written) input must error rather than corrupt.
+   "custom alternative requires the tag first"_test = [] {
+      // tag first: parses the body
+      custom_tagged_variant ok{};
+      expect(not glz::read_json(ok, R"({"action":"PUT","a":1})"));
+      expect(std::holds_alternative<custom_map_action>(ok));
+      expect(std::get<custom_map_action>(ok).data().at("a") == 1);
+
+      // tag after another key, error_on_unknown_keys = false: must not silently absorb
+      // the tag into the custom value
+      custom_tagged_variant corrupt{};
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(corrupt, R"({"a":1,"action":"PUT"})");
+      expect(bool(ec));
+      expect(ec == glz::error_code::feature_not_supported);
+
+      // tag after another key, default keys handling: unknown key is reported
+      custom_tagged_variant unknown{};
+      expect(bool(glz::read_json(unknown, R"({"a":1,"action":"PUT"})")));
+   };
+};
+
+// A std::variant whose own meta opts into custom_read/custom_write (with full from/to
+// specializations) must not be ambiguous with the built-in variant handlers.
+
+struct fully_custom_a
+{};
+struct fully_custom_b
+{};
+using fully_custom_variant = std::variant<fully_custom_a, fully_custom_b>;
+
+template <>
+struct glz::meta<fully_custom_variant>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::from<Format, fully_custom_variant>
+{
+   template <auto Opts>
+   static void op(fully_custom_variant&, is_context auto&&, auto&&, auto&&)
+   {}
+};
+
+template <uint32_t Format>
+struct glz::to<Format, fully_custom_variant>
+{
+   template <auto Opts>
+   static void op(auto&&, is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>("custom", ctx, args...);
+   }
+};
+
+suite fully_custom_variant_tests = [] {
+   "fully custom variant specialization is unambiguous"_test = [] {
+      fully_custom_variant v{};
+      std::string s{};
+      expect(not glz::write_json(v, s));
+      expect(s == R"("custom")") << s;
+   };
+};
+
 int main() { return 0; }

@@ -746,6 +746,30 @@ void map_tests()
          expect(result[item.first] == item.second);
       }
    };
+
+   "map_skips_empty_optional_by_default"_test = [] {
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}, {"c", 3}};
+      std::string buf;
+      expect(not glz::write_cbor(in, buf));
+      std::map<std::string, std::optional<int>> out{};
+      expect(not glz::read_cbor(out, buf));
+      expect(out.size() == 2);
+      expect(out.count("b") == 0);
+      expect(out.at("a").value() == 1);
+      expect(out.at("c").value() == 3);
+   };
+
+   "map_preserves_nulls_when_skip_disabled"_test = [] {
+      constexpr auto preserve = glz::opts{.format = glz::CBOR, .skip_null_members = false};
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}};
+      std::string buf;
+      expect(not glz::write<preserve>(in, buf));
+      std::map<std::string, std::optional<int>> out{};
+      expect(not glz::read<preserve>(out, buf));
+      expect(out.size() == 2);
+      expect(out.at("a").value() == 1);
+      expect(!out.at("b").has_value());
+   };
 }
 
 void object_tests()
@@ -3260,8 +3284,92 @@ void merge_meta_tests()
    };
 }
 
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in CBOR.
+namespace cbor_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m{};
+      bool active{true};
+      int count{42};
+      std::string name{"hello"};
+   };
+}
+
+void cbor_skip_marker_tests_run()
+{
+   using namespace cbor_skip_marker_tests;
+   "cbor skip-marker roundtrip"_test = [] {
+      settings original{.active = false, .count = 7, .name = "world"};
+      auto encoded = glz::write_cbor(original);
+      expect(encoded.has_value());
+
+      settings decoded{};
+      auto ec = glz::read_cbor(decoded, *encoded);
+      expect(!ec);
+      expect(decoded.active == false);
+      expect(decoded.count == 7);
+      expect(decoded.name == "world");
+   };
+}
+
+// A std::variant whose own meta opts into custom_read/custom_write (with full from/to
+// specializations) must not be ambiguous with the built-in CBOR variant handlers.
+// Parity with the JSON fix in #2591.
+struct cbor_fc_a
+{};
+struct cbor_fc_b
+{};
+using cbor_fc_variant = std::variant<cbor_fc_a, cbor_fc_b>;
+
+template <>
+struct glz::meta<cbor_fc_variant>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::from<Format, cbor_fc_variant>
+{
+   template <auto Opts>
+   static void op(cbor_fc_variant&, glz::is_context auto&&, auto&&, auto&&)
+   {}
+};
+
+template <uint32_t Format>
+struct glz::to<Format, cbor_fc_variant>
+{
+   template <auto Opts>
+   static void op(auto&&, glz::is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(42, ctx, args...);
+   }
+};
+
+void custom_variant_ambiguity_tests()
+{
+   "fully custom variant specialization is unambiguous"_test = [] {
+      cbor_fc_variant v{};
+      std::string s{};
+      expect(not glz::write_cbor(v, s));
+      cbor_fc_variant r{};
+      expect(not glz::read_cbor(r, s));
+   };
+}
+
 int main()
 {
+   custom_variant_ambiguity_tests();
    basic_types_tests();
    integer_tests();
    float_tests();
@@ -3299,6 +3407,7 @@ int main()
    chrono_tests();
    chrono_struct_tests();
    merge_meta_tests();
+   cbor_skip_marker_tests_run();
 #if __cpp_exceptions
    exceptions_tests();
 #endif

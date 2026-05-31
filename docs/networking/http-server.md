@@ -529,6 +529,8 @@ server.mount("/api/v2", api_v2);
 // GET /api/v2/users
 ```
 
+`mount()` propagates normal, streaming (`stream_get`/`stream_post`), and WebSocket (`websocket`) routes from the sub-router; all three kinds support `:param` and `*wildcard` segments. See [HTTP Router](http-router.md#streaming-routes) for streaming and WebSocket route registration.
+
 ## Static File Serving
 
 ```cpp

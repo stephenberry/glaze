@@ -9,14 +9,11 @@
 #include "defs.hpp"
 #include "types.hpp"
 
-using std::uint8_t;
-using std::size_t;
-
 namespace glz
 {
 
    template <class Ctx, class It0, class It1>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool check_offset(Ctx&& ctx, It0&& it, It1&& end, size_t off)
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool check_invalid_offset(Ctx&& ctx, It0&& it, It1&& end, size_t off) noexcept
    {
       if ((it + off) > end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -25,28 +22,28 @@ namespace glz
       return false;
    }
 
-   using header_pair = std::pair<size_t, size_t>;
+   using header_pair = std::pair<std::size_t, std::size_t>;
 
    namespace detail
    {
       template <class F, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE void decode_impl(F&& func, Ctx&& ctx, It0&& it, It1 end)
+      GLZ_ALWAYS_INLINE void decode_impl(F&& func, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          int index{};
-         if (func(it, &index) < 0) [[unlikely]] {
+         if (func(reinterpret_cast<const char*>(it), &index) < 0) [[unlikely]] {
             ctx.error = error_code::parse_number_failure;
             return;
          }
 
-         if (check_offset(ctx, it, end, index)) return;
+         if (check_invalid_offset(ctx, it, end, index)) return;
          std::advance(it, index);
       }
 
       template <output_buffer B, class IX>
       [[nodiscard]] GLZ_ALWAYS_INLINE int resize_buffer(B&& b, IX&& ix, int index)
       {
-         if (b.size() < static_cast<size_t>(index)) {
-            b.resize((std::max)(b.size() * 2, static_cast<size_t>(index)));
+         if (b.size() < static_cast<std::size_t>(index)) {
+            b.resize((std::max)(b.size() * 2, static_cast<std::size_t>(index)));
          }
 
          return static_cast<int>(ix);
@@ -73,11 +70,11 @@ namespace glz
    } // namespace detail
 
    template <class It>
-   [[nodiscard]] GLZ_ALWAYS_INLINE int decode_version(is_context auto&& ctx, It&& it)
+   [[nodiscard]] GLZ_ALWAYS_INLINE int decode_version(is_context auto&& ctx, It&& it) noexcept
    {
       int index{};
       int version{};
-      if (ei_decode_version(it, &index, &version) < 0) [[unlikely]] {
+      if (ei_decode_version(reinterpret_cast<const char*>(it), &index, &version) < 0) [[unlikely]] {
          ctx.error = error_code::syntax_error;
          return -1;
       }
@@ -87,12 +84,12 @@ namespace glz
    }
 
    template <class It>
-   GLZ_ALWAYS_INLINE int get_type(is_context auto&& ctx, It&& it)
+   GLZ_ALWAYS_INLINE int get_type(is_context auto&& ctx, It&& it) noexcept
    {
       int type{};
       int size{};
       int index{};
-      if (ei_get_type(it, &index, &type, &size) < 0) {
+      if (ei_get_type(reinterpret_cast<const char*>(it), &index, &type, &size) < 0) {
          ctx.error = error_code::syntax_error;
          return -1;
       }
@@ -101,20 +98,20 @@ namespace glz
    }
 
    template <class It0, class It1>
-   auto skip_term(is_context auto&& ctx, It0&& it, It1 end)
+   auto skip_term(is_context auto&& ctx, It0&& it, It1&& end) noexcept
    {
       int index{};
-      if (ei_skip_term(it, &index) < 0) {
+      if (ei_skip_term(reinterpret_cast<const char*>(it), &index) < 0) {
          ctx.error = error_code::syntax_error;
          index = 0;
       }
 
-      if (check_offset(ctx, it, end, index)) return;
+      if (check_invalid_offset(ctx, it, end, index)) return;
       std::advance(it, index);
    }
 
    template <num_t T, class... Args>
-   GLZ_ALWAYS_INLINE void decode_number(T&& value, Args&&... args)
+   GLZ_ALWAYS_INLINE void decode_number(T&& value, Args&&... args) noexcept
    {
       using namespace std::placeholders;
       using V = std::remove_cvref_t<T>;
@@ -152,19 +149,19 @@ namespace glz
    }
 
    template <class It0, class It1>
-   GLZ_ALWAYS_INLINE void decode_token(auto&& value, is_context auto&& ctx, It0&& it, It1 end)
+   GLZ_ALWAYS_INLINE void decode_token(auto&& value, is_context auto&& ctx, It0&& it, It1&& end)
    {
       using namespace std::placeholders;
 
       int index{};
       int type{};
       int sz{};
-      if (ei_get_type(it, &index, &type, &sz) < 0) [[unlikely]] {
+      if (ei_get_type(reinterpret_cast<const char*>(it), &index, &type, &sz) < 0) [[unlikely]] {
          ctx.error = error_code::syntax_error;
          return;
       }
 
-      if (check_offset(ctx, it, end, sz)) return;
+      if (check_invalid_offset(ctx, it, end, sz)) return;
 
       value.resize(sz);
       if (eetf::is_atom(type)) {
@@ -176,7 +173,7 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void decode_boolean(auto&& value, Args&&... args)
+   GLZ_ALWAYS_INLINE void decode_boolean(auto&& value, Args&&... args) noexcept
    {
       using namespace std::placeholders;
 
@@ -186,11 +183,11 @@ namespace glz
    }
 
    template <auto Opts, class T, class It0>
-   void decode_binary(T&& value, size_t sz, is_context auto&& ctx, It0&& it, auto end)
+   void decode_binary(T&& value, std::size_t sz, is_context auto&& ctx, It0&& it, auto&& end)
    {
       using namespace std::placeholders;
 
-      if (check_offset(ctx, it, end, sz * sizeof(std::uint8_t))) return;
+      if (check_invalid_offset(ctx, it, end, sz * sizeof(std::uint8_t))) return;
 
       using V = range_value_t<std::decay_t<T>>;
 
@@ -208,31 +205,31 @@ namespace glz
       }
 
       [[maybe_unused]] long szl{};
-      if constexpr (sizeof(V) == sizeof(uint8_t)) {
+      if constexpr (sizeof(V) == sizeof(std::uint8_t)) {
          detail::decode_impl(std::bind(ei_decode_binary, _1, _2, value.data(), &szl), ctx, it, end);
       }
       else {
-         std::vector<uint8_t> buff(sz);
+         std::vector<std::uint8_t> buff(sz);
          detail::decode_impl(std::bind(ei_decode_binary, _1, _2, buff.data(), &szl), ctx, it, end);
          std::copy(buff.begin(), buff.end(), value.begin());
       }
    }
 
    template <is_context Ctx, class It>
-   GLZ_ALWAYS_INLINE auto decode_list_header(Ctx&& ctx, It&& it)
+   GLZ_ALWAYS_INLINE auto decode_list_header(Ctx&& ctx, It&& it) noexcept
    {
       int arity{};
       int index{};
-      if (ei_decode_list_header(it, &index, &arity) < 0) [[unlikely]] {
+      if (ei_decode_list_header(reinterpret_cast<const char*>(it), &index, &arity) < 0) [[unlikely]] {
          ctx.error = error_code::syntax_error;
          return header_pair(-1ull, -1ull);
       }
 
-      return header_pair(static_cast<size_t>(arity), static_cast<size_t>(index));
+      return header_pair(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
    }
 
    template <auto Opts, class T>
-   GLZ_ALWAYS_INLINE void decode_list(T&& value, is_context auto&& ctx, auto&& it, auto end)
+   GLZ_ALWAYS_INLINE void decode_list(T&& value, is_context auto&& ctx, auto&& it, auto&& end)
    {
       using V = range_value_t<std::decay_t<T>>;
 
@@ -248,16 +245,16 @@ namespace glz
          }
       }
       else {
-         if (static_cast<size_t>(arity) > value.size()) {
+         if (static_cast<std::size_t>(arity) > value.size()) {
             ctx.error = error_code::syntax_error;
             return;
          }
       }
 
-      if (check_offset(ctx, it, end, index)) return;
+      if (check_invalid_offset(ctx, it, end, index)) return;
       std::advance(it, index);
 
-      for (size_t idx = 0; idx < arity; idx++) {
+      for (std::size_t idx = 0; idx < arity; idx++) {
          V v;
          from<EETF, V>::template op<Opts>(v, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
@@ -271,18 +268,18 @@ namespace glz
    }
 
    template <auto Opts, class T, is_context Ctx, class It0, class It1>
-   GLZ_ALWAYS_INLINE void decode_sequence(T&& value, Ctx&& ctx, It0&& it, It1 end)
+   GLZ_ALWAYS_INLINE void decode_sequence(T&& value, Ctx&& ctx, It0&& it, It1&& end)
    {
       int index{};
       int type{};
       int sz{};
-      if (ei_get_type(it, &index, &type, &sz) < 0) [[unlikely]] {
+      if (ei_get_type(reinterpret_cast<const char*>(it), &index, &type, &sz) < 0) [[unlikely]] {
          ctx.error = error_code::syntax_error;
          return;
       }
 
       if (eetf::is_binary(type)) {
-         decode_binary<Opts>(std::forward<T>(value), static_cast<size_t>(sz), std::forward<Ctx>(ctx),
+         decode_binary<Opts>(std::forward<T>(value), static_cast<std::size_t>(sz), std::forward<Ctx>(ctx),
                              std::forward<It0>(it), end);
       }
       else if (eetf::is_list(type)) {
@@ -296,7 +293,7 @@ namespace glz
                }
             }
             else {
-               if (static_cast<size_t>(sz) > value.size()) {
+               if (static_cast<std::size_t>(sz) > value.size()) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -314,33 +311,33 @@ namespace glz
    }
 
    template <is_context Ctx, class It>
-   GLZ_ALWAYS_INLINE auto decode_map_header(Ctx&& ctx, It&& it)
+   GLZ_ALWAYS_INLINE auto decode_map_header(Ctx&& ctx, It&& it) noexcept
    {
       int arity{};
       int index{};
-      if (ei_decode_map_header(it, &index, &arity) < 0) [[unlikely]] {
+      if (ei_decode_map_header(reinterpret_cast<const char*>(it), &index, &arity) < 0) [[unlikely]] {
          ctx.error = error_code::syntax_error;
          return header_pair(-1ull, -1ull);
       }
 
-      return header_pair(static_cast<size_t>(arity), static_cast<size_t>(index));
+      return header_pair(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
    }
 
    template <is_context Ctx, class It>
-   GLZ_ALWAYS_INLINE auto decode_tuple_header(Ctx&& ctx, It&& it)
+   GLZ_ALWAYS_INLINE auto decode_tuple_header(Ctx&& ctx, It&& it) noexcept
    {
       int arity{};
       int index{};
-      if (ei_decode_tuple_header(it, &index, &arity) < 0) [[unlikely]] {
+      if (ei_decode_tuple_header(reinterpret_cast<const char*>(it), &index, &arity) < 0) [[unlikely]] {
          ctx.error = error_code::syntax_error;
          return header_pair(-1ull, -1ull);
       }
 
-      return header_pair(static_cast<size_t>(arity), static_cast<size_t>(index));
+      return header_pair(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
    }
 
    template <class B, class IX>
-   GLZ_ALWAYS_INLINE void encode_version(is_context auto&& ctx, B&& b, IX&& ix)
+   GLZ_ALWAYS_INLINE void encode_version(is_context auto&& ctx, B&& b, IX&& ix) noexcept
    {
       int index{static_cast<int>(ix)};
       if (ei_encode_version(reinterpret_cast<char*>(b.data()), &index) < 0) [[unlikely]] {
@@ -393,7 +390,7 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void encode_atom_len(auto&& value, size_t sz, Args&&... args)
+   GLZ_ALWAYS_INLINE void encode_atom_len(auto&& value, std::size_t sz, Args&&... args)
    {
       using namespace std::placeholders;
       detail::encode_impl(std::bind(ei_encode_atom_len, _1, _2, value.data(), static_cast<int>(sz)),
@@ -408,7 +405,7 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void encode_tuple_header(size_t arity, Args&&... args)
+   GLZ_ALWAYS_INLINE void encode_tuple_header(std::size_t arity, Args&&... args)
    {
       using namespace std::placeholders;
       detail::encode_impl(std::bind(ei_encode_tuple_header, _1, _2, static_cast<int>(arity)),
@@ -416,7 +413,7 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void encode_list_header(size_t arity, Args&&... args)
+   GLZ_ALWAYS_INLINE void encode_list_header(std::size_t arity, Args&&... args)
    {
       using namespace std::placeholders;
       detail::encode_impl(std::bind(ei_encode_list_header, _1, _2, static_cast<int>(arity)),
@@ -431,7 +428,7 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void encode_map_header(size_t arity, Args&&... args)
+   GLZ_ALWAYS_INLINE void encode_map_header(std::size_t arity, Args&&... args)
    {
       using namespace std::placeholders;
       detail::encode_impl(std::bind(ei_encode_map_header, _1, _2, static_cast<int>(arity)),

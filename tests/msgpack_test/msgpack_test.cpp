@@ -285,8 +285,109 @@ struct glz::meta<msgpack_error_on_missing_keys_tests::MigrationV2>
    static constexpr auto value = object("id", &T::id, "name", &T::name, "version", &T::version);
 };
 
+// Issue #2539: types opted out of serialization via meta::value = glz::skip{}
+// must round-trip correctly in MsgPack, including the structs_as_arrays mode
+// where writer and reader must agree on the wire count of non-skipped fields.
+namespace msgpack_skip_marker_tests
+{
+   struct marker
+   {
+      struct glaze
+      {
+         static constexpr auto value = glz::skip{};
+      };
+   };
+
+   struct settings
+   {
+      marker m{};
+      bool active{true};
+      int count{42};
+      std::string name{"hello"};
+   };
+}
+
+template <>
+struct glz::meta<msgpack_skip_marker_tests::settings>
+{
+   using T = msgpack_skip_marker_tests::settings;
+   static constexpr auto value = object("m", &T::m, "active", &T::active, "count", &T::count, "name", &T::name);
+};
+
+namespace msgpack_skip_marker_tests
+{
+   inline void run()
+   {
+      using namespace ut;
+      "msgpack skip-marker keyed roundtrip"_test = [] {
+         settings original{.active = false, .count = 7, .name = "world"};
+         auto encoded = glz::write_msgpack(original);
+         expect(encoded.has_value());
+
+         settings decoded{};
+         auto ec = glz::read_msgpack(decoded, *encoded);
+         expect(!ec) << glz::format_error(ec, *encoded);
+         expect(decoded.active == false);
+         expect(decoded.count == 7);
+         expect(decoded.name == "world");
+      };
+
+      "msgpack skip-marker structs_as_arrays roundtrip"_test = [] {
+         constexpr auto opts = glz::opt_true<glz::opts{.format = glz::MSGPACK}, glz::structs_as_arrays_opt_tag{}>;
+         settings original{.active = false, .count = 7, .name = "world"};
+         std::string buffer;
+         auto write_ec = glz::write<opts>(original, buffer);
+         expect(!write_ec);
+
+         settings decoded{};
+         glz::context ctx{};
+         auto ec = glz::read<opts>(decoded, std::string_view{buffer}, ctx);
+         expect(!ec) << glz::format_error(ec, buffer);
+         expect(decoded.active == false);
+         expect(decoded.count == 7);
+         expect(decoded.name == "world");
+      };
+   }
+}
+
+// A std::variant whose own meta opts into custom_read/custom_write (with full from/to
+// specializations) must not be ambiguous with the built-in MessagePack variant handlers.
+// Parity with the JSON fix in #2591.
+struct mp_fc_a
+{};
+struct mp_fc_b
+{};
+using mp_fc_variant = std::variant<mp_fc_a, mp_fc_b>;
+
+template <>
+struct glz::meta<mp_fc_variant>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::to<Format, mp_fc_variant>
+{
+   template <auto Opts>
+   static void op(auto&&, glz::is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(42, ctx, args...);
+   }
+};
+
 int main()
 {
+   // Only the write side is exercised here: MessagePack passes its type-tag byte
+   // positionally to from::op, so a generic JSON-style custom from signature cannot be
+   // read-tested (a separate MessagePack custom-type limitation). The from exclusion is
+   // the same one-line change and is read-tested in the BEVE/CBOR/YAML suites.
+   "fully custom variant specialization is unambiguous"_test = [] {
+      mp_fc_variant v{};
+      std::string s{};
+      expect(not glz::write_msgpack(v, s));
+   };
+
    "msgpack primitive roundtrip"_test = [] {
       expect_roundtrip_equal(int8_t{-8});
       expect_roundtrip_equal(int32_t{123456});
@@ -373,12 +474,45 @@ int main()
                   .tags = {{"zones", {0, 1}}},
                },
             },
-         .metrics = {{"errors", {{1, 2, 3}}}, {"warnings", std::nullopt}},
+         // "warnings" would be std::nullopt, but skip_null_members (default) drops empty
+         // optionals in maps just like struct fields. A dedicated test below covers that path.
+         .metrics = {{"errors", {{1, 2, 3}}}},
          .header = std::make_tuple(2024, std::string{"glaze-msgpack"}, true),
          .status = 200,
       };
 
       expect_roundtrip_equal(batch);
+   };
+
+   "msgpack map skips empty optional values by default"_test = [] {
+      // skip_null_members defaults to true. Empty optional values in a map should
+      // be dropped on write (matching the struct-field behavior); non-empty ones
+      // and non-null value types are unaffected.
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}, {"c", 3}};
+      auto encoded = glz::write_msgpack(in);
+      expect(bool(encoded));
+
+      std::map<std::string, std::optional<int>> decoded{};
+      auto ec = glz::read_msgpack(decoded, std::string_view{encoded.value()});
+      expect(not ec);
+      expect(decoded.size() == 2);
+      expect(decoded.count("b") == 0);
+      expect(decoded.at("a").value() == 1);
+      expect(decoded.at("c").value() == 3);
+   };
+
+   "msgpack map preserves nulls when skip_null_members=false"_test = [] {
+      constexpr auto preserve = glz::opts{.format = glz::MSGPACK, .skip_null_members = false};
+      std::map<std::string, std::optional<int>> in{{"a", 1}, {"b", std::nullopt}};
+      auto encoded = glz::write<preserve>(in);
+      expect(bool(encoded));
+
+      std::map<std::string, std::optional<int>> decoded{};
+      auto ec = glz::read<preserve>(decoded, std::string_view{encoded.value()});
+      expect(not ec);
+      expect(decoded.size() == 2);
+      expect(decoded.at("a").value() == 1);
+      expect(!decoded.at("b").has_value());
    };
 
    "msgpack structs_as_arrays roundtrip"_test = [] {
@@ -988,6 +1122,8 @@ int main()
          expect(decoded.active == batch.active) << "active should match";
       };
    }
+
+   msgpack_skip_marker_tests::run();
 
    return 0;
 }

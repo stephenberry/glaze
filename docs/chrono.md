@@ -68,6 +68,52 @@ glz::read_json(tp, "\"2024-12-13T15:30:45-08:00\"");
 glz::read_json(tp, "\"2024-12-13T15:30:45.123456789Z\"");
 ```
 
+### Date-Only Time Points (`sys_days`)
+
+> **Breaking change:** `std::chrono::sys_days` previously serialized as the full ISO 8601 datetime `"YYYY-MM-DDT00:00:00Z"`. It now serializes as the date-only string `"YYYY-MM-DD"`. The reader accepts both forms, so consumers upgrading Glaze on the read side stay compatible; producers that emit the new shape break older readers that strictly require a time component.
+
+Time points whose duration period is exactly `days` (`std::chrono::sys_days`, i.e. `std::chrono::sys_time<std::chrono::days>`) serialize as date-only strings, since the time-of-day at that precision is always zero:
+
+```cpp
+using namespace std::chrono;
+
+sys_days d = year{2024} / month{6} / day{15};
+std::string json = glz::write_json(d).value();  // "2024-06-15"
+
+sys_days parsed{};
+glz::read_json(parsed, "\"2024-06-15\"");
+```
+
+On read, both the bare date form and a full ISO 8601 datetime are accepted; a full datetime is floored to days precision **after** any timezone offset is applied to UTC:
+
+```cpp
+sys_days parsed{};
+glz::read_json(parsed, "\"2024-06-15T15:30:45Z\"");      // parsed == 2024-06-15
+glz::read_json(parsed, "\"2024-06-14T20:00:00-08:00\""); // parsed == 2024-06-15 (UTC)
+```
+
+Footgun: a sender that thinks "June 14 in California" and emits `"2024-06-14T23:00:00-08:00"` (= `2024-06-15 07:00:00Z`) gets `2024-06-15` back, not `2024-06-14`. The date is the UTC date of the instant, not the local date in the offset. If your protocol means "the local civil date," send a bare `"YYYY-MM-DD"` instead of a datetime with offset.
+
+The reader rejects negative-year strings (`"-0001-01-01"`) and 5+ digit years for symmetry with the writer's `[0000, 9999]` range.
+
+### `std::chrono::year_month_day`
+
+`std::chrono::year_month_day` serializes as a `"YYYY-MM-DD"` JSON string:
+
+```cpp
+using namespace std::chrono;
+
+year_month_day ymd{year{2024}, month{6}, day{15}};
+std::string json = glz::write_json(ymd).value();  // "2024-06-15"
+
+year_month_day parsed{};
+glz::read_json(parsed, json);
+```
+
+Unlike `sys_days`, `year_month_day` accepts only the bare date form on read; embed a `sys_days` field if you also need to accept full datetimes.
+
+Years must lie within RFC 3339's four-digit range `[0000, 9999]` on write; values outside that range fail to serialize with `error_code::constraint_violated` rather than emit wrap-around digits.
+
 ### Steady Clock Time Points
 
 `std::chrono::steady_clock::time_point` serializes as a numeric count (time since epoch), since steady clock's epoch is implementation-defined and not meaningful as a calendar time:
@@ -193,6 +239,8 @@ Output:
 |------|-------------|---------|
 | `std::chrono::duration<Rep, Period>` | Numeric count | `12345` |
 | `std::chrono::system_clock::time_point` | ISO 8601 string | `"2024-12-13T15:30:45Z"` |
+| `std::chrono::sys_days` (`sys_time<days>`) | Date string | `"2024-12-13"` |
+| `std::chrono::year_month_day` | Date string | `"2024-12-13"` |
 | `std::chrono::steady_clock::time_point` | Numeric count | `123456789012345` |
 | `glz::epoch_seconds` | Unix seconds | `1702481400` |
 | `glz::epoch_millis` | Unix milliseconds | `1702481400123` |

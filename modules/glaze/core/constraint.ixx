@@ -23,7 +23,7 @@ using std::uint32_t;
 
 namespace glz
 {
-   // read_constraint allows a user to register a contraint lambda or member function
+   // read_constraint allows a user to register a constraint lambda or member function
    // that returns a boolean, which indicates true for success and false for failure
    // this allows arguments to be validated
    export template <class T, auto Target, auto Constraint, string_literal Message>

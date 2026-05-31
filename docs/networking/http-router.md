@@ -249,9 +249,65 @@ glz::param_constraint safe_path{
 router.get("/files/*path", file_handler, {.constraints = {{"path", safe_path}}});
 ```
 
+## Streaming Routes
+
+The router accepts streaming handlers alongside normal handlers. Streaming routes share the radix-tree matcher with normal routes, so `:param` and `*wildcard` segments work the same way. Captured parameters are placed in `request.params` before the handler runs.
+
+```cpp
+glz::http_router router;
+
+// GET streaming route with a path parameter
+router.stream_get("/items/:id/events",
+    [](glz::request& req, glz::streaming_response& res) {
+        const auto id = req.params.at("id");
+        res.start_stream(200, {{"Content-Type", "text/event-stream"}});
+        res.send("data: streaming events for item " + id + "\n\n");
+        res.close();
+    });
+
+// POST streaming route
+router.stream_post("/upload/:bucket",
+    [](glz::request& req, glz::streaming_response& res) { /* ... */ });
+
+// Generic method form
+router.stream(glz::http_method::PUT, "/jobs/:id", job_handler);
+```
+
+Mount the router on a server like any other:
+
+```cpp
+glz::http_server server;
+server.mount("/api", router);
+// Streaming routes are now reachable at /api/items/:id/events, etc.
+```
+
+Streaming handlers take over the connection (no keep-alive loop) and write chunked responses through `streaming_response`.
+
+> **Behavior change.** Before streaming and WebSocket routes shared the matcher, `streaming_handlers_` was an exact-path lookup, so registering `/items/:id` as a streaming route was effectively dead and a request to `/items/42` fell through to the normal router. After the unification, streaming routes are matched first (see [Route Priority](#route-priority)), so a streaming `/items/:id` will intercept requests that a static normal `/items/42` would otherwise handle. Code that registered both kinds on the same path needs to be aware of the new ordering.
+
+## WebSocket Routes
+
+WebSocket handlers can also be registered on the router and use `:param` paths. The HTTP server detects the upgrade handshake and dispatches to the matching `websocket_server`, populating `request.params` from the path.
+
+```cpp
+glz::http_router router;
+auto chat = std::make_shared<glz::websocket_server>();
+// ... configure chat (on_open, on_message, on_close, on_error) ...
+
+// WebSocket route with a path parameter
+router.websocket("/rooms/:room/ws", chat);
+
+glz::http_server server;
+server.mount("/api", router);
+// Clients connecting to ws://host/api/rooms/lobby/ws receive
+// request.params["room"] == "lobby" in on_open.
+```
+
+WebSocket upgrades are HTTP `GET` by definition, so the router stores them under `GET` internally; you do not specify a method when registering.
+
 ## Route Priority
 
-The router matches routes in priority order:
+Within a single radix tree, routes are matched in this order:
 
 1. **Static routes** (highest priority)
 2. **Parameter routes** 
@@ -267,6 +323,14 @@ router.get("/users/*action", user_action);        // 3. Wildcard
 // Request "/users/123" matches user_handler  
 // Request "/users/edit/profile" matches user_action
 ```
+
+Across the three kinds of routes (normal, streaming, WebSocket), the HTTP server dispatches in the following order for each request:
+
+1. **WebSocket** — if the request carries an `Upgrade: websocket` handshake, the WebSocket route table is consulted first.
+2. **Streaming** — otherwise, the streaming route table is consulted next. A match takes over the connection (no keep-alive loop) and runs the streaming handler.
+3. **Normal** — finally, the normal route table is consulted.
+
+In practice, streaming and normal routes for the same path/method should not be registered together; the streaming handler will always win.
 
 ## Middleware
 
@@ -374,6 +438,8 @@ server.mount("/admin", admin_router);
 // GET /admin/dashboard  
 // GET /admin/settings
 ```
+
+`mount()` propagates all three kinds of routes: normal, streaming (`stream_get`/`stream_post`/`stream`), and WebSocket (`websocket`). Each is rewritten with the mount prefix and added to the server's root router.
 
 ## Async Handlers
 

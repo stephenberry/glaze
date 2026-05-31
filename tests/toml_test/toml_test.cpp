@@ -50,6 +50,17 @@ struct advanced_container
    double value = 5.5;
 };
 
+struct deep_container
+{
+   simple_container nested;
+};
+struct deep_container_optional
+{
+   std::optional<simple_container> nested1;
+   std::optional<simple_container> nested2;
+   std::optional<simple_container> nested3;
+};
+
 struct level_one
 {
    int value{0};
@@ -101,6 +112,13 @@ struct int_array_struct
    std::vector<int> values{};
 };
 
+struct int_array_struct_pad
+{
+   int a;
+   std::vector<int> values{};
+   int b;
+};
+
 template <>
 struct glz::meta<dotted_unknown_inner>
 {
@@ -127,6 +145,13 @@ struct optional_struct
    std::optional<int> maybe = 99;
 };
 
+struct complex_optional_struct
+{
+   std::string name{};
+   std::optional<int> age{};
+   std::optional<std::string> email{};
+};
+
 struct inline_table_member
 {
    std::string key1{};
@@ -146,15 +171,65 @@ struct struct_with_inline_table
 {
    std::string name{};
    inline_table_member inline_data{};
+   std::string sname{};
 
    bool operator==(const struct_with_inline_table&) const = default;
+};
+
+struct struct_with_optional_inline_table
+{
+   int a;
+   std::optional<inline_table_member> inline_data{};
+   int b;
+};
+
+struct struct_with_unique_ptr
+{
+   int a{};
+   std::unique_ptr<int> p{};
+   int b{};
+};
+
+struct struct_with_shared_ptr
+{
+   int a{};
+   std::shared_ptr<int> p{};
+   int b{};
+};
+
+struct struct_with_unique_ptr_inline_table
+{
+   int a{};
+   std::unique_ptr<inline_table_member> data{};
+   int b{};
+};
+
+struct struct_with_shared_ptr_inline_table
+{
+   int a{};
+   std::shared_ptr<inline_table_member> data{};
+   int b{};
+};
+
+struct struct_with_nested_optional
+{
+   int a{};
+   std::optional<std::optional<int>> v{};
+   int b{};
+};
+
+struct struct_with_optional_vector
+{
+   int a{};
+   std::optional<std::vector<int>> arr{};
+   int b{};
 };
 
 template <>
 struct glz::meta<struct_with_inline_table>
 {
    using T = struct_with_inline_table;
-   static constexpr auto value = object("name", &T::name, "inline_data", &T::inline_data);
+   static constexpr auto value = object("name", &T::name, "inline_data", &T::inline_data, "sname", &T::sname);
 };
 
 struct complex_strings_struct
@@ -1005,6 +1080,22 @@ arr = [4, 5, 6])";
       expect(value[2] == 3);
       expect(value[3] == 4);
    };
+   "read_array_with_newlines"_test = [] {
+      std::string toml_input = R"([
+  1,
+  2,
+  3,
+  4
+])";
+      std::vector<int> value{};
+      const auto error = glz::read_toml(value, toml_input);
+      expect(not error) << glz::format_error(error, toml_input);
+      expect(value.size() == 4);
+      expect(value[0] == 1);
+      expect(value[1] == 2);
+      expect(value[2] == 3);
+      expect(value[3] == 4);
+   };
 
    "scalar_int"_test = [] {
       int i = 42;
@@ -1103,6 +1194,29 @@ y = "test2"
       expect(ac.inner_two.x == 12);
       expect(ac.inner_two.y == "test2");
       expect(ac.value == 5.6);
+   };
+
+   "read_deep_nested_struct_with_dot_notation"_test = [] {
+      deep_container dc{};
+      std::string_view toml_input{R"([nested.inner]
+x = 42
+)"};
+      auto error = glz::read_toml(dc, toml_input);
+      expect(!error) << glz::format_error(error, toml_input);
+      expect(dc.nested.inner.x == 42);
+   };
+
+   "read_deep_nested_struct_with_dot_notation_optional"_test = [] {
+      deep_container_optional dc{};
+      std::string_view toml_input{R"([nested2.inner]
+x = 42
+)"};
+      auto error = glz::read_toml(dc, toml_input);
+      expect(!error) << glz::format_error(error, toml_input);
+      expect(!dc.nested1.has_value());
+      expect(!dc.nested1.has_value());
+      expect(dc.nested2.has_value());
+      expect(dc.nested2->inner.x == 42);
    };
 
    "read_advanced_nested_struct"_test = [] {
@@ -1253,13 +1367,15 @@ value = "string")";
 
    "read_inline_table"_test = [] {
       std::string toml_input = R"(name = "Test Person"
-inline_data = { key1 = "value1", key2 = 100 })";
+inline_data = { key1 = "value1", key2 = 100 }
+sname = "Second String")";
       struct_with_inline_table s{};
       auto error = glz::read_toml(s, toml_input);
       expect(!error) << glz::format_error(error, toml_input);
       expect(s.name == "Test Person");
       expect(s.inline_data.key1 == "value1");
       expect(s.inline_data.key2 == 100);
+      expect(s.sname == "Second String");
    };
 
    "read_complex_strings"_test = [] {
@@ -2294,6 +2410,202 @@ arr = [7, 8, 9])";
       expect(parsed.time_ms.seconds() == original.time_ms.seconds());
       expect(parsed.time_ms.subseconds() == original.time_ms.subseconds());
    };
+
+   "read_optional_with_value"_test = [] {
+      std::string input = R"(name = "Test"
+age = 25
+email = "test@example.com")";
+      complex_optional_struct obj{};
+      auto ec = glz::read_toml(obj, input);
+      expect(!ec) << glz::format_error(ec, input);
+      expect(obj.name == "Test");
+      expect(obj.age.value() == 25);
+      expect(obj.email.value() == "test@example.com");
+   };
+   "read_optional_without_int_value"_test = [] {
+      std::string input = R"(name = "Test"
+age = 25)";
+      complex_optional_struct obj{};
+      auto ec = glz::read_toml(obj, input);
+      expect(!ec) << glz::format_error(ec, input);
+      expect(obj.name == "Test");
+      expect(obj.age.value() == 25);
+      expect(!obj.email.has_value());
+   };
+   "read_optional_without_string_value"_test = [] {
+      std::string input = R"(name = "Test"
+email = "test@example.com")";
+      complex_optional_struct obj{};
+      auto ec = glz::read_toml(obj, input);
+      expect(!ec) << glz::format_error(ec, input);
+      expect(obj.name == "Test");
+      expect(!obj.age.has_value());
+      expect(obj.email.value() == "test@example.com");
+   };
+   "read_optional_without_values_defval"_test = [] {
+      std::string input = R"( )";
+      optional_struct obj{};
+      auto ec = glz::read_toml(obj, input);
+      expect(!ec) << glz::format_error(ec, input);
+      expect(obj.maybe.has_value());
+      expect(obj.maybe.value() == 99);
+   };
+   "read_optional_with_inline_table"_test = [] {
+      std::string input = R"(a = 1
+inline_data = { key1 = "value1", key2 = 100 }
+b = 2)";
+      struct_with_optional_inline_table s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.inline_data.has_value());
+      expect(s.inline_data->key1 == "value1");
+      expect(s.inline_data->key2 == 100);
+   };
+   "read_optional_with_inline_table_missing"_test = [] {
+      std::string input = R"(a = 1
+b = 2)";
+      struct_with_optional_inline_table s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(!s.inline_data.has_value());
+   };
+   "read_unique_ptr_with_value"_test = [] {
+      std::string input = R"(a = 1
+p = 42
+b = 2)";
+      struct_with_unique_ptr s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.p != nullptr);
+      expect(*s.p == 42);
+   };
+   "read_unique_ptr_missing"_test = [] {
+      std::string input = R"(a = 1
+b = 2)";
+      struct_with_unique_ptr s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.p == nullptr);
+   };
+   "read_unique_ptr_overwrites_existing"_test = [] {
+      std::string input = R"(a = 1
+p = 7
+b = 2)";
+      struct_with_unique_ptr s{};
+      s.p = std::make_unique<int>(99);
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.p != nullptr);
+      expect(*s.p == 7);
+   };
+   "read_shared_ptr_with_value"_test = [] {
+      std::string input = R"(a = 1
+p = 5
+b = 2)";
+      struct_with_shared_ptr s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.p != nullptr);
+      expect(*s.p == 5);
+   };
+   "read_shared_ptr_missing"_test = [] {
+      std::string input = R"(a = 1
+b = 2)";
+      struct_with_shared_ptr s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.p == nullptr);
+   };
+   "read_unique_ptr_inline_table"_test = [] {
+      std::string input = R"(a = 1
+data = { key1 = "hello", key2 = 11 }
+b = 2)";
+      struct_with_unique_ptr_inline_table s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.data != nullptr);
+      expect(s.data->key1 == "hello");
+      expect(s.data->key2 == 11);
+   };
+   "read_shared_ptr_inline_table"_test = [] {
+      std::string input = R"(a = 1
+data = { key1 = "world", key2 = 22 }
+b = 2)";
+      struct_with_shared_ptr_inline_table s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.data != nullptr);
+      expect(s.data->key1 == "world");
+      expect(s.data->key2 == 22);
+   };
+   "read_nested_optional"_test = [] {
+      std::string input = R"(a = 1
+v = 33
+b = 2)";
+      struct_with_nested_optional s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.v.has_value());
+      expect(s.v->has_value());
+      expect(s.v->value() == 33);
+   };
+   "read_optional_vector"_test = [] {
+      std::string input = R"(a = 1
+arr = [10, 20, 30]
+b = 2)";
+      struct_with_optional_vector s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(s.arr.has_value());
+      expect(s.arr->size() == 3);
+      expect((*s.arr)[0] == 10);
+      expect((*s.arr)[1] == 20);
+      expect((*s.arr)[2] == 30);
+   };
+   "read_optional_vector_missing"_test = [] {
+      std::string input = R"(a = 1
+b = 2)";
+      struct_with_optional_vector s{};
+      auto error = glz::read_toml(s, input);
+      expect(!error) << glz::format_error(error, input);
+      expect(s.a == 1);
+      expect(s.b == 2);
+      expect(!s.arr.has_value());
+   };
+   "read_top_level_optional_int"_test = [] {
+      std::optional<int> value{};
+      auto ec = glz::read_toml(value, std::string{"42"});
+      expect(!ec) << glz::format_error(ec, std::string{"42"});
+      expect(value.has_value());
+      expect(value.value() == 42);
+   };
+   "read_top_level_unique_ptr"_test = [] {
+      std::unique_ptr<int> value{};
+      auto ec = glz::read_toml(value, std::string{"99"});
+      expect(!ec) << glz::format_error(ec, std::string{"99"});
+      expect(value != nullptr);
+      expect(*value == 99);
+   };
 };
 
 // Bounded buffer overflow tests for TOML format
@@ -2429,6 +2741,15 @@ struct catalog
    bool operator==(const catalog&) const = default;
 };
 
+struct catalog_wrapper
+{
+   catalog cat;
+};
+struct optional_catalog_wrapper
+{
+   std::optional<catalog> cat;
+};
+
 template <>
 struct glz::meta<catalog>
 {
@@ -2502,6 +2823,10 @@ struct simple_catalog
    std::vector<product> products{};
 
    bool operator==(const simple_catalog&) const = default;
+};
+struct opt_simple_catalog
+{
+   std::optional<std::vector<product>> products{};
 };
 
 template <>
@@ -2674,6 +2999,73 @@ sku = 284758393
       expect(c.products[1].sku == 0);
       expect(c.products[2].name == "Nail");
       expect(c.products[2].sku == 284758393);
+   };
+
+   "read_array_of_tables_nested"_test = [] {
+      std::string input = R"(
+[[cat.products]]
+name = "Hammer"
+sku = 738594937
+
+[[cat.products]]
+name = "Nail"
+sku = 284758393
+)";
+
+      catalog_wrapper c{};
+      auto ec = glz::read_toml(c, input);
+      expect(not ec) << glz::format_error(ec, input);
+
+      expect(c.cat.products.size() == 2);
+      expect(c.cat.products[0].name == "Hammer");
+      expect(c.cat.products[0].sku == 738594937);
+      expect(c.cat.products[1].name == "Nail");
+      expect(c.cat.products[1].sku == 284758393);
+   };
+
+   "read_array_of_tables_nested_optional"_test = [] {
+      std::string input = R"(
+[[cat.products]]
+name = "Hammer"
+sku = 738594937
+
+[[cat.products]]
+name = "Nail"
+sku = 284758393
+)";
+
+      optional_catalog_wrapper c{};
+      auto ec = glz::read_toml(c, input);
+      expect(not ec) << glz::format_error(ec, input);
+
+      expect(c.cat.has_value());
+      expect(c.cat->products.size() == 2);
+      expect(c.cat->products[0].name == "Hammer");
+      expect(c.cat->products[0].sku == 738594937);
+      expect(c.cat->products[1].name == "Nail");
+      expect(c.cat->products[1].sku == 284758393);
+   };
+
+   "read_array_of_optional_vector_array_table"_test = [] {
+      std::string input = R"([[products]]
+name = "Hammer"
+sku = 738594937
+
+[[products]]
+name = "Nail"
+sku = 284758393
+)";
+
+      opt_simple_catalog c{};
+      auto ec = glz::read_toml(c, input);
+      expect(not ec) << glz::format_error(ec, input);
+
+      expect(c.products.has_value());
+      expect(c.products->size() == 2);
+      expect((*c.products)[0].name == "Hammer");
+      expect((*c.products)[0].sku == 738594937);
+      expect((*c.products)[1].name == "Nail");
+      expect((*c.products)[1].sku == 284758393);
    };
 
    "write_nested_array_of_tables"_test = [] {
@@ -4241,7 +4633,8 @@ suite toml_1_1_delta_tests = [] {
 inline_data = {
   key1 = "value1",
   key2 = 100,
-})";
+}
+sname = "Second String")";
 
       struct_with_inline_table s{};
       const auto error = glz::read_toml(s, input);
@@ -4249,6 +4642,7 @@ inline_data = {
       expect(s.name == "Test Person");
       expect(s.inline_data.key1 == "value1");
       expect(s.inline_data.key2 == 100);
+      expect(s.sname == "Second String");
    };
 
    "toml_1_1_inline_table_allows_newlines_and_trailing_comma_map"_test = [] {
@@ -4374,6 +4768,20 @@ inline_data = {
       int_array_struct value{};
       const auto error = glz::read_toml(value, input);
       expect(error);
+   };
+
+   "toml_struct_array_padded"_test = [] {
+      const std::string input = R"(a = 111
+values = [1, 2,]
+b = 222)";
+      int_array_struct_pad value{};
+      const auto error = glz::read_toml(value, input);
+      expect(not error) << glz::format_error(error, input);
+      expect(value.a == 111);
+      expect(value.values.size() == 2);
+      expect(value.values[0] == 1);
+      expect(value.values[1] == 2);
+      expect(value.b == 222);
    };
 
    "toml_1_1_basic_string_hex_escape_xHH_invalid_short"_test = [] {
@@ -4608,6 +5016,602 @@ apple.taste.sweet = true
       const auto float_error = glz::read_toml(d, "3.141592653589793");
       expect(not float_error);
       expect(std::abs(d - 3.141592653589793) < 1e-15);
+   };
+};
+
+// A map appearing as the value of a key (whether it is a struct field or the
+// mapped_type of an enclosing map) must be serialized as an inline table so
+// the resulting document remains valid TOML in any nesting position.
+namespace map_as_value
+{
+   struct toggle
+   {
+      bool enabled{};
+   };
+   struct config_with_struct_map
+   {
+      std::map<std::string, toggle> items;
+   };
+   struct config_with_scalar_map
+   {
+      std::map<std::string, bool> items;
+   };
+}
+
+template <>
+struct glz::meta<map_as_value::toggle>
+{
+   using T = map_as_value::toggle;
+   static constexpr auto value = object("enabled", &T::enabled);
+};
+template <>
+struct glz::meta<map_as_value::config_with_struct_map>
+{
+   using T = map_as_value::config_with_struct_map;
+   static constexpr auto value = object("items", &T::items);
+};
+template <>
+struct glz::meta<map_as_value::config_with_scalar_map>
+{
+   using T = map_as_value::config_with_scalar_map;
+   static constexpr auto value = object("items", &T::items);
+};
+
+suite map_as_value_tests = [] {
+   "map_of_struct_field_writes_as_inline_table"_test = [] {
+      map_as_value::config_with_struct_map c{};
+      c.items = {{"foo", {true}}, {"bar", {false}}};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+      // std::map iterates in lexicographic key order, so bar precedes foo.
+      expect(buffer == R"(items = {bar = {enabled = false}, foo = {enabled = true}})") << buffer;
+   };
+
+   "map_of_struct_field_roundtrips"_test = [] {
+      map_as_value::config_with_struct_map c{};
+      c.items = {{"foo", {true}}, {"bar", {false}}};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      map_as_value::config_with_struct_map parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.items.size() == 2u);
+      expect(parsed.items.at("foo").enabled == true);
+      expect(parsed.items.at("bar").enabled == false);
+   };
+
+   "map_of_scalar_field_writes_as_inline_table"_test = [] {
+      map_as_value::config_with_scalar_map c{};
+      c.items = {{"foo", true}, {"bar", false}};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+      expect(buffer == R"(items = {bar = false, foo = true})") << buffer;
+   };
+
+   "map_of_scalar_field_roundtrips"_test = [] {
+      map_as_value::config_with_scalar_map c{};
+      c.items = {{"foo", true}, {"bar", false}};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+
+      map_as_value::config_with_scalar_map parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.items.size() == 2u);
+      expect(parsed.items.at("foo") == true);
+      expect(parsed.items.at("bar") == false);
+   };
+
+   "top_level_map_of_struct_writes_each_value_inline"_test = [] {
+      // A struct value at the top level of a document-level map must still be
+      // emitted inline, so the document remains a flat sequence of key = value
+      // lines rather than spilling the struct's keys into the enclosing scope.
+      std::map<std::string, map_as_value::toggle> m{{"foo", {true}}, {"bar", {false}}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == "bar = {enabled = false}\nfoo = {enabled = true}") << buffer;
+
+      std::map<std::string, map_as_value::toggle> parsed;
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.size() == 2u);
+      expect(parsed.at("foo").enabled == true);
+      expect(parsed.at("bar").enabled == false);
+   };
+
+   "empty_map_field_writes_empty_inline_table"_test = [] {
+      map_as_value::config_with_scalar_map c{};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+      expect(buffer == "items = {}") << buffer;
+
+      map_as_value::config_with_scalar_map parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.items.empty());
+   };
+
+   "nested_map_of_map_recurses_inline"_test = [] {
+      // Exercises the recursive write_inline_map<Options>(val, ...) branch when
+      // the mapped_type is itself a map.
+      std::map<std::string, std::map<std::string, int>> m{{"a", {{"x", 1}, {"y", 2}}}, {"b", {{"z", 3}}}};
+      std::string buffer{};
+      expect(not glz::write_toml(m, buffer));
+      expect(buffer == "a = {x = 1, y = 2}\nb = {z = 3}") << buffer;
+
+      std::map<std::string, std::map<std::string, int>> parsed;
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.size() == 2u);
+      expect(parsed.at("a").at("x") == 1);
+      expect(parsed.at("a").at("y") == 2);
+      expect(parsed.at("b").at("z") == 3);
+   };
+
+   "malformed_inline_struct_value_surfaces_error"_test = [] {
+      // The struct reader now returns immediately after consuming an inline
+      // table; this confirms the early return doesn't swallow a real parse
+      // error inside the inline value.
+      map_as_value::config_with_struct_map parsed{};
+      // Missing the outer closing '}' that terminates the items map.
+      const std::string buffer = "items = {bar = {enabled = false}";
+      const auto ec = glz::read_toml(parsed, buffer);
+      expect(bool(ec)) << "expected a parse error";
+   };
+};
+
+// Once a value is being written inside an inline context (the value of a key in
+// an inline table, or an element of an inline array) every nested value must be
+// inline TOML as well. The standard struct/map writers emit multi-line content
+// and `[table]` / `[[array]]` headers that the inline context cannot accept, so
+// the inline writers route every recursion through write_inline_value to keep
+// the output legal at arbitrary nesting depth.
+namespace inline_cascade
+{
+   struct leaf
+   {
+      int x{};
+      std::string s{};
+   };
+   struct branch_with_array
+   {
+      std::vector<leaf> arr;
+   };
+   struct trunk_with_map
+   {
+      std::map<std::string, branch_with_array> m;
+   };
+   struct holder_with_vec_of_maps
+   {
+      std::vector<std::map<std::string, int>> data;
+   };
+}
+
+template <>
+struct glz::meta<inline_cascade::leaf>
+{
+   using T = inline_cascade::leaf;
+   static constexpr auto value = object("x", &T::x, "s", &T::s);
+};
+template <>
+struct glz::meta<inline_cascade::branch_with_array>
+{
+   using T = inline_cascade::branch_with_array;
+   static constexpr auto value = object("arr", &T::arr);
+};
+template <>
+struct glz::meta<inline_cascade::trunk_with_map>
+{
+   using T = inline_cascade::trunk_with_map;
+   static constexpr auto value = object("m", &T::m);
+};
+template <>
+struct glz::meta<inline_cascade::holder_with_vec_of_maps>
+{
+   using T = inline_cascade::holder_with_vec_of_maps;
+   static constexpr auto value = object("data", &T::data);
+};
+
+suite inline_cascade_tests = [] {
+   "map_value_holding_array_of_structs_stays_inline"_test = [] {
+      // Without cascading, write_inline_object would dispatch arr through the
+      // multi-line struct writer, leaking newline-separated key = value pairs
+      // (and potentially [[arr]] headers in deeper trees) inside the outer
+      // inline table.
+      inline_cascade::trunk_with_map t{};
+      t.m["k1"] = {.arr = {{1, "a"}, {2, "b"}}};
+      t.m["k2"] = {.arr = {{3, "c"}}};
+      std::string buffer{};
+      expect(not glz::write_toml(t, buffer));
+      expect(buffer == R"(m = {k1 = {arr = [{x = 1, s = "a"}, {x = 2, s = "b"}]}, k2 = {arr = [{x = 3, s = "c"}]}})")
+         << buffer;
+
+      inline_cascade::trunk_with_map parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.m.size() == 2u);
+      expect(parsed.m.at("k1").arr.size() == 2u);
+      expect(parsed.m.at("k1").arr.at(0).x == 1);
+      expect(parsed.m.at("k1").arr.at(0).s == "a");
+      expect(parsed.m.at("k1").arr.at(1).x == 2);
+      expect(parsed.m.at("k2").arr.size() == 1u);
+      expect(parsed.m.at("k2").arr.at(0).x == 3);
+   };
+
+   "vector_of_map_field_writes_each_element_inline"_test = [] {
+      // vector<map<...>> is not classified as an array-of-objects (since map is
+      // neither glaze_object_t nor reflectable), so it flows through the array
+      // writer. Each element must be emitted as an inline table.
+      inline_cascade::holder_with_vec_of_maps h{.data = {{{"a", 1}, {"b", 2}}, {{"c", 3}}}};
+      std::string buffer{};
+      expect(not glz::write_toml(h, buffer));
+      expect(buffer == "data = [{a = 1, b = 2}, {c = 3}]") << buffer;
+
+      inline_cascade::holder_with_vec_of_maps parsed{};
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.data.size() == 2u);
+      expect(parsed.data.at(0).at("a") == 1);
+      expect(parsed.data.at(0).at("b") == 2);
+      expect(parsed.data.at(1).at("c") == 3);
+   };
+
+   "top_level_vector_of_struct_emits_inline_elements"_test = [] {
+      // Previously this dispatched each element through the multi-pass struct
+      // writer, producing multi-line content inside the array's `[ ... ]`
+      // brackets. Each element must be an inline table.
+      std::vector<inline_cascade::leaf> v{{1, "a"}, {2, "b"}};
+      std::string buffer{};
+      expect(not glz::write_toml(v, buffer));
+      expect(buffer == R"([{x = 1, s = "a"}, {x = 2, s = "b"}])") << buffer;
+
+      std::vector<inline_cascade::leaf> parsed;
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.size() == 2u);
+      expect(parsed.at(0).x == 1);
+      expect(parsed.at(0).s == "a");
+      expect(parsed.at(1).x == 2);
+      expect(parsed.at(1).s == "b");
+   };
+
+   "top_level_vector_of_map_emits_inline_elements"_test = [] {
+      // Same reasoning for map elements: the array writer's `[ ... ]` cannot
+      // contain multi-line `key = value` lines from the standard map writer.
+      std::vector<std::map<std::string, int>> v{{{"a", 1}}, {{"b", 2}}};
+      std::string buffer{};
+      expect(not glz::write_toml(v, buffer));
+      expect(buffer == "[{a = 1}, {b = 2}]") << buffer;
+
+      std::vector<std::map<std::string, int>> parsed;
+      expect(not glz::read_toml(parsed, buffer));
+      expect(parsed.size() == 2u);
+      expect(parsed.at(0).at("a") == 1);
+      expect(parsed.at(1).at("b") == 2);
+   };
+};
+
+// Wrapper-typed struct fields (optional<X>, variant<...>) that ultimately hold
+// a struct or map need to dispatch through the inline writers, otherwise the
+// wrapper's writer falls through to the multi-line struct/map writers and
+// emits content invalid in value position.
+//
+// Note: the TOML reader has no nullable/optional specialization, so these are
+// write-only tests. Round-trip is not supported for std::optional<T> in TOML.
+namespace inline_wrappers
+{
+   struct toggle
+   {
+      bool enabled{};
+   };
+   struct optional_map_field
+   {
+      std::optional<std::map<std::string, bool>> items;
+   };
+   struct optional_struct_field
+   {
+      std::optional<toggle> it;
+   };
+   struct variant_field
+   {
+      std::variant<int, toggle, std::map<std::string, int>> v;
+   };
+}
+
+template <>
+struct glz::meta<inline_wrappers::toggle>
+{
+   using T = inline_wrappers::toggle;
+   static constexpr auto value = object("enabled", &T::enabled);
+};
+template <>
+struct glz::meta<inline_wrappers::optional_map_field>
+{
+   using T = inline_wrappers::optional_map_field;
+   static constexpr auto value = object("items", &T::items);
+};
+template <>
+struct glz::meta<inline_wrappers::optional_struct_field>
+{
+   using T = inline_wrappers::optional_struct_field;
+   static constexpr auto value = object("it", &T::it);
+};
+template <>
+struct glz::meta<inline_wrappers::variant_field>
+{
+   using T = inline_wrappers::variant_field;
+   static constexpr auto value = object("v", &T::v);
+};
+
+suite inline_wrapper_tests = [] {
+   "optional_map_field_emits_inline_table"_test = [] {
+      inline_wrappers::optional_map_field w{.items = std::map<std::string, bool>{{"a", true}, {"b", false}}};
+      std::string buffer{};
+      expect(not glz::write_toml(w, buffer));
+      expect(buffer == "items = {a = true, b = false}") << buffer;
+   };
+
+   "optional_struct_field_emits_inline_table"_test = [] {
+      inline_wrappers::optional_struct_field w{.it = inline_wrappers::toggle{true}};
+      std::string buffer{};
+      expect(not glz::write_toml(w, buffer));
+      expect(buffer == "it = {enabled = true}") << buffer;
+   };
+
+   "variant_field_struct_alternative_emits_inline"_test = [] {
+      inline_wrappers::variant_field w{.v = inline_wrappers::toggle{true}};
+      std::string buffer{};
+      expect(not glz::write_toml(w, buffer));
+      expect(buffer == "v = {enabled = true}") << buffer;
+   };
+
+   "variant_field_map_alternative_emits_inline"_test = [] {
+      inline_wrappers::variant_field w{.v = std::map<std::string, int>{{"a", 1}, {"b", 2}}};
+      std::string buffer{};
+      expect(not glz::write_toml(w, buffer));
+      expect(buffer == "v = {a = 1, b = 2}") << buffer;
+   };
+
+   "tuple_with_struct_element_emits_inline_array"_test = [] {
+      // Tuple/glaze_array elements live inside `[ ... ]` and must be inline,
+      // matching the behavior of std::vector elements.
+      std::tuple<inline_wrappers::toggle, int> t{inline_wrappers::toggle{true}, 42};
+      std::string buffer{};
+      expect(not glz::write_toml(t, buffer));
+      expect(buffer == "[{enabled = true}, 42]") << buffer;
+   };
+
+   "tuple_with_map_element_emits_inline_array"_test = [] {
+      std::tuple<std::map<std::string, int>, int> t{{{"a", 1}}, 7};
+      std::string buffer{};
+      expect(not glz::write_toml(t, buffer));
+      expect(buffer == "[{a = 1}, 7]") << buffer;
+   };
+};
+
+// A focused regression test for the struct reader's early-return after
+// consuming an inline table. The targeted shape is an inline outer table whose
+// first value is itself an inline table, followed by a sibling key:
+// `outer = {field = {a = 1}, b = 2}`. Without the early return, the inner
+// struct reader loops after consuming the inner `}` and tries to parse the
+// outer `,` as the start of a new key, surfacing a syntax error. With the
+// early return the inner reader stops at the right boundary and the outer
+// parser resumes correctly.
+namespace inline_return_regression
+{
+   struct inner
+   {
+      int a{};
+   };
+   struct outer_table
+   {
+      inner field;
+      int b{};
+   };
+   struct doc
+   {
+      outer_table outer{};
+   };
+}
+
+template <>
+struct glz::meta<inline_return_regression::inner>
+{
+   using T = inline_return_regression::inner;
+   static constexpr auto value = object("a", &T::a);
+};
+template <>
+struct glz::meta<inline_return_regression::outer_table>
+{
+   using T = inline_return_regression::outer_table;
+   static constexpr auto value = object("field", &T::field, "b", &T::b);
+};
+template <>
+struct glz::meta<inline_return_regression::doc>
+{
+   using T = inline_return_regression::doc;
+   static constexpr auto value = object("outer", &T::outer);
+};
+
+suite inline_return_regression_tests = [] {
+   "inline_struct_value_with_trailing_sibling_parses"_test = [] {
+      inline_return_regression::doc parsed{};
+      const auto ec = glz::read_toml(parsed, "outer = {field = {a = 1}, b = 2}");
+      expect(not ec);
+      expect(parsed.outer.field.a == 1);
+      expect(parsed.outer.b == 2);
+   };
+};
+
+// Issue #2539: marking an entire class as always-skipped from serialization
+// by setting its meta value to glz::skip{}. Two opt-in styles are supported,
+// matching Glaze's local/external metadata convention:
+//   1. Local:    struct glaze { static constexpr auto value = glz::skip{}; };
+//   2. External: glz::meta<T> { static constexpr auto value = glz::skip{}; };
+template <int N>
+struct skip_marker_local
+{
+   static constexpr int secret = N;
+   struct glaze
+   {
+      static constexpr auto value = glz::skip{};
+   };
+};
+
+template <int N>
+struct skip_marker_via_meta
+{
+   static constexpr int secret = N;
+};
+
+template <int N>
+struct glz::meta<skip_marker_via_meta<N>>
+{
+   static constexpr auto value = glz::skip{};
+};
+
+struct settings_with_local_markers
+{
+   skip_marker_local<99> things_marker{};
+   bool enable_things{true};
+   int number_of_things{42};
+
+   skip_marker_local<200> stuff_marker{};
+   float stuff_multiplier{13.37f};
+};
+
+struct settings_with_meta_markers
+{
+   skip_marker_via_meta<1> alpha{};
+   bool enable{true};
+   skip_marker_via_meta<2> beta{};
+   int count{42};
+};
+
+suite skip_meta_value_tests = [] {
+   "skip_local_meta_toml_write"_test = [] {
+      settings_with_local_markers s{};
+      const auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(*result == "enable_things = true\nnumber_of_things = 42\nstuff_multiplier = 13.37");
+   };
+
+   "skip_external_meta_toml_write"_test = [] {
+      settings_with_meta_markers s{};
+      const auto result = glz::write_toml(s);
+      expect(result.has_value());
+      expect(*result == "enable = true\ncount = 42");
+   };
+
+   "skip_local_meta_json_write"_test = [] {
+      settings_with_local_markers s{};
+      std::string buffer{};
+      expect(not glz::write_json(s, buffer));
+      expect(buffer == R"({"enable_things":true,"number_of_things":42,"stuff_multiplier":13.37})");
+   };
+
+   "skip_external_meta_json_write"_test = [] {
+      settings_with_meta_markers s{};
+      std::string buffer{};
+      expect(not glz::write_json(s, buffer));
+      expect(buffer == R"({"enable":true,"count":42})");
+   };
+
+   // Read-side: input containing the skipped key must be silently consumed.
+   "skip_local_meta_json_read_silently_skips"_test = [] {
+      settings_with_local_markers s{};
+      std::string input =
+         R"({"things_marker":{"junk":1,"more":[1,2,3]},"enable_things":false,"number_of_things":7,"stuff_marker":"anything goes","stuff_multiplier":2.5})";
+      auto err = glz::read_json(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable_things == false);
+      expect(s.number_of_things == 7);
+      expect(std::abs(s.stuff_multiplier - 2.5f) < 1e-6f);
+   };
+
+   "skip_external_meta_json_read_silently_skips"_test = [] {
+      settings_with_meta_markers s{};
+      std::string input = R"({"alpha":{"x":1},"enable":false,"beta":[1,2,3],"count":11})";
+      auto err = glz::read_json(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable == false);
+      expect(s.count == 11);
+   };
+
+   "skip_local_meta_toml_read_silently_skips"_test = [] {
+      settings_with_local_markers s{};
+      std::string input = R"(things_marker = "garbage"
+enable_things = false
+number_of_things = 7
+stuff_marker = 12345
+stuff_multiplier = 2.5)";
+      auto err = glz::read_toml(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable_things == false);
+      expect(s.number_of_things == 7);
+      expect(std::abs(s.stuff_multiplier - 2.5f) < 1e-6f);
+   };
+
+   "skip_external_meta_toml_read_silently_skips"_test = [] {
+      settings_with_meta_markers s{};
+      std::string input = R"(alpha = [1, 2, 3]
+enable = false
+beta = "throwaway"
+count = 11)";
+      auto err = glz::read_toml(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable == false);
+      expect(s.count == 11);
+   };
+
+   // Regression: marker fields must not be flagged as missing when
+   // error_on_missing_keys is set. They are never written, so requiring them
+   // would make every read of error_on_missing_keys fail.
+   "skip_marker_with_error_on_missing_keys"_test = [] {
+      settings_with_local_markers s{};
+      std::string input = R"({"enable_things":false,"number_of_things":7,"stuff_multiplier":2.5})";
+      auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable_things == false);
+      expect(s.number_of_things == 7);
+      expect(std::abs(s.stuff_multiplier - 2.5f) < 1e-6f);
+   };
+
+   "skip_marker_via_meta_with_error_on_missing_keys"_test = [] {
+      settings_with_meta_markers s{};
+      std::string input = R"({"enable":false,"count":11})";
+      auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(s, input);
+      expect(not err) << glz::format_error(err, input);
+      expect(s.enable == false);
+      expect(s.count == 11);
+   };
+};
+
+// A std::variant whose own meta opts into custom_read/custom_write (with full from/to
+// specializations) must not be ambiguous with the built-in TOML variant handler.
+// Parity with the JSON fix in #2591.
+struct toml_fc_a
+{};
+struct toml_fc_b
+{};
+using toml_fc_variant = std::variant<toml_fc_a, toml_fc_b>;
+
+template <>
+struct glz::meta<toml_fc_variant>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::to<Format, toml_fc_variant>
+{
+   template <auto Opts>
+   static void op(auto&&, glz::is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(42, ctx, args...);
+   }
+};
+
+suite toml_fully_custom_variant_tests = [] {
+   "fully custom variant specialization is unambiguous"_test = [] {
+      toml_fc_variant v{};
+      std::string s{};
+      expect(not glz::write_toml(v, s));
+      expect(s == "42") << s;
    };
 };
 

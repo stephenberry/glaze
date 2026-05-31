@@ -16,6 +16,7 @@
 // glz:header std=<iterator>
 // glz:header std=<limits>
 // glz:header std=<map>
+// glz:header std=<memory>
 // glz:header std=<optional>
 // glz:header std=<ranges>
 // glz:header std=<span>
@@ -50,6 +51,7 @@ import glaze.util.glaze_fast_float;
 import glaze.util.simple_float;
 import glaze.util.compare;
 import glaze.util.string_literal;
+import glaze.util.nullable_traits;
 import glaze.util.type_traits;
 import glaze.util.variant;
 import glaze.util.parse;
@@ -1335,7 +1337,11 @@ namespace glz
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
-                        value.assign(buffer.data(), size_t(p - buffer.data()));
+                        const size_t n = size_t(p - buffer.data());
+#if __has_cpp_attribute(assume) >= 202207L
+                        [[assume(n <= sizeof(buffer))]];
+#endif
+                        value.assign(buffer.data(), n);
                         ++it;
                         if constexpr (not Opts.null_terminated) {
                            if (it == end) {
@@ -2410,7 +2416,7 @@ namespace glz
                   }
 
                   if constexpr (has_try_emplace_back<T>) {
-                     if (value.try_emplace_back() != nullptr)
+                     if (value.try_emplace_back())
                         parse<JSON>::op<ws_handled<Opts>()>(value.back(), ctx, it, end);
                      else
                         ctx.error = error_code::exceeded_static_array_size;
@@ -2477,7 +2483,7 @@ namespace glz
       }
 
       // for types like std::vector<std::pair...> that can't look up with operator[]
-      // Intead of hashing or linear searching, we just clear the input and overwrite the entire contents
+      // Instead of hashing or linear searching, we just clear the input and overwrite the entire contents
       template <auto Options>
          requires(pair_t<range_value_t<T>> && check_concatenate(Options) == true)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
@@ -2526,7 +2532,7 @@ namespace glz
             }
 
             if constexpr (has_try_emplace_back<T>) {
-               if (value.try_emplace_back() == nullptr) [[unlikely]] {
+               if (not value.try_emplace_back()) [[unlikely]] {
                   ctx.error = error_code::exceeded_static_array_size;
                   return;
                }
@@ -2988,10 +2994,15 @@ namespace glz
    template <class T, string_literal Tag>
    inline consteval bool contains_tag()
    {
-      auto& keys = reflect<T>::keys;
-      for (size_t i = 0; i < keys.size(); ++i) {
-         if (Tag.sv() == keys[i]) {
-            return true;
+      // Only object-like types expose reflect<T>::keys. Custom-read types (and other
+      // non-reflectable variant alternatives) have no fields, so the tag can never be
+      // one of their members and we must not touch reflect<T> (it may be incomplete).
+      if constexpr (requires { reflect<T>::keys; }) {
+         auto& keys = reflect<T>::keys;
+         for (size_t i = 0; i < keys.size(); ++i) {
+            if (Tag.sv() == keys[i]) {
+               return true;
+            }
          }
       }
       return false;
@@ -3182,7 +3193,7 @@ namespace glz
                         }
                      }
                   }
-                  ++it; // Increment after checking for mising keys so errors are within buffer bounds
+                  ++it; // Increment after checking for missing keys so errors are within buffer bounds
                   if constexpr (not Opts.null_terminated) {
                      if (it == end) {
                         ctx.error = error_code::end_reached;
@@ -3404,7 +3415,7 @@ namespace glz
                   }
                   else {
                      Key key_value{};
-                     if constexpr (glaze_enum_t<Key> || mimics_str_t<Key>) {
+                     if constexpr (is_named_enum<Key> || mimics_str_t<Key>) {
                         parse<JSON>::op<Opts>(key_value, ctx, it, end);
                      }
                      else if constexpr (std::is_arithmetic_v<Key>) {
@@ -3533,6 +3544,10 @@ namespace glz
    template <class T>
    struct is_variant_object : std::bool_constant<variant_object_type<T>>
    {};
+   // Range-of-pairs alternatives parse as a JSON object only when the `concatenate` option is enabled (default).
+   template <class T>
+   struct is_variant_concat_object : std::bool_constant<json_pair_range_object<T>>
+   {};
    template <class T>
    struct is_variant_array : std::bool_constant<variant_array_type<T>>
    {};
@@ -3605,6 +3620,31 @@ namespace glz
       static constexpr auto n_array = variant_count_v<T, is_variant_array>;
       static constexpr auto n_null = variant_count_v<T, is_variant_null>;
    };
+
+   // Number of variant alternatives that should be treated as JSON objects under the active options.
+   // Includes range-of-pair alternatives only when `concatenate` is enabled (default).
+   //
+   // Note: this preserves the existing predicate used by the variant '{' fast path. Because
+   // `variant_type_count::n_object` already includes `n_nullable_object`, adding
+   // `n_nullable_object` again effectively excludes nullable-object alternatives from the
+   // single-candidate fast path (which only knows how to dispatch a non-nullable object index).
+   template <auto Opts, class T>
+   constexpr size_t variant_object_candidate_count_v =
+      variant_type_count<T>::n_object + variant_type_count<T>::n_nullable_object +
+      (check_concatenate(Opts) ? variant_count_v<T, is_variant_concat_object> : 0);
+
+   // First variant index that is an object candidate under the active options. Prefers a true
+   // `is_variant_object` match; falls back to `is_variant_concat_object` when concatenate is enabled.
+   template <auto Opts, class T>
+   constexpr size_t variant_first_object_candidate_v = []() {
+      constexpr auto obj_idx = variant_first_index_v<T, is_variant_object>;
+      if constexpr (obj_idx != std::variant_npos)
+         return obj_idx;
+      else if constexpr (check_concatenate(Opts))
+         return variant_first_index_v<T, is_variant_concat_object>;
+      else
+         return std::variant_npos;
+   }();
 
    // Process variant alternatives by iterating directly over variant indices
    // (replaces tuple_cat + tuple iteration approach)
@@ -3732,6 +3772,7 @@ namespace glz
    };
 
    template <is_variant T>
+      requires(not custom_read<T>)
    struct from<JSON, T>
    {
       // Note that items in the variant are required to be default constructable for us to switch types
@@ -3750,7 +3791,7 @@ namespace glz
             case '\0':
                ctx.error = error_code::unexpected_end;
                return;
-            case '{':
+            case '{': {
                if (ctx.depth >= max_recursive_depth_limit) {
                   ctx.error = error_code::exceeded_max_recursive_depth;
                   return;
@@ -3767,13 +3808,13 @@ namespace glz
                   }
                }
                using type_counts = variant_type_count<T>;
-               if constexpr ((type_counts::n_object < 1) //
-                             && (type_counts::n_nullable_object < 1)) {
+               constexpr auto n_object_candidates = variant_object_candidate_count_v<Opts, T>;
+               if constexpr (n_object_candidates < 1) {
                   ctx.error = error_code::no_matching_variant_type;
                   return;
                }
-               else if constexpr ((type_counts::n_object + type_counts::n_nullable_object) == 1 && tag_v<T>.empty()) {
-                  constexpr auto first_idx = variant_first_index_v<T, is_variant_object>;
+               else if constexpr (n_object_candidates == 1 && tag_v<T>.empty()) {
+                  constexpr auto first_idx = variant_first_object_candidate_v<Opts, T>;
                   using V = std::variant_alternative_t<first_idx, T>;
                   if (!std::holds_alternative<V>(value)) value = V{};
                   parse<JSON>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
@@ -3899,7 +3940,8 @@ namespace glz
                                  std::visit(
                                     [&](auto&& v) {
                                        using V = std::decay_t<decltype(v)>;
-                                       constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
+                                       constexpr bool is_object =
+                                          (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
                                        if constexpr (is_object) {
                                           if constexpr (contains_tag<V, tag_literal>()) {
                                              it = start; // tag is a struct field, must re-parse
@@ -3944,6 +3986,20 @@ namespace glz
                                           from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
                                              *v, ctx, it, end);
                                        }
+                                       else if constexpr (custom_read<V>) {
+                                          // Custom handlers parse the remaining body themselves and do not
+                                          // accept the tag template parameter; the tag was already consumed.
+                                          // This only works when the tag was the first key. If it came later,
+                                          // we were reset to the object start and the custom handler would
+                                          // absorb the tag, so error rather than corrupt the value.
+                                          if (it == start) {
+                                             ctx.error = error_code::feature_not_supported;
+                                             ctx.custom_error_message =
+                                                "the tag must be the first key for a custom variant alternative";
+                                             return;
+                                          }
+                                          from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
+                                       }
                                     },
                                     value);
 
@@ -3969,7 +4025,8 @@ namespace glz
                                     std::visit(
                                        [&](auto&& v) {
                                           using V = std::decay_t<decltype(v)>;
-                                          constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
+                                          constexpr bool is_object =
+                                             (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
                                           if constexpr (is_object) {
                                              if constexpr (contains_tag<V, tag_literal>()) {
                                                 it = start; // tag is a struct field, must re-parse
@@ -4010,6 +4067,19 @@ namespace glz
                                              }
                                              from<JSON, memory_type<V>>::template op<opening_handled<Opts>()>(*v, ctx,
                                                                                                               it, end);
+                                          }
+                                          else if constexpr (custom_read<V>) {
+                                             // Custom handlers parse the remaining body themselves; this only
+                                             // works when the tag was the first key (see above). If it came
+                                             // later we were reset to the object start, so error rather than
+                                             // let the custom handler absorb the tag.
+                                             if (it == start) {
+                                                ctx.error = error_code::feature_not_supported;
+                                                ctx.custom_error_message =
+                                                   "the tag must be the first key for a custom variant alternative";
+                                                return;
+                                             }
+                                             from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
                                           }
                                        },
                                        value);
@@ -4086,10 +4156,27 @@ namespace glz
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
-                                 if constexpr (contains_tag<V, tag_literal>()) {
-                                    it = start; // tag is a struct field, must re-parse
+                                 if constexpr (custom_read<V>) {
+                                    // Custom handlers parse the remaining object body themselves and do not
+                                    // accept the tag template parameter that reflected objects use to skip an
+                                    // interior tag key. That only works when the tag is the first key (it was
+                                    // just consumed). If the tag came after other keys, position_after_tag()
+                                    // reset us to the object start and the custom handler would absorb the tag
+                                    // into its value, so error here rather than corrupt the result.
+                                    if (it == start) {
+                                       ctx.error = error_code::feature_not_supported;
+                                       ctx.custom_error_message =
+                                          "the tag must be the first key for a custom variant alternative";
+                                       return;
+                                    }
+                                    from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
                                  }
-                                 from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                 else {
+                                    if constexpr (contains_tag<V, tag_literal>()) {
+                                       it = start; // tag is a struct field, must re-parse
+                                    }
+                                    from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                 }
                               },
                               value);
                            if constexpr (Opts.null_terminated) {
@@ -4136,7 +4223,7 @@ namespace glz
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
-                                 constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
+                                 constexpr bool is_object = (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
                                  if constexpr (is_object) {
                                     from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }
@@ -4172,6 +4259,10 @@ namespace glz
                                     }
                                     from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
                                        *v, ctx, it, end);
+                                 }
+                                 else if constexpr (custom_read<V>) {
+                                    // Custom handlers parse the remaining body themselves.
+                                    from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
                                  }
                               },
                               value);
@@ -4221,7 +4312,7 @@ namespace glz
                         std::visit(
                            [&](auto&& v) {
                               using V = std::decay_t<decltype(v)>;
-                              constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
+                              constexpr bool is_object = (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
                               if constexpr (is_object) {
                                  from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                               }
@@ -4255,6 +4346,10 @@ namespace glz
                                  }
                                  from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx,
                                                                                                                it, end);
+                              }
+                              else if constexpr (custom_read<V>) {
+                                 // Custom handlers parse the remaining body themselves.
+                                 from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
                               }
                            },
                            value);
@@ -4313,7 +4408,7 @@ namespace glz
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
-                                 constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
+                                 constexpr bool is_object = (glaze_object_t<V> || reflectable<V>) && not custom_read<V>;
                                  if constexpr (is_object) {
                                     from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }
@@ -4348,6 +4443,10 @@ namespace glz
                                     from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
                                        *v, ctx, it, end);
                                  }
+                                 else if constexpr (custom_read<V>) {
+                                    // Custom handlers parse the remaining body themselves.
+                                    from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
+                                 }
                               },
                               value);
 
@@ -4366,6 +4465,7 @@ namespace glz
                   }
                }
                break;
+            }
             case '[':
                if (ctx.depth >= max_recursive_depth_limit) {
                   ctx.error = error_code::exceeded_max_recursive_depth;
@@ -4685,30 +4785,7 @@ namespace glz
             }
             else {
                if (!value) {
-                  if constexpr (optional_like<T>) {
-                     if constexpr (requires { value.emplace(); }) {
-                        value.emplace();
-                     }
-                     else {
-                        value = typename T::value_type{};
-                     }
-                  }
-                  else if constexpr (is_specialization_v<T, std::unique_ptr>)
-                     value = std::make_unique<typename T::element_type>();
-                  else if constexpr (is_specialization_v<T, std::shared_ptr>)
-                     value = std::make_shared<typename T::element_type>();
-                  else if constexpr (constructible<T>) {
-                     value = meta_construct_v<T>();
-                  }
-                  else if constexpr (std::is_pointer_v<T> &&
-                                     can_allocate_raw_pointer<Opts, std::decay_t<decltype(ctx)>>) {
-                     if (!try_allocate_raw_pointer<Opts>(value, ctx)) {
-                        return;
-                     }
-                  }
-                  else {
-                     // Cannot read into a null raw pointer
-                     ctx.error = error_code::invalid_nullable_read;
+                  if (!nullable_emplace<Opts>(value, ctx)) {
                      return;
                   }
                }
@@ -4760,7 +4837,12 @@ namespace glz
       }
    };
 
-   // system_clock::time_point: parse from ISO 8601 string
+   // system_clock::time_point: parse from ISO 8601 string.
+   // Time points whose Duration period is exactly `days` (e.g. std::chrono::sys_days)
+   // also accept the bare "YYYY-MM-DD" date form; full ISO 8601 datetimes are still
+   // accepted in that case and floored to days precision. Coarser periods (weeks,
+   // months, years) intentionally fall through to the full ISO 8601 parser so that
+   // user-supplied dates are not silently snapped to a multi-day boundary.
    template <is_system_time_point T>
       requires(not custom_read<T>)
    struct from<JSON, T>
@@ -4772,7 +4854,36 @@ namespace glz
          from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
+
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Period = typename Duration::period;
+         if constexpr (std::ratio_equal_v<Period, std::ratio<86400>>) {
+            if (str.size() == 10) {
+               std::chrono::year_month_day ymd{};
+               chrono_detail::parse_ymd(str, ymd, ctx.error);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value = std::chrono::time_point_cast<Duration>(std::chrono::sys_days{ymd});
+               return;
+            }
+         }
          chrono_detail::parse_iso8601(str, value, ctx.error);
+      }
+   };
+
+   // year_month_day: parse from "YYYY-MM-DD" JSON string
+   template <is_year_month_day T>
+      requires(not custom_read<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts, class It0, class It1>
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
+      {
+         std::string_view str;
+         from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         chrono_detail::parse_ymd(str, value, ctx.error);
       }
    };
 

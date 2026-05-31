@@ -166,7 +166,7 @@ static void verify(const char* name, const std::string& input)
                    simd_result.size() > 200 ? "..." : "");
 
       // Find first difference
-      for (size_t i = 0; i < std::min(swar_result.size(), simd_result.size()); ++i) {
+      for (size_t i = 0; i < (std::min)(swar_result.size(), simd_result.size()); ++i) {
          if (swar_result[i] != simd_result[i]) {
             std::fprintf(stderr, "  First diff at byte %zu: SWAR=0x%02X SIMD=0x%02X\n", i,
                          (unsigned char)swar_result[i], (unsigned char)simd_result[i]);

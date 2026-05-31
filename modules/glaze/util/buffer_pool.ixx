@@ -103,7 +103,7 @@ namespace glz
       explicit buffer_pool(size_t max_buffers = 1024, size_t max_buffer_size = 1024 * 1024) noexcept
          : max_buffers_(max_buffers), max_buffer_size_(max_buffer_size)
       {
-         buffers_.reserve(std::min(max_buffers, size_t{64})); // Pre-allocate some capacity
+         buffers_.reserve((std::min)(max_buffers, size_t{64})); // Pre-allocate some capacity
       }
 
       // Non-copyable, non-movable (due to mutex and pointers in scoped_buffers)

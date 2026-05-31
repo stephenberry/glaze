@@ -25,6 +25,7 @@
 module;
 
 #include "glaze/simd/simd.hpp"
+#include "glaze/util/zmij.hpp"
 
 export module glaze.json.write;
 
@@ -533,10 +534,11 @@ namespace glz
                   return 64;
                }
                else if constexpr (sizeof(T) > 4) {
-                  return 32;
+                  // zmij scratch + 4 for optional quotes and trailing comma.
+                  return zmij::double_buffer_size + 4;
                }
                else {
-                  return 24;
+                  return zmij::float_buffer_size + 4;
                }
             }
             else if constexpr (sizeof(T) > 4) {
@@ -1261,7 +1263,7 @@ namespace glz
    template <auto Opts, class Key, class Value, is_context Ctx, class B>
    GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, B&& b, auto& ix)
    {
-      if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || mimics_str_t<Key> || custom_str_t<Key> ||
+      if constexpr (str_t<Key> || char_t<Key> || is_named_enum<Key> || mimics_str_t<Key> || custom_str_t<Key> ||
                     check_quoted_num(Opts)) {
          to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
       }
@@ -1734,6 +1736,7 @@ namespace glz
    };
 
    template <is_variant T>
+      requires(not custom_write<T>)
    struct to<JSON, T>
    {
       template <auto Opts, class B>
@@ -1743,9 +1746,76 @@ namespace glz
             [&](auto&& val) {
                using V = std::decay_t<decltype(val)>;
 
-               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() &&
-                             (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)) ||
-                              is_memory_object<V>)) {
+               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() && custom_write<V>) {
+                  // Custom alternative: the user's serializer emits the object body, into which we
+                  // merge the variant tag. For this to produce valid JSON the custom to<> must (1)
+                  // write an object body and (2) honor opening_and_closing_handled (suppress its own
+                  // braces) so the tag shares the alternative's object. A custom writer that emits a
+                  // scalar/array, or that ignores those flags, would yield malformed output.
+                  //
+                  // The tag-emission below mirrors the reflected-object branch that follows; keep the
+                  // two in sync. The body size is not known at compile time, so we always write the
+                  // tag separator and then drop it at runtime if the body turned out empty.
+                  using id_type = std::decay_t<decltype(ids_v<T>[value.index()])>;
+                  if constexpr (Opts.prettify) {
+                     dump("{\n", b, ix);
+                     ctx.depth += check_indentation_width(Opts);
+                     dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+                     dump('"', b, ix);
+                     dump_maybe_empty(tag_v<T>, b, ix);
+                     if constexpr (std::integral<id_type>) {
+                        dump("\": ", b, ix);
+                        serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                     }
+                     else {
+                        dump("\": \"", b, ix);
+                        dump_maybe_empty(ids_v<T>[value.index()], b, ix);
+                        dump('"', b, ix);
+                     }
+                     const auto pos_after_tag = ix;
+                     dump(",\n", b, ix);
+                     dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+                     const auto pos_body_start = ix;
+                     to<JSON, V>::template op<opening_and_closing_handled<Opts>()>(val, ctx, b, ix);
+                     if (ix == pos_body_start) {
+                        ix = pos_after_tag; // custom body was empty: undo the tag separator
+                     }
+                     ctx.depth -= check_indentation_width(Opts);
+                     if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+                        return;
+                     }
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
+                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     ix += ctx.depth;
+                     std::memcpy(&b[ix], "}", 1);
+                     ++ix;
+                  }
+                  else {
+                     dump("{\"", b, ix);
+                     dump_maybe_empty(tag_v<T>, b, ix);
+                     if constexpr (std::integral<id_type>) {
+                        dump("\":", b, ix);
+                        serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                     }
+                     else {
+                        dump("\":\"", b, ix);
+                        dump_maybe_empty(ids_v<T>[value.index()], b, ix);
+                        dump('"', b, ix);
+                     }
+                     const auto pos_after_tag = ix;
+                     dump(',', b, ix);
+                     const auto pos_body_start = ix;
+                     to<JSON, V>::template op<opening_and_closing_handled<Opts>()>(val, ctx, b, ix);
+                     if (ix == pos_body_start) {
+                        ix = pos_after_tag; // custom body was empty: undo the tag separator
+                     }
+                     dump('}', b, ix);
+                  }
+               }
+               else if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() &&
+                                  (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)) ||
+                                   is_memory_object<V>)) {
                   constexpr auto N = []() {
                      if constexpr (is_memory_object<V>) {
                         return reflect<memory_type<V>>::size;
@@ -2443,95 +2513,161 @@ namespace glz
       }
    };
 
-   // system_clock::time_point: serialize as ISO 8601 string
-   // Zero-allocation implementation writing directly to buffer
+   // system_clock::time_point: serialize as ISO 8601 string.
+   // Zero-allocation implementation writing directly to buffer.
+   // Time points whose Duration period is exactly `days` (e.g. std::chrono::sys_days)
+   // are written as date-only "YYYY-MM-DD" since the time-of-day is always zero at that
+   // precision and the calendar date is the meaningful payload. Coarser periods (weeks,
+   // months, years) fall through to the full ISO 8601 path; this avoids silently
+   // truncating an arbitrary date to a multi-day boundary on read.
    template <is_system_time_point T>
       requires(not custom_write<T>)
    struct to<JSON, T>
    {
       template <auto Opts, class B>
-      static void op(auto&& value, [[maybe_unused]] is_context auto&& ctx, B&& b, auto& ix) noexcept
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
       {
          using namespace std::chrono;
          using TP = std::remove_cvref_t<T>;
          using Duration = typename TP::duration;
+         using Period = typename Duration::period;
 
-         // Split into date and time-of-day
+         constexpr bool date_only = std::ratio_equal_v<Period, std::ratio<86400>>;
+
          const auto dp = floor<days>(value);
          const year_month_day ymd{dp};
-         const hh_mm_ss tod{floor<Duration>(value - dp)};
-
-         // Extract components
          const int yr = static_cast<int>(ymd.year());
          const unsigned mo = static_cast<unsigned>(ymd.month());
          const unsigned dy = static_cast<unsigned>(ymd.day());
-         const auto hr = static_cast<unsigned>(tod.hours().count());
-         const auto mi = static_cast<unsigned>(tod.minutes().count());
-         const auto sc = static_cast<unsigned>(tod.seconds().count());
 
-         // Calculate fractional digits based on duration precision
-         constexpr size_t frac_digits = []() constexpr {
-            using Period = typename Duration::period;
-            if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
-               return 0; // seconds or coarser
-            }
-            else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
-               return 3; // milliseconds
-            }
-            else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
-               return 6; // microseconds
-            }
-            else {
-               return 9; // nanoseconds or finer
-            }
-         }();
+         // RFC 3339 requires a 4-digit year in [0000, 9999]. Reject anything else rather
+         // than silently corrupting the output via uint64_t wrap of a negative year.
+         if (yr < 0 || yr > 9999) [[unlikely]] {
+            ctx.error = error_code::constraint_violated;
+            return;
+         }
 
-         // Max size: "YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ" = 30 + quotes = 32
-         constexpr size_t max_size = 22 + (frac_digits > 0 ? 1 + frac_digits : 0);
+         if constexpr (date_only) {
+            // "YYYY-MM-DD" = 10 chars + optional quotes
+            constexpr size_t max_size = 12;
+            if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
+               return;
+            }
+
+            if constexpr (not check_unquoted(Opts)) {
+               b[ix++] = '"';
+            }
+            chrono_detail::write_digits<4>(b, ix, static_cast<uint64_t>(yr));
+            b[ix++] = '-';
+            chrono_detail::write_digits<2>(b, ix, mo);
+            b[ix++] = '-';
+            chrono_detail::write_digits<2>(b, ix, dy);
+            if constexpr (not check_unquoted(Opts)) {
+               b[ix++] = '"';
+            }
+         }
+         else {
+            const hh_mm_ss tod{floor<Duration>(value - dp)};
+            const auto hr = static_cast<unsigned>(tod.hours().count());
+            const auto mi = static_cast<unsigned>(tod.minutes().count());
+            const auto sc = static_cast<unsigned>(tod.seconds().count());
+
+            // Calculate fractional digits based on duration precision
+            constexpr size_t frac_digits = []() constexpr {
+               if constexpr (std::ratio_greater_equal_v<Period, std::ratio<1>>) {
+                  return 0; // seconds or coarser
+               }
+               else if constexpr (std::ratio_greater_equal_v<Period, std::milli>) {
+                  return 3; // milliseconds
+               }
+               else if constexpr (std::ratio_greater_equal_v<Period, std::micro>) {
+                  return 6; // microseconds
+               }
+               else {
+                  return 9; // nanoseconds or finer
+               }
+            }();
+
+            // Max size: "YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ" = 30 + quotes = 32
+            constexpr size_t max_size = 22 + (frac_digits > 0 ? 1 + frac_digits : 0);
+            if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
+               return;
+            }
+
+            if constexpr (not check_unquoted(Opts)) {
+               b[ix++] = '"';
+            }
+            chrono_detail::write_digits<4>(b, ix, static_cast<uint64_t>(yr));
+            b[ix++] = '-';
+            chrono_detail::write_digits<2>(b, ix, mo);
+            b[ix++] = '-';
+            chrono_detail::write_digits<2>(b, ix, dy);
+            b[ix++] = 'T';
+            chrono_detail::write_digits<2>(b, ix, hr);
+            b[ix++] = ':';
+            chrono_detail::write_digits<2>(b, ix, mi);
+            b[ix++] = ':';
+            chrono_detail::write_digits<2>(b, ix, sc);
+
+            // Write fractional seconds if duration is finer than seconds
+            if constexpr (frac_digits > 0) {
+               b[ix++] = '.';
+               const auto subsec = tod.subseconds();
+               if constexpr (frac_digits == 3) {
+                  chrono_detail::write_digits<3>(b, ix,
+                                                 static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
+               }
+               else if constexpr (frac_digits == 6) {
+                  chrono_detail::write_digits<6>(b, ix,
+                                                 static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
+               }
+               else {
+                  chrono_detail::write_digits<9>(b, ix,
+                                                 static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
+               }
+            }
+
+            b[ix++] = 'Z';
+            if constexpr (not check_unquoted(Opts)) {
+               b[ix++] = '"';
+            }
+         }
+      }
+   };
+
+   // year_month_day: serialize as "YYYY-MM-DD" JSON string
+   template <is_year_month_day T>
+      requires(not custom_write<T>)
+   struct to<JSON, T>
+   {
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto& ix) noexcept
+      {
+         const int yr = static_cast<int>(value.year());
+         const unsigned mo = static_cast<unsigned>(value.month());
+         const unsigned dy = static_cast<unsigned>(value.day());
+
+         // std::chrono::year is a signed 16-bit-ish range, so users can construct dates
+         // outside [0000, 9999]. Reject those rather than emitting wrap-around digits.
+         if (yr < 0 || yr > 9999) [[unlikely]] {
+            ctx.error = error_code::constraint_violated;
+            return;
+         }
+
+         // "YYYY-MM-DD" = 10 chars + optional quotes
+         constexpr size_t max_size = 12;
          if (!ensure_space(ctx, b, ix + max_size)) [[unlikely]] {
             return;
          }
 
-         // Helper to write N-digit zero-padded number
-         auto write_digits = [&]<size_t N>(uint64_t val) {
-            for (size_t i = N; i > 0; --i) {
-               b[ix + i - 1] = static_cast<char>('0' + val % 10);
-               val /= 10;
-            }
-            ix += N;
-         };
-
          if constexpr (not check_unquoted(Opts)) {
             b[ix++] = '"';
          }
-         write_digits.template operator()<4>(static_cast<uint64_t>(yr));
+         chrono_detail::write_digits<4>(b, ix, static_cast<uint64_t>(yr));
          b[ix++] = '-';
-         write_digits.template operator()<2>(mo);
+         chrono_detail::write_digits<2>(b, ix, mo);
          b[ix++] = '-';
-         write_digits.template operator()<2>(dy);
-         b[ix++] = 'T';
-         write_digits.template operator()<2>(hr);
-         b[ix++] = ':';
-         write_digits.template operator()<2>(mi);
-         b[ix++] = ':';
-         write_digits.template operator()<2>(sc);
-
-         // Write fractional seconds if duration is finer than seconds
-         if constexpr (frac_digits > 0) {
-            b[ix++] = '.';
-            const auto subsec = tod.subseconds();
-            if constexpr (frac_digits == 3) {
-               write_digits.template operator()<3>(static_cast<uint64_t>(duration_cast<milliseconds>(subsec).count()));
-            }
-            else if constexpr (frac_digits == 6) {
-               write_digits.template operator()<6>(static_cast<uint64_t>(duration_cast<microseconds>(subsec).count()));
-            }
-            else {
-               write_digits.template operator()<9>(static_cast<uint64_t>(duration_cast<nanoseconds>(subsec).count()));
-            }
-         }
-
-         b[ix++] = 'Z';
+         chrono_detail::write_digits<2>(b, ix, dy);
          if constexpr (not check_unquoted(Opts)) {
             b[ix++] = '"';
          }

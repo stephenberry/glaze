@@ -231,7 +231,7 @@ namespace glz
             // Find maximum column count
             size_t max_cols = 0;
             for (const auto& row : value) {
-               max_cols = std::max(max_cols, row.size());
+               max_cols = (std::max)(max_cols, row.size());
             }
 
             // Write transposed data
