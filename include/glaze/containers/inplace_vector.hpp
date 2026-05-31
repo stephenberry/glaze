@@ -415,7 +415,7 @@ namespace glz
                x.set_storage_size(temp_size);
             }
             else {
-               const auto min_size = std::min(storage_size(), x.storage_size());
+               const auto min_size = (std::min)(storage_size(), x.storage_size());
 
                // Swap common elements
                for (size_type i = 0; i < min_size; ++i) std::swap(this->data_ptr()[i], x.data_ptr()[i]);
@@ -849,19 +849,19 @@ namespace glz
          else {
             // General case for non-trivial types
             // First, move elements at the end to their new positions
-            for (size_type i = 0; i < std::min(n, this->storage_size() - pos_idx); ++i) {
+            for (size_type i = 0; i < (std::min)(n, this->storage_size() - pos_idx); ++i) {
                std::construct_at(this->data_ptr() + this->storage_size() + n - 1 - i,
                                  std::move(this->data_ptr()[this->storage_size() - 1 - i]));
             }
 
             // Move the remaining elements that need to be shifted but not constructed
-            for (size_type i = this->storage_size() - std::min(n, this->storage_size() - pos_idx) - 1;
+            for (size_type i = this->storage_size() - (std::min)(n, this->storage_size() - pos_idx) - 1;
                  i >= pos_idx && i < this->storage_size(); --i) {
                this->data_ptr()[i + n] = std::move(this->data_ptr()[i]);
             }
 
             // Destroy elements that will be overwritten
-            for (size_type i = pos_idx; i < std::min(pos_idx + n, this->storage_size()); ++i) {
+            for (size_type i = pos_idx; i < (std::min)(pos_idx + n, this->storage_size()); ++i) {
                std::destroy_at(this->data_ptr() + i);
             }
 
@@ -907,19 +907,19 @@ namespace glz
                // Make space first
                if (pos_idx < this->storage_size()) {
                   // Move elements after position count positions to the right
-                  for (size_type i = 0; i < std::min(count, this->storage_size() - pos_idx); ++i) {
+                  for (size_type i = 0; i < (std::min)(count, this->storage_size() - pos_idx); ++i) {
                      std::construct_at(this->data_ptr() + this->storage_size() + count - 1 - i,
                                        std::move(this->data_ptr()[this->storage_size() - 1 - i]));
                   }
 
                   // Move the remaining elements
-                  for (size_type i = this->storage_size() - std::min(count, this->storage_size() - pos_idx) - 1;
+                  for (size_type i = this->storage_size() - (std::min)(count, this->storage_size() - pos_idx) - 1;
                        i >= pos_idx && i < this->storage_size(); --i) {
                      this->data_ptr()[i + count] = std::move(this->data_ptr()[i]);
                   }
 
                   // Destroy elements that will be overwritten
-                  for (size_type i = pos_idx; i < std::min(pos_idx + count, this->storage_size()); ++i) {
+                  for (size_type i = pos_idx; i < (std::min)(pos_idx + count, this->storage_size()); ++i) {
                      std::destroy_at(this->data_ptr() + i);
                   }
                }
@@ -975,19 +975,19 @@ namespace glz
                // Make space first
                if (pos_idx < this->storage_size()) {
                   // Move elements after position count positions to the right
-                  for (size_type i = 0; i < std::min(count, this->storage_size() - pos_idx); ++i) {
+                  for (size_type i = 0; i < (std::min)(count, this->storage_size() - pos_idx); ++i) {
                      std::construct_at(this->data_ptr() + this->storage_size() + count - 1 - i,
                                        std::move(this->data_ptr()[this->storage_size() - 1 - i]));
                   }
 
                   // Move the remaining elements
-                  for (size_type i = this->storage_size() - std::min(count, this->storage_size() - pos_idx) - 1;
+                  for (size_type i = this->storage_size() - (std::min)(count, this->storage_size() - pos_idx) - 1;
                        i >= pos_idx && i < this->storage_size(); --i) {
                      this->data_ptr()[i + count] = std::move(this->data_ptr()[i]);
                   }
 
                   // Destroy elements that will be overwritten
-                  for (size_type i = pos_idx; i < std::min(pos_idx + count, this->storage_size()); ++i) {
+                  for (size_type i = pos_idx; i < (std::min)(pos_idx + count, this->storage_size()); ++i) {
                      std::destroy_at(this->data_ptr() + i);
                   }
                }

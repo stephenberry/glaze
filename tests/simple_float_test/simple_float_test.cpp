@@ -262,7 +262,7 @@ suite exhaustive_float_tests = [] {
    "exhaustive_float_roundtrip"_test = [] {
       std::cout << "\n=== Exhaustive float roundtrip test (all 2^32 values) ===" << std::endl;
 
-      const unsigned num_threads = std::max(1u, std::thread::hardware_concurrency());
+      const unsigned num_threads = (std::max)(1u, std::thread::hardware_concurrency());
       std::cout << "Using " << num_threads << " threads" << std::endl;
 
       constexpr uint64_t total_values = 0x100000000ULL; // 2^32

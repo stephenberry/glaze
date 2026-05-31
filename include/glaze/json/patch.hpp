@@ -662,7 +662,7 @@ namespace glz
                   const auto& src_arr = src_val;
                   const auto& tgt_arr = std::get<typename GenericType::array_t>(target.data);
 
-                  size_t min_len = std::min(src_arr.size(), tgt_arr.size());
+                  size_t min_len = (std::min)(src_arr.size(), tgt_arr.size());
 
                   // Compare common elements
                   for (size_t i = 0; i < min_len; ++i) {
