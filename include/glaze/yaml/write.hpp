@@ -625,7 +625,10 @@ namespace glz
                      std::visit(
                         [&](auto&& inner) {
                            using inner_t = std::remove_cvref_t<decltype(inner)>;
-                           if constexpr (glaze_object_t<inner_t> || reflectable<inner_t>) {
+                           // not custom_write: a custom alternative that is also reflectable (e.g. a
+                           // non-aggregate class under P2996) must take the custom branch below.
+                           if constexpr ((glaze_object_t<inner_t> || reflectable<inner_t>) &&
+                                         not custom_write<inner_t>) {
                               // Compact form: first key (or the discriminator tag) inline after dash
                               dump(' ', b, ix);
                               if constexpr (check_write_type_info(Opts) && not tag_v<element_t>.empty()) {
@@ -1149,8 +1152,10 @@ namespace glz
             std::visit(
                [&](auto&& inner) {
                   using inner_t = std::remove_cvref_t<decltype(inner)>;
-                  if constexpr ((glaze_object_t<inner_t> || reflectable<inner_t>) && check_write_type_info(Opts) &&
-                                not tag_v<V>.empty()) {
+                  // not custom_write: a custom alternative that is also reflectable (e.g. a
+                  // non-aggregate class under P2996) must take the custom branch below.
+                  if constexpr ((glaze_object_t<inner_t> || reflectable<inner_t>) && not custom_write<inner_t> &&
+                                check_write_type_info(Opts) && not tag_v<V>.empty()) {
                      write_tagged_block_object<Opts, V>(inner, index, ctx, b, ix, indent_level, false);
                   }
                   else if constexpr (custom_write<inner_t> && check_write_type_info(Opts) && not tag_v<V>.empty()) {
@@ -1546,7 +1551,9 @@ namespace glz
             std::visit(
                [&](auto&& v) {
                   using Vt = std::remove_cvref_t<decltype(v)>;
-                  if constexpr (glaze_object_t<Vt> || reflectable<Vt>) {
+                  // not custom_write: a custom alternative that also happens to be reflectable (e.g.
+                  // a non-aggregate class under P2996 reflection) must take the custom branch below.
+                  if constexpr ((glaze_object_t<Vt> || reflectable<Vt>) && not custom_write<Vt>) {
                      if constexpr (yaml::check_flow_style(Opts) || yaml::check_flow_context(Opts)) {
                         yaml::write_tagged_flow_object<Opts, V>(v, index, ctx, b, ix);
                      }
