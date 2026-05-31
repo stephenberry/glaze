@@ -9653,4 +9653,152 @@ suite yaml_tagged_variant_stress_suite = [] {
    };
 };
 
+// A tagged-variant alternative that uses custom_read/custom_write and serializes an object body
+// should merge the variant tag into that body and round-trip in block YAML, across root, sequence,
+// struct-field and map-value contexts. Flow style is reported as unsupported.
+namespace yaml_custom_alt_tests
+{
+   struct put_action
+   {
+      std::map<std::string, int>& data() { return m_data; }
+      const std::map<std::string, int>& data() const { return m_data; }
+      bool operator==(const put_action&) const = default;
+
+     private:
+      std::map<std::string, int> m_data{};
+   };
+
+   struct delete_action
+   {
+      std::string note{};
+      bool operator==(const delete_action&) const = default;
+   };
+
+   using action_variant = std::variant<put_action, delete_action>;
+
+   struct action_holder
+   {
+      int id{};
+      action_variant act{};
+      bool operator==(const action_holder&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<yaml_custom_alt_tests::put_action>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::from<Format, yaml_custom_alt_tests::put_action>
+{
+   template <auto Opts>
+   static void op(yaml_custom_alt_tests::put_action& value, is_context auto&& ctx, auto&&... args)
+   {
+      glz::parse<Format>::template op<Opts>(value.data(), ctx, args...);
+   }
+};
+
+template <uint32_t Format>
+struct glz::to<Format, yaml_custom_alt_tests::put_action>
+{
+   template <auto Opts>
+   static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(value.data(), ctx, args...);
+   }
+};
+
+template <>
+struct glz::meta<yaml_custom_alt_tests::delete_action>
+{
+   using T = yaml_custom_alt_tests::delete_action;
+   static constexpr auto value = object("note", &T::note);
+};
+
+template <>
+struct glz::meta<yaml_custom_alt_tests::action_variant>
+{
+   static constexpr std::string_view tag = "action";
+   static constexpr auto ids = std::array{"PUT", "DELETE"};
+};
+
+template <>
+struct glz::meta<yaml_custom_alt_tests::action_holder>
+{
+   using T = yaml_custom_alt_tests::action_holder;
+   static constexpr auto value = object("id", &T::id, "act", &T::act);
+};
+
+suite yaml_custom_alternative_variant_tests = [] {
+   using namespace yaml_custom_alt_tests;
+   auto put = [](std::map<std::string, int> m) {
+      put_action p{};
+      p.data() = std::move(m);
+      return p;
+   };
+
+   "custom alternative block round-trips"_test = [&] {
+      action_variant v = put({{"a", 1}, {"b", 2}});
+      std::string s{};
+      expect(not glz::write_yaml(v, s));
+      expect(s == "action: PUT\na: 1\nb: 2\n") << s;
+      action_variant r{};
+      expect(not glz::read_yaml(r, s));
+      expect(r == v);
+   };
+
+   "custom alternative empty body"_test = [&] {
+      action_variant v = put({});
+      std::string s{};
+      expect(not glz::write_yaml(v, s));
+      expect(s == "action: PUT\n") << s;
+      action_variant r{};
+      expect(not glz::read_yaml(r, s));
+      expect(r == v);
+   };
+
+   "custom alternative in a sequence"_test = [&] {
+      std::vector<action_variant> v{put({{"x", 9}}), delete_action{"bye"}, put({})};
+      std::string s{};
+      expect(not glz::write_yaml(v, s));
+      std::vector<action_variant> r{};
+      expect(not glz::read_yaml(r, s));
+      expect(r == v);
+   };
+
+   "custom alternative as a struct field"_test = [&] {
+      action_holder v{5, put({{"k", 7}})};
+      std::string s{};
+      expect(not glz::write_yaml(v, s));
+      action_holder r{};
+      expect(not glz::read_yaml(r, s));
+      expect(r == v);
+   };
+
+   "custom alternative as a map value"_test = [&] {
+      std::map<std::string, action_variant> v{{"first", put({{"a", 1}})}, {"second", delete_action{"hi"}}};
+      std::string s{};
+      expect(not glz::write_yaml(v, s));
+      std::map<std::string, action_variant> r{};
+      expect(not glz::read_yaml(r, s));
+      expect(r == v);
+   };
+
+   "custom alternative requires the tag first"_test = [&] {
+      action_variant r{};
+      const auto ec = glz::read_yaml(r, std::string("a: 1\naction: PUT\n"));
+      expect(ec == glz::error_code::feature_not_supported);
+   };
+
+   "custom alternative errors in flow style"_test = [&] {
+      action_variant v = put({{"a", 1}});
+      std::string s{};
+      const auto ec = glz::write_yaml<glz::yaml::yaml_opts{.flow_style = true}>(v, s);
+      expect(ec == glz::error_code::feature_not_supported);
+   };
+};
+
 int main() { return 0; }
