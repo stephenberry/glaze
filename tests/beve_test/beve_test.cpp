@@ -6764,6 +6764,50 @@ suite beve_skip_marker_suite = [] {
    };
 };
 
+// A std::variant whose own meta opts into custom_read/custom_write (with full from/to
+// specializations) must not be ambiguous with the built-in BEVE variant handlers.
+// Parity with the JSON fix in #2591.
+struct beve_fc_a
+{};
+struct beve_fc_b
+{};
+using beve_fc_variant = std::variant<beve_fc_a, beve_fc_b>;
+
+template <>
+struct glz::meta<beve_fc_variant>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::from<Format, beve_fc_variant>
+{
+   template <auto Opts>
+   static void op(beve_fc_variant&, glz::is_context auto&&, auto&&, auto&&)
+   {}
+};
+
+template <uint32_t Format>
+struct glz::to<Format, beve_fc_variant>
+{
+   template <auto Opts>
+   static void op(auto&&, glz::is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(42, ctx, args...);
+   }
+};
+
+suite beve_fully_custom_variant_tests = [] {
+   "fully custom variant specialization is unambiguous"_test = [] {
+      beve_fc_variant v{};
+      std::string s{};
+      expect(not glz::write_beve(v, s));
+      beve_fc_variant r{};
+      expect(not glz::read_beve(r, s));
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");

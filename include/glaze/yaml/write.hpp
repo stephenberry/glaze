@@ -1538,6 +1538,7 @@ namespace glz
 
    // Variant support
    template <is_variant T>
+      requires(not custom_write<T>)
    struct to<YAML, T>
    {
       template <auto Opts, class B>

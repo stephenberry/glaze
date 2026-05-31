@@ -1743,6 +1743,7 @@ namespace glz
 
    // Variants
    template <is_variant T>
+      requires(not custom_read<T>)
    struct from<CBOR, T>
    {
       template <auto Opts>

@@ -973,6 +973,7 @@ namespace glz
 
    // Variants
    template <is_variant T>
+      requires(not custom_write<T>)
    struct to<CBOR, T> final
    {
       template <auto Opts>
