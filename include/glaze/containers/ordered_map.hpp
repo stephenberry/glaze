@@ -310,7 +310,7 @@ namespace glz
          : values_(alloc), max_load_factor_(default_max_load_factor), hash_(hash), equal_(equal)
       {
          if (bucket_count > 0) {
-            auto bc = round_up_pow2(static_cast<uint32_t>(std::max(bucket_count, size_type(min_bucket_count))));
+            auto bc = round_up_pow2(static_cast<uint32_t>((std::max)(bucket_count, size_type(min_bucket_count))));
             bucket_count_ = bc;
             bucket_mask_ = bc - 1;
             load_threshold_ = static_cast<uint32_t>(static_cast<float>(bc) * max_load_factor_);
@@ -337,8 +337,8 @@ namespace glz
       {
          if (!values_.empty()) {
             auto bc = round_up_pow2(static_cast<uint32_t>(
-               std::max(size_type(min_bucket_count),
-                        static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
+               (std::max)(size_type(min_bucket_count),
+                          static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
             bucket_count_ = bc;
             bucket_mask_ = bc - 1;
             load_threshold_ = static_cast<uint32_t>(static_cast<float>(bc) * max_load_factor_);
@@ -434,8 +434,8 @@ namespace glz
          // Optionally rehash to minimal bucket count
          if (bucket_count_ > 0) {
             auto needed = round_up_pow2(static_cast<uint32_t>(
-               std::max(size_type(min_bucket_count),
-                        static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
+               (std::max)(size_type(min_bucket_count),
+                          static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1)));
             if (needed < bucket_count_) {
                rehash_impl(needed);
             }
@@ -878,8 +878,8 @@ namespace glz
       void rehash(size_type count)
       {
          auto needed = static_cast<size_type>(static_cast<float>(values_.size()) / max_load_factor_) + 1;
-         count = std::max(count, needed);
-         auto bc = round_up_pow2(static_cast<uint32_t>(std::max(count, size_type(min_bucket_count))));
+         count = (std::max)(count, needed);
+         auto bc = round_up_pow2(static_cast<uint32_t>((std::max)(count, size_type(min_bucket_count))));
          if (bc != bucket_count_) {
             rehash_impl(bc);
          }
@@ -889,7 +889,7 @@ namespace glz
       {
          values_.reserve(count);
          auto needed = static_cast<size_type>(static_cast<float>(count) / max_load_factor_) + 1;
-         auto bc = round_up_pow2(static_cast<uint32_t>(std::max(needed, size_type(min_bucket_count))));
+         auto bc = round_up_pow2(static_cast<uint32_t>((std::max)(needed, size_type(min_bucket_count))));
          if (bc > bucket_count_) {
             rehash_impl(bc);
          }

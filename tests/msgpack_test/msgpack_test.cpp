@@ -361,8 +361,44 @@ namespace msgpack_skip_marker_tests
    }
 }
 
+// A std::variant whose own meta opts into custom_read/custom_write (with full from/to
+// specializations) must not be ambiguous with the built-in MessagePack variant handlers.
+// Parity with the JSON fix in #2591.
+struct mp_fc_a
+{};
+struct mp_fc_b
+{};
+using mp_fc_variant = std::variant<mp_fc_a, mp_fc_b>;
+
+template <>
+struct glz::meta<mp_fc_variant>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::to<Format, mp_fc_variant>
+{
+   template <auto Opts>
+   static void op(auto&&, glz::is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(42, ctx, args...);
+   }
+};
+
 int main()
 {
+   // Only the write side is exercised here: MessagePack passes its type-tag byte
+   // positionally to from::op, so a generic JSON-style custom from signature cannot be
+   // read-tested (a separate MessagePack custom-type limitation). The from exclusion is
+   // the same one-line change and is read-tested in the BEVE/CBOR/YAML suites.
+   "fully custom variant specialization is unambiguous"_test = [] {
+      mp_fc_variant v{};
+      std::string s{};
+      expect(not glz::write_msgpack(v, s));
+   };
+
    "msgpack primitive roundtrip"_test = [] {
       expect_roundtrip_equal(int8_t{-8});
       expect_roundtrip_equal(int32_t{123456});

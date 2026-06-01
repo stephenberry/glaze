@@ -500,6 +500,7 @@ namespace glz
    }(std::make_index_sequence<std::variant_size_v<V>>{});
 
    template <is_variant T>
+      requires(not custom_write<T>)
    struct to<BEVE, T> final
    {
       template <auto Opts, class B>

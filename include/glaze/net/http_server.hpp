@@ -1768,7 +1768,7 @@ namespace glz
             if (colon_pos != std::string_view::npos) {
                std::string_view name_sv = line.substr(0, colon_pos);
                std::string_view value_sv = line.substr(colon_pos + 1);
-               value_sv.remove_prefix(std::min(value_sv.find_first_not_of(" \t"), value_sv.size()));
+               value_sv.remove_prefix((std::min)(value_sv.find_first_not_of(" \t"), value_sv.size()));
                std::string key(name_sv);
                for (auto& c : key) c = ascii_tolower(c);
                headers[std::move(key)] = std::string(value_sv);
@@ -1815,7 +1815,7 @@ namespace glz
 
          if (content_length > 0) {
             conn->request_.body.resize(content_length);
-            const size_t initial_body_size = std::min(content_length, available_body);
+            const size_t initial_body_size = (std::min)(content_length, available_body);
             if (initial_body_size > 0) {
                std::memcpy(conn->request_.body.data(), &conn->read_buf[body_offset], initial_body_size);
             }
