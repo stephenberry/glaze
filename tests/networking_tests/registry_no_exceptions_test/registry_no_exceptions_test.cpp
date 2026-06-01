@@ -255,7 +255,7 @@ struct jsonrpc_expected_t
       }
       return x;
    };
-   // glz::error_ctx -> JSON-RPC internal error; the custom message is preserved.
+   // glz::error_ctx -> JSON-RPC internal error; the context detail is carried in data.
    std::function<glz::expected<int, glz::error_ctx>(int)> bounded = [](int x) -> glz::expected<int, glz::error_ctx> {
       if (x > 100) {
          return glz::unexpected(
@@ -289,7 +289,9 @@ suite jsonrpc_expected_handlers = [] {
 
       auto response = server.call(R"({"jsonrpc":"2.0","method":"halve","params":3,"id":2})");
       expect(response.find(R"("code":-32603)") != std::string::npos) << response; // internal error
-      expect(response.find("odd input") != std::string::npos) << response;
+      // Reserved code -> standard message, handler detail carried in data (mirrors the thrown path).
+      expect(response.find(R"("message":"Internal error")") != std::string::npos) << response;
+      expect(response.find(R"("data":"odd input")") != std::string::npos) << response;
       expect(response.find(R"("id":2)") != std::string::npos) << response;
    };
 
@@ -311,7 +313,9 @@ suite jsonrpc_expected_handlers = [] {
 
       auto response = server.call(R"({"jsonrpc":"2.0","method":"bounded","params":250,"id":7})");
       expect(response.find(R"("code":-32603)") != std::string::npos) << response; // internal error
-      expect(response.find("out of range") != std::string::npos) << response; // custom message preserved
+      // Reserved code -> standard message, context detail carried in data (mirrors the thrown path).
+      expect(response.find(R"("message":"Internal error")") != std::string::npos) << response;
+      expect(response.find(R"("data":"out of range")") != std::string::npos) << response;
       expect(response.find(R"("id":7)") != std::string::npos) << response;
    };
 

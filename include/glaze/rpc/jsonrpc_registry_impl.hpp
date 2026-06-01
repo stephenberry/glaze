@@ -133,9 +133,12 @@ namespace glz
       // response. Supported error types:
       //   - glz::rpc::error   -> its code, message, and optional data (full fidelity)
       //   - glz::rpc::error_e -> that code with its standard message
-      //   - glz::error_ctx    -> error_e::internal with the context's message
-      //   - string-like       -> error_e::internal with the message
+      //   - glz::error_ctx    -> error_e::internal, "Internal error", context message in data
+      //   - string-like       -> error_e::internal, "Internal error", the string in data
       // error_e::internal (-32603) is the JSON-RPC code reserved for server-side errors.
+      // The handler supplies no code in the error_ctx/string cases, so the reserved code's
+      // standard message is kept in "message" and the handler's detail is carried in "data"
+      // (matching the thrown path in registry.hpp). An empty detail emits no data member.
       template <class E>
       void set_handler_error(is_state auto&& state, E&& error)
       {
@@ -147,13 +150,17 @@ namespace glz
             write_error(state, error, std::string(rpc::code_as_sv(error)));
          }
          else if constexpr (std::same_as<DE, error_ctx>) {
-            write_error(state, rpc::error_e::internal, std::string(error.custom_error_message));
+            const std::string_view detail = error.custom_error_message;
+            write_error(state, rpc::error_e::internal, "Internal error",
+                        detail.empty() ? std::nullopt : std::optional<std::string>(detail));
          }
          else {
             static_assert(std::convertible_to<DE, std::string_view>,
                           "A JSON-RPC handler's glz::expected error type must be glz::rpc::error, glz::rpc::error_e, "
                           "glz::error_ctx, or convertible to std::string_view.");
-            write_error(state, rpc::error_e::internal, std::string(std::string_view(error)));
+            const std::string_view detail = std::string_view(error);
+            write_error(state, rpc::error_e::internal, "Internal error",
+                        detail.empty() ? std::nullopt : std::optional<std::string>(detail));
          }
       }
 
