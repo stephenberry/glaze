@@ -246,11 +246,12 @@ struct jsonrpc_expected_t
       }
       return x / 2;
    };
-   // Full JSON-RPC fidelity: custom code, message, and data.
-   std::function<glz::expected<int, glz::rpc::error>(int)> checked = [](int x) -> glz::expected<int, glz::rpc::error> {
+   // Full JSON-RPC fidelity: custom code, message, and data. The glz::rpc::result<T>
+   // alias and the invalid_params() helper replace the longhand
+   // glz::unexpected(glz::rpc::error{glz::rpc::error_e::invalid_params, std::optional<std::string>{...}}).
+   std::function<glz::rpc::result<int>(int)> checked = [](int x) -> glz::rpc::result<int> {
       if (x < 0) {
-         return glz::unexpected(
-            glz::rpc::error{glz::rpc::error_e::invalid_params, std::optional<std::string>{"x must be >= 0"}});
+         return glz::rpc::invalid_params("x must be >= 0");
       }
       return x;
    };

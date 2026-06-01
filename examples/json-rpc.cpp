@@ -35,7 +35,7 @@ int main()
    rpc::client<rpc::method<"foo", foo_params, foo_result>, rpc::method<"bar", bar_params, bar_result>> client;
 
    // One long living callback per method for the server
-   server.on<"foo">([](const foo_params& params) -> glz::expected<foo_result, glz::rpc::error> {
+   server.on<"foo">([](const foo_params& params) -> glz::rpc::result<foo_result> {
       // access to member variables for the request `foo`
       // params.foo_a
       // params.foo_b
@@ -46,18 +46,20 @@ int main()
       }
       else {
          std::cout << "Server received invalid data:" << params.foo_b << std::endl;
-         // Or return an error:
-         return glz::unexpected{glz::rpc::error{glz::rpc::error_e::invalid_params, {}, "foo_a should be equal to 0"}};
+         // Or return an error. The invalid_params() helper carries the detail in the
+         // JSON-RPC `data` member; `message` stays the standard text for the code.
+         return glz::rpc::invalid_params("foo_a should be equal to 0");
       }
    });
    server.on<"bar">([](const bar_params& params) { return bar_result{.bar_c = true, .bar_d = "new world"}; });
 
    std::string uuid{"42"};
-   auto client_cb = [](glz::expected<foo_result, rpc::error> value, rpc::id_t id) -> void {
+   auto client_cb = [](rpc::result<foo_result> value, rpc::id_t id) -> void {
       if (value)
          std::cout << "Client received " << value.value().foo_c << ":" << value.value().foo_d << std::endl;
       else
-         std::cerr << "Client received error " << value.error().message << std::endl;
+         std::cerr << "Client received error " << value.error().message
+                   << (value.error().data ? " (" + *value.error().data + ")" : "") << std::endl;
    };
 
    // One callback per client request
@@ -98,7 +100,8 @@ int main()
 
    response = server.call(request_str);
    std::cout << "Server json response :" << response << std::endl;
-   assert(response == R"({"jsonrpc":"2.0","error":{"code":-32602,"message":"foo_a should be equal to 0"},"id":"42"})");
+   assert(response ==
+          R"({"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params","data":"foo_a should be equal to 0"},"id":"42"})");
    err = client.call(response);
    std::cout << "Client call with error result :" << err.message << std::endl;
 }

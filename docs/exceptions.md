@@ -48,7 +48,7 @@ struct calculator {
 };
 ```
 
-For full JSON-RPC fidelity (custom code, message, and `data`), return `glz::expected<T, glz::rpc::error>`. REPE handlers may return `glz::expected<T, glz::error_code>` to choose the response error code. When exceptions are enabled, a handler that throws is still caught and reported as before.
+For full JSON-RPC fidelity (custom code, message, and `data`), return `glz::expected<T, glz::rpc::error>` — or its alias `glz::rpc::result<T>`. The `glz::rpc::invalid_params`, `invalid_request`, `method_not_found`, `internal_error`, and `parse_error` helpers (plus `glz::rpc::fail(code, data)` for any other code, including the server-error range) build the `glz::unexpected<glz::rpc::error>` for you, with the optional argument carried in the `data` member. REPE handlers may return `glz::expected<T, glz::error_code>` to choose the response error code. When exceptions are enabled, a handler that throws is still caught and reported as before.
 
 #### REST
 
