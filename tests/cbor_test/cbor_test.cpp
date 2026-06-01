@@ -3324,8 +3324,54 @@ void cbor_skip_marker_tests_run()
    };
 }
 
+// A std::variant whose own meta opts into custom_read/custom_write (with full from/to
+// specializations) must not be ambiguous with the built-in CBOR variant handlers.
+// Parity with the JSON fix in #2591.
+struct cbor_fc_a
+{};
+struct cbor_fc_b
+{};
+using cbor_fc_variant = std::variant<cbor_fc_a, cbor_fc_b>;
+
+template <>
+struct glz::meta<cbor_fc_variant>
+{
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+template <uint32_t Format>
+struct glz::from<Format, cbor_fc_variant>
+{
+   template <auto Opts>
+   static void op(cbor_fc_variant&, glz::is_context auto&&, auto&&, auto&&)
+   {}
+};
+
+template <uint32_t Format>
+struct glz::to<Format, cbor_fc_variant>
+{
+   template <auto Opts>
+   static void op(auto&&, glz::is_context auto&& ctx, auto&&... args)
+   {
+      glz::serialize<Format>::template op<Opts>(42, ctx, args...);
+   }
+};
+
+void custom_variant_ambiguity_tests()
+{
+   "fully custom variant specialization is unambiguous"_test = [] {
+      cbor_fc_variant v{};
+      std::string s{};
+      expect(not glz::write_cbor(v, s));
+      cbor_fc_variant r{};
+      expect(not glz::read_cbor(r, s));
+   };
+}
+
 int main()
 {
+   custom_variant_ambiguity_tests();
    basic_types_tests();
    integer_tests();
    float_tests();

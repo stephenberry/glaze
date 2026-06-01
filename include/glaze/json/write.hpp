@@ -1671,6 +1671,7 @@ namespace glz
    };
 
    template <is_variant T>
+      requires(not custom_write<T>)
    struct to<JSON, T>
    {
       template <auto Opts, class B>
@@ -1680,9 +1681,76 @@ namespace glz
             [&](auto&& val) {
                using V = std::decay_t<decltype(val)>;
 
-               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() &&
-                             (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)) ||
-                              is_memory_object<V>)) {
+               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() && custom_write<V>) {
+                  // Custom alternative: the user's serializer emits the object body, into which we
+                  // merge the variant tag. For this to produce valid JSON the custom to<> must (1)
+                  // write an object body and (2) honor opening_and_closing_handled (suppress its own
+                  // braces) so the tag shares the alternative's object. A custom writer that emits a
+                  // scalar/array, or that ignores those flags, would yield malformed output.
+                  //
+                  // The tag-emission below mirrors the reflected-object branch that follows; keep the
+                  // two in sync. The body size is not known at compile time, so we always write the
+                  // tag separator and then drop it at runtime if the body turned out empty.
+                  using id_type = std::decay_t<decltype(ids_v<T>[value.index()])>;
+                  if constexpr (Opts.prettify) {
+                     dump("{\n", b, ix);
+                     ctx.depth += check_indentation_width(Opts);
+                     dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+                     dump('"', b, ix);
+                     dump_maybe_empty(tag_v<T>, b, ix);
+                     if constexpr (std::integral<id_type>) {
+                        dump("\": ", b, ix);
+                        serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                     }
+                     else {
+                        dump("\": \"", b, ix);
+                        dump_maybe_empty(ids_v<T>[value.index()], b, ix);
+                        dump('"', b, ix);
+                     }
+                     const auto pos_after_tag = ix;
+                     dump(",\n", b, ix);
+                     dumpn(check_indentation_char(Opts), ctx.depth, b, ix);
+                     const auto pos_body_start = ix;
+                     to<JSON, V>::template op<opening_and_closing_handled<Opts>()>(val, ctx, b, ix);
+                     if (ix == pos_body_start) {
+                        ix = pos_after_tag; // custom body was empty: undo the tag separator
+                     }
+                     ctx.depth -= check_indentation_width(Opts);
+                     if (!ensure_space(ctx, b, ix + ctx.depth + write_padding_bytes)) [[unlikely]] {
+                        return;
+                     }
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
+                     std::memset(&b[ix], check_indentation_char(Opts), ctx.depth);
+                     ix += ctx.depth;
+                     std::memcpy(&b[ix], "}", 1);
+                     ++ix;
+                  }
+                  else {
+                     dump("{\"", b, ix);
+                     dump_maybe_empty(tag_v<T>, b, ix);
+                     if constexpr (std::integral<id_type>) {
+                        dump("\":", b, ix);
+                        serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
+                     }
+                     else {
+                        dump("\":\"", b, ix);
+                        dump_maybe_empty(ids_v<T>[value.index()], b, ix);
+                        dump('"', b, ix);
+                     }
+                     const auto pos_after_tag = ix;
+                     dump(',', b, ix);
+                     const auto pos_body_start = ix;
+                     to<JSON, V>::template op<opening_and_closing_handled<Opts>()>(val, ctx, b, ix);
+                     if (ix == pos_body_start) {
+                        ix = pos_after_tag; // custom body was empty: undo the tag separator
+                     }
+                     dump('}', b, ix);
+                  }
+               }
+               else if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() &&
+                                  (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)) ||
+                                   is_memory_object<V>)) {
                   constexpr auto N = []() {
                      if constexpr (is_memory_object<V>) {
                         return reflect<memory_type<V>>::size;

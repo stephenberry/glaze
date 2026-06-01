@@ -1980,7 +1980,7 @@ void run_integrity_check_server(std::atomic<bool>& server_ready, std::atomic<boo
             std::cerr << "[integrity_server] Invalid message detected! Size=" << message.size() << std::endl;
             // Print hex dump of first 64 bytes for debugging
             std::cerr << "[integrity_server] Hex dump: ";
-            for (size_t i = 0; i < std::min(message.size(), size_t(64)); ++i) {
+            for (size_t i = 0; i < (std::min)(message.size(), size_t(64)); ++i) {
                std::cerr << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)message[i] << " ";
             }
             std::cerr << std::dec << std::endl;

@@ -1474,6 +1474,7 @@ namespace glz
    // Variant support for TOML
    // Serializes the active variant alternative using the appropriate TOML type
    template <is_variant T>
+      requires(not custom_write<T>)
    struct to<TOML, T>
    {
       template <auto Opts, class B>

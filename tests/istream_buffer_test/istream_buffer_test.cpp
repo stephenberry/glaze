@@ -34,7 +34,7 @@ class slow_stringbuf : public std::stringbuf
    std::streamsize xsgetn(char* s, std::streamsize n) override
    {
       // Only return up to max_bytes_per_read_ bytes, simulating chunked arrival
-      return std::stringbuf::xsgetn(s, std::min(n, static_cast<std::streamsize>(max_bytes_per_read_)));
+      return std::stringbuf::xsgetn(s, (std::min)(n, static_cast<std::streamsize>(max_bytes_per_read_)));
    }
 };
 
@@ -113,7 +113,7 @@ class pipe_buffer : public std::streambuf
          return 0;
       }
 
-      size_t to_read = std::min(static_cast<size_t>(n), available);
+      size_t to_read = (std::min)(static_cast<size_t>(n), available);
       std::memcpy(s, buffer_.data() + read_pos_, to_read);
       read_pos_ += to_read;
 
@@ -148,7 +148,7 @@ class slow_ostringbuf : public std::stringbuf
       std::streamsize total_written = 0;
       while (total_written < n) {
          ++total_write_calls_;
-         std::streamsize to_write = std::min(n - total_written, static_cast<std::streamsize>(max_bytes_per_write_));
+         std::streamsize to_write = (std::min)(n - total_written, static_cast<std::streamsize>(max_bytes_per_write_));
          auto written = std::stringbuf::xsputn(s + total_written, to_write);
          if (written <= 0) break; // Error case
          total_written += written;
@@ -1249,7 +1249,7 @@ suite async_streaming_tests = [] {
          size_t pos = 0;
          size_t chunk_size = 5;
          while (pos < json.size()) {
-            size_t len = std::min(chunk_size, json.size() - pos);
+            size_t len = (std::min)(chunk_size, json.size() - pos);
             pbuf.write(json.data() + pos, len);
             pos += len;
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -1287,7 +1287,7 @@ suite async_streaming_tests = [] {
          // Send in variable-sized chunks
          size_t pos = 0;
          while (pos < json.size()) {
-            size_t len = std::min(size_t(7 + (pos % 5)), json.size() - pos); // Varying chunk sizes
+            size_t len = (std::min)(size_t(7 + (pos % 5)), json.size() - pos); // Varying chunk sizes
             pbuf.write(json.data() + pos, len);
             pos += len;
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -1320,7 +1320,7 @@ suite async_streaming_tests = [] {
          // Send with longer delays between chunks
          size_t pos = 0;
          while (pos < json.size()) {
-            size_t len = std::min(size_t(10), json.size() - pos);
+            size_t len = (std::min)(size_t(10), json.size() - pos);
             pbuf.write(json.data() + pos, len);
             pos += len;
             std::this_thread::sleep_for(std::chrono::milliseconds(15));
