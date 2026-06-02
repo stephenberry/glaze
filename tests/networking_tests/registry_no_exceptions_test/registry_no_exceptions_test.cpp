@@ -356,6 +356,43 @@ suite rest_registration = [] {
 };
 
 // ----------------------------------------------------------------------------
+// Compile-time guard: merge registration is available for REPE/JSON-RPC but not
+// REST. REST's registry_impl has no register_merge_endpoint, so on(merge) and
+// try_on(merge) are constrained out (requires Proto != REST) and produce an honest
+// "no matching function" diagnostic instead of a hard error deep in the
+// implementation. These checks lock the constraint in: they fail to compile if it
+// is dropped, and they will flag it if REST merge is ever implemented (at which
+// point the constraint, and these asserts, should be revisited). See issue #2265.
+// ----------------------------------------------------------------------------
+
+namespace merge_constraint_checks
+{
+   struct merge_a_t
+   {
+      int x{};
+   };
+   struct merge_b_t
+   {
+      int y{};
+   };
+
+   template <uint32_t Proto>
+   using reg_t = glz::registry<glz::opts{}, Proto>;
+
+   template <class Reg>
+   concept can_on_merge = requires(Reg reg, glz::merge<merge_a_t&, merge_b_t&> m) { reg.on(m); };
+   template <class Reg>
+   concept can_try_on_merge = requires(Reg reg, glz::merge<merge_a_t&, merge_b_t&> m) { reg.try_on(m); };
+
+   static_assert(!can_on_merge<reg_t<glz::REST>>, "REST must not advertise on(merge)");
+   static_assert(!can_try_on_merge<reg_t<glz::REST>>, "REST must not advertise try_on(merge)");
+   static_assert(can_on_merge<reg_t<glz::REPE>>, "REPE must support on(merge)");
+   static_assert(can_try_on_merge<reg_t<glz::REPE>>, "REPE must support try_on(merge)");
+   static_assert(can_on_merge<reg_t<glz::JSONRPC>>, "JSON-RPC must support on(merge)");
+   static_assert(can_try_on_merge<reg_t<glz::JSONRPC>>, "JSON-RPC must support try_on(merge)");
+}
+
+// ----------------------------------------------------------------------------
 // REST: a reflected handler may fail a request by returning glz::expected. The
 // registry maps the error to an HTTP status + glz::http_error body rather than
 // serializing the expected as a 200 success payload. See issue #2265.

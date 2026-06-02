@@ -292,9 +292,13 @@ namespace glz
          return {};
       }
 
-      // Register multiple C++ types merged together, allowing the root endpoint to return a combined view
+      // Register multiple C++ types merged together, allowing the root endpoint to return a combined view.
+      // Not available for REST: merge registration relies on register_merge_endpoint, which the REST
+      // protocol does not provide (a merged combined-view root endpoint is not modeled for REST). The
+      // requires-clause makes that an honest "no matching function" diagnostic instead of a hard error
+      // deep inside the implementation.
       template <const std::string_view& root = detail::empty_path, class... Ts>
-         requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
+         requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)) && Proto != REST)
       void on(glz::merge<Ts...>& merged)
       {
          using impl = registry_impl<Opts, Proto>;
@@ -310,33 +314,15 @@ namespace glz
          });
       }
 
-      // Non-throwing registration for merged objects (see try_on(T&) above).
+      // Non-throwing registration for merged objects (see try_on(T&) above). Like on(merge) this is
+      // constrained to non-REST protocols, so it never advertises REST merge support that does not
+      // exist. For REPE/JSON-RPC registration cannot fail, so this simply registers and succeeds; the
+      // route-error handling that try_on(T&) needs for REST is therefore unnecessary here.
       template <const std::string_view& root = detail::empty_path, class... Ts>
-         requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
+         requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)) && Proto != REST)
       [[nodiscard]] expected<void, std::string> try_on(glz::merge<Ts...>& merged)
       {
-         if constexpr (Proto == REST) {
-            endpoints.clear_route_error();
-#if __cpp_exceptions
-            try {
-               on<root>(merged);
-            }
-            catch (const std::exception& e) {
-               return glz::unexpected(std::string(e.what()));
-            }
-            catch (...) {
-               return glz::unexpected(std::string("Unknown route registration error"));
-            }
-#else
-            on<root>(merged);
-#endif
-            if (endpoints.has_route_error()) {
-               return glz::unexpected(std::string(endpoints.route_error()));
-            }
-         }
-         else {
-            on<root>(merged);
-         }
+         on<root>(merged);
          return {};
       }
 
