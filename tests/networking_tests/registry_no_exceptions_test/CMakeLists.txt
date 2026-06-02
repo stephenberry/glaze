@@ -5,8 +5,11 @@ add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
-# No-exceptions build: the core purpose of this test. glz_test_common compiles with
-# -fno-exceptions -fno-rtti, so this would not even compile before issue #2265 was fixed.
+# No-exceptions build: the core purpose of this test. On GCC/Clang glz_test_common
+# compiles with -fno-exceptions -fno-rtti, so this would not even compile before issue
+# #2265 was fixed. On MSVC exceptions stay enabled (see glz_test_common in
+# tests/CMakeLists.txt), so this variant mirrors the exceptions build there rather than
+# exercising the !__cpp_exceptions paths.
 if(glaze_BUILD_REGISTRY_NOEXCEPT_TESTS)
     add_executable(${PROJECT_NAME}_noexceptions ${PROJECT_NAME}.cpp)
     target_link_libraries(${PROJECT_NAME}_noexceptions PRIVATE glz_test_common)

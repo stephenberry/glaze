@@ -85,6 +85,15 @@ add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_23)
 target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glz_asio)
 
+# glz_test_common is the no-exceptions test config: on GCC/Clang it compiles with
+# -fno-exceptions, so targets that link it exercise the library's no-exception
+# (#else / !__cpp_exceptions) paths. MSVC is the exception: /GR- disables RTTI to mirror
+# -fno-rtti, but exceptions stay ENABLED -- CMake injects /EHsc by default, so disabling
+# them would also require _HAS_EXCEPTIONS=0 and stripping /EHsc, which would flip the
+# entire Windows suite to no-exceptions and surface unguarded throw/try in the MSVC STL,
+# ut, and Asio. That is its own effort; until then the *_noexceptions targets are
+# exceptions-enabled duplicates on Windows and the !__cpp_exceptions paths go uncompiled
+# there. Tracked as a follow-up (proper MSVC _HAS_EXCEPTIONS=0 coverage).
 if(MSVC)
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj)
     target_compile_options(glz_test_common INTERFACE /W4 /wd4459 /wd4805)
