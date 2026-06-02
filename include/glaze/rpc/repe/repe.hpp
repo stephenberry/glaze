@@ -580,10 +580,12 @@ namespace glz::repe
    /// Supported error types:
    ///   - glz::error_code  -> that code with an empty message
    ///   - glz::error_ctx   -> its code and message
-   ///   - string-like      -> error_code::parse_error + the message. This matches the
-   ///                         code used when a thrown handler is caught (see registry
-   ///                         call()), so returning glz::unexpected(msg) and throwing
-   ///                         produce the same response.
+   ///   - string-like      -> error_code::parse_error + the message. This is the same
+   ///                         error code a thrown handler is mapped to when caught (see
+   ///                         registry call()), so the two paths agree on the code. The
+   ///                         body differs, though: the thrown path wraps the message via
+   ///                         build_registry_error(query, ...) for context, while this path
+   ///                         uses the returned string verbatim.
    template <class E>
    void set_handler_error(state_view& state, E&& error)
    {
