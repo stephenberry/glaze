@@ -11,6 +11,7 @@
 #include "glaze/core/wrappers.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
+#include "glaze/core/write_wrappers.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/parse.hpp"
@@ -940,6 +941,132 @@ namespace glz
       template <auto Opts, class T, class B>
       inline void write_block_mapping_nested(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level);
 
+      // Write the value portion of a block-mapping entry (everything after the already-written
+      // "key:"). Dispatches on `val_t` to choose the layout: simple scalars stay on the same
+      // line, complex objects/arrays/maps move to the next line with increased indent. Factored
+      // out so transparent write wrappers (mimic glaze_value_t and glz::custom getters) can be
+      // unwrapped and routed through the same logic by their resolved type (issue #2595).
+      template <auto Opts, class val_t, class Member, class B>
+      inline void write_block_mapping_value(Member&& member, is_context auto&& ctx, B&& b, auto& ix,
+                                            int32_t indent_level)
+      {
+         // Handle empty containers inline (before type dispatch)
+         if constexpr (range<val_t> && !str_t<val_t> && !is_simple_type<val_t>() && has_empty<val_t>) {
+            if (member.empty()) {
+               if constexpr (writable_map_t<val_t>) {
+                  dump(" {}\n", b, ix);
+               }
+               else {
+                  dump(" []\n", b, ix);
+               }
+               return;
+            }
+         }
+
+         if constexpr (is_simple_type<val_t>()) {
+            // Simple types go on same line
+            dump(' ', b, ix);
+            if constexpr (str_t<val_t>) {
+               yaml::write_yaml_string<Opts>(sv{member}, ctx, b, ix, indent_level);
+            }
+            else {
+               serialize<YAML>::op<Opts>(member, ctx, b, ix);
+            }
+            dump('\n', b, ix);
+         }
+         else if constexpr (nullable_like<val_t>) {
+            using inner_t = std::remove_cvref_t<decltype(*std::declval<val_t&>())>;
+            if (!member) {
+               // Null - always same line
+               dump(' ', b, ix);
+               serialize<YAML>::op<Opts>(member, ctx, b, ix);
+               dump('\n', b, ix);
+            }
+            else if constexpr (is_simple_type<inner_t>() || str_t<inner_t>) {
+               // Simple inner type - same line
+               dump(' ', b, ix);
+               if constexpr (str_t<inner_t>) {
+                  yaml::write_yaml_string<Opts>(sv{*member}, ctx, b, ix, indent_level);
+               }
+               else {
+                  serialize<YAML>::op<Opts>(*member, ctx, b, ix);
+               }
+               dump('\n', b, ix);
+            }
+            else {
+               // Complex inner type - check for empty containers first
+               bool wrote_empty = false;
+               if constexpr (writable_map_t<inner_t>) {
+                  if (member->empty()) {
+                     dump(" {}\n", b, ix);
+                     wrote_empty = true;
+                  }
+               }
+               else if constexpr (writable_array_t<inner_t>) {
+                  if constexpr (requires { member->empty(); }) {
+                     if (member->empty()) {
+                        dump(" []\n", b, ix);
+                        wrote_empty = true;
+                     }
+                  }
+               }
+               if (!wrote_empty) {
+                  // Non-empty complex inner type - next line with increased indent
+                  dump('\n', b, ix);
+                  if constexpr (requires { ctx.indent_level; }) {
+                     auto nested_ctx = ctx;
+                     nested_ctx.indent_level = indent_level + 1;
+                     serialize<YAML>::op<Opts>(*member, nested_ctx, b, ix);
+                  }
+                  else {
+                     write_block_mapping_nested<Opts>(*member, ctx, b, ix, indent_level + 1);
+                  }
+               }
+            }
+         }
+         else if constexpr (is_or_wraps_variant<val_t>()) {
+            // Variants and variant-wrappers (e.g., glz::generic) may hold simple values
+            if (variant_holds_simple_type(member)) {
+               dump(' ', b, ix);
+               write_variant_value<Opts>(member, ctx, b, ix, indent_level);
+               dump('\n', b, ix);
+            }
+            else {
+               dump('\n', b, ix);
+               if constexpr (requires { ctx.indent_level; }) {
+                  auto nested_ctx = ctx;
+                  nested_ctx.indent_level = indent_level + 1;
+                  serialize<YAML>::op<Opts>(member, nested_ctx, b, ix);
+               }
+               else {
+                  write_block_mapping_nested<Opts>(member, ctx, b, ix, indent_level + 1);
+               }
+            }
+         }
+         else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> ||
+                            reflectable<val_t>) {
+            // Complex types go on next line with increased indent
+            dump('\n', b, ix);
+
+            // Create a modified context with incremented indent level
+            if constexpr (requires { ctx.indent_level; }) {
+               auto nested_ctx = ctx;
+               nested_ctx.indent_level = indent_level + 1;
+               serialize<YAML>::op<Opts>(member, nested_ctx, b, ix);
+            }
+            else {
+               write_block_mapping_nested<Opts>(member, ctx, b, ix, indent_level + 1);
+            }
+         }
+         else {
+            // All other types (custom_t, types with custom to/from<YAML>, etc.)
+            // are assumed to produce scalar values - write on same line
+            dump(' ', b, ix);
+            serialize<YAML>::op<Opts>(member, ctx, b, ix);
+            dump('\n', b, ix);
+         }
+      }
+
       // Write block-style mapping
       template <auto Opts, class T, class B>
       inline void write_block_mapping(T&& value, is_context auto&& ctx, B&& b, auto& ix, int32_t indent_level,
@@ -1013,120 +1140,19 @@ namespace glz
                dump(key, b, ix);
                dump(':', b, ix);
 
-               // Handle empty containers inline (before type dispatch)
-               if constexpr (range<val_t> && !str_t<val_t> && !is_simple_type<val_t>() && has_empty<val_t>) {
-                  if (member.empty()) {
-                     if constexpr (writable_map_t<val_t>) {
-                        dump(" {}\n", b, ix);
-                     }
-                     else {
-                        dump(" []\n", b, ix);
-                     }
-                     return;
-                  }
-               }
-
-               if constexpr (is_simple_type<val_t>()) {
-                  // Simple types go on same line
-                  dump(' ', b, ix);
-                  if constexpr (str_t<val_t>) {
-                     yaml::write_yaml_string<Opts>(sv{member}, ctx, b, ix, indent_level);
-                  }
-                  else {
-                     serialize<YAML>::op<Opts>(member, ctx, b, ix);
-                  }
-                  dump('\n', b, ix);
-               }
-               else if constexpr (nullable_like<val_t>) {
-                  using inner_t = std::remove_cvref_t<decltype(*std::declval<val_t&>())>;
-                  if (!member) {
-                     // Null - always same line
-                     dump(' ', b, ix);
-                     serialize<YAML>::op<Opts>(member, ctx, b, ix);
-                     dump('\n', b, ix);
-                  }
-                  else if constexpr (is_simple_type<inner_t>() || str_t<inner_t>) {
-                     // Simple inner type - same line
-                     dump(' ', b, ix);
-                     if constexpr (str_t<inner_t>) {
-                        yaml::write_yaml_string<Opts>(sv{*member}, ctx, b, ix, indent_level);
-                     }
-                     else {
-                        serialize<YAML>::op<Opts>(*member, ctx, b, ix);
-                     }
-                     dump('\n', b, ix);
-                  }
-                  else {
-                     // Complex inner type - check for empty containers first
-                     bool wrote_empty = false;
-                     if constexpr (writable_map_t<inner_t>) {
-                        if (member->empty()) {
-                           dump(" {}\n", b, ix);
-                           wrote_empty = true;
-                        }
-                     }
-                     else if constexpr (writable_array_t<inner_t>) {
-                        if constexpr (requires { member->empty(); }) {
-                           if (member->empty()) {
-                              dump(" []\n", b, ix);
-                              wrote_empty = true;
-                           }
-                        }
-                     }
-                     if (!wrote_empty) {
-                        // Non-empty complex inner type - next line with increased indent
-                        dump('\n', b, ix);
-                        if constexpr (requires { ctx.indent_level; }) {
-                           auto nested_ctx = ctx;
-                           nested_ctx.indent_level = indent_level + 1;
-                           serialize<YAML>::op<Opts>(*member, nested_ctx, b, ix);
-                        }
-                        else {
-                           write_block_mapping_nested<Opts>(*member, ctx, b, ix, indent_level + 1);
-                        }
-                     }
-                  }
-               }
-               else if constexpr (is_or_wraps_variant<val_t>()) {
-                  // Variants and variant-wrappers (e.g., glz::generic) may hold simple values
-                  if (variant_holds_simple_type(member)) {
-                     dump(' ', b, ix);
-                     write_variant_value<Opts>(member, ctx, b, ix, indent_level);
-                     dump('\n', b, ix);
-                  }
-                  else {
-                     dump('\n', b, ix);
-                     if constexpr (requires { ctx.indent_level; }) {
-                        auto nested_ctx = ctx;
-                        nested_ctx.indent_level = indent_level + 1;
-                        serialize<YAML>::op<Opts>(member, nested_ctx, b, ix);
-                     }
-                     else {
-                        write_block_mapping_nested<Opts>(member, ctx, b, ix, indent_level + 1);
-                     }
-                  }
-               }
-               else if constexpr (writable_map_t<val_t> || writable_array_t<val_t> || glaze_object_t<val_t> ||
-                                  reflectable<val_t>) {
-                  // Complex types go on next line with increased indent
-                  dump('\n', b, ix);
-
-                  // Create a modified context with incremented indent level
-                  if constexpr (requires { ctx.indent_level; }) {
-                     auto nested_ctx = ctx;
-                     nested_ctx.indent_level = indent_level + 1;
-                     serialize<YAML>::op<Opts>(member, nested_ctx, b, ix);
-                  }
-                  else {
-                     write_block_mapping_nested<Opts>(member, ctx, b, ix, indent_level + 1);
-                  }
+               // A field exposed through a transparent write wrapper (mimic glaze_value_t or a
+               // glz::custom getter) that does not itself wrap a variant is laid out by the type
+               // it resolves to, not the wrapper type. Without this it would fall through to the
+               // scalar branch and emit a nested object/array on the same line (issue #2595).
+               // Variant-wrappers (e.g. glz::generic) keep their existing path unchanged.
+               if constexpr (transparent_write_wrapper<val_t> && !is_or_wraps_variant<val_t>()) {
+                  unwrap_write_value(member, ctx, [&]<class Inner>(Inner&& inner) {
+                     write_block_mapping_value<Opts, std::remove_cvref_t<Inner>>(std::forward<Inner>(inner), ctx, b, ix,
+                                                                                 indent_level);
+                  });
                }
                else {
-                  // All other types (custom_t, types with custom to/from<YAML>, etc.)
-                  // are assumed to produce scalar values - write on same line
-                  dump(' ', b, ix);
-                  serialize<YAML>::op<Opts>(member, ctx, b, ix);
-                  dump('\n', b, ix);
+                  write_block_mapping_value<Opts, val_t>(member, ctx, b, ix, indent_level);
                }
             }
          });
