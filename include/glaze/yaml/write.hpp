@@ -11,6 +11,7 @@
 #include "glaze/core/wrappers.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
+#include "glaze/core/write_wrappers.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/parse.hpp"
