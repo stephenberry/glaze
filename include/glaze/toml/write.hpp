@@ -11,6 +11,7 @@
 #include "glaze/core/wrappers.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
+#include "glaze/core/write_wrappers.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
@@ -905,6 +906,13 @@ namespace glz
       else if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
          write_inline_object<Options, val_t>(std::forward<V>(val), ctx, b, ix);
       }
+      else if constexpr (transparent_write_wrapper<val_t>) {
+         // A mimic glaze_value_t or glz::custom getter: unwrap to the value it serializes as so
+         // a wrapped object/map/array stays inline here, rather than dispatching through its
+         // multi-line writer and leaking `key = value` lines or `[table]` headers (issue #2595).
+         unwrap_write_value(std::forward<V>(val), ctx,
+                            [&](auto&& inner) { write_inline_value<Options>(inner, ctx, b, ix); });
+      }
       else {
          // Arrays land here and dispatch into the array writer, which wraps `[...]`
          // and routes each element back through write_inline_value via write_element.
@@ -1059,8 +1067,6 @@ namespace glz
 
       // Helper lambda to write a nested table [table] - not used when inside array-of-tables context
       auto write_table_field = [&]<size_t I>() {
-         using val_t = field_t<T, I>;
-
          if (!ensure_space(ctx, b, ix + padding)) [[unlikely]] {
             return;
          }
@@ -1103,14 +1109,20 @@ namespace glz
             new_prefix += key;
          }
 
-         // Serialize the nested object with the new path
-         if constexpr (reflectable<T>) {
-            write_toml_object_with_path<Options, val_t>(get_member(value, get<I>(t)), ctx, b, ix, new_prefix);
-         }
-         else {
-            write_toml_object_with_path<Options, val_t>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix,
-                                                        new_prefix);
-         }
+         // Serialize the nested object with the new path, looking through any transparent write
+         // wrapper (mimic glaze_value_t / glz::custom getter) so the unwrapped object is what
+         // receives the [table] body rather than being mistaken for a scalar (issue #2595).
+         auto&& member = [&]() -> decltype(auto) {
+            if constexpr (reflectable<T>) {
+               return get_member(value, get<I>(t));
+            }
+            else {
+               return get_member(value, get<I>(reflect<T>::values));
+            }
+         }();
+         unwrap_write_value(member, ctx, [&](auto&& inner) {
+            write_toml_object_with_path<Options, std::remove_cvref_t<decltype(inner)>>(inner, ctx, b, ix, new_prefix);
+         });
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -1226,11 +1238,19 @@ namespace glz
                return;
             }
 
-            // Only process scalar fields in this pass (not objects or arrays of objects)
+            // Only process scalar fields in this pass (not objects or arrays of objects).
+            // is_object looks through transparent write wrappers (mimic glaze_value_t /
+            // glz::custom getters) so a wrapped object is laid out as a [table] rather than
+            // emitting malformed multi-line `key = value` content in value position (issue
+            // #2595). Arrays and maps stay classified by the wrapper type so a wrapped sequence
+            // or map falls into the scalar path, where write_inline_value unwraps it into a
+            // valid inline array / inline table that also round-trips through the reader (the
+            // TOML reader cannot feed a [[array]] header into a glz::custom setter).
             // Exception: in inline_mode, arrays of objects are written as inline arrays.
             // Map fields are written as inline tables here so multi-line key = value
             // pairs do not leak out as the value of a struct field.
-            constexpr bool is_object = glaze_object_t<val_t> || reflectable<val_t>;
+            constexpr bool is_object =
+               glaze_object_t<resolve_write_type_t<val_t>> || reflectable<resolve_write_type_t<val_t>>;
             constexpr bool is_map = writable_map_t<val_t>;
             constexpr bool is_scalar = !is_object && !is_map && (!is_array_of_objects_v<val_t> || inline_mode);
             if constexpr (is_map) {
@@ -1256,8 +1276,11 @@ namespace glz
                return;
             }
 
-            // Process nested objects and arrays of objects
-            if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
+            // Process nested objects and arrays of objects. is_object looks through transparent
+            // write wrappers so a wrapped object gets a [table] body (issue #2595); arrays-of-
+            // objects stay classified by the wrapper type and are handled inline in pass 1 when
+            // wrapped (see the pass 1 note above).
+            if constexpr (glaze_object_t<resolve_write_type_t<val_t>> || reflectable<resolve_write_type_t<val_t>>) {
                write_table_field.template operator()<I>();
             }
             else if constexpr (is_array_of_objects_v<val_t> && !inline_mode) {

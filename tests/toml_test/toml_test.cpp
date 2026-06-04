@@ -5613,4 +5613,178 @@ suite toml_fully_custom_variant_tests = [] {
    };
 };
 
+// Issue #2595: a field exposed through a transparent write wrapper - a mimic glaze_value_t
+// (meta whose value is a single member pointer) or a glz::custom getter/setter - must be laid
+// out by the shape it resolves to. A wrapped object gets a [table] body instead of malformed
+// multi-line `key = value` content in value position.
+namespace i2595
+{
+   struct leaf
+   {
+      std::string name{};
+      int id{};
+      bool operator==(const leaf&) const = default;
+   };
+
+   // mimic: meta value is a single member pointer, so this serializes exactly as `leaf`.
+   struct mimic_leaf
+   {
+      leaf v{};
+      bool operator==(const mimic_leaf&) const = default;
+   };
+   struct mimic_pair
+   {
+      mimic_leaf x{};
+      mimic_leaf y{};
+   };
+   struct mimic_doc
+   {
+      mimic_pair mid{};
+   };
+   // Plain equivalents used to confirm the wrapped output matches a plain field exactly.
+   struct plain_pair
+   {
+      leaf x{};
+      leaf y{};
+   };
+   struct plain_doc
+   {
+      plain_pair mid{};
+   };
+
+   // glz::custom getter/setter exposing a nested object.
+   struct custom_obj
+   {
+      leaf inner{};
+      const leaf& get_inner() const { return inner; }
+      void set_inner(leaf l) { inner = std::move(l); }
+      bool operator==(const custom_obj&) const = default;
+   };
+   struct plain_obj
+   {
+      leaf inner{};
+   };
+
+   // glz::custom getter/setter exposing a sequence of objects.
+   struct custom_seq
+   {
+      std::vector<leaf> items{};
+      const std::vector<leaf>& get_items() const { return items; }
+      void set_items(std::vector<leaf> v) { items = std::move(v); }
+      bool operator==(const custom_seq&) const = default;
+   };
+}
+
+template <>
+struct glz::meta<i2595::leaf>
+{
+   using T = i2595::leaf;
+   static constexpr auto value = object("name", &T::name, "id", &T::id);
+};
+template <>
+struct glz::meta<i2595::mimic_leaf>
+{
+   using mimic = i2595::leaf;
+   static constexpr auto value = &i2595::mimic_leaf::v;
+};
+template <>
+struct glz::meta<i2595::mimic_pair>
+{
+   using T = i2595::mimic_pair;
+   static constexpr auto value = object("x", &T::x, "y", &T::y);
+};
+template <>
+struct glz::meta<i2595::mimic_doc>
+{
+   using T = i2595::mimic_doc;
+   static constexpr auto value = object("mid", &T::mid);
+};
+template <>
+struct glz::meta<i2595::plain_pair>
+{
+   using T = i2595::plain_pair;
+   static constexpr auto value = object("x", &T::x, "y", &T::y);
+};
+template <>
+struct glz::meta<i2595::plain_doc>
+{
+   using T = i2595::plain_doc;
+   static constexpr auto value = object("mid", &T::mid);
+};
+template <>
+struct glz::meta<i2595::custom_obj>
+{
+   using T = i2595::custom_obj;
+   static constexpr auto value = object("inner", glz::custom<&T::set_inner, &T::get_inner>);
+};
+template <>
+struct glz::meta<i2595::plain_obj>
+{
+   using T = i2595::plain_obj;
+   static constexpr auto value = object("inner", &T::inner);
+};
+template <>
+struct glz::meta<i2595::custom_seq>
+{
+   using T = i2595::custom_seq;
+   static constexpr auto value = object("items", glz::custom<&T::set_items, &T::get_items>);
+};
+
+suite issue_2595_transparent_wrappers = [] {
+   using namespace i2595;
+
+   "mimic nested objects match plain layout"_test = [] {
+      mimic_doc w{};
+      w.mid.x.v = {"asdf", 123};
+      w.mid.y.v = {"qwer", 456};
+      plain_doc p{};
+      p.mid.x = {"asdf", 123};
+      p.mid.y = {"qwer", 456};
+
+      const auto ws = glz::write_toml(w);
+      const auto ps = glz::write_toml(p);
+      expect(ws.has_value());
+      expect(ps.has_value());
+      expect(ws.value() == ps.value()) << ws.value();
+
+      mimic_doc r{};
+      expect(not glz::read_toml(r, ws.value()));
+      expect(r.mid.x == w.mid.x);
+      expect(r.mid.y == w.mid.y);
+   };
+
+   "custom getter object matches plain layout"_test = [] {
+      custom_obj c{};
+      c.inner = {"asdf", 123};
+      plain_obj p{};
+      p.inner = {"asdf", 123};
+
+      const auto cs = glz::write_toml(c);
+      const auto ps = glz::write_toml(p);
+      expect(cs.has_value());
+      expect(ps.has_value());
+      expect(cs.value() == ps.value()) << cs.value();
+
+      custom_obj r{};
+      expect(not glz::read_toml(r, cs.value()));
+      expect(r == c);
+   };
+
+   // A wrapped sequence is emitted as a valid inline array rather than a [[array]] header: the
+   // TOML reader cannot feed a [[array]] section into a glz::custom setter, so inline keeps the
+   // output both valid and round-trippable.
+   "custom getter sequence is inline and round-trips"_test = [] {
+      custom_seq c{};
+      c.items = {{"a", 1}, {"b", 2}};
+
+      const auto cs = glz::write_toml(c);
+      expect(cs.has_value());
+      expect(cs.value() == R"(items = [{name = "a", id = 1}, {name = "b", id = 2}])") << cs.value();
+
+      custom_seq r{};
+      expect(not glz::read_toml(r, cs.value()));
+      expect(r == c);
+   };
+};
+
 int main() { return 0; }
