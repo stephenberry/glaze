@@ -1249,8 +1249,8 @@ namespace glz
             // Exception: in inline_mode, arrays of objects are written as inline arrays.
             // Map fields are written as inline tables here so multi-line key = value
             // pairs do not leak out as the value of a struct field.
-            constexpr bool is_object = glaze_object_t<resolve_write_type_t<val_t>> ||
-                                       reflectable<resolve_write_type_t<val_t>>;
+            constexpr bool is_object =
+               glaze_object_t<resolve_write_type_t<val_t>> || reflectable<resolve_write_type_t<val_t>>;
             constexpr bool is_map = writable_map_t<val_t>;
             constexpr bool is_scalar = !is_object && !is_map && (!is_array_of_objects_v<val_t> || inline_mode);
             if constexpr (is_map) {
