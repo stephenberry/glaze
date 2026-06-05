@@ -12,6 +12,7 @@
 #include <cstring>
 #include <limits>
 #include <string_view>
+#include <utility>
 
 #include "glaze/bson/header.hpp"
 #include "glaze/core/buffer_traits.hpp"
@@ -321,7 +322,7 @@ namespace glz
                return;
             }
             if constexpr (std::same_as<T, uint64_t>) {
-               if (value > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) [[unlikely]] {
+               if (!std::in_range<int64_t>(value)) [[unlikely]] {
                   ctx.error = error_code::invalid_length;
                   return;
                }
