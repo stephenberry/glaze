@@ -463,7 +463,7 @@ void integer_tests()
    };
 
    "uint32_max"_test = [] {
-      uint32_t v = std::numeric_limits<uint32_t>::max();
+      uint32_t v = (std::numeric_limits<uint32_t>::max)();
       std::string buffer;
       expect(not glz::write_cbor(v, buffer));
       uint32_t result{};
@@ -472,7 +472,7 @@ void integer_tests()
    };
 
    "int64_min"_test = [] {
-      int64_t v = std::numeric_limits<int64_t>::min() + 1; // +1 to avoid overflow in CBOR
+      int64_t v = (std::numeric_limits<int64_t>::min)() + 1; // +1 to avoid overflow in CBOR
       std::string buffer;
       expect(not glz::write_cbor(v, buffer));
       int64_t result{};

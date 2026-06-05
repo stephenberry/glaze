@@ -637,7 +637,7 @@ suite buffer_traits_comprehensive_tests = [] {
       static_assert(!traits::is_output_streaming);
 
       std::string s = "hello";
-      expect(traits::capacity(s) == std::numeric_limits<size_t>::max());
+      expect(traits::capacity(s) == (std::numeric_limits<size_t>::max)());
       expect(traits::ensure_capacity(s, 100) == true);
       expect(s.size() >= 100u); // ensure_capacity may resize
    };
@@ -687,7 +687,7 @@ suite buffer_traits_comprehensive_tests = [] {
 
       char buf[100];
       char* ptr = buf;
-      expect(traits::capacity(ptr) == std::numeric_limits<size_t>::max());
+      expect(traits::capacity(ptr) == (std::numeric_limits<size_t>::max)());
       expect(traits::ensure_capacity(ptr, 1000) == true); // Always trusts caller
    };
 
