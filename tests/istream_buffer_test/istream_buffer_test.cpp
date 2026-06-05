@@ -3451,7 +3451,7 @@ suite buffer_size_requirements = [] {
    };
 
    "DBL_MAX and DBL_MIN with minimum 512-byte buffer"_test = [] {
-      std::vector<double> original = {std::numeric_limits<double>::max(), std::numeric_limits<double>::min(),
+      std::vector<double> original = {(std::numeric_limits<double>::max)(), (std::numeric_limits<double>::min)(),
                                       std::numeric_limits<double>::lowest(), std::numeric_limits<double>::epsilon()};
 
       std::ostringstream oss;

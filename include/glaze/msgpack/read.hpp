@@ -484,7 +484,7 @@ namespace glz
 
             if constexpr (std::is_signed_v<V>) {
                int64_t temp = is_signed ? signed_value : static_cast<int64_t>(unsigned_value);
-               if (temp < std::numeric_limits<V>::min() || temp > std::numeric_limits<V>::max()) {
+               if (temp < (std::numeric_limits<V>::min)() || temp > (std::numeric_limits<V>::max)()) {
                   ctx.error = error_code::dump_int_error;
                   return;
                }
@@ -496,14 +496,14 @@ namespace glz
                      ctx.error = error_code::dump_int_error;
                      return;
                   }
-                  if (static_cast<uint64_t>(signed_value) > std::numeric_limits<V>::max()) {
+                  if (static_cast<uint64_t>(signed_value) > (std::numeric_limits<V>::max)()) {
                      ctx.error = error_code::dump_int_error;
                      return;
                   }
                   value = static_cast<V>(signed_value);
                }
                else {
-                  if (unsigned_value > std::numeric_limits<V>::max()) {
+                  if (unsigned_value > (std::numeric_limits<V>::max)()) {
                      ctx.error = error_code::dump_int_error;
                      return;
                   }
