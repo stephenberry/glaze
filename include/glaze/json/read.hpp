@@ -4302,24 +4302,26 @@ namespace glz
 
                         // Compile-time array of field counts for each variant type
                         constexpr auto field_counts = []<size_t... I>(std::index_sequence<I...>) {
-                           return std::array<size_t, N>{([]<size_t J = I>() -> size_t {
-                              using V = std::decay_t<std::variant_alternative_t<J, T>>;
-                              if constexpr (glaze_object_t<V> || reflectable<V>) {
-                                 return reflect<V>::size;
-                              }
-                              else if constexpr (is_memory_object<V>) {
-                                 using X = memory_type<V>;
-                                 if constexpr (glaze_object_t<X> || reflectable<X>) {
-                                    return reflect<X>::size;
+                           return std::array<size_t, N> {
+                              ([]<size_t J = I>() -> size_t {
+                                 using V = std::decay_t<std::variant_alternative_t<J, T>>;
+                                 if constexpr (glaze_object_t<V> || reflectable<V>) {
+                                    return reflect<V>::size;
+                                 }
+                                 else if constexpr (is_memory_object<V>) {
+                                    using X = memory_type<V>;
+                                    if constexpr (glaze_object_t<X> || reflectable<X>) {
+                                       return reflect<X>::size;
+                                    }
+                                    else {
+                                       return (std::numeric_limits<size_t>::max)();
+                                    }
                                  }
                                  else {
                                     return (std::numeric_limits<size_t>::max)();
                                  }
-                              }
-                              else {
-                                 return (std::numeric_limits<size_t>::max)();
-                              }
-                           }.template operator()<I>())...};
+                              }.template operator()<I>())...
+                           };
                         }(std::make_index_sequence<N>{});
 
                         // Find the type with minimum field count among the possible types
