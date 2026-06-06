@@ -558,9 +558,18 @@ namespace glz
       std::string_view get_close_reason() const override { return close_reason_; }
 
       // Inject initial data read during handshake
-      inline void set_initial_data(std::string_view data)
+      inline void set_initial_data(std::vector<uint8_t> data)
       {
-         frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
+         if (frame_buffer_.empty()) {
+            // Avoid allocations and steal the original buffer if frame_buffer_ is empty
+            frame_buffer_ = std::move(data);
+         }
+         else {
+            // Otherwise, if for some reason the frame_buffer_ is not empty,
+            // append a copy of the initial data to it
+            frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
+         }
+
          size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
          if (consumed > 0) {
             frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
