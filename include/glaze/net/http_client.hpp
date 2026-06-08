@@ -461,7 +461,8 @@ namespace glz
             path = std::string(url.substr(port_end));
          }
 
-         if (!port_str.empty() && !std::all_of(port_str.begin(), port_str.end(), ::isdigit)) {
+         if (!port_str.empty() &&
+             !std::all_of(port_str.begin(), port_str.end(), [](unsigned char c) { return std::isdigit(c); })) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
          }
       }

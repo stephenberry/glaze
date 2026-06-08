@@ -268,7 +268,10 @@ namespace glz
             // Case-insensitive comparison
             if (token.size() == value.size() &&
                 std::equal(token.begin(), token.end(), value.begin(), value.end(),
-                           [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+                           [](char a, char b) {
+                              return std::tolower(static_cast<unsigned char>(a)) ==
+                                     std::tolower(static_cast<unsigned char>(b));
+                           })) {
                return true;
             }
 
@@ -610,7 +613,10 @@ namespace glz
          constexpr std::string_view websocket_str = "websocket";
          if (it == req.headers.end() ||
              !std::equal(it->second.begin(), it->second.end(), websocket_str.begin(), websocket_str.end(),
-                         [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+                         [](char a, char b) {
+                            return std::tolower(static_cast<unsigned char>(a)) ==
+                                   std::tolower(static_cast<unsigned char>(b));
+                         })) {
             do_close();
             return;
          }
