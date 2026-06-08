@@ -1699,8 +1699,9 @@ namespace glz
          }
          std::string_view major_v = version_number.substr(0, dot_pos);
          std::string_view minor_v = version_number.substr(dot_pos + 1);
-         if (major_v.empty() || !std::all_of(major_v.begin(), major_v.end(), ::isdigit) || minor_v.empty() ||
-             !std::all_of(minor_v.begin(), minor_v.end(), ::isdigit)) {
+         const auto is_digit = [](unsigned char c) { return std::isdigit(c); };
+         if (major_v.empty() || !std::all_of(major_v.begin(), major_v.end(), is_digit) || minor_v.empty() ||
+             !std::all_of(minor_v.begin(), minor_v.end(), is_digit)) {
             result.status = parse_status::error;
             send_error_response_with_close(conn, 400, "Bad Request");
             return result;

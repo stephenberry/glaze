@@ -1150,7 +1150,7 @@ namespace glz::yaml
       }
 
       // Check if it looks like a number
-      if (std::isdigit(first) || first == '-' || first == '+' || first == '.') {
+      if (std::isdigit(static_cast<unsigned char>(first)) || first == '-' || first == '+' || first == '.') {
          return true;
       }
 
