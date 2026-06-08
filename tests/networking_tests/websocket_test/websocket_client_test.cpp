@@ -219,7 +219,7 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
 
 // Helper to run a server that returns a load-balancer-style connection header
 void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
-                                    std::atomic<uint16_t>& selected_port)
+                                    std::atomic<uint16_t>& selected_port, std::string* host_header = nullptr)
 {
    try {
       asio::io_context io_ctx;
@@ -252,7 +252,10 @@ void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic
          while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
          while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) value.pop_back();
 
-         if (case_insensitive_equal(name, "Sec-WebSocket-Key")) {
+         if (host_header && case_insensitive_equal(name, "Host")) {
+            *host_header = value;
+         }
+         else if (case_insensitive_equal(name, "Sec-WebSocket-Key")) {
             websocket_key = std::move(value);
          }
       }
@@ -1305,7 +1308,7 @@ suite websocket_client_tests = [] {
       std::atomic<uint16_t> port{0};
 
       std::thread server_thread(run_lb_header_handshake_server, std::ref(server_ready), std::ref(stop_server),
-                                std::ref(port));
+                                std::ref(port), nullptr);
 
       expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
 
@@ -1348,6 +1351,59 @@ suite websocket_client_tests = [] {
 
       stop_server = true;
       server_thread.join();
+   };
+
+   "websocket_handshake_host_header_includes_port"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+      std::string host_header;
+
+      std::thread server_thread(run_lb_header_handshake_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), &host_header);
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      client.on_open([&]() {
+         open_called = true;
+         client.context()->stop();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([](ws_close_code, std::string_view) {});
+
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
+      expect(open_called.load()) << "Handshake should succeed";
+      expect(!error_called.load()) << "Handshake should not fail";
+
+      if (!client.context()->stopped()) {
+         client.context()->stop();
+      }
+
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+
+      const std::string expected_host = "127.0.0.1:" + std::to_string(port.load());
+      expect(host_header == expected_host) << "Host header should include authority port";
    };
 
    "handshake_buffered_frame_delivery_test"_test = [] {
