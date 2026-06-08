@@ -15,66 +15,16 @@ set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
 message(STATUS "...finished fetching dependencies.")
 
-# Setup ASIO dependency (used by networking tests)
-# This must be defined here before glz_test_common/glz_test_exceptions
-#
-# Search order:
-#   1. Boost.Asio (via find_package(Boost))
-#   2. Standalone Asio (via find_package(Asio) using our FindAsio.cmake)
-#   3. FetchContent (if glaze_USE_BUNDLED_ASIO is ON)
+# Setup the Asio backend (Boost / standalone / bundled) used by networking tests.
+# Selection plus the GLZ_USE_BOOST_ASIO bridge live in cmake/glaze-asio.cmake, the
+# single source of truth shared with the benchmarks, so glaze/ext/glaze_asio.hpp and
+# the backend CMake links can never disagree (issue #2599). Must run before
+# glz_test_common/glz_test_exceptions, which link glaze::asio.
 #
 # Distro maintainers can set -Dglaze_USE_BUNDLED_ASIO=OFF to require system packages.
-
-option(glaze_USE_BUNDLED_ASIO
-    "Download ASIO via FetchContent if not found on system (disable for distro builds)"
-    ON
-)
-
-# First, try Boost.Asio
-find_package(Boost QUIET CONFIG)
-
-if(Boost_FOUND)
-    message(STATUS "Using Boost.Asio")
-    add_library(glz_asio INTERFACE)
-    # Boost.Asio is header-only, just need Boost headers
-    # Boost::system was removed in Boost 1.89 (it was header-only since 1.69)
-    if(TARGET Boost::headers)
-        target_link_libraries(glz_asio INTERFACE Boost::headers)
-    elseif(TARGET Boost::boost)
-        target_link_libraries(glz_asio INTERFACE Boost::boost)
-    endif()
-else()
-    # Second, try standalone Asio
-    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
-    find_package(Asio QUIET)
-
-    if(Asio_FOUND)
-        message(STATUS "Using standalone Asio ${Asio_VERSION}")
-        add_library(glz_asio INTERFACE)
-        target_link_libraries(glz_asio INTERFACE Asio::Asio)
-    elseif(glaze_USE_BUNDLED_ASIO)
-        # Third, fetch via FetchContent
-        message(STATUS "Fetching standalone Asio via FetchContent")
-        FetchContent_Declare(
-            asio
-            GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
-            GIT_TAG asio-1-36-0
-            GIT_SHALLOW TRUE
-        )
-        FetchContent_MakeAvailable(asio)
-        add_library(glz_asio INTERFACE)
-        target_include_directories(glz_asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
-    else()
-        message(FATAL_ERROR
-            "ASIO not found and bundling is disabled (glaze_USE_BUNDLED_ASIO=OFF).\n"
-            "Options:\n"
-            "  - Install Boost with the 'system' component\n"
-            "  - Install standalone Asio (headers in standard location)\n"
-            "  - Set Asio_INCLUDE_DIR to your Asio headers location\n"
-            "  - Set glaze_USE_BUNDLED_ASIO=ON to download via FetchContent"
-        )
-    endif()
-endif()
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+include(glaze-asio)
+glaze_setup_asio()
 
 include(../cmake/code-coverage.cmake)
 add_code_coverage_all_targets()
@@ -83,7 +33,7 @@ option(glaze_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSan
 
 add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_23)
-target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glz_asio)
+target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glaze::asio)
 
 if(MSVC)
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj)
@@ -107,7 +57,7 @@ endif()
 
 add_library(glz_test_exceptions INTERFACE)
 target_compile_features(glz_test_exceptions INTERFACE cxx_std_23)
-target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze glz_asio)
+target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze glaze::asio)
 if(MSVC)
     target_compile_options(glz_test_exceptions INTERFACE /GR- /bigobj)
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
