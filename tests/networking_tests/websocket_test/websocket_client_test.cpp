@@ -285,7 +285,8 @@ void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic
 // WebSocket handshake and records the close frame sent back by the client.
 void run_raw_close_frame_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
                                 std::atomic<uint16_t>& selected_port, std::vector<uint8_t> close_payload,
-                                std::atomic<bool>& client_close_received, std::atomic<uint16_t>& client_close_code)
+                                std::atomic<bool>& client_close_received, std::atomic<uint16_t>& client_close_code,
+                                uint8_t frame_first_byte)
 {
    try {
       asio::io_context io_ctx;
@@ -340,7 +341,7 @@ void run_raw_close_frame_server(std::atomic<bool>& server_ready, std::atomic<boo
 
       std::vector<uint8_t> close_frame;
       close_frame.reserve(4 + close_payload.size());
-      close_frame.push_back(0x88);
+      close_frame.push_back(frame_first_byte);
       if (close_payload.size() < 126) {
          close_frame.push_back(static_cast<uint8_t>(close_payload.size()));
       }
@@ -786,7 +787,7 @@ suite websocket_client_tests = [] {
 
    "invalid_server_close_frame_test"_test = [] {
       auto run_case = [](std::string_view name, std::vector<uint8_t> close_payload, ws_close_code expected_code,
-                         std::string_view expected_reason) {
+                         std::string_view expected_reason, uint8_t frame_first_byte = 0x88) {
          std::atomic<bool> server_ready{false};
          std::atomic<bool> stop_server{false};
          std::atomic<uint16_t> port{0};
@@ -795,7 +796,7 @@ suite websocket_client_tests = [] {
 
          std::thread server_thread(run_raw_close_frame_server, std::ref(server_ready), std::ref(stop_server),
                                    std::ref(port), std::move(close_payload), std::ref(client_close_received),
-                                   std::ref(client_close_code));
+                                   std::ref(client_close_code), frame_first_byte);
 
          if (!wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) {
             expect(false) << name << ": server failed to start";
@@ -877,6 +878,10 @@ suite websocket_client_tests = [] {
       run_case("invalid close code", {0x03, 0xED}, ws_close_code::protocol_error, "Invalid close code");
       run_case("invalid close reason", {0x03, 0xE8, 0xC3, 0x28}, ws_close_code::invalid_payload,
                "Invalid close reason");
+      // RFC 6455 Section 5.5: control frames MUST NOT be fragmented. First byte 0x08 is a close
+      // opcode with FIN cleared, which must fail the connection with a protocol error.
+      run_case("fragmented control frame", {0x03, 0xE8}, ws_close_code::protocol_error, "Fragmented control frame",
+               0x08);
    };
 
    "multiple_clients_shared_context_test"_test = [] {

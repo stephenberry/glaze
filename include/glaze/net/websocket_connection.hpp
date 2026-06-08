@@ -798,6 +798,14 @@ namespace glz
 
       inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin)
       {
+         // RFC 6455 Section 5.5: "All control frames ... MUST NOT be fragmented."
+         // A fragmented control frame (FIN == 0) is a protocol error and the connection must fail.
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5
+         if (!fin && (opcode == ws_opcode::close || opcode == ws_opcode::ping || opcode == ws_opcode::pong)) {
+            fail_connection(ws_close_code::protocol_error, "Fragmented control frame");
+            return;
+         }
+
          switch (opcode) {
          case ws_opcode::text:
          case ws_opcode::binary:
@@ -901,7 +909,7 @@ namespace glz
             // that this will be evident from a combination of several requirements:
             // 1. Section 5.5.1: "the first two bytes of the body MUST be a 2-byte unsigned integer".
             // 2. Section 7.4 clearly specifies which status codes exist and which ranges are allowed.
-            // 2. Section 10.7: "Incoming data MUST always be validated by both clients and servers".
+            // 3. Section 10.7: "Incoming data MUST always be validated by both clients and servers".
             if (!ws_util::is_valid_close_code(code_value)) {
                fail_connection(ws_close_code::protocol_error, "Invalid close code");
                return;
