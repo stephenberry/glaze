@@ -273,7 +273,8 @@ namespace glz
          request_str.append("Host: ");
          request_str.append(url.host);
          if (!is_default_port) {
-            char port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
+            char
+               port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
             auto* end = glz::to_chars(port_buf, url.port);
             request_str.push_back(':');
             request_str.append(port_buf, static_cast<size_t>(end - port_buf));
