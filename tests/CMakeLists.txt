@@ -152,6 +152,7 @@ add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
 add_subdirectory(yaml_test)
 add_subdirectory(developer_tools_test)
+add_subdirectory(simd_benchmark)
 
 add_subdirectory(yaml_conformance)
 add_subdirectory(msgpack_test)

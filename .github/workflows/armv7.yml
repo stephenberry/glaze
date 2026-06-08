@@ -84,4 +84,4 @@ jobs:
       run: |
         ctest --test-dir "$GITHUB_WORKSPACE/build" \
           --output-on-failure \
-          -R "^(api_test|json_test|roundtrip_JSON)$"
+          -R "^(api_test|json_test|roundtrip_JSON|simd_benchmark)$"
