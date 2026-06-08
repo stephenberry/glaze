@@ -7,11 +7,13 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <string>
 #include <variant>
 #include <vector>
 
 #include "glaze/net/http_client.hpp"
 #include "glaze/net/websocket_connection.hpp"
+#include "glaze/util/itoa.hpp"
 
 namespace glz
 {
@@ -350,7 +352,16 @@ namespace glz
             for (auto& b : key_bytes) b = static_cast<char>(dist(rng));
             std::string key = glz::write_base64(key_bytes);
 
-            std::string handshake = "GET " + url.path + " HTTP/1.1\r\n" + "Host: " + url.host + "\r\n" +
+            std::string host_str = url.host;
+            if ((url.protocol == "ws" && url.port != 80) || (url.protocol == "wss" && url.port != 443)) {
+               char port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa
+                                 // internals
+               auto* end = glz::to_chars(port_buf, url.port);
+               host_str.push_back(':');
+               host_str.append(port_buf, static_cast<size_t>(end - port_buf));
+            }
+
+            std::string handshake = "GET " + url.path + " HTTP/1.1\r\n" + "Host: " + host_str + "\r\n" +
                                     "Upgrade: websocket\r\n" + "Connection: Upgrade\r\n" + "Sec-WebSocket-Key: " + key +
                                     "\r\n" + "Sec-WebSocket-Version: 13\r\n";
 
