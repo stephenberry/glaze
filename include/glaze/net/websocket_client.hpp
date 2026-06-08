@@ -452,18 +452,9 @@ namespace glz
                                       ws_conn->set_client_mode(true);
                                       ws_conn->set_max_message_size(self->max_message_size);
 
-                                      if (response_buf->size() > 0) {
-                                         std::string_view initial_data{
-                                            static_cast<const char*>(response_buf->data().data()),
-                                            response_buf->size()};
-                                         ws_conn->set_initial_data(initial_data);
-                                      }
-
                                       if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
                                       if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
                                       if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
-
-                                      ws_conn->start_read();
 
                                       {
                                          std::lock_guard<std::mutex> lock(self->connection_mutex);
@@ -471,6 +462,14 @@ namespace glz
                                       }
 
                                       if (self->on_open && *self->on_open) (*self->on_open)();
+
+                                      if (response_buf->size() > 0) {
+                                         std::vector<uint8_t> initial_data(response_buf->size());
+                                         asio::buffer_copy(asio::buffer(initial_data), response_buf->data());
+                                         ws_conn->set_initial_data(std::move(initial_data));
+                                      }
+
+                                      ws_conn->start_read();
                                    });
          }
 
