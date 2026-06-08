@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <cstring>
 #include <deque>
 #include <functional>
@@ -269,8 +270,8 @@ namespace glz
             if (token.size() == value.size() &&
                 std::equal(token.begin(), token.end(), value.begin(), value.end(),
                            [](char a, char b) {
-                              return std::tolower(static_cast<unsigned char>(a)) ==
-                                     std::tolower(static_cast<unsigned char>(b));
+                              return std::tolower(static_cast<uint8_t>(a)) ==
+                                     std::tolower(static_cast<uint8_t>(b));
                            })) {
                return true;
             }
@@ -614,8 +615,8 @@ namespace glz
          if (it == req.headers.end() ||
              !std::equal(it->second.begin(), it->second.end(), websocket_str.begin(), websocket_str.end(),
                          [](char a, char b) {
-                            return std::tolower(static_cast<unsigned char>(a)) ==
-                                   std::tolower(static_cast<unsigned char>(b));
+                            return std::tolower(static_cast<uint8_t>(a)) ==
+                                   std::tolower(static_cast<uint8_t>(b));
                          })) {
             do_close();
             return;

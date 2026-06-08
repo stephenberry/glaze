@@ -5,6 +5,7 @@
 
 #include <cctype>
 #include <charconv>
+#include <cstdint>
 #include <limits>
 
 #include "glaze/core/chrono.hpp"
@@ -211,7 +212,7 @@ namespace glz
       }
       else {
          // Bare key
-         while (it != end && (std::isalnum(static_cast<unsigned char>(*it)) || *it == '_' || *it == '-')) {
+         while (it != end && (std::isalnum(static_cast<uint8_t>(*it)) || *it == '_' || *it == '-')) {
             key.push_back(*it);
             ++it;
          }
@@ -288,7 +289,7 @@ namespace glz
             ++it; // skip closing quote
          }
          else {
-            while (it != end && (std::isalnum(static_cast<unsigned char>(*it)) || *it == '_' || *it == '-')) {
+            while (it != end && (std::isalnum(static_cast<uint8_t>(*it)) || *it == '_' || *it == '-')) {
                key.push_back(*it);
                ++it;
             }

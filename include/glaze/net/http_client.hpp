@@ -6,6 +6,7 @@
 #include <atomic>
 #include <chrono>
 #include <concepts>
+#include <cstdint>
 #include <cstdlib>
 #include <expected>
 #include <functional>
@@ -462,7 +463,7 @@ namespace glz
          }
 
          if (!port_str.empty() &&
-             !std::all_of(port_str.begin(), port_str.end(), [](unsigned char c) { return std::isdigit(c); })) {
+             !std::all_of(port_str.begin(), port_str.end(), [](uint8_t c) { return std::isdigit(c); })) {
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
          }
       }
