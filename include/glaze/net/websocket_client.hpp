@@ -354,7 +354,7 @@ namespace glz
 
             std::string host_str = url.host;
             if ((url.protocol == "ws" && url.port != 80) || (url.protocol == "wss" && url.port != 443)) {
-               char port_buf[5];
+               char port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa internals
                auto* end = glz::to_chars(port_buf, url.port);
                host_str.push_back(':');
                host_str.append(port_buf, static_cast<size_t>(end - port_buf));
