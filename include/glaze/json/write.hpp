@@ -2119,6 +2119,17 @@ namespace glz
       requires((glaze_object_t<T> || reflectable<T>) && not custom_write<T>)
    struct to<JSON, T>
    {
+      static_assert([]() {
+         if constexpr (glaze_object_t<T> || reflectable<T>) {
+            return []<size_t... I>(std::index_sequence<I...>) {
+               return (write_supported<field_t<T, I>, JSON> && ...);
+            }(std::make_index_sequence<reflect<T>::size>{});
+         }
+         else {
+            return true;
+         }
+      }(), "One of the object's members is not serializable. Check if member's type has glz::meta or is reflectable.");
+
       static constexpr bool can_error = [] {
          constexpr auto N = reflect<T>::size;
          if constexpr (N == 0) {
