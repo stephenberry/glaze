@@ -2954,7 +2954,7 @@ namespace glz
       static_assert([]() {
          if constexpr (glaze_object_t<T> || reflectable<T>) {
             return []<size_t... I>(std::index_sequence<I...>) {
-               return (read_supported<field_t<T, I>, JSON> && ...);
+               return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || read_supported<field_t<T, I>, JSON>) && ...);
             }(std::make_index_sequence<reflect<T>::size>{});
          }
          else {
