@@ -489,6 +489,12 @@ namespace glz
    struct reflect<T>
    {
       static constexpr auto size = 0;
+
+      template <size_t I>
+      using elem = std::nullptr_t;
+
+      template <size_t I>
+      using type = std::nullptr_t;
    };
 
    // The type of the field before get_member is applied
