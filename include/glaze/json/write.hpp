@@ -2120,14 +2120,9 @@ namespace glz
    struct to<JSON, T>
    {
       static_assert([]() {
-         if constexpr (glaze_object_t<T> || reflectable<T>) {
-            return []<size_t... I>(std::index_sequence<I...>) {
-               return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || write_supported<field_t<T, I>, JSON>) && ...);
-            }(std::make_index_sequence<reflect<T>::size>{});
-         }
-         else {
-            return true;
-         }
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return ((is_any_function_ptr<field_t<T, I>> || always_skipped<field_t<T, I>> || write_supported<field_t<T, I>, JSON>) && ...);
+         }(std::make_index_sequence<reflect<T>::size>{});
       }(), "One of the object's members is not serializable. Check if member's type has glz::meta or is reflectable.");
 
       static constexpr bool can_error = [] {
