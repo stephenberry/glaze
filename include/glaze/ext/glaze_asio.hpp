@@ -12,6 +12,19 @@
 #define _WIN32_WINNT 0x0601
 #endif
 
+// Two distinct, intentionally similar macros govern the Asio backend. Do not confuse them:
+//
+//   GLZ_USE_BOOST_ASIO   - INPUT (you set it, or CMake's glaze::asio target sets it).
+//                          Suppresses the standalone <asio.hpp> branch below so the
+//                          Boost branch is taken even when standalone Asio is also on
+//                          the include path. This is the knob that forces Boost.
+//   GLZ_USING_BOOST_ASIO - OUTPUT (this header defines it; never set it yourself).
+//                          Reports that the Boost branch was actually taken. All code
+//                          downstream of this block keys off GLZ_USING_BOOST_ASIO.
+//
+// In short: define GLZ_USE_BOOST_ASIO to choose Boost; read GLZ_USING_BOOST_ASIO to
+// learn what was chosen. cmake/glaze-asio.cmake sets the former on the glaze::asio
+// target so the linked backend and this header can never disagree (issue #2599).
 #if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
 #include <asio/signal_set.hpp>

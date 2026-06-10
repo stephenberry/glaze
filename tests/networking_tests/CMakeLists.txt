@@ -1,4 +1,5 @@
-# glz_asio is defined in the parent tests/CMakeLists.txt
+# The glaze::asio target is created in the parent tests/CMakeLists.txt via
+# glaze_setup_asio() (cmake/glaze-asio.cmake).
 
 option(glaze_BUILD_SSL_TESTS "Build SSL/TLS tests (requires OpenSSL headers matching target architecture)" ON)
 
