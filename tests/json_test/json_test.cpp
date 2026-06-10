@@ -157,6 +157,79 @@ suite as_array_wrapper_tests = [] {
    };
 };
 
+struct reflect_array_point
+{
+   double x{};
+   double y{};
+   std::string label{};
+};
+
+template <>
+struct glz::meta<reflect_array_point>
+{
+   static constexpr auto value = glz::reflect_array{};
+};
+
+static_assert(glz::glaze_array_t<reflect_array_point>);
+
+struct reflect_array_local
+{
+   int a{};
+   int b{};
+
+   struct glaze
+   {
+      static constexpr auto value = glz::reflect_array{};
+   };
+};
+
+static_assert(glz::glaze_array_t<reflect_array_local>);
+
+suite reflect_array_tests = [] {
+   "reflect_array round trip"_test = [] {
+      reflect_array_point value{1.5, 2.5, "origin"};
+      auto written = glz::write_json(value).value();
+      expect(written == R"([1.5,2.5,"origin"])") << written;
+
+      reflect_array_point parsed{};
+      expect(!glz::read_json(parsed, written));
+      expect(parsed.x == 1.5);
+      expect(parsed.y == 2.5);
+      expect(parsed.label == "origin");
+   };
+
+   "reflect_array within array of arrays"_test = [] {
+      std::string buffer = R"([[1,2,"a"],[3,4,"b"]])";
+      std::vector<reflect_array_point> values{};
+      expect(!glz::read_json(values, buffer));
+      expect(values.size() == 2);
+      expect(values[0].x == 1.0);
+      expect(values[0].label == "a");
+      expect(values[1].y == 4.0);
+      expect(values[1].label == "b");
+
+      auto written = glz::write_json(values).value();
+      expect(written == R"([[1,2,"a"],[3,4,"b"]])") << written;
+   };
+
+   "reflect_array invalid input"_test = [] {
+      reflect_array_point value{};
+      std::string buffer = R"({"x":1})";
+      expect(bool(glz::read_json(value, buffer))); // an object should fail to parse
+   };
+
+   "reflect_array local glaze meta"_test = [] {
+      reflect_array_local value{1, 2};
+      auto written = glz::write_json(value).value();
+      expect(written == R"([1,2])") << written;
+
+      reflect_array_local parsed{};
+      expect(!glz::read_json(parsed, R"([3,4])"));
+      expect(parsed.a == 3);
+      expect(parsed.b == 4);
+   };
+};
+
 struct my_struct
 {
    int i = 287;

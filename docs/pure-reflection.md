@@ -66,6 +66,37 @@ auto out = glz::write_json(p).value();
 
 `glz::as_array` relies on the wrapped type's reflection (pure reflection or an explicit `glz::meta`) to map each array element by index. Serialization uses that same order to emit an array, so you get positional reads and writes while the C++ type stays a struct. The wrapper works for JSON, BEVE, CSV, TOML, and any other Glaze format.
 
+### Marking an entire type as a positional array
+
+`glz::as_array` requires a member to wrap, which doesn't help when the array-styled struct appears directly inside a container (e.g. an array of arrays). Use a `glz::reflect_array{}` meta value to mark the type itself as positional, without enumerating its members the way `glz::array(&T::x, &T::y, ...)` requires:
+
+```c++
+struct Point
+{
+   double x{};
+   double y{};
+   std::string label{};
+};
+
+template <>
+struct glz::meta<Point>
+{
+   static constexpr auto value = glz::reflect_array{};
+};
+
+std::string_view payload = R"([[1,2,"a"],[3,4,"b"]])";
+
+std::vector<Point> points{};
+if (auto ec = glz::read_json(points, payload); ec) {
+   throw std::runtime_error(glz::format_error(ec, payload));
+}
+
+auto out = glz::write_json(points).value();
+// out == R"([[1,2,"a"],[3,4,"b"]])"
+```
+
+`glz::reflect_array{}` generates the same meta as an explicit `glz::array(...)` of all the members in declaration order, so the type behaves as a positional array everywhere, in every Glaze format. It also works in a local meta (`struct glaze { static constexpr auto value = glz::reflect_array{}; };`).
+
 > CUSTOMIZATION NOTE:
 >
 > When writing custom serializers specializing `to<JSON>` or `from<JSON>`, your concepts for custom types might not take precedence over the reflection engine (when you haven't written a `glz::meta` for your type). The reflection engine tries to discern that no specialization occurs for your type, but this is not always possible.

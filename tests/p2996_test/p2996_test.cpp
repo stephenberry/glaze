@@ -333,4 +333,46 @@ suite c_style_array_of_structs = [] {
    };
 };
 
+// reflect_array marks a type as a positional array without enumerating its members
+struct PositionalPoint
+{
+   double x{};
+   double y{};
+   std::string label{};
+};
+
+template <>
+struct glz::meta<PositionalPoint>
+{
+   static constexpr auto value = glz::reflect_array{};
+};
+
+static_assert(glz::glaze_array_t<PositionalPoint>);
+
+suite p2996_reflect_array = [] {
+   "reflect_array json round-trip"_test = [] {
+      std::vector<PositionalPoint> values{};
+      std::string buffer = R"([[1,2,"a"],[3,4,"b"]])";
+      expect(!glz::read_json(values, buffer));
+      expect(values.size() == 2);
+      expect(values[1].y == 4.0);
+      expect(values[1].label == "b");
+
+      auto written = glz::write_json(values).value_or("error");
+      expect(written == buffer) << written;
+   };
+
+   "reflect_array beve round-trip"_test = [] {
+      PositionalPoint obj{1.5, 2.5, "origin"};
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+
+      PositionalPoint obj2{};
+      expect(not glz::read_beve(obj2, s));
+      expect(obj2.x == 1.5);
+      expect(obj2.y == 2.5);
+      expect(obj2.label == "origin");
+   };
+};
+
 int main() {}
