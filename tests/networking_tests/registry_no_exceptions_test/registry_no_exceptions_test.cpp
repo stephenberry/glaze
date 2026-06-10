@@ -156,6 +156,14 @@ struct repe_expected_t
       }
       return x;
    };
+   // Degenerate: an error state carrying the success code. Without normalization this
+   // would be indistinguishable from success on the wire.
+   std::function<glz::expected<int, glz::error_code>()> degenerate_code = []() -> glz::expected<int, glz::error_code> {
+      return glz::unexpected(glz::error_code::none);
+   };
+   std::function<glz::expected<int, glz::error_ctx>()> degenerate_ctx = []() -> glz::expected<int, glz::error_ctx> {
+      return glz::unexpected(glz::error_ctx{.ec = glz::error_code::none, .custom_error_message = "should still fail"});
+   };
 };
 
 // A registered data member of type glz::expected is read as a stored value, not a
@@ -219,6 +227,26 @@ suite repe_expected_handlers = [] {
       expect(response.body == "out of range") << response.body;
    };
 
+   "repe_degenerate_none_error_still_fails_the_request"_test = [] {
+      glz::registry<glz::opts{}, glz::REPE> server{};
+      repe_expected_t obj{};
+      server.on(obj);
+
+      // error_code::none in an error state is normalized to parse_error (the thrown-
+      // handler fallback) so the failure cannot masquerade as success.
+      repe::message request{};
+      repe::request_json({"/degenerate_code"}, request);
+      auto response = run_repe(server, request);
+      expect(response.header.ec == glz::error_code::parse_error) << response.body;
+
+      // Same for an error_ctx whose ec is none; the custom message is preserved.
+      repe::message ctx_request{};
+      repe::request_json({"/degenerate_ctx"}, ctx_request);
+      auto ctx_response = run_repe(server, ctx_request);
+      expect(ctx_response.header.ec == glz::error_code::parse_error) << ctx_response.body;
+      expect(ctx_response.body == "should still fail") << ctx_response.body;
+   };
+
    "repe_expected_data_member_is_serialized_not_intercepted"_test = [] {
       glz::registry<glz::opts{}, glz::REPE> server{};
       repe_expected_member_t obj{};
@@ -263,6 +291,13 @@ struct jsonrpc_expected_t
       }
       return x;
    };
+   // Degenerate: an error state carrying the success code (no_error = 0), which would
+   // emit a malformed JSON-RPC error with "code":0 without normalization.
+   std::function<glz::rpc::result<int>()> degenerate_error = []() -> glz::rpc::result<int> {
+      return glz::unexpected(glz::rpc::error{}); // default-constructed: no_error, "No error"
+   };
+   std::function<glz::expected<int, glz::rpc::error_e>()> degenerate_code =
+      []() -> glz::expected<int, glz::rpc::error_e> { return glz::unexpected(glz::rpc::error_e::no_error); };
 };
 
 // As with REPE, a registered glz::expected data member is read as a stored value
@@ -317,6 +352,25 @@ suite jsonrpc_expected_handlers = [] {
       expect(response.find(R"("message":"Internal error")") != std::string::npos) << response;
       expect(response.find(R"("data":"out of range")") != std::string::npos) << response;
       expect(response.find(R"("id":7)") != std::string::npos) << response;
+   };
+
+   "jsonrpc_degenerate_no_error_code_is_normalized_to_internal"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+      jsonrpc_expected_t obj{};
+      server.on(obj);
+
+      // A default-constructed rpc::error (code no_error) is normalized to internal so
+      // the response is a well-formed JSON-RPC error rather than "code":0.
+      auto response = server.call(R"({"jsonrpc":"2.0","method":"degenerate_error","id":9})");
+      expect(response.find(R"("error")") != std::string::npos) << response;
+      expect(response.find(R"("code":-32603)") != std::string::npos) << response;
+      expect(response.find(R"("message":"Internal error")") != std::string::npos) << response;
+      expect(response.find(R"("code":0)") == std::string::npos) << response;
+
+      // The bare error_e::no_error channel is normalized the same way.
+      auto code_response = server.call(R"({"jsonrpc":"2.0","method":"degenerate_code","id":10})");
+      expect(code_response.find(R"("code":-32603)") != std::string::npos) << code_response;
+      expect(code_response.find(R"("code":0)") == std::string::npos) << code_response;
    };
 
    "jsonrpc_expected_data_member_is_serialized_not_intercepted"_test = [] {
@@ -438,6 +492,12 @@ struct rest_expected_t
             glz::error_ctx{.ec = glz::error_code::constraint_violated, .custom_error_message = "out of range"});
       return x;
    };
+
+   // GET /degenerate : an error state carrying a success status, which would look like
+   // a successful response on the wire without normalization.
+   std::function<glz::expected<int, glz::http_error>()> degenerate = []() -> glz::expected<int, glz::http_error> {
+      return glz::unexpected(glz::http_error{200, "error disguised as success"});
+   };
 };
 
 // As with REPE and JSON-RPC, a registered glz::expected data member is read as a stored
@@ -544,6 +604,20 @@ suite rest_expected_handlers = [] {
       expect(!glz::read_json(err, res.response_body)) << res.response_body;
       expect(err.status == 500);
       expect(err.message.find("out of range") != std::string::npos) << res.response_body;
+   };
+
+   "rest_degenerate_success_status_error_is_normalized_to_500"_test = [] {
+      glz::registry<glz::opts{}, glz::REST> reg{};
+      rest_expected_t obj{};
+      reg.on(obj);
+      // A glz::http_error with a non-error status (< 400) is normalized to 500 so the
+      // failure cannot masquerade as a success or redirect; the message is preserved.
+      auto res = run_rest(reg, glz::http_method::GET, "/degenerate", "");
+      expect(res.status_code == 500) << res.status_code;
+      glz::http_error err{};
+      expect(!glz::read_json(err, res.response_body)) << res.response_body;
+      expect(err.status == 500);
+      expect(err.message == "error disguised as success") << res.response_body;
    };
 
    "rest_expected_data_member_is_serialized_not_intercepted"_test = [] {

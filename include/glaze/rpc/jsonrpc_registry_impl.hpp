@@ -139,15 +139,35 @@ namespace glz
       // The handler supplies no code in the error_ctx/string cases, so the reserved code's
       // standard message is kept in "message" and the handler's detail is carried in "data"
       // (matching the thrown path in registry.hpp). An empty detail emits no data member.
+      // A degenerate error carrying the success code (error_e::no_error, which would emit
+      // a malformed JSON-RPC error with "code":0) is normalized to error_e::internal so an
+      // error state always produces a well-formed error response; a custom message and
+      // data are preserved.
       template <class E>
       void set_handler_error(is_state auto&& state, E&& error)
       {
          using DE = std::remove_cvref_t<E>;
          if constexpr (std::same_as<DE, rpc::error>) {
-            write_error(state, error.code, error.message, error.data);
+            if (error.code == rpc::error_e::no_error) [[unlikely]] {
+               // Replace a default-constructed "No error" message along with the code;
+               // keep a deliberately customized one.
+               const bool default_message = error.message == rpc::code_as_sv(rpc::error_e::no_error);
+               write_error(state, rpc::error_e::internal,
+                           default_message ? std::string(rpc::code_as_sv(rpc::error_e::internal)) : error.message,
+                           error.data);
+            }
+            else {
+               write_error(state, error.code, error.message, error.data);
+            }
          }
          else if constexpr (std::same_as<DE, rpc::error_e>) {
-            write_error(state, error, std::string(rpc::code_as_sv(error)));
+            if (error == rpc::error_e::no_error) [[unlikely]] {
+               write_error(state, rpc::error_e::internal, std::string(rpc::code_as_sv(rpc::error_e::internal)),
+                           "handler returned an error state with error_e::no_error");
+            }
+            else {
+               write_error(state, error, std::string(rpc::code_as_sv(error)));
+            }
          }
          else if constexpr (std::same_as<DE, error_ctx>) {
             const std::string_view detail = error.custom_error_message;

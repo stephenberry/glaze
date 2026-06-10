@@ -263,6 +263,12 @@ namespace glz
       // which emits only literal paths (direct routes never structurally conflict); it
       // surfaces only if conflicting parameterized routes are added manually. For
       // REPE/JSON-RPC, registration cannot fail and this always succeeds. See #2265.
+      //
+      // Note: for REST this clears the router's route_error() side-channel first, so a
+      // conflict recorded by this registration is attributable to it. Any conflict a
+      // prior chaining route()/stream()/websocket() call recorded under -fno-exceptions
+      // is discarded by that reset -- check route_error() before calling try_on if you
+      // mix the two registration styles.
       template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
          requires(glaze_object_t<T> || reflectable<T>)
       [[nodiscard]] expected<void, std::string> try_on(T& value)

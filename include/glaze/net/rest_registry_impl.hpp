@@ -82,12 +82,21 @@ namespace glz
       //   - glz::error_code -> http_status_for(ec) with the code's name
       //   - glz::error_ctx  -> 500 with the formatted context
       //   - string-like     -> 500 with the message
+      // A degenerate glz::http_error whose status is not an error status (< 400, which
+      // would make the failure look like a success or redirect on the wire) is normalized
+      // to 500; the message is preserved. The same guard covers error_code::none, which
+      // http_status_for already maps to 500.
       template <class E>
       static void set_handler_error(response& res, E&& error)
       {
          using DE = std::remove_cvref_t<E>;
          if constexpr (std::same_as<DE, http_error>) {
-            res.status(error.status).template body<Opts>(std::forward<E>(error));
+            if (error.status < 400) [[unlikely]] {
+               res.status(500).template body<Opts>(http_error{500, std::forward<E>(error).message});
+            }
+            else {
+               res.status(error.status).template body<Opts>(std::forward<E>(error));
+            }
          }
          else if constexpr (std::same_as<DE, error_code>) {
             const int s = http_status_for(error);

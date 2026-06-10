@@ -48,6 +48,8 @@ struct calculator {
 };
 ```
 
+An error state must carry a real error: a degenerate success-coded error (`glz::error_code::none`, `glz::rpc::error_e::no_error`, or a `glz::http_error` with a status below 400) is normalized to the protocol's server-error fallback (REPE `parse_error`, JSON-RPC `-32603`, HTTP 500) so a failure can never masquerade as a success on the wire.
+
 For full JSON-RPC fidelity (custom code, message, and `data`), return `glz::expected<T, glz::rpc::error>` — or its alias `glz::rpc::result<T>`. The `glz::rpc::invalid_params`, `invalid_request`, `method_not_found`, `internal_error`, and `parse_error` helpers (plus `glz::rpc::fail(code, data)` for any other code, including the server-error range) build the `glz::unexpected<glz::rpc::error>` for you, with the optional argument carried in the `data` member. REPE handlers may return `glz::expected<T, glz::error_code>` to choose the response error code. When exceptions are enabled, a handler that throws is still caught and reported as before.
 
 #### REST

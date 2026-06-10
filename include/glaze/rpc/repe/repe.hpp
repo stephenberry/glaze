@@ -586,15 +586,25 @@ namespace glz::repe
    ///                         body differs, though: the thrown path wraps the message via
    ///                         build_registry_error(query, ...) for context, while this path
    ///                         uses the returned string verbatim.
+   /// A degenerate error_code::none (which would make the failure indistinguishable from
+   /// success on the wire) is normalized to error_code::parse_error -- the same fallback
+   /// code as the string-like and thrown-handler paths -- so an error state always
+   /// produces an error response.
    template <class E>
    void set_handler_error(state_view& state, E&& error)
    {
       using DE = std::remove_cvref_t<E>;
       if constexpr (std::same_as<DE, error_code>) {
-         state.out.set_error(error);
+         if (error == error_code::none) [[unlikely]] {
+            state.out.set_error(error_code::parse_error, "handler returned an error state with error_code::none");
+         }
+         else {
+            state.out.set_error(error);
+         }
       }
       else if constexpr (std::same_as<DE, error_ctx>) {
-         state.out.set_error(error.ec, error.custom_error_message);
+         state.out.set_error(error.ec == error_code::none ? error_code::parse_error : error.ec,
+                             error.custom_error_message);
       }
       else {
          static_assert(std::convertible_to<DE, std::string_view>,
