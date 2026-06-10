@@ -228,8 +228,8 @@ suite csv_tests = [] {
 
       expect(obj.i8.size() == 1);
       expect(obj.i32.size() == 1);
-      expect(obj.i8[0] == std::numeric_limits<std::int8_t>::min());
-      expect(obj.i32[0] == std::numeric_limits<std::int32_t>::min());
+      expect(obj.i8[0] == (std::numeric_limits<std::int8_t>::min)());
+      expect(obj.i32[0] == (std::numeric_limits<std::int32_t>::min)());
    };
 
    "rowwise char round trip"_test = [] {

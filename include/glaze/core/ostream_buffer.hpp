@@ -170,7 +170,7 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr size_t capacity(const basic_ostream_buffer<Stream, N>&) noexcept
       {
-         return std::numeric_limits<size_t>::max();
+         return (std::numeric_limits<size_t>::max)();
       }
 
       GLZ_ALWAYS_INLINE static bool ensure_capacity(basic_ostream_buffer<Stream, N>& b, size_t needed)

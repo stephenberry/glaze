@@ -4314,18 +4314,18 @@ namespace glz
                                        return reflect<X>::size;
                                     }
                                     else {
-                                       return std::numeric_limits<size_t>::max();
+                                       return (std::numeric_limits<size_t>::max)();
                                     }
                                  }
                                  else {
-                                    return std::numeric_limits<size_t>::max();
+                                    return (std::numeric_limits<size_t>::max)();
                                  }
                               }.template operator()<I>())...
                            };
                         }(std::make_index_sequence<N>{});
 
                         // Find the type with minimum field count among the possible types
-                        size_t min_fields = std::numeric_limits<size_t>::max();
+                        size_t min_fields = (std::numeric_limits<size_t>::max)();
                         size_t chosen_index = N; // Invalid index initially
 
                         for (size_t i = 0; i < N; ++i) {

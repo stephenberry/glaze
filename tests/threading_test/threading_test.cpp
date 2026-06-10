@@ -1794,11 +1794,11 @@ suite additional_async_vector_tests = [] {
                   const size_t insert_index = static_cast<size_t>(t * 100) % proxy.size();
                   const int val1 = proxy[insert_index];
                   int insert_value = val1;
-                  if (val1 > std::numeric_limits<int>::max() / 2) {
-                     insert_value = std::numeric_limits<int>::max();
+                  if (val1 > (std::numeric_limits<int>::max)() / 2) {
+                     insert_value = (std::numeric_limits<int>::max)();
                   }
-                  else if (val1 < std::numeric_limits<int>::min() / 2) {
-                     insert_value = std::numeric_limits<int>::min();
+                  else if (val1 < (std::numeric_limits<int>::min)() / 2) {
+                     insert_value = (std::numeric_limits<int>::min)();
                   }
                   else {
                      insert_value = val1 * 2;

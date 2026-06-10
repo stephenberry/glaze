@@ -933,7 +933,7 @@ namespace
          // BSON's int64 wire type is signed; uint64_t values above INT64_MAX
          // cannot be represented and must fail the write path with
          // invalid_length (see write.hpp uint64_t range check).
-         u64_s src{static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1};
+         u64_s src{static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()) + 1};
          auto w = glz::write_bson(src);
          expect(not w.has_value());
          expect(w.error().ec == glz::error_code::invalid_length);
@@ -941,7 +941,7 @@ namespace
 
       "uint64-write-at-int64-max-ok"_test = [] {
          // Boundary: INT64_MAX itself must write successfully.
-         u64_s src{static_cast<uint64_t>(std::numeric_limits<int64_t>::max())};
+         u64_s src{static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())};
          auto w = glz::write_bson(src);
          expect(w.has_value());
          u64_s dst{};

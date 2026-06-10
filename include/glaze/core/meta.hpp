@@ -89,6 +89,42 @@ namespace glz
       Flags(T) -> Flags<T>;
    }
 
+   // Declares that a struct is serialized/parsed as a positional array of its
+   // members via reflection, without enumerating them:
+   //
+   //   template <> struct glz::meta<my_struct> {
+   //      static constexpr auto value = glz::reflect_array{};
+   //   };
+   //
+   // meta_wrapper_v replaces this tag with a glz::array(...) equivalent generated
+   // from reflection, so the type behaves as glaze_array_t in every format.
+   struct reflect_array
+   {};
+
+   namespace detail
+   {
+      template <class T, size_t... I>
+      constexpr auto reflect_array_impl(std::index_sequence<I...>) noexcept
+      {
+#if GLZ_REFLECTION26
+         // P2996 reflection splices each member directly
+         return Array{glz::tuple{[](auto&& self) -> decltype(auto) { return get_member_ref<I>(self); }...}};
+#else
+         return Array{glz::tuple{[](auto&& self) -> decltype(auto) {
+            auto tie = to_tie(self);
+            return glz::get<I>(tie); // returns a reference to a member of self
+         }...}};
+#endif
+      }
+
+      template <class T>
+      constexpr auto make_reflect_array() noexcept
+      {
+         using V = std::remove_cvref_t<T>;
+         return reflect_array_impl<V>(std::make_index_sequence<count_members<V>>{});
+      }
+   }
+
    template <class T>
    concept local_construct_t = requires { T::glaze::construct; };
 
@@ -442,10 +478,20 @@ namespace glz
    template <class T>
    inline constexpr decltype(auto) meta_wrapper_v = [] {
       if constexpr (local_meta_t<T>) {
-         return T::glaze::value;
+         if constexpr (std::same_as<std::remove_cvref_t<decltype(T::glaze::value)>, reflect_array>) {
+            return detail::make_reflect_array<T>();
+         }
+         else {
+            return T::glaze::value;
+         }
       }
       else if constexpr (global_meta_t<T>) {
-         return meta<T>::value;
+         if constexpr (std::same_as<std::remove_cvref_t<decltype(meta<T>::value)>, reflect_array>) {
+            return detail::make_reflect_array<T>();
+         }
+         else {
+            return meta<T>::value;
+         }
       }
       else if constexpr (modify_t<T>) {
          return detail::make_modified_object<std::decay_t<T>>();

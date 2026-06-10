@@ -32,6 +32,20 @@ set(
 )
 mark_as_advanced(glaze_INSTALL_CMAKEDIR)
 
+# Ship the Asio backend selector alongside the package config so that
+# find_package(glaze) consumers can call glaze_setup_asio() and link
+# glaze::asio, getting the exact same backend + GLZ_USE_BOOST_ASIO bridge as the
+# in-tree builds. FindAsio.cmake travels with it because glaze_setup_asio()
+# locates it via CMAKE_CURRENT_FUNCTION_LIST_DIR (issue #2599). glazeConfig.cmake
+# includes glaze-asio.cmake so the function is available after find_package(glaze).
+install(
+    FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/glaze-asio.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindAsio.cmake"
+    DESTINATION "${glaze_INSTALL_CMAKEDIR}"
+    COMPONENT glaze_Development
+)
+
 # Read FindErlang.cmake content for embedding into config file
 # This avoids installing a separate FindErlang.cmake that could collide with other projects
 if(glaze_EETF_FORMAT)

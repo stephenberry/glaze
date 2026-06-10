@@ -761,13 +761,13 @@ arr = [4, 5, 6])";
          std::string toml_input = "-128";
          std::int8_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int8_t>::min());
+         expect(value == (std::numeric_limits<std::int8_t>::min)());
       }
       {
          std::string toml_input = "127";
          std::int8_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int8_t>::max());
+         expect(value == (std::numeric_limits<std::int8_t>::max)());
       }
       {
          std::string toml_input = "-129";
@@ -790,13 +790,13 @@ arr = [4, 5, 6])";
          std::string toml_input = "0";
          std::uint8_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint8_t>::min());
+         expect(value == (std::numeric_limits<std::uint8_t>::min)());
       }
       {
          std::string toml_input = "255";
          std::uint8_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint8_t>::max());
+         expect(value == (std::numeric_limits<std::uint8_t>::max)());
       }
       {
          std::string toml_input = "-1";
@@ -819,13 +819,13 @@ arr = [4, 5, 6])";
          std::string toml_input = "-32768";
          std::int16_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int16_t>::min());
+         expect(value == (std::numeric_limits<std::int16_t>::min)());
       }
       {
          std::string toml_input = "32767";
          std::int16_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int16_t>::max());
+         expect(value == (std::numeric_limits<std::int16_t>::max)());
       }
       {
          std::string toml_input = "-32769";
@@ -848,13 +848,13 @@ arr = [4, 5, 6])";
          std::string toml_input = "0";
          std::uint16_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint16_t>::min());
+         expect(value == (std::numeric_limits<std::uint16_t>::min)());
       }
       {
          std::string toml_input = "65535";
          std::uint16_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint16_t>::max());
+         expect(value == (std::numeric_limits<std::uint16_t>::max)());
       }
       {
          std::string toml_input = "-1";
@@ -877,13 +877,13 @@ arr = [4, 5, 6])";
          std::string toml_input = "-2147483648";
          std::int32_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int32_t>::min());
+         expect(value == (std::numeric_limits<std::int32_t>::min)());
       }
       {
          std::string toml_input = "2147483647";
          std::int32_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::int32_t>::max());
+         expect(value == (std::numeric_limits<std::int32_t>::max)());
       }
       {
          std::string toml_input = "-2147483649";
@@ -906,13 +906,13 @@ arr = [4, 5, 6])";
          std::string toml_input = "0";
          std::uint32_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint32_t>::min());
+         expect(value == (std::numeric_limits<std::uint32_t>::min)());
       }
       {
          std::string toml_input = "4294967295";
          std::uint32_t value{};
          expect(not glz::read_toml(value, toml_input));
-         expect(value == std::numeric_limits<std::uint32_t>::max());
+         expect(value == (std::numeric_limits<std::uint32_t>::max)());
       }
       {
          std::string toml_input = "-1";
@@ -5008,7 +5008,7 @@ apple.taste.sweet = true
       std::int64_t i{};
       const auto int_error = glz::read_toml(i, "9223372036854775807");
       expect(not int_error);
-      expect(i == std::numeric_limits<std::int64_t>::max());
+      expect(i == (std::numeric_limits<std::int64_t>::max)());
 
       double d{};
       const auto float_error = glz::read_toml(d, "3.141592653589793");

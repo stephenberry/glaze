@@ -1,6 +1,7 @@
 #include "glaze/net/websocket_client.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <chrono>
@@ -218,7 +219,75 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
 
 // Helper to run a server that returns a load-balancer-style connection header
 void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
-                                    std::atomic<uint16_t>& selected_port)
+                                    std::atomic<uint16_t>& selected_port, std::string* host_header = nullptr)
+{
+   try {
+      asio::io_context io_ctx;
+      asio::ip::tcp::acceptor acceptor(io_ctx, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), 0));
+      selected_port = acceptor.local_endpoint().port();
+      server_ready = true;
+
+      asio::ip::tcp::socket socket(io_ctx);
+      acceptor.accept(socket);
+
+      asio::streambuf request_buf;
+      asio::error_code ec;
+      asio::read_until(socket, request_buf, "\r\n\r\n", ec);
+      if (ec) return;
+
+      std::istream request_stream(&request_buf);
+      std::string request_line;
+      std::getline(request_stream, request_line);
+
+      std::string websocket_key;
+      std::string header;
+      while (std::getline(request_stream, header) && header != "\r") {
+         if (!header.empty() && header.back() == '\r') header.pop_back();
+
+         auto colon = header.find(':');
+         if (colon == std::string::npos) continue;
+
+         std::string name = header.substr(0, colon);
+         std::string value = header.substr(colon + 1);
+         while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
+         while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) value.pop_back();
+
+         if (host_header && case_insensitive_equal(name, "Host")) {
+            *host_header = value;
+         }
+         else if (case_insensitive_equal(name, "Sec-WebSocket-Key")) {
+            websocket_key = std::move(value);
+         }
+      }
+
+      if (websocket_key.empty()) return;
+
+      const std::string accept_key = ws_util::generate_accept_key(websocket_key);
+      const std::string response =
+         "HTTP/1.1 101 Switching Protocols\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: keep-alive, Upgrade\r\n"
+         "Sec-WebSocket-Accept: " +
+         accept_key + "\r\n\r\n";
+
+      asio::write(socket, asio::buffer(response), ec);
+      if (ec) return;
+
+      auto stop_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+      while (!should_stop && std::chrono::steady_clock::now() < stop_at) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+   }
+   catch (const std::exception& e) {
+      std::cerr << "[lb_header_server] Exception: " << e.what() << "\n";
+      server_ready = true;
+   }
+}
+
+// Helper to run a server that sends WebSocket frames in the same TCP segment
+// as the handshake response
+void run_initial_data_handshake_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                                       std::atomic<uint16_t>& selected_port)
 {
    try {
       asio::io_context io_ctx;
@@ -259,23 +328,146 @@ void run_lb_header_handshake_server(std::atomic<bool>& server_ready, std::atomic
       if (websocket_key.empty()) return;
 
       const std::string accept_key = ws_util::generate_accept_key(websocket_key);
-      const std::string response =
+      const std::string payload = "hello from handshake buffer";
+
+      std::string response =
          "HTTP/1.1 101 Switching Protocols\r\n"
          "Upgrade: websocket\r\n"
-         "Connection: keep-alive, Upgrade\r\n"
+         "Connection: Upgrade\r\n"
+         "Sec-WebSocket-Accept: " +
+         accept_key + "\r\n\r\n";
+
+      response.push_back(static_cast<char>(0x81));
+      response.push_back(static_cast<char>(payload.size()));
+      response += payload;
+      response.push_back(static_cast<char>(0x88));
+      response.push_back(static_cast<char>(0x00));
+
+      asio::write(socket, asio::buffer(response), ec);
+      if (ec) return;
+
+      auto stop_at = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+      while (!should_stop && std::chrono::steady_clock::now() < stop_at) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+   }
+   catch (const std::exception& e) {
+      std::cerr << "[initial_data_handshake_server] Exception: " << e.what() << "\n";
+      server_ready = true;
+   }
+}
+
+// Helper to run a raw server that sends a specific control frame after the
+// WebSocket handshake and records the close frame sent back by the client.
+void run_raw_control_frame_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop,
+                                  std::atomic<uint16_t>& selected_port, std::vector<uint8_t> frame_payload,
+                                  std::atomic<bool>& client_close_received, std::atomic<uint16_t>& client_close_code,
+                                  uint8_t frame_first_byte)
+{
+   try {
+      asio::io_context io_ctx;
+      asio::ip::tcp::acceptor acceptor(io_ctx, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), 0));
+      selected_port = acceptor.local_endpoint().port();
+      server_ready = true;
+
+      asio::ip::tcp::socket socket(io_ctx);
+      acceptor.accept(socket);
+
+      asio::streambuf request_buf;
+      asio::error_code ec;
+      asio::read_until(socket, request_buf, "\r\n\r\n", ec);
+      if (ec) return;
+
+      std::istream request_stream(&request_buf);
+      std::string request_line;
+      std::getline(request_stream, request_line);
+
+      std::string websocket_key;
+      std::string header;
+      while (std::getline(request_stream, header) && header != "\r") {
+         if (!header.empty() && header.back() == '\r') header.pop_back();
+
+         auto colon = header.find(':');
+         if (colon == std::string::npos) continue;
+
+         std::string name = header.substr(0, colon);
+         std::string value = header.substr(colon + 1);
+         while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
+         while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) value.pop_back();
+
+         if (case_insensitive_equal(name, "Sec-WebSocket-Key")) {
+            websocket_key = std::move(value);
+         }
+      }
+
+      if (websocket_key.empty()) return;
+
+      const std::string accept_key = ws_util::generate_accept_key(websocket_key);
+      std::string response =
+         "HTTP/1.1 101 Switching Protocols\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: Upgrade\r\n"
          "Sec-WebSocket-Accept: " +
          accept_key + "\r\n\r\n";
 
       asio::write(socket, asio::buffer(response), ec);
       if (ec) return;
 
-      auto stop_at = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
-      while (!should_stop && std::chrono::steady_clock::now() < stop_at) {
-         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+      std::vector<uint8_t> control_frame;
+      control_frame.reserve(4 + frame_payload.size());
+      control_frame.push_back(frame_first_byte);
+      if (frame_payload.size() < 126) {
+         control_frame.push_back(static_cast<uint8_t>(frame_payload.size()));
       }
+      else {
+         control_frame.push_back(126);
+         control_frame.push_back(static_cast<uint8_t>(frame_payload.size() >> 8));
+         control_frame.push_back(static_cast<uint8_t>(frame_payload.size() & 0xFF));
+      }
+      control_frame.insert(control_frame.end(), frame_payload.begin(), frame_payload.end());
+
+      asio::write(socket, asio::buffer(control_frame), ec);
+      if (ec) return;
+
+      auto wait_for_bytes = [&](size_t count) {
+         auto stop_at = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+         while (!should_stop && std::chrono::steady_clock::now() < stop_at) {
+            const auto available = socket.available(ec);
+            if (ec) return false;
+            if (available >= count) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         }
+         return false;
+      };
+
+      std::array<uint8_t, 2> frame_header{};
+      if (!wait_for_bytes(frame_header.size())) return;
+      asio::read(socket, asio::buffer(frame_header), ec);
+      if (ec) return;
+
+      const bool is_close_frame = (frame_header[0] & 0x0F) == static_cast<uint8_t>(ws_opcode::close);
+      const bool is_masked = (frame_header[1] & 0x80) != 0;
+      const auto payload_length = static_cast<size_t>(frame_header[1] & 0x7F);
+      if (!is_close_frame || !is_masked || payload_length < 2 || payload_length >= 126) return;
+
+      std::array<uint8_t, 4> mask{};
+      std::vector<uint8_t> payload(payload_length);
+      if (!wait_for_bytes(mask.size() + payload.size())) return;
+
+      asio::read(socket, asio::buffer(mask), ec);
+      if (ec) return;
+      asio::read(socket, asio::buffer(payload), ec);
+      if (ec) return;
+
+      payload[0] ^= mask[0];
+      payload[1] ^= mask[1];
+      client_close_code = static_cast<uint16_t>((payload[0] << 8) | payload[1]);
+      client_close_received = true;
    }
    catch (const std::exception& e) {
-      std::cerr << "[lb_header_server] Exception: " << e.what() << "\n";
+      std::cerr << "[raw_control_frame_server] Exception: " << e.what() << "\n";
       server_ready = true;
    }
 }
@@ -669,6 +861,111 @@ suite websocket_client_tests = [] {
       server_thread.join();
    };
 
+   "invalid_server_control_frame_test"_test = [] {
+      auto run_case = [](std::string_view name, std::vector<uint8_t> frame_payload, ws_close_code expected_code,
+                         std::string_view expected_reason, uint8_t frame_first_byte = 0x88) {
+         std::atomic<bool> server_ready{false};
+         std::atomic<bool> stop_server{false};
+         std::atomic<uint16_t> port{0};
+         std::atomic<bool> client_close_received{false};
+         std::atomic<uint16_t> client_close_code{0};
+
+         std::thread server_thread(run_raw_control_frame_server, std::ref(server_ready), std::ref(stop_server),
+                                   std::ref(port), std::move(frame_payload), std::ref(client_close_received),
+                                   std::ref(client_close_code), frame_first_byte);
+
+         if (!wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) {
+            expect(false) << name << ": server failed to start";
+            stop_server = true;
+            if (server_thread.joinable()) {
+               server_thread.join();
+            }
+            return;
+         }
+
+         websocket_client client;
+         std::atomic<bool> open_called{false};
+         std::atomic<bool> close_called{false};
+         std::atomic<bool> error_called{false};
+         std::atomic<uint16_t> observed_close_code{0};
+         std::string observed_close_reason;
+         std::mutex close_mu;
+
+         client.on_open([&] { open_called = true; });
+         client.on_message([](std::string_view, ws_opcode) {});
+         client.on_close([&](ws_close_code code, std::string_view reason) {
+            observed_close_code = static_cast<uint16_t>(code);
+            {
+               std::lock_guard lock(close_mu);
+               observed_close_reason = std::string(reason);
+            }
+            close_called = true;
+            client.context()->stop();
+         });
+         client.on_error([&](std::error_code ec) {
+            std::cerr << "[invalid_control_frame_test] Client Error: " << ec.message() << "\n";
+            error_called = true;
+            client.context()->stop();
+         });
+
+         const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+         client.connect(client_url);
+
+         std::thread client_thread([&client]() { client.context()->run(); });
+
+         const bool completed = wait_for_condition(
+            [&] { return error_called.load() || (close_called.load() && client_close_received.load()); });
+
+         expect(completed) << name << ": client did not complete invalid control frame handling";
+         expect(open_called.load()) << name << ": client did not open before receiving control frame";
+         expect(!error_called.load()) << name << ": invalid control frame should complete through on_close";
+         expect(close_called.load()) << name << ": on_close was not called";
+         expect(observed_close_code.load() == static_cast<uint16_t>(expected_code))
+            << name << ": unexpected local close code";
+         expect(client_close_received.load()) << name << ": client did not send close frame response";
+         expect(client_close_code.load() == static_cast<uint16_t>(expected_code))
+            << name << ": unexpected close response code";
+
+         {
+            std::lock_guard lock(close_mu);
+            expect(observed_close_reason == expected_reason)
+               << name << ": unexpected local close reason: " << observed_close_reason;
+         }
+
+         if (!client.context()->stopped()) {
+            client.context()->stop();
+         }
+         if (client_thread.joinable()) {
+            client_thread.join();
+         }
+
+         stop_server = true;
+         if (server_thread.joinable()) {
+            server_thread.join();
+         }
+      };
+
+      run_case("invalid close payload length", {0x03}, ws_close_code::protocol_error, "Invalid close payload length");
+      run_case("invalid close code", {0x03, 0xED}, ws_close_code::protocol_error, "Invalid close code");
+      run_case("invalid close reason", {0x03, 0xE8, 0xC3, 0x28}, ws_close_code::invalid_payload,
+               "Invalid close reason");
+
+      std::vector<uint8_t> oversized_close_payload(126, 'x');
+      oversized_close_payload[0] = 0x03;
+      oversized_close_payload[1] = 0xE8;
+      run_case("oversized close payload", std::move(oversized_close_payload), ws_close_code::protocol_error,
+               "Invalid control frame payload length");
+      run_case("oversized ping payload", std::vector<uint8_t>(126, 'x'), ws_close_code::protocol_error,
+               "Invalid control frame payload length", 0x89);
+      run_case("oversized pong payload", std::vector<uint8_t>(126, 'x'), ws_close_code::protocol_error,
+               "Invalid control frame payload length", 0x8A);
+
+      // RFC 6455 Section 5.5: control frames MUST NOT be fragmented. First byte 0x08 is a close
+      // opcode with FIN cleared, which must fail the connection with a protocol error.
+      run_case("fragmented control frame", {0x03, 0xE8}, ws_close_code::protocol_error, "Fragmented control frame",
+               0x08);
+   };
+
    "multiple_clients_shared_context_test"_test = [] {
       uint16_t port = 8096;
       std::atomic<bool> server_ready{false};
@@ -1017,7 +1314,7 @@ suite websocket_client_tests = [] {
       std::atomic<uint16_t> port{0};
 
       std::thread server_thread(run_lb_header_handshake_server, std::ref(server_ready), std::ref(stop_server),
-                                std::ref(port));
+                                std::ref(port), nullptr);
 
       expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
 
@@ -1061,6 +1358,137 @@ suite websocket_client_tests = [] {
       stop_server = true;
       server_thread.join();
    };
+
+   "websocket_handshake_host_header_includes_port"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+      std::string host_header;
+
+      std::thread server_thread(run_lb_header_handshake_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port), &host_header);
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> error_called{false};
+
+      client.on_open([&]() {
+         open_called = true;
+         client.context()->stop();
+      });
+
+      client.on_message([](std::string_view, ws_opcode) {});
+      client.on_close([](ws_close_code, std::string_view) {});
+
+      client.on_error([&](std::error_code) {
+         error_called = true;
+         client.context()->stop();
+      });
+
+      std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      expect(wait_for_condition([&] { return open_called.load() || error_called.load(); }))
+         << "Handshake did not complete";
+      expect(open_called.load()) << "Handshake should succeed";
+      expect(!error_called.load()) << "Handshake should not fail";
+
+      if (!client.context()->stopped()) {
+         client.context()->stop();
+      }
+
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+
+      const std::string expected_host = "127.0.0.1:" + std::to_string(port.load());
+      expect(host_header == expected_host) << "Host header should include authority port";
+   };
+
+   "handshake_buffered_frame_delivery_test"_test = [] {
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<uint16_t> port{0};
+
+      std::thread server_thread(run_initial_data_handshake_server, std::ref(server_ready), std::ref(stop_server),
+                                std::ref(port));
+
+      expect(wait_for_condition([&] { return server_ready.load() && port.load() != 0; })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> open_called{false};
+      std::atomic<bool> message_received{false};
+      std::atomic<bool> message_before_open{false};
+      std::atomic<bool> close_called{false};
+      std::atomic<bool> error_called{false};
+      std::string received_message;
+      std::mutex received_mu;
+
+      client.on_open([&]() { open_called = true; });
+
+      client.on_message([&](std::string_view message, ws_opcode opcode) {
+         if (!open_called) {
+            message_before_open = true;
+         }
+         if (opcode == ws_opcode::text) {
+            {
+               std::lock_guard lock(received_mu);
+               received_message = std::string(message);
+            }
+            message_received = true;
+         }
+      });
+
+      client.on_close([&](ws_close_code, std::string_view) {
+         close_called = true;
+         client.context()->stop();
+      });
+
+      client.on_error([&](std::error_code ec) {
+         std::cerr << "[handshake_buffered_frame_test] Client Error: " << ec.message() << "\n";
+         error_called = true;
+         client.context()->stop();
+      });
+
+      const std::string client_url = "ws://127.0.0.1:" + std::to_string(port.load()) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.context()->run(); });
+
+      bool buffered_frames_processed =
+         wait_for_condition([&] { return error_called.load() || (message_received.load() && close_called.load()); });
+
+      expect(buffered_frames_processed) << "Client did not finish processing buffered WebSocket frames";
+      expect(message_received.load()) << "Text frame buffered after the handshake response was not delivered";
+      expect(close_called.load()) << "Close frame buffered after the handshake response was not delivered";
+      expect(open_called.load()) << "on_open should fire before processing buffered WebSocket frames";
+      expect(!message_before_open.load()) << "Buffered message was delivered before on_open";
+      expect(!error_called.load()) << "Handshake and buffered frames should not produce an error";
+
+      {
+         std::lock_guard lock(received_mu);
+         expect(received_message == "hello from handshake buffer")
+            << "Unexpected buffered message payload: " << received_message;
+      }
+
+      if (!client.context()->stopped()) {
+         client.context()->stop();
+      }
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
    "custom_handshake_header_auth_test"_test = [] {
       std::atomic<bool> server_ready{false};
       std::atomic<bool> stop_server{false};

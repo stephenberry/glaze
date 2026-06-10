@@ -261,8 +261,8 @@ namespace glz
             // int32. For sizeof(T) == 4 && unsigned (uint32_t), the non-negative
             // check above plus the int32 input width guarantee the value fits.
             if constexpr (sizeof(T) < 4) {
-               if (v < static_cast<int32_t>(std::numeric_limits<T>::min()) ||
-                   v > static_cast<int32_t>(std::numeric_limits<T>::max())) [[unlikely]] {
+               if (v < static_cast<int32_t>((std::numeric_limits<T>::min)()) ||
+                   v > static_cast<int32_t>((std::numeric_limits<T>::max)())) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
@@ -285,14 +285,14 @@ namespace glz
             }
             else if constexpr (sizeof(T) <= 8) {
                if constexpr (std::is_signed_v<T>) {
-                  if (v < static_cast<int64_t>(std::numeric_limits<T>::min()) ||
-                      v > static_cast<int64_t>(std::numeric_limits<T>::max())) [[unlikely]] {
+                  if (v < static_cast<int64_t>((std::numeric_limits<T>::min)()) ||
+                      v > static_cast<int64_t>((std::numeric_limits<T>::max)())) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
                }
                else {
-                  if (v < 0 || static_cast<uint64_t>(v) > static_cast<uint64_t>(std::numeric_limits<T>::max()))
+                  if (v < 0 || static_cast<uint64_t>(v) > static_cast<uint64_t>((std::numeric_limits<T>::max)()))
                      [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;

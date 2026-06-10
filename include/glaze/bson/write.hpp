@@ -132,7 +132,7 @@ namespace glz
          }
          put_byte(0, b, ix);
          const size_t total = ix - start;
-         if (total > static_cast<size_t>(std::numeric_limits<int32_t>::max())) [[unlikely]] {
+         if (total > static_cast<size_t>((std::numeric_limits<int32_t>::max)())) [[unlikely]] {
             ctx.error = error_code::invalid_length;
             return false;
          }
@@ -162,7 +162,7 @@ namespace glz
       {
          // The length field stores byte count of the UTF-8 payload PLUS the
          // trailing null byte, per spec.
-         if (str.size() > static_cast<size_t>(std::numeric_limits<int32_t>::max()) - 1) [[unlikely]] {
+         if (str.size() > static_cast<size_t>((std::numeric_limits<int32_t>::max)()) - 1) [[unlikely]] {
             ctx.error = error_code::invalid_length;
             return false;
          }
@@ -321,7 +321,7 @@ namespace glz
                return;
             }
             if constexpr (std::same_as<T, uint64_t>) {
-               if (value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) [[unlikely]] {
+               if (value > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) [[unlikely]] {
                   ctx.error = error_code::invalid_length;
                   return;
                }
@@ -535,7 +535,7 @@ namespace glz
          // Subtype 0x02 (binary_old) is spec-required to wrap the payload in
          // a redundant inner int32 length, so its outer length is 4 + N.
          const bool is_binary_old = value.subtype == bson::binary_subtype::binary_old;
-         const size_t cap = static_cast<size_t>(std::numeric_limits<int32_t>::max()) - (is_binary_old ? 4 : 0);
+         const size_t cap = static_cast<size_t>((std::numeric_limits<int32_t>::max)()) - (is_binary_old ? 4 : 0);
          if (n > cap) [[unlikely]] {
             ctx.error = error_code::invalid_length;
             return;

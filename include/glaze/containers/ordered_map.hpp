@@ -75,7 +75,7 @@ namespace glz
          uint32_t stored_hash;
       };
 
-      static constexpr uint32_t empty_marker = std::numeric_limits<uint32_t>::max();
+      static constexpr uint32_t empty_marker = (std::numeric_limits<uint32_t>::max)();
       static constexpr uint32_t min_bucket_count = 8;
       static constexpr float default_max_load_factor = 0.75f;
 
