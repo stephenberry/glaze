@@ -2,6 +2,7 @@
 # glaze_setup_asio() (cmake/glaze-asio.cmake).
 
 option(glaze_BUILD_SSL_TESTS "Build SSL/TLS tests (requires OpenSSL headers matching target architecture)" ON)
+option(glaze_BUILD_WEBSOCKET_AUTOBAHN_TEST "Build Autobahn WebSocket compliance test" OFF)
 
 # HTTP Examples
 add_subdirectory(http_examples)
@@ -30,4 +31,7 @@ add_subdirectory(repe_test)
 add_subdirectory(registry_view_test)
 add_subdirectory(repe_to_jsonrpc_test)
 add_subdirectory(rest_test)
+if(glaze_BUILD_WEBSOCKET_AUTOBAHN_TEST)
+    add_subdirectory(websocket_autobahn_test)
+endif()
 add_subdirectory(websocket_test)
