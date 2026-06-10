@@ -945,8 +945,7 @@ suite websocket_client_tests = [] {
          }
       };
 
-      run_case("invalid close payload length", {0x03}, ws_close_code::protocol_error,
-               "Invalid close payload length");
+      run_case("invalid close payload length", {0x03}, ws_close_code::protocol_error, "Invalid close payload length");
       run_case("invalid close code", {0x03, 0xED}, ws_close_code::protocol_error, "Invalid close code");
       run_case("invalid close reason", {0x03, 0xE8, 0xC3, 0x28}, ws_close_code::invalid_payload,
                "Invalid close reason");
