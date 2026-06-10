@@ -706,6 +706,34 @@ namespace glz
 
    constexpr auto flags(auto&&... args) noexcept { return detail::Flags{tuple{args...}}; }
 
+   namespace detail
+   {
+      template <class T, size_t... I>
+      constexpr auto reflect_array_impl(std::index_sequence<I...>) noexcept
+      {
+#if GLZ_REFLECTION26
+         // P2996 reflection splices each member directly
+         return Array{glz::tuple{[](auto&& self) -> decltype(auto) { return get_member_ref<I>(self); }...}};
+#else
+         return Array{glz::tuple{[](auto&& self) -> decltype(auto) {
+            auto tie = to_tie(self);
+            return glz::get<I>(tie); // returns a reference to a member of self
+         }...}};
+#endif
+      }
+   }
+
+   // Produces a glz::array(...) meta from pure reflection, so that a struct is
+   // serialized/parsed as an array of its members without enumerating them:
+   //
+   //   template <> struct glz::meta<my_struct> {
+   //      static constexpr auto value = glz::reflect_array<my_struct>;
+   //   };
+   template <class T>
+      requires(std::is_class_v<std::remove_cvref_t<T>>)
+   inline constexpr auto reflect_array = detail::reflect_array_impl<std::remove_cvref_t<T>>(
+      std::make_index_sequence<detail::count_members<std::remove_cvref_t<T>>>{});
+
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
