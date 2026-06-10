@@ -22,6 +22,7 @@ constexpr std::string_view autobahn_url = "ws://127.0.0.1:9001";
 constexpr std::string_view glaze_agent = "glaze-websocket-client";
 constexpr size_t autobahn_max_message_size = 64ZU * 1024ZU * 1024ZU;
 constexpr auto autobahn_count_timeout = 5s;
+constexpr auto autobahn_startup_timeout = 30s;
 constexpr auto autobahn_case_timeout = 1min;
 constexpr auto autobahn_report_timeout = 10s;
 
@@ -131,6 +132,23 @@ single_message_result read_one_text_message(std::string_view url, std::chrono::m
 
    ctx->stop();
    client_thread.join();
+
+   return result;
+}
+
+single_message_result read_case_count()
+{
+   const auto url = std::format("{}/getCaseCount", autobahn_url);
+   const auto deadline = std::chrono::steady_clock::now() + autobahn_startup_timeout;
+   single_message_result result{single_message_status::timeout};
+
+   do {
+      result = read_one_text_message(url, autobahn_count_timeout);
+      if (result.status == single_message_status::ok) {
+         return result;
+      }
+      std::this_thread::sleep_for(500ms);
+   } while (std::chrono::steady_clock::now() < deadline);
 
    return result;
 }
@@ -248,8 +266,7 @@ bool update_reports(std::chrono::milliseconds timeout)
 
 suite websocket_autobahn_tests = [] {
    "autobahn_fuzzingclient"_test = [] {
-      const auto count_message =
-         read_one_text_message(std::format("{}/getCaseCount", autobahn_url), autobahn_count_timeout);
+      const auto count_message = read_case_count();
       if (count_message.status != single_message_status::ok) {
          std::cerr << "[autobahn] Could not read /getCaseCount from " << autobahn_url
                    << " (status=" << status_name(count_message.status);

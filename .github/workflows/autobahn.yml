@@ -55,7 +55,7 @@ jobs:
           mkdir -p autobahn-config autobahn-reports
           cat > autobahn-config/fuzzingserver.json <<'JSON'
           {
-             "url": "ws://127.0.0.1:9001",
+             "url": "ws://0.0.0.0:9001",
              "outdir": "/reports",
              "cases": ["*"],
              "exclude-cases": ["9.*", "12.*", "13.*"],
@@ -72,23 +72,6 @@ jobs:
             -v "$GITHUB_WORKSPACE/autobahn-reports:/reports" \
             "$AUTOBAHN_IMAGE" \
             wstest -m fuzzingserver -s /config/fuzzingserver.json
-
-          python3 - <<'PY'
-          import socket
-          import sys
-          import time
-
-          deadline = time.time() + 30
-          while time.time() < deadline:
-             try:
-                with socket.create_connection(("127.0.0.1", 9001), timeout=1):
-                   sys.exit(0)
-             except OSError:
-                time.sleep(1)
-
-          print("Autobahn fuzzingserver did not start within 30 seconds", file=sys.stderr)
-          sys.exit(1)
-          PY
 
       - name: Test
         run: ctest --output-on-failure --test-dir build -R "^websocket_autobahn_test$" --timeout 1800 --no-tests=error
