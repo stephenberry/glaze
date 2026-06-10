@@ -276,7 +276,7 @@ expect(written ==
 );
 ```
 
-To mark an entire type as a positional array (rather than a particular member), give it a `glz::meta` with `static constexpr auto value = glz::reflect_array<T>;`. This generates the equivalent of `glz::array(...)` over all members via reflection, so the type serializes positionally even inside containers like `std::vector<T>`. See [Pure Reflection](pure-reflection.md#marking-an-entire-type-as-a-positional-array).
+To mark an entire type as a positional array (rather than a particular member), give it a `glz::meta` with `static constexpr auto value = glz::reflect_array{};`. This generates the equivalent of `glz::array(...)` over all members via reflection, so the type serializes positionally even inside containers like `std::vector<T>`. See [Pure Reflection](pure-reflection.md#marking-an-entire-type-as-a-positional-array).
 
 ## flatten_map
 

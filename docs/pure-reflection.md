@@ -68,7 +68,7 @@ auto out = glz::write_json(p).value();
 
 ### Marking an entire type as a positional array
 
-`glz::as_array` requires a member to wrap, which doesn't help when the array-styled struct appears directly inside a container (e.g. an array of arrays). Use `glz::reflect_array<T>` to mark the type itself as positional, without enumerating its members the way `glz::array(&T::x, &T::y, ...)` requires:
+`glz::as_array` requires a member to wrap, which doesn't help when the array-styled struct appears directly inside a container (e.g. an array of arrays). Use a `glz::reflect_array{}` meta value to mark the type itself as positional, without enumerating its members the way `glz::array(&T::x, &T::y, ...)` requires:
 
 ```c++
 struct Point
@@ -81,7 +81,7 @@ struct Point
 template <>
 struct glz::meta<Point>
 {
-   static constexpr auto value = glz::reflect_array<Point>;
+   static constexpr auto value = glz::reflect_array{};
 };
 
 std::string_view payload = R"([[1,2,"a"],[3,4,"b"]])";
@@ -95,7 +95,7 @@ auto out = glz::write_json(points).value();
 // out == R"([[1,2,"a"],[3,4,"b"]])"
 ```
 
-`glz::reflect_array<T>` generates the same meta as an explicit `glz::array(...)` of all the members in declaration order, so the type behaves as a positional array everywhere, in every Glaze format.
+`glz::reflect_array{}` generates the same meta as an explicit `glz::array(...)` of all the members in declaration order, so the type behaves as a positional array everywhere, in every Glaze format. It also works in a local meta (`struct glaze { static constexpr auto value = glz::reflect_array{}; };`).
 
 > CUSTOMIZATION NOTE:
 >

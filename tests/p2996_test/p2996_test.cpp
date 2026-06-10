@@ -344,7 +344,7 @@ struct PositionalPoint
 template <>
 struct glz::meta<PositionalPoint>
 {
-   static constexpr auto value = glz::reflect_array<PositionalPoint>;
+   static constexpr auto value = glz::reflect_array{};
 };
 
 static_assert(glz::glaze_array_t<PositionalPoint>);

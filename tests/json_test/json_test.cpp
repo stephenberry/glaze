@@ -167,10 +167,23 @@ struct reflect_array_point
 template <>
 struct glz::meta<reflect_array_point>
 {
-   static constexpr auto value = glz::reflect_array<reflect_array_point>;
+   static constexpr auto value = glz::reflect_array{};
 };
 
 static_assert(glz::glaze_array_t<reflect_array_point>);
+
+struct reflect_array_local
+{
+   int a{};
+   int b{};
+
+   struct glaze
+   {
+      static constexpr auto value = glz::reflect_array{};
+   };
+};
+
+static_assert(glz::glaze_array_t<reflect_array_local>);
 
 suite reflect_array_tests = [] {
    "reflect_array round trip"_test = [] {
@@ -203,6 +216,17 @@ suite reflect_array_tests = [] {
       reflect_array_point value{};
       std::string buffer = R"({"x":1})";
       expect(bool(glz::read_json(value, buffer))); // an object should fail to parse
+   };
+
+   "reflect_array local glaze meta"_test = [] {
+      reflect_array_local value{1, 2};
+      auto written = glz::write_json(value).value();
+      expect(written == R"([1,2])") << written;
+
+      reflect_array_local parsed{};
+      expect(!glz::read_json(parsed, R"([3,4])"));
+      expect(parsed.a == 3);
+      expect(parsed.b == 4);
    };
 };
 
