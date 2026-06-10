@@ -192,6 +192,11 @@ namespace glz
       }
 #endif
 
+      inline bool is_control_frame(ws_opcode opcode)
+      {
+         return opcode == ws_opcode::close || opcode == ws_opcode::ping || opcode == ws_opcode::pong;
+      }
+
       inline bool is_valid_close_code(uint16_t code)
       {
          switch (static_cast<ws_close_code>(code)) {
@@ -813,8 +818,14 @@ namespace glz
          // RFC 6455 Section 5.5: "All control frames ... MUST NOT be fragmented."
          // A fragmented control frame (FIN == 0) is a protocol error and the connection must fail.
          // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5
-         if (!fin && (opcode == ws_opcode::close || opcode == ws_opcode::ping || opcode == ws_opcode::pong)) {
+         if (!fin && ws_util::is_control_frame(opcode)) [[unlikely]] {
             fail_connection(ws_close_code::protocol_error, "Fragmented control frame");
+            return;
+         }
+
+         // RFC 6455 Section 5.5: "All control frames MUST have a payload length of 125 bytes or less."
+         if (length > 125 && ws_util::is_control_frame(opcode)) [[unlikely]] {
+            fail_connection(ws_close_code::protocol_error, "Invalid control frame payload length");
             return;
          }
 
@@ -900,12 +911,9 @@ namespace glz
 
             // Based on the RFC sections 5.5 and 5.5.1, the payload length of a
             // close frame can be either 0 (no close code) or >= 2 && <= 125.
-            // RFC 6455 Section 5.5: "All control frames MUST have a payload length of 125
-            // bytes or less and MUST NOT be fragmented."
-            //
             // RFC 6455 Section 5.5.1: "If there is a body, the first two bytes of
             // the body MUST be a 2-byte unsigned integer ..."
-            if (length > 125 || length == 1) {
+            if (length == 1) {
                fail_connection(ws_close_code::protocol_error, "Invalid close payload length");
                return;
             }
