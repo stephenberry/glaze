@@ -4,24 +4,30 @@
 // Lightweight forward declarations of Glaze's customization points.
 //
 // Include this header alone when you need to specialize glz::meta,
-// glz::to<Format, T>, glz::from<Format, T>, or construct glz::custom_t in
-// widely-included user headers. It pulls in no Glaze internals and only
-// <cstdint> from the standard library, so it's cheap to include broadly and
-// lets user code defer inclusion of the full Glaze headers (glaze/glaze.hpp,
-// glaze/json.hpp, glaze/core/common.hpp) to the translation units that
-// actually call read/write.
+// glz::to<Format, T>, glz::from<Format, T>, glz::tuple_size / glz::tuple_element,
+// or construct glz::custom_t / glz::raw_json in widely-included user headers.
+// It pulls in no Glaze internals and only a few lightweight standard headers
+// (<cstddef>, <cstdint>, <string>, <string_view>), so it's cheap to include
+// broadly and lets user code defer inclusion of the full Glaze headers
+// (glaze/glaze.hpp, glaze/json.hpp, glaze/core/common.hpp) to the translation
+// units that actually call read/write.
 //
 // Builders like glz::object(...), glz::array(...), and glz::enumerate(...),
 // along with the full definitions of glz::meta and the per-format glz::to /
 // glz::from specializations, live in glaze/core/meta.hpp, glaze/core/common.hpp,
-// and the respective format headers. glz::custom_t is fully defined below.
+// and the respective format headers. glz::custom_t, glz::custom, and the
+// glz::tuple_size / glz::tuple_element / glz::basic_raw_json forward
+// declarations are defined below.
 //
 // For the same lightweight-header pattern applied to glz::generic, see
 // glaze/json/generic_fwd.hpp.
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 namespace glz
 {
@@ -97,4 +103,40 @@ namespace glz
 
    template <class T, class From, class To>
    custom_t(T&, From, To) -> custom_t<T, From, To>;
+
+   // Factory for the glz::custom serialization customization point. Defined here
+   // alongside custom_t because it depends on nothing else: it returns a generic
+   // lambda that constructs a custom_t via the deduction guide above. The full
+   // set of opts-based wrappers (quoted_num, unquoted, ...) lives in
+   // glaze/core/wrappers.hpp.
+   template <auto From, auto To>
+   constexpr auto custom_impl() noexcept
+   {
+      return [](auto&& v) { return custom_t{v, From, To}; };
+   }
+
+   // Customize reading and writing of a member.
+   template <auto From, auto To>
+   constexpr auto custom = custom_impl<From, To>();
+
+   // Tuple-protocol customization points. Glaze treats a type as tuple-like when
+   // glz::tuple_size / glz::tuple_element are specialized for it. The primary
+   // templates are left incomplete here so user headers can add specializations
+   // (and detect them) without pulling in glaze/tuplet/tuple.hpp, which provides
+   // the std:: specializations and the tuple_size_v / tuple_element_t helpers.
+   template <class... T>
+   struct tuple_size;
+
+   template <std::size_t I, class... T>
+   struct tuple_element;
+
+   // Raw, pre-serialized JSON passed through verbatim. Forward declared without a
+   // default template argument so glaze/core/common.hpp remains the sole owner of
+   // the default and the full definition; the aliases below let user headers name
+   // glz::raw_json (e.g. as a default template argument) without that definition.
+   template <class string_type>
+   struct basic_raw_json;
+
+   using raw_json = basic_raw_json<std::string>;
+   using raw_json_view = basic_raw_json<std::string_view>;
 }
