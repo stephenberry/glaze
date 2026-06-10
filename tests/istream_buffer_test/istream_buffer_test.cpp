@@ -477,6 +477,121 @@ suite json_read_streaming_tests = [] {
    };
 };
 
+// Regression tests for https://github.com/stephenberry/glaze/issues/2609
+// Skipping unknown keys (error_on_unknown_keys = false) must refill the
+// streaming buffer when the skipped value is larger than the buffer.
+suite json_streaming_skip_unknown_tests = [] {
+   "skip unknown array larger than buffer"_test = [] {
+      std::string json = R"({"fill":[)";
+      for (int i = 0; i < 4096; ++i) {
+         json += "0,";
+      }
+      json.back() = ']'; // replace trailing comma
+      json += R"(,"id":7,"name":"after"})";
+      expect(json.size() > 1024u);
+
+      std::istringstream iss(json);
+      glz::istream_buffer<1024> buffer(iss);
+
+      Record r{};
+      auto ec = glz::read_streaming<glz::opts{.error_on_unknown_keys = false}>(r, buffer);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(r.id == 7);
+      expect(r.name == "after");
+   };
+
+   "skip unknown nested object larger than buffer"_test = [] {
+      std::string json = R"({"fill":{)";
+      for (int i = 0; i < 512; ++i) {
+         json += "\"k" + std::to_string(i) + R"(":{"a":[1,2,3],"b":"text"},)";
+      }
+      json.pop_back(); // remove trailing comma
+      json += R"(},"id":3,"name":"nested"})";
+      expect(json.size() > 1024u);
+
+      std::istringstream iss(json);
+      glz::istream_buffer<1024> buffer(iss);
+
+      Record r{};
+      auto ec = glz::read_streaming<glz::opts{.error_on_unknown_keys = false}>(r, buffer);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(r.id == 3);
+      expect(r.name == "nested");
+   };
+
+   "skip unknown string larger than buffer with escapes"_test = [] {
+      std::string json = R"({"fill":")";
+      for (int i = 0; i < 1024; ++i) {
+         json += R"(abc\"\\)";
+      }
+      json += R"(","id":9,"name":"escaped"})";
+      expect(json.size() > 1024u);
+
+      std::istringstream iss(json);
+      glz::istream_buffer<1024> buffer(iss);
+
+      Record r{};
+      auto ec = glz::read_streaming<glz::opts{.error_on_unknown_keys = false}>(r, buffer);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(r.id == 9);
+      expect(r.name == "escaped");
+   };
+
+   "skip unknown array with chunked stream arrival"_test = [] {
+      std::string json = R"({"fill":[)";
+      for (int i = 0; i < 4096; ++i) {
+         json += std::to_string(i) + ",";
+      }
+      json.back() = ']';
+      json += R"(,"id":1,"name":"chunked"})";
+
+      slow_stringbuf sbuf(json, 100); // data arrives 100 bytes at a time
+      std::istream stream(&sbuf);
+      glz::istream_buffer<1024> buffer(stream);
+
+      Record r{};
+      auto ec = glz::read_streaming<glz::opts{.error_on_unknown_keys = false}>(r, buffer);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(r.id == 1);
+      expect(r.name == "chunked");
+   };
+
+   "skip multiple unknown keys spanning refills"_test = [] {
+      std::string big_array = "[";
+      for (int i = 0; i < 2048; ++i) {
+         big_array += "1,";
+      }
+      big_array.back() = ']';
+
+      std::string json = R"({"a":)" + big_array + R"(,"id":5,"b":)" + big_array + R"(,"name":"multi","c":true})";
+
+      std::istringstream iss(json);
+      glz::istream_buffer<1024> buffer(iss);
+
+      Record r{};
+      auto ec = glz::read_streaming<glz::opts{.error_on_unknown_keys = false}>(r, buffer);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(r.id == 5);
+      expect(r.name == "multi");
+   };
+
+   "unterminated unknown value still errors"_test = [] {
+      std::string json = R"({"fill":[)";
+      for (int i = 0; i < 2048; ++i) {
+         json += "0,";
+      }
+      // never closed
+
+      std::istringstream iss(json);
+      glz::istream_buffer<1024> buffer(iss);
+
+      Record r{};
+      auto ec = glz::read_streaming<glz::opts{.error_on_unknown_keys = false}>(r, buffer);
+      expect(bool(ec));
+      expect(ec.ec == glz::error_code::unexpected_end);
+   };
+};
+
 suite json_roundtrip_tests = [] {
    "JSON roundtrip - write to ostream, read from istream"_test = [] {
       ComplexObj original{.id = 42,
