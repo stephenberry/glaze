@@ -57,14 +57,16 @@ int main() {
        client;
 
     // One long living callback per method for the server
-    server.on<"foo">([](foo_params const& params) -> glz::expected<foo_result, glz::rpc::error> {
+    server.on<"foo">([](foo_params const& params) -> glz::rpc::result<foo_result> {
         // access to member variables for the request `foo`
         // params.foo_a
         // params.foo_b
         if( params.foo_a != 0)
            return foo_result{.foo_c = true, .foo_d = "new world"};
         else
-        // Or return an error:
+        // Or return an error. For a standard code, glz::rpc::invalid_params("...") and
+        // friends are shorter; construct rpc::error directly to set a custom message or
+        // an implementation-defined server-error code as shown here:
            return glz::unexpected{rpc::error{rpc::error_e::server_error_lower, {}, "my error"}};
     });
     server.on<"bar">([](bar_params const& params) {
@@ -76,7 +78,7 @@ int main() {
     auto [request_str, inserted] = client.request<"foo">(
             uuid,
             foo_params{.foo_a = 1337, .foo_b = "hello world"},
-            [](glz::expected<foo_result, rpc::error> value, rpc::id_t id) -> void {
+            [](rpc::result<foo_result> value, rpc::id_t id) -> void {
         // Access to value/error and/or id
     });
     // request_str: R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})"

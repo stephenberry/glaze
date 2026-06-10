@@ -99,6 +99,44 @@ namespace glz::rpc
       };
    };
 
+   // Convenience alias for a handler that fails a request with a full-fidelity JSON-RPC
+   // error. `glz::rpc::result<int>` is just `glz::expected<int, glz::rpc::error>`, so it
+   // does not have to be spelled twice (once for the stored handler signature and once
+   // for a lambda's trailing return type).
+   template <class T>
+   using result = glz::expected<T, error>;
+
+   // Build a `glz::unexpected<error>` so a handler can `return` it directly from a
+   // `result<T>` (i.e. `expected<T, rpc::error>`). `data` populates the JSON-RPC `data`
+   // member (detailed information); `message` stays the standard text for `code`. These
+   // remove the `glz::unexpected(glz::rpc::error{glz::rpc::error_e::..., ...})` boilerplate
+   // at handler error sites.
+   inline glz::unexpected<error> fail(error_e code, std::optional<std::string> data = std::nullopt)
+   {
+      return glz::unexpected(error{code, std::move(data)});
+   }
+
+   inline glz::unexpected<error> parse_error(std::optional<std::string> data = std::nullopt)
+   {
+      return fail(error_e::parse_error, std::move(data));
+   }
+   inline glz::unexpected<error> invalid_request(std::optional<std::string> data = std::nullopt)
+   {
+      return fail(error_e::invalid_request, std::move(data));
+   }
+   inline glz::unexpected<error> method_not_found(std::optional<std::string> data = std::nullopt)
+   {
+      return fail(error_e::method_not_found, std::move(data));
+   }
+   inline glz::unexpected<error> invalid_params(std::optional<std::string> data = std::nullopt)
+   {
+      return fail(error_e::invalid_params, std::move(data));
+   }
+   inline glz::unexpected<error> internal_error(std::optional<std::string> data = std::nullopt)
+   {
+      return fail(error_e::internal, std::move(data));
+   }
+
    template <class Params>
    struct request_t
    {

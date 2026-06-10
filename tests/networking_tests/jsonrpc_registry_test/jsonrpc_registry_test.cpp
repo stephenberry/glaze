@@ -374,6 +374,10 @@ suite jsonrpc_merge_tests = [] {
    };
 };
 
+// These tests exercise the exceptions-only safety net that catches a throwing handler.
+// Under -fno-exceptions a handler reports failure by returning glz::expected instead
+// (see registry_no_exceptions_test), so this struct and suite are exceptions-only.
+#if __cpp_exceptions
 struct throwing_functions_t
 {
    std::function<int()> throw_func = []() -> int { throw std::runtime_error("Test exception"); };
@@ -411,6 +415,7 @@ suite jsonrpc_exception_tests = [] {
       expect(!err) << "Response must be valid JSON: " << glz::format_error(err, response);
    };
 };
+#endif
 
 suite jsonrpc_error_json_validity_tests = [] {
    "parse_error_with_special_chars_produces_valid_json"_test = [] {

@@ -1100,7 +1100,11 @@ namespace glz
                      op.tags = route_entry.spec.tags;
                   }
                   op.operationId = std::string(to_string(method)) + route_path;
-                  op.responses["200"].description = "OK";
+
+                  // Success response keyed by the handler's actual status (204 for void /
+                  // update endpoints, 200 when a body is returned).
+                  const std::string success_key = std::to_string(route_entry.spec.success_status);
+                  op.responses[success_key].description = route_entry.spec.success_status == 204 ? "No Content" : "OK";
 
                   // Add request body schema
                   if (route_entry.spec.request_body_schema) {
@@ -1127,13 +1131,34 @@ namespace glz
                      if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.response_schema)) {
                         res_obj.content.value()["application/json"].schema = *schema_val;
                      }
-                     op.responses["200"] = res_obj;
+                     op.responses[success_key] = res_obj;
 
                      // Add schema to components
                      if (!spec.components) spec.components.emplace();
                      if (!spec.components->schemas) spec.components->schemas.emplace();
                      if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.response_schema)) {
                         spec.components->schemas->operator[](*route_entry.spec.response_type_name) = *schema_val;
+                     }
+                  }
+
+                  // Add error response (handlers that fail by returning glz::expected)
+                  if (route_entry.spec.error_response_schema) {
+                     openapi_response err_obj;
+                     err_obj.description = "Error response";
+                     err_obj.content.emplace();
+                     if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.error_response_schema)) {
+                        err_obj.content.value()["application/json"].schema = *schema_val;
+                     }
+                     op.responses[route_entry.spec.error_status_key] = err_obj;
+
+                     // Add error schema to components
+                     if (route_entry.spec.error_response_type_name) {
+                        if (!spec.components) spec.components.emplace();
+                        if (!spec.components->schemas) spec.components->schemas.emplace();
+                        if (auto schema_val = glz::read_json<glz::schema>(*route_entry.spec.error_response_schema)) {
+                           spec.components->schemas->operator[](*route_entry.spec.error_response_type_name) =
+                              *schema_val;
+                        }
                      }
                   }
 

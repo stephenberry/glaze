@@ -9,6 +9,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/rpc/repe/header.hpp"
+#include "glaze/util/expected.hpp"
 
 namespace glz
 {
@@ -563,7 +564,60 @@ namespace glz::repe
       return size_t(b - start);
    }
 
-   /// Write response with a value (zero-copy to output buffer)
+   /// Write response without a value (null body)
+   template <auto Opts>
+   void write_response(state_view& state)
+   {
+      state.out.reset(state.in);
+      auto ec = state.out.template set_body<Opts>(nullptr);
+      if (bool(ec)) [[unlikely]] {
+         state.out.set_error(ec, "Failed to serialize response");
+      }
+   }
+
+   /// Translate the error of a glz::expected handler result into a REPE error
+   /// response, so a registered handler can fail a request without throwing.
+   /// Supported error types:
+   ///   - glz::error_code  -> that code with an empty message
+   ///   - glz::error_ctx   -> its code and message
+   ///   - string-like      -> error_code::parse_error + the message. This is the same
+   ///                         error code a thrown handler is mapped to when caught (see
+   ///                         registry call()), so the two paths agree on the code. The
+   ///                         body differs, though: the thrown path wraps the message via
+   ///                         build_registry_error(query, ...) for context, while this path
+   ///                         uses the returned string verbatim.
+   /// A degenerate error_code::none (which would make the failure indistinguishable from
+   /// success on the wire) is normalized to error_code::parse_error -- the same fallback
+   /// code as the string-like and thrown-handler paths -- so an error state always
+   /// produces an error response.
+   template <class E>
+   void set_handler_error(state_view& state, E&& error)
+   {
+      using DE = std::remove_cvref_t<E>;
+      if constexpr (std::same_as<DE, error_code>) {
+         if (error == error_code::none) [[unlikely]] {
+            state.out.set_error(error_code::parse_error, "handler returned an error state with error_code::none");
+         }
+         else {
+            state.out.set_error(error);
+         }
+      }
+      else if constexpr (std::same_as<DE, error_ctx>) {
+         state.out.set_error(error.ec == error_code::none ? error_code::parse_error : error.ec,
+                             error.custom_error_message);
+      }
+      else {
+         static_assert(std::convertible_to<DE, std::string_view>,
+                       "A REPE handler's glz::expected error type must be glz::error_code, glz::error_ctx, "
+                       "or convertible to std::string_view.");
+         state.out.set_error(error_code::parse_error, std::string_view(error));
+      }
+   }
+
+   /// Write a response value to the output buffer (zero-copy). The value is serialized
+   /// as-is; a glz::expected is written through its normal JSON serializer, so an error
+   /// state becomes {"unexpected": ...}. Handler results that should treat a glz::expected
+   /// error as a request failure go through write_handler_result instead.
    template <auto Opts, class Value>
    void write_response(Value&& value, state_view& state)
    {
@@ -574,14 +628,33 @@ namespace glz::repe
       }
    }
 
-   /// Write response without a value (null body)
-   template <auto Opts>
-   void write_response(state_view& state)
+   /// Write a registered handler's result. Unlike write_response, a glz::expected return
+   /// is interpreted as a success/error channel: the success value is serialized and an
+   /// error is translated into a REPE error response (see set_handler_error), so a handler
+   /// can signal failure by returning glz::unexpected(...) rather than throwing (required
+   /// under -fno-exceptions, convenient otherwise). This is applied only at the function/
+   /// member-function call sites; a registered data member of type glz::expected is read
+   /// through write_response and still serializes its JSON shape. See #2265.
+   template <auto Opts, class Value>
+   void write_handler_result(Value&& value, state_view& state)
    {
-      state.out.reset(state.in);
-      auto ec = state.out.template set_body<Opts>(nullptr);
-      if (bool(ec)) [[unlikely]] {
-         state.out.set_error(ec, "Failed to serialize response");
+      using V = std::remove_cvref_t<Value>;
+      if constexpr (glz::is_expected<V>) {
+         if (value.has_value()) {
+            if constexpr (std::is_void_v<typename V::value_type>) {
+               write_response<Opts>(state);
+            }
+            else {
+               write_response<Opts>(*std::forward<Value>(value), state);
+            }
+         }
+         else {
+            state.out.reset(state.in);
+            set_handler_error(state, std::forward<Value>(value).error());
+         }
+      }
+      else {
+         write_response<Opts>(std::forward<Value>(value), state);
       }
    }
 }

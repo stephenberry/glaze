@@ -2,6 +2,7 @@
 # glaze_setup_asio() (cmake/glaze-asio.cmake).
 
 option(glaze_BUILD_SSL_TESTS "Build SSL/TLS tests (requires OpenSSL headers matching target architecture)" ON)
+option(glaze_BUILD_REGISTRY_NOEXCEPT_TESTS "Build no-exceptions variants of the registry tests" ON)
 
 # HTTP Examples
 add_subdirectory(http_examples)
@@ -28,6 +29,7 @@ add_subdirectory(repe_buffer_test)
 add_subdirectory(repe_plugin_test)
 add_subdirectory(repe_test)
 add_subdirectory(registry_view_test)
+add_subdirectory(registry_no_exceptions_test)
 add_subdirectory(repe_to_jsonrpc_test)
 add_subdirectory(rest_test)
 add_subdirectory(websocket_test)

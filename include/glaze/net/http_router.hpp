@@ -18,6 +18,7 @@
 #include "glaze/json/generic.hpp"
 #include "glaze/net/http.hpp"
 #include "glaze/net/url.hpp"
+#include "glaze/util/expected.hpp"
 #include "glaze/util/key_transformers.hpp"
 
 namespace glz
@@ -44,6 +45,18 @@ namespace glz
       std::string_view error{"glaze write failure"};
       uint32_t code{};
       std::string_view message{};
+   };
+
+   // Returned (as the error of a glz::expected) by a reflected REST handler to fail
+   // the request with a chosen HTTP status. The registry sets the response status to
+   // `status` and serializes this object as the body, so a client can deserialize the
+   // response straight back into a glz::http_error. Handlers that don't need a specific
+   // status can return glz::expected with a glz::error_code or string error instead; the
+   // registry maps those to a status automatically (see rest_registry_impl.hpp).
+   struct http_error
+   {
+      int status{500};
+      std::string message{};
    };
 
    // Response builder
@@ -205,11 +218,23 @@ namespace glz
       std::vector<std::string> tags{};
       std::unordered_map<std::string, param_constraint> constraints{};
 
+      // HTTP status of a successful response. 200 when the handler returns a body, 204
+      // (No Content) for void/expected<void, E> handlers and update (PUT) endpoints.
+      int success_status{200};
+
       // Type information for schema generation
       std::optional<std::string> request_body_schema{};
       std::optional<std::string> response_schema{};
       std::optional<std::string> request_body_type_name{};
       std::optional<std::string> response_type_name{};
+
+      // Error response, populated when a reflected handler returns glz::expected. The
+      // error body is a glz::http_error; error_status_key is the OpenAPI response key:
+      // "500" when the status is fixed (string/error_ctx errors), otherwise "default"
+      // because the status depends on the error value (error_code or glz::http_error).
+      std::optional<std::string> error_response_schema{};
+      std::optional<std::string> error_response_type_name{};
+      std::string error_status_key{"default"};
    };
 
    /**
@@ -323,26 +348,28 @@ namespace glz
        * @param path The route path, may contain ":param" or trailing "*name" wildcards.
        * @param handle The handler to associate with the route.
        * @param spec Optional spec for the route.
+       * @return Empty on success; an error message describing the structural
+       *         conflict on failure. Never throws and never aborts, so the same
+       *         code path is used with and without exceptions.
        */
-      void add(http_method method, std::string_view path, H handle, const route_spec& spec = {})
+      [[nodiscard]] expected<void, std::string> add(http_method method, std::string_view path, H handle,
+                                                    const route_spec& spec = {})
       {
-         try {
-            // Install in the radix tree first. add_route can throw on conflict
-            // (duplicate :param or *wildcard names at the same position); if it
-            // throws we want the routes map to stay in sync with the tree, not
-            // to silently retain an entry that iteration sees but match() never
-            // reaches. Pass handle by value so we still own a copy to move into
-            // the routes entry below.
-            add_route(method, path, handle, spec.constraints);
+         // Install in the radix tree first. add_route reports structural conflicts
+         // (duplicate :param or *wildcard names at the same position, or a wildcard
+         // that is not the final segment) by returning an error rather than throwing.
+         // On failure we leave the routes map untouched so it stays in sync with the
+         // tree, instead of silently retaining an entry that iteration sees but match()
+         // never reaches. Pass handle by value so we still own a copy to move into the
+         // routes entry below.
+         if (auto result = add_route(method, path, handle, spec.constraints); !result) {
+            return result;
+         }
 
-            auto& entry = routes[std::string(path)][method];
-            entry.handle = std::move(handle);
-            entry.spec = spec;
-         }
-         catch (const std::exception& e) {
-            std::fprintf(stderr, "Error adding route '%.*s': %s\n", static_cast<int>(path.length()), path.data(),
-                         e.what());
-         }
+         auto& entry = routes[std::string(path)][method];
+         entry.handle = std::move(handle);
+         entry.spec = spec;
+         return {};
       }
 
       /**
@@ -389,14 +416,15 @@ namespace glz
       mutable radix_node root;
       std::unordered_map<std::string, std::unordered_map<http_method, H>> direct_routes;
 
-      void add_route(http_method method, std::string_view path, H handle,
-                     const std::unordered_map<std::string, param_constraint>& constraints = {})
+      [[nodiscard]] expected<void, std::string> add_route(
+         http_method method, std::string_view path, H handle,
+         const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          std::string path_str(path);
 
          if (path_str.find(':') == std::string::npos && path_str.find('*') == std::string::npos) {
             direct_routes[path_str][method] = handle;
-            return;
+            return {};
          }
 
          std::vector<std::string> segments = split_path(path);
@@ -419,8 +447,8 @@ namespace glz
                   current->parameter_child->full_path = current->full_path + "/" + segment;
                }
                else if (current->parameter_child->parameter_name != param_name) {
-                  throw std::runtime_error("Route conflict: different parameter names at same position: :" +
-                                           current->parameter_child->parameter_name + " vs :" + param_name);
+                  return glz::unexpected("Route conflict: different parameter names at same position: :" +
+                                         current->parameter_child->parameter_name + " vs :" + param_name);
                }
 
                current = current->parameter_child.get();
@@ -429,7 +457,7 @@ namespace glz
                std::string wildcard_name = segment.substr(1);
 
                if (i != segments.size() - 1) {
-                  throw std::runtime_error("Wildcard must be the last segment in route: " + path_str);
+                  return glz::unexpected("Wildcard must be the last segment in route: " + path_str);
                }
 
                if (!current->wildcard_child) {
@@ -440,8 +468,8 @@ namespace glz
                   current->wildcard_child->full_path = current->full_path + "/" + segment;
                }
                else if (current->wildcard_child->parameter_name != wildcard_name) {
-                  throw std::runtime_error("Route conflict: different wildcard names at same position: *" +
-                                           current->wildcard_child->parameter_name + " vs *" + wildcard_name);
+                  return glz::unexpected("Route conflict: different wildcard names at same position: *" +
+                                         current->wildcard_child->parameter_name + " vs *" + wildcard_name);
                }
 
                current = current->wildcard_child.get();
@@ -464,6 +492,8 @@ namespace glz
          if (!constraints.empty()) {
             current->constraints[method] = constraints;
          }
+
+         return {};
       }
 
       bool match_node(radix_node* node, const std::vector<std::string>& segments, size_t index, http_method method,
@@ -780,6 +810,11 @@ namespace glz
     *
     * Note: http_server::mount() only accepts the default http_router (basic_http_router<>).
     * Custom handler routers are intended for standalone use or with custom server implementations.
+    *
+    * Thread-safety: route registration (route()/stream()/websocket()/try_* and the
+    * route_error() side-channel) mutates the router without synchronization and is not
+    * thread-safe. Register all routes during startup, before the router begins serving;
+    * once serving, match()/match_websocket() are const and safe for concurrent reads.
     */
    template <class Handler = std::function<void(const request&, response&)>>
       requires std::invocable<Handler, const request&, response&>
@@ -826,13 +861,56 @@ namespace glz
        * @param handle The handler function to call when this route matches
        * @param spec Optional spec for the route.
        * @return Reference to this router for method chaining
-       * @throws std::runtime_error if there's a route conflict
+       * @throws std::runtime_error on a structural route conflict when exceptions
+       *         are enabled. Under -fno-exceptions the conflict is recorded instead
+       *         (see route_error()); use try_route() for explicit handling in either
+       *         configuration. A structural conflict means duplicate ":param" or
+       *         "*wildcard" names at the same position, or a wildcard that is not the
+       *         final segment; re-registering an identical route simply overwrites it.
        */
       basic_http_router& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
       {
-         normal_routes.add(method, path, std::move(handle), spec);
+         surface_route_result(normal_routes.add(method, path, std::move(handle), spec));
          return *this;
       }
+
+      /**
+       * @brief Register a route without throwing, reporting conflicts by return value.
+       *
+       * Behaves identically with and without exceptions: a structural route conflict
+       * is returned as an error message rather than thrown or logged to stderr. This is
+       * the recommended registration entry point for exception-free builds. As the
+       * explicit return-value path, try_route() does not touch the route_error() side-
+       * channel (which exists for the chaining route()/stream()/websocket() variants);
+       * the caller owns the returned error.
+       *
+       * @return Empty on success, or the conflict message on failure.
+       */
+      [[nodiscard]] expected<void, std::string> try_route(http_method method, std::string_view path, handler handle,
+                                                          const route_spec& spec = {})
+      {
+         return normal_routes.add(method, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Whether a route registration error has been recorded.
+       *
+       * Populated under -fno-exceptions, where route()/stream()/websocket() record the
+       * first conflict instead of throwing (they return *this for chaining and so cannot
+       * report it by value). The try_* variants report conflicts purely by return value
+       * and do not write here. Use clear_route_error() to reset.
+       */
+      [[nodiscard]] bool has_route_error() const noexcept { return !route_error_.empty(); }
+
+      /**
+       * @brief The first recorded route registration error message (empty if none).
+       */
+      [[nodiscard]] std::string_view route_error() const noexcept { return route_error_; }
+
+      /**
+       * @brief Clear any recorded route registration error.
+       */
+      void clear_route_error() noexcept { route_error_.clear(); }
 
       /**
        * @brief Register a GET route
@@ -940,12 +1018,28 @@ namespace glz
        * lifecycle and write chunked responses through streaming_response.
        *
        * Supports the same path-parameter syntax as normal routes (":param" and "*name").
+       * Like route(), a structural conflict throws when exceptions are enabled and is
+       * recorded (see route_error()) otherwise; use try_stream() to handle conflicts by
+       * return value in either configuration.
        */
       basic_http_router& stream(http_method method, std::string_view path, streaming_handler handle,
                                 const route_spec& spec = {})
       {
-         streaming_routes.add(method, path, std::move(handle), spec);
+         surface_route_result(streaming_routes.add(method, path, std::move(handle), spec));
          return *this;
+      }
+
+      /**
+       * @brief Register a streaming route without throwing, reporting conflicts by
+       * return value. The streaming counterpart of try_route(); like it, the error is
+       * returned, not written to the route_error() side-channel.
+       *
+       * @return Empty on success, or the conflict message on failure.
+       */
+      [[nodiscard]] expected<void, std::string> try_stream(http_method method, std::string_view path,
+                                                           streaming_handler handle, const route_spec& spec = {})
+      {
+         return streaming_routes.add(method, path, std::move(handle), spec);
       }
 
       /**
@@ -970,11 +1064,28 @@ namespace glz
        * Supports the same path-parameter syntax as normal routes. The HTTP server
        * detects the upgrade handshake (Upgrade: websocket) and dispatches to the
        * matching server, populating request.params from the path.
+       *
+       * Like route(), a structural conflict throws when exceptions are enabled and is
+       * recorded (see route_error()) otherwise; use try_websocket() to handle conflicts
+       * by return value in either configuration.
        */
       basic_http_router& websocket(std::string_view path, websocket_handler server, const route_spec& spec = {})
       {
-         websocket_routes.add(http_method::GET, path, std::move(server), spec);
+         surface_route_result(websocket_routes.add(http_method::GET, path, std::move(server), spec));
          return *this;
+      }
+
+      /**
+       * @brief Register a WebSocket handler without throwing, reporting conflicts by
+       * return value. The WebSocket counterpart of try_route(); like it, the error is
+       * returned, not written to the route_error() side-channel.
+       *
+       * @return Empty on success, or the conflict message on failure.
+       */
+      [[nodiscard]] expected<void, std::string> try_websocket(std::string_view path, websocket_handler server,
+                                                              const route_spec& spec = {})
+      {
+         return websocket_routes.add(http_method::GET, path, std::move(server), spec);
       }
 
       /**
@@ -1075,6 +1186,32 @@ namespace glz
        * @brief Vector of middleware handlers
        */
       std::vector<handler> middlewares;
+
+     private:
+      /**
+       * @brief Surface a route-table registration result.
+       *
+       * Where exceptions are enabled a structural conflict is thrown, restoring the
+       * documented route() contract and making misuse impossible to miss. Under
+       * -fno-exceptions the first conflict is recorded for query via route_error().
+       * The error is never swallowed to stderr and never aborts the process, so both
+       * configurations report failures rather than hiding them.
+       */
+      void surface_route_result(expected<void, std::string> result)
+      {
+         if (result) {
+            return;
+         }
+#if __cpp_exceptions
+         throw std::runtime_error(std::move(result.error()));
+#else
+         if (route_error_.empty()) {
+            route_error_ = std::move(result.error());
+         }
+#endif
+      }
+
+      std::string route_error_{};
    };
 
    /**

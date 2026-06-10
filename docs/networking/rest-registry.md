@@ -224,6 +224,20 @@ private:
 };
 ```
 
+### Non-throwing registration
+
+`registry.on(service)` throws `std::runtime_error` if registering a service produces a structural route conflict (and is unavailable under `-fno-exceptions`). Use `try_on` to detect registration failures by return value instead of throwing:
+
+```cpp
+glz::registry<glz::opts{}, glz::REST> registry{};
+if (auto ec = registry.try_on(userService); !ec) {
+    std::fprintf(stderr, "route registration failed: %s\n", ec.error().c_str());
+    return;
+}
+```
+
+`try_on` returns `glz::expected<void, std::string>` and never throws, so it works identically with and without exceptions. See [Glaze Exceptions](../exceptions.md) for the full no-exceptions story, including failing a request from a handler.
+
 ## Multiple Services
 
 ### Service Composition

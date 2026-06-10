@@ -206,6 +206,28 @@ server.call(R"({"jsonrpc":"1.0","method":"greet","id":1})");
 // Returns: {"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request",...},"id":1}
 ```
 
+### Failing a request from a handler
+
+A handler can fail a request by returning `glz::expected<T, E>`. The error is translated into a JSON-RPC error response, so you do not need to throw (and it works under `-fno-exceptions`):
+
+```cpp
+struct calculator {
+   std::function<glz::rpc::result<int>(div_params)> divide = [](div_params p) -> glz::rpc::result<int> {
+      if (p.denominator == 0) {
+         return glz::rpc::invalid_params("denominator must be non-zero");
+      }
+      return p.numerator / p.denominator;
+   };
+};
+
+server.call(R"({"jsonrpc":"2.0","method":"divide","params":{"numerator":10,"denominator":0},"id":1})");
+// Returns: {"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params","data":"denominator must be non-zero"},"id":1}
+```
+
+`glz::rpc::result<T>` is an alias for `glz::expected<T, glz::rpc::error>`, and the `glz::rpc::invalid_params`, `invalid_request`, `method_not_found`, `internal_error`, and `parse_error` helpers each return a `glz::unexpected<glz::rpc::error>` carrying that code; their optional argument becomes the JSON-RPC `data` member while `message` stays the standard text for the code. For any other code (including the implementation-defined server-error range) use `glz::rpc::fail(code, data)`, or construct a `glz::rpc::error` directly for full control over the code, message, and `data`.
+
+Returning a string error type (for example `glz::expected<T, std::string>`) maps to `-32603` (Internal error) with the string as the message, which is convenient when the same handler is reused across protocols. When exceptions are enabled a handler that throws is still caught and reported as `-32603`.
+
 ## ID Types
 
 JSON-RPC 2.0 supports string, integer, and null IDs. All are preserved in responses:
