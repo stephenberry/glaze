@@ -32,10 +32,6 @@ jobs:
       CXX: g++-${{matrix.gcc}}
 
     steps:
-    - name: Install Dependencies
-      run: |
-          sudo apt-get update
-          sudo apt-get install erlang-dev
 
     - uses: actions/checkout@v6
 
