@@ -60,7 +60,6 @@ jobs:
     env:
       CC: clang-22
       CXX: clang++-22
-      LLVM_VERSION: 22
 
     steps:
     - uses: actions/checkout@v6
