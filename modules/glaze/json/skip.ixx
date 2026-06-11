@@ -10,6 +10,7 @@ import std;
 
 import glaze.core.context;
 import glaze.core.opts;
+import glaze.core.streaming_state;
 
 import glaze.util.parse;
 import glaze.util.atoi;
@@ -17,6 +18,7 @@ import glaze.util.atoi;
 #include "glaze/util/inline.hpp"
 
 using std::size_t;
+using std::uint8_t;
 
 export namespace glz
 {

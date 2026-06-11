@@ -1,15 +1,21 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/core/write_wrappers.hpp"
+// glz:header std=<concepts>
+// glz:header std=<functional>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+export module glaze.core.write_wrappers;
 
-#pragma once
+import std;
 
-#include <functional>
-#include <type_traits>
-#include <utility>
+import glaze.core.context;
+import glaze.core.common;
+import glaze.core.custom;
+import glaze.core.meta;
+import glaze.util.type_traits;
 
-#include "glaze/core/common.hpp" // glaze_value_t, get_member, context
-#include "glaze/core/meta.hpp" // remove_meta_wrapper_t, meta_wrapper_v, custom_write
-#include "glaze/util/type_traits.hpp" // is_specialization_v, return_type, function_traits
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {
@@ -30,7 +36,7 @@ namespace glz
    // A wrapper the value serializer sees through, but the block writers must look past to
    // classify a field's serialized shape. glaze_value_t excludes object/array/enum metas, so
    // a true mimic only wraps a single inner value; custom_t is the glz::custom getter/setter.
-   template <class V>
+   export template <class V>
    concept transparent_write_wrapper =
       (glaze_value_t<V> && !custom_write<V>) || is_specialization_v<std::remove_cvref_t<V>, custom_t>;
 
@@ -102,13 +108,13 @@ namespace glz
       using type = typename resolve_write_type<typename custom_getter_result<custom_t<T, From, To>>::type>::type;
    };
 
-   template <class V>
+   export template <class V>
    using resolve_write_type_t = typename resolve_write_type<std::remove_cvref_t<V>>::type;
 
    // Invoke `func` with the value a field actually serializes, recursively unwrapping any
    // transparent write wrappers. Continuation-passing keeps a by-value custom getter result
    // alive for the duration of `func` (a getter may return a value rather than a reference).
-   template <class V, class Ctx, class Func>
+   export template <class V, class Ctx, class Func>
    GLZ_ALWAYS_INLINE void unwrap_write_value(V&& v, Ctx&& ctx, Func&& func)
    {
       using T = std::remove_cvref_t<V>;

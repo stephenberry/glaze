@@ -421,7 +421,7 @@ struct glz::meta<glz::schema>
 #endif
 };
 
-export namespace glz
+namespace glz
 {
    // Note: has_custom_meta_v and detail::custom_read_input_type are defined in common.hpp
 
@@ -887,7 +887,7 @@ export namespace glz
 
             const auto& ids = ids_v<T>;
 
-             glz::for_each<N>([&]<auto I>() {
+            for_each<N>([&]<auto I>() {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
 
@@ -1046,7 +1046,7 @@ export namespace glz
             auto req = s.required.value_or(std::vector<std::string_view>{});
 
             s.properties = std::map<sv, schema, std::less<>>();
-             glz::for_each<N>([&]<auto I>() {
+            for_each<N>([&]<auto I>() {
                using val_t = std::decay_t<refl_t<T, I>>;
 
                static constexpr sv key = reflect<T>::keys[I];
@@ -1340,7 +1340,7 @@ export namespace glz
       bool write_type_info = false;
    };
 
-   template <class T, auto Opts = opts{}, class Buffer>
+   export template <class T, auto Opts = opts{}, class Buffer>
    [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer)
    {
       schema s{};
@@ -1361,10 +1361,10 @@ export namespace glz
 
       // Making this static constexpr options to fix MSVC bug
       static constexpr opts options = opts_write_type_info_off<decltype(Opts)>{{Opts}};
-      return glz::write<options>(std::move(s), std::forward<Buffer>(buffer));
+      return write<options>(std::move(s), std::forward<Buffer>(buffer));
    }
 
-   template <class T, auto Opts = opts{}>
+   export template <class T, auto Opts = opts{}>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_json_schema()
    {
       std::string buffer{};

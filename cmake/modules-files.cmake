@@ -51,10 +51,10 @@ target_sources(glaze_glaze
       modules/glaze/core/streaming_state.ixx
       modules/glaze/core/to.ixx
       modules/glaze/core/traits.ixx
-
       modules/glaze/core/wrapper_traits.ixx
       modules/glaze/core/write.ixx
       modules/glaze/core/write_chars.ixx
+      modules/glaze/core/write_wrappers.ixx
 )
 
 # json
