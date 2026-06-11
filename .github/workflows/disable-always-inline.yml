@@ -65,6 +65,11 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libc++-dev libc++abi-dev
+
     - name: Configure CMake
       run: |
         cmake -B ${{github.workspace}}/build \

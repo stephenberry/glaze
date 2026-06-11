@@ -35,6 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Install Clang dependencies
+        if: ${{ matrix.compiler.name == 'clang' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libc++-dev libc++abi-dev
+
       - name: Install Boost
         id: install-boost
         uses: MarkusJx/install-boost@v2

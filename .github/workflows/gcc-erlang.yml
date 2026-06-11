@@ -35,6 +35,11 @@ jobs:
 
     - uses: actions/checkout@v6
 
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y erlang-dev
+
     - name: Configure CMake
       run: |
         CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build \

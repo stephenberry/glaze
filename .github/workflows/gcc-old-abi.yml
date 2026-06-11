@@ -58,16 +58,6 @@ jobs:
       CXX: g++-15
 
     steps:
-    - name: Install build dependencies
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        apt-get update
-        apt-get install -y --no-install-recommends \
-          ca-certificates \
-          libssl-dev \
-        update-ca-certificates
-
     - uses: actions/checkout@v6
 
     - name: Prepare build directory
