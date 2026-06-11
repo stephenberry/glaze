@@ -32,12 +32,12 @@ jobs:
           g++-15-arm-linux-gnueabihf \
           libstdc++-15-dev-armhf-cross \
           libc6-armhf-cross \
-          qemu-user-static
+          qemu-user
 
     - name: Verify compiler and NEON target macro
       run: |
         arm-linux-gnueabihf-g++-15 --version
-        qemu-arm-static --version
+        qemu-arm --version
         arm-linux-gnueabihf-g++-15 -std=c++23 -march=armv7-a -mfpu=neon -mfloat-abi=hard -dM -E -x c++ /dev/null | grep "__ARM_NEON"
 
     - name: Create CMake toolchain file
@@ -55,7 +55,7 @@ jobs:
         set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 
         # Use QEMU to run selected target binaries in smoke tests.
-        set(CMAKE_CROSSCOMPILING_EMULATOR qemu-arm-static;-L;/usr/arm-linux-gnueabihf)
+        set(CMAKE_CROSSCOMPILING_EMULATOR qemu-arm;-L;/usr/arm-linux-gnueabihf)
 
         # We're cross-compiling; avoid running target executables during configure.
         set(CMAKE_CROSSCOMPILING TRUE)

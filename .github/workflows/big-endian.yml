@@ -29,13 +29,13 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           g++-15-s390x-linux-gnu \
-          qemu-user-static \
+          qemu-user \
           libstdc++-15-dev-s390x-cross
 
     - name: Verify cross-compiler
       run: |
         s390x-linux-gnu-g++-15 --version
-        qemu-s390x-static --version
+        qemu-s390x --version
 
     - name: Create CMake toolchain file
       run: |
@@ -50,6 +50,8 @@ jobs:
         set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
         set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
         set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+        set(CMAKE_CROSSCOMPILING_EMULATOR qemu-s390x;-L;/usr/s390x-linux-gnu)
 
         # Tell CMake we're cross-compiling, so it won't try to run test executables
         set(CMAKE_CROSSCOMPILING TRUE)
@@ -71,7 +73,7 @@ jobs:
         }
         EOF
         s390x-linux-gnu-g++-15 -std=c++20 /tmp/check_endian.cpp -o /tmp/check_endian
-        qemu-s390x-static -L /usr/s390x-linux-gnu /tmp/check_endian
+        qemu-s390x -L /usr/s390x-linux-gnu /tmp/check_endian
 
     - name: Configure CMake
       run: |
