@@ -102,6 +102,36 @@ target_link_libraries(your_target PRIVATE Boost::system)
 
 ## CMake Configuration
 
+### Recommended: the `glaze::asio` target
+
+Glaze ships a CMake helper, `glaze_setup_asio()`, that selects exactly one Asio
+backend and exposes it as the `glaze::asio` target. Linking `glaze::asio` is the
+recommended way to wire networking, whether you consume Glaze via `find_package`
+or `FetchContent` / `add_subdirectory`:
+
+```cmake
+find_package(glaze CONFIG REQUIRED)   # or FetchContent_MakeAvailable(glaze)
+
+glaze_setup_asio()                    # picks Boost / standalone / bundled Asio
+
+add_executable(myapp main.cpp)
+target_link_libraries(myapp PRIVATE glaze::glaze glaze::asio)
+```
+
+`glaze_setup_asio()` searches in this order:
+
+1. **Boost.Asio** (`find_package(Boost CONFIG)`) - also defines `GLZ_USE_BOOST_ASIO`
+2. **Standalone Asio** (`find_package(Asio)`, bundled `FindAsio.cmake`)
+3. **Bundled Asio** via `FetchContent`, when `glaze_USE_BUNDLED_ASIO=ON` (the default)
+
+The key benefit: when Boost is selected, `glaze::asio` carries `GLZ_USE_BOOST_ASIO`,
+which pins `glaze/ext/glaze_asio.hpp` to the Boost backend. Without it, a system
+that has *both* standalone `<asio.hpp>` and Boost on the include path could link
+Boost while the header silently compiled against standalone Asio. Linking
+`glaze::asio` keeps CMake and the header in lockstep automatically, so you never
+have to set the macro by hand. Set `-Dglaze_USE_BUNDLED_ASIO=OFF` to require a
+system package instead of downloading one.
+
 ### Complete Example with ASIO
 
 ```cmake

@@ -7,11 +7,13 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <string>
 #include <variant>
 #include <vector>
 
 #include "glaze/net/http_client.hpp"
 #include "glaze/net/websocket_connection.hpp"
+#include "glaze/util/itoa.hpp"
 
 using std::uint16_t;
 using std::size_t;
@@ -353,7 +355,16 @@ namespace glz
             for (auto& b : key_bytes) b = static_cast<char>(dist(rng));
             std::string key = glz::write_base64(key_bytes);
 
-            std::string handshake = "GET " + url.path + " HTTP/1.1\r\n" + "Host: " + url.host + "\r\n" +
+            std::string host_str = url.host;
+            if ((url.protocol == "ws" && url.port != 80) || (url.protocol == "wss" && url.port != 443)) {
+               char port_buf[8]; // a uint16_t port is at most 5 digits; pad so the sizing does not depend on itoa
+                                 // internals
+               auto* end = glz::to_chars(port_buf, url.port);
+               host_str.push_back(':');
+               host_str.append(port_buf, static_cast<size_t>(end - port_buf));
+            }
+
+            std::string handshake = "GET " + url.path + " HTTP/1.1\r\n" + "Host: " + host_str + "\r\n" +
                                     "Upgrade: websocket\r\n" + "Connection: Upgrade\r\n" + "Sec-WebSocket-Key: " + key +
                                     "\r\n" + "Sec-WebSocket-Version: 13\r\n";
 
@@ -455,18 +466,9 @@ namespace glz
                                       ws_conn->set_client_mode(true);
                                       ws_conn->set_max_message_size(self->max_message_size);
 
-                                      if (response_buf->size() > 0) {
-                                         std::string_view initial_data{
-                                            static_cast<const char*>(response_buf->data().data()),
-                                            response_buf->size()};
-                                         ws_conn->set_initial_data(initial_data);
-                                      }
-
                                       if (self->on_message && *self->on_message) ws_conn->on_message(*self->on_message);
                                       if (self->on_close && *self->on_close) ws_conn->on_close(*self->on_close);
                                       if (self->on_error && *self->on_error) ws_conn->on_error(*self->on_error);
-
-                                      ws_conn->start_read();
 
                                       {
                                          std::lock_guard<std::mutex> lock(self->connection_mutex);
@@ -474,6 +476,14 @@ namespace glz
                                       }
 
                                       if (self->on_open && *self->on_open) (*self->on_open)();
+
+                                      if (response_buf->size() > 0) {
+                                         std::vector<uint8_t> initial_data(response_buf->size());
+                                         asio::buffer_copy(asio::buffer(initial_data), response_buf->data());
+                                         ws_conn->set_initial_data(std::move(initial_data));
+                                      }
+
+                                      ws_conn->start_read();
                                    });
          }
 

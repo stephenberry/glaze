@@ -247,7 +247,7 @@ namespace glz
       }
       else {
          // Bare key
-         while (it != end && (std::isalnum(*it) || *it == '_' || *it == '-')) {
+         while (it != end && (std::isalnum(static_cast<unsigned char>(*it)) || *it == '_' || *it == '-')) {
             key.push_back(*it);
             ++it;
          }
@@ -324,7 +324,7 @@ namespace glz
             ++it; // skip closing quote
          }
          else {
-            while (it != end && (std::isalnum(*it) || *it == '_' || *it == '-')) {
+            while (it != end && (std::isalnum(static_cast<unsigned char>(*it)) || *it == '_' || *it == '-')) {
                key.push_back(*it);
                ++it;
             }

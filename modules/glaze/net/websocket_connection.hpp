@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <chrono>
 #include <cstring>
 #include <deque>
 #include <functional>
@@ -16,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 // Optional OpenSSL support - detected at compile time
@@ -55,7 +55,10 @@ namespace glz
       policy_violation = 1008,
       message_too_big = 1009,
       mandatory_extension = 1010,
-      internal_error = 1011
+      internal_error = 1011,
+      service_restart = 1012,
+      try_again_later = 1013,
+      bad_gateway = 1014,
    };
 
    // WebSocket frame header helper
@@ -195,6 +198,32 @@ namespace glz
       }
 #endif
 
+      inline bool is_control_frame(ws_opcode opcode)
+      {
+         return opcode == ws_opcode::close || opcode == ws_opcode::ping || opcode == ws_opcode::pong;
+      }
+
+      inline bool is_valid_close_code(uint16_t code)
+      {
+         switch (static_cast<ws_close_code>(code)) {
+         case ws_close_code::normal:
+         case ws_close_code::going_away:
+         case ws_close_code::protocol_error:
+         case ws_close_code::unsupported_data:
+         case ws_close_code::invalid_payload:
+         case ws_close_code::policy_violation:
+         case ws_close_code::message_too_big:
+         case ws_close_code::mandatory_extension:
+         case ws_close_code::internal_error:
+         case ws_close_code::service_restart:
+         case ws_close_code::try_again_later:
+         case ws_close_code::bad_gateway:
+            return true;
+         }
+
+         return code >= 3000 && code <= 4999;
+      }
+
       // Generate WebSocket accept key from client key
       inline std::string generate_accept_key(std::string_view client_key)
       {
@@ -249,8 +278,9 @@ namespace glz
 
             // Case-insensitive comparison
             if (token.size() == value.size() &&
-                std::equal(token.begin(), token.end(), value.begin(), value.end(),
-                           [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+                std::equal(token.begin(), token.end(), value.begin(), value.end(), [](char a, char b) {
+                   return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+                })) {
                return true;
             }
 
@@ -564,9 +594,18 @@ namespace glz
       std::string_view get_close_reason() const override { return close_reason_; }
 
       // Inject initial data read during handshake
-      inline void set_initial_data(std::string_view data)
+      inline void set_initial_data(std::vector<uint8_t> data)
       {
-         frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
+         if (frame_buffer_.empty()) {
+            // Avoid allocations and steal the original buffer if frame_buffer_ is empty
+            frame_buffer_ = std::move(data);
+         }
+         else {
+            // Otherwise, if for some reason the frame_buffer_ is not empty,
+            // append a copy of the initial data to it
+            frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
+         }
+
          size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
          if (consumed > 0) {
             frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
@@ -581,9 +620,11 @@ namespace glz
          // Validate WebSocket upgrade request
          auto it = req.headers.find("upgrade");
          constexpr std::string_view websocket_str = "websocket";
-         if (it == req.headers.end() ||
-             !std::equal(it->second.begin(), it->second.end(), websocket_str.begin(), websocket_str.end(),
-                         [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+         if (it == req.headers.end() || !std::equal(it->second.begin(), it->second.end(), websocket_str.begin(),
+                                                    websocket_str.end(), [](char a, char b) {
+                                                       return std::tolower(static_cast<unsigned char>(a)) ==
+                                                              std::tolower(static_cast<unsigned char>(b));
+                                                    })) {
             do_close();
             return;
          }
@@ -780,6 +821,20 @@ namespace glz
 
       inline void handle_frame(ws_opcode opcode, const uint8_t* payload, size_t length, bool fin)
       {
+         // RFC 6455 Section 5.5: "All control frames ... MUST NOT be fragmented."
+         // A fragmented control frame (FIN == 0) is a protocol error and the connection must fail.
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5
+         if (!fin && ws_util::is_control_frame(opcode)) [[unlikely]] {
+            fail_connection(ws_close_code::protocol_error, "Fragmented control frame");
+            return;
+         }
+
+         // RFC 6455 Section 5.5: "All control frames MUST have a payload length of 125 bytes or less."
+         if (length > 125 && ws_util::is_control_frame(opcode)) [[unlikely]] {
+            fail_connection(ws_close_code::protocol_error, "Invalid control frame payload length");
+            return;
+         }
+
          switch (opcode) {
          case ws_opcode::text:
          case ws_opcode::binary:
@@ -857,17 +912,44 @@ namespace glz
          // send a Close frame, the endpoint MUST send a Close frame in response."
          // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.1
          case ws_opcode::close: {
-            ws_close_code code = ws_close_code::normal;
+            uint16_t code_value = static_cast<uint16_t>(ws_close_code::normal);
             std::string reason;
 
+            // Based on the RFC sections 5.5 and 5.5.1, the payload length of a
+            // close frame can be either 0 (no close code) or >= 2 && <= 125.
+            // RFC 6455 Section 5.5.1: "If there is a body, the first two bytes of
+            // the body MUST be a 2-byte unsigned integer ..."
+            if (length == 1) {
+               fail_connection(ws_close_code::protocol_error, "Invalid close payload length");
+               return;
+            }
+
             if (length >= 2) {
-               code = static_cast<ws_close_code>((payload[0] << 8) | payload[1]);
+               code_value = static_cast<uint16_t>((payload[0] << 8) | payload[1]);
                if (length > 2) {
                   reason = std::string(reinterpret_cast<const char*>(payload + 2), length - 2);
                }
             }
 
+            // The RFC 6455 does not explicitly mention the validation of close codes, but it is expected
+            // that this will be evident from a combination of several requirements:
+            // 1. Section 5.5.1: "the first two bytes of the body MUST be a 2-byte unsigned integer".
+            // 2. Section 7.4 clearly specifies which status codes exist and which ranges are allowed.
+            // 3. Section 10.7: "Incoming data MUST always be validated by both clients and servers".
+            if (!ws_util::is_valid_close_code(code_value)) {
+               fail_connection(ws_close_code::protocol_error, "Invalid close code");
+               return;
+            }
+
+            // RFC 6455 Section 5.5.1: "Following the 2-byte integer, the body MAY contain
+            // UTF-8-encoded data with value /reason/"
+            if (!reason.empty() && !glz::validate_utf8(reason.c_str(), reason.size())) {
+               fail_connection(ws_close_code::invalid_payload, "Invalid close reason");
+               return;
+            }
+
             // Store close code and reason for callback
+            auto code = static_cast<ws_close_code>(code_value);
             close_code_ = code;
             close_reason_ = std::move(reason);
 
@@ -1201,6 +1283,19 @@ namespace glz
                socket_->lowest_layer().close(ec);
                socket_.reset(); // Reset pointer so subsequent checks know socket is closed
             }
+         }
+      }
+
+      inline void fail_connection(ws_close_code close_code, std::string_view close_reason = {})
+      {
+         close_code_ = close_code;
+         close_reason_ = close_reason;
+         bool expected = false;
+         if (is_closing_.compare_exchange_strong(expected, true)) {
+            send_close_frame(close_code, close_reason, true);
+         }
+         else {
+            do_close();
          }
       }
 

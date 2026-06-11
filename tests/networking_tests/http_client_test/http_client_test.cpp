@@ -1377,6 +1377,78 @@ class eof_delimited_server
    uint16_t port_{0};
 };
 
+class host_header_server
+{
+  public:
+   host_header_server() = default;
+   ~host_header_server() { stop(); }
+
+   bool start()
+   {
+      try {
+         acceptor_ = std::make_unique<asio::ip::tcp::acceptor>(
+            io_, asio::ip::tcp::endpoint(asio::ip::make_address("127.0.0.1"), 0));
+         port_ = acceptor_->local_endpoint().port();
+
+         server_thread_ = std::thread([this]() {
+            try {
+               asio::ip::tcp::socket socket(io_);
+               acceptor_->accept(socket);
+
+               asio::streambuf request_buf;
+               asio::read_until(socket, request_buf, "\r\n\r\n");
+
+               std::istream request_stream(&request_buf);
+               std::string line;
+               std::getline(request_stream, line);
+
+               while (std::getline(request_stream, line) && line != "\r") {
+                  if (!line.empty() && line.back() == '\r') line.pop_back();
+                  if (line.rfind("Host: ", 0) == 0) {
+                     host_header_ = line.substr(6);
+                     break;
+                  }
+               }
+
+               const std::string http_response =
+                  "HTTP/1.1 200 OK\r\n"
+                  "Content-Length: 0\r\n"
+                  "Connection: close\r\n"
+                  "\r\n";
+
+               asio::write(socket, asio::buffer(http_response));
+               socket.shutdown(asio::ip::tcp::socket::shutdown_both);
+               socket.close();
+            }
+            catch (...) {
+            }
+         });
+
+         return true;
+      }
+      catch (...) {
+         return false;
+      }
+   }
+
+   void stop()
+   {
+      if (acceptor_) acceptor_->close();
+      if (server_thread_.joinable()) server_thread_.join();
+   }
+
+   uint16_t port() const { return port_; }
+   std::string base_url() const { return "http://127.0.0.1:" + std::to_string(port_); }
+   const std::string& host_header() const { return host_header_; }
+
+  private:
+   asio::io_context io_;
+   std::unique_ptr<asio::ip::tcp::acceptor> acceptor_;
+   std::thread server_thread_;
+   uint16_t port_{0};
+   std::string host_header_;
+};
+
 suite eof_delimited_tests = [] {
    "sync_eof_delimited_body"_test = [] {
       const std::string expected_body = R"({"name":"Hue Bridge","modelid":"BSB002"})";
@@ -1481,6 +1553,26 @@ suite eof_delimited_tests = [] {
       }
 
       server.stop();
+   };
+};
+
+suite host_header_tests = [] {
+   "http_request_host_header_includes_port"_test = [] {
+      host_header_server server;
+      expect(server.start()) << "Host header server should start";
+
+      glz::http_client client;
+      auto result = client.get(server.base_url() + "/host-header");
+
+      server.stop();
+
+      expect(result.has_value()) << "GET should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "Status should be 200";
+      }
+
+      const std::string expected_host = "127.0.0.1:" + std::to_string(server.port());
+      expect(server.host_header() == expected_host) << "Host header should include authority port";
    };
 };
 
