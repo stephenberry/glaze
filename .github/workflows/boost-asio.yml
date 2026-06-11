@@ -23,9 +23,9 @@ jobs:
       fail-fast: false
       matrix:
         compiler:
-          - { name: clang, version: 18 }
-          - { name: clang, version: 20 }
-          - { name: gcc, version: 14 }
+          - { name: clang, version: 21 }
+          - { name: clang, version: 22 }
+          - { name: gcc, version: 15 }
         boost_version: [1.88.0, 1.86.0]
 
     env:

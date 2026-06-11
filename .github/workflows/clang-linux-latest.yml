@@ -21,12 +21,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        clang: [19, 20]
+        clang: [21, 22]
         build_type: [Debug]
         std: [23]
 
@@ -37,22 +37,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
-
-    - name: Install latest clang
-      run: |
-        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-        # Use the 'noble' repository for Ubuntu 24.04
-        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
-        # Clean apt cache and update before installing
-        sudo apt-get clean
-        sudo apt-get update
-        sudo apt-get install -y --fix-missing clang-${{matrix.clang}} libc++-${{matrix.clang}}-dev libc++abi-${{matrix.clang}}-dev
-
-    - name: Set path for clang
-      run: |
-        echo "PATH=/usr/lib/llvm-${{matrix.clang}}/bin:$PATH" >> $GITHUB_ENV
-        clang-${{matrix.clang}} --version
-        clang++-${{matrix.clang}} --version
 
     - name: Configure CMake
       run: |

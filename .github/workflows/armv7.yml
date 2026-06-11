@@ -18,7 +18,7 @@ on:
 
 jobs:
   build-armv7:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: GCC armv7 (NEON, cross-compiled)
 
     steps:
@@ -28,17 +28,17 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          gcc-13-arm-linux-gnueabihf \
-          g++-13-arm-linux-gnueabihf \
-          libstdc++-13-dev-armhf-cross \
+          gcc-15-arm-linux-gnueabihf \
+          g++-15-arm-linux-gnueabihf \
+          libstdc++-15-dev-armhf-cross \
           libc6-armhf-cross \
           qemu-user-static
 
     - name: Verify compiler and NEON target macro
       run: |
-        arm-linux-gnueabihf-g++-13 --version
+        arm-linux-gnueabihf-g++-15 --version
         qemu-arm-static --version
-        arm-linux-gnueabihf-g++-13 -std=c++23 -march=armv7-a -mfpu=neon -mfloat-abi=hard -dM -E -x c++ /dev/null | grep "__ARM_NEON"
+        arm-linux-gnueabihf-g++-15 -std=c++23 -march=armv7-a -mfpu=neon -mfloat-abi=hard -dM -E -x c++ /dev/null | grep "__ARM_NEON"
 
     - name: Create CMake toolchain file
       run: |
@@ -46,8 +46,8 @@ jobs:
         set(CMAKE_SYSTEM_NAME Linux)
         set(CMAKE_SYSTEM_PROCESSOR armv7)
 
-        set(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc-13)
-        set(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++-13)
+        set(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc-15)
+        set(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++-15)
 
         set(CMAKE_FIND_ROOT_PATH /usr/arm-linux-gnueabihf)
         set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)

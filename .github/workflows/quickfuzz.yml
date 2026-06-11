@@ -18,12 +18,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     strategy:
       fail-fast: false
       matrix:
-        clang: [19]
+        clang: [22]
         build_type: [Debug]
         std: [23]
 
@@ -33,11 +33,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
-
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang-19
 
     - name: Configure CMake
       run: |
