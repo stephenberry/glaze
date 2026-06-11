@@ -10,6 +10,7 @@ target_sources(glaze_glaze
       modules/glaze/json.ixx
       modules/glaze/jsonb.ixx
       modules/glaze/cbor.ixx
+      modules/glaze/bson.ixx
       modules/glaze/beve.ixx
       modules/glaze/csv.ixx
       modules/glaze/chrono.ixx
@@ -119,6 +120,8 @@ target_sources(glaze_glaze
     modules/glaze/util/buffer_pool.ixx
     modules/glaze/util/progress_bar.ixx
     modules/glaze/util/key_transformers.ixx
+    modules/glaze/util/uuid.ixx
+    modules/glaze/util/zmij.ixx
 )
 
 # concepts
@@ -260,6 +263,18 @@ target_sources(glaze_glaze
     modules/glaze/cbor/skip.ixx
     modules/glaze/cbor/wrappers.ixx
     modules/glaze/cbor/write.ixx
+)
+
+# bson
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    modules/glaze/bson/bson_to_json.ixx
+    modules/glaze/bson/header.ixx
+    modules/glaze/bson/read.ixx
+    modules/glaze/bson/skip.ixx
+    modules/glaze/bson/write.ixx
 )
 
 # jsonb

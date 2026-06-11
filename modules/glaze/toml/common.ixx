@@ -29,7 +29,7 @@ namespace glz
    }
 
    // Skip whitespace, newlines and comments
-   template <class It, class End>
+   export template <class It, class End>
    inline void skip_ws_newlines_and_comments(It&& it, End end) noexcept
    {
       while (it != end) {

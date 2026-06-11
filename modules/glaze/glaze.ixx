@@ -57,4 +57,6 @@ export import glaze.file.write_directory;
 
 export import glaze.json;
 
+export import glaze.msgpack;
+
 export import glaze.util.for_each;

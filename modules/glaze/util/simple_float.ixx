@@ -13,6 +13,10 @@ import std;
 
 #include "glaze/util/inline.hpp"
 
+using std::int16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::uint64_t;
 
 // Simple computational float parsing for size-optimized builds.
 // Uses minimal lookup tables (~1KB) instead of fast_float (~20KB+), trading
@@ -20,15 +24,6 @@ import std;
 // Suitable for embedded systems and bare-metal environments.
 // (Serialization is handled by glz::to_chars in glaze/util/zmij.hpp; with
 // `OptSize=true` it offers a similarly small footprint at higher throughput.)
-
-#include <charconv>
-#include <cmath>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <type_traits>
-
-#include "glaze/util/inline.hpp"
 
 namespace glz::simple_float
 {
@@ -1081,7 +1076,7 @@ namespace glz::simple_float
    // Parse a floating-point number from a character buffer
    // Returns: {pointer past last parsed char, error code}
    // Uses strict JSON-compliant parsing (RFC 8259)
-   template <bool null_terminated, class T>
+   export template <bool null_terminated, class T>
    GLZ_ALWAYS_INLINE constexpr std::from_chars_result from_chars(const char* first, const char* last, T& value) noexcept
    {
       static_assert(std::is_floating_point_v<T>, "T must be a floating-point type");

@@ -1,16 +1,25 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/bson/skip.hpp"
+// glz:header std=<bit>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+export module glaze.bson.skip;
 
-#pragma once
+import glaze.bson.header;
 
-#include <bit>
-#include <cstdint>
-#include <cstring>
+import glaze.core.context;
+import glaze.core.opts;
 
-#include "glaze/bson/header.hpp"
-#include "glaze/core/context.hpp"
-#include "glaze/core/opts.hpp"
+import std;
+
 #include "glaze/util/inline.hpp"
+
+using std::int32_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::size_t;
 
 // Skip a single BSON value given its element type byte. Used by the struct
 // and map readers to drop over unknown keys, and by the deprecated-type

@@ -1,27 +1,63 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/bson/read.hpp"
+// glz:header std=<array>
+// glz:header std=<bit>
+// glz:header std=<charconv>
+// glz:header std=<chrono>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<limits>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
+export module glaze.bson.read;
 
-#pragma once
+import glaze.bson.header;
+import glaze.bson.skip;
 
-#include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <string_view>
+import glaze.concepts.container_concepts;
 
-#include "glaze/bson/header.hpp"
-#include "glaze/bson/skip.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/read.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/core/to.hpp"
-#include "glaze/file/file_ops.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/uuid.hpp"
-#include "glaze/util/variant.hpp"
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.read;
+import glaze.core.reflect;
+import glaze.core.to;
+
+import glaze.file.file_ops;
+
+import glaze.reflection.to_tuple;
+
+import glaze.util.bit_array;
+import glaze.util.compare;
+import glaze.util.expected;
+import glaze.util.for_each;
+import glaze.util.string_literal;
+import glaze.util.tuple;
+import glaze.util.type_traits;
+import glaze.util.uuid;
+import glaze.util.variant;
+
+import glaze.tuplet;
+
+import std;
+
+#include "glaze/util/inline.hpp"
+
+using std::int32_t;
+using std::int64_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 // BSON reader — https://bsonspec.org/spec.html
 //
@@ -38,7 +74,7 @@ namespace glz
       // popping on exit. Errors with exceeded_max_recursive_depth before the
       // stack can overflow on adversarial input — pathologically nested BSON
       // (e.g. `{"a": {"a": {...}}}`) is cheap to produce and a real DoS vector.
-      template <class Ctx>
+      export template <class Ctx>
       struct depth_guard
       {
          Ctx& ctx;
@@ -65,7 +101,7 @@ namespace glz
       // On little-endian hosts these compile to a single aligned load. On big-
       // endian hosts we byteswap first.
 
-      template <std::integral T, class It, class End>
+      export template <std::integral T, class It, class End>
       GLZ_ALWAYS_INLINE bool read_le(is_context auto& ctx, It& it, const End& end, T& out) noexcept
       {
          if (static_cast<size_t>(end - it) < sizeof(T)) [[unlikely]] {
@@ -82,7 +118,7 @@ namespace glz
          return true;
       }
 
-      template <class It, class End>
+      export template <class It, class End>
       GLZ_ALWAYS_INLINE bool read_le_double(is_context auto& ctx, It& it, const End& end, double& out) noexcept
       {
          uint64_t bits{};
@@ -93,7 +129,7 @@ namespace glz
 
       // Return a string_view over a cstring in the buffer. Advances `it` to
       // just past the trailing 0x00.
-      template <class It, class End>
+      export template <class It, class End>
       GLZ_ALWAYS_INLINE bool read_cstring(is_context auto& ctx, It& it, const End& end, std::string_view& out) noexcept
       {
          auto start = it;
@@ -112,7 +148,7 @@ namespace glz
 
       // Read a BSON string value: int32(len) | UTF-8 | 0x00. `out` points into
       // the input buffer; lifetime matches the buffer.
-      template <class It, class End>
+      export template <class It, class End>
       GLZ_ALWAYS_INLINE bool read_bson_string(is_context auto& ctx, It& it, const End& end,
                                               std::string_view& out) noexcept
       {
@@ -140,7 +176,7 @@ namespace glz
       // Helper — read a BSON document's 4-byte length and compute the
       // terminating position (`stop`) such that a correct document consumes
       // exactly `stop - doc_start` bytes ending in 0x00 at `stop - 1`.
-      template <class It, class End>
+      export template <class It, class End>
       GLZ_ALWAYS_INLINE bool read_document_stop(is_context auto& ctx, It& it, const End& end, It& stop) noexcept
       {
          auto doc_start = it;
@@ -983,7 +1019,7 @@ namespace glz
       //     corrupted so the terminator is consumed as part of an element) →
       //     the loop exits via `it >= stop` without ever seeing a zero tag.
       // Both surface as `syntax_error` with a specific custom message.
-      template <class It, class F>
+      export template <class It, class F>
       bool read_document_elements(is_context auto& ctx, It& it, const It& stop, F&& on_element) noexcept
       {
          while (it < stop) {
@@ -1233,7 +1269,7 @@ namespace glz
    // Public entry points
    // ==========================================================================
 
-   template <class T>
+   export template <class T>
    concept bson_top_level_read_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
                                    writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
                                    glaze_array_t<std::remove_cvref_t<T>>;
@@ -1255,14 +1291,14 @@ namespace glz
       }
    }
 
-   template <auto Opts = opts{}, bson_top_level_read_t T, class Buffer>
+   export template <auto Opts = opts{}, bson_top_level_read_t T, class Buffer>
    [[nodiscard]] inline error_ctx read_bson(T&& value, Buffer&& buffer)
    {
       auto ec = read<set_bson<Opts>()>(std::forward<T>(value), buffer);
       return bson_detail::enforce_exact_fill(buffer, ec);
    }
 
-   template <class T, auto Opts = opts{}, class Buffer>
+   export template <class T, auto Opts = opts{}, class Buffer>
       requires bson_top_level_read_t<T>
    [[nodiscard]] inline expected<T, error_ctx> read_bson(Buffer&& buffer)
    {
@@ -1275,7 +1311,7 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, bson_top_level_read_t T>
+   export template <auto Opts = opts{}, bson_top_level_read_t T>
    [[nodiscard]] inline error_ctx read_file_bson(T& value, const sv file_name, auto&& buffer)
    {
       context ctx{};

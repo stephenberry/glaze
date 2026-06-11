@@ -1,20 +1,38 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/bson/bson_to_json.hpp"
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<iterator>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<type_traits>
+export module glaze.bson.bson_to_json;
 
-#pragma once
+import std;
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <string>
-#include <string_view>
+import glaze.base64;
+import glaze.bson.header;
+import glaze.bson.read;
 
-#include "glaze/base64/base64.hpp"
-#include "glaze/bson/header.hpp"
-#include "glaze/bson/read.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/json/write.hpp"
+import glaze.concepts.container_concepts;
+
+import glaze.core.buffer_traits;
+import glaze.core.context;
+import glaze.core.opts;
+
+import glaze.json.write;
+
+import glaze.util.expected;
+
+#include "glaze/util/inline.hpp"
+
+using std::int32_t;
+using std::int64_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::size_t;
 
 // BSON → JSON converter.
 //
@@ -394,7 +412,7 @@ namespace glz
    } // namespace bson_detail
 
    // Convert a BSON document (top-level) to JSON text.
-   template <auto Opts = glz::opts{}, class BSONBuffer, class JSONBuffer>
+   export template <auto Opts = glz::opts{}, class BSONBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx bson_to_json(const BSONBuffer& input, JSONBuffer& out)
    {
       size_t ix{};
@@ -432,7 +450,7 @@ namespace glz
       return {};
    }
 
-   template <auto Opts = glz::opts{}, class BSONBuffer>
+   export template <auto Opts = glz::opts{}, class BSONBuffer>
    [[nodiscard]] inline expected<std::string, error_ctx> bson_to_json(const BSONBuffer& input)
    {
       std::string out;

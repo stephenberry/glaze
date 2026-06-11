@@ -7,8 +7,12 @@ export module glaze.util.nullable_traits;
 
 import std;
 
+import glaze.concepts.container_concepts;
 import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
 import glaze.core.opts;
+import glaze.util.type_traits;
 
 export namespace glz
 {

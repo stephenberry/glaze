@@ -1,17 +1,23 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/bson/header.hpp"
+// glz:header std=<array>
+// glz:header std=<compare>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<string>
+// glz:header std=<vector>
+export module glaze.bson.header;
 
-#pragma once
+import std;
 
-#include <array>
-#include <compare>
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <vector>
+import glaze.concepts.container_concepts;
 
-#include "glaze/concepts/container_concepts.hpp"
 #include "glaze/util/inline.hpp"
+
+using std::int64_t;
+using std::uint8_t;
+using std::uint32_t;
 
 // BSON - https://bsonspec.org/spec.html
 //
@@ -27,7 +33,7 @@
 // BSON arrays are encoded as documents whose keys are the decimal string
 // representations of their indices ("0", "1", "2", ...), in order.
 
-namespace glz::bson
+export namespace glz::bson
 {
    // Element type codes. These identify the wire format of a document value.
    namespace type

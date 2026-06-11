@@ -25,7 +25,6 @@
 module;
 
 #include "glaze/simd/simd.hpp"
-#include "glaze/util/zmij.hpp"
 
 export module glaze.json.write;
 
@@ -59,6 +58,7 @@ import glaze.util.string_literal;
 import glaze.util.tuple;
 import glaze.util.type_traits;
 import glaze.util.variant;
+import glaze.util.zmij;
 
 import glaze.concepts.container_concepts;
 

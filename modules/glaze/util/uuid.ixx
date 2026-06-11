@@ -1,19 +1,25 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/util/uuid.hpp"
+// glz:header std=<array>
+// glz:header std=<compare>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<functional>
+// glz:header std=<string>
+// glz:header std=<string_view>
+export module glaze.util.uuid;
 
-#pragma once
-
-#include <array>
-#include <compare>
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <string>
-#include <string_view>
+import std;
 
 #include "glaze/util/inline.hpp"
 
-namespace glz
+using std::size_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
+
+export namespace glz
 {
    // A 16-byte universally unique identifier (RFC 9562 / RFC 4122).
    //
@@ -102,29 +108,32 @@ namespace glz
    }
 }
 
-template <>
-struct std::hash<glz::uuid>
+export namespace std
 {
-   [[nodiscard]] size_t operator()(const glz::uuid& u) const noexcept
+   template <>
+   struct hash<glz::uuid>
    {
-      // FNV-1a over the 16 bytes. Deterministic and allocation-free. The
-      // offset basis and prime are width-specific so this compiles cleanly on
-      // 32-bit platforms where size_t is 32 bits.
-      if constexpr (sizeof(size_t) >= 8) {
-         uint64_t h = 14695981039346656037ULL;
-         for (auto b : u.bytes) {
-            h ^= b;
-            h *= 1099511628211ULL;
+      [[nodiscard]] size_t operator()(const glz::uuid& u) const noexcept
+      {
+         // FNV-1a over the 16 bytes. Deterministic and allocation-free. The
+         // offset basis and prime are width-specific so this compiles cleanly on
+         // 32-bit platforms where size_t is 32 bits.
+         if constexpr (sizeof(size_t) >= 8) {
+            uint64_t h = 14695981039346656037ULL;
+            for (auto b : u.bytes) {
+               h ^= b;
+               h *= 1099511628211ULL;
+            }
+            return static_cast<size_t>(h);
          }
-         return static_cast<size_t>(h);
-      }
-      else {
-         uint32_t h = 2166136261u;
-         for (auto b : u.bytes) {
-            h ^= b;
-            h *= 16777619u;
+         else {
+            uint32_t h = 2166136261u;
+            for (auto b : u.bytes) {
+               h ^= b;
+               h *= 16777619u;
+            }
+            return static_cast<size_t>(h);
          }
-         return static_cast<size_t>(h);
       }
-   }
-};
+   };
+}

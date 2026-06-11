@@ -1,28 +1,62 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
+// glz:header path="glaze/bson/write.hpp"
+// glz:header std=<algorithm>
+// glz:header std=<array>
+// glz:header std=<bit>
+// glz:header std=<charconv>
+// glz:header std=<chrono>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<limits>
+// glz:header std=<map>
+// glz:header std=<optional>
+// glz:header std=<string>
+// glz:header std=<string_view>
+// glz:header std=<tuple>
+// glz:header std=<type_traits>
+// glz:header std=<utility>
+// glz:header std=<variant>
+// glz:header std=<vector>
+export module glaze.bson.write;
 
-#pragma once
+import glaze.bson.header;
 
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <charconv>
-#include <chrono>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <string_view>
+import glaze.concepts.container_concepts;
 
-#include "glaze/bson/header.hpp"
-#include "glaze/core/buffer_traits.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/core/reflect.hpp"
-#include "glaze/core/to.hpp"
-#include "glaze/core/write.hpp"
-#include "glaze/file/file_ops.hpp"
-#include "glaze/util/dump.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/uuid.hpp"
+import glaze.core.buffer_traits;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta;
+import glaze.core.opts;
+import glaze.core.reflect;
+import glaze.core.to;
+import glaze.core.write;
+
+import glaze.reflection.to_tuple;
+
+import glaze.util.expected;
+import glaze.util.for_each;
+import glaze.util.string_literal;
+import glaze.util.tuple;
+import glaze.util.type_traits;
+import glaze.util.uuid;
+import glaze.util.variant;
+
+import glaze.tuplet;
+
+import std;
+
+#include "glaze/util/inline.hpp"
+
+using std::int32_t;
+using std::int64_t;
+using std::uint8_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 // BSON writer — https://bsonspec.org/spec.html
 //
@@ -839,24 +873,24 @@ namespace glz
    // as integer-keyed documents), and glaze_array_t. Primitives are rejected
    // at the call site — they have no valid BSON document encoding on their
    // own.
-   template <class T>
+   export template <class T>
    concept bson_top_level_t = glaze_object_t<std::remove_cvref_t<T>> || reflectable<std::remove_cvref_t<T>> ||
                               writable_map_t<std::remove_cvref_t<T>> || writable_array_t<std::remove_cvref_t<T>> ||
                               glaze_array_t<std::remove_cvref_t<T>>;
 
-   template <auto Opts = opts{}, bson_top_level_t T, class Buffer>
+   export template <auto Opts = opts{}, bson_top_level_t T, class Buffer>
    [[nodiscard]] error_ctx write_bson(T&& value, Buffer&& buffer)
    {
       return write<set_bson<Opts>()>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <auto Opts = opts{}, bson_top_level_t T>
+   export template <auto Opts = opts{}, bson_top_level_t T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_bson(T&& value)
    {
       return write<set_bson<Opts>()>(std::forward<T>(value));
    }
 
-   template <auto Opts = opts{}, bson_top_level_t T>
+   export template <auto Opts = opts{}, bson_top_level_t T>
    [[nodiscard]] inline error_code write_file_bson(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_bson<Opts>()>(std::forward<T>(value), buffer);

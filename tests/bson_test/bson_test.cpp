@@ -1,22 +1,25 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/bson.hpp"
+import std;
 
-#include <array>
-#include <chrono>
-#include <cstdint>
-#include <filesystem>
-#include <limits>
-#include <map>
-#include <optional>
-#include <string>
-#include <string_view>
-#include <system_error>
-#include <variant>
-#include <vector>
+import glaze.bson;
+import glaze.core.common;
+import glaze.core.context;
+import glaze.core.meta_fwd;
+import glaze.core.opts;
+import glaze.core.reflect;
 
-#include "ut/ut.hpp"
+import ut;
+
+using std::int8_t;
+using std::int32_t;
+using std::int64_t;
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 

@@ -14,6 +14,7 @@ import std;
 import glaze.core.context;
 import glaze.core.traits;
 
+using std::uint64_t;
 using std::int64_t;
 using std::size_t;
 

@@ -23,10 +23,6 @@ import glaze.tuplet;
 
 #include "glaze/core/feature_test.hpp"
 
-#if GLZ_REFLECTION26
-#include <meta>
-#endif
-
 #if defined(__clang__) || defined(__GNUC__)
 #define GLZ_PRETTY_FUNCTION __PRETTY_FUNCTION__
 #elif defined(_MSC_VER)

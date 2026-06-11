@@ -10,10 +10,6 @@
 // glz:header std=<string>
 // glz:header std=<string_view>
 // glz:header std=<type_traits>
-module;
-
-#include "glaze/util/zmij.hpp"
-
 export module glaze.core.write_chars;
 
 import std;
@@ -28,6 +24,7 @@ import glaze.util.itoa;
 import glaze.util.itoa_40kb;
 
 import glaze.util.type_traits;
+import glaze.util.zmij;
 
 #include "glaze/util/inline.hpp"
 

@@ -20,18 +20,16 @@
 //  - Internal helpers live in glz::zmij::detail_impl (formerly an anonymous
 //    namespace in zmij.cc); namespace-level constants that previously collided
 //    with struct members (neg100/neg10/neg10k/zeros) are suffixed `_v`.
-
-#pragma once
-
-#include <bit>
-#include <cassert>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <type_traits>
-
+// glz:header path="glaze/util/zmij.hpp"
+// glz:header std=<bit>
+// glz:header std=<cassert>
+// glz:header std=<concepts>
+// glz:header std=<cstddef>
+// glz:header std=<cstdint>
+// glz:header std=<cstring>
+// glz:header std=<limits>
+// glz:header std=<type_traits>
+module;
 #ifndef ZMIJ_USE_SIMD
 // SIMD (SSE/NEON) is enabled by default; defining GLZ_DISABLE_SIMD selects the
 // scalar code paths, matching the rest of Glaze.
@@ -40,12 +38,6 @@
 #else
 #define ZMIJ_USE_SIMD 1
 #endif
-#endif
-
-// Non-finite output format for zmij::detail::write. 0 (default) emits "null"
-// to stay JSON-compliant; =1 restores upstream zmij behavior ("inf" / "nan").
-#ifndef GLZ_ZMIJ_EMIT_INF_NAN
-#define GLZ_ZMIJ_EMIT_INF_NAN 0
 #endif
 
 #ifdef ZMIJ_USE_NEON
@@ -69,6 +61,34 @@
 #if ZMIJ_USE_SSE
 #include <immintrin.h>
 #endif
+
+#ifdef _MSC_VER
+#define ZMIJ_MSC_VER _MSC_VER
+#include <intrin.h>
+#else
+#define ZMIJ_MSC_VER 0
+#endif
+
+#include <cassert>
+
+export module glaze.util.zmij;
+
+import std;
+
+using std::uint8_t;
+using std::uint16_t;
+using std::uint32_t;
+using std::uint64_t;
+using std::int32_t;
+using std::int64_t;
+using std::size_t;
+
+// Non-finite output format for zmij::detail::write. 0 (default) emits "null"
+// to stay JSON-compliant; =1 restores upstream zmij behavior ("inf" / "nan").
+#ifndef GLZ_ZMIJ_EMIT_INF_NAN
+#define GLZ_ZMIJ_EMIT_INF_NAN 0
+#endif
+
 
 #ifdef ZMIJ_USE_SSE4_1
 static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE);
@@ -94,13 +114,6 @@ static_assert(!ZMIJ_USE_SSE4_1 || ZMIJ_USE_SSE);
 #define ZMIJ_CLANG 1
 #else
 #define ZMIJ_CLANG 0
-#endif
-
-#ifdef _MSC_VER
-#define ZMIJ_MSC_VER _MSC_VER
-#include <intrin.h>
-#else
-#define ZMIJ_MSC_VER 0
 #endif
 
 #if defined(__has_builtin) && !defined(ZMIJ_NO_BUILTINS)
@@ -163,7 +176,7 @@ namespace glz::zmij
    };
 
    enum { non_finite_exp = int(~0u >> 1) };
-   enum { float_buffer_size = 17, double_buffer_size = 34 };
+   export enum { float_buffer_size = 17, double_buffer_size = 34 };
 
    namespace detail_impl
    {
@@ -357,7 +370,7 @@ namespace glz::zmij
          static auto to_bits(Float value) noexcept -> sig_type
          {
             sig_type bits;
-            memcpy(&bits, &value, sizeof(value));
+            std::memcpy(&bits, &value, sizeof(value));
             return bits;
          }
 
@@ -991,18 +1004,18 @@ namespace glz::zmij
          if (!is_normal) [[unlikely]] {
             if (bin_exp != 0) {
 #if GLZ_ZMIJ_EMIT_INF_NAN
-               memcpy(buffer, bin_sig == 0 ? "inf" : "nan", 4);
+               std::memcpy(buffer, bin_sig == 0 ? "inf" : "nan", 4);
                return buffer + 3;
 #else
                // Undo the speculative '-' for sign-bit-set NaN/Inf: JSON "null"
                // never carries a sign.
                buffer -= traits::is_negative(bits);
-               memcpy(buffer, "null", 4);
+               std::memcpy(buffer, "null", 4);
                return buffer + 4;
 #endif
             }
             if (bin_sig == 0) {
-               memcpy(buffer, "0", 2);
+               std::memcpy(buffer, "0", 2);
                return buffer + 1;
             }
             dec = detail_impl::to_decimal<Float, typename traits::sig_type, OptSize>(bin_sig, 1, true, *c);
@@ -1032,19 +1045,19 @@ namespace glz::zmij
          auto dig = to_digits<traits::num_bits, OptSize>(static_cast<uint64_t>(dec.sig), extra_digit, *c);
          constexpr int bcd_size = traits::num_bits == 64 ? 16 : 8;
          if (dec_exp >= traits::min_fixed_dec_exp && dec_exp <= traits::max_fixed_dec_exp) {
-            memcpy(start, &zeros_v, 8);
+            std::memcpy(start, &zeros_v, 8);
             const auto& fmt = dec_exp_formats.get<traits>(dec_exp);
             buffer += fmt.start_pos;
-            memcpy(buffer, &dig.digits, bcd_size);
-            memmove(buffer, buffer + !extra_digit, bcd_size);
+            std::memcpy(buffer, &dig.digits, bcd_size);
+            std::memmove(buffer, buffer + !extra_digit, bcd_size);
             buffer[bcd_size + extra_digit - 1] = static_cast<char>('0' + (dec.has_last_digit ? dec.last_digit : 0));
-            memmove(start + fmt.shift_pos, start + fmt.point_pos, bcd_size);
+            std::memmove(start + fmt.shift_pos, start + fmt.point_pos, bcd_size);
             start[fmt.point_pos] = '.';
             int num_digits = dec.has_last_digit ? bcd_size : dig.num_digits - 1;
             return buffer + fmt.exp_pos[num_digits + extra_digit - 1];
          }
          buffer += extra_digit;
-         memcpy(buffer, &dig.digits, bcd_size);
+         std::memcpy(buffer, &dig.digits, bcd_size);
          buffer[bcd_size] = static_cast<char>('0' + dec.last_digit);
          buffer += dec.has_last_digit ? bcd_size + 1 : dig.num_digits;
          start[0] = start[1];
@@ -1055,7 +1068,7 @@ namespace glz::zmij
             uint64_t exp_data = exp_strings_v<OptSize>.data[dec_exp + exp_string_table<OptSize>::offset];
             int len = int(exp_data >> 48);
             if (is_big_endian) exp_data = bswap64(exp_data);
-            memcpy(buffer, &exp_data, traits::max_exponent10 >= 100 ? 8 : 4);
+            std::memcpy(buffer, &exp_data, traits::max_exponent10 >= 100 ? 8 : 4);
             return buffer + len;
          }
          // Glaze emits uppercase 'E', omits '+' on positive exponents, and
@@ -1113,7 +1126,7 @@ namespace glz
    // '\0' at *end themselves. Glaze's JSON writer doesn't care:
    // buffer_traits::finalize resizes the output down to the tracked length,
    // discarding anything past it.
-   template <std::floating_point T, bool OptSize = false>
+   export template <std::floating_point T, bool OptSize = false>
    inline char* to_chars(char* buf, T val) noexcept
    {
       static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>);

@@ -32,7 +32,7 @@ using std::size_t;
 
 namespace glz
 {
-   template <class T>
+   export template <class T>
    struct flatten_map_wrapper final
    {
       static constexpr auto glaze_reflect = false;
@@ -40,7 +40,7 @@ namespace glz
       T& value;
    };
 
-   template <class T>
+   export template <class T>
       requires(range<T> && pair_t<range_value_t<T>>)
    flatten_map_wrapper(T&) -> flatten_map_wrapper<T>;
 
