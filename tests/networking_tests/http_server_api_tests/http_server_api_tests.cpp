@@ -34,6 +34,59 @@ suite http_date_tests = [] {
       const sys_seconds time = sys_days{year{1994} / month{11} / day{6}} + hours{8} + minutes{49} + seconds{37};
       expect(glz::detail::format_http_date(time) == "Sun, 06 Nov 1994 08:49:37 GMT");
    };
+
+   "unix_epoch"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds epoch{seconds{0}};
+      expect(glz::detail::format_http_date(epoch) == "Thu, 01 Jan 1970 00:00:00 GMT");
+   };
+
+   "y2k"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{2000} / month{1} / day{1}};
+      expect(glz::detail::format_http_date(time) == "Sat, 01 Jan 2000 00:00:00 GMT");
+   };
+
+   "leap_day"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{2024} / month{2} / day{29}} + hours{12} + minutes{0} + seconds{0};
+      expect(glz::detail::format_http_date(time) == "Thu, 29 Feb 2024 12:00:00 GMT");
+   };
+
+   "end_of_year"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{2023} / month{12} / day{31}} + hours{23} + minutes{59} + seconds{59};
+      expect(glz::detail::format_http_date(time) == "Sun, 31 Dec 2023 23:59:59 GMT");
+   };
+
+   "single_digit_day"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{2025} / month{3} / day{5}} + hours{7} + minutes{30} + seconds{15};
+      expect(glz::detail::format_http_date(time) == "Wed, 05 Mar 2025 07:30:15 GMT");
+   };
+
+   "all_weekdays_covered"_test = [] {
+      // 2024-01-01 is a Monday, test Mon through Sun
+      using namespace std::chrono;
+      const std::array<std::string_view, 7> expected_days = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+      for (uint32_t i = 0; i < 7; ++i) {
+         const sys_seconds time = sys_days{year{2024} / month{1} / day{1 + i}};
+         const auto result = glz::detail::format_http_date(time);
+         expect(result.substr(0, 3) == expected_days[i]) << "day offset " << i;
+      }
+   };
+
+   "all_months_covered"_test = [] {
+      using namespace std::chrono;
+      const std::array<std::string_view, 12> expected_months = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                                                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+      for (uint32_t m = 1; m <= 12; ++m) {
+         const sys_seconds time = sys_days{year{2024} / month{m} / day{15}};
+         const auto result = glz::detail::format_http_date(time);
+         // Month name starts at position 8 in "Xxx, DD Mon YYYY HH:MM:SS GMT"
+         expect(result.substr(8, 3) == expected_months[m - 1]) << "month " << m;
+      }
+   };
 };
 
 // Test data structures

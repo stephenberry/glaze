@@ -10,6 +10,7 @@
 #include <charconv>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <expected>
@@ -55,11 +56,11 @@ namespace glz
          char buffer[64];
          const auto size = std::snprintf(
             buffer, sizeof(buffer), "%.*s, %02u %.*s %04d %02u:%02u:%02u GMT",
-            static_cast<int>(weekdays[weekday.c_encoding()].size()), weekdays[weekday.c_encoding()].data(),
-            static_cast<unsigned>(date.day()), static_cast<int>(months[static_cast<unsigned>(date.month()) - 1].size()),
-            months[static_cast<unsigned>(date.month()) - 1].data(), static_cast<int>(date.year()),
-            static_cast<unsigned>(time_of_day.hours().count()), static_cast<unsigned>(time_of_day.minutes().count()),
-            static_cast<unsigned>(time_of_day.seconds().count()));
+            static_cast<int32_t>(weekdays[weekday.c_encoding()].size()), weekdays[weekday.c_encoding()].data(),
+            static_cast<uint32_t>(date.day()), static_cast<int32_t>(months[static_cast<uint32_t>(date.month()) - 1].size()),
+            months[static_cast<uint32_t>(date.month()) - 1].data(), static_cast<int32_t>(date.year()),
+            static_cast<uint32_t>(time_of_day.hours().count()), static_cast<uint32_t>(time_of_day.minutes().count()),
+            static_cast<uint32_t>(time_of_day.seconds().count()));
          if (size < 0 || static_cast<size_t>(size) >= sizeof(buffer)) {
             return {};
          }
