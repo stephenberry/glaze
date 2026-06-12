@@ -4,11 +4,14 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <charconv>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <expected>
 #include <functional>
@@ -39,6 +42,32 @@ namespace glz
 {
    namespace detail
    {
+      // Produces an RFC 7231 §7.1.1.1 IMF-fixdate formatted HTTP date string
+      [[nodiscard]] inline std::string format_http_date(const std::chrono::sys_seconds time)
+      {
+         static constexpr std::array<std::string_view, 7> weekdays = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+         static constexpr std::array<std::string_view, 12> months = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                                                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+         const auto day_point = std::chrono::floor<std::chrono::days>(time);
+         const std::chrono::year_month_day date{day_point};
+         const std::chrono::weekday weekday{day_point};
+         const std::chrono::hh_mm_ss time_of_day{time - day_point};
+
+         char buffer[64];
+         const auto size = std::snprintf(
+            buffer, sizeof(buffer), "%.*s, %02u %.*s %04d %02u:%02u:%02u GMT",
+            int32_t(weekdays[weekday.c_encoding()].size()), weekdays[weekday.c_encoding()].data(),
+            uint32_t(date.day()), int32_t(months[uint32_t(date.month()) - 1].size()),
+            months[uint32_t(date.month()) - 1].data(), int32_t(date.year()),
+            uint32_t(time_of_day.hours().count()), uint32_t(time_of_day.minutes().count()),
+            uint32_t(time_of_day.seconds().count()));
+         if (size < 0 || size_t(size) >= sizeof(buffer)) {
+            return {};
+         }
+         return {buffer, size_t(size)};
+      }
+
       // Type trait to detect SSL streams
       template <typename T>
       inline constexpr bool is_ssl_stream = false;
@@ -2339,21 +2368,11 @@ namespace glz
       inline const std::string& get_current_date()
       {
          static thread_local std::string cached;
-         static thread_local std::chrono::seconds cached_sec{};
-         auto now = std::chrono::system_clock::now();
-         auto sec = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch());
-         if (sec != cached_sec) {
-            cached_sec = sec;
-            auto time_t_now = std::chrono::system_clock::to_time_t(now);
-            char buf[64];
-#ifdef _MSC_VER
-            std::tm tm_buf;
-            gmtime_s(&tm_buf, &time_t_now);
-            std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", &tm_buf);
-#else
-            std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", std::gmtime(&time_t_now));
-#endif
-            cached = buf;
+         static thread_local std::chrono::sys_seconds cached_time{};
+         const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+         if (cached.empty() || now != cached_time) {
+            cached_time = now;
+            cached = detail::format_http_date(now);
          }
          return cached;
       }
