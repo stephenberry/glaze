@@ -3,8 +3,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
-#include <fstream>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <mutex>
 #include <optional>
