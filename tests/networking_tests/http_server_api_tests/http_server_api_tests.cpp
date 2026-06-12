@@ -28,6 +28,14 @@ namespace asio
 
 using namespace ut;
 
+suite http_date_tests = [] {
+   "formats_imf_fixdate"_test = [] {
+      using namespace std::chrono;
+      const sys_seconds time = sys_days{year{1994} / month{11} / day{6}} + hours{8} + minutes{49} + seconds{37};
+      expect(glz::detail::format_http_date(time) == "Sun, 06 Nov 1994 08:49:37 GMT");
+   };
+};
+
 // Test data structures
 struct AsyncResult
 {
