@@ -57,15 +57,15 @@ namespace glz
          char buffer[64];
          const auto size = std::snprintf(
             buffer, sizeof(buffer), "%.*s, %02u %.*s %04d %02u:%02u:%02u GMT",
-            static_cast<int32_t>(weekdays[weekday.c_encoding()].size()), weekdays[weekday.c_encoding()].data(),
-            static_cast<uint32_t>(date.day()), static_cast<int32_t>(months[static_cast<uint32_t>(date.month()) - 1].size()),
-            months[static_cast<uint32_t>(date.month()) - 1].data(), static_cast<int32_t>(date.year()),
-            static_cast<uint32_t>(time_of_day.hours().count()), static_cast<uint32_t>(time_of_day.minutes().count()),
-            static_cast<uint32_t>(time_of_day.seconds().count()));
-         if (size < 0 || static_cast<size_t>(size) >= sizeof(buffer)) {
+            int32_t(weekdays[weekday.c_encoding()].size()), weekdays[weekday.c_encoding()].data(),
+            uint32_t(date.day()), int32_t(months[uint32_t(date.month()) - 1].size()),
+            months[uint32_t(date.month()) - 1].data(), int32_t(date.year()),
+            uint32_t(time_of_day.hours().count()), uint32_t(time_of_day.minutes().count()),
+            uint32_t(time_of_day.seconds().count()));
+         if (size < 0 || size_t(size) >= sizeof(buffer)) {
             return {};
          }
-         return {buffer, static_cast<size_t>(size)};
+         return {buffer, size_t(size)};
       }
 
       // Type trait to detect SSL streams
