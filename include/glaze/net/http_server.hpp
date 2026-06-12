@@ -57,10 +57,9 @@ namespace glz
          char buffer[64];
          const auto size = std::snprintf(
             buffer, sizeof(buffer), "%.*s, %02u %.*s %04d %02u:%02u:%02u GMT",
-            int32_t(weekdays[weekday.c_encoding()].size()), weekdays[weekday.c_encoding()].data(),
-            uint32_t(date.day()), int32_t(months[uint32_t(date.month()) - 1].size()),
-            months[uint32_t(date.month()) - 1].data(), int32_t(date.year()),
-            uint32_t(time_of_day.hours().count()), uint32_t(time_of_day.minutes().count()),
+            int32_t(weekdays[weekday.c_encoding()].size()), weekdays[weekday.c_encoding()].data(), uint32_t(date.day()),
+            int32_t(months[uint32_t(date.month()) - 1].size()), months[uint32_t(date.month()) - 1].data(),
+            int32_t(date.year()), uint32_t(time_of_day.hours().count()), uint32_t(time_of_day.minutes().count()),
             uint32_t(time_of_day.seconds().count()));
          if (size < 0 || size_t(size) >= sizeof(buffer)) {
             return {};

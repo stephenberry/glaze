@@ -79,7 +79,7 @@ suite http_date_tests = [] {
    "all_months_covered"_test = [] {
       using namespace std::chrono;
       const std::array<std::string_view, 12> expected_months = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                                                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+                                                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
       for (uint32_t m = 1; m <= 12; ++m) {
          const sys_seconds time = sys_days{year{2024} / month{m} / day{15}};
          const auto result = glz::detail::format_http_date(time);
