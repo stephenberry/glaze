@@ -53,7 +53,7 @@ Example: read only the fields present in a struct and then short circuit the par
 struct partial_struct
 {
    std::string string{};
-   int32_t integer{};
+   std::int32_t integer{};
 };
 ```
 

@@ -1,11 +1,13 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <chrono>
-#include <thread>
+import std;
+import glaze;
+import glaze.core.opts;
+import glaze.core.write;
+import ut;
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+using std::int64_t;
 
 using namespace ut;
 

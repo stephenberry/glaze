@@ -290,11 +290,11 @@ newlines)";
    };
 
    "large_id_values"_test = [] {
-      // Test with maximum uint64_t values
+      // Test with maximum std::uint64_t values
       repe::message msg{};
       msg.query = "/test";
       msg.body = "{}";
-      msg.header.id = 18446744073709551615ULL; // max uint64_t
+      msg.header.id = 18446744073709551615ULL; // max std::uint64_t
       msg.header.body_format = repe::body_format::JSON;
       msg.header.notify = false;
 
@@ -375,12 +375,12 @@ newlines)";
    };
 
    "negative_id_in_jsonrpc"_test = [] {
-      // Negative IDs should be handled (will be cast to uint64_t)
+      // Negative IDs should be handled (will be cast to std::uint64_t)
       std::string jsonrpc = R"({"jsonrpc":"2.0","method":"test","params":[],"id":-1})";
 
       auto msg = repe::from_jsonrpc_request(jsonrpc);
       expect(msg.has_value());
-      // -1 as int64_t becomes very large uint64_t
+      // -1 as int64_t becomes very large std::uint64_t
       expect(msg->header.notify == false);
    };
 

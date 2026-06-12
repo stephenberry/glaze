@@ -73,11 +73,11 @@ glz::write_cbor(values, buffer);  // Uses typed array with bulk memcpy
 |------|-------------------|----------------|
 | `uint8_t` | 64 | 64 |
 | `uint16_t` | 69 | 65 |
-| `uint32_t` | 70 | 66 |
-| `uint64_t` | 71 | 67 |
+| `std::uint32_t` | 70 | 66 |
+| `std::uint64_t` | 71 | 67 |
 | `int8_t` | 72 | 72 |
 | `int16_t` | 77 | 73 |
-| `int32_t` | 78 | 74 |
+| `std::int32_t` | 78 | 74 |
 | `int64_t` | 79 | 75 |
 | `float` | 85 | 81 |
 | `double` | 86 | 82 |

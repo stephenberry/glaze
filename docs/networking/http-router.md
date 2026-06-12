@@ -184,7 +184,7 @@ glz::param_constraint hex_color{
     .description = "Valid hex color code",
     .validation = [](std::string_view value) {
         if (value.size() != 7 || value[0] != '#') return false;
-        for (size_t i = 1; i < value.size(); ++i) {
+        for (std::size_t i = 1; i < value.size(); ++i) {
             if (!std::isxdigit(value[i])) return false;
         }
         return true;

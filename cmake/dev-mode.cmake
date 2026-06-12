@@ -13,7 +13,7 @@ if(BUILD_TESTING)
 endif()
 
 if (glaze_ENABLE_FUZZING)
-  add_subdirectory(fuzzing)
+  #add_subdirectory(fuzzing) # temporary
 endif()
 
 # Done in developer mode only, so users won't be bothered by this :)

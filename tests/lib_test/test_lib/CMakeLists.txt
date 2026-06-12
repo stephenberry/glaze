@@ -7,7 +7,7 @@ if(stale_libs)
    file(REMOVE ${stale_libs})
 endif()
 
-add_library(${PROJECT_NAME} SHARED ${PROJECT_NAME}.cpp)
+add_library(${PROJECT_NAME} SHARED)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "_d")
 set_target_properties(${PROJECT_NAME} PROPERTIES RELWITHDEBINFO_POSTFIX "_rd")
@@ -26,3 +26,10 @@ foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
     set_target_properties(${PROJECT_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} "${CMAKE_SOURCE_DIR}/bin")
     set_target_properties(${PROJECT_NAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} "${CMAKE_SOURCE_DIR}/bin")
 endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
+
+target_sources(test_lib
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    test_lib.ixx
+)

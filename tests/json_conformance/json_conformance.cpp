@@ -1,11 +1,11 @@
-#include <deque>
-#include <iostream>
-#include <map>
-#include <random>
-#include <unordered_map>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
+
+import glaze.util.string_literal;
 
 using namespace ut;
 

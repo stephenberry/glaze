@@ -220,7 +220,7 @@ struct AppContext {
 
 template <>
 struct glz::meta<AppContext> {
-    template <size_t Index>
+    template <std::size_t Index>
     static constexpr auto rename_key() {
         using MemberType = glz::member_type_t<AppContext, Index>;
 
@@ -248,13 +248,13 @@ You can customize how type names are formatted by manipulating them at compile t
 ```cpp
 template <>
 struct glz::meta<AppContext> {
-    template <size_t Index>
+    template <std::size_t Index>
     static constexpr auto rename_key() {
         using MemberType = glz::member_type_t<AppContext, Index>;
 
         if constexpr (std::is_enum_v<MemberType>) {
             constexpr auto full_name = glz::name_v<MemberType>;
-            constexpr size_t pos = full_name.rfind("::");
+            constexpr std::size_t pos = full_name.rfind("::");
             return (pos == std::string_view::npos)
                 ? full_name
                 : full_name.substr(pos + 2);
@@ -286,7 +286,7 @@ struct MixedTypes {
 
 template <>
 struct glz::meta<MixedTypes> {
-    template <size_t Index>
+    template <std::size_t Index>
     static constexpr auto rename_key() {
         using MemberType = glz::member_type_t<MixedTypes, Index>;
         constexpr auto name = glz::member_nameof<Index, MixedTypes>;
@@ -314,7 +314,7 @@ struct Point {
 
 template <>
 struct glz::meta<Point> {
-    template <size_t Index>
+    template <std::size_t Index>
     static constexpr auto rename_key() {
         constexpr auto name = glz::member_nameof<Index, Point>;
 
@@ -346,7 +346,7 @@ std::string json = glz::write_json(p).value();
 | Variant | Use When |
 |---------|----------|
 | `rename_key(const std::string_view key)` | You need to transform keys based on their string values |
-| `template <size_t Index> rename_key()` | You need access to member types or index information |
+| `template <std::size_t Index> rename_key()` | You need access to member types or index information |
 | Built-in transformers (e.g., `glz::camel_case`) | You want simple naming convention conversions |
 
 ### Implementation Notes

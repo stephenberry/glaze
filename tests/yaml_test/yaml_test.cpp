@@ -25,6 +25,9 @@
 #include "glaze/json/generic.hpp"
 #include "ut/ut.hpp"
 
+using std::uint64_t;
+using std::size_t;
+
 using namespace ut;
 
 // Test structures

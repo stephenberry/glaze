@@ -146,7 +146,7 @@ std::string jsonrpc = repe::to_jsonrpc_request(notification);
 
 ### ID Handling
 
-REPE uses `uint64_t` for IDs, while JSON-RPC supports strings, numbers, or null:
+REPE uses `std::uint64_t` for IDs, while JSON-RPC supports strings, numbers, or null:
 
 - Numeric IDs are directly mapped between protocols
 - Numeric strings (e.g., `"123"`) are parsed as numbers

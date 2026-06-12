@@ -1,8 +1,14 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/json.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze.json;
+import ut;
+
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::size_t;
 
 using namespace ut;
 

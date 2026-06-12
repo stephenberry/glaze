@@ -108,7 +108,7 @@ This is useful for dynamic path construction:
 std::string buffer = R"({"users":[{"name":"Alice"},{"name":"Bob"}]})";
 
 // Update user at runtime-determined index
-size_t user_index = 1;
+std::size_t user_index = 1;
 std::string path = "/users/" + std::to_string(user_index) + "/name";
 glz::write_at(path, R"("Charlie")", buffer);
 // buffer is now: {"users":[{"name":"Alice"},{"name":"Charlie"}]}

@@ -1,14 +1,14 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include "glaze/util/key_transformers.hpp"
+import std;
 
-#include <iostream>
-#include <string>
+import glaze;
+import glaze.util.key_transformers;
+
+import ut;
 
 #include "glaze/core/feature_test.hpp"
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
 
 using namespace ut;
 

@@ -1,14 +1,23 @@
-#include <charconv>
-#include <deque>
-#include <iostream>
-#include <map>
-#include <random>
-#include <unordered_map>
+// Glaze Library
+// For the license information refer to glaze.ixx
 
-#include "glaze/glaze.hpp"
-#include "glaze/util/itoa.hpp"
-#include "glaze/util/itoa_40kb.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze;
+import glaze.util.itoa;
+import glaze.util.itoa_40kb;
+
+import ut;
+
+using std::int8_t;
+using std::uint8_t;
+using std::int16_t;
+using std::uint16_t;
+using std::int32_t;
+using std::uint32_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
@@ -385,13 +394,13 @@ bool test_lengths()
 
 suite to_chars_validation = [] {
    // Exhaustive tests for small integer types (every possible value)
-   "to_chars uint8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint8_t>()); };
-   "to_chars int8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int8_t>()); };
-   "to_chars uint16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint16_t>()); };
-   "to_chars int16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int16_t>()); };
+   "to_chars std::uint8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint8_t>()); };
+   "to_chars std::int8_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int8_t>()); };
+   "to_chars std::uint16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<uint16_t>()); };
+   "to_chars std::int16_t exhaustive"_test = [] { expect(validate_to_chars_exhaustive<int16_t>()); };
 
    // Sample tests for larger types (exhaustive would take too long)
-   "to_chars uint32_t samples"_test = [] {
+   "to_chars std::uint32_t samples"_test = [] {
       char glz_buf[32], std_buf[32];
       std::mt19937 rng(42);
       std::uniform_int_distribution<uint32_t> dist(0, (std::numeric_limits<uint32_t>::max)());
@@ -408,7 +417,7 @@ suite to_chars_validation = [] {
       test((std::numeric_limits<uint32_t>::max)());
       for (int i = 0; i < 100000; ++i) test(dist(rng));
    };
-   "to_chars int32_t samples"_test = [] {
+   "to_chars std::int32_t samples"_test = [] {
       // Test edge cases and random samples for to_chars (400B tables)
       char glz_buf[32], std_buf[32];
       std::mt19937 rng(42);
@@ -431,10 +440,10 @@ suite to_chars_validation = [] {
    };
 
    // to_chars_40kb validation for 32/64-bit types
-   "to_chars_40kb int32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<int32_t>()); };
-   "to_chars_40kb uint32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<uint32_t>()); };
-   "to_chars_40kb int64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<int64_t>()); };
-   "to_chars_40kb uint64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<uint64_t>()); };
+   "to_chars_40kb std::int32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<int32_t>()); };
+   "to_chars_40kb std::uint32_t samples"_test = [] { expect(validate_to_chars_40kb_samples<uint32_t>()); };
+   "to_chars_40kb std::int64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<int64_t>()); };
+   "to_chars_40kb std::uint64_t samples"_test = [] { expect(validate_to_chars_40kb_samples<uint64_t>()); };
 };
 
 // We test parsing an array so that early termination triggers errors

@@ -13,3 +13,10 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE GLZ_TEST_DIRECTORY="${CMAKE_S
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 target_code_coverage(${PROJECT_NAME} AUTO ALL)
+
+target_sources(glaze_glaze
+  PUBLIC
+    FILE_SET CXX_MODULES
+    FILES
+    interface.ixx
+)

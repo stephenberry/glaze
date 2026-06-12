@@ -160,7 +160,7 @@ if (result) {
     auto users = (*result)["users"].index();
 
     // Now enjoy O(1) operations:
-    size_t count = users.size();        // O(1) - no scanning
+    std::size_t count = users.size();        // O(1) - no scanning
     auto user500 = users[500];          // O(1) - direct access
     auto user999 = users[999];          // O(1) - no matter the position
 
@@ -187,7 +187,7 @@ if (result) {
 auto indexed = doc["items"].index();
 
 // O(1) size query
-size_t count = indexed.size();
+std::size_t count = indexed.size();
 
 // O(1) empty check
 if (!indexed.empty()) { /* ... */ }
@@ -361,8 +361,8 @@ if (value) {
 | Type | Description |
 |------|-------------|
 | `bool` | Boolean values |
-| `int32_t`, `int64_t` | Signed integers |
-| `uint32_t`, `uint64_t` | Unsigned integers |
+| `std::int32_t`, `int64_t` | Signed integers |
+| `std::uint32_t`, `std::uint64_t` | Unsigned integers |
 | `float`, `double` | Floating-point numbers |
 | `std::string` | String with escape processing |
 | `std::string_view` | Raw string view (no escape processing) |
@@ -408,7 +408,7 @@ auto arr = doc["items"];
 if (arr.empty()) { /* ... */ }
 
 // Get number of elements (requires scanning)
-size_t count = arr.size();
+std::size_t count = arr.size();
 
 // Check if object contains a key
 if (doc.root().contains("name")) { /* ... */ }

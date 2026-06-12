@@ -1,0 +1,11 @@
+# Optional global overrides for module-name to header-path conversion.
+# Most project imports use the mechanical mapping:
+#   import glaze.core.read; -> #include "glaze/core/read.hpp"
+import_overrides:
+  cbor: "glaze/cbor.hpp"
+  glaze.base64: "glaze/base64/base64.hpp"
+  glaze.compare: "glaze/compare/compare.hpp"
+  glaze.exceptions: "glaze/glaze_exceptions.hpp"
+  glaze.stencil: "glaze/stencil/stencil.hpp"
+  glaze.trace: "glaze/trace/trace.hpp"
+  glaze.tuplet: "glaze/tuplet/tuple.hpp"

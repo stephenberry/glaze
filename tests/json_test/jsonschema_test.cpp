@@ -1,15 +1,24 @@
-#include <algorithm>
-#include <cstdint>
-#include <glaze/json.hpp>
-#include <glaze/json/schema.hpp>
-#include <string>
-#include <ut/ut.hpp>
+// Glaze Library
+// For the license information refer to glaze.ixx
+
+import std;
+
+import glaze.json;
+import glaze.tuplet;
+import glaze.util.variant;
+
+import ut;
+
+using std::uint8_t;
+using std::int64_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 
 struct schema_obj
 {
-   std::int64_t variable{2};
+   int64_t variable{2};
 };
 
 template <>
@@ -35,7 +44,7 @@ struct glz::json_schema<schema_obj>
       .exclusiveMaximum = 2L,
       .multipleOf = 3L,
       .minProperties = 4UL,
-      .maxProperties = (std::numeric_limits<std::uint64_t>::max)(),
+      .maxProperties = (std::numeric_limits<uint64_t>::max)(),
       // .required = , // read of std::span is not supported
       .minItems = 1UL,
       .maxItems = 2UL,
@@ -107,11 +116,11 @@ suite schema_attributes = [] {
    };
    "minLength"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minLength>(test, "variable", std::uint64_t{1});
+      expect_property<&glz::schema::minLength>(test, "variable", uint64_t{1});
    };
    "maxLength"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maxLength>(test, "variable", std::uint64_t{2});
+      expect_property<&glz::schema::maxLength>(test, "variable", uint64_t{2});
    };
    "pattern"_test = [] {
       const test_case test{};
@@ -123,47 +132,47 @@ suite schema_attributes = [] {
    };
    "minimum"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minimum>(test, "variable", std::int64_t{1});
+      expect_property<&glz::schema::minimum>(test, "variable", int64_t{1});
    };
    "maximum"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maximum>(test, "variable", std::int64_t{2});
+      expect_property<&glz::schema::maximum>(test, "variable", int64_t{2});
    };
    "exclusiveMinimum"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::exclusiveMinimum>(test, "variable", std::int64_t{1});
+      expect_property<&glz::schema::exclusiveMinimum>(test, "variable", int64_t{1});
    };
    "exclusiveMaximum"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::exclusiveMaximum>(test, "variable", std::int64_t{2});
+      expect_property<&glz::schema::exclusiveMaximum>(test, "variable", int64_t{2});
    };
    "multipleOf"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::multipleOf>(test, "variable", std::int64_t{3});
+      expect_property<&glz::schema::multipleOf>(test, "variable", int64_t{3});
    };
    "minProperties"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minProperties>(test, "variable", std::uint64_t{4});
+      expect_property<&glz::schema::minProperties>(test, "variable", uint64_t{4});
    };
    "maxProperties"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maxProperties>(test, "variable", (std::numeric_limits<std::uint64_t>::max)());
+      expect_property<&glz::schema::maxProperties>(test, "variable", (std::numeric_limits<uint64_t>::max)());
    };
    "minItems"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minItems>(test, "variable", std::uint64_t{1});
+      expect_property<&glz::schema::minItems>(test, "variable", uint64_t{1});
    };
    "maxItems"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maxItems>(test, "variable", std::uint64_t{2});
+      expect_property<&glz::schema::maxItems>(test, "variable", uint64_t{2});
    };
    "minContains"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::minContains>(test, "variable", std::uint64_t{1});
+      expect_property<&glz::schema::minContains>(test, "variable", uint64_t{1});
    };
    "maxContains"_test = [] {
       const test_case test{};
-      expect_property<&glz::schema::maxContains>(test, "variable", std::uint64_t{2});
+      expect_property<&glz::schema::maxContains>(test, "variable", uint64_t{2});
    };
    "uniqueItems"_test = [] {
       const test_case test{};
@@ -182,7 +191,7 @@ suite schema_attributes = [] {
 
 struct one_number
 {
-   std::int64_t some_var{42};
+   int64_t some_var{42};
 };
 
 template <>
@@ -193,7 +202,7 @@ struct glz::meta<one_number>
 
 struct const_one_number
 {
-   static constexpr std::int64_t some_var{1337};
+   static constexpr int64_t some_var{1337};
 };
 
 template <>
@@ -202,7 +211,7 @@ struct glz::meta<const_one_number>
    static constexpr auto value = &const_one_number::some_var;
 };
 
-enum struct color : std::uint8_t { red = 0, green, blue };
+enum struct color : uint8_t { red = 0, green, blue };
 
 template <>
 struct glz::meta<color>
@@ -384,8 +393,8 @@ suite schema_tests = [] {
          expect[(std::holds_alternative<std::int64_t>(obj.minimum.value()))];
          expect(std::get<std::int64_t>(obj.minimum.value()) == std::numeric_limits<number_t>::lowest());
       };
-      test(std::int64_t{});
-      test(std::uint8_t{});
+      test(int64_t{});
+      test(uint8_t{});
       // double todo parse_number_failure when reading "minimum":-1.7976931348623157E308
    };
 
@@ -432,7 +441,7 @@ suite schema_tests = [] {
    };
 
    "fixed array has fixed size"_test = [] {
-      std::string schema_str = glz::write_json_schema<std::array<std::int64_t, 42>>().value_or("error");
+      std::string schema_str = glz::write_json_schema<std::array<int64_t, 42>>().value_or("error");
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);

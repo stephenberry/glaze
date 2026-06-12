@@ -239,7 +239,7 @@ inline expected<std::string, error_ctx> unescape_json_ptr(std::string_view token
 {
    std::string result;
    result.reserve(token.size());
-   for (size_t i = 0; i < token.size(); ++i) {
+   for (std::size_t i = 0; i < token.size(); ++i) {
       if (token[i] == '~') {
          if (i + 1 >= token.size()) {
             return unexpected(error_ctx{error_code::invalid_json_pointer});
@@ -311,7 +311,7 @@ error_ctx patch(generic& document, const patch_document& ops, patch_opts opts)
       // Deep copy for rollback - requires O(n) space
       generic backup = document;
 
-      for (size_t i = 0; i < ops.size(); ++i) {
+      for (std::size_t i = 0; i < ops.size(); ++i) {
          auto ec = apply_operation(document, ops[i], opts);
          if (ec) {
             document = std::move(backup);  // Rollback
@@ -321,7 +321,7 @@ error_ctx patch(generic& document, const patch_document& ops, patch_opts opts)
       }
    }
    else {
-      for (size_t i = 0; i < ops.size(); ++i) {
+      for (std::size_t i = 0; i < ops.size(); ++i) {
          auto ec = apply_operation(document, ops[i], opts);
          if (ec) {
             ec.operation_index = i;
@@ -367,7 +367,7 @@ namespace glz
 New error codes to add to `error_code` enum:
 
 ```cpp
-enum struct error_code : uint32_t {
+enum struct error_code : std::uint32_t {
    // ... existing codes ...
 
    // JSON Pointer errors

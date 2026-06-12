@@ -1,24 +1,21 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
-
-#include "glaze/ext/eigen.hpp"
+// For the license information refer to glaze.ixx
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include <any>
-#include <chrono>
-#include <iostream>
-#include <iterator>
-#include <random>
 
-#include "glaze/beve/beve_to_json.hpp"
-#include "glaze/cbor/read.hpp"
-#include "glaze/cbor/write.hpp"
-#include "glaze/json/json_ptr.hpp"
-#include "glaze/json/ptr.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/json/write.hpp"
-#include "ut/ut.hpp"
+import std;
+
+import glaze.ext.eigen;
+import glaze.beve.beve_to_json;
+import glaze.cbor.read;
+import glaze.cbor.write;
+import glaze.json.json_ptr;
+import glaze.json.ptr;
+import glaze.json.read;
+import glaze.json.write;
+
+import ut;
 
 using namespace ut;
 

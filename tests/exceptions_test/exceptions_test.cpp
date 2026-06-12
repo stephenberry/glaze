@@ -1,16 +1,26 @@
 // Glaze Library
-// For the license information refer to glaze.hpp
+// For the license information refer to glaze.ixx
 
-#include <limits>
+import glaze;
 
-#include "glaze/containers/ordered_small_map.hpp"
-#include "glaze/glaze_exceptions.hpp"
-#include "glaze/thread/async.hpp"
-#include "glaze/thread/async_string.hpp"
-#include "glaze/thread/shared_async_map.hpp"
-#include "glaze/thread/shared_async_vector.hpp"
-#include "glaze/thread/threadpool.hpp"
-#include "ut/ut.hpp"
+import glaze.exceptions;
+
+import glaze.thread.async;
+import glaze.thread.async_string;
+import glaze.thread.shared_async_map;
+import glaze.thread.shared_async_vector;
+import glaze.thread.threadpool;
+import glaze.thread.value_proxy;
+
+import glaze.containers.ordered_small_map;
+
+import ut;
+
+import std;
+
+using std::uint32_t;
+using std::uint64_t;
+using std::size_t;
 
 using namespace ut;
 

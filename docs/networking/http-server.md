@@ -427,8 +427,8 @@ server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
 **Request/Response Timing:**
 ```cpp
 struct Metrics {
-    std::atomic<uint64_t> total_requests{0};
-    std::atomic<uint64_t> total_responses{0};
+    std::atomic<std::uint64_t> total_requests{0};
+    std::atomic<std::uint64_t> total_responses{0};
     std::atomic<double> response_time_sum{0.0};
 };
 

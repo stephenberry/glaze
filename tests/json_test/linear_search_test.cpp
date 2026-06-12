@@ -1,8 +1,12 @@
+// Glaze Library
+// For the license information refer to glaze.ixx
+
 // Tests for linear_search compile-time option
 // This option uses linear key search instead of hash tables for smaller binary size
 
-#include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+import std;
+import glaze;
+import ut;
 
 using namespace ut;
 

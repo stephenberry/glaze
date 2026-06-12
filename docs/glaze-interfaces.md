@@ -47,10 +47,10 @@ namespace glz {
     [[nodiscard]] virtual bool contains(const sv path) noexcept = 0;
 
     // Read data into the API object from JSON or BEVE
-    virtual bool read(const uint32_t format, const sv path, const sv data) noexcept = 0;
+    virtual bool read(const std::uint32_t format, const sv path, const sv data) noexcept = 0;
 
     // Write data from the API object to JSON or BEVE
-    virtual bool write(const uint32_t format, const sv path, std::string& data) noexcept = 0;
+    virtual bool write(const std::uint32_t format, const sv path, std::string& data) noexcept = 0;
 
     // Get the last error message
     [[nodiscard]] virtual const sv last_error() const noexcept { return error; }

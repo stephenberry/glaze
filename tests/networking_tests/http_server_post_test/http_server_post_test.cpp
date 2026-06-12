@@ -9,6 +9,9 @@
 #include "glaze/net/http_server.hpp"
 
 #if defined(GLZ_USING_BOOST_ASIO)
+
+using std::size_t;
+
 namespace asio
 {
    using namespace boost::asio;
@@ -88,7 +91,7 @@ namespace
       std::array<char, 4096> buf{};
       asio::error_code ec;
       for (;;) {
-         std::size_t n = socket.read_some(asio::buffer(buf), ec);
+         size_t n = socket.read_some(asio::buffer(buf), ec);
          if (n == 0 || ec) break;
          resp.append(buf.data(), n);
       }
