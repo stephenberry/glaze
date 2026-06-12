@@ -7,6 +7,8 @@ module;
 
 export module glaze.simd.neon;
 
+import std;
+
 #include "glaze/util/inline.hpp"
 
 #if defined(GLZ_USE_NEON)
