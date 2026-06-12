@@ -19,6 +19,17 @@ namespace glz
 
    template <num_mode Mode, template <class> class MapType>
       requires generic_map_type<MapType>
+   [[nodiscard]] std::string format_error(const error_ctx& ec, const generic_json<Mode, MapType>& source)
+   {
+      const auto buffer = source.dump();
+      if (buffer) {
+         return format_error(ec, *buffer);
+      }
+      return format_error(ec);
+   }
+
+   template <num_mode Mode, template <class> class MapType>
+      requires generic_map_type<MapType>
    template <class T>
       requires(assignable_generic_type<generic_json<Mode, MapType>, T>)
    generic_json<Mode, MapType>& generic_json<Mode, MapType>::operator=(T&& value)

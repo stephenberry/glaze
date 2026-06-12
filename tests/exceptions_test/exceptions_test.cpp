@@ -149,6 +149,24 @@ suite basic_types = [] {
    };
 };
 
+struct generic_read_struct
+{
+   int field{};
+};
+
+suite generic_read_tests = [] {
+   "generic read valid"_test = [] {
+      const auto generic = glz::ex::read_json<glz::generic_u64>(R"({"field":42})");
+      const auto value = glz::ex::read_json<generic_read_struct>(generic);
+      expect(value.field == 42);
+   };
+
+   "generic read invalid"_test = [] {
+      const auto generic = glz::ex::read_json<glz::generic_u64>(R"({"field":"invalid"})");
+      expect(throws([&] { [[maybe_unused]] auto value = glz::ex::read_json<generic_read_struct>(generic); }));
+   };
+};
+
 struct file_struct
 {
    std::string name;
