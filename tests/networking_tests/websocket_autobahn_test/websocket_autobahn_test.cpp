@@ -2,6 +2,8 @@
 #include <charconv>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
+#include <fstream>
 #include <format>
 #include <iostream>
 #include <mutex>
@@ -45,6 +47,26 @@ std::optional<uint32_t> parse_u32(std::string_view text)
    const auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), value);
    if (ec != std::errc{} || ptr != text.data() + text.size()) return std::nullopt;
    return value;
+}
+
+bool write_case_count(uint32_t case_count)
+{
+   const char* path = std::getenv("AUTOBAHN_CASE_COUNT_FILE");
+   if (path == nullptr || *path == '\0') return true;
+
+   std::ofstream output{path, std::ios::trunc};
+   if (!output) {
+      std::cerr << "[autobahn] Could not open case count file: " << path << "\n";
+      return false;
+   }
+
+   output << case_count << '\n';
+   if (!output) {
+      std::cerr << "[autobahn] Could not write case count file: " << path << "\n";
+      return false;
+   }
+
+   return true;
 }
 
 enum class single_message_status : uint8_t {
@@ -281,6 +303,10 @@ suite websocket_autobahn_tests = [] {
       const auto case_count = parse_u32(count_message.message);
       expect(case_count.has_value()) << "Autobahn /getCaseCount returned a non-integer payload";
       if (!case_count) return;
+
+      const bool case_count_written = write_case_count(*case_count);
+      expect(case_count_written) << "Could not persist the Autobahn case count";
+      if (!case_count_written) return;
 
       std::cout << "[autobahn] Running " << *case_count << " cases as " << glaze_agent << "\n";
 
