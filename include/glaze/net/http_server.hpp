@@ -42,7 +42,8 @@ namespace glz
 {
    namespace detail
    {
-      inline std::string format_http_date(const std::chrono::sys_seconds time)
+      // Produces an RFC 7231 §7.1.1.1 IMF-fixdate formatted HTTP date string
+      [[nodiscard]] inline std::string format_http_date(const std::chrono::sys_seconds time)
       {
          static constexpr std::array<std::string_view, 7> weekdays = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
          static constexpr std::array<std::string_view, 12> months = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
