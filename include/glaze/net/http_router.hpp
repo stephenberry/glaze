@@ -326,6 +326,7 @@ namespace glz
        */
       void add(http_method method, std::string_view path, H handle, const route_spec& spec = {})
       {
+#if __cpp_exceptions
          try {
             // Install in the radix tree first. add_route can throw on conflict
             // (duplicate :param or *wildcard names at the same position); if it
@@ -343,6 +344,16 @@ namespace glz
             std::fprintf(stderr, "Error adding route '%.*s': %s\n", static_cast<int>(path.length()), path.data(),
                          e.what());
          }
+#else
+         // Under -fno-exceptions add_route's misuse-detection throws are
+         // compiled to fprintf+abort (see the matching #else branches below),
+         // so we cannot observe the conflict here and simply propagate the
+         // install. Misconfigured routes still get reported on stderr.
+         add_route(method, path, handle, spec.constraints);
+         auto& entry = routes[std::string(path)][method];
+         entry.handle = std::move(handle);
+         entry.spec = spec;
+#endif
       }
 
       /**
@@ -419,8 +430,14 @@ namespace glz
                   current->parameter_child->full_path = current->full_path + "/" + segment;
                }
                else if (current->parameter_child->parameter_name != param_name) {
-                  throw std::runtime_error("Route conflict: different parameter names at same position: :" +
-                                           current->parameter_child->parameter_name + " vs :" + param_name);
+                  const auto msg = "Route conflict: different parameter names at same position: :" +
+                                   current->parameter_child->parameter_name + " vs :" + param_name;
+#if __cpp_exceptions
+                  throw std::runtime_error(msg);
+#else
+                  std::fprintf(stderr, "%s\n", msg.c_str());
+                  std::abort();
+#endif
                }
 
                current = current->parameter_child.get();
@@ -429,7 +446,13 @@ namespace glz
                std::string wildcard_name = segment.substr(1);
 
                if (i != segments.size() - 1) {
-                  throw std::runtime_error("Wildcard must be the last segment in route: " + path_str);
+                  const auto msg = "Wildcard must be the last segment in route: " + path_str;
+#if __cpp_exceptions
+                  throw std::runtime_error(msg);
+#else
+                  std::fprintf(stderr, "%s\n", msg.c_str());
+                  std::abort();
+#endif
                }
 
                if (!current->wildcard_child) {
@@ -440,8 +463,14 @@ namespace glz
                   current->wildcard_child->full_path = current->full_path + "/" + segment;
                }
                else if (current->wildcard_child->parameter_name != wildcard_name) {
-                  throw std::runtime_error("Route conflict: different wildcard names at same position: *" +
-                                           current->wildcard_child->parameter_name + " vs *" + wildcard_name);
+                  const auto msg = "Route conflict: different wildcard names at same position: *" +
+                                   current->wildcard_child->parameter_name + " vs *" + wildcard_name;
+#if __cpp_exceptions
+                  throw std::runtime_error(msg);
+#else
+                  std::fprintf(stderr, "%s\n", msg.c_str());
+                  std::abort();
+#endif
                }
 
                current = current->wildcard_child.get();
