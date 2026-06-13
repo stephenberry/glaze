@@ -663,6 +663,13 @@ suite mustache_list_template_tests = [] {
 
 #include "glaze/stencil/stencilcount.hpp"
 
+struct stencilcount_point
+{
+   int x{};
+   int y{};
+   int z{};
+};
+
 suite stencilcount_tests = [] {
    "basic docstencil"_test = [] {
       std::string_view layout = R"(# About
@@ -710,7 +717,8 @@ suite stencilcount_tests = [] {
       // Each layout is copied into an exact-size buffer with no trailing null
       // terminator, so a read past `end` trips the sanitizer build instead of
       // landing on benign padding.
-      person p{"Henry", "Foster", 34};
+      static_assert(glz::hash_info<stencilcount_point>.type == glz::hash_type::mod4);
+      stencilcount_point p{};
       for (const std::string_view tpl : {"{", "{{", "{{+", "{{++", "{{ ", "{{+}", "{{first_name"}) {
          std::vector<char> buf(tpl.begin(), tpl.end());
          const std::string_view layout{buf.data(), buf.size()};

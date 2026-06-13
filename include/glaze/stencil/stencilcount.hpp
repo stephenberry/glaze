@@ -93,6 +93,10 @@ namespace glz
                      ++it;
                   }
 
+                  if (it == end) {
+                     break;
+                  }
+
                   const sv key{start, size_t(it - start)};
 
                   skip_whitespace();
