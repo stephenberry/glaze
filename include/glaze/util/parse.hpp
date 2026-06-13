@@ -1431,22 +1431,22 @@ namespace glz
       [[nodiscard]] GLZ_ALWAYS_INLINE bool complete() const noexcept { return valid_ && remaining_ == 0; }
 
      private:
-      static GLZ_ALWAYS_INLINE bool is_continuation(const uint32_t byte) noexcept { return (byte & 0xC0) == 0x80; }
+      GLZ_ALWAYS_INLINE static bool is_continuation(const uint32_t byte) noexcept { return (byte & 0xC0) == 0x80; }
 
-      static GLZ_ALWAYS_INLINE bool is_in_range(const uint32_t byte, const uint32_t lower_bound,
+      GLZ_ALWAYS_INLINE static bool is_in_range(const uint32_t byte, const uint32_t lower_bound,
                                                 const uint32_t upper_bound) noexcept
       {
          return byte - lower_bound <= upper_bound - lower_bound;
       }
 
-      static GLZ_ALWAYS_INLINE uint64_t load_u64(const uint8_t* ptr) noexcept
+      GLZ_ALWAYS_INLINE static uint64_t load_u64(const uint8_t* ptr) noexcept
       {
          uint64_t value;
          std::memcpy(&value, ptr, sizeof(value));
          return value;
       }
 
-      static GLZ_ALWAYS_INLINE size_t first_non_ascii_offset(const uint64_t high_bits) noexcept
+      GLZ_ALWAYS_INLINE static size_t first_non_ascii_offset(const uint64_t high_bits) noexcept
       {
          // REVIEW: Not sure whether this needed or not, does Glaze support middle-endian?
          static_assert(std::endian::native == std::endian::little || std::endian::native == std::endian::big);
@@ -1460,7 +1460,7 @@ namespace glz
          }
       }
 
-      static GLZ_ALWAYS_INLINE const uint8_t* skip_ascii8(const uint8_t* it, const uint8_t* end) noexcept
+      GLZ_ALWAYS_INLINE static const uint8_t* skip_ascii8(const uint8_t* it, const uint8_t* end) noexcept
       {
          constexpr uint64_t mask = glz::repeat_byte8(0x80);
 
@@ -1481,7 +1481,7 @@ namespace glz
          return it;
       }
 
-      static GLZ_ALWAYS_INLINE const uint8_t* skip_ascii_adaptive(const uint8_t* it, const uint8_t* end) noexcept
+      GLZ_ALWAYS_INLINE static const uint8_t* skip_ascii_adaptive(const uint8_t* it, const uint8_t* end) noexcept
       {
          constexpr uint64_t mask = glz::repeat_byte8(0x80);
 
@@ -1535,7 +1535,7 @@ namespace glz
          return skip_ascii8(it, end);
       }
 
-      static GLZ_ALWAYS_INLINE bool consume_full_non_ascii(const uint8_t*& it, const uint32_t byte0) noexcept
+      GLZ_ALWAYS_INLINE static bool consume_full_non_ascii(const uint8_t*& it, const uint32_t byte0) noexcept
       {
          // Called only when at least four bytes remaining, so
          // no boundary checks are needed here
@@ -1587,7 +1587,7 @@ namespace glz
          return false;
       }
 
-      static GLZ_ALWAYS_INLINE bool consume_non_ascii_checked(const uint8_t*& it, const uint8_t* end,
+      GLZ_ALWAYS_INLINE static bool consume_non_ascii_checked(const uint8_t*& it, const uint8_t* end,
                                                               uint32_t& remaining, uint32_t& lower_bound,
                                                               uint32_t& upper_bound) noexcept
       {
@@ -1679,7 +1679,7 @@ namespace glz
          return false;
       }
 
-      static GLZ_ALWAYS_INLINE bool consume_small(const uint8_t*& it, const uint8_t* end, uint32_t& remaining,
+      GLZ_ALWAYS_INLINE static bool consume_small(const uint8_t*& it, const uint8_t* end, uint32_t& remaining,
                                                   uint32_t& lower_bound, uint32_t& upper_bound) noexcept
       {
          // Small-buffer path. Avoid the larger bulk-loop setup and still
@@ -1705,7 +1705,7 @@ namespace glz
          return true;
       }
 
-      static GLZ_ALWAYS_INLINE bool consume_tail(const uint8_t*& it, const uint8_t* end, uint32_t& remaining,
+      GLZ_ALWAYS_INLINE static bool consume_tail(const uint8_t*& it, const uint8_t* end, uint32_t& remaining,
                                                  uint32_t& lower_bound, uint32_t& upper_bound) noexcept
       {
          // Tail normally should be 0..3 bytes after bulk loop
@@ -1727,7 +1727,7 @@ namespace glz
          return true;
       }
 
-      static GLZ_ALWAYS_INLINE bool consume_pending(const uint8_t*& it, const uint8_t* end, uint32_t& remaining,
+      GLZ_ALWAYS_INLINE static bool consume_pending(const uint8_t*& it, const uint8_t* end, uint32_t& remaining,
                                                     uint32_t& lower_bound, uint32_t& upper_bound) noexcept
       {
          // Continue a partially consumed codepoint.
