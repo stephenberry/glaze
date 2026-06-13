@@ -29,6 +29,22 @@ struct my_struct
    std::array<uint64_t, 3> arr = {1, 2, 3};
 };
 
+struct cbor_mod4_object
+{
+   int x{};
+   int y{};
+   int z{};
+};
+
+struct cbor_front_hash_object
+{
+   int aaaa{};
+   int aaab{};
+   int aaba{};
+   int aabb{};
+   int abaa{};
+};
+
 template <>
 struct glz::meta<my_struct>
 {
@@ -2258,6 +2274,26 @@ void past_fuzzing_issues()
 
 void error_tests()
 {
+   const auto read_exact = []<class T, size_t N>(const std::array<uint8_t, N>& input) {
+      auto buffer = std::make_unique_for_overwrite<char[]>(N);
+      std::copy_n(reinterpret_cast<const char*>(input.data()), N, buffer.get());
+      T value{};
+      return glz::read_cbor(value, std::string_view{buffer.get(), N});
+   };
+
+   "empty object key stays within the buffer"_test = [=] {
+      static_assert(glz::hash_info<cbor_mod4_object>.type == glz::hash_type::mod4);
+      constexpr std::array<uint8_t, 3> input{0xa1, 0x60, 0x00};
+      expect(read_exact.template operator()<cbor_mod4_object>(input).ec == glz::error_code::unknown_key);
+   };
+
+   "short front hash key stays within the buffer"_test = [=] {
+      static_assert(glz::hash_info<cbor_front_hash_object>.type == glz::hash_type::front_hash);
+      static_assert(glz::hash_info<cbor_front_hash_object>.front_hash_bytes == 4);
+      constexpr std::array<uint8_t, 4> input{0xa1, 0x61, 'a', 0x00};
+      expect(read_exact.template operator()<cbor_front_hash_object>(input).ec == glz::error_code::unknown_key);
+   };
+
    "truncated_input"_test = [] {
       std::string buffer;
       buffer.push_back(static_cast<char>(glz::cbor::initial_byte(glz::cbor::major::uint, 24)));

@@ -1395,7 +1395,9 @@ namespace glz
             if constexpr (N > 0) {
                static constexpr auto HashInfo = hash_info<T>;
 
-               const auto index = decode_hash_with_size<CBOR, T, HashInfo, HashInfo.type>::op(it, end, key_len);
+               const auto index = key_len < HashInfo.min_length || key_len > HashInfo.max_length
+                                     ? N
+                                     : decode_hash_with_size<CBOR, T, HashInfo, HashInfo.type>::op(it, end, key_len);
 
                if (index < N) [[likely]] {
                   const sv key{reinterpret_cast<const char*>(it), static_cast<size_t>(key_len)};
