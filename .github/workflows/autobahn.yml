@@ -86,12 +86,6 @@ jobs:
           import sys
 
           allowed = {"OK", "INFORMATIONAL"}
-          allowed_non_strict = {
-             ("6.4.1", "behavior"),
-             ("6.4.2", "behavior"),
-             ("6.4.3", "behavior"),
-             ("6.4.4", "behavior"),
-          }
           agent = os.environ["AUTOBAHN_AGENT"]
           reports = sorted(pathlib.Path("autobahn-reports").rglob("index.json"))
 
@@ -137,8 +131,6 @@ jobs:
                 continue
              for field in ("behavior", "behaviorClose"):
                 value = result.get(field)
-                if value == "NON-STRICT" and (case_id, field) in allowed_non_strict:
-                   continue
                 if value not in allowed:
                    failures.append((case_id, field, value))
 
