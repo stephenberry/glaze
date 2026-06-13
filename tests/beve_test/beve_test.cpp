@@ -6825,6 +6825,16 @@ suite beve_fixed_array_bounds_tests = [] {
       expect(bool(glz::read_beve(dst, buffer)));
    };
 
+   "beve fixed bool array supports partial reads"_test = [] {
+      std::vector<bool> src{true, false, true, true, false, true, false, false};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<bool, 2> dst{};
+      constexpr glz::opts partial{.format = glz::BEVE, .partial_read = true};
+      expect(not glz::read<partial>(dst, buffer));
+      expect(dst == std::array{true, false});
+   };
+
    "beve fixed array exact-size typed arrays round trip"_test = [] {
       {
          std::array<std::complex<double>, 3> src{{{1, 2}, {3, 4}, {5, 6}}};
