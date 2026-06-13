@@ -2668,17 +2668,33 @@ namespace glz
    template <uint32_t Format, class T, auto HashInfo, hash_type Type>
    struct decode_hash_with_size;
 
+   template <auto HashInfo>
+   GLZ_ALWAYS_INLINE constexpr bool invalid_hash_key_size(auto&& it, auto&& end, const size_t n) noexcept
+   {
+      return n < HashInfo.min_length || n > HashInfo.max_length || (n != 0 && n > size_t(end - it));
+   }
+
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::single_element>
    {
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&, const size_t) noexcept { return 0; }
+      static constexpr auto N = reflect<T>::size;
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      {
+         return invalid_hash_key_size<HashInfo>(it, end, n) ? N : 0;
+      }
    };
 
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::mod4>
    {
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
+      static constexpr auto N = reflect<T>::size;
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
+         if (invalid_hash_key_size<HashInfo>(it, end, n)) {
+            return N;
+         }
          return uint8_t(*it) % 4;
       }
    };
@@ -2686,10 +2702,14 @@ namespace glz
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::xor_mod4>
    {
+      static constexpr auto N = reflect<T>::size;
       static constexpr auto first_key_char = reflect<T>::keys[0][0];
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
+         if (invalid_hash_key_size<HashInfo>(it, end, n)) {
+            return N;
+         }
          return (uint8_t(*it) ^ first_key_char) % 4;
       }
    };
@@ -2697,10 +2717,14 @@ namespace glz
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::minus_mod4>
    {
+      static constexpr auto N = reflect<T>::size;
       static constexpr auto first_key_char = reflect<T>::keys[0][0];
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
+         if (invalid_hash_key_size<HashInfo>(it, end, n)) {
+            return N;
+         }
          return (uint8_t(*it) - first_key_char) % 4;
       }
    };
@@ -2714,11 +2738,11 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
-         if constexpr (HashInfo.sized_hash) {
-            if (n == 0 || n > HashInfo.max_length) {
-               return N; // error
-            }
+         if (invalid_hash_key_size<HashInfo>(it, end, n)) {
+            return N;
+         }
 
+         if constexpr (HashInfo.sized_hash) {
             const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
             return HashInfo.table[h % bsize];
          }
@@ -2747,8 +2771,12 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto uindex = HashInfo.unique_index;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
+         if (invalid_hash_key_size<HashInfo>(it, end, n)) {
+            return N;
+         }
+
          if constexpr (uindex > 0) {
             if ((it + uindex) >= end) [[unlikely]] {
                return N; // error
@@ -2766,8 +2794,12 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
+         if (invalid_hash_key_size<HashInfo>(it, end, n)) {
+            return N;
+         }
+
          if constexpr (HashInfo.front_hash_bytes == 2) {
             uint16_t h;
             if consteval {
@@ -2830,6 +2862,10 @@ namespace glz
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
+         if (invalid_hash_key_size<HashInfo>(it, end, n)) {
+            return N;
+         }
+
          const auto pos = per_length_info<T>.unique_index[uint8_t(n)];
          if ((it + pos) >= end) [[unlikely]] {
             return N; // error
@@ -2845,8 +2881,12 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t n) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
+         if (invalid_hash_key_size<HashInfo>(it, end, n)) {
+            return N;
+         }
+
          const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
          return HashInfo.table[h % bsize];
       }

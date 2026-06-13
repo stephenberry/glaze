@@ -724,6 +724,11 @@ suite stencilcount_tests = [] {
 
    "truncated tags stay within the buffer"_test = [] {
       static_assert(glz::hash_info<stencilcount_point>.type == glz::hash_type::mod4);
+      static_assert(
+         glz::decode_hash_with_size<glz::STENCIL, stencilcount_point, glz::hash_info<stencilcount_point>,
+                                    glz::hash_type::mod4>::op(static_cast<const char*>(nullptr),
+                                                             static_cast<const char*>(nullptr), 0) ==
+         glz::reflect<stencilcount_point>::size);
 
       constexpr std::array cases{
          std::pair<std::string_view, std::string_view>{"{{x}}", "42"},
@@ -752,6 +757,13 @@ suite stencilcount_tests = [] {
 
       static_assert(glz::hash_info<stencilcount_front_hash>.type == glz::hash_type::front_hash);
       static_assert(glz::hash_info<stencilcount_front_hash>.front_hash_bytes == 4);
+      static_assert([] {
+         constexpr std::string_view short_key = "a";
+         return glz::decode_hash_with_size<
+                   glz::STENCIL, stencilcount_front_hash, glz::hash_info<stencilcount_front_hash>,
+                   glz::hash_type::front_hash>::op(short_key.data(), short_key.data() + short_key.size(),
+                                                   short_key.size()) == glz::reflect<stencilcount_front_hash>::size;
+      }());
 
       stencilcount_front_hash front_hash_value{.aaaa = 42};
       for (const std::string_view layout : {"{{a}", "{{a}}", "{{a }", "{{aaaa}}"}) {

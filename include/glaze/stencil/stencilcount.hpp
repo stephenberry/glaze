@@ -104,12 +104,8 @@ namespace glz
                   static constexpr auto N = reflect<T>::size;
                   static constexpr auto HashInfo = hash_info<T>;
 
-                  const auto index = [&] {
-                     if (key.size() < HashInfo.min_length || key.size() > HashInfo.max_length) {
-                        return N;
-                     }
-                     return decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
-                  }();
+                  const auto index =
+                     decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
                   if (index < N) [[likely]] {
                      std::string temp{};
