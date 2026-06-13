@@ -948,6 +948,12 @@ namespace glz
                   value.shrink_to_fit();
                }
             }
+            else {
+               if (n > value.size()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
 
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                if (invalid_end(ctx, it, end)) {
@@ -1342,6 +1348,12 @@ namespace glz
 
                if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
+               }
+            }
+            else {
+               if (n > value.size()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             }
 
