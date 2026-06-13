@@ -6808,6 +6808,53 @@ suite beve_fully_custom_variant_tests = [] {
    };
 };
 
+suite beve_fixed_array_bounds_tests = [] {
+   "beve fixed array rejects oversized complex typed array"_test = [] {
+      std::vector<std::complex<double>> src(8, std::complex<double>{1.0, 2.0});
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<std::complex<double>, 2> dst{};
+      expect(bool(glz::read_beve(dst, buffer)));
+   };
+
+   "beve fixed array rejects oversized bool typed array"_test = [] {
+      std::vector<bool> src(64, true);
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<bool, 2> dst{};
+      expect(bool(glz::read_beve(dst, buffer)));
+   };
+
+   "beve fixed bool array supports partial reads"_test = [] {
+      std::vector<bool> src{true, false, true, true, false, true, false, false};
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+      std::array<bool, 2> dst{};
+      constexpr glz::opts partial{.format = glz::BEVE, .partial_read = true};
+      expect(not glz::read<partial>(dst, buffer));
+      expect(dst == std::array{true, false});
+   };
+
+   "beve fixed array exact-size typed arrays round trip"_test = [] {
+      {
+         std::array<std::complex<double>, 3> src{{{1, 2}, {3, 4}, {5, 6}}};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         std::array<std::complex<double>, 3> dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(src == dst);
+      }
+      {
+         std::array<bool, 5> src{true, false, true, true, false};
+         std::string buffer{};
+         expect(not glz::write_beve(src, buffer));
+         std::array<bool, 5> dst{};
+         expect(not glz::read_beve(dst, buffer));
+         expect(src == dst);
+      }
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");
