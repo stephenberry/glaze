@@ -670,6 +670,15 @@ struct stencilcount_point
    int z{};
 };
 
+struct stencilcount_front_hash
+{
+   int aaaa{};
+   int aaab{};
+   int aaba{};
+   int aabb{};
+   int abaa{};
+};
+
 suite stencilcount_tests = [] {
    "basic docstencil"_test = [] {
       std::string_view layout = R"(# About
@@ -714,16 +723,45 @@ suite stencilcount_tests = [] {
    };
 
    "truncated tags stay within the buffer"_test = [] {
-      // Each layout is copied into an exact-size buffer with no trailing null
-      // terminator, so a read past `end` trips the sanitizer build instead of
-      // landing on benign padding.
       static_assert(glz::hash_info<stencilcount_point>.type == glz::hash_type::mod4);
-      stencilcount_point p{};
-      for (const std::string_view tpl : {"{", "{{", "{{+", "{{++", "{{ ", "{{+}", "{{first_name"}) {
-         std::vector<char> buf(tpl.begin(), tpl.end());
-         const std::string_view layout{buf.data(), buf.size()};
-         auto result = glz::stencilcount(layout, p);
-         expect(result.has_value()) << tpl;
+
+      constexpr std::array cases{
+         std::pair<std::string_view, std::string_view>{"{{x}}", "42"},
+         std::pair<std::string_view, std::string_view>{"{{ x }}", "42"},
+         std::pair<std::string_view, std::string_view>{"{{\tx\t}}", "42"},
+         std::pair<std::string_view, std::string_view>{"{{+++}}", "0.0.1"},
+         std::pair<std::string_view, std::string_view>{"before {{x}} after", "before 42 after"},
+      };
+
+      const auto render_prefix = []<class T>(const std::string_view layout, const size_t size, T& value) {
+         auto buffer = std::make_unique_for_overwrite<char[]>(size);
+         std::copy_n(layout.data(), size, buffer.get());
+         return glz::stencilcount(std::string_view{buffer.get(), size}, value);
+      };
+
+      stencilcount_point point{.x = 42};
+      for (const auto& [layout, expected] : cases) {
+         for (size_t size = 1; size <= layout.size(); ++size) {
+            auto result = render_prefix(layout, size, point);
+            expect(result.has_value()) << layout << " prefix size " << size;
+            if (size == layout.size()) {
+               expect(result.value_or("") == expected) << layout;
+            }
+         }
+      }
+
+      static_assert(glz::hash_info<stencilcount_front_hash>.type == glz::hash_type::front_hash);
+      static_assert(glz::hash_info<stencilcount_front_hash>.front_hash_bytes == 4);
+
+      stencilcount_front_hash front_hash_value{.aaaa = 42};
+      for (const std::string_view layout : {"{{a}", "{{a}}", "{{a }", "{{aaaa}}"}) {
+         for (size_t size = 1; size <= layout.size(); ++size) {
+            auto result = render_prefix(layout, size, front_hash_value);
+            expect(result.has_value()) << layout << " prefix size " << size;
+            if (size == layout.size() && layout == "{{aaaa}}") {
+               expect(result.value_or("") == "42");
+            }
+         }
       }
    };
 };
