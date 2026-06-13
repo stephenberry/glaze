@@ -49,9 +49,9 @@ struct bench_row
    double std_map_iteration;
 };
 
-const char* pick_winner(double small, double ordered, double std_map)
+const char* pick_winner(double small_map, double ordered, double std_map)
 {
-   if (small >= ordered && small >= std_map) return "glz_small_map";
+   if (small_map >= ordered && small_map >= std_map) return "glz_small_map";
    if (ordered >= std_map) return "glz_map";
    return "std_map";
 }
