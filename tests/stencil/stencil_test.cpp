@@ -705,6 +705,19 @@ suite stencilcount_tests = [] {
 3.1.2 English
 )") << result;
    };
+
+   "truncated tags stay within the buffer"_test = [] {
+      // Each layout is copied into an exact-size buffer with no trailing null
+      // terminator, so a read past `end` trips the sanitizer build instead of
+      // landing on benign padding.
+      person p{"Henry", "Foster", 34};
+      for (const std::string_view tpl : {"{", "{{", "{{+", "{{++", "{{ ", "{{+}", "{{first_name"}) {
+         std::vector<char> buf(tpl.begin(), tpl.end());
+         const std::string_view layout{buf.data(), buf.size()};
+         auto result = glz::stencilcount(layout, p);
+         expect(result.has_value()) << tpl;
+      }
+   };
 };
 
 int main() { return 0; }

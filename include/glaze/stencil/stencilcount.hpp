@@ -27,7 +27,7 @@ namespace glz
       }
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
-            while (whitespace_table[uint8_t(*it)]) {
+            while (it < end && whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          };
@@ -40,12 +40,12 @@ namespace glz
             switch (*it) {
             case '{': {
                ++it;
-               if (*it == '{') {
+               if (it != end && *it == '{') {
                   ++it;
                   skip_whitespace();
 
                   uint64_t count{};
-                  while (*it == '+') {
+                  while (it != end && *it == '+') {
                      ++it;
                      ++count;
                   }
@@ -76,9 +76,9 @@ namespace glz
                      prev_count = count;
                   }
 
-                  if (*it == '}') {
+                  if (it != end && *it == '}') {
                      ++it;
-                     if (*it == '}') {
+                     if (it != end && *it == '}') {
                         ++it;
                         break;
                      }
@@ -137,9 +137,9 @@ namespace glz
 
                   skip_whitespace();
 
-                  if (*it == '}') {
+                  if (it != end && *it == '}') {
                      ++it;
-                     if (*it == '}') {
+                     if (it != end && *it == '}') {
                         ++it;
                         break;
                      }
