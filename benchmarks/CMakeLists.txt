@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
+include(CheckIncludeFileCXX)
 
 # Fetch bencher
 FetchContent_Declare(
@@ -119,14 +120,17 @@ target_compile_options(generic_benchmark PRIVATE
 )
 
 # Ordered map memory comparison
-add_executable(ordered_map_memory ordered_map_memory.cpp)
-target_link_libraries(ordered_map_memory PRIVATE
-  glaze
-)
-target_compile_options(ordered_map_memory PRIVATE
-  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
-  $<$<CXX_COMPILER_ID:MSVC>:/O2>
-)
+check_include_file_cxx("malloc/malloc.h" GLZ_HAS_MALLOC_MALLOC_H)
+if (GLZ_HAS_MALLOC_MALLOC_H)
+  add_executable(ordered_map_memory ordered_map_memory.cpp)
+  target_link_libraries(ordered_map_memory PRIVATE
+    glaze
+  )
+  target_compile_options(ordered_map_memory PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+    $<$<CXX_COMPILER_ID:MSVC>:/O2>
+  )
+endif()
 
 # HTTP server benchmark: Glaze vs Boost.Beast
 add_subdirectory(http_benchmark)
