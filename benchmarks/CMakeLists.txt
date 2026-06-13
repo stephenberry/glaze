@@ -68,6 +68,17 @@ target_compile_options(skip_ws_benchmark PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
 
+# UTF-8 validation benchmark (stateless whole-buffer validator vs streaming validator)
+add_executable(utf8_benchmark utf8_benchmark.cpp)
+target_link_libraries(utf8_benchmark PRIVATE
+  glaze
+  bencher::bencher
+)
+target_compile_options(utf8_benchmark PRIVATE
+  $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-O3 -march=native>
+  $<$<CXX_COMPILER_ID:MSVC>:/O2>
+)
+
 # String write optimization benchmark (SWAR-only vs SIMD+SWAR)
 # The no-SIMD baseline is a shared library so the linker can't deduplicate
 # its glz::write template instantiation with the SIMD-enabled one.
