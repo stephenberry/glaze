@@ -27,7 +27,7 @@ namespace glz
       }
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
-            while (whitespace_table[uint8_t(*it)]) {
+            while (it < end && whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          };
@@ -40,12 +40,12 @@ namespace glz
             switch (*it) {
             case '{': {
                ++it;
-               if (*it == '{') {
+               if (it != end && *it == '{') {
                   ++it;
                   skip_whitespace();
 
                   uint64_t count{};
-                  while (*it == '+') {
+                  while (it != end && *it == '+') {
                      ++it;
                      ++count;
                   }
@@ -76,9 +76,9 @@ namespace glz
                      prev_count = count;
                   }
 
-                  if (*it == '}') {
+                  if (it != end && *it == '}') {
                      ++it;
-                     if (*it == '}') {
+                     if (it != end && *it == '}') {
                         ++it;
                         break;
                      }
@@ -93,6 +93,10 @@ namespace glz
                      ++it;
                   }
 
+                  if (it == end) {
+                     break;
+                  }
+
                   const sv key{start, size_t(it - start)};
 
                   skip_whitespace();
@@ -100,8 +104,12 @@ namespace glz
                   static constexpr auto N = reflect<T>::size;
                   static constexpr auto HashInfo = hash_info<T>;
 
-                  const auto index =
-                     decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
+                  const auto index = [&] {
+                     if (key.size() < HashInfo.min_length || key.size() > HashInfo.max_length) {
+                        return N;
+                     }
+                     return decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
+                  }();
 
                   if (index < N) [[likely]] {
                      std::string temp{};
@@ -137,9 +145,9 @@ namespace glz
 
                   skip_whitespace();
 
-                  if (*it == '}') {
+                  if (it != end && *it == '}') {
                      ++it;
-                     if (*it == '}') {
+                     if (it != end && *it == '}') {
                         ++it;
                         break;
                      }
